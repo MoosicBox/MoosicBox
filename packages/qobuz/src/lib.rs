@@ -1733,7 +1733,7 @@ impl From<TrackAudioQuality> for QobuzAudioQuality {
 ///
 /// # Panics
 ///
-/// * If time went backwards
+/// * If the system clock returned a time earlier than the Unix epoch (January 1, 1970)
 ///
 /// # Errors
 ///

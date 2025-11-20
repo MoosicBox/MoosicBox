@@ -114,7 +114,9 @@ impl From<Error> for actix_web::Error {
     }
 }
 
-/// Query parameters for Qobuz user login endpoint.
+/// Query parameters for authenticating a user with the Qobuz API.
+///
+/// Used by the user login endpoint to obtain access tokens for subsequent API requests.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzUserLoginQuery {
@@ -148,6 +150,9 @@ pub struct QobuzUserLoginQuery {
     )
 )]
 #[route("/auth/login", method = "POST")]
+/// # Panics
+///
+/// * If the `x-qobuz-app-id` header contains invalid UTF-8 bytes
 pub async fn user_login_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzUserLoginQuery>,
@@ -364,7 +369,9 @@ static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
 static QOBUZ_APP_ID_HEADER: &str = "x-qobuz-app-id";
 static QOBUZ_APP_SECRET_HEADER: &str = "x-qobuz-app-secret";
 
-/// Query parameters for fetching a single artist by ID.
+/// Query parameters for retrieving detailed artist information from Qobuz.
+///
+/// Used to fetch artist metadata including name, photo, and other details.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistQuery {
@@ -392,6 +399,9 @@ pub struct QobuzArtistQuery {
     )
 )]
 #[route("/artists", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistQuery>,
@@ -413,7 +423,9 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
-/// Query parameters for fetching paginated favorite artists.
+/// Query parameters for retrieving a user's favorited artists from Qobuz.
+///
+/// Returns a paginated list of artists marked as favorites by the authenticated user.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteArtistsQuery {
@@ -444,6 +456,9 @@ pub struct QobuzFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
@@ -468,7 +483,9 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
-/// Query parameters for fetching a single album by ID.
+/// Query parameters for retrieving detailed album information from Qobuz.
+///
+/// Used to fetch album metadata including tracks, artwork, and release details.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumQuery {
@@ -496,6 +513,9 @@ pub struct QobuzAlbumQuery {
     )
 )]
 #[route("/albums", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumQuery>,
@@ -598,7 +618,10 @@ impl From<AlbumOrder> for QobuzAlbumOrder {
     }
 }
 
-/// Query parameters for fetching albums by a specific artist.
+/// Query parameters for retrieving albums and releases by a specific artist.
+///
+/// Supports filtering, sorting, and pagination of an artist's discography including
+/// studio albums, live recordings, compilations, EPs, and singles.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistAlbumsQuery {
@@ -644,6 +667,9 @@ pub struct QobuzArtistAlbumsQuery {
     )
 )]
 #[route("/artists/albums", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
@@ -672,7 +698,10 @@ pub async fn artist_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
-/// Query parameters for fetching paginated favorite albums.
+/// Query parameters for retrieving a user's favorited albums from Qobuz.
+///
+/// Returns a paginated list of albums marked as favorites by the authenticated user,
+/// optionally filtered by release type.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteAlbumsQuery {
@@ -706,6 +735,9 @@ pub struct QobuzFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
@@ -735,7 +767,10 @@ pub async fn favorite_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
-/// Query parameters for fetching tracks from a specific album.
+/// Query parameters for retrieving the track listing of a specific album.
+///
+/// Returns paginated track information including titles, artists, durations,
+/// and track numbers for the specified album.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumTracksQuery {
@@ -769,6 +804,9 @@ pub struct QobuzAlbumTracksQuery {
     )
 )]
 #[route("/albums/tracks", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
@@ -793,7 +831,9 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-/// Query parameters for fetching a single track by ID.
+/// Query parameters for retrieving detailed track information from Qobuz.
+///
+/// Used to fetch track metadata including title, artist, album, duration, and audio quality.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackQuery {
@@ -821,6 +861,9 @@ pub struct QobuzTrackQuery {
     )
 )]
 #[route("/tracks", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackQuery>,
@@ -842,7 +885,9 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
-/// Query parameters for fetching paginated favorite tracks.
+/// Query parameters for retrieving a user's favorited tracks from Qobuz.
+///
+/// Returns a paginated list of tracks marked as favorites by the authenticated user.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteTracksQuery {
@@ -873,6 +918,9 @@ pub struct QobuzFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
@@ -896,7 +944,10 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-/// Query parameters for fetching a track's streaming URL.
+/// Query parameters for obtaining a direct streaming URL for a track.
+///
+/// Used to retrieve time-limited, signed URLs for playing tracks at the specified
+/// audio quality level (e.g., lossy, lossless, hi-res).
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackFileUrlQuery {
@@ -927,6 +978,9 @@ pub struct QobuzTrackFileUrlQuery {
     )
 )]
 #[route("/track/url", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token`, `x-qobuz-app-id`, or `x-qobuz-app-secret` headers contain invalid UTF-8 bytes
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackFileUrlQuery>,
@@ -952,7 +1006,10 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
-/// Query parameters for searching the Qobuz catalog.
+/// Query parameters for performing a full-text search across the Qobuz catalog.
+///
+/// Searches artists, albums, and tracks simultaneously, returning combined paginated
+/// results ranked by relevance to the query string.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzSearchQuery {
@@ -986,6 +1043,9 @@ pub struct QobuzSearchQuery {
     )
 )]
 #[route("/search", method = "GET")]
+/// # Panics
+///
+/// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzSearchQuery>,
