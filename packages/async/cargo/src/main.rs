@@ -170,41 +170,6 @@ mod tests {
     use syn::parse_quote;
 
     #[test_log::test]
-    fn test_has_inject_attr_with_inject_yields() {
-        let attrs: Vec<Attribute> = vec![parse_quote!(#[inject_yields])];
-        assert!(has_inject_attr(&attrs));
-    }
-
-    #[test_log::test]
-    fn test_has_inject_attr_without_inject_yields() {
-        let attrs: Vec<Attribute> = vec![parse_quote!(#[allow(dead_code)])];
-        assert!(!has_inject_attr(&attrs));
-    }
-
-    #[test_log::test]
-    fn test_has_inject_attr_empty_attributes() {
-        let attrs: Vec<Attribute> = vec![];
-        assert!(!has_inject_attr(&attrs));
-    }
-
-    #[test_log::test]
-    fn test_has_inject_attr_multiple_attributes_with_inject_yields() {
-        let attrs: Vec<Attribute> = vec![
-            parse_quote!(#[allow(dead_code)]),
-            parse_quote!(#[inject_yields]),
-            parse_quote!(#[inline]),
-        ];
-        assert!(has_inject_attr(&attrs));
-    }
-
-    #[test_log::test]
-    fn test_has_inject_attr_similar_named_attributes() {
-        let attrs: Vec<Attribute> =
-            vec![parse_quote!(#[inject_something]), parse_quote!(#[yields])];
-        assert!(!has_inject_attr(&attrs));
-    }
-
-    #[test_log::test]
     fn test_checker_detects_async_fn_without_attribute() {
         let code = r#"
             async fn test_function() {

@@ -93,17 +93,4 @@ mod tests {
         assert!(info.output_size > 0, "Should produce output");
         assert!(info.input_consumed > 0, "Should consume input");
     }
-
-    #[test_log::test]
-    fn test_encode_info_conversion() {
-        let fdk_info = fdk_aac::enc::EncodeInfo {
-            output_size: 1024,
-            input_consumed: 2048,
-        };
-
-        let info: EncodeInfo = fdk_info.into();
-
-        assert_eq!(info.output_size, 1024);
-        assert_eq!(info.input_consumed, 2048);
-    }
 }

@@ -516,29 +516,4 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(temp_file);
     }
-
-    #[test_log::test]
-    fn test_opus_stream_headers_format() {
-        // Verify OpusHead magic signature
-        assert_eq!(&OPUS_STREAM_IDENTIFICATION_HEADER[0..8], b"OpusHead");
-
-        // Verify version
-        assert_eq!(OPUS_STREAM_IDENTIFICATION_HEADER[8], 0x01);
-
-        // Verify channel count (stereo)
-        assert_eq!(OPUS_STREAM_IDENTIFICATION_HEADER[9], 0x02);
-
-        // Verify OpusTags magic signature
-        assert_eq!(&OPUS_STREAM_COMMENTS_HEADER[0..8], b"OpusTags");
-
-        // Verify vendor string
-        let vendor_len = u32::from_le_bytes([
-            OPUS_STREAM_COMMENTS_HEADER[8],
-            OPUS_STREAM_COMMENTS_HEADER[9],
-            OPUS_STREAM_COMMENTS_HEADER[10],
-            OPUS_STREAM_COMMENTS_HEADER[11],
-        ]);
-        assert_eq!(vendor_len, 7);
-        assert_eq!(&OPUS_STREAM_COMMENTS_HEADER[12..19], b"ENCODER");
-    }
 }

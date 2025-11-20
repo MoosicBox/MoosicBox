@@ -40,15 +40,21 @@ You must ONLY add tests that meet ALL of the following criteria:
 
 - **Simple getters/setters with no logic** - Functions that just return or set a field value without any transformation, validation, or business logic
 - **Trivial type conversions** - Standard trait implementations like `ToString`, `AsRef`, `Into`, `From`, `FromStr` that simply convert between types without complex logic
-- **Trivial constructors** - Constructors that just assign values to fields without validation or setup logic
+- **Trivial constructors** - Constructors that just assign values to fields without validation or setup logic (e.g., `new()`, `default()`)
 - **Code already well-tested through integration tests** - Avoid redundant unit tests for behavior that is thoroughly covered by integration/end-to-end tests
 - **Obvious behavior that doesn't need verification** - Self-evident functionality that would fail to compile if incorrect
 - **Simple forwarding functions with no logic** - Functions that just call another function or method without transformation
 - **Debug/Display trait implementations** - Do not test formatting output of Debug or Display traits (e.g., `format!("{:?}", value)` or `value.to_string()`)
 - **Clone trait implementations** - Do not test that Clone works correctly, trust the derive macro or manual implementation
 - **External dependency behavior** - Do not test that external libraries (e.g., flume channels, tokio, etc.) work correctly. Trust that dependencies are tested by their maintainers
-- **Derived or auto-generated trait implementations** - Do not test traits that are derived (Debug, Clone, PartialEq, Eq, Hash, etc.)
+- **Derived or auto-generated trait implementations** - Do not test traits that are derived (Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize, etc.)
 - **Standard library trait implementations** - Do not test standard conversions (AsRef, Into, From) unless they contain complex logic beyond simple type conversion
+- **Default trait implementations** - Do not test that Default::default() creates expected default values (e.g., testing that fields are None, empty, or have default values)
+- **Serde serialization/deserialization** - Do not test simple serde serialization/deserialization unless there is complex custom logic
+- **Error Display formatting** - Do not test error Display or Debug output unless there is custom formatting logic beyond what thiserror or derive macros provide
+- **Arbitrary/Generator constraints** - Do not test that property-based test generators satisfy their own constraints (e.g., testing that a generator for valid CSS doesn't generate invalid CSS)
+- **Parser tests for trivial grammars** - Do not test that parsers correctly parse their own defined grammar unless testing edge cases or error handling
+- **Constant values** - Do not test that constants have specific values unless the values are computed or have complex initialization logic
 
 **Why avoid these tests?**
 These tests provide minimal value because:
