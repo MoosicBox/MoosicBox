@@ -353,3 +353,220 @@ impl<
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_content_html_creation() {
+        let html = Content::Html("<h1>Test</h1>".to_string());
+        match html {
+            Content::Html(s) => assert_eq!(s, "<h1>Test</h1>"),
+            _ => panic!("Expected Html variant"),
+        }
+    }
+
+    #[test]
+    fn test_content_html_empty() {
+        let html = Content::Html(String::new());
+        match html {
+            Content::Html(s) => assert!(s.is_empty()),
+            _ => panic!("Expected Html variant"),
+        }
+    }
+
+    #[test]
+    fn test_content_raw_creation() {
+        let data = Bytes::from_static(b"test data");
+        let content_type = "application/octet-stream".to_string();
+        let raw = Content::Raw {
+            data: data.clone(),
+            content_type: content_type.clone(),
+        };
+
+        match raw {
+            Content::Raw {
+                data: d,
+                content_type: ct,
+            } => {
+                assert_eq!(d, data);
+                assert_eq!(ct, content_type);
+            }
+            _ => panic!("Expected Raw variant"),
+        }
+    }
+
+    #[test]
+    fn test_content_raw_with_image_mime_type() {
+        let data = Bytes::from_static(b"\x89PNG\r\n\x1a\n");
+        let raw = Content::Raw {
+            data: data.clone(),
+            content_type: "image/png".to_string(),
+        };
+
+        match raw {
+            Content::Raw {
+                data: d,
+                content_type: ct,
+            } => {
+                assert_eq!(d, data);
+                assert_eq!(ct, "image/png");
+            }
+            _ => panic!("Expected Raw variant"),
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_content_json_creation() {
+        let value = serde_json::json!({"key": "value"});
+        let json = Content::Json(value.clone());
+
+        match json {
+            Content::Json(v) => assert_eq!(v, value),
+            _ => panic!("Expected Json variant"),
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_content_json_array() {
+        let value = serde_json::json!([1, 2, 3]);
+        let json = Content::Json(value.clone());
+
+        match json {
+            Content::Json(v) => {
+                assert!(v.is_array());
+                assert_eq!(v, value);
+            }
+            _ => panic!("Expected Json variant"),
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_content_json_null() {
+        let value = serde_json::json!(null);
+        let json = Content::Json(value.clone());
+
+        match json {
+            Content::Json(v) => {
+                assert!(v.is_null());
+                assert_eq!(v, value);
+            }
+            _ => panic!("Expected Json variant"),
+        }
+    }
+
+    #[test]
+    fn test_lambda_app_new() {
+        #[derive(Clone)]
+        struct TestProcessor;
+
+        #[async_trait]
+        impl LambdaResponseProcessor<String> for TestProcessor {
+            fn prepare_request(
+                &self,
+                _req: Request,
+                _body: Option<Arc<Bytes>>,
+            ) -> Result<String, lambda_runtime::Error> {
+                Ok(String::new())
+            }
+
+            fn headers(
+                &self,
+                _content: &hyperchad_renderer::Content,
+            ) -> Option<Vec<(String, String)>> {
+                None
+            }
+
+            async fn to_response(
+                &self,
+                _data: String,
+            ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
+            {
+                Ok(None)
+            }
+
+            async fn to_body(
+                &self,
+                _content: hyperchad_renderer::Content,
+                _data: String,
+            ) -> Result<Content, lambda_runtime::Error> {
+                Ok(Content::Html(String::new()))
+            }
+        }
+
+        let processor = TestProcessor;
+        let app = LambdaApp::new(processor);
+
+        // Verify the app was created successfully
+        #[cfg(feature = "assets")]
+        assert!(app.static_asset_routes.is_empty());
+    }
+
+    #[cfg(feature = "assets")]
+    #[test]
+    fn test_lambda_app_with_static_routes() {
+        #[derive(Clone)]
+        struct TestProcessor;
+
+        #[async_trait]
+        impl LambdaResponseProcessor<String> for TestProcessor {
+            fn prepare_request(
+                &self,
+                _req: Request,
+                _body: Option<Arc<Bytes>>,
+            ) -> Result<String, lambda_runtime::Error> {
+                Ok(String::new())
+            }
+
+            fn headers(
+                &self,
+                _content: &hyperchad_renderer::Content,
+            ) -> Option<Vec<(String, String)>> {
+                None
+            }
+
+            async fn to_response(
+                &self,
+                _data: String,
+            ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
+            {
+                Ok(None)
+            }
+
+            async fn to_body(
+                &self,
+                _content: hyperchad_renderer::Content,
+                _data: String,
+            ) -> Result<Content, lambda_runtime::Error> {
+                Ok(Content::Html(String::new()))
+            }
+        }
+
+        let processor = TestProcessor;
+        let mut app = LambdaApp::new(processor);
+
+        // Add a static route with in-memory content
+        app.static_asset_routes
+            .push(hyperchad_renderer::assets::StaticAssetRoute {
+                route: "/static/style.css".to_string(),
+                target: hyperchad_renderer::assets::AssetPathTarget::FileContents(
+                    Bytes::from_static(b"body { margin: 0; }"),
+                ),
+            });
+
+        assert_eq!(app.static_asset_routes.len(), 1);
+        assert_eq!(app.static_asset_routes[0].route, "/static/style.css");
+
+        // Verify the target is FileContents
+        match &app.static_asset_routes[0].target {
+            hyperchad_renderer::assets::AssetPathTarget::FileContents(bytes) => {
+                assert_eq!(bytes, &Bytes::from_static(b"body { margin: 0; }"));
+            }
+            _ => panic!("Expected FileContents target"),
+        }
+    }
+}
