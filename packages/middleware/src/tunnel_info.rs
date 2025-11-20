@@ -69,6 +69,11 @@ impl FromRequest for TunnelInfo {
     type Error = actix_web::Error;
     type Future = Ready<Result<Self, actix_web::Error>>;
 
+    /// Extracts tunnel info from the request context.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `ErrorInternalServerError` if tunnel info has not been initialized via [`init`]
     fn from_request(_req: &HttpRequest, _: &mut Payload) -> Self::Future {
         let Some(tunnel_info) = TUNNEL_INFO.get().cloned() else {
             return err(ErrorInternalServerError(

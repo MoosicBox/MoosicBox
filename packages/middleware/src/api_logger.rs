@@ -47,6 +47,7 @@ impl ApiLogger {
 }
 
 impl Default for ApiLogger {
+    /// Creates a default API logger instance.
     fn default() -> Self {
         Self::new()
     }
@@ -67,14 +68,19 @@ where
     type Transform = ApiLoggerMiddleware<S>;
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
+    /// Creates a new middleware instance wrapping the given service.
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(ApiLoggerMiddleware { service }))
     }
 }
 
 /// The actual middleware service that wraps the next service in the chain.
+///
+/// This struct is created by the [`Transform`] implementation on [`ApiLogger`]
+/// and performs the actual request/response logging.
 #[allow(clippy::module_name_repetitions)]
 pub struct ApiLoggerMiddleware<S> {
+    /// The next service in the middleware chain.
     service: S,
 }
 
@@ -90,6 +96,13 @@ where
 
     forward_ready!(service);
 
+    /// Processes the request, logs details, and logs the response when complete.
+    ///
+    /// Logs request method, path, query string, and relevant headers (e.g., Range).
+    /// After the response completes, logs status, duration, and relevant response headers
+    /// (e.g., Content-Range, Content-Length).
+    ///
+    /// Successful responses are logged at trace level, while failures are logged at error level.
     fn call(&self, req: ServiceRequest) -> Self::Future {
         const RELEVANT_HEADER_NAMES: [header::HeaderName; 1] = [header::RANGE];
         let relevant_headers = req
