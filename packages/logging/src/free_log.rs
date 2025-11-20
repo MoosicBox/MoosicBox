@@ -87,3 +87,87 @@ pub fn init(
 
     Ok(layer)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init_succeeds_or_already_initialized() {
+        // Test that init either succeeds or fails with SetLogger error
+        // (which indicates the logger was already set by another test)
+        let result = init(None, None);
+
+        // Init should either succeed, or fail with SetLogger error if already initialized
+        match result {
+            Ok(_) => {
+                // Success case - logger was initialized
+            }
+            Err(InitError::Logs(free_log_client::LogsInitError::SetLogger(_))) => {
+                // Expected failure - logger already initialized by another test
+                // This is acceptable in a test environment where tests may run in parallel
+            }
+            Err(e) => panic!("Unexpected error type: {e:?}"),
+        }
+    }
+
+    #[test]
+    fn test_init_configurations_are_valid() {
+        // Test that different configuration combinations don't panic
+        // We can't test actual initialization due to global logger state,
+        // but we can verify the configurations are constructed correctly
+
+        // Configuration 1: No filename, no layers
+        let config1 = || {
+            let _logs_config = free_log_client::LogsConfig::builder();
+        };
+        config1();
+
+        // Configuration 2: With filename (requires config dir)
+        let config2 = || {
+            let logs_config = free_log_client::LogsConfig::builder();
+            if let Some(log_dir) = make_config_dir_path().map(|p| p.join("logs")) {
+                let _ = logs_config.with_file_writer(
+                    free_log_client::FileWriterConfig::builder()
+                        .file_path(log_dir.join("test.log"))
+                        .log_level(free_log_client::Level::Debug),
+                );
+            }
+        };
+        config2();
+
+        // Configuration 3: With empty layers
+        let config3 = || {
+            let _logs_config = free_log_client::LogsConfig::builder().with_layers(vec![]);
+        };
+        config3();
+    }
+
+    #[test]
+    fn test_init_error_is_error() {
+        // Test that InitError implements the Error trait properly
+        use std::error::Error;
+
+        // The type should implement Error and Debug
+        fn assert_error<T: Error + std::fmt::Debug>() {}
+        assert_error::<InitError>();
+    }
+
+    #[test]
+    fn test_init_error_from_conversions() {
+        // Test that From trait implementations work correctly for InitError
+        use std::error::Error;
+
+        // We can't construct the actual error types from free_log_client,
+        // but we can verify the type relationships exist
+        fn assert_from<T, E: Error>()
+        where
+            T: From<E>,
+        {
+        }
+
+        assert_from::<InitError, free_log_client::LogsInitError>();
+        assert_from::<InitError, free_log_client::BuildLogsConfigError>();
+        assert_from::<InitError, free_log_client::BuildFileWriterConfigError>();
+    }
+}
