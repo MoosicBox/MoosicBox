@@ -1041,3 +1041,530 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Layo
             .unwrap_or_else(|| if_expr.value.unwrap_or_default())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_value_as_str() {
+        let string_value = Value::String("test".to_string());
+        assert_eq!(string_value.as_str(), Some("test"));
+
+        let key_value = Value::Key(Key::Enter);
+        assert_eq!(key_value.as_str(), Some("Enter"));
+
+        let real_value = Value::Real(42.0);
+        assert_eq!(real_value.as_str(), None);
+
+        let visibility_value = Value::Visibility(Visibility::Hidden);
+        assert_eq!(visibility_value.as_str(), None);
+    }
+
+    #[test]
+    fn test_value_as_f32_real() {
+        let value = Value::Real(42.5);
+        assert_eq!(
+            value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(42.5)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_plus_evaluation() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(15.0));
+    }
+
+    #[test]
+    fn test_arithmetic_minus_evaluation() {
+        let arith = Arithmetic::Minus(Value::Real(10.0), Value::Real(3.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(7.0));
+    }
+
+    #[test]
+    fn test_arithmetic_multiply_evaluation() {
+        let arith = Arithmetic::Multiply(Value::Real(4.0), Value::Real(3.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(12.0));
+    }
+
+    #[test]
+    fn test_arithmetic_divide_evaluation() {
+        let arith = Arithmetic::Divide(Value::Real(10.0), Value::Real(2.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+    }
+
+    #[test]
+    fn test_arithmetic_min_evaluation() {
+        let arith = Arithmetic::Min(Value::Real(10.0), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+
+        let arith2 = Arithmetic::Min(Value::Real(3.0), Value::Real(8.0));
+        let result2 = arith2.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result2, Some(3.0));
+    }
+
+    #[test]
+    fn test_arithmetic_max_evaluation() {
+        let arith = Arithmetic::Max(Value::Real(10.0), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(10.0));
+
+        let arith2 = Arithmetic::Max(Value::Real(3.0), Value::Real(8.0));
+        let result2 = arith2.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result2, Some(8.0));
+    }
+
+    #[test]
+    fn test_arithmetic_grouping_evaluation() {
+        let inner = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
+        let grouped = Arithmetic::Grouping(Box::new(inner));
+        let result = grouped.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(8.0));
+    }
+
+    #[test]
+    fn test_arithmetic_complex_expression() {
+        // (10 + 5) * 2
+        let add = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let multiply = Arithmetic::Multiply(add.into(), Value::Real(2.0));
+        let result = multiply.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(30.0));
+    }
+
+    #[test]
+    fn test_arithmetic_chaining_plus() {
+        let arith = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
+        let chained = arith.plus(2.0);
+
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(10.0));
+    }
+
+    #[test]
+    fn test_arithmetic_chaining_minus() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let chained = arith.minus(3.0);
+
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(12.0));
+    }
+
+    #[test]
+    fn test_arithmetic_clamp() {
+        // Test clamp with simple value
+        let clamped = Arithmetic::Plus(Value::Real(15.0), Value::Real(0.0)).clamp(5.0, 10.0);
+        let result = clamped.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(10.0)); // 15 clamped to max 10
+
+        let clamped2 = Arithmetic::Plus(Value::Real(2.0), Value::Real(0.0)).clamp(5.0, 10.0);
+        let result2 = clamped2.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result2, Some(5.0)); // 2 clamped to min 5
+
+        let clamped3 = Arithmetic::Plus(Value::Real(7.0), Value::Real(0.0)).clamp(5.0, 10.0);
+        let result3 = clamped3.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result3, Some(7.0)); // 7 is within range
+    }
+
+    #[test]
+    fn test_calc_value_eq() {
+        let calc = CalcValue::Display {
+            target: ElementTarget::Id(1),
+        };
+        let condition = calc.eq(Value::Display(true));
+
+        match condition {
+            Condition::Eq(left, right) => {
+                assert!(matches!(left, Value::Calc(_)));
+                assert_eq!(right, Value::Display(true));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition, got Bool"),
+        }
+    }
+
+    #[test]
+    fn test_calc_value_plus() {
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::Id(1),
+        };
+        let arith = calc.plus(10.0);
+
+        assert!(matches!(arith, Arithmetic::Plus(_, _)));
+    }
+
+    #[test]
+    fn test_calc_value_clamp() {
+        let calc = CalcValue::HeightPx {
+            target: ElementTarget::Id(1),
+        };
+        let clamped = calc.clamp(100.0, 500.0);
+
+        // Should create Min(500, Max(calc, 100))
+        assert!(matches!(clamped, Arithmetic::Min(_, _)));
+    }
+
+    #[test]
+    fn test_condition_then() {
+        let condition = Condition::Bool(true);
+        let if_action = condition.then(ActionType::NoOp);
+
+        assert_eq!(if_action.condition, Condition::Bool(true));
+        assert_eq!(if_action.actions.len(), 1);
+        assert_eq!(if_action.else_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_condition_or_else() {
+        let condition = Condition::Bool(false);
+        let if_action = condition.or_else(ActionType::NoOp);
+
+        assert_eq!(if_action.condition, Condition::Bool(false));
+        assert_eq!(if_action.actions.len(), 0);
+        assert_eq!(if_action.else_actions.len(), 1);
+    }
+
+    #[test]
+    fn test_if_chaining() {
+        let condition = Condition::Bool(true);
+        let if_action = condition
+            .then(ActionType::hide_str_id("element1"))
+            .then(ActionType::show_str_id("element2"))
+            .or_else(ActionType::no_display_str_id("element3"));
+
+        assert_eq!(if_action.actions.len(), 2);
+        assert_eq!(if_action.else_actions.len(), 1);
+    }
+
+    #[test]
+    fn test_eq_condition_helper() {
+        let condition = eq(Value::Real(5.0), Value::Real(5.0));
+
+        match condition {
+            Condition::Eq(left, right) => {
+                assert_eq!(left, Value::Real(5.0));
+                assert_eq!(right, Value::Real(5.0));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition, got Bool"),
+        }
+    }
+
+    #[test]
+    fn test_if_stmt_helper() {
+        let condition = Condition::Bool(true);
+        let if_action = if_stmt(condition, ActionType::NoOp);
+
+        assert_eq!(if_action.actions.len(), 1);
+        assert_eq!(if_action.else_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_visibility_helpers() {
+        assert_eq!(hidden(), Value::Visibility(Visibility::Hidden));
+        assert_eq!(visible(), Value::Visibility(Visibility::Visible));
+    }
+
+    #[test]
+    fn test_display_helpers() {
+        assert_eq!(displayed(), Value::Display(true));
+        assert_eq!(not_displayed(), Value::Display(false));
+    }
+
+    #[test]
+    fn test_get_visibility_str_id() {
+        let calc = get_visibility_str_id("my-element");
+
+        match calc {
+            CalcValue::Visibility { target } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+            }
+            _ => panic!("Expected Visibility CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_visibility_id() {
+        let calc = get_visibility_id(42);
+
+        match calc {
+            CalcValue::Visibility { target } => {
+                assert_eq!(target, ElementTarget::Id(42));
+            }
+            _ => panic!("Expected Visibility CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_display_str_id() {
+        let calc = get_display_str_id("my-element");
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_display_id() {
+        let calc = get_display_id(42);
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(target, ElementTarget::Id(42));
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_width_px() {
+        let calc = get_width_px_str_id("my-element");
+
+        match calc {
+            CalcValue::WidthPx { target } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+            }
+            _ => panic!("Expected WidthPx CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_height_px() {
+        let calc = get_height_px_id(42);
+
+        match calc {
+            CalcValue::HeightPx { target } => {
+                assert_eq!(target, ElementTarget::Id(42));
+            }
+            _ => panic!("Expected HeightPx CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_x() {
+        let calc = get_mouse_x();
+
+        match calc {
+            CalcValue::MouseX { target } => {
+                assert_eq!(target, None);
+            }
+            _ => panic!("Expected MouseX CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_x_str_id() {
+        let calc = get_mouse_x_str_id("my-element");
+
+        match calc {
+            CalcValue::MouseX { target } => {
+                assert_eq!(
+                    target,
+                    Some(ElementTarget::StrId(Target::from("my-element")))
+                );
+            }
+            _ => panic!("Expected MouseX CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_y() {
+        let calc = get_mouse_y();
+
+        match calc {
+            CalcValue::MouseY { target } => {
+                assert_eq!(target, None);
+            }
+            _ => panic!("Expected MouseY CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_y_self() {
+        let calc = get_mouse_y_self();
+
+        match calc {
+            CalcValue::MouseY { target } => {
+                assert_eq!(target, Some(ElementTarget::SelfTarget));
+            }
+            _ => panic!("Expected MouseY CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_position_x() {
+        let calc = get_position_x_id(42);
+
+        match calc {
+            CalcValue::PositionX { target } => {
+                assert_eq!(target, ElementTarget::Id(42));
+            }
+            _ => panic!("Expected PositionX CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_position_y() {
+        let calc = get_position_y_self();
+
+        match calc {
+            CalcValue::PositionY { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected PositionY CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_id_self() {
+        let calc = get_id_self();
+
+        match calc {
+            CalcValue::Id { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected Id CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_event_value() {
+        let calc = get_event_value();
+
+        match calc {
+            CalcValue::EventValue => {}
+            _ => panic!("Expected EventValue CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_data_attr_value_self() {
+        let calc = get_data_attr_value_self("data-value");
+
+        match calc {
+            CalcValue::DataAttrValue { attr, target } => {
+                assert_eq!(attr, "data-value");
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected DataAttrValue CalcValue"),
+        }
+    }
+
+    #[test]
+    fn test_if_responsive_single_target() {
+        let responsive = if_responsive("mobile");
+
+        match responsive {
+            Responsive::Target(target) => {
+                assert_eq!(target, "mobile");
+            }
+            Responsive::Targets(_) => panic!("Expected single Target, got Targets"),
+        }
+    }
+
+    #[test]
+    fn test_if_responsive_multiple_targets() {
+        let responsive = if_responsive_any(vec!["mobile", "tablet"]);
+
+        match responsive {
+            Responsive::Targets(targets) => {
+                assert_eq!(targets.len(), 2);
+                assert_eq!(targets[0], "mobile");
+                assert_eq!(targets[1], "tablet");
+            }
+            Responsive::Target(_) => panic!("Expected multiple Targets, got Target"),
+        }
+    }
+
+    #[test]
+    fn test_responsive_then() {
+        let responsive = if_responsive("mobile");
+        let if_expr = responsive.then(10);
+
+        assert_eq!(if_expr.value, Some(10));
+        assert_eq!(if_expr.default, None);
+    }
+
+    #[test]
+    fn test_responsive_or_else() {
+        let responsive = if_responsive("desktop");
+        let if_expr = responsive.or_else(20);
+
+        assert_eq!(if_expr.value, None);
+        assert_eq!(if_expr.default, Some(20));
+    }
+
+    #[test]
+    fn test_if_expression_chaining() {
+        let responsive = if_responsive("mobile");
+        let if_expr = responsive.then(10).or_else(20);
+
+        assert_eq!(if_expr.value, Some(10));
+        assert_eq!(if_expr.default, Some(20));
+    }
+
+    #[test]
+    fn test_value_from_conversions() {
+        let from_f32: Value = 42.5f32.into();
+        assert_eq!(from_f32, Value::Real(42.5));
+
+        let from_f64: Value = 42.5f64.into();
+        assert!(matches!(from_f64, Value::Real(x) if (x - 42.5).abs() < 0.001));
+
+        let from_visibility: Value = Visibility::Hidden.into();
+        assert_eq!(from_visibility, Value::Visibility(Visibility::Hidden));
+
+        let from_key: Value = Key::Enter.into();
+        assert_eq!(from_key, Value::Key(Key::Enter));
+    }
+
+    #[test]
+    fn test_arithmetic_from_into_value() {
+        let arith = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
+        let value: Value = arith.into();
+
+        assert!(matches!(value, Value::Arithmetic(_)));
+    }
+
+    #[test]
+    fn test_calc_value_then_pass_to() {
+        let calc = get_width_px_id(42);
+        let action = calc.then_pass_to(ActionType::NoOp);
+
+        match action {
+            ActionType::Parameterized { action, value } => {
+                assert!(matches!(*action, ActionType::NoOp));
+                match value {
+                    Value::Calc(CalcValue::WidthPx { target }) => {
+                        assert_eq!(target, ElementTarget::Id(42));
+                    }
+                    _ => panic!("Expected Calc value with WidthPx"),
+                }
+            }
+            _ => panic!("Expected Parameterized action"),
+        }
+    }
+
+    #[test]
+    fn test_arithmetic_then_pass_to() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let action = arith.then_pass_to(ActionType::show_str_id("element"));
+
+        match action {
+            ActionType::Parameterized { action, value } => {
+                assert!(matches!(*action, ActionType::Style { .. }));
+                match value {
+                    Value::Arithmetic(_) => {}
+                    _ => panic!("Expected Arithmetic value"),
+                }
+            }
+            _ => panic!("Expected Parameterized action"),
+        }
+    }
+}

@@ -1369,3 +1369,474 @@ pub mod prelude {
     #[cfg(feature = "logic")]
     pub use crate::logic::*;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_key_as_str() {
+        assert_eq!(Key::Escape.as_str(), "Escape");
+        assert_eq!(Key::Enter.as_str(), "Enter");
+        assert_eq!(Key::A.as_str(), "A");
+        assert_eq!(Key::Key0.as_str(), "Key0");
+        assert_eq!(Key::Numpad5.as_str(), "Numpad5");
+        assert_eq!(Key::F12.as_str(), "F12");
+        assert_eq!(Key::Control.as_str(), "Control");
+    }
+
+    #[test]
+    fn test_key_display() {
+        assert_eq!(format!("{}", Key::Tab), "Tab");
+        assert_eq!(format!("{}", Key::ArrowUp), "ArrowUp");
+        assert_eq!(format!("{}", Key::Meta), "Meta");
+    }
+
+    #[test]
+    fn test_action_trigger_type() {
+        assert_eq!(ActionTrigger::Click.trigger_type(), "Click");
+        assert_eq!(ActionTrigger::Hover.trigger_type(), "Hover");
+        assert_eq!(ActionTrigger::Change.trigger_type(), "Change");
+        assert_eq!(ActionTrigger::Immediate.trigger_type(), "Immediate");
+        assert_eq!(
+            ActionTrigger::HttpRequestSuccess.trigger_type(),
+            "HttpRequestSuccess"
+        );
+        assert_eq!(
+            ActionTrigger::Event("custom".to_string()).trigger_type(),
+            "Event"
+        );
+    }
+
+    #[test]
+    fn test_action_trigger_default() {
+        assert_eq!(ActionTrigger::default(), ActionTrigger::Immediate);
+    }
+
+    #[test]
+    fn test_action_effect_delay_off() {
+        let action = ActionType::NoOp;
+        let effect = action.delay_off(1000);
+
+        assert_eq!(effect.delay_off, Some(1000));
+        assert_eq!(effect.throttle, None);
+        assert_eq!(effect.unique, None);
+    }
+
+    #[test]
+    fn test_action_effect_throttle() {
+        let action = ActionType::NoOp;
+        let effect = action.throttle(500);
+
+        assert_eq!(effect.throttle, Some(500));
+        assert_eq!(effect.delay_off, None);
+        assert_eq!(effect.unique, None);
+    }
+
+    #[test]
+    fn test_action_effect_unique() {
+        let action = ActionType::NoOp;
+        let effect = action.unique();
+
+        assert_eq!(effect.unique, Some(true));
+        assert_eq!(effect.throttle, None);
+        assert_eq!(effect.delay_off, None);
+    }
+
+    #[test]
+    fn test_action_effect_chaining() {
+        let effect = ActionEffect::default()
+            .delay_off(1000)
+            .throttle(500)
+            .unique();
+
+        assert_eq!(effect.delay_off, Some(1000));
+        assert_eq!(effect.throttle, Some(500));
+        assert_eq!(effect.unique, Some(true));
+    }
+
+    #[test]
+    fn test_action_type_hide_str_id() {
+        let action = ActionType::hide_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_show_str_id() {
+        let action = ActionType::show_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_hide_id() {
+        let action = ActionType::hide_id(42);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(42));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_show_id() {
+        let action = ActionType::show_id(42);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(42));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_hide_self() {
+        let action = ActionType::hide_self();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_show_self() {
+        let action = ActionType::show_self();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_display_str_id() {
+        let action = ActionType::display_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_no_display_str_id() {
+        let action = ActionType::no_display_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_set_focus() {
+        let action = ActionType::set_focus_str_id(true, "my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetFocus(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_focus_str_id() {
+        let action = ActionType::focus_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetFocus(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_set_background() {
+        let action = ActionType::set_background_str_id("red", "my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetBackground(Some("red".to_string())));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_remove_background() {
+        let action = ActionType::remove_background_str_id("my-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_navigate() {
+        let action = ActionType::Navigate {
+            url: "/home".to_string(),
+        };
+
+        match action {
+            ActionType::Navigate { url } => {
+                assert_eq!(url, "/home");
+            }
+            _ => panic!("Expected Navigate action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_log() {
+        let action = ActionType::Log {
+            message: "test".to_string(),
+            level: LogLevel::Info,
+        };
+
+        match action {
+            ActionType::Log { message, level } => {
+                assert_eq!(message, "test");
+                assert_eq!(level, LogLevel::Info);
+            }
+            _ => panic!("Expected Log action"),
+        }
+    }
+
+    #[test]
+    #[allow(clippy::similar_names)]
+    fn test_action_type_and_chaining() {
+        let action1 = ActionType::hide_str_id("element1");
+        let action2 = ActionType::show_str_id("element2");
+        let chained = action1.and(action2);
+
+        match chained {
+            ActionType::Multi(actions) => {
+                assert_eq!(actions.len(), 2);
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+
+    #[test]
+    #[allow(clippy::similar_names)]
+    fn test_action_type_and_chaining_with_existing_multi() {
+        let action1 = ActionType::hide_str_id("element1");
+        let action2 = ActionType::show_str_id("element2");
+        let action3 = ActionType::no_display_str_id("element3");
+
+        let chained = action1.and(action2).and(action3);
+
+        match chained {
+            ActionType::Multi(actions) => {
+                assert_eq!(actions.len(), 3);
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_on_event() {
+        let inner_action = ActionType::show_str_id("element");
+        let event_action = ActionType::on_event("custom-event", inner_action);
+
+        match event_action {
+            ActionType::Event { name, action } => {
+                assert_eq!(name, "custom-event");
+                match *action {
+                    ActionType::Style { .. } => {}
+                    _ => panic!("Expected Style action inside Event"),
+                }
+            }
+            _ => panic!("Expected Event action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_select_str_id() {
+        let action = ActionType::select_str_id("input-field");
+
+        match action {
+            ActionType::Input(InputActionType::Select { target }) => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("input-field")));
+            }
+            _ => panic!("Expected Input Select action"),
+        }
+    }
+
+    #[test]
+    fn test_action_effect_from_vec_action_types() {
+        let actions = vec![
+            ActionType::hide_str_id("element1"),
+            ActionType::show_str_id("element2"),
+        ];
+        let effect: ActionEffect = actions.into();
+
+        match effect.action {
+            ActionType::Multi(inner_actions) => {
+                assert_eq!(inner_actions.len(), 2);
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+
+    #[test]
+    fn test_action_effect_from_vec_action_effects() {
+        let effects = vec![
+            ActionEffect {
+                action: ActionType::hide_str_id("element1"),
+                delay_off: Some(100),
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::show_str_id("element2"),
+                delay_off: None,
+                throttle: Some(200),
+                unique: None,
+            },
+        ];
+        let combined: ActionEffect = effects.into();
+
+        match combined.action {
+            ActionType::MultiEffect(inner_effects) => {
+                assert_eq!(inner_effects.len(), 2);
+                assert_eq!(inner_effects[0].delay_off, Some(100));
+                assert_eq!(inner_effects[1].throttle, Some(200));
+            }
+            _ => panic!("Expected MultiEffect action"),
+        }
+    }
+
+    #[test]
+    fn test_action_from_action_type() {
+        let action_type = ActionType::NoOp;
+        let action: Action = action_type.into();
+
+        assert_eq!(action.trigger, ActionTrigger::Immediate);
+        assert_eq!(action.effect.action, ActionType::NoOp);
+    }
+
+    #[test]
+    fn test_http_event_context_creation() {
+        let context = HttpEventContext {
+            url: "https://example.com".to_string(),
+            method: "GET".to_string(),
+            status: Some(200),
+            headers: Some(BTreeMap::new()),
+            duration_ms: Some(150),
+            error: None,
+        };
+
+        assert_eq!(context.url, "https://example.com");
+        assert_eq!(context.method, "GET");
+        assert_eq!(context.status, Some(200));
+        assert_eq!(context.duration_ms, Some(150));
+        assert_eq!(context.error, None);
+    }
+
+    #[test]
+    fn test_http_event_context_with_error() {
+        let context = HttpEventContext {
+            url: "https://example.com".to_string(),
+            method: "POST".to_string(),
+            status: None,
+            headers: None,
+            duration_ms: None,
+            error: Some("Network timeout".to_string()),
+        };
+
+        assert_eq!(context.error, Some("Network timeout".to_string()));
+        assert_eq!(context.status, None);
+    }
+
+    #[test]
+    fn test_action_type_visibility_class() {
+        let action = ActionType::hide_class("my-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("my-class")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_display_class() {
+        let action = ActionType::display_class("my-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("my-class")));
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_background_last_child() {
+        let action = ActionType::set_background_last_child("blue");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetBackground(Some("blue".to_string())));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_remove_background_last_child() {
+        let action = ActionType::remove_background_last_child();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+}
