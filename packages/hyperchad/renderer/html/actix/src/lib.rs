@@ -393,3 +393,99 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct TestProcessor;
+
+    #[async_trait]
+    impl ActixResponseProcessor<()> for TestProcessor {
+        fn prepare_request(
+            &self,
+            _req: HttpRequest,
+            _body: Option<Arc<Bytes>>,
+        ) -> Result<(), actix_web::Error> {
+            Ok(())
+        }
+
+        async fn to_response(&self, _data: ()) -> Result<HttpResponse, actix_web::Error> {
+            Ok(HttpResponse::Ok().finish())
+        }
+
+        async fn to_body(
+            &self,
+            _content: Content,
+            _data: (),
+        ) -> Result<(Bytes, String), actix_web::Error> {
+            Ok((Bytes::new(), "text/html".to_string()))
+        }
+    }
+
+    #[test]
+    fn test_actix_app_new() {
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let processor = TestProcessor;
+        let app = ActixApp::new(processor, rx);
+
+        #[cfg(feature = "actions")]
+        assert!(app.action_tx.is_none());
+
+        #[cfg(feature = "assets")]
+        assert!(app.static_asset_routes.is_empty());
+    }
+
+    #[cfg(feature = "actions")]
+    #[test]
+    fn test_actix_app_with_action_tx() {
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let (action_tx, _action_rx) = flume::unbounded();
+        let processor = TestProcessor;
+
+        let app = ActixApp::new(processor, rx).with_action_tx(action_tx.clone());
+
+        assert!(app.action_tx.is_some());
+        if let Some(tx) = app.action_tx {
+            assert!(tx.same_channel(&action_tx));
+        }
+    }
+
+    #[cfg(feature = "actions")]
+    #[test]
+    fn test_actix_app_set_action_tx() {
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let (action_tx, _action_rx) = flume::unbounded();
+        let processor = TestProcessor;
+
+        let mut app = ActixApp::new(processor, rx);
+        assert!(app.action_tx.is_none());
+
+        app.set_action_tx(action_tx.clone());
+
+        assert!(app.action_tx.is_some());
+        if let Some(tx) = app.action_tx {
+            assert!(tx.same_channel(&action_tx));
+        }
+    }
+
+    #[cfg(feature = "actions")]
+    #[test]
+    fn test_actix_app_with_action_tx_chaining() {
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let (action_tx1, _action_rx1) = flume::unbounded();
+        let (action_tx2, _action_rx2) = flume::unbounded();
+        let processor = TestProcessor;
+
+        let app = ActixApp::new(processor, rx)
+            .with_action_tx(action_tx1)
+            .with_action_tx(action_tx2.clone());
+
+        assert!(app.action_tx.is_some());
+        if let Some(tx) = app.action_tx {
+            // Should have the last set action_tx (action_tx2)
+            assert!(tx.same_channel(&action_tx2));
+        }
+    }
+}
