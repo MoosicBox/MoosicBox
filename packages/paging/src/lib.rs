@@ -1550,7 +1550,7 @@ mod tests {
             total: 6,
         };
 
-        let response = PagingResponse::new(page1, |offset, limit| {
+        let response = PagingResponse::new(page1, |offset, _limit| {
             Box::pin(async move {
                 match offset {
                     2 => Ok(PagingResponse::new(

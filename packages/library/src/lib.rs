@@ -2009,7 +2009,7 @@ mod test {
             AlbumVersion {
                 tracks: vec![],
                 format: None,
-                sample_rate: Some(192000),
+                sample_rate: Some(192_000),
                 bit_depth: Some(24),
                 channels: None,
                 source: TrackApiSource::Local,
@@ -2027,9 +2027,9 @@ mod test {
         sort_album_versions(&mut versions);
 
         // Should be sorted by sample rate descending (highest first)
-        assert_eq!(versions[0].sample_rate, Some(192000));
-        assert_eq!(versions[1].sample_rate, Some(96000));
-        assert_eq!(versions[2].sample_rate, Some(44100));
+        assert_eq!(versions[0].sample_rate, Some(192_000));
+        assert_eq!(versions[1].sample_rate, Some(96_000));
+        assert_eq!(versions[2].sample_rate, Some(44_100));
     }
 
     #[test_log::test]

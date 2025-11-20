@@ -2195,13 +2195,10 @@ mod tests {
         }
 
         // Verify all migrations were created
-        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
-            .expect("Failed to read migrations directory")
-            .into_iter()
-            .collect();
-
         assert_eq!(
-            entries.len(),
+            switchy_fs::sync::read_dir_sorted(&migrations_dir)
+                .expect("Failed to read migrations directory")
+                .len(),
             4,
             "Should create migrations for all valid names"
         );

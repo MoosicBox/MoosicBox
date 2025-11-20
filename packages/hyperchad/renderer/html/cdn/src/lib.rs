@@ -202,7 +202,9 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
-    async fn test_setup_cdn_optimization_dynamic_endpoint_preserves_original_handler() {
+    async fn test_setup_cdn_optimization_preserves_dynamic_root() {
+        use hyperchad_router::RequestInfo;
+
         // Create a router with a dynamic root that returns specific content
         let expected_content = "Original dynamic content from handler";
         let router =
@@ -211,7 +213,6 @@ mod tests {
         let result = setup_cdn_optimization(router, None, None);
 
         // Navigate to the dynamic endpoint
-        use hyperchad_router::RequestInfo;
         let req = RouteRequest::from_path(
             "/__hyperchad_dynamic_root__",
             RequestInfo {

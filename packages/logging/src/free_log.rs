@@ -100,11 +100,9 @@ mod tests {
 
         // Init should either succeed, or fail with SetLogger error if already initialized
         match result {
-            Ok(_) => {
+            Ok(_) | Err(InitError::Logs(free_log_client::LogsInitError::SetLogger(_))) => {
                 // Success case - logger was initialized
-            }
-            Err(InitError::Logs(free_log_client::LogsInitError::SetLogger(_))) => {
-                // Expected failure - logger already initialized by another test
+                // OR expected failure - logger already initialized by another test
                 // This is acceptable in a test environment where tests may run in parallel
             }
             Err(e) => panic!("Unexpected error type: {e:?}"),

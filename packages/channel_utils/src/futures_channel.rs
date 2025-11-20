@@ -328,24 +328,22 @@ mod tests {
         let waker = futures_util::task::noop_waker();
         let mut context = Context::from_waker(&waker);
 
-        loop {
-            match Pin::new(&mut rx).poll_next(&mut context) {
-                Poll::Ready(Some(msg)) => results.push(msg),
-                Poll::Ready(None) | Poll::Pending => break,
-            }
+        while let Poll::Ready(Some(msg)) = Pin::new(&mut rx).poll_next(&mut context) {
+            results.push(msg);
         }
 
         assert_eq!(results, vec![1, 2, 3]);
     }
 
     #[test_log::test(switchy_async::test)]
-    async fn test_priority_ordering_basic() {
+    async fn test_priority_ordering_with_updates() {
         use std::pin::Pin;
         use std::task::{Context, Poll};
 
         let (tx, mut rx) = unbounded::<i32>();
 
         // Configure priority - higher values have higher priority
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Send messages in non-priority order
@@ -380,6 +378,7 @@ mod tests {
 
         let (tx, mut rx) = unbounded::<i32>();
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Send messages with equal priorities
@@ -413,6 +412,7 @@ mod tests {
 
         let (tx, mut rx) = unbounded::<i32>();
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Clone the sender
@@ -457,6 +457,7 @@ mod tests {
 
         let (tx, mut rx) = unbounded::<i32>();
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Use unbounded_send to bypass priority buffering
@@ -489,6 +490,7 @@ mod tests {
 
         let (tx, mut rx) = unbounded::<i32>();
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Send multiple messages to build up buffer
@@ -565,11 +567,8 @@ mod tests {
         let mut context = Context::from_waker(&waker);
         let mut results = Vec::new();
 
-        loop {
-            match Pin::new(&mut rx).poll_next(&mut context) {
-                Poll::Ready(Some(msg)) => results.push(msg),
-                Poll::Ready(None) | Poll::Pending => break,
-            }
+        while let Poll::Ready(Some(msg)) = Pin::new(&mut rx).poll_next(&mut context) {
+            results.push(msg);
         }
 
         // Should have received all 30 messages
@@ -645,6 +644,7 @@ mod tests {
 
         let (tx, mut rx) = unbounded::<i32>();
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Initially ready_to_send is true
@@ -675,11 +675,14 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
-    async fn test_stream_poll_next_with_priority() {
+    async fn test_priority_ordering_with_dynamic_priority() {
         use std::pin::Pin;
         use std::task::{Context, Poll};
 
         let (tx, mut rx) = unbounded::<i32>();
+
+        // Configure priority - higher values have higher priority
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(|msg: &i32| *msg as usize);
 
         // Send messages to buffer
@@ -749,6 +752,7 @@ mod tests {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = Arc::clone(&call_count);
 
+        #[allow(clippy::cast_sign_loss)]
         let tx = tx.with_priority(move |msg: &i32| {
             call_count_clone.fetch_add(1, Ordering::SeqCst);
             *msg as usize

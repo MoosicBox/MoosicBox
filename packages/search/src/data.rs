@@ -225,7 +225,7 @@ pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
 mod tests {
     use super::*;
     use moosicbox_music_models::{
-        AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, TrackApiSource, id::Id,
+        AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, ApiSources, TrackApiSource, id::Id,
     };
     use pretty_assertions::assert_eq;
 
@@ -236,7 +236,7 @@ mod tests {
             title: "Test Artist".to_string(),
             cover: Some("cover.jpg".to_string()),
             api_source: ApiSource::library(),
-            api_sources: Default::default(),
+            api_sources: ApiSources::default(),
         };
 
         let data = artist.as_data_values();
@@ -258,7 +258,7 @@ mod tests {
             title: "No Cover Artist".to_string(),
             cover: None,
             api_source: ApiSource::library(),
-            api_sources: Default::default(),
+            api_sources: ApiSources::default(),
         };
 
         let data = artist.as_data_values();
@@ -288,8 +288,8 @@ mod tests {
             }],
             album_source: AlbumSource::Local,
             api_source: ApiSource::library(),
-            artist_sources: Default::default(),
-            album_sources: Default::default(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
         };
 
         let data = album.as_data_values();
@@ -322,8 +322,8 @@ mod tests {
             versions: vec![],
             album_source: AlbumSource::Local,
             api_source: ApiSource::library(),
-            artist_sources: Default::default(),
-            album_sources: Default::default(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
         };
 
         let data = album.as_data_values();
@@ -361,7 +361,7 @@ mod tests {
             channels: Some(2),
             track_source: TrackApiSource::Local,
             api_source: ApiSource::library(),
-            sources: Default::default(),
+            sources: ApiSources::default(),
         };
 
         let data = track.as_data_values();
@@ -407,7 +407,7 @@ mod tests {
             channels: None,
             track_source: TrackApiSource::Local,
             api_source: ApiSource::library(),
-            sources: Default::default(),
+            sources: ApiSources::default(),
         };
 
         let data = track.as_data_values();
@@ -429,7 +429,7 @@ mod tests {
             title: "Delete Artist".to_string(),
             cover: None,
             api_source: ApiSource::library(),
-            api_sources: Default::default(),
+            api_sources: ApiSources::default(),
         };
 
         let term = artist.as_delete_term();
@@ -454,8 +454,8 @@ mod tests {
             versions: vec![],
             album_source: AlbumSource::Local,
             api_source: ApiSource::library(),
-            artist_sources: Default::default(),
-            album_sources: Default::default(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
         };
 
         let term = album.as_delete_term();
@@ -490,7 +490,7 @@ mod tests {
             channels: None,
             track_source: TrackApiSource::Local,
             api_source: ApiSource::library(),
-            sources: Default::default(),
+            sources: ApiSources::default(),
         };
 
         let term = track.as_delete_term();

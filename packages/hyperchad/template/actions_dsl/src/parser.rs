@@ -990,10 +990,10 @@ mod tests {
 
     #[test_log::test]
     fn test_parse_literal_float() {
-        let lit = syn::parse_quote! { 3.14 };
+        let lit = syn::parse_quote! { 2.5 };
         let result = parse_literal(lit).unwrap();
         match result {
-            Literal::Float(f) => assert!((f - 3.14).abs() < f64::EPSILON),
+            Literal::Float(f) => assert!((f - 2.5).abs() < f64::EPSILON),
             _ => panic!("Expected float literal"),
         }
     }

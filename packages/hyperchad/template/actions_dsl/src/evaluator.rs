@@ -2761,10 +2761,10 @@ mod tests {
 
     #[test_log::test]
     fn test_generate_literal_code_for_float() {
-        let literal = Literal::Float(3.14);
+        let literal = Literal::Float(2.5);
         let result = generate_literal_code(&literal);
         let result_str = result.to_string();
-        assert!(result_str.contains("3.14f64"));
+        assert!(result_str.contains("2.5f64"));
     }
 
     #[test_log::test]

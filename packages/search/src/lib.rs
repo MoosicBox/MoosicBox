@@ -1610,12 +1610,14 @@ mod tests {
         before_each();
 
         // Add initial data
-        crate::populate_global_search_index_sync(&[ELDER_ARTIST.clone()], true).unwrap();
+        crate::populate_global_search_index_sync(std::slice::from_ref(&ELDER_ARTIST), true)
+            .unwrap();
         let results = crate::search_global_search_index("elder", 0, 10).unwrap();
         assert_eq!(results.len(), 1);
 
         // Add more data without deleting
-        crate::populate_global_search_index_sync(&[OMENS_ALBUM.clone()], false).unwrap();
+        crate::populate_global_search_index_sync(std::slice::from_ref(&OMENS_ALBUM), false)
+            .unwrap();
         let results = crate::search_global_search_index("elder", 0, 10).unwrap();
         assert_eq!(results.len(), 2);
     }

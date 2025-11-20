@@ -1838,17 +1838,19 @@ mod tests {
             assert_eq!(context.direction, LayoutDirection::default());
             assert_eq!(context.overflow_x, LayoutOverflow::default());
             assert_eq!(context.overflow_y, LayoutOverflow::default());
-            assert_eq!(context.width, 800.0);
-            assert_eq!(context.height, 600.0);
-            assert_eq!(context.root_width, 1920.0);
-            assert_eq!(context.root_height, 1080.0);
+            assert!((context.width - 800.0).abs() < f32::EPSILON);
+            assert!((context.height - 600.0).abs() < f32::EPSILON);
+            assert!((context.root_width - 1920.0).abs() < f32::EPSILON);
+            assert!((context.root_height - 1080.0).abs() < f32::EPSILON);
         }
 
         #[test_log::test]
         fn test_with_container_updates_direction() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
-            let mut container = Container::default();
-            container.direction = LayoutDirection::Column;
+            let container = Container {
+                direction: LayoutDirection::Column,
+                ..Default::default()
+            };
 
             let updated = context.with_container(&container);
 
@@ -1858,9 +1860,11 @@ mod tests {
         #[test_log::test]
         fn test_with_container_updates_overflow() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
-            let mut container = Container::default();
-            container.overflow_x = LayoutOverflow::Scroll;
-            container.overflow_y = LayoutOverflow::Auto;
+            let container = Container {
+                overflow_x: LayoutOverflow::Scroll,
+                overflow_y: LayoutOverflow::Auto,
+                ..Default::default()
+            };
 
             let updated = context.with_container(&container);
 
@@ -1871,42 +1875,48 @@ mod tests {
         #[test_log::test]
         fn test_with_container_uses_calculated_dimensions() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
-            let mut container = Container::default();
-            container.calculated_width = Some(400.0);
-            container.calculated_height = Some(300.0);
+            let container = Container {
+                calculated_width: Some(400.0),
+                calculated_height: Some(300.0),
+                ..Default::default()
+            };
 
             let updated = context.with_container(&container);
 
-            assert_eq!(updated.width, 400.0);
-            assert_eq!(updated.height, 300.0);
+            assert!((updated.width - 400.0).abs() < f32::EPSILON);
+            assert!((updated.height - 300.0).abs() < f32::EPSILON);
         }
 
         #[test_log::test]
         fn test_with_container_calculates_dimensions_from_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
-            let mut container = Container::default();
-            container.width = Some(Number::Real(500.0));
-            container.height = Some(Number::Real(400.0));
+            let container = Container {
+                width: Some(Number::Real(500.0)),
+                height: Some(Number::Real(400.0)),
+                ..Default::default()
+            };
 
             let updated = context.with_container(&container);
 
-            assert_eq!(updated.width, 500.0);
-            assert_eq!(updated.height, 400.0);
+            assert!((updated.width - 500.0).abs() < f32::EPSILON);
+            assert!((updated.height - 400.0).abs() < f32::EPSILON);
         }
 
         #[test_log::test]
         fn test_with_container_prefers_calculated_over_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
-            let mut container = Container::default();
-            container.width = Some(Number::Real(500.0));
-            container.height = Some(Number::Real(400.0));
-            container.calculated_width = Some(300.0);
-            container.calculated_height = Some(200.0);
+            let container = Container {
+                width: Some(Number::Real(500.0)),
+                height: Some(Number::Real(400.0)),
+                calculated_width: Some(300.0),
+                calculated_height: Some(200.0),
+                ..Default::default()
+            };
 
             let updated = context.with_container(&container);
 
-            assert_eq!(updated.width, 300.0);
-            assert_eq!(updated.height, 200.0);
+            assert!((updated.width - 300.0).abs() < f32::EPSILON);
+            assert!((updated.height - 200.0).abs() < f32::EPSILON);
         }
 
         #[test_log::test]
@@ -1916,8 +1926,8 @@ mod tests {
 
             let updated = context.with_container(&container);
 
-            assert_eq!(updated.width, 800.0);
-            assert_eq!(updated.height, 600.0);
+            assert!((updated.width - 800.0).abs() < f32::EPSILON);
+            assert!((updated.height - 600.0).abs() < f32::EPSILON);
         }
     }
 

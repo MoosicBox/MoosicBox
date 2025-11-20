@@ -1996,6 +1996,7 @@ mod tests {
 
             #[derive(Deserialize)]
             struct Data {
+                #[allow(dead_code)]
                 value: String,
             }
 

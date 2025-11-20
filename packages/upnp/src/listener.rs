@@ -509,8 +509,8 @@ mod tests {
 
     #[test_log::test]
     fn test_listener_error_from_send_error() {
-        let (tx, _rx) = flume::bounded::<usize>(1);
-        drop(_rx);
+        let (tx, rx) = flume::bounded::<usize>(1);
+        drop(rx);
         let send_error = tx.send(42).unwrap_err();
         let listener_error: ListenerError = send_error.into();
         assert!(matches!(listener_error, ListenerError::Send));

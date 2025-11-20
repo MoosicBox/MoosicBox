@@ -522,8 +522,8 @@ mod tests {
 
     #[test_log::test]
     fn test_error_from_recv_error() {
-        let (_tx, rx) = flume::unbounded::<()>();
-        drop(_tx);
+        let (tx, rx) = flume::unbounded::<()>();
+        drop(tx);
         let recv_err = rx.recv().unwrap_err();
         let err = Error::from(recv_err);
         assert!(matches!(err, Error::Recv(_)));
