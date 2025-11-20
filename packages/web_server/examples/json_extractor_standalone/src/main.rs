@@ -458,3 +458,274 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{UpdateUser, User};
+
+    #[test]
+    fn test_user_serialization_round_trip() {
+        let user = User {
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            age: 30,
+        };
+
+        let json = serde_json::to_string(&user).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+
+        assert_eq!(user.name, deserialized.name);
+        assert_eq!(user.email, deserialized.email);
+        assert_eq!(user.age, deserialized.age);
+    }
+
+    #[test]
+    fn test_user_deserialization_from_json() {
+        let json = r#"{"name": "Bob", "email": "bob@test.com", "age": 25}"#;
+        let user: User = serde_json::from_str(json).expect("Failed to deserialize User");
+
+        assert_eq!(user.name, "Bob");
+        assert_eq!(user.email, "bob@test.com");
+        assert_eq!(user.age, 25);
+    }
+
+    #[test]
+    fn test_user_with_special_characters() {
+        let user = User {
+            name: "O'Brien".to_string(),
+            email: "test+alias@example.com".to_string(),
+            age: 42,
+        };
+
+        let json = serde_json::to_string(&user).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+
+        assert_eq!(user.name, deserialized.name);
+        assert_eq!(user.email, deserialized.email);
+    }
+
+    #[test]
+    fn test_user_with_unicode() {
+        let user = User {
+            name: "José García".to_string(),
+            email: "josé@example.com".to_string(),
+            age: 35,
+        };
+
+        let json = serde_json::to_string(&user).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+
+        assert_eq!(user.name, deserialized.name);
+        assert_eq!(user.email, deserialized.email);
+    }
+
+    #[test]
+    fn test_user_deserialization_missing_field_fails() {
+        let json = r#"{"name": "Alice", "email": "alice@example.com"}"#;
+        let result: Result<User, _> = serde_json::from_str(json);
+
+        assert!(result.is_err(), "Should fail when age field is missing");
+    }
+
+    #[test]
+    fn test_user_deserialization_wrong_type_fails() {
+        let json = r#"{"name": "Alice", "email": "alice@example.com", "age": "thirty"}"#;
+        let result: Result<User, _> = serde_json::from_str(json);
+
+        assert!(
+            result.is_err(),
+            "Should fail when age is a string instead of number"
+        );
+    }
+
+    #[test]
+    fn test_user_with_boundary_age_values() {
+        let user_zero = User {
+            name: "Newborn".to_string(),
+            email: "newborn@example.com".to_string(),
+            age: 0,
+        };
+
+        let json = serde_json::to_string(&user_zero).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+        assert_eq!(deserialized.age, 0);
+
+        let user_max = User {
+            name: "Old".to_string(),
+            email: "old@example.com".to_string(),
+            age: u32::MAX,
+        };
+
+        let json = serde_json::to_string(&user_max).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+        assert_eq!(deserialized.age, u32::MAX);
+    }
+
+    #[test]
+    fn test_update_user_all_fields_present() {
+        let json = r#"{"name": "Updated Name", "email": "updated@example.com", "age": 40, "bio": "New bio"}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, Some("Updated Name".to_string()));
+        assert_eq!(update.email, Some("updated@example.com".to_string()));
+        assert_eq!(update.age, Some(40));
+        assert_eq!(update.bio, Some("New bio".to_string()));
+    }
+
+    #[test]
+    fn test_update_user_partial_fields() {
+        let json = r#"{"name": "Only Name"}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, Some("Only Name".to_string()));
+        assert_eq!(update.email, None);
+        assert_eq!(update.age, None);
+        assert_eq!(update.bio, None);
+    }
+
+    #[test]
+    fn test_update_user_no_fields() {
+        let json = r"{}";
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, None);
+        assert_eq!(update.email, None);
+        assert_eq!(update.age, None);
+        assert_eq!(update.bio, None);
+    }
+
+    #[test]
+    fn test_update_user_only_bio() {
+        let json = r#"{"bio": "Just the bio field"}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, None);
+        assert_eq!(update.email, None);
+        assert_eq!(update.age, None);
+        assert_eq!(update.bio, Some("Just the bio field".to_string()));
+    }
+
+    #[test]
+    fn test_update_user_null_values() {
+        let json = r#"{"name": null, "email": "test@example.com", "age": null, "bio": null}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, None);
+        assert_eq!(update.email, Some("test@example.com".to_string()));
+        assert_eq!(update.age, None);
+        assert_eq!(update.bio, None);
+    }
+
+    #[test]
+    fn test_update_user_serialization_round_trip() {
+        let update = UpdateUser {
+            name: Some("Test Name".to_string()),
+            email: None,
+            age: Some(25),
+            bio: Some("Test bio".to_string()),
+        };
+
+        let json = serde_json::to_string(&update).expect("Failed to serialize UpdateUser");
+        let deserialized: UpdateUser =
+            serde_json::from_str(&json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, deserialized.name);
+        assert_eq!(update.email, deserialized.email);
+        assert_eq!(update.age, deserialized.age);
+        assert_eq!(update.bio, deserialized.bio);
+    }
+
+    #[test]
+    fn test_update_user_empty_string_values() {
+        let json = r#"{"name": "", "email": "", "bio": ""}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.name, Some(String::new()));
+        assert_eq!(update.email, Some(String::new()));
+        assert_eq!(update.bio, Some(String::new()));
+    }
+
+    #[test]
+    fn test_update_user_with_unicode_bio() {
+        let json = r#"{"bio": "こんにちは世界 🌍"}"#;
+        let update: UpdateUser =
+            serde_json::from_str(json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.bio, Some("こんにちは世界 🌍".to_string()));
+    }
+
+    #[test]
+    fn test_user_with_empty_strings() {
+        let user = User {
+            name: String::new(),
+            email: String::new(),
+            age: 0,
+        };
+
+        let json = serde_json::to_string(&user).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+
+        assert_eq!(deserialized.name, "");
+        assert_eq!(deserialized.email, "");
+    }
+
+    #[test]
+    fn test_user_deserialization_extra_fields_ignored() {
+        let json = r#"{"name": "Alice", "email": "alice@example.com", "age": 30, "extra": "ignored", "another": 123}"#;
+        let user: User = serde_json::from_str(json).expect("Failed to deserialize User");
+
+        assert_eq!(user.name, "Alice");
+        assert_eq!(user.email, "alice@example.com");
+        assert_eq!(user.age, 30);
+    }
+
+    #[test]
+    fn test_update_user_wrong_type_fails() {
+        let json = r#"{"age": "not a number"}"#;
+        let result: Result<UpdateUser, _> = serde_json::from_str(json);
+
+        assert!(
+            result.is_err(),
+            "Should fail when age is a string instead of number"
+        );
+    }
+
+    #[test]
+    fn test_user_with_very_long_strings() {
+        let long_name = "A".repeat(10000);
+        let long_email = format!("{}@example.com", "b".repeat(1000));
+
+        let user = User {
+            name: long_name.clone(),
+            email: long_email.clone(),
+            age: 25,
+        };
+
+        let json = serde_json::to_string(&user).expect("Failed to serialize User");
+        let deserialized: User = serde_json::from_str(&json).expect("Failed to deserialize User");
+
+        assert_eq!(deserialized.name, long_name);
+        assert_eq!(deserialized.email, long_email);
+    }
+
+    #[test]
+    fn test_update_user_age_boundary_values() {
+        let json = format!(r#"{{"age": {}}}"#, u32::MAX);
+        let update: UpdateUser =
+            serde_json::from_str(&json).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update.age, Some(u32::MAX));
+
+        let json_zero = r#"{"age": 0}"#;
+        let update_zero: UpdateUser =
+            serde_json::from_str(json_zero).expect("Failed to deserialize UpdateUser");
+
+        assert_eq!(update_zero.age, Some(0));
+    }
+}
