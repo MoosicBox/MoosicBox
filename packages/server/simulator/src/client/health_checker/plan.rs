@@ -114,3 +114,144 @@ impl InteractionPlan<Interaction> for HealthCheckInteractionPlan {
         self.plan.push(interaction);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interaction_plan_context_new() {
+        let context = InteractionPlanContext::new();
+        // Just verify it constructs without panic
+        let _ = context;
+    }
+
+    #[test]
+    fn test_interaction_plan_context_default() {
+        let context = InteractionPlanContext::default();
+        // Just verify default constructs without panic
+        let _ = context;
+    }
+
+    #[test]
+    fn test_health_check_plan_new() {
+        let plan = HealthCheckInteractionPlan::new();
+        assert_eq!(plan.step, 0);
+        assert_eq!(plan.plan.len(), 0);
+    }
+
+    #[test]
+    fn test_health_check_plan_default() {
+        let plan = HealthCheckInteractionPlan::default();
+        assert_eq!(plan.step, 0);
+        assert_eq!(plan.plan.len(), 0);
+    }
+
+    #[test]
+    fn test_gen_interactions_creates_correct_count() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(10);
+
+        assert_eq!(plan.plan.len(), 10);
+        assert_eq!(plan.step, 0);
+    }
+
+    #[test]
+    fn test_gen_interactions_alternates_sleep_and_health_check() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(6);
+
+        // Based on the logic: (i + len).is_multiple_of(2) determines Sleep vs HealthCheck
+        // With len=0: i=1 (odd->HealthCheck), i=2 (even->Sleep), i=3 (odd->HealthCheck), etc.
+        assert!(matches!(plan.plan[0], Interaction::HealthCheck(_)));
+        assert!(matches!(plan.plan[1], Interaction::Sleep(_)));
+        assert!(matches!(plan.plan[2], Interaction::HealthCheck(_)));
+        assert!(matches!(plan.plan[3], Interaction::Sleep(_)));
+        assert!(matches!(plan.plan[4], Interaction::HealthCheck(_)));
+        assert!(matches!(plan.plan[5], Interaction::Sleep(_)));
+    }
+
+    #[test]
+    fn test_gen_interactions_health_check_has_correct_host() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(1);
+
+        if let Interaction::HealthCheck(host) = &plan.plan[0] {
+            assert_eq!(host, &format!("{HOST}:{PORT}"));
+        } else {
+            panic!("Expected HealthCheck interaction");
+        }
+    }
+
+    #[test]
+    fn test_gen_interactions_sleep_has_correct_duration() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(2);
+
+        // Second interaction should be Sleep
+        if let Interaction::Sleep(duration) = plan.plan[1] {
+            assert_eq!(duration, Duration::from_millis(1000));
+        } else {
+            panic!("Expected Sleep interaction");
+        }
+    }
+
+    #[test]
+    fn test_step_returns_interactions_in_order() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(3);
+
+        let first = plan.step();
+        assert!(first.is_some());
+        assert_eq!(plan.step, 1);
+
+        let second = plan.step();
+        assert!(second.is_some());
+        assert_eq!(plan.step, 2);
+
+        let third = plan.step();
+        assert!(third.is_some());
+        assert_eq!(plan.step, 3);
+
+        let fourth = plan.step();
+        assert!(fourth.is_none());
+    }
+
+    #[test]
+    fn test_step_returns_none_on_empty_plan() {
+        let mut plan = HealthCheckInteractionPlan::new();
+
+        assert!(plan.step().is_none());
+    }
+
+    #[test]
+    fn test_add_interaction_increases_plan_size() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        assert_eq!(plan.plan.len(), 0);
+
+        plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+        assert_eq!(plan.plan.len(), 1);
+
+        plan.add_interaction(Interaction::HealthCheck("test:1234".to_string()));
+        assert_eq!(plan.plan.len(), 2);
+    }
+
+    #[test]
+    fn test_gen_interactions_clears_previous_plan() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(5);
+        assert_eq!(plan.plan.len(), 5);
+
+        plan.gen_interactions(3);
+        assert_eq!(plan.plan.len(), 3);
+        assert_eq!(plan.step, 0);
+    }
+
+    #[test]
+    fn test_gen_interactions_zero_count() {
+        let mut plan = HealthCheckInteractionPlan::new();
+        plan.gen_interactions(0);
+
+        assert_eq!(plan.plan.len(), 0);
+    }
+}

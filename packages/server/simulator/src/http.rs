@@ -10,6 +10,7 @@ use simvar::switchy::tcp::TcpStream;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 /// HTTP response with status code, headers, and body.
+#[derive(Debug)]
 pub struct HttpResponse {
     /// HTTP status code.
     pub status_code: u16,
@@ -145,4 +146,195 @@ pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static 
         headers,
         body,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_headers_contains_in_order_empty_expected() {
+        let actual = BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("content-length".to_string(), "100".to_string()),
+        ]);
+
+        assert!(headers_contains_in_order(&[], &actual));
+    }
+
+    #[test]
+    fn test_headers_contains_in_order_single_match() {
+        let expected = vec![("content-type".to_string(), "application/json".to_string())];
+        let actual = BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("content-length".to_string(), "100".to_string()),
+        ]);
+
+        assert!(headers_contains_in_order(&expected, &actual));
+    }
+
+    #[test]
+    fn test_headers_contains_in_order_multiple_in_order() {
+        let expected = vec![
+            ("connection".to_string(), "close".to_string()),
+            ("content-type".to_string(), "application/json".to_string()),
+        ];
+        let actual = BTreeMap::from([
+            ("connection".to_string(), "close".to_string()),
+            ("content-length".to_string(), "100".to_string()),
+            ("content-type".to_string(), "application/json".to_string()),
+        ]);
+
+        assert!(headers_contains_in_order(&expected, &actual));
+    }
+
+    #[test]
+    fn test_headers_contains_in_order_missing_header() {
+        let expected = vec![("missing-header".to_string(), "value".to_string())];
+        let actual = BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
+
+        assert!(!headers_contains_in_order(&expected, &actual));
+    }
+
+    #[test]
+    fn test_headers_contains_in_order_wrong_value() {
+        let expected = vec![("content-type".to_string(), "text/html".to_string())];
+        let actual = BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
+
+        assert!(!headers_contains_in_order(&expected, &actual));
+    }
+
+    #[test]
+    fn test_headers_contains_in_order_out_of_order() {
+        // BTreeMap is ordered, so this tests that expected headers must appear in order
+        let expected = vec![
+            ("z-header".to_string(), "last".to_string()),
+            ("a-header".to_string(), "first".to_string()),
+        ];
+        let actual = BTreeMap::from([
+            ("a-header".to_string(), "first".to_string()),
+            ("z-header".to_string(), "last".to_string()),
+        ]);
+
+        // Should fail because z-header comes after a-header in BTreeMap
+        assert!(!headers_contains_in_order(&expected, &actual));
+    }
+
+    #[test]
+    fn test_parse_http_response_valid_basic() {
+        let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 13\r\n\r\n{\"test\":true}";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.status_code, 200);
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            response.headers.get("Content-Length"),
+            Some(&"13".to_string())
+        );
+        assert_eq!(response.body, "{\"test\":true}");
+    }
+
+    #[test]
+    fn test_parse_http_response_with_content_length_truncation() {
+        let raw = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello World Extra Data";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.body, "Hello");
+    }
+
+    #[test]
+    fn test_parse_http_response_multiple_body_separators() {
+        let raw = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nBody with\r\n\r\nseparators";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.body, "Body with\r\n\r\nseparators");
+    }
+
+    #[test]
+    fn test_parse_http_response_no_headers_separator() {
+        let raw = "HTTP/1.1 200 OK\r\nContent-Type: text/plain";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Invalid HTTP response format");
+    }
+
+    #[test]
+    fn test_parse_http_response_empty_response() {
+        let raw = "";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Invalid HTTP response format");
+    }
+
+    #[test]
+    fn test_parse_http_response_invalid_status_line() {
+        let raw = "HTTP/1.1 OK\r\n\r\nbody";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Invalid status line");
+    }
+
+    #[test]
+    fn test_parse_http_response_invalid_status_code() {
+        let raw = "HTTP/1.1 ABC OK\r\n\r\nbody";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Invalid status code");
+    }
+
+    #[test]
+    fn test_parse_http_response_various_status_codes() {
+        for status in [200, 201, 301, 400, 404, 500, 503] {
+            let raw = format!("HTTP/1.1 {status} Message\r\n\r\nbody");
+
+            let result = parse_http_response(&raw);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().status_code, status);
+        }
+    }
+
+    #[test]
+    fn test_parse_http_response_headers_with_whitespace() {
+        let raw =
+            "HTTP/1.1 200 OK\r\nContent-Type:  application/json  \r\nX-Custom:value\r\n\r\nbody";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(response.headers.get("X-Custom"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_http_response_empty_body() {
+        let raw = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n";
+
+        let result = parse_http_response(raw);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.status_code, 204);
+        assert_eq!(response.body, "");
+    }
 }
