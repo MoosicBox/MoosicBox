@@ -23,10 +23,15 @@ futures-core    = { workspace = true, optional = true }
 log = { workspace = true }
 
 [dev-dependencies]
-futures-util  = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "sync", "time", "tokio"] }
-test-log      = { workspace = true }
-tokio         = { workspace = true, features = ["macros", "rt-multi-thread"] }
+futures-util = { workspace = true }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+test-log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = ["futures-channel"]

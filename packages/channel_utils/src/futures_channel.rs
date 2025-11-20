@@ -468,9 +468,18 @@ mod tests {
         let mut context = Context::from_waker(&waker);
 
         // Messages should arrive in send order, not priority order
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(10))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(5))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(20))));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(20))
+        ));
     }
 
     #[test_log::test(switchy_async::test)]
@@ -492,11 +501,26 @@ mod tests {
         let mut context = Context::from_waker(&waker);
 
         // Each poll should flush one message from buffer
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(1))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(10))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(5))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(3))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Pending));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(3))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
     }
 
     #[test_log::test(switchy_async::test)]
@@ -701,9 +725,18 @@ mod tests {
         let mut context = Context::from_waker(&waker);
 
         // With equal priorities, should maintain FIFO order
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(1))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(2))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(3))));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(2))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(3))
+        ));
     }
 
     #[test_log::test(switchy_async::test)]
@@ -736,9 +769,18 @@ mod tests {
         let mut context = Context::from_waker(&waker);
 
         // Receive messages to verify they were buffered correctly
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(1))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(5))));
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Ready(Some(3))));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(3))
+        ));
     }
 
     #[test_log::test(switchy_async::test)]
@@ -765,9 +807,15 @@ mod tests {
         // Remaining messages should come out in descending priority order
         for i in (0..999).rev() {
             let received = Pin::new(&mut rx).poll_next(&mut context);
-            assert!(matches!(received, Poll::Ready(Some(val)) if val == i), "Expected {i}, got {received:?}");
+            assert!(
+                matches!(received, Poll::Ready(Some(val)) if val == i),
+                "Expected {i}, got {received:?}"
+            );
         }
 
-        assert!(matches!(Pin::new(&mut rx).poll_next(&mut context), Poll::Pending));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
     }
 }
