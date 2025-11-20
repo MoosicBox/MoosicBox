@@ -90,7 +90,17 @@ generate_error_summary() {
                 echo "- Ensure Cargo.toml files are valid"
                 ;;
         esac
-    } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+    } >> "$GITHUB_STEP_SUMMARY" || {
+        echo "⚠️ Failed to write error summary to GITHUB_STEP_SUMMARY" >&2
+        echo "   GITHUB_STEP_SUMMARY=$GITHUB_STEP_SUMMARY" >&2
+        echo "   File writable: $(test -w "$GITHUB_STEP_SUMMARY" && echo "yes" || echo "no")" >&2
+    }
+
+    # Log confirmation that summary was generated
+    echo "✍️  Error summary written to GITHUB_STEP_SUMMARY" >&2
+    echo "   Command: $CONTEXT_COMMAND" >&2
+    echo "   Phase: $CONTEXT_PHASE" >&2
+    [[ -n "$CONTEXT_PACKAGE_NAME" ]] && echo "   Package: $CONTEXT_PACKAGE_NAME" >&2
 }
 
 # Set trap to catch ALL errors
@@ -1004,12 +1014,20 @@ handle_setup_error() {
         echo "<details open>"
         echo "<summary><b>🔧 Setup Details</b></summary>"
         echo ""
-        echo "The CI environment setup process failed. This typically occurs when:"
+        echo "The CI environment setup process failed during: **$CONTEXT_PHASE**"
+        echo ""
+        echo "This typically occurs when:"
         echo ""
         echo "- Required inputs are missing or malformed"
         echo "- Git submodules cannot be initialized"
-        echo "- Dependencies fail to install"
+        echo "- Dependencies fail to install (vcpkg, npm, cargo, etc.)"
         echo "- Custom CI steps fail"
+        echo ""
+        echo "**Common dependency installation issues:**"
+        echo "- vcpkg packages not available for target platform"
+        echo "- Network connectivity issues"
+        echo "- Missing system dependencies"
+        echo "- Insufficient disk space"
         echo ""
         echo "</details>"
         echo ""
@@ -1079,13 +1097,21 @@ setup_ci_environment() {
     fi
 
     if [[ -n "$ci_steps" ]]; then
+        CONTEXT_PHASE="running CI steps"
         echo "⚙️  Running CI setup steps"
-        eval "$ci_steps"
+        echo "   Command: $ci_steps" >&2
+        if ! eval "$ci_steps"; then
+            handle_setup_error "CI setup steps failed: $ci_steps"
+        fi
     fi
 
     if [[ -n "$dependencies" ]]; then
+        CONTEXT_PHASE="installing dependencies"
         echo "📥 Installing dependencies"
-        eval "$dependencies"
+        echo "   Command: $dependencies" >&2
+        if ! eval "$dependencies"; then
+            handle_setup_error "Dependency installation failed: $dependencies"
+        fi
     fi
 
     echo "✅ CI environment setup completed"
