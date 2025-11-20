@@ -754,3 +754,258 @@ async fn get_connection_id(
         )
         .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_websocket_context_default() {
+        let context = WebsocketContext::default();
+
+        assert_eq!(context.connection_id, "");
+        assert_eq!(context.profile, None);
+        assert_eq!(context.player_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_websocket_context_clone() {
+        let context1 = WebsocketContext {
+            connection_id: "test-123".to_string(),
+            profile: Some("my-profile".to_string()),
+            player_actions: vec![],
+        };
+
+        let context2 = context1.clone();
+        assert_eq!(context1.connection_id, context2.connection_id);
+        assert_eq!(context1.profile, context2.profile);
+    }
+
+    #[test]
+    fn test_response_serialization() {
+        let response = Response {
+            status_code: 200,
+            body: "Success".to_string(),
+        };
+
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["statusCode"], 200);
+        assert_eq!(json["body"], "Success");
+    }
+
+    #[test]
+    fn test_response_deserialization() {
+        let json = serde_json::json!({
+            "statusCode": 404,
+            "body": "Not Found"
+        });
+
+        let response: Response = serde_json::from_value(json).unwrap();
+        assert_eq!(response.status_code, 404);
+        assert_eq!(response.body, "Not Found");
+    }
+
+    #[test]
+    fn test_websocket_send_error_display() {
+        let error = WebsocketSendError::Unknown("test error".to_string());
+        let error_str = error.to_string();
+        assert!(error_str.contains("test error"));
+    }
+
+    #[test]
+    fn test_websocket_message_error_display() {
+        let error = WebsocketMessageError::MissingMessageType;
+        assert_eq!(error.to_string(), "Missing message type");
+
+        let error = WebsocketMessageError::InvalidMessageType;
+        assert_eq!(error.to_string(), "Invalid message type");
+
+        let error = WebsocketMessageError::MissingPayload;
+        assert_eq!(error.to_string(), "Missing payload");
+
+        let error = WebsocketMessageError::MissingProfile;
+        assert_eq!(error.to_string(), "Missing profile");
+    }
+
+    #[test]
+    fn test_websocket_message_error_invalid_payload() {
+        let error =
+            WebsocketMessageError::InvalidPayload("field_name".to_string(), "reason".to_string());
+        let error_str = error.to_string();
+        assert!(error_str.contains("field_name"));
+        assert!(error_str.contains("reason"));
+    }
+
+    #[test]
+    fn test_update_session_error_display() {
+        let error = UpdateSessionError::NoSessionFound;
+        assert_eq!(error.to_string(), "No session found");
+    }
+
+    #[test]
+    fn test_websocket_connect_error_display() {
+        let error = WebsocketConnectError::Unknown;
+        assert_eq!(error.to_string(), "Unknown");
+    }
+
+    #[test]
+    fn test_websocket_connection_data_serialization() {
+        let data = WebsocketConnectionData { playing: true };
+        let json = serde_json::to_value(&data).unwrap();
+        assert_eq!(json["playing"], true);
+    }
+
+    #[test]
+    fn test_websocket_connection_data_deserialization() {
+        let json = serde_json::json!({
+            "playing": false
+        });
+        let data: WebsocketConnectionData = serde_json::from_value(json).unwrap();
+        assert!(!data.playing);
+    }
+
+    struct MockWebsocketSender;
+
+    #[async_trait]
+    impl WebsocketSender for MockWebsocketSender {
+        async fn send(&self, _connection_id: &str, _data: &str) -> Result<(), WebsocketSendError> {
+            Ok(())
+        }
+
+        async fn send_all(&self, _data: &str) -> Result<(), WebsocketSendError> {
+            Ok(())
+        }
+
+        async fn send_all_except(
+            &self,
+            _connection_id: &str,
+            _data: &str,
+        ) -> Result<(), WebsocketSendError> {
+            Ok(())
+        }
+
+        async fn ping(&self) -> Result<(), WebsocketSendError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_connect_returns_success_response() {
+        let sender = MockWebsocketSender;
+        let context = WebsocketContext {
+            connection_id: "test-conn-123".to_string(),
+            profile: Some("default".to_string()),
+            player_actions: vec![],
+        };
+
+        let response = connect(&sender, &context);
+
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.body, "Connected");
+    }
+
+    #[test]
+    fn test_websocket_sender_debug() {
+        let sender = MockWebsocketSender;
+        let debug_str = format!("{:?}", &sender as &dyn WebsocketSender);
+        assert_eq!(debug_str, "{WebsocketSender}");
+    }
+
+    #[test]
+    fn test_websocket_send_error_from_parse_int() {
+        let parse_error = "invalid".parse::<u64>().unwrap_err();
+        let ws_error = WebsocketSendError::from(parse_error);
+
+        match ws_error {
+            WebsocketSendError::ParseInt(_) => {}
+            _ => panic!("Expected ParseInt variant"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_send_error_from_serde() {
+        // Create a value that will fail during deserialization
+        let invalid_json = r#"{"key": invalid}"#;
+        let serde_error: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+        let ws_error = WebsocketSendError::from(serde_error);
+
+        match ws_error {
+            WebsocketSendError::Serde(_) => {}
+            _ => panic!("Expected Serde variant"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_message_error_from_websocket_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let message_error = WebsocketMessageError::from(send_error);
+
+        match message_error {
+            WebsocketMessageError::WebsocketSend(_) => {}
+            _ => panic!("Expected WebsocketSend variant"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_message_error_from_serde() {
+        let invalid_json = r#"{"key": invalid}"#;
+        let serde_error: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+        let message_error = WebsocketMessageError::from(serde_error);
+
+        match message_error {
+            WebsocketMessageError::Serde(_) => {}
+            _ => panic!("Expected Serde variant"),
+        }
+    }
+
+    #[test]
+    fn test_update_session_error_from_websocket_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let update_error = UpdateSessionError::from(send_error);
+
+        match update_error {
+            UpdateSessionError::WebsocketSend(_) => {}
+            _ => panic!("Expected WebsocketSend variant"),
+        }
+    }
+
+    #[test]
+    fn test_update_session_error_from_serde() {
+        let invalid_json = r#"{"key": invalid}"#;
+        let serde_error: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+        let update_error = UpdateSessionError::from(serde_error);
+
+        match update_error {
+            UpdateSessionError::Serde(_) => {}
+            _ => panic!("Expected Serde variant"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_disconnect_error_from_websocket_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let disconnect_error = WebsocketDisconnectError::from(send_error);
+
+        match disconnect_error {
+            WebsocketDisconnectError::WebsocketSend(_) => {}
+            _ => panic!("Expected WebsocketSend variant"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_disconnect_error_from_serde() {
+        let invalid_json = r#"{"key": invalid}"#;
+        let serde_error: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+        let disconnect_error = WebsocketDisconnectError::from(serde_error);
+
+        match disconnect_error {
+            WebsocketDisconnectError::Serde(_) => {}
+            _ => panic!("Expected Serde variant"),
+        }
+    }
+}

@@ -9504,6 +9504,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_logging",
  "moosicbox_session",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "strum 0.27.2",

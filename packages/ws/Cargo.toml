@@ -33,6 +33,9 @@ serde_json   = { workspace = true }
 strum        = { workspace = true }
 strum_macros = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
 [features]
 default = ["aac", "flac", "mp3", "opus", "ws"]
 

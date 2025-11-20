@@ -221,3 +221,194 @@ pub struct SetSeek {
     /// Seek position in seconds.
     pub seek: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_session::models::ApiPlaybackTarget;
+    use pretty_assertions::assert_eq;
+    use serde_json::json;
+
+    #[test]
+    fn test_inbound_payload_ping_serialization() {
+        let payload = InboundPayload::Ping(EmptyPayload {});
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "PING");
+    }
+
+    #[test]
+    fn test_inbound_payload_ping_deserialization() {
+        let json = json!({"type": "PING"});
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::Ping(_) => {}
+            _ => panic!("Expected Ping variant"),
+        }
+    }
+
+    #[test]
+    fn test_inbound_payload_get_connection_id_serialization() {
+        let payload = InboundPayload::GetConnectionId(EmptyPayload {});
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "GET_CONNECTION_ID");
+    }
+
+    #[test]
+    fn test_inbound_payload_get_sessions_serialization() {
+        let payload = InboundPayload::GetSessions(EmptyPayload {});
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "GET_SESSIONS");
+    }
+
+    #[test]
+    fn test_inbound_payload_display() {
+        let payload = InboundPayload::Ping(EmptyPayload {});
+        assert_eq!(payload.to_string(), "Ping");
+
+        let payload = InboundPayload::GetConnectionId(EmptyPayload {});
+        assert_eq!(payload.to_string(), "GetConnectionId");
+
+        let payload = InboundPayload::GetSessions(EmptyPayload {});
+        assert_eq!(payload.to_string(), "GetSessions");
+    }
+
+    #[test]
+    fn test_outbound_payload_connection_id_serialization() {
+        let payload = OutboundPayload::ConnectionId(ConnectionIdPayload {
+            connection_id: "test-123".to_string(),
+        });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "CONNECTION_ID");
+        assert_eq!(json["connectionId"], "test-123");
+    }
+
+    #[test]
+    fn test_outbound_payload_connection_id_deserialization() {
+        let json = json!({
+            "type": "CONNECTION_ID",
+            "connectionId": "test-456"
+        });
+        let payload: OutboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            OutboundPayload::ConnectionId(p) => {
+                assert_eq!(p.connection_id, "test-456");
+            }
+            _ => panic!("Expected ConnectionId variant"),
+        }
+    }
+
+    #[test]
+    fn test_outbound_payload_display() {
+        let payload = OutboundPayload::ConnectionId(ConnectionIdPayload {
+            connection_id: "test".to_string(),
+        });
+        assert_eq!(payload.to_string(), "ConnectionId");
+
+        let payload = OutboundPayload::Sessions(SessionsPayload { payload: vec![] });
+        assert_eq!(payload.to_string(), "Sessions");
+    }
+
+    #[test]
+    fn test_set_seek_serialization() {
+        let seek = SetSeek {
+            session_id: 42,
+            profile: "test-profile".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            seek: 120,
+        };
+
+        let json = serde_json::to_value(&seek).unwrap();
+
+        assert_eq!(json["sessionId"], 42);
+        assert_eq!(json["profile"], "test-profile");
+        assert_eq!(json["seek"], 120);
+    }
+
+    #[test]
+    fn test_set_seek_deserialization() {
+        let json = json!({
+            "sessionId": 99,
+            "profile": "my-profile",
+            "playbackTarget": {
+                "type": "AUDIO_ZONE",
+                "audioZoneId": 1
+            },
+            "seek": 300
+        });
+
+        let seek: SetSeek = serde_json::from_value(json).unwrap();
+
+        assert_eq!(seek.session_id, 99);
+        assert_eq!(seek.profile, "my-profile");
+        assert_eq!(seek.seek, 300);
+    }
+
+    #[test]
+    fn test_set_seek_default() {
+        let seek = SetSeek::default();
+
+        assert_eq!(seek.session_id, 0);
+        assert_eq!(seek.profile, "");
+        assert_eq!(seek.seek, 0);
+    }
+
+    #[test]
+    fn test_set_seek_clone_and_equality() {
+        let seek1 = SetSeek {
+            session_id: 10,
+            profile: "profile1".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            seek: 50,
+        };
+
+        let seek2 = seek1.clone();
+        assert_eq!(seek1, seek2);
+
+        let seek3 = SetSeek {
+            session_id: 11,
+            profile: "profile1".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            seek: 50,
+        };
+        assert_ne!(seek1, seek3);
+    }
+
+    #[test]
+    fn test_empty_payload_serialization() {
+        let payload = EmptyPayload {};
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert!(json.is_object());
+        assert_eq!(json.as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_sessions_payload_serialization() {
+        let payload = SessionsPayload { payload: vec![] };
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["payload"], json!([]));
+    }
+
+    #[test]
+    fn test_connections_payload_serialization() {
+        let payload = ConnectionsPayload { payload: vec![] };
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["payload"], json!([]));
+    }
+
+    #[test]
+    fn test_audio_zone_with_sessions_payload_serialization() {
+        let payload = AudioZoneWithSessionsPayload { payload: vec![] };
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["payload"], json!([]));
+    }
+}
