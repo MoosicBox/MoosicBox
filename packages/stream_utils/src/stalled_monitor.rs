@@ -4,6 +4,25 @@
 //! when data flow stalls and enforce timeout or rate-limiting policies.
 //!
 //! Available when the `stalled-monitor` feature is enabled.
+//!
+//! # Examples
+//!
+//! Adding timeout monitoring to a byte stream:
+//!
+//! ```rust
+//! use moosicbox_stream_utils::ByteWriter;
+//! use std::time::Duration;
+//! use std::io::Write;
+//!
+//! # async fn example() {
+//! let mut writer = ByteWriter::default();
+//! let stream = writer.stream()
+//!     .stalled_monitor()
+//!     .with_timeout(Duration::from_secs(30));
+//!
+//! // Stream will timeout if no data is received within 30 seconds
+//! # }
+//! ```
 
 use std::io::{ErrorKind, Result};
 use std::task::Poll;
