@@ -33,6 +33,11 @@ impl MdnsSdServiceDaemon {
 
 #[async_trait]
 impl MdnsServiceDaemon for MdnsSdServiceDaemon {
+    /// Registers an mDNS service using the `mdns_sd` service daemon.
+    ///
+    /// # Errors
+    ///
+    /// * [`mdns_sd::Error`] - If the service daemon encounters an error during registration
     async fn register(&self, service_info: ServiceInfo) -> Result<(), mdns_sd::Error> {
         self.0.register(service_info)
     }
@@ -53,6 +58,13 @@ pub mod simulator {
 
     #[async_trait]
     impl MdnsServiceDaemon for SimulatorServiceDaemon {
+        /// Simulates registering an mDNS service (no-op).
+        ///
+        /// This implementation does nothing and always succeeds.
+        ///
+        /// # Errors
+        ///
+        /// This method never returns an error.
         async fn register(&self, _service_info: ServiceInfo) -> Result<(), mdns_sd::Error> {
             Ok(())
         }

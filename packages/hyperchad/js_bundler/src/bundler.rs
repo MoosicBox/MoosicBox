@@ -24,14 +24,10 @@ pub static MANIFEST_DIR: LazyLock<PathBuf> =
 /// This function delegates to either the SWC or esbuild bundler based on which
 /// feature is enabled. SWC is preferred if both features are enabled.
 ///
-/// # Errors
-///
-/// This function does not return errors directly, but the underlying bundlers may panic
-/// on failure conditions. See the individual bundler implementations for details.
-///
 /// # Panics
 ///
-/// Panics if neither the `swc` nor `esbuild` feature is enabled.
+/// * Panics if neither the `swc` nor `esbuild` feature is enabled.
+/// * May panic if the underlying bundlers encounter errors. See the individual bundler implementations for details.
 pub fn bundle(target: &Path, out: &Path) {
     if cfg!(feature = "swc") {
         #[cfg(feature = "swc")]

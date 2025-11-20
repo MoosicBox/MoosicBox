@@ -33,6 +33,7 @@ use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedReceiver;
 
+/// Prefix used to identify base64-encoded tunnel response strings.
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
 
@@ -368,6 +369,9 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
         }
     }
 
+    /// Processes the next queued packet if available and in sequence.
+    ///
+    /// Returns `Some(Poll)` if a packet was processed, `None` if no packet is ready.
     fn process_queued_packet(
         &mut self,
     ) -> Option<std::task::Poll<Option<Result<Bytes, TunnelStreamError>>>> {
@@ -389,6 +393,10 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
     }
 }
 
+/// Converts a tunnel response into a polled stream item.
+///
+/// Updates stream metrics including time to first byte, packet count, and byte count.
+/// Marks the stream as done if the response is the final packet.
 fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>>>(
     stream: &mut TunnelStream<F>,
     response: TunnelResponse,

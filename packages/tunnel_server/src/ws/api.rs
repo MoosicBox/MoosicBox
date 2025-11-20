@@ -36,8 +36,8 @@ pub struct ConnectRequest {
 ///
 /// # Errors
 ///
-/// * Returns an error if the WebSocket handshake fails.
-/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
+/// * Returns an error if the WebSocket handshake fails
+/// * Returns [`actix_web::error::ErrorUnauthorized`] if the signature token is invalid
 #[get("/ws")]
 #[allow(clippy::similar_names, clippy::future_not_send)]
 pub async fn websocket(

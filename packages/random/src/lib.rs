@@ -193,6 +193,7 @@ macro_rules! impl_rng {
             /// Creates a new random number generator from an optional seed.
             ///
             /// If `None` is provided, a random seed will be used.
+            #[must_use]
             pub fn from_seed<S: Into<Option<u64>>>(seed: S) -> Self {
                 Self(Arc::new(Mutex::new(<$type>::new(seed))))
             }
@@ -241,6 +242,7 @@ macro_rules! impl_rng {
             ///
             /// * If the range is empty
             /// * If the internal mutex is poisoned
+            #[must_use]
             pub fn gen_range<T, R>(&self, range: R) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -258,6 +260,7 @@ macro_rules! impl_rng {
             ///
             /// * If the range is empty
             /// * If the internal mutex is poisoned
+            #[must_use]
             pub fn gen_range_dist<T, R>(&self, range: R, dist: f64) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -278,6 +281,7 @@ macro_rules! impl_rng {
             ///
             /// * If the range is empty
             /// * If the internal mutex is poisoned
+            #[must_use]
             pub fn gen_range_disti<T, R>(&self, range: R, dist: i32) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -295,6 +299,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If the internal mutex is poisoned
+            #[must_use]
             pub fn sample<T, D: ::rand::prelude::Distribution<T>>(&self, distr: D) -> T {
                 distr.sample(&mut *self.0.lock().unwrap())
             }

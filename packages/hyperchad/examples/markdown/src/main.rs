@@ -344,7 +344,26 @@ hyperchad = { version = "0.1", features = ["markdown", "markdown-emoji"] }
 ```
 "##;
 
+/// Creates the main demo page showcasing various markdown features.
+///
+/// This function constructs a complete demo page using `HyperChad`'s `container!` macro,
+/// demonstrating how markdown content is converted to `Container` structures and integrated
+/// with custom styling. The page includes examples of:
+///
+/// - Text formatting (bold, italic, strikethrough)
+/// - Lists (ordered, unordered, task lists)
+/// - Code blocks with syntax highlighting
+/// - Tables with GitHub Flavored Markdown
+/// - Links and images
+/// - Emoji support (both Unicode and shortcodes)
+/// - Advanced features (nested blockquotes, complex lists)
+///
+/// # Returns
+///
+/// A `Containers` structure containing the complete demo page layout with header,
+/// main content area, and footer.
 #[allow(clippy::too_many_lines)]
+#[must_use]
 fn create_main_page() -> Containers {
     container! {
         div class="page" {
@@ -541,6 +560,16 @@ fn create_main_page() -> Containers {
     }
 }
 
+/// Creates the application router with the demo page route.
+///
+/// This function sets up a `Router` with a single route (`/`) that serves the
+/// markdown demo page. When accessed, it returns a `View` containing the
+/// complete demo page created by `create_main_page()`.
+///
+/// # Returns
+///
+/// A configured `Router` instance with the demo page route handler.
+#[must_use]
 fn create_router() -> Router {
     Router::new().with_route("/", |_req: RouteRequest| async move {
         View::builder().with_primary(create_main_page()).build()

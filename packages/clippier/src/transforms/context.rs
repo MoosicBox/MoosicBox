@@ -25,6 +25,7 @@ pub struct PackageInfo {
     pub dependencies: Vec<DependencyInfo>,
 }
 
+#[must_use]
 fn default_cargo_toml() -> Value {
     Value::Table(toml::map::Map::new())
 }
@@ -203,6 +204,7 @@ impl PackageInfo {
 }
 
 /// Extract features from Cargo.toml
+#[must_use]
 fn extract_features(cargo_toml: &Value) -> BTreeMap<String, Vec<String>> {
     let Some(features_table) = cargo_toml.get("features").and_then(|f| f.as_table()) else {
         return BTreeMap::new();
@@ -224,6 +226,7 @@ fn extract_features(cargo_toml: &Value) -> BTreeMap<String, Vec<String>> {
 }
 
 /// Extract dependencies from Cargo.toml
+#[must_use]
 fn extract_dependencies(
     cargo_toml: &Value,
     workspace: &WorkspaceContext,

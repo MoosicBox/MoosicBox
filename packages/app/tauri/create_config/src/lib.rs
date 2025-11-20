@@ -51,11 +51,6 @@ impl Config {
 /// Creates a TypeScript configuration file with web disabled, app enabled,
 /// and the bundled flag set according to the `bundled` parameter.
 ///
-/// # Parameters
-///
-/// * `bundled` - Whether the build is bundled (affects the `bundled` field in the generated config)
-/// * `output` - The path where the TypeScript configuration file will be written
-///
 /// # Panics
 ///
 /// * If the file fails to open

@@ -47,6 +47,7 @@ impl CustomMigration {
 
 #[async_trait]
 impl Migration<'static> for CustomMigration {
+    /// Returns the unique identifier for this migration.
     fn id(&self) -> &str {
         &self.id
     }
@@ -77,6 +78,7 @@ impl Migration<'static> for CustomMigration {
         Ok(())
     }
 
+    /// Returns an optional description of the migration.
     fn description(&self) -> Option<&str> {
         Some("Custom migration example")
     }

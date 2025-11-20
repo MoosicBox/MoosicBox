@@ -34,6 +34,9 @@ impl std::fmt::Display for DownloadTab {
     }
 }
 
+/// Renders the progress indicator for a download task.
+///
+/// Displays bytes downloaded, total size, progress percentage, and download speed if available.
 fn download_task_progress(task: &ApiDownloadTask) -> Containers {
     container! {
         div {
@@ -52,6 +55,9 @@ fn download_task_progress(task: &ApiDownloadTask) -> Containers {
     }
 }
 
+/// Renders a download task card with cover art, title, and progress information.
+///
+/// Displays different information based on the download item type (track, album cover, or artist cover).
 #[allow(clippy::too_many_lines)]
 fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
     let id = task.id;

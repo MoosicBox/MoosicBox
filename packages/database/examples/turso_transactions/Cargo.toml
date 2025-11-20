@@ -15,6 +15,9 @@ version     = "0.1.0"
 switchy_database = { workspace = true, features = ["turso"] }
 tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
+[features]
+fail-on-warnings = []
+
 [[bin]]
 name = "turso_transactions"
 path = "src/main.rs"

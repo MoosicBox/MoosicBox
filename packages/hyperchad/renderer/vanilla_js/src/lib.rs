@@ -68,9 +68,18 @@ static INSECURE_WARNING: LazyLock<()> = LazyLock::new(|| {
 ///
 /// This renderer produces HTML with custom attributes (e.g., `v-onclick`, `hx-get`)
 /// that are processed by the hyperchad JavaScript runtime to enable interactive behavior.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct VanillaJsTagRenderer {
     default: DefaultHtmlTagRenderer,
+}
+
+impl Default for VanillaJsTagRenderer {
+    /// Creates a new vanilla JavaScript tag renderer with default settings.
+    fn default() -> Self {
+        Self {
+            default: DefaultHtmlTagRenderer::default(),
+        }
+    }
 }
 
 const SCRIPT_NAME_STEM: &str = "hyperchad";
@@ -177,6 +186,10 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     format!("{SCRIPT_NAME_STEM}-{hash}.{SCRIPT_NAME_EXTENSION}")
 });
 
+/// Converts an arithmetic expression to JavaScript code.
+///
+/// Recursively translates hyperchad arithmetic operations (plus, minus, multiply, divide, min, max)
+/// into their JavaScript equivalents, handling operator precedence with grouping parentheses.
 fn arithmetic_to_js(value: &Arithmetic) -> String {
     match value {
         Arithmetic::Plus(a, b) => {
@@ -205,6 +218,16 @@ fn arithmetic_to_js(value: &Arithmetic) -> String {
     }
 }
 
+/// Converts a calculated value to JavaScript code.
+///
+/// Translates hyperchad calculated values (event values, element dimensions, positions, etc.)
+/// into JavaScript expressions that can be evaluated at runtime.
+///
+/// # Panics
+///
+/// Panics if `target` is `None` for value variants that have already been handled by early
+/// returns (`EventValue`, `Key`, `MouseX`/`MouseY` without target). This is an internal logic
+/// invariant that should never occur in practice.
 fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     let target = match value {
         CalcValue::EventValue => {
@@ -277,6 +300,11 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     )
 }
 
+/// Converts a hyperchad value to JavaScript code.
+///
+/// Translates various hyperchad value types (calculated values, arithmetic, strings, etc.)
+/// into JavaScript expressions. Returns a tuple of (JavaScript code, equality flag) where
+/// the equality flag indicates whether the value should use strict equality comparison.
 fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
     match value {
         Value::Calc(calc_value) => (calc_value_to_js(calc_value, serializable), true),
@@ -309,10 +337,18 @@ fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
     }
 }
 
+/// Converts an action effect to JavaScript code.
+///
+/// Wraps the action conversion with effect modifiers like delays and throttling.
+/// Returns a tuple of (action code, optional reset code).
 fn action_effect_to_js(effect: &ActionEffect) -> (String, Option<String>) {
     action_to_js(&effect.action, true)
 }
 
+/// Converts an action effect to a JavaScript attribute string.
+///
+/// Applies effect modifiers (delay, throttle) to the action and formats it as an
+/// HTML attribute value suitable for hyperchad event handlers.
 fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
     let (action, reset) = action_effect_to_js(effect);
 
@@ -334,6 +370,15 @@ fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
     )
 }
 
+/// Converts an element target to JavaScript code.
+///
+/// Translates hyperchad element selectors (by ID, class, self, etc.) into JavaScript
+/// expressions that return an array of matching DOM elements.
+///
+/// # Panics
+///
+/// Panics if the target is `ElementTarget::Id(_)`, which should be converted to
+/// `ElementTarget::StrId` before calling this function. This is an internal invariant.
 fn element_target_to_js(target: &ElementTarget) -> String {
     #[allow(clippy::match_wildcard_for_single_variants)]
     match target {
@@ -364,6 +409,7 @@ fn element_target_to_js(target: &ElementTarget) -> String {
     }
 }
 
+/// Converts a binary operator to its JavaScript equivalent.
 const fn binary_op_to_js(op: &BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "+",
@@ -385,6 +431,7 @@ const fn binary_op_to_js(op: &BinaryOp) -> &'static str {
     }
 }
 
+/// Converts a unary operator to its JavaScript equivalent.
 const fn unary_op_to_js(op: &UnaryOp) -> &'static str {
     match op {
         UnaryOp::Not => "!",
@@ -394,6 +441,20 @@ const fn unary_op_to_js(op: &UnaryOp) -> &'static str {
     }
 }
 
+/// Converts a hyperchad expression to JavaScript code.
+///
+/// Recursively translates hyperchad DSL expressions (literals, variables, function calls,
+/// operators, etc.) into their JavaScript equivalents for runtime evaluation.
+///
+/// # Panics
+///
+/// Panics if the expression contains:
+/// * `Expression::ElementRef` with an expression type other than `Literal::String` or `Variable`
+/// * `Expression::Match` - match expressions are not yet implemented
+/// * `Expression::Block` - block expressions are not yet implemented
+/// * `Expression::Array` - array expressions are not yet implemented
+/// * `Expression::Tuple` - tuple expressions are not yet implemented
+/// * `Expression::Closure` - closure expressions are not yet implemented
 #[allow(clippy::too_many_lines)]
 fn expression_to_js(expr: &Expression) -> String {
     match expr {
@@ -504,6 +565,11 @@ fn expression_to_js(expr: &Expression) -> String {
     }
 }
 
+/// Converts a hyperchad action to JavaScript code.
+///
+/// Translates action types (style changes, navigation, logging, etc.) into JavaScript code
+/// that can be executed in response to user interactions. Returns a tuple of (action code,
+/// optional reset code) where reset code can be used to undo the action.
 #[allow(clippy::too_many_lines)]
 fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<String>) {
     match action {
@@ -1045,7 +1111,15 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
 ///
 /// This renderer implements the `ExtendHtmlRenderer` trait to enable server-sent events,
 /// view updates, and canvas rendering in hyperchad applications using vanilla JavaScript.
+#[derive(Debug, Clone, Copy)]
 pub struct VanillaJsRenderer {}
+
+impl Default for VanillaJsRenderer {
+    /// Creates a new vanilla JavaScript renderer.
+    fn default() -> Self {
+        Self {}
+    }
+}
 
 #[async_trait]
 impl ExtendHtmlRenderer for VanillaJsRenderer {

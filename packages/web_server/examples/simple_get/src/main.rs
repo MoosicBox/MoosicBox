@@ -1,7 +1,11 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Simple GET endpoint example demonstrating basic route creation with scope-based routing.
 //!
 //! This example shows the fundamental building blocks of creating a web server with
-//! MoosicBox's web server abstraction. It demonstrates how to set up a basic GET
+//! `MoosicBox`'s web server abstraction. It demonstrates how to set up a basic GET
 //! endpoint using the `Scope::get()` method, configure CORS for cross-origin requests,
 //! and access request information like path and query parameters.
 //!

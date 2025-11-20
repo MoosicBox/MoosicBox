@@ -86,6 +86,11 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 mod cache {
+    //! Internal cache for storing discovered `UPnP` devices and their services.
+    //!
+    //! This module maintains mappings of devices by both URL and UDN (Unique Device Name)
+    //! to enable fast lookups during `UPnP` operations.
+
     use std::{
         collections::BTreeMap,
         sync::{LazyLock, RwLock},
@@ -95,6 +100,7 @@ mod cache {
 
     use crate::ScanError;
 
+    /// Mapping of a device and its associated services.
     #[derive(Debug, Clone)]
     struct DeviceMapping {
         device: Device,
@@ -107,6 +113,11 @@ mod cache {
     static DEVICE_MAPPINGS: LazyLock<RwLock<BTreeMap<String, DeviceMapping>>> =
         LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
+    /// Retrieves a cached device by its URL.
+    ///
+    /// # Errors
+    ///
+    /// * If no device with the specified URL is found in the cache
     pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
@@ -119,6 +130,11 @@ mod cache {
             .clone())
     }
 
+    /// Retrieves a cached device by its UDN.
+    ///
+    /// # Errors
+    ///
+    /// * If no device with the specified UDN is found in the cache
     pub fn get_device(udn: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
@@ -131,6 +147,7 @@ mod cache {
             .clone())
     }
 
+    /// Inserts a device into the cache, indexed by both URL and UDN.
     pub fn insert_device(device: Device) {
         DEVICE_URL_MAPPINGS.write().unwrap().insert(
             device.url().to_string(),
@@ -148,6 +165,12 @@ mod cache {
         );
     }
 
+    /// Retrieves a cached service by device UDN and service ID.
+    ///
+    /// # Errors
+    ///
+    /// * If no device with the specified UDN is found in the cache
+    /// * If no service with the specified service ID is found on the device
     pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
@@ -164,6 +187,12 @@ mod cache {
             .clone())
     }
 
+    /// Retrieves a cached device and service by device UDN and service ID.
+    ///
+    /// # Errors
+    ///
+    /// * If no device with the specified UDN is found in the cache
+    /// * If no service with the specified service ID is found on the device
     pub fn get_device_and_service(
         device_udn: &str,
         service_id: &str,
@@ -189,6 +218,12 @@ mod cache {
         Ok(resp)
     }
 
+    /// Retrieves a cached device and service by device URL and service ID.
+    ///
+    /// # Errors
+    ///
+    /// * If no device with the specified URL is found in the cache
+    /// * If no service with the specified service ID is found on the device
     pub fn get_device_and_service_from_url(
         device_url: &str,
         service_id: &str,
@@ -214,6 +249,9 @@ mod cache {
         Ok(resp)
     }
 
+    /// Inserts a service into the cache for a specific device.
+    ///
+    /// The service is added to both the URL-indexed and UDN-indexed device mappings.
     pub fn insert_service(device: &Device, service: &Service) {
         if let Some(device_mapping) = DEVICE_URL_MAPPINGS
             .write()

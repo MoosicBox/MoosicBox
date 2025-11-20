@@ -77,6 +77,24 @@ struct Args {
     quality: u8,
 }
 
+/// Converts an audio file from one format to another while preserving metadata.
+///
+/// Parses command-line arguments, reads the input audio file, converts it to the target format,
+/// saves the output, and copies metadata tags from the input to the output file.
+///
+/// # Errors
+///
+/// * If the input or output file paths are invalid
+/// * If the source or output file extensions are not recognized audio formats
+/// * If the audio conversion fails
+/// * If saving the converted audio file fails
+/// * If copying metadata tags fails
+///
+/// # Panics
+///
+/// * If the logging system fails to initialize
+/// * If the source or output paths lack a valid file extension
+/// * If the file extension cannot be converted to a UTF-8 string
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(Some("moosicbox_aconverter.log"), None)

@@ -140,6 +140,7 @@ pub enum WebsocketConnectError {
 }
 
 /// Handles a websocket connection.
+#[must_use]
 pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Response {
     log::debug!("Connected {}", context.connection_id);
 

@@ -64,6 +64,11 @@ where
 // All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &Value {
+    /// Converts a `SQLite` value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
             Value::Text(x) => Ok(x.clone()),
@@ -73,6 +78,13 @@ impl ToValueType<String> for &Value {
 }
 
 impl ToValueType<bool> for &Value {
+    /// Converts a `SQLite` value to a boolean.
+    ///
+    /// Integers are converted where 1 = true and 0 = false.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num == 1),
@@ -82,6 +94,11 @@ impl ToValueType<bool> for &Value {
 }
 
 impl ToValueType<f32> for &Value {
+    /// Converts a `SQLite` value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a real number
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             Value::Real(num) => Ok(*num as f32),
@@ -91,6 +108,11 @@ impl ToValueType<f32> for &Value {
 }
 
 impl ToValueType<f64> for &Value {
+    /// Converts a `SQLite` value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a real number
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             Value::Real(num) => Ok(*num),
@@ -100,6 +122,11 @@ impl ToValueType<f64> for &Value {
 }
 
 impl ToValueType<i8> for &Value {
+    /// Converts a `SQLite` value to an i8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i8),
@@ -109,6 +136,11 @@ impl ToValueType<i8> for &Value {
 }
 
 impl ToValueType<i16> for &Value {
+    /// Converts a `SQLite` value to an i16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i16),
@@ -118,6 +150,11 @@ impl ToValueType<i16> for &Value {
 }
 
 impl ToValueType<i32> for &Value {
+    /// Converts a `SQLite` value to an i32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as i32),
@@ -127,6 +164,11 @@ impl ToValueType<i32> for &Value {
 }
 
 impl ToValueType<i64> for &Value {
+    /// Converts a `SQLite` value to an i64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num),
@@ -136,6 +178,11 @@ impl ToValueType<i64> for &Value {
 }
 
 impl ToValueType<isize> for &Value {
+    /// Converts a `SQLite` value to an isize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as isize),
@@ -145,6 +192,11 @@ impl ToValueType<isize> for &Value {
 }
 
 impl ToValueType<u8> for &Value {
+    /// Converts a `SQLite` value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u8),
@@ -154,6 +206,11 @@ impl ToValueType<u8> for &Value {
 }
 
 impl ToValueType<u16> for &Value {
+    /// Converts a `SQLite` value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u16),
@@ -163,6 +220,11 @@ impl ToValueType<u16> for &Value {
 }
 
 impl ToValueType<u32> for &Value {
+    /// Converts a `SQLite` value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u32),
@@ -172,6 +234,11 @@ impl ToValueType<u32> for &Value {
 }
 
 impl ToValueType<u64> for &Value {
+    /// Converts a `SQLite` value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as u64),
@@ -181,6 +248,11 @@ impl ToValueType<u64> for &Value {
 }
 
 impl ToValueType<usize> for &Value {
+    /// Converts a `SQLite` value to a usize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             Value::Integer(num) => Ok(*num as usize),
@@ -371,6 +443,11 @@ where
 }
 
 impl ToValueType<String> for Value {
+    /// Converts an owned `SQLite` value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
             Self::Text(str) => Ok(str.clone()),
@@ -380,6 +457,13 @@ impl ToValueType<String> for Value {
 }
 
 impl ToValueType<bool> for Value {
+    /// Converts an owned `SQLite` value to a boolean.
+    ///
+    /// Integers are converted where 1 = true and 0 = false.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             Self::Integer(num) => Ok(num == 1),
@@ -389,6 +473,11 @@ impl ToValueType<bool> for Value {
 }
 
 impl ToValueType<f32> for Value {
+    /// Converts an owned `SQLite` value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a real number
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             Self::Real(num) => Ok(num as f32),
@@ -398,6 +487,11 @@ impl ToValueType<f32> for Value {
 }
 
 impl ToValueType<f64> for Value {
+    /// Converts an owned `SQLite` value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a real number
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             Self::Real(num) => Ok(num),
@@ -407,6 +501,11 @@ impl ToValueType<f64> for Value {
 }
 
 impl ToValueType<i8> for Value {
+    /// Converts an owned `SQLite` value to an i8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as i8),
@@ -416,6 +515,11 @@ impl ToValueType<i8> for Value {
 }
 
 impl ToValueType<i16> for Value {
+    /// Converts an owned `SQLite` value to an i16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as i16),
@@ -425,6 +529,11 @@ impl ToValueType<i16> for Value {
 }
 
 impl ToValueType<i32> for Value {
+    /// Converts an owned `SQLite` value to an i32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as i32),
@@ -434,6 +543,11 @@ impl ToValueType<i32> for Value {
 }
 
 impl ToValueType<i64> for Value {
+    /// Converts an owned `SQLite` value to an i64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             Self::Integer(num) => Ok(num),
@@ -443,6 +557,11 @@ impl ToValueType<i64> for Value {
 }
 
 impl ToValueType<isize> for Value {
+    /// Converts an owned `SQLite` value to an isize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as isize),
@@ -452,6 +571,11 @@ impl ToValueType<isize> for Value {
 }
 
 impl ToValueType<u8> for Value {
+    /// Converts an owned `SQLite` value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as u8),
@@ -461,6 +585,11 @@ impl ToValueType<u8> for Value {
 }
 
 impl ToValueType<u16> for Value {
+    /// Converts an owned `SQLite` value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as u16),
@@ -470,6 +599,11 @@ impl ToValueType<u16> for Value {
 }
 
 impl ToValueType<u32> for Value {
+    /// Converts an owned `SQLite` value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as u32),
@@ -479,6 +613,11 @@ impl ToValueType<u32> for Value {
 }
 
 impl ToValueType<u64> for Value {
+    /// Converts an owned `SQLite` value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as u64),
@@ -488,6 +627,11 @@ impl ToValueType<u64> for Value {
 }
 
 impl ToValueType<usize> for Value {
+    /// Converts an owned `SQLite` value to a usize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an integer
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             Self::Integer(num) => Ok(num as usize),

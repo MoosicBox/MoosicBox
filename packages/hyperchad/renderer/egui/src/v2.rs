@@ -96,7 +96,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
     }
 
     /// Waits for a navigation event and returns the navigation URL if one occurs.
-    #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }

@@ -124,6 +124,11 @@ where
 // All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &Value {
+    /// Converts a JSON value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<String, ParseError> {
         Ok(self
             .as_str()
@@ -133,6 +138,11 @@ impl ToValueType<String> for &Value {
 }
 
 impl ToValueType<bool> for &Value {
+    /// Converts a JSON value to a boolean.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a boolean
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.as_bool()
             .ok_or_else(|| ParseError::ConvertType("bool".into()))
@@ -140,6 +150,11 @@ impl ToValueType<bool> for &Value {
 }
 
 impl ToValueType<f32> for &Value {
+    /// Converts a JSON value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a number
     fn to_value_type(self) -> Result<f32, ParseError> {
         Ok(self
             .as_f64()
@@ -148,6 +163,11 @@ impl ToValueType<f32> for &Value {
 }
 
 impl ToValueType<f64> for &Value {
+    /// Converts a JSON value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a number
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.as_f64()
             .ok_or_else(|| ParseError::ConvertType("f64".into()))
@@ -155,6 +175,11 @@ impl ToValueType<f64> for &Value {
 }
 
 impl ToValueType<u8> for &Value {
+    /// Converts a JSON value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u8, ParseError> {
         Ok(self
             .as_u64()
@@ -163,6 +188,11 @@ impl ToValueType<u8> for &Value {
 }
 
 impl ToValueType<u16> for &Value {
+    /// Converts a JSON value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u16, ParseError> {
         Ok(self
             .as_u64()
@@ -171,6 +201,11 @@ impl ToValueType<u16> for &Value {
 }
 
 impl ToValueType<u32> for &Value {
+    /// Converts a JSON value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u32, ParseError> {
         Ok(self
             .as_u64()
@@ -179,6 +214,11 @@ impl ToValueType<u32> for &Value {
 }
 
 impl ToValueType<u64> for &Value {
+    /// Converts a JSON value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.as_u64()
             .ok_or_else(|| ParseError::ConvertType("u64".into()))
@@ -186,6 +226,11 @@ impl ToValueType<u64> for &Value {
 }
 
 impl ToValueType<usize> for &Value {
+    /// Converts a JSON value to a usize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<usize, ParseError> {
         self.as_u64()
             .map(|x| x as usize)
@@ -194,6 +239,11 @@ impl ToValueType<usize> for &Value {
 }
 
 impl ToValueType<i8> for &Value {
+    /// Converts a JSON value to an i8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a signed integer
     fn to_value_type(self) -> Result<i8, ParseError> {
         Ok(self
             .as_i64()
@@ -202,6 +252,11 @@ impl ToValueType<i8> for &Value {
 }
 
 impl ToValueType<i16> for &Value {
+    /// Converts a JSON value to an i16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a signed integer
     fn to_value_type(self) -> Result<i16, ParseError> {
         Ok(self
             .as_i64()
@@ -210,6 +265,11 @@ impl ToValueType<i16> for &Value {
 }
 
 impl ToValueType<i32> for &Value {
+    /// Converts a JSON value to an i32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a signed integer
     fn to_value_type(self) -> Result<i32, ParseError> {
         Ok(self
             .as_i64()
@@ -218,6 +278,11 @@ impl ToValueType<i32> for &Value {
 }
 
 impl ToValueType<i64> for &Value {
+    /// Converts a JSON value to an i64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a signed integer
     fn to_value_type(self) -> Result<i64, ParseError> {
         self.as_i64()
             .ok_or_else(|| ParseError::ConvertType("i64".into()))
@@ -225,6 +290,11 @@ impl ToValueType<i64> for &Value {
 }
 
 impl ToValueType<isize> for &Value {
+    /// Converts a JSON value to an isize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a signed integer
     fn to_value_type(self) -> Result<isize, ParseError> {
         self.as_i64()
             .map(|x| x as isize)

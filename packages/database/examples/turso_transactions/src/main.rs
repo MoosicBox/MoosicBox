@@ -10,6 +10,10 @@
 //! The example uses an in-memory database with a simple accounts table to illustrate
 //! transaction concepts.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use switchy_database::{Database, DatabaseValue, turso::TursoDatabase};
 
 /// Entry point for the Turso transactions example.
@@ -32,6 +36,7 @@ use switchy_database::{Database, DatabaseValue, turso::TursoDatabase};
 /// Panics if:
 /// * Database value retrieval returns `None` when a value is expected
 /// * Type conversion of database values fails (e.g., value is not a string or i64)
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Turso Database - Transaction Example");
@@ -97,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let name = name_val.as_str().unwrap();
         let balance_val = row.get("balance").unwrap();
         let balance = balance_val.as_i64().unwrap();
-        println!("  * {}: ${}", name, balance);
+        println!("  * {name}: ${balance}");
     }
     println!();
 
@@ -112,10 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
         rows[0].get("balance").unwrap().as_i64().unwrap()
     };
-    println!("  - Alice's current balance: ${}", alice_balance);
+    println!("  - Alice's current balance: ${alice_balance}");
 
     let withdrawal_amount = 1000;
-    println!("  - Attempting to withdraw: ${}", withdrawal_amount);
+    println!("  - Attempting to withdraw: ${withdrawal_amount}");
 
     if alice_balance < withdrawal_amount {
         println!("  ✗ Insufficient funds! Rolling back transaction...");
@@ -139,7 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let name = name_val.as_str().unwrap();
         let balance_val = row.get("balance").unwrap();
         let balance = balance_val.as_i64().unwrap();
-        println!("  * {}: ${}", name, balance);
+        println!("  * {name}: ${balance}");
     }
     println!();
 
@@ -174,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let name = name_val.as_str().unwrap();
         let balance_val = row.get("balance").unwrap();
         let balance = balance_val.as_i64().unwrap();
-        println!("  * {}: ${}", name, balance);
+        println!("  * {name}: ${balance}");
     }
 
     println!("\n✓ All transaction examples completed successfully!");

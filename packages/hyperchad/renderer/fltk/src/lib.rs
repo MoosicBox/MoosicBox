@@ -201,6 +201,10 @@ pub struct FltkRenderer {
 
 impl FltkRenderer {
     /// Creates a new FLTK renderer.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_action` - Channel sender for dispatching action requests from UI events
     #[must_use]
     pub fn new(request_action: Sender<(String, Option<Value>)>) -> Self {
         let (tx, rx) = flume::unbounded();
@@ -222,6 +226,7 @@ impl FltkRenderer {
         }
     }
 
+    /// Handles window resize events and triggers a re-render if dimensions changed.
     fn handle_resize(&self, window: &Window) {
         let width = self.width.load(std::sync::atomic::Ordering::SeqCst);
         let height = self.height.load(std::sync::atomic::Ordering::SeqCst);
@@ -243,6 +248,11 @@ impl FltkRenderer {
         }
     }
 
+    /// Checks all registered viewport listeners and triggers callbacks for visible items.
+    ///
+    /// # Arguments
+    ///
+    /// * `cancelled` - Atomic flag to signal early termination of viewport checking
     fn check_viewports(&self, cancelled: &AtomicBool) {
         for listener in self.viewport_listeners.write().unwrap().iter_mut() {
             if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
@@ -252,6 +262,11 @@ impl FltkRenderer {
         }
     }
 
+    /// Triggers loading of an image associated with a frame widget.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SendError` if the event channel is closed
     fn trigger_load_image(&self, frame: &Frame) -> Result<(), flume::SendError<AppEvent>> {
         let image = {
             self.images
@@ -277,6 +292,15 @@ impl FltkRenderer {
         Ok(())
     }
 
+    /// Registers an image for lazy loading with viewport-based visibility tracking.
+    ///
+    /// # Arguments
+    ///
+    /// * `viewport` - Optional viewport for tracking visibility
+    /// * `source` - Source of the image (bytes or URL)
+    /// * `width` - Optional width constraint in pixels
+    /// * `height` - Optional height constraint in pixels
+    /// * `frame` - FLTK frame widget that will display the image
     fn register_image(
         &self,
         viewport: Option<Viewport>,
@@ -312,12 +336,32 @@ impl FltkRenderer {
             ));
     }
 
+    /// Sets or clears the image displayed in a frame widget.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame widget to update
+    /// * `image` - Optional image to display, or `None` to clear the current image
     fn set_frame_image(frame: &mut Frame, image: Option<SharedImage>) {
         frame.set_image_scaled(image);
         frame.set_damage(true);
         app::awake();
     }
 
+    /// Loads an image from a source and displays it in a frame widget.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - Source of the image (bytes or URL)
+    /// * `width` - Optional width constraint in pixels
+    /// * `height` - Optional height constraint in pixels
+    /// * `frame` - FLTK frame widget to display the image in
+    ///
+    /// # Errors
+    ///
+    /// * Returns `LoadImageError::Reqwest` if HTTP request fails when fetching from URL
+    /// * Returns `LoadImageError::Image` if image decoding fails
+    /// * Returns `LoadImageError::Fltk` if FLTK rendering fails
     async fn load_image(
         source: ImageSource,
         width: Option<f32>,
@@ -391,6 +435,11 @@ impl FltkRenderer {
         Ok(())
     }
 
+    /// Performs a full render of the UI elements to the FLTK window.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `FltkError` if FLTK rendering operations fail
     fn perform_render(&self) -> Result<(), FltkError> {
         let (Some(mut window), Some(tx)) = (self.window.clone(), self.event_sender.clone()) else {
             moosicbox_assert::die_or_panic!(
@@ -471,6 +520,19 @@ impl FltkRenderer {
         Ok(())
     }
 
+    /// Recursively draws UI elements as FLTK widgets within a flex container.
+    ///
+    /// # Arguments
+    ///
+    /// * `viewport` - Optional viewport for tracking scrollable content visibility
+    /// * `element` - Container element to render with its children
+    /// * `depth` - Current recursion depth for debugging purposes
+    /// * `context` - Rendering context with layout and size information
+    /// * `event_sender` - Channel for sending application events
+    ///
+    /// # Errors
+    ///
+    /// * Returns `FltkError` if FLTK widget creation or configuration fails
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
     fn draw_elements(
@@ -859,6 +921,20 @@ impl FltkRenderer {
         Ok(container)
     }
 
+    /// Draws a single UI element and its children as FLTK widgets.
+    ///
+    /// # Arguments
+    ///
+    /// * `viewport` - Optional viewport for tracking scrollable content visibility
+    /// * `container` - Container element to render
+    /// * `index` - Index of this element within its parent's children
+    /// * `depth` - Current recursion depth for debugging purposes
+    /// * `context` - Rendering context with layout and size information
+    /// * `event_sender` - Channel for sending application events
+    ///
+    /// # Errors
+    ///
+    /// * Returns `FltkError` if FLTK widget creation or configuration fails
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
     fn draw_element(
@@ -1129,6 +1205,9 @@ impl FltkRenderer {
         Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
     }
 
+    /// Listens for application events and processes them asynchronously.
+    ///
+    /// Handles navigation, resize, mouse wheel, and image loading events from the UI.
     async fn listen(&self) {
         let Some(rx) = self.event_receiver.clone() else {
             moosicbox_assert::die_or_panic!("Cannot listen before app is started");
@@ -1209,6 +1288,9 @@ impl FltkRenderer {
     }
 
     /// Waits for a navigation event and returns the href.
+    ///
+    /// This method blocks until a navigation event occurs in the UI, then returns the
+    /// destination URL.
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
@@ -1469,19 +1551,31 @@ impl Renderer for FltkRenderer {
     }
 }
 
+/// Rendering context containing layout and styling information.
+///
+/// Tracks the current state of layout properties as the renderer traverses the UI tree.
 #[derive(Clone)]
 struct Context {
+    /// Font size in points.
     size: u16,
+    /// Layout direction (row or column).
     direction: LayoutDirection,
+    /// Horizontal overflow behavior.
     overflow_x: LayoutOverflow,
+    /// Vertical overflow behavior.
     overflow_y: LayoutOverflow,
+    /// Current container width in pixels.
     width: f32,
+    /// Current container height in pixels.
     height: f32,
+    /// Root window width in pixels.
     root_width: f32,
+    /// Root window height in pixels.
     root_height: f32,
 }
 
 impl Context {
+    /// Creates a new rendering context with default values.
     fn new(width: f32, height: f32, root_width: f32, root_height: f32) -> Self {
         Self {
             size: 12,
@@ -1495,6 +1589,7 @@ impl Context {
         }
     }
 
+    /// Updates the context with layout properties from a container element.
     fn with_container(mut self, container: &Container) -> Self {
         self.direction = container.direction;
         self.overflow_x = container.overflow_x;
@@ -1521,6 +1616,7 @@ impl Context {
     }
 }
 
+/// Wrapper for FLTK widget to implement position tracking traits.
 #[derive(Clone)]
 struct WidgetWrapper(widget::Widget);
 
@@ -1548,6 +1644,7 @@ impl WidgetPosition for WidgetWrapper {
     }
 }
 
+/// Wrapper for FLTK scroll widget to implement viewport position tracking traits.
 #[derive(Clone)]
 struct ScrollWrapper(group::Scroll);
 
@@ -1603,10 +1700,15 @@ impl From<ScrollWrapper> for Box<dyn ViewportPosition + Send + Sync> {
     }
 }
 
+/// Trait for FLTK group widgets providing common operations.
 trait Group {
+    /// Finalizes the group, preventing further child additions.
     fn end(&mut self);
+    /// Returns a string identifying the group type.
     fn type_str(&self) -> &'static str;
+    /// Returns the width of the group in pixels.
     fn wid(&self) -> i32;
+    /// Returns the height of the group in pixels.
     fn hei(&self) -> i32;
 }
 
@@ -1658,6 +1760,15 @@ impl From<group::Scroll> for Box<dyn Group> {
     }
 }
 
+/// Sets fixed size constraints on a widget within a flex container.
+///
+/// # Arguments
+///
+/// * `direction` - Layout direction determining which dimension to constrain
+/// * `width` - Optional width constraint in pixels
+/// * `height` - Optional height constraint in pixels
+/// * `container` - Flex container holding the widget
+/// * `element` - Widget to apply size constraints to
 fn fixed_size<W: WidgetExt>(
     direction: LayoutDirection,
     width: Option<f32>,
@@ -1670,6 +1781,14 @@ fn fixed_size<W: WidgetExt>(
     });
 }
 
+/// Helper function to apply fixed size based on layout direction.
+///
+/// # Arguments
+///
+/// * `direction` - Layout direction determining which dimension to use
+/// * `width` - Optional width constraint in pixels
+/// * `height` - Optional height constraint in pixels
+/// * `f` - Callback function to apply the size constraint
 #[inline]
 fn call_fixed_size<F: FnMut(i32)>(
     direction: LayoutDirection,
