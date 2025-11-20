@@ -108,3 +108,113 @@ pub enum AuthValues {
     /// No credentials needed - OAuth polling will be initiated
     Poll,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_api_music_api_serialization() {
+        let api = ApiMusicApi {
+            id: "qobuz".to_string(),
+            name: "Qobuz".to_string(),
+            logged_in: true,
+            supports_scan: true,
+            scan_enabled: false,
+            auth_method: Some(AuthMethod::UsernamePassword),
+        };
+
+        let json = serde_json::to_string(&api).unwrap();
+        let deserialized: ApiMusicApi = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(api, deserialized);
+    }
+
+    #[test]
+    fn test_api_music_api_camel_case_serialization() {
+        let api = ApiMusicApi {
+            id: "tidal".to_string(),
+            name: "Tidal".to_string(),
+            logged_in: false,
+            supports_scan: true,
+            scan_enabled: true,
+            auth_method: None,
+        };
+
+        let json = serde_json::to_string(&api).unwrap();
+
+        assert!(json.contains("\"loggedIn\":false"));
+        assert!(json.contains("\"supportsScan\":true"));
+        assert!(json.contains("\"scanEnabled\":true"));
+        assert!(json.contains("\"authMethod\":null"));
+    }
+
+    #[test]
+    fn test_auth_method_serialization() {
+        let username_password = AuthMethod::UsernamePassword;
+        let poll = AuthMethod::Poll;
+
+        let json_up = serde_json::to_string(&username_password).unwrap();
+        let json_poll = serde_json::to_string(&poll).unwrap();
+
+        assert_eq!(json_up, "\"UsernamePassword\"");
+        assert_eq!(json_poll, "\"Poll\"");
+
+        let deserialized_up: AuthMethod = serde_json::from_str(&json_up).unwrap();
+        let deserialized_poll: AuthMethod = serde_json::from_str(&json_poll).unwrap();
+
+        assert_eq!(deserialized_up, AuthMethod::UsernamePassword);
+        assert_eq!(deserialized_poll, AuthMethod::Poll);
+    }
+
+    #[test]
+    fn test_auth_values_username_password_serialization() {
+        let auth = AuthValues::UsernamePassword {
+            username: "test_user".to_string(),
+            password: "secret123".to_string(),
+        };
+
+        let json = serde_json::to_string(&auth).unwrap();
+        let deserialized: AuthValues = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            AuthValues::UsernamePassword { username, password } => {
+                assert_eq!(username, "test_user");
+                assert_eq!(password, "secret123");
+            }
+            _ => panic!("Expected UsernamePassword variant"),
+        }
+
+        assert!(json.contains("\"type\":\"username-password\""));
+    }
+
+    #[test]
+    fn test_auth_values_poll_serialization() {
+        let auth = AuthValues::Poll;
+
+        let json = serde_json::to_string(&auth).unwrap();
+        let deserialized: AuthValues = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            AuthValues::Poll => {}
+            _ => panic!("Expected Poll variant"),
+        }
+
+        assert!(json.contains("\"type\":\"poll\""));
+    }
+
+    #[test]
+    fn test_auth_values_kebab_case_tag() {
+        let auth = AuthValues::UsernamePassword {
+            username: "user".to_string(),
+            password: "pass".to_string(),
+        };
+
+        let json = serde_json::to_string(&auth).unwrap();
+
+        // Verify kebab-case for both type tag and field names
+        assert!(json.contains("\"type\":\"username-password\""));
+        assert!(json.contains("\"username\":\"user\""));
+        assert!(json.contains("\"password\":\"pass\""));
+    }
+}
