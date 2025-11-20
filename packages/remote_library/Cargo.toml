@@ -26,6 +26,10 @@ thiserror   = { workspace = true }
 tokio       = { workspace = true }
 urlencoding = { workspace = true }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros"] }
+test-log      = { workspace = true }
+
 [features]
 default = ["aac", "flac", "mp3", "opus"]
 
