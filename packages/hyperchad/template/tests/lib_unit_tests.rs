@@ -6,8 +6,8 @@
 
 use hyperchad_color::Color;
 use hyperchad_template::{
-    calc, color_functions, unit_functions, ContainerList, ContainerVecExt, Containers, IntoBorder,
-    RenderContainer,
+    ContainerList, ContainerVecExt, Containers, IntoBorder, RenderContainer, calc, color_functions,
+    unit_functions,
 };
 use hyperchad_transformer::Number;
 use pretty_assertions::assert_eq;
@@ -102,7 +102,10 @@ fn render_container_integers() {
     18_446_744_073_709_551_615_u64
         .render_to(&mut containers_u64)
         .unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_u64), "18446744073709551615");
+    assert_eq!(
+        ContainerVecExt::to_string(&containers_u64),
+        "18446744073709551615"
+    );
 }
 
 #[test]
