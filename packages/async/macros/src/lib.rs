@@ -757,8 +757,3 @@ pub fn inject_yields_mod(input: TokenStream) -> TokenStream {
         .into()
     }
 }
-
-#[cfg(all(test, feature = "simulator"))]
-mod tests {
-    use super::*;
-}
