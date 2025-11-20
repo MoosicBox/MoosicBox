@@ -66,3 +66,44 @@ pub fn encode_aac(
 
     Ok(info.into())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoder_creation() {
+        let result = encoder_aac();
+        assert!(result.is_ok(), "AAC encoder should initialize successfully");
+    }
+
+    #[test]
+    fn test_encode_aac_basic() {
+        let encoder = encoder_aac().expect("Failed to create encoder");
+
+        // Create a buffer of PCM samples (2048 samples for stereo)
+        let input: Vec<i16> = vec![0; 2048];
+        let mut output = vec![0u8; 8192];
+
+        let result = encode_aac(&encoder, &input, &mut output);
+
+        assert!(result.is_ok(), "Encoding should succeed");
+        let info = result.unwrap();
+
+        assert!(info.output_size > 0, "Should produce output");
+        assert!(info.input_consumed > 0, "Should consume input");
+    }
+
+    #[test]
+    fn test_encode_info_conversion() {
+        let fdk_info = fdk_aac::enc::EncodeInfo {
+            output_size: 1024,
+            input_consumed: 2048,
+        };
+
+        let info: EncodeInfo = fdk_info.into();
+
+        assert_eq!(info.output_size, 1024);
+        assert_eq!(info.input_consumed, 2048);
+    }
+}
