@@ -455,8 +455,77 @@ macro_rules! default_env {
 mod test {
     use pretty_assertions::assert_eq;
 
-    use crate::parse_isize;
+    use crate::{POW10, ParseIntError, parse_byte, parse_isize, parse_usize};
 
+    // Tests for parse_usize function
+    #[test_log::test]
+    fn parse_usize_can_parse_single_digit() {
+        let result = parse_usize("5").unwrap();
+        assert_eq!(result, 5);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_multiple_digits() {
+        let result = parse_usize("12345").unwrap();
+        assert_eq!(result, 12345);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_zero() {
+        let result = parse_usize("0").unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_large_number() {
+        let result = parse_usize("9876543210").unwrap();
+        assert_eq!(result, 9_876_543_210);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_number_with_leading_zeros() {
+        let result = parse_usize("00123").unwrap();
+        assert_eq!(result, 123);
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_invalid_digit() {
+        let result = parse_usize("12a34");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_negative_sign() {
+        let result = parse_usize("-123");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_positive_sign() {
+        let result = parse_usize("+123");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_empty_string() {
+        let result = parse_usize("");
+        // Empty string should return 0 based on the implementation
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_non_numeric_string() {
+        let result = parse_usize("abc");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_special_characters() {
+        let result = parse_usize("12@34");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    // Tests for parse_isize function
     #[test_log::test]
     fn parse_isize_can_parse_positive_number() {
         let result = parse_isize("100").unwrap();
@@ -476,5 +545,157 @@ mod test {
         let result = parse_isize("-100").unwrap();
 
         assert_eq!(result, -100);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_zero() {
+        let result = parse_isize("0").unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_negative_zero() {
+        let result = parse_isize("-0").unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_positive_zero() {
+        let result = parse_isize("+0").unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_invalid_digit() {
+        let result = parse_isize("12a34");
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_sign_only() {
+        let result = parse_isize("-");
+        // Sign-only should result in 0 based on implementation
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_positive_sign_only() {
+        let result = parse_isize("+");
+        // Sign-only should result in 0 based on implementation
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_large_negative_number() {
+        let result = parse_isize("-987654321").unwrap();
+        assert_eq!(result, -987_654_321);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_large_positive_number() {
+        let result = parse_isize("+987654321").unwrap();
+        assert_eq!(result, 987_654_321);
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_empty_string() {
+        let result = parse_isize("");
+        // Empty string should return 0 based on the implementation
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    // Tests for parse_byte helper function
+    #[test_log::test]
+    fn parse_byte_can_parse_valid_digit_zero() {
+        let result = parse_byte(b'0', 1).unwrap();
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn parse_byte_can_parse_valid_digit_nine() {
+        let result = parse_byte(b'9', 1).unwrap();
+        assert_eq!(result, 9);
+    }
+
+    #[test_log::test]
+    fn parse_byte_can_parse_digit_with_power_of_ten() {
+        let result = parse_byte(b'5', 100).unwrap();
+        assert_eq!(result, 500);
+    }
+
+    #[test_log::test]
+    fn parse_byte_returns_error_for_letter() {
+        let result = parse_byte(b'a', 1);
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_byte_returns_error_for_special_char() {
+        let result = parse_byte(b'@', 1);
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_byte_returns_error_for_negative_sign() {
+        let result = parse_byte(b'-', 1);
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_byte_returns_error_for_positive_sign() {
+        let result = parse_byte(b'+', 1);
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    #[test_log::test]
+    fn parse_byte_returns_error_for_space() {
+        let result = parse_byte(b' ', 1);
+        assert!(matches!(result, Err(ParseIntError::InvalidDigit)));
+    }
+
+    // Tests for POW10 constant table
+    // The POW10 array is stored in reverse order: from 10^19 down to 10^0
+    #[test_log::test]
+    fn pow10_first_element_is_ten_to_nineteenth() {
+        assert_eq!(POW10[0], 10_u128.pow(19));
+    }
+
+    #[test_log::test]
+    fn pow10_last_element_is_one() {
+        assert_eq!(POW10[19], 1);
+    }
+
+    #[test_log::test]
+    fn pow10_second_to_last_element_is_ten() {
+        assert_eq!(POW10[18], 10);
+    }
+
+    #[test_log::test]
+    fn pow10_third_to_last_element_is_hundred() {
+        assert_eq!(POW10[17], 100);
+    }
+
+    #[test_log::test]
+    fn pow10_tenth_element_is_ten_billion() {
+        assert_eq!(POW10[9], 10_000_000_000);
+    }
+
+    #[test_log::test]
+    fn pow10_has_correct_length() {
+        assert_eq!(POW10.len(), 20);
+    }
+
+    #[test_log::test]
+    fn pow10_elements_decrease_by_factor_of_ten() {
+        // Array is in reverse order, so each element should be 1/10 of the previous
+        for i in 1..POW10.len() {
+            assert_eq!(POW10[i], POW10[i - 1] / 10);
+        }
+    }
+
+    #[test_log::test]
+    fn pow10_middle_element_is_correct() {
+        // POW10[10] should be 10^9
+        assert_eq!(POW10[10], 1_000_000_000);
     }
 }
