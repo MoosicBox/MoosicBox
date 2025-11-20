@@ -52,3 +52,91 @@ impl RequestContext {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_request_context_new() {
+        let mut params = BTreeMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let context = RequestContext::new(params.clone());
+        assert_eq!(context.path_params, params);
+    }
+
+    #[test]
+    fn test_request_context_default() {
+        let context = RequestContext::default();
+        assert!(context.path_params.is_empty());
+    }
+
+    #[test]
+    fn test_request_context_with_path_params() {
+        let mut params1 = BTreeMap::new();
+        params1.insert("id".to_string(), "123".to_string());
+
+        let mut params2 = BTreeMap::new();
+        params2.insert("user_id".to_string(), "456".to_string());
+        params2.insert("post_id".to_string(), "789".to_string());
+
+        let context = RequestContext::new(params1).with_path_params(params2.clone());
+
+        assert_eq!(context.path_params, params2);
+        assert_eq!(context.path_params.get("user_id"), Some(&"456".to_string()));
+        assert_eq!(context.path_params.get("post_id"), Some(&"789".to_string()));
+    }
+
+    #[test]
+    fn test_request_context_path_params_empty() {
+        let context = RequestContext::new(BTreeMap::new());
+        assert!(context.path_params.is_empty());
+    }
+
+    #[test]
+    fn test_request_context_path_params_multiple() {
+        let mut params = BTreeMap::new();
+        params.insert("category".to_string(), "electronics".to_string());
+        params.insert("product_id".to_string(), "12345".to_string());
+        params.insert("variant".to_string(), "blue".to_string());
+
+        let context = RequestContext::new(params.clone());
+
+        assert_eq!(context.path_params.len(), 3);
+        assert_eq!(
+            context.path_params.get("category"),
+            Some(&"electronics".to_string())
+        );
+        assert_eq!(
+            context.path_params.get("product_id"),
+            Some(&"12345".to_string())
+        );
+        assert_eq!(
+            context.path_params.get("variant"),
+            Some(&"blue".to_string())
+        );
+    }
+
+    #[test]
+    fn test_request_context_clone() {
+        let mut params = BTreeMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let context1 = RequestContext::new(params);
+        let context2 = context1.clone();
+
+        assert_eq!(context1.path_params, context2.path_params);
+    }
+
+    #[test]
+    fn test_request_context_builder_chaining() {
+        let mut params = BTreeMap::new();
+        params.insert("id".to_string(), "999".to_string());
+
+        let context = RequestContext::default().with_path_params(params.clone());
+
+        assert_eq!(context.path_params, params);
+    }
+}
