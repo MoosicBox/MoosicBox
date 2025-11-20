@@ -630,3 +630,498 @@ pub struct RegisterPlayer {
     /// The player name.
     pub name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_playback_target_default() {
+        let default = PlaybackTarget::default();
+        assert_eq!(default, PlaybackTarget::AudioZone { audio_zone_id: 0 });
+    }
+
+    #[test]
+    fn test_playback_target_default_from_str_audio_zone() {
+        let result = PlaybackTarget::default_from_str("AUDIO_ZONE");
+        assert_eq!(result, Some(PlaybackTarget::AudioZone { audio_zone_id: 0 }));
+    }
+
+    #[test]
+    fn test_playback_target_default_from_str_connection_output() {
+        let result = PlaybackTarget::default_from_str("CONNECTION_OUTPUT");
+        assert_eq!(
+            result,
+            Some(PlaybackTarget::ConnectionOutput {
+                connection_id: String::new(),
+                output_id: String::new(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_playback_target_default_from_str_invalid() {
+        let result = PlaybackTarget::default_from_str("INVALID_TYPE");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_playback_target_default_from_str_empty() {
+        let result = PlaybackTarget::default_from_str("");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_playback_target_default_from_str_case_sensitive() {
+        // Test that the function is case-sensitive
+        let result = PlaybackTarget::default_from_str("audio_zone");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_none() {
+        let session = UpdateSession::default();
+        assert!(!session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_play() {
+        let session = UpdateSession {
+            play: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_stop() {
+        let session = UpdateSession {
+            stop: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_active() {
+        let session = UpdateSession {
+            active: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_playing() {
+        let session = UpdateSession {
+            playing: Some(false),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_position() {
+        let session = UpdateSession {
+            position: Some(5),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_volume() {
+        let session = UpdateSession {
+            volume: Some(0.8),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_seek() {
+        let session = UpdateSession {
+            seek: Some(30.5),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_with_playlist() {
+        let session = UpdateSession {
+            playlist: Some(UpdateSessionPlaylist {
+                session_playlist_id: 1,
+                tracks: vec![],
+            }),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_multiple_fields() {
+        let session = UpdateSession {
+            play: Some(true),
+            volume: Some(0.5),
+            position: Some(2),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test]
+    fn test_update_session_playback_updated_only_non_playback_fields() {
+        let session = UpdateSession {
+            session_id: 1,
+            profile: "test".to_string(),
+            name: Some("Test Session".to_string()),
+            quality: Some(PlaybackQuality::default()),
+            ..Default::default()
+        };
+        assert!(!session.playback_updated());
+    }
+
+    #[test]
+    fn test_playback_target_conversion_audio_zone() {
+        let api_target = ApiPlaybackTarget::AudioZone { audio_zone_id: 42 };
+        let target: PlaybackTarget = api_target.clone().into();
+        assert_eq!(target, PlaybackTarget::AudioZone { audio_zone_id: 42 });
+
+        // Test reverse conversion
+        let api_target_back: ApiPlaybackTarget = target.into();
+        assert_eq!(api_target_back, api_target);
+    }
+
+    #[test]
+    fn test_playback_target_conversion_connection_output() {
+        let api_target = ApiPlaybackTarget::ConnectionOutput {
+            connection_id: "conn123".to_string(),
+            output_id: "out456".to_string(),
+        };
+        let target: PlaybackTarget = api_target.clone().into();
+        assert_eq!(
+            target,
+            PlaybackTarget::ConnectionOutput {
+                connection_id: "conn123".to_string(),
+                output_id: "out456".to_string(),
+            }
+        );
+
+        // Test reverse conversion
+        let api_target_back: ApiPlaybackTarget = target.into();
+        assert_eq!(api_target_back, api_target);
+    }
+
+    #[test]
+    fn test_update_session_conversion() {
+        let quality = PlaybackQuality::default();
+        let api_session = ApiUpdateSession {
+            session_id: 1,
+            profile: "high".to_string(),
+            playback_target: ApiPlaybackTarget::AudioZone { audio_zone_id: 5 },
+            play: Some(true),
+            stop: None,
+            name: Some("My Session".to_string()),
+            active: Some(true),
+            playing: Some(false),
+            position: Some(3),
+            seek: Some(45.5),
+            volume: Some(0.75),
+            playlist: Some(ApiUpdateSessionPlaylist {
+                session_playlist_id: 10,
+                tracks: vec![],
+            }),
+            quality: Some(quality),
+        };
+
+        let session: UpdateSession = api_session.clone().into();
+        assert_eq!(session.session_id, 1);
+        assert_eq!(session.profile, "high");
+        assert_eq!(
+            session.playback_target,
+            PlaybackTarget::AudioZone { audio_zone_id: 5 }
+        );
+        assert_eq!(session.play, Some(true));
+        assert_eq!(session.name, Some("My Session".to_string()));
+        assert_eq!(session.quality, Some(quality));
+
+        // Test reverse conversion
+        let api_session_back: ApiUpdateSession = session.into();
+        assert_eq!(api_session_back.session_id, api_session.session_id);
+        assert_eq!(api_session_back.profile, api_session.profile);
+    }
+
+    #[test]
+    fn test_update_session_playlist_conversion() {
+        let api_playlist = ApiUpdateSessionPlaylist {
+            session_playlist_id: 100,
+            tracks: vec![],
+        };
+
+        let playlist: UpdateSessionPlaylist = api_playlist.clone().into();
+        assert_eq!(playlist.session_playlist_id, 100);
+        assert_eq!(playlist.tracks.len(), 0);
+
+        // Test reverse conversion
+        let api_playlist_back: ApiUpdateSessionPlaylist = playlist.into();
+        assert_eq!(api_playlist_back, api_playlist);
+    }
+
+    #[test]
+    fn test_session_conversion_to_api_session() {
+        let session = Session {
+            id: 42,
+            name: "Test Session".to_string(),
+            active: true,
+            playing: false,
+            position: Some(5),
+            seek: Some(120.5),
+            volume: Some(0.8),
+            playback_target: Some(PlaybackTarget::AudioZone { audio_zone_id: 3 }),
+            playlist: SessionPlaylist {
+                id: 99,
+                tracks: vec![],
+            },
+        };
+
+        let api_session: ApiSession = session.into();
+        assert_eq!(api_session.session_id, 42);
+        assert_eq!(api_session.name, "Test Session");
+        assert_eq!(api_session.active, true);
+        assert_eq!(api_session.playing, false);
+        assert_eq!(api_session.position, Some(5));
+        assert_eq!(api_session.seek, Some(120.5));
+        assert_eq!(api_session.volume, Some(0.8));
+        assert_eq!(
+            api_session.playback_target,
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 3 })
+        );
+        assert_eq!(api_session.playlist.session_playlist_id, 99);
+    }
+
+    #[test]
+    fn test_session_playlist_conversion_to_api() {
+        let playlist = SessionPlaylist {
+            id: 123,
+            tracks: vec![],
+        };
+
+        let api_playlist: ApiSessionPlaylist = playlist.into();
+        assert_eq!(api_playlist.session_playlist_id, 123);
+        assert_eq!(api_playlist.tracks.len(), 0);
+    }
+
+    #[test]
+    fn test_connection_conversion_to_api() {
+        let connection = Connection {
+            id: "conn-abc123".to_string(),
+            name: "My Connection".to_string(),
+            created: "2024-01-01T00:00:00Z".to_string(),
+            updated: "2024-01-02T00:00:00Z".to_string(),
+            players: vec![],
+        };
+
+        let api_connection: ApiConnection = connection.into();
+        assert_eq!(api_connection.connection_id, "conn-abc123");
+        assert_eq!(api_connection.name, "My Connection");
+        assert_eq!(api_connection.alive, false); // Always false in conversion
+        assert_eq!(api_connection.players.len(), 0);
+    }
+
+    #[test]
+    fn test_session_as_id() {
+        let session = Session {
+            id: 999,
+            ..Default::default()
+        };
+        let db_value = session.as_id();
+        assert_eq!(db_value, DatabaseValue::Int64(999));
+    }
+
+    #[test]
+    fn test_session_playlist_as_id() {
+        let playlist = SessionPlaylist {
+            id: 777,
+            tracks: vec![],
+        };
+        let db_value = playlist.as_id();
+        assert_eq!(db_value, DatabaseValue::Int64(777));
+    }
+
+    #[test]
+    fn test_connection_as_id() {
+        let connection = Connection {
+            id: "test-connection-id".to_string(),
+            ..Default::default()
+        };
+        let db_value = connection.as_id();
+        assert_eq!(
+            db_value,
+            DatabaseValue::String("test-connection-id".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_playback_target_serialization_audio_zone() {
+        let target = PlaybackTarget::AudioZone { audio_zone_id: 42 };
+        let json = serde_json::to_string(&target).unwrap();
+        assert!(json.contains(r#""type":"AUDIO_ZONE"#));
+        assert!(json.contains(r#""audioZoneId":42"#));
+
+        let deserialized: PlaybackTarget = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, target);
+    }
+
+    #[test_log::test]
+    fn test_playback_target_serialization_connection_output() {
+        let target = PlaybackTarget::ConnectionOutput {
+            connection_id: "conn123".to_string(),
+            output_id: "out456".to_string(),
+        };
+        let json = serde_json::to_string(&target).unwrap();
+        assert!(json.contains(r#""type":"CONNECTION_OUTPUT"#));
+        assert!(json.contains(r#""connectionId":"conn123"#));
+        assert!(json.contains(r#""outputId":"out456"#));
+
+        let deserialized: PlaybackTarget = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, target);
+    }
+
+    #[test_log::test]
+    fn test_update_session_serialization_skips_none_fields() {
+        let session = UpdateSession {
+            session_id: 1,
+            profile: "test".to_string(),
+            playback_target: PlaybackTarget::default(),
+            play: Some(true),
+            stop: None, // Should be skipped
+            name: None, // Should be skipped
+            active: Some(false),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&session).unwrap();
+        assert!(json.contains(r#""sessionId":1"#));
+        assert!(json.contains(r#""play":true"#));
+        assert!(json.contains(r#""active":false"#));
+        assert!(!json.contains(r#""stop""#)); // Verify None fields are skipped
+        assert!(!json.contains(r#""name""#));
+    }
+
+    #[test_log::test]
+    fn test_create_session_serialization() {
+        let create = CreateSession {
+            name: "New Session".to_string(),
+            audio_zone_id: Some(5),
+            playlist: CreateSessionPlaylist {
+                tracks: vec![1, 2, 3],
+            },
+        };
+
+        let json = serde_json::to_string(&create).unwrap();
+        assert!(json.contains(r#""name":"New Session"#));
+        assert!(json.contains(r#""audioZoneId":5"#));
+        assert!(json.contains(r#""tracks":[1,2,3]"#));
+
+        let deserialized: CreateSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "New Session");
+        assert_eq!(deserialized.audio_zone_id, Some(5));
+        assert_eq!(deserialized.playlist.tracks, vec![1, 2, 3]);
+    }
+
+    #[test_log::test]
+    fn test_register_connection_serialization() {
+        let register = RegisterConnection {
+            connection_id: "conn-xyz".to_string(),
+            name: "Test Connection".to_string(),
+            players: vec![RegisterPlayer {
+                audio_output_id: "output1".to_string(),
+                name: "Player 1".to_string(),
+            }],
+        };
+
+        let json = serde_json::to_string(&register).unwrap();
+        assert!(json.contains(r#""connectionId":"conn-xyz"#));
+        assert!(json.contains(r#""name":"Test Connection"#));
+        assert!(json.contains(r#""audioOutputId":"output1"#));
+
+        let deserialized: RegisterConnection = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn-xyz");
+        assert_eq!(deserialized.players.len(), 1);
+        assert_eq!(deserialized.players[0].name, "Player 1");
+    }
+
+    #[test]
+    fn test_api_playback_target_default() {
+        let default = ApiPlaybackTarget::default();
+        assert_eq!(default, ApiPlaybackTarget::AudioZone { audio_zone_id: 0 });
+    }
+
+    #[test]
+    fn test_set_session_audio_zone_default() {
+        let set_zone = SetSessionAudioZone::default();
+        assert_eq!(set_zone.session_id, 0);
+        assert_eq!(set_zone.audio_zone_id, 0);
+    }
+
+    #[test]
+    fn test_delete_session_default() {
+        let delete = DeleteSession::default();
+        assert_eq!(delete.session_id, 0);
+    }
+
+    #[test]
+    fn test_session_default() {
+        let session = Session::default();
+        assert_eq!(session.id, 0);
+        assert_eq!(session.name, "");
+        assert!(!session.active);
+        assert!(!session.playing);
+        assert_eq!(session.position, None);
+        assert_eq!(session.seek, None);
+        assert_eq!(session.volume, None);
+        assert_eq!(session.playback_target, None);
+        assert_eq!(session.playlist.id, 0);
+        assert_eq!(session.playlist.tracks.len(), 0);
+    }
+
+    #[test]
+    fn test_connection_default() {
+        let connection = Connection::default();
+        assert_eq!(connection.id, "");
+        assert_eq!(connection.name, "");
+        assert_eq!(connection.created, "");
+        assert_eq!(connection.updated, "");
+        assert_eq!(connection.players.len(), 0);
+    }
+
+    #[test]
+    fn test_register_player_default() {
+        let player = RegisterPlayer::default();
+        assert_eq!(player.audio_output_id, "");
+        assert_eq!(player.name, "");
+    }
+
+    #[test]
+    fn test_update_session_with_quality() {
+        let quality = PlaybackQuality::default();
+        let session = UpdateSession {
+            session_id: 1,
+            profile: "test".to_string(),
+            playback_target: PlaybackTarget::default(),
+            quality: Some(quality),
+            ..Default::default()
+        };
+
+        assert_eq!(session.quality, Some(quality));
+        assert!(!session.playback_updated()); // quality alone doesn't trigger playback update
+    }
+
+    #[test]
+    fn test_session_playlist_tracks_wrapper() {
+        let tracks = SessionPlaylistTracks(vec![]);
+        assert_eq!(tracks.0.len(), 0);
+    }
+}
