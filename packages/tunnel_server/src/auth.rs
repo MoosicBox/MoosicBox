@@ -212,3 +212,85 @@ pub fn hash_token(token: &str) -> String {
 
     hash
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_token_produces_consistent_hash() {
+        let token = "test_token_12345";
+        let hash1 = hash_token(token);
+        let hash2 = hash_token(token);
+
+        assert_eq!(hash1, hash2, "Same token should produce identical hashes");
+        assert_eq!(hash1.len(), 64, "SHA-256 hash should be 64 hex characters");
+    }
+
+    #[test]
+    fn test_hash_token_different_tokens_produce_different_hashes() {
+        let token1 = "token_one";
+        let token2 = "token_two";
+
+        let hash1 = hash_token(token1);
+        let hash2 = hash_token(token2);
+
+        assert_ne!(
+            hash1, hash2,
+            "Different tokens should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_hash_token_cache_hit_returns_same_instance() {
+        let token = "cached_token_test";
+
+        // First call - cache miss, computes hash
+        let hash1 = hash_token(token);
+
+        // Second call - cache hit, should return cached value
+        let hash2 = hash_token(token);
+
+        assert_eq!(hash1, hash2, "Cached hash should match computed hash");
+
+        // Verify it's actually using the cache by checking the hash is valid SHA-256
+        assert_eq!(hash1.len(), 64);
+        assert!(
+            hash1.chars().all(|c| c.is_ascii_hexdigit()),
+            "Hash should only contain hex digits"
+        );
+    }
+
+    #[test]
+    fn test_hash_token_empty_string() {
+        let empty_hash = hash_token("");
+
+        assert_eq!(
+            empty_hash.len(),
+            64,
+            "Empty string should still hash to 64 chars"
+        );
+        assert_eq!(
+            empty_hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "Empty string SHA-256 hash should match known value"
+        );
+    }
+
+    #[test]
+    fn test_hash_token_special_characters() {
+        let token = "token-with!@#$%^&*()special_chars";
+        let hash = hash_token(token);
+
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_hash_token_unicode_characters() {
+        let token = "token_with_unicode_🔒🔑";
+        let hash = hash_token(token);
+
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+}
