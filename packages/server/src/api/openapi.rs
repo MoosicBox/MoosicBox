@@ -21,6 +21,7 @@ struct ApiDoc;
 /// A complete `OpenAPI` specification document that can be served via Swagger UI, Redoc,
 /// `RapiDoc`, or Scalar interfaces.
 #[cfg_attr(feature = "profiling", profiling::function)]
+#[must_use]
 pub fn init() -> OpenApi {
     #[allow(unused)]
     fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -101,6 +102,7 @@ pub fn init() -> OpenApi {
 /// * `/rapidoc` - `RapiDoc` documentation viewer
 /// * `/scalar` - Scalar documentation viewer
 #[cfg_attr(feature = "profiling", profiling::function)]
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
