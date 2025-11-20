@@ -143,3 +143,288 @@ impl<P: StatePersistence> StateStore<P> {
         self.persistence.clear().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+
+    #[cfg(feature = "persistence-sqlite")]
+    use crate::sqlite::SqlitePersistence;
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestData {
+        id: u32,
+        name: String,
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_cache_hit_after_get() -> Result<(), Error> {
+        // Test that values retrieved from persistence are cached for subsequent gets
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data = TestData {
+            id: 1,
+            name: "test".to_string(),
+        };
+
+        // First set - should write to both cache and persistence
+        store.set("key1", &data).await?;
+
+        // First get - should hit persistence and populate cache
+        let retrieved1: Option<TestData> = store.get("key1").await?;
+        assert_eq!(retrieved1, Some(data.clone()));
+
+        // Second get - should hit cache (we can't directly verify this, but it exercises the cache path)
+        let retrieved2: Option<TestData> = store.get("key1").await?;
+        assert_eq!(retrieved2, Some(data));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_cache_invalidation_on_remove() -> Result<(), Error> {
+        // Test that cache is properly invalidated when removing items
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data = TestData {
+            id: 2,
+            name: "test".to_string(),
+        };
+
+        // Set and get to populate cache
+        store.set("key2", &data).await?;
+        let _: Option<TestData> = store.get("key2").await?;
+
+        // Remove should clear from both cache and persistence
+        store.remove("key2").await?;
+
+        // Get should now return None
+        let retrieved: Option<TestData> = store.get("key2").await?;
+        assert_eq!(retrieved, None);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_cache_invalidation_on_clear() -> Result<(), Error> {
+        // Test that cache is properly cleared when clearing the entire store
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data1 = TestData {
+            id: 1,
+            name: "first".to_string(),
+        };
+        let data2 = TestData {
+            id: 2,
+            name: "second".to_string(),
+        };
+
+        // Set multiple items and populate cache
+        store.set("key1", &data1).await?;
+        store.set("key2", &data2).await?;
+        let _: Option<TestData> = store.get("key1").await?;
+        let _: Option<TestData> = store.get("key2").await?;
+
+        // Clear should remove all items from cache and persistence
+        store.clear().await?;
+
+        // Both keys should return None
+        assert_eq!(store.get::<TestData>("key1").await?, None);
+        assert_eq!(store.get::<TestData>("key2").await?, None);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_take_removes_from_cache_and_returns_value() -> Result<(), Error> {
+        // Test that take removes from both cache and persistence while returning the value
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data = TestData {
+            id: 3,
+            name: "test".to_string(),
+        };
+
+        // Set and get to populate cache
+        store.set("key3", &data).await?;
+        let _: Option<TestData> = store.get("key3").await?;
+
+        // Take should return the value and remove it
+        let taken: Option<TestData> = store.take("key3").await?;
+        assert_eq!(taken, Some(data));
+
+        // Subsequent get should return None
+        let retrieved: Option<TestData> = store.get("key3").await?;
+        assert_eq!(retrieved, None);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_take_nonexistent_key_returns_none() -> Result<(), Error> {
+        // Test that taking a nonexistent key returns None without errors
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let taken: Option<TestData> = store.take("nonexistent").await?;
+        assert_eq!(taken, None);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_existing_key() -> Result<(), Error> {
+        // Test that setting an existing key updates both cache and persistence
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data1 = TestData {
+            id: 1,
+            name: "original".to_string(),
+        };
+        let data2 = TestData {
+            id: 1,
+            name: "updated".to_string(),
+        };
+
+        // Set initial value
+        store.set("key4", &data1).await?;
+        let retrieved1: Option<TestData> = store.get("key4").await?;
+        assert_eq!(retrieved1, Some(data1));
+
+        // Update the value
+        store.set("key4", &data2).await?;
+        let retrieved2: Option<TestData> = store.get("key4").await?;
+        assert_eq!(retrieved2, Some(data2));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_empty_string_key() -> Result<(), Error> {
+        // Test that empty string keys are handled correctly
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data = TestData {
+            id: 5,
+            name: "empty_key_test".to_string(),
+        };
+
+        // Empty string should be a valid key
+        store.set("", &data).await?;
+        let retrieved: Option<TestData> = store.get("").await?;
+        assert_eq!(retrieved, Some(data));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_special_characters_in_key() -> Result<(), Error> {
+        // Test that keys with special characters are handled correctly
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data = TestData {
+            id: 6,
+            name: "special".to_string(),
+        };
+
+        let special_key = "key/with:special@chars#$%";
+        store.set(special_key, &data).await?;
+        let retrieved: Option<TestData> = store.get(special_key).await?;
+        assert_eq!(retrieved, Some(data));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_complex_nested_data() -> Result<(), Error> {
+        // Test serialization and deserialization of complex nested structures
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        struct ComplexData {
+            items: Vec<TestData>,
+            metadata: BTreeMap<String, String>,
+        }
+
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let mut metadata = BTreeMap::new();
+        metadata.insert("version".to_string(), "1.0".to_string());
+        metadata.insert("author".to_string(), "test".to_string());
+
+        let complex = ComplexData {
+            items: vec![
+                TestData {
+                    id: 1,
+                    name: "first".to_string(),
+                },
+                TestData {
+                    id: 2,
+                    name: "second".to_string(),
+                },
+            ],
+            metadata,
+        };
+
+        store.set("complex", &complex).await?;
+        let retrieved: Option<ComplexData> = store.get("complex").await?;
+        assert_eq!(retrieved, Some(complex));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "persistence-sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_multiple_independent_keys() -> Result<(), Error> {
+        // Test that multiple keys can coexist independently
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let data1 = TestData {
+            id: 1,
+            name: "first".to_string(),
+        };
+        let data2 = TestData {
+            id: 2,
+            name: "second".to_string(),
+        };
+        let data3 = TestData {
+            id: 3,
+            name: "third".to_string(),
+        };
+
+        // Set multiple keys
+        store.set("key_a", &data1).await?;
+        store.set("key_b", &data2).await?;
+        store.set("key_c", &data3).await?;
+
+        // Verify all keys are independently retrievable
+        assert_eq!(store.get::<TestData>("key_a").await?, Some(data1.clone()));
+        assert_eq!(store.get::<TestData>("key_b").await?, Some(data2));
+        assert_eq!(store.get::<TestData>("key_c").await?, Some(data3.clone()));
+
+        // Remove one key and verify others are unaffected
+        store.remove("key_b").await?;
+        assert_eq!(store.get::<TestData>("key_a").await?, Some(data1));
+        assert_eq!(store.get::<TestData>("key_b").await?, None);
+        assert_eq!(store.get::<TestData>("key_c").await?, Some(data3));
+
+        Ok(())
+    }
+}

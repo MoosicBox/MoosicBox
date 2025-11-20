@@ -36,6 +36,7 @@ switchy = { workspace = true, optional = true, features = [
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
 tokio         = { workspace = true, features = ["macros"] }
 
 [features]
