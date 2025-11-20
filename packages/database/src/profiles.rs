@@ -275,3 +275,171 @@ pub mod api {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simulator::SimulationDatabase;
+
+    #[test]
+    fn test_database_profiles_add_and_get() {
+        let profiles = DatabaseProfiles::default();
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+
+        profiles.add("test_profile".to_string(), db.clone());
+
+        let retrieved = profiles.get("test_profile");
+        assert!(retrieved.is_some());
+    }
+
+    #[test]
+    fn test_database_profiles_get_nonexistent() {
+        let profiles = DatabaseProfiles::default();
+
+        let retrieved = profiles.get("nonexistent_profile");
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_database_profiles_remove() {
+        let profiles = DatabaseProfiles::default();
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+
+        profiles.add("test_profile".to_string(), db);
+        assert!(profiles.get("test_profile").is_some());
+
+        profiles.remove("test_profile");
+        assert!(profiles.get("test_profile").is_none());
+    }
+
+    #[test]
+    fn test_database_profiles_remove_nonexistent() {
+        let profiles = DatabaseProfiles::default();
+
+        // Should not panic when removing nonexistent profile
+        profiles.remove("nonexistent_profile");
+    }
+
+    #[test]
+    fn test_database_profiles_add_fetch() {
+        let profiles = DatabaseProfiles::default();
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+
+        let retrieved = profiles.add_fetch("test_profile", db);
+
+        // Should return the added database
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**retrieved.database),
+            std::ptr::addr_of!(**profiles.get("test_profile").unwrap().database)
+        ));
+    }
+
+    #[test]
+    fn test_database_profiles_names() {
+        let profiles = DatabaseProfiles::default();
+        let db1 = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let db2 = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+
+        profiles.add("profile1".to_string(), db1);
+        profiles.add("profile2".to_string(), db2);
+
+        let names = profiles.names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"profile1".to_string()));
+        assert!(names.contains(&"profile2".to_string()));
+    }
+
+    #[test]
+    fn test_database_profiles_names_empty() {
+        let profiles = DatabaseProfiles::default();
+        let names = profiles.names();
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_database_profiles_replace_existing() {
+        let profiles = DatabaseProfiles::default();
+        let db1 = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let db2 = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+
+        profiles.add("test_profile".to_string(), db1.clone());
+        let first = profiles.get("test_profile").unwrap();
+
+        profiles.add("test_profile".to_string(), db2.clone());
+        let second = profiles.get("test_profile").unwrap();
+
+        // The second database should replace the first
+        assert!(!std::ptr::addr_eq(
+            std::ptr::addr_of!(**first.database),
+            std::ptr::addr_of!(**second.database)
+        ));
+    }
+
+    #[test]
+    fn test_library_database_from_arc() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let library_db: LibraryDatabase = db.clone().into();
+
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**library_db.database),
+            std::ptr::addr_of!(**db)
+        ));
+    }
+
+    #[test]
+    fn test_library_database_into_arc() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let library_db = LibraryDatabase {
+            database: db.clone(),
+        };
+
+        let arc_db: Arc<Box<dyn Database>> = library_db.into();
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**arc_db),
+            std::ptr::addr_of!(**db)
+        ));
+    }
+
+    #[test]
+    fn test_library_database_deref() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let library_db = LibraryDatabase {
+            database: db.clone(),
+        };
+
+        // Should be able to use as &dyn Database via Deref
+        let _db_ref: &dyn Database = &*library_db;
+    }
+
+    #[test]
+    fn test_library_database_ref_into_dyn_database() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let library_db = LibraryDatabase { database: db };
+
+        let db_ref: &dyn Database = (&library_db).into();
+        // Just verify the conversion works
+        let _ = db_ref;
+    }
+}

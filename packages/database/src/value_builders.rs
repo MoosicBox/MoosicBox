@@ -421,4 +421,117 @@ mod tests {
             panic!("Expected NowPlus variant");
         }
     }
+
+    #[test]
+    fn test_duration_with_nanoseconds() {
+        let duration = Duration::new(1, 500_000_000); // 1.5 seconds
+        let result = DatabaseValue::now().plus_duration(duration).build();
+
+        if let DatabaseValue::NowPlus(interval) = result {
+            assert_eq!(interval.seconds, 1);
+            assert_eq!(interval.nanos, 500_000_000);
+        } else {
+            panic!("Expected NowPlus variant");
+        }
+    }
+
+    #[test]
+    fn test_minus_duration_with_nanos_borrow() {
+        // Test nanosecond borrowing from seconds
+        let add_duration = Duration::new(2, 100_000_000); // 2.1 seconds
+        let sub_duration = Duration::new(0, 500_000_000); // 0.5 seconds
+
+        let result = DatabaseValue::now()
+            .plus_duration(add_duration)
+            .minus_duration(sub_duration)
+            .build();
+
+        if let DatabaseValue::NowPlus(interval) = result {
+            // 2.1s - 0.5s = 1.6s = 1 second + 600,000,000 nanos
+            assert_eq!(interval.seconds, 1);
+            assert_eq!(interval.nanos, 600_000_000);
+        } else {
+            panic!("Expected NowPlus variant");
+        }
+    }
+
+    #[test]
+    fn test_timezone_local() {
+        let builder = DatabaseValue::now().local();
+        assert_eq!(builder.timezone, Some("LOCAL".to_string()));
+    }
+
+    #[test]
+    fn test_timezone_utc() {
+        let builder = DatabaseValue::now().tz("America/Los_Angeles").utc();
+        assert_eq!(builder.timezone, None); // UTC is represented as None
+    }
+
+    #[test]
+    fn test_timezone_custom() {
+        let builder = DatabaseValue::now().tz("Europe/London");
+        assert_eq!(builder.timezone, Some("Europe/London".to_string()));
+    }
+
+    #[test]
+    fn test_complex_interval_combination() {
+        let result = DatabaseValue::now()
+            .plus_years(1)
+            .minus_months(2)
+            .plus_days(15)
+            .minus_hours(6)
+            .plus_minutes(30)
+            .minus_seconds(45)
+            .build();
+
+        if let DatabaseValue::NowPlus(interval) = result {
+            assert_eq!(interval.years, 1);
+            assert_eq!(interval.months, -2);
+            assert_eq!(interval.days, 15);
+            assert_eq!(interval.hours, -6);
+            assert_eq!(interval.minutes, 30);
+            assert_eq!(interval.seconds, -45);
+        } else {
+            panic!("Expected NowPlus variant");
+        }
+    }
+
+    #[test]
+    fn test_default_now_builder() {
+        let builder = NowBuilder::default();
+        assert!(builder.interval.is_zero());
+        assert!(builder.timezone.is_none());
+    }
+
+    #[test]
+    fn test_now_builder_chaining() {
+        // Test that builder methods can be chained fluently
+        let result = NowBuilder::new()
+            .plus_days(1)
+            .plus_hours(2)
+            .plus_minutes(3)
+            .build();
+
+        assert!(matches!(result, DatabaseValue::NowPlus(_)));
+    }
+
+    #[test]
+    fn test_nanos_overflow_in_plus_duration() {
+        // Test that large nanosecond values are properly normalized
+        let duration1 = Duration::new(0, 800_000_000); // 0.8 seconds
+        let duration2 = Duration::new(0, 700_000_000); // 0.7 seconds
+
+        let result = DatabaseValue::now()
+            .plus_duration(duration1)
+            .plus_duration(duration2)
+            .build();
+
+        if let DatabaseValue::NowPlus(interval) = result {
+            // 0.8s + 0.7s = 1.5s = 1 second + 500,000,000 nanos (after normalization)
+            assert_eq!(interval.seconds, 1);
+            assert_eq!(interval.nanos, 500_000_000);
+        } else {
+            panic!("Expected NowPlus variant");
+        }
+    }
 }
