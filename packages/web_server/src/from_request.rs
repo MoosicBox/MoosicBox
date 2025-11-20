@@ -555,3 +555,212 @@ impl FromRequest for RequestInfo {
         std::future::ready(Self::from_request_sync(&req))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    use crate::{Method, Stub, simulator::SimulationRequest};
+
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn create_test_request() -> HttpRequest {
+        let sim_req = SimulationRequest::new(Method::Get, "/api/users")
+            .with_query_string("page=1&limit=20")
+            .with_header("user-agent", "TestAgent/1.0")
+            .with_header("content-type", "application/json")
+            .with_header("authorization", "Bearer token123")
+            .with_header("accept", "application/json");
+
+        HttpRequest::Stub(Stub::Simulator(sim_req.into()))
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_data_extraction() {
+        let req = create_test_request();
+        let result = RequestData::from_request_sync(&req);
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+
+        assert_eq!(data.method, Method::Get);
+        assert_eq!(data.path, "/api/users");
+        assert_eq!(data.query, "page=1&limit=20");
+        assert_eq!(data.user_agent, Some("TestAgent/1.0".to_string()));
+        assert_eq!(data.content_type, Some("application/json".to_string()));
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_data_header_methods() {
+        let req = create_test_request();
+        let data = RequestData::from_request_sync(&req).unwrap();
+
+        assert!(data.has_header("user-agent"));
+        assert!(data.has_header("content-type"));
+        assert!(!data.has_header("non-existent"));
+
+        assert_eq!(
+            data.header("authorization"),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(data.header("accept"), Some(&"application/json".to_string()));
+        assert_eq!(data.header("non-existent"), None);
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_info_extraction() {
+        let req = create_test_request();
+        let result = RequestInfo::from_request_sync(&req);
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+
+        assert_eq!(info.method, Method::Get);
+        assert_eq!(info.path, "/api/users");
+        assert_eq!(info.query, "page=1&limit=20");
+        assert!(info.remote_addr.is_none());
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_extraction() {
+        let req = create_test_request();
+        let result = Headers::from_request_sync(&req);
+
+        assert!(result.is_ok());
+        let headers = result.unwrap();
+
+        assert!(headers.contains("authorization"));
+        assert!(headers.contains("content-type"));
+        assert!(headers.contains("user-agent"));
+        assert!(!headers.contains("non-existent"));
+
+        assert_eq!(
+            headers.authorization(),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(
+            headers.content_type(),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(headers.user_agent(), Some(&"TestAgent/1.0".to_string()));
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_all() {
+        let req = create_test_request();
+        let headers = Headers::from_request_sync(&req).unwrap();
+
+        let all_headers = headers.all();
+        assert!(!all_headers.is_empty());
+        assert!(all_headers.contains_key("authorization"));
+        assert!(all_headers.contains_key("content-type"));
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_string_from_request() {
+        let req = create_test_request();
+        let result = String::from_request_sync(&req);
+
+        assert!(result.is_ok());
+        let query = result.unwrap();
+        assert_eq!(query, "page=1&limit=20");
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_u32_from_request_valid() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("42");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let result = u32::from_request_sync(&req);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_u32_from_request_invalid() {
+        let sim_req =
+            SimulationRequest::new(Method::Get, "/test").with_query_string("not_a_number");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let result = u32::from_request_sync(&req);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_i32_from_request_valid() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("-123");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let result = i32::from_request_sync(&req);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), -123);
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_bool_from_request_true_values() {
+        for true_value in &["true", "1", "yes", "on", "TRUE", "YES", "ON"] {
+            let sim_req =
+                SimulationRequest::new(Method::Get, "/test").with_query_string(*true_value);
+            let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+            let result = bool::from_request_sync(&req);
+            assert!(result.is_ok());
+            assert!(result.unwrap(), "Failed for value: {true_value}");
+        }
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_bool_from_request_false_values() {
+        for false_value in &[
+            "false",
+            "0",
+            "no",
+            "off",
+            "FALSE",
+            "NO",
+            "OFF",
+            "anything_else",
+        ] {
+            let sim_req =
+                SimulationRequest::new(Method::Get, "/test").with_query_string(*false_value);
+            let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+            let result = bool::from_request_sync(&req);
+            assert!(result.is_ok());
+            assert!(!result.unwrap(), "Failed for value: {false_value}");
+        }
+    }
+
+    #[test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_http_request_from_request_error() {
+        let req = create_test_request();
+        let result = HttpRequest::from_request_sync(&req);
+
+        // Should return an error because HttpRequest cannot be cloned
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_into_handler_error() {
+        let error = Error::bad_request("Test error");
+        let handler_error = error.into_handler_error();
+
+        match handler_error {
+            Error::Http { status_code, .. } => {
+                assert_eq!(status_code, crate::StatusCode::BadRequest);
+            }
+        }
+    }
+}
