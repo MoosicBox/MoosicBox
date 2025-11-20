@@ -873,3 +873,196 @@ fn do_verification(finalization: FinalizeResult) -> i32 {
         i32::from(!is_ok)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use symphonia::core::codecs::CodecParameters;
+    use symphonia::core::formats::Track;
+
+    #[test]
+    fn test_audio_decode_handler_new() {
+        let handler = AudioDecodeHandler::new();
+        assert!(handler.cancellation_token.is_none());
+        assert_eq!(handler.filters.len(), 0);
+        assert_eq!(handler.open_decode_handlers.len(), 0);
+        assert_eq!(handler.outputs.len(), 0);
+    }
+
+    #[test]
+    fn test_audio_decode_handler_default() {
+        let handler = AudioDecodeHandler::default();
+        assert!(handler.cancellation_token.is_none());
+        assert_eq!(handler.filters.len(), 0);
+        assert_eq!(handler.open_decode_handlers.len(), 0);
+        assert_eq!(handler.outputs.len(), 0);
+    }
+
+    #[test]
+    fn test_audio_decode_handler_with_cancellation_token() {
+        let token = CancellationToken::new();
+        let handler = AudioDecodeHandler::new().with_cancellation_token(token);
+        assert!(handler.cancellation_token.is_some());
+        assert!(!handler.cancellation_token.unwrap().is_cancelled());
+    }
+
+    #[test]
+    fn test_audio_decode_handler_contains_outputs_to_open() {
+        let handler = AudioDecodeHandler::new();
+        assert!(!handler.contains_outputs_to_open());
+
+        let handler = handler.with_output(Box::new(|_spec, _duration| {
+            Err(AudioDecodeError::OpenStream)
+        }));
+        assert!(handler.contains_outputs_to_open());
+    }
+
+    #[test]
+    fn test_audio_decode_handler_try_open_success() {
+        struct MockOutput;
+        impl AudioDecode for MockOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
+            Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
+        }));
+
+        assert!(handler.contains_outputs_to_open());
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        let result = handler.try_open(spec, 1024);
+        assert!(result.is_ok());
+        assert!(!handler.contains_outputs_to_open());
+        assert_eq!(handler.outputs.len(), 1);
+    }
+
+    #[test]
+    fn test_audio_decode_handler_try_open_error() {
+        let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
+            Err(AudioDecodeError::OpenStream)
+        }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        let result = handler.try_open(spec, 1024);
+        assert!(result.is_err());
+        assert_eq!(handler.outputs.len(), 0);
+    }
+
+    #[test]
+    fn test_first_supported_track_empty() {
+        let tracks: Vec<Track> = vec![];
+        assert!(first_supported_track(&tracks).is_none());
+    }
+
+    #[test]
+    fn test_first_supported_track_all_null() {
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+        ];
+        assert!(first_supported_track(&tracks).is_none());
+    }
+
+    #[test]
+    fn test_first_supported_track_finds_supported() {
+        use symphonia::core::codecs::CODEC_TYPE_FLAC;
+
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+            Track::new(2, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+        ];
+        let result = first_supported_track(&tracks);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 1);
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_ok() {
+        let result = ignore_end_of_stream_error(Ok(()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_expected_eof() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "end of stream");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_unexpected_eof_different_message() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "unexpected end");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_other_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_do_verification_none() {
+        let finalization = FinalizeResult { verify_ok: None };
+        assert_eq!(do_verification(finalization), 0);
+    }
+
+    #[test]
+    fn test_do_verification_passed() {
+        let finalization = FinalizeResult {
+            verify_ok: Some(true),
+        };
+        assert_eq!(do_verification(finalization), 0);
+    }
+
+    #[test]
+    fn test_do_verification_failed() {
+        let finalization = FinalizeResult {
+            verify_ok: Some(false),
+        };
+        assert_eq!(do_verification(finalization), 1);
+    }
+
+    #[test]
+    fn test_io_error_to_decode_error_conversion() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let decode_error: DecodeError = io_error.into();
+        assert!(matches!(decode_error, DecodeError::Symphonia(_)));
+    }
+
+    #[test]
+    fn test_audio_decode_error_display() {
+        let error = AudioDecodeError::OpenStream;
+        assert_eq!(error.to_string(), "OpenStreamError");
+
+        let error = AudioDecodeError::StreamEnd;
+        assert_eq!(error.to_string(), "StreamEndError");
+
+        let error = AudioDecodeError::Interrupt;
+        assert_eq!(error.to_string(), "InterruptError");
+    }
+
+    #[test]
+    fn test_decode_error_display() {
+        let error = DecodeError::NoAudioOutputs;
+        assert_eq!(error.to_string(), "No audio outputs");
+
+        let error = DecodeError::InvalidSource;
+        assert_eq!(error.to_string(), "Invalid source");
+    }
+}

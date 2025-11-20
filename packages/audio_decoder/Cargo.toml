@@ -54,3 +54,6 @@ aac  = []
 flac = []
 mp3  = []
 opus = ["dep:moosicbox_opus"]
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
