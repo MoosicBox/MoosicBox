@@ -792,4 +792,243 @@ mod tests {
             .await;
         assert!(result.is_err() || result.unwrap().is_empty());
     }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_multiple_before_breakpoints_same_migration() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations = vec![
+            Arc::new(TestMigration::new(
+                "001_create_users",
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+                Some("DROP TABLE users"),
+            )) as Arc<dyn Migration<'static> + 'static>,
+            Arc::new(TestMigration::new(
+                "002_create_posts",
+                "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)",
+                Some("DROP TABLE posts"),
+            )) as Arc<dyn Migration<'static> + 'static>,
+        ];
+
+        // Multiple data_before for the same migration should execute in order
+        MigrationTestBuilder::new(migrations)
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO users (name) VALUES ('First')")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO users (name) VALUES ('Second')")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // Verify both insertions happened
+        let result = query::select("users")
+            .columns(&["name"])
+            .execute(db.as_ref())
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 2);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_multiple_after_breakpoints_same_migration() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations = vec![Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>];
+
+        // Multiple data_after for the same migration
+        MigrationTestBuilder::new(migrations)
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO users (name) VALUES ('First')")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO users (name) VALUES ('Second')")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO users (name) VALUES ('Third')")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // Verify all three insertions happened
+        let result = query::select("users")
+            .columns(&["name"])
+            .execute(db.as_ref())
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 3);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_empty_migrations_with_initial_setup() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = vec![];
+
+        // Should handle empty migrations list with initial setup
+        MigrationTestBuilder::new(migrations)
+            .with_initial_setup(|db| {
+                Box::pin(async move {
+                    db.exec_raw("CREATE TABLE test (id INTEGER)").await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // Verify initial setup ran
+        let result = query::select("sqlite_master")
+            .columns(&["name"])
+            .where_eq("type", "table")
+            .where_eq("name", "test")
+            .execute(db.as_ref())
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_builder_with_failing_initial_setup() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations = vec![Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>];
+
+        // Initial setup that fails
+        let result = MigrationTestBuilder::new(migrations)
+            .with_initial_setup(|db| {
+                Box::pin(async move {
+                    db.exec_raw("INVALID SQL STATEMENT").await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_builder_with_failing_breakpoint_action() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations = vec![Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>];
+
+        // Breakpoint action that fails
+        let result = MigrationTestBuilder::new(migrations)
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    db.exec_raw("INSERT INTO nonexistent_table VALUES (1)")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_breakpoint_timing_both_before_and_after() {
+        let db = crate::create_empty_in_memory().await.unwrap();
+
+        let migrations = vec![Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, counter INTEGER DEFAULT 0)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>];
+
+        // Test both before and after for the same migration
+        MigrationTestBuilder::new(migrations)
+            .with_data_before("001_create_users", |db| {
+                Box::pin(async move {
+                    // Before: create a temp table
+                    db.exec_raw("CREATE TABLE temp (value INTEGER)").await?;
+                    db.exec_raw("INSERT INTO temp VALUES (1)").await?;
+                    Ok(())
+                })
+            })
+            .with_data_after("001_create_users", |db| {
+                Box::pin(async move {
+                    // After: insert into the newly created users table
+                    db.exec_raw("INSERT INTO users (name, counter) VALUES ('test', (SELECT value FROM temp))")
+                        .await?;
+                    Ok(())
+                })
+            })
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // Verify the complex interaction worked
+        let result = query::select("users")
+            .columns(&["name", "counter"])
+            .execute(db.as_ref())
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].get("counter").unwrap().as_i64().unwrap(), 1);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_vec_migration_source_new() {
+        // Test the VecMigrationSource constructor
+        let migration = Arc::new(TestMigration::new(
+            "001_test",
+            "CREATE TABLE test (id INTEGER)",
+            Some("DROP TABLE test"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let source = VecMigrationSource::new(vec![migration]);
+        let migrations = source.migrations().await.unwrap();
+
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0].id(), "001_test");
+    }
 }

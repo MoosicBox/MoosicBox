@@ -644,4 +644,158 @@ mod tests {
             "Migrations with no mutations failed: {result:?}"
         );
     }
+
+    #[test]
+    fn test_test_error_display() {
+        // Test that TestError variants display properly
+        let migration_err = TestError::Migration(switchy_schema::MigrationError::Validation(
+            "test error".to_string(),
+        ));
+        let display = format!("{migration_err}");
+        assert!(display.contains("test error"));
+
+        let db_err = TestError::Database(DatabaseError::NoRow);
+        let display = format!("{db_err}");
+        assert!(!display.is_empty());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_test_error_from_database_init_error() {
+        use std::path::Path;
+
+        // Test conversion from database init error by attempting to open invalid DB
+        // This test requires no_simulator because the simulator creates directories automatically
+        let path = Path::new("/nonexistent/path/that/should/not/exist/db.sqlite");
+        let result = switchy_database_connection::init_sqlite_sqlx(Some(path)).await;
+
+        assert!(result.is_err());
+        if let Err(init_error) = result {
+            let test_error: TestError = init_error.into();
+            let display = format!("{test_error}");
+            assert!(!display.is_empty());
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_vec_migration_source_multiple_calls() {
+        // Test that VecMigrationSource can be called multiple times (Arc cloning)
+        let migration1 = Arc::new(TestMigration::new(
+            "001_test",
+            "CREATE TABLE test (id INTEGER)",
+            Some("DROP TABLE test"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let source = VecMigrationSource::new(vec![migration1]);
+
+        // Call migrations() multiple times
+        let first_call = source.migrations().await.unwrap();
+        let second_call = source.migrations().await.unwrap();
+
+        assert_eq!(first_call.len(), 1);
+        assert_eq!(second_call.len(), 1);
+        assert_eq!(first_call[0].id(), "001_test");
+        assert_eq!(second_call[0].id(), "001_test");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[switchy_async::test]
+    async fn test_verify_migrations_with_failing_migration() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        // Create a migration that will fail due to invalid SQL
+        let bad_migration = Arc::new(TestMigration::new(
+            "001_bad_migration",
+            "THIS IS NOT VALID SQL",
+            None,
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let result = verify_migrations_full_cycle(db.as_ref(), vec![bad_migration]).await;
+
+        // Should fail with a migration error
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[switchy_async::test]
+    async fn test_verify_migrations_with_state_failing_setup() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        // Setup that fails with invalid SQL
+        let result = verify_migrations_with_state(db.as_ref(), vec![migration1], |db| {
+            Box::pin(async move {
+                // This should fail
+                db.exec_raw("INVALID SQL STATEMENT").await?;
+                Ok(())
+            })
+        })
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[switchy_async::test]
+    async fn test_verify_migrations_rollback_failure() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        // Create a migration with no down() implementation
+        let migration_no_down = Arc::new(TestMigration::new(
+            "001_no_rollback",
+            "CREATE TABLE test (id INTEGER PRIMARY KEY)",
+            None, // No down SQL - rollback will be a no-op but should succeed
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        // This should still succeed because empty down() is valid
+        let result = verify_migrations_full_cycle(db.as_ref(), vec![migration_no_down]).await;
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[switchy_async::test]
+    async fn test_verify_migrations_with_mutations_execution_order() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let migration2 = Arc::new(TestMigration::new(
+            "002_create_posts",
+            "CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT)",
+            Some("DROP TABLE posts"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1, migration2];
+
+        // Create mutations that will verify execution order
+        // Mutation for 001 should execute after table is created
+        // If the mutation runs before the table is created, it will fail
+        let mut mutation_map = std::collections::BTreeMap::new();
+        mutation_map.insert(
+            "001_create_users".to_string(),
+            Arc::new("INSERT INTO users (name) VALUES ('first_user')".to_string())
+                as Arc<dyn switchy_database::Executable>,
+        );
+
+        // If this succeeds, it means:
+        // 1. The migration ran first (creating the table)
+        // 2. The mutation ran second (inserting into the table)
+        // 3. The rollback succeeded
+        // If the order were wrong, the INSERT would fail with "no such table: users"
+        let result =
+            verify_migrations_with_mutations(db.as_ref(), test_migrations, mutation_map).await;
+        assert!(
+            result.is_ok(),
+            "Mutation should succeed when executed after migration"
+        );
+    }
 }
