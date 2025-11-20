@@ -351,7 +351,7 @@ pub enum PopulateIndexError {
 ///
 /// This enum supports the three data types that can be stored in the Tantivy search index:
 /// text strings, boolean flags, and unsigned integers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataValue {
     /// A text string value for fields like titles, names, and descriptions
     String(String),
@@ -1508,5 +1508,115 @@ mod tests {
                 .len(),
             4
         );
+    }
+
+    #[test]
+    fn test_sanitize_query_removes_special_characters() {
+        assert_eq!(sanitize_query("hello@world!"), "hello world");
+        assert_eq!(sanitize_query("test#123$456"), "test 123 456");
+        assert_eq!(sanitize_query("foo&bar*baz"), "foo bar baz");
+    }
+
+    #[test]
+    fn test_sanitize_query_collapses_whitespace() {
+        assert_eq!(sanitize_query("hello    world"), "hello world");
+        assert_eq!(
+            sanitize_query("  spaces  everywhere  "),
+            "spaces everywhere"
+        );
+        assert_eq!(sanitize_query("tab\ttab"), "tab tab");
+    }
+
+    #[test]
+    fn test_sanitize_query_preserves_alphanumeric() {
+        assert_eq!(sanitize_query("abc123 XYZ789"), "abc123 XYZ789");
+        assert_eq!(sanitize_query("MixedCase123"), "MixedCase123");
+    }
+
+    #[test]
+    fn test_sanitize_query_empty_string() {
+        assert_eq!(sanitize_query(""), "");
+    }
+
+    #[test]
+    fn test_sanitize_query_only_special_characters() {
+        assert_eq!(sanitize_query("@#$%^&*()"), "");
+        assert_eq!(sanitize_query("!!!???"), "");
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_from_global_search_index() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Delete a specific track by its track_id_string - test that the function executes successfully
+        let result = crate::delete_from_global_search_index(&[(
+            "track_id_string",
+            DataValue::String("1654".to_string()),
+        )]);
+
+        // Verify deletion completes without error
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_multiple_from_global_search_index() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Delete multiple items - test that the function executes successfully with multiple terms
+        let result = crate::delete_from_global_search_index(&[
+            ("track_id_string", DataValue::String("1655".to_string())),
+            ("track_id_string", DataValue::String("1659".to_string())),
+        ]);
+
+        // Verify deletion completes without error
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_from_global_search_index_empty() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+        let results_before = crate::search_global_search_index("elder", 0, 10).unwrap();
+
+        // Delete with empty data should be a no-op
+        crate::delete_from_global_search_index(&[]).unwrap();
+        let results_after = crate::search_global_search_index("elder", 0, 10).unwrap();
+
+        assert_eq!(results_before.len(), results_after.len());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_populate_global_search_index_empty() {
+        before_each();
+
+        // Populate with empty data should succeed without error
+        crate::populate_global_search_index_sync(&[], true).unwrap();
+        let results = crate::search_global_search_index("anything", 0, 10).unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_populate_global_search_index_without_delete() {
+        before_each();
+
+        // Add initial data
+        crate::populate_global_search_index_sync(&[ELDER_ARTIST.clone()], true).unwrap();
+        let results = crate::search_global_search_index("elder", 0, 10).unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Add more data without deleting
+        crate::populate_global_search_index_sync(&[OMENS_ALBUM.clone()], false).unwrap();
+        let results = crate::search_global_search_index("elder", 0, 10).unwrap();
+        assert_eq!(results.len(), 2);
     }
 }
