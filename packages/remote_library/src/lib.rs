@@ -1007,3 +1007,183 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::TrackApiSource;
+
+    /// Creates a test instance of `RemoteLibraryMusicApi` for testing.
+    fn create_test_api() -> RemoteLibraryMusicApi {
+        RemoteLibraryMusicApi::new(
+            "http://localhost:8000".to_string(),
+            ApiSource::library(),
+            "test-profile".to_string(),
+        )
+    }
+
+    #[test]
+    fn test_new_creates_instance_with_correct_fields() {
+        let host = "http://example.com".to_string();
+        let api_source = ApiSource::library();
+        let profile = "my-profile".to_string();
+
+        let api = RemoteLibraryMusicApi::new(host.clone(), api_source.clone(), profile.clone());
+
+        assert_eq!(api.host, host);
+        assert_eq!(api.api_source, api_source);
+        assert_eq!(api.profile, profile);
+    }
+
+    #[test]
+    fn test_source_returns_api_source() {
+        let api = create_test_api();
+        let source = api.source();
+
+        assert_eq!(source, &ApiSource::library());
+    }
+
+    #[test]
+    fn test_supports_search_returns_true() {
+        let api = create_test_api();
+
+        assert!(api.supports_search());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_artist_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let artist_id = Id::Number(1);
+
+        let result = api.add_artist(&artist_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Adding artist is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_remove_artist_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let artist_id = Id::Number(1);
+
+        let result = api.remove_artist(&artist_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Removing artist is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_album_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let album_id = Id::Number(1);
+
+        let result = api.add_album(&album_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Adding album is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_remove_album_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let album_id = Id::Number(1);
+
+        let result = api.remove_album(&album_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Removing album is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_track_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let track_id = Id::Number(1);
+
+        let result = api.add_track(&track_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Adding track is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_remove_track_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let track_id = Id::Number(1);
+
+        let result = api.remove_track(&track_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Removing track is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_track_size_returns_unsupported_action_error() {
+        let api = create_test_api();
+        let track_id = Id::Number(1);
+        let track_or_id = TrackOrId::Id(track_id);
+        let track_source = TrackSource::LocalFilePath {
+            path: "/tmp/test.mp3".into(),
+            format: AudioFormat::Flac,
+            track_id: None,
+            source: TrackApiSource::Local,
+        };
+        let quality = PlaybackQuality {
+            format: AudioFormat::Flac,
+        };
+
+        let result = api.track_size(track_or_id, &track_source, quality).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Fetching track size is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tracks_with_none_track_ids_returns_unsupported_action_error() {
+        let api = create_test_api();
+
+        let result = api.tracks(None, None, None, None, None).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(moosicbox_music_api::Error::UnsupportedAction(msg)) => {
+                assert_eq!(msg, "Fetching all tracks is not implemented");
+            }
+            _ => panic!("Expected UnsupportedAction error"),
+        }
+    }
+}
