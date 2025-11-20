@@ -31,7 +31,6 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 test-log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = ["futures-channel"]

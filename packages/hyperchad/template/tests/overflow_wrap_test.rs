@@ -155,15 +155,3 @@ fn test_overflow_wrap_with_conditional() {
 
     assert_eq!(containers[0].overflow_wrap, Some(OverflowWrap::BreakWord));
 }
-
-#[test]
-fn test_overflow_wrap_display_trait() {
-    assert_eq!(OverflowWrap::Normal.to_string(), "normal");
-    assert_eq!(OverflowWrap::BreakWord.to_string(), "break-word");
-    assert_eq!(OverflowWrap::Anywhere.to_string(), "anywhere");
-}
-
-#[test]
-fn test_overflow_wrap_default_trait() {
-    assert_eq!(OverflowWrap::default(), OverflowWrap::Normal);
-}

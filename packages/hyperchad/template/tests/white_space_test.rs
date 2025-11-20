@@ -155,15 +155,3 @@ fn test_white_space_with_conditional() {
 
     assert_eq!(containers[0].white_space, Some(WhiteSpace::Preserve));
 }
-
-#[test]
-fn test_white_space_display_trait() {
-    assert_eq!(WhiteSpace::Normal.to_string(), "normal");
-    assert_eq!(WhiteSpace::Preserve.to_string(), "preserve");
-    assert_eq!(WhiteSpace::PreserveWrap.to_string(), "preserve-wrap");
-}
-
-#[test]
-fn test_white_space_default_trait() {
-    assert_eq!(WhiteSpace::default(), WhiteSpace::Normal);
-}

@@ -6019,7 +6019,6 @@ dependencies = [
  "switchy_http_models",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "uaparser",
 ]
 
@@ -6055,7 +6054,6 @@ dependencies = [
  "pretty_assertions",
  "switchy_async",
  "test-log",
- "tokio",
 ]
 
 [[package]]
@@ -6163,7 +6161,6 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8403,7 +8400,6 @@ dependencies = [
  "moosicbox_assert",
  "switchy_async",
  "test-log",
- "tokio",
 ]
 
 [[package]]
@@ -8572,7 +8568,6 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_search",
- "pretty_assertions",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -9320,7 +9315,6 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy",
- "test-log",
  "thiserror 2.0.17",
  "tokio",
  "url 2.5.7",

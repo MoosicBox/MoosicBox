@@ -298,20 +298,3 @@ async fn test_barrier_stress() {
 fn test_barrier_zero_size_panics() {
     let _ = Barrier::new(0);
 }
-
-/// Test that the result types implement the expected traits
-#[switchy_async::test]
-async fn test_barrier_result_traits() {
-    let barrier = Barrier::new(1);
-    let result = barrier.wait().await;
-
-    // Test Clone
-    let _cloned = result.clone();
-
-    // Test Debug
-    let debug_str = format!("{:?}", result);
-    assert!(debug_str.contains("BarrierWaitResult"));
-
-    // Test is_leader method
-    assert!(result.is_leader());
-}

@@ -26,7 +26,6 @@ log = { workspace = true }
 pretty_assertions = { workspace = true }
 switchy_async     = { workspace = true, features = ["macros", "tokio"] }
 test-log          = { workspace = true }
-tokio             = { workspace = true }
 
 [features]
 default = []

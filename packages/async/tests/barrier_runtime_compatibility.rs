@@ -45,24 +45,6 @@ async fn test_barrier_cross_runtime_compatibility() {
 }
 
 #[switchy_async::test]
-async fn test_barrier_api_compatibility() {
-    // Test that the API is identical to tokio::sync::Barrier
-    let barrier = Barrier::new(1);
-
-    // Test that we can clone the result
-    let result = barrier.wait().await;
-    let _cloned_result = result.clone();
-
-    // Test Debug formatting
-    let debug_output = format!("{:?}", result);
-    assert!(debug_output.contains("BarrierWaitResult"));
-
-    // Test is_leader method
-    let is_leader = result.is_leader();
-    assert!(is_leader); // Single task barrier always becomes leader
-}
-
-#[switchy_async::test]
 async fn test_barrier_reuse_across_runtime() {
     // Test barrier reuse works the same way across runtimes
     let barrier = Arc::new(Barrier::new(2));

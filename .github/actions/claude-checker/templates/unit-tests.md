@@ -43,6 +43,10 @@ You must ONLY add tests that meet ALL of the following criteria:
 - Code that is already well-tested through integration tests
 - Obvious behavior that doesn't need verification
 - Simple forwarding functions with no logic
+- **Debug/Display trait implementations** - Do not test formatting output of Debug or Display traits
+- **Clone trait implementations** - Do not test that Clone works correctly, trust the derive macro or manual impl
+- **External dependency behavior** - Do not test that external libraries (e.g., flume channels, tokio, etc.) work correctly. Trust that dependencies are tested by their maintainers
+- **Derived or auto-generated trait implementations** - Do not test traits that are derived (Debug, Clone, PartialEq, etc.)
 
 **DO** add tests for:
 

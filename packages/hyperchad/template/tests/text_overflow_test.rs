@@ -133,17 +133,6 @@ fn test_text_overflow_with_conditional() {
 }
 
 #[test]
-fn test_text_overflow_display_trait() {
-    assert_eq!(TextOverflow::Clip.to_string(), "clip");
-    assert_eq!(TextOverflow::Ellipsis.to_string(), "ellipsis");
-}
-
-#[test]
-fn test_text_overflow_default_trait() {
-    assert_eq!(TextOverflow::default(), TextOverflow::Clip);
-}
-
-#[test]
 fn test_text_overflow_with_width_constraint() {
     let containers = container! {
         div

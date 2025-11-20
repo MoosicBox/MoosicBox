@@ -109,6 +109,5 @@ format-mp3  = ["moosicbox_library_models/mp3", "moosicbox_music_models/mp3"]
 format-opus = ["moosicbox_library_models/opus", "moosicbox_music_models/opus"]
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
-switchy_async     = { workspace = true, features = ["macros", "time", "tokio"] }
-test-log          = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
+test-log      = { workspace = true }

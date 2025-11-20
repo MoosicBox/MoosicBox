@@ -179,16 +179,3 @@ fn test_user_select_with_conditional() {
 
     assert_eq!(containers[0].user_select, Some(UserSelect::None));
 }
-
-#[test]
-fn test_user_select_display_trait() {
-    assert_eq!(UserSelect::Auto.to_string(), "auto");
-    assert_eq!(UserSelect::None.to_string(), "none");
-    assert_eq!(UserSelect::Text.to_string(), "text");
-    assert_eq!(UserSelect::All.to_string(), "all");
-}
-
-#[test]
-fn test_user_select_default_trait() {
-    assert_eq!(UserSelect::default(), UserSelect::Auto);
-}

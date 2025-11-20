@@ -92,4 +92,3 @@ scan = ["db", "moosicbox_music_api_helpers/scan"]
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-test-log          = { workspace = true }

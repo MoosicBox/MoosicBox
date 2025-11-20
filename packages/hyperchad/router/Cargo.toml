@@ -80,4 +80,3 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 test-log = { workspace = true }
-tokio = { workspace = true }
