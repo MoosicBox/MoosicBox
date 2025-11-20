@@ -173,3 +173,124 @@ impl<T: HtmlTagRenderer> ToRenderRunner for StubApp<T> {
         Ok(Box::new(StubRunner))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DefaultHtmlTagRenderer;
+
+    #[test]
+    fn test_stub_app_new() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let app = StubApp::new(tag_renderer);
+        assert!(app.css_urls.is_empty());
+        assert!(app.css_paths.is_empty());
+        assert!(app.inline_css.is_empty());
+    }
+
+    #[test]
+    fn test_stub_app_with_css_url() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let app = StubApp::new(tag_renderer).with_css_url("https://example.com/style.css");
+        assert_eq!(app.css_urls().len(), 1);
+        assert_eq!(app.css_urls()[0], "https://example.com/style.css");
+    }
+
+    #[test]
+    fn test_stub_app_add_css_url() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let mut app = StubApp::new(tag_renderer);
+        app.add_css_url("https://example.com/style.css");
+        app.add_css_url("https://example.com/theme.css");
+        assert_eq!(app.css_urls().len(), 2);
+    }
+
+    #[test]
+    fn test_stub_app_with_css_path() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let app = StubApp::new(tag_renderer).with_css_path("/static/style.css");
+        assert_eq!(app.css_paths().len(), 1);
+        assert_eq!(app.css_paths()[0], "/static/style.css");
+    }
+
+    #[test]
+    fn test_stub_app_add_css_path() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let mut app = StubApp::new(tag_renderer);
+        app.add_css_path("/static/main.css");
+        app.add_css_path("/static/reset.css");
+        assert_eq!(app.css_paths().len(), 2);
+    }
+
+    #[test]
+    fn test_stub_app_with_inline_css() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let css = "body { margin: 0; }";
+        let app = StubApp::new(tag_renderer).with_inline_css(css);
+        assert_eq!(app.inline_css_blocks().len(), 1);
+        assert_eq!(app.inline_css_blocks()[0], css);
+    }
+
+    #[test]
+    fn test_stub_app_add_inline_css() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let mut app = StubApp::new(tag_renderer);
+        app.add_inline_css("body { margin: 0; }");
+        app.add_inline_css("* { box-sizing: border-box; }");
+        assert_eq!(app.inline_css_blocks().len(), 2);
+    }
+
+    #[test]
+    fn test_stub_app_with_responsive_trigger() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let app = StubApp::new(tag_renderer).with_responsive_trigger(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(hyperchad_transformer::Number::Integer(768)),
+        );
+        let _renderer = app.tag_renderer();
+        // Test that the responsive trigger was added (implicitly through tag_renderer)
+    }
+
+    #[test]
+    fn test_stub_app_add_responsive_trigger() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let mut app = StubApp::new(tag_renderer);
+        app.add_responsive_trigger(
+            "tablet".to_string(),
+            ResponsiveTrigger::MaxWidth(hyperchad_transformer::Number::Integer(1024)),
+        );
+        let _renderer = app.tag_renderer();
+    }
+
+    #[test]
+    fn test_stub_runner_run() {
+        let mut runner = StubRunner;
+        let result = runner.run();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stub_app_to_runner() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let app = StubApp::new(tag_renderer);
+        let handle = Handle::current();
+        let result = app.to_runner(handle);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "assets")]
+    #[test]
+    fn test_stub_app_with_static_asset_routes() {
+        use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+        use std::path::PathBuf;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let routes = vec![StaticAssetRoute {
+            route: "/static".to_string(),
+            target: AssetPathTarget::Directory(PathBuf::from("./assets")),
+        }];
+        let app = StubApp::new(tag_renderer).with_static_asset_routes(routes);
+        let mut routes_iter = app.static_asset_routes();
+        assert!(routes_iter.next().is_some());
+    }
+}

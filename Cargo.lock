@@ -6025,8 +6025,11 @@ dependencies = [
  "qstring",
  "serde_json",
  "switchy",
+ "switchy_async",
  "switchy_http_models",
+ "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "uaparser",
 ]
 
