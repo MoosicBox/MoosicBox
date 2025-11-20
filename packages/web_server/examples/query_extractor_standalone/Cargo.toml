@@ -24,3 +24,6 @@ simulator        = ["moosicbox_web_server/simulator"]
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["serde", "simulator"] }
 serde                = { workspace = true }
+
+[dev-dependencies]
+test-log = { workspace = true }

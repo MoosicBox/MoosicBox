@@ -340,3 +340,284 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "simulator")]
+    mod simulator_tests {
+        use super::*;
+        use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+        use moosicbox_web_server::{FromRequest, HttpRequest, Stub};
+
+        #[test]
+        fn test_simple_query_deserialization_valid() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=Alice&age=30");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.name, "Alice");
+            assert_eq!(query.0.age, 30);
+        }
+
+        #[test]
+        fn test_simple_query_missing_required_field_name() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("age=30");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_simple_query_missing_required_field_age() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=Bob");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_simple_query_invalid_age_type() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=Charlie&age=not_a_number");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_simple_query_zero_age() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=David&age=0");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.name, "David");
+            assert_eq!(query.0.age, 0);
+        }
+
+        #[test]
+        fn test_simple_query_special_characters_in_name() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=John%20Doe&age=25");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.name, "John Doe");
+            assert_eq!(query.0.age, 25);
+        }
+
+        #[test]
+        fn test_optional_query_all_fields_present() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=rust&limit=10&offset=20&sort=date");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.search, "rust");
+            assert_eq!(query.0.limit, Some(10));
+            assert_eq!(query.0.offset, Some(20));
+            assert_eq!(query.0.sort, Some("date".to_string()));
+        }
+
+        #[test]
+        fn test_optional_query_only_required_field() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=programming");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.search, "programming");
+            assert_eq!(query.0.limit, None);
+            assert_eq!(query.0.offset, None);
+            assert_eq!(query.0.sort, None);
+        }
+
+        #[test]
+        fn test_optional_query_partial_optional_fields() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=database&limit=5&sort=relevance");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.search, "database");
+            assert_eq!(query.0.limit, Some(5));
+            assert_eq!(query.0.offset, None);
+            assert_eq!(query.0.sort, Some("relevance".to_string()));
+        }
+
+        #[test]
+        fn test_optional_query_missing_required_field() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("limit=10&offset=20");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_optional_query_invalid_limit_type() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=test&limit=invalid");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_optional_query_zero_values() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=query&limit=0&offset=0");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.search, "query");
+            assert_eq!(query.0.limit, Some(0));
+            assert_eq!(query.0.offset, Some(0));
+        }
+
+        #[test_log::test]
+        fn test_request_data_extraction() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error")
+                .with_query_string("test=1&debug=true")
+                .with_header("user-agent", "TestBot/1.0");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = RequestData::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let data = result.unwrap();
+            assert_eq!(data.query, "test=1&debug=true");
+            assert_eq!(data.path, "/error");
+            assert_eq!(data.user_agent, Some("TestBot/1.0".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_request_data_empty_query_string() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = RequestData::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let data = result.unwrap();
+            assert_eq!(data.query, "");
+            assert_eq!(data.path, "/error");
+        }
+
+        #[test_log::test]
+        fn test_request_data_no_user_agent() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error")
+                .with_query_string("foo=bar");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = RequestData::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let data = result.unwrap();
+            assert_eq!(data.user_agent, None);
+        }
+
+        #[test]
+        fn test_query_extraction_with_empty_query_string() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_query_extraction_with_duplicate_parameters() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
+                .with_query_string("name=First&name=Second&age=30");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<SimpleQuery>::from_request_sync(&http_request);
+            // Behavior depends on serde-querystring implementation
+            // At minimum, should not panic
+            let _ = result;
+        }
+
+        #[test]
+        fn test_optional_query_empty_string_values() {
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
+                .with_query_string("search=&limit=10");
+
+            let stub = SimulationStub::new(request);
+            let http_request = HttpRequest::Stub(Stub::Simulator(stub));
+
+            let result = Query::<OptionalQuery>::from_request_sync(&http_request);
+            assert!(result.is_ok());
+
+            let query = result.unwrap();
+            assert_eq!(query.0.search, "");
+            assert_eq!(query.0.limit, Some(10));
+        }
+    }
+}
