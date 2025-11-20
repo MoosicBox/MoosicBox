@@ -422,6 +422,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     }
 }
 
+/// Parses HTTP Cookie header into key-value pairs.
+///
+/// Splits the cookie header string by semicolons and extracts name-value pairs.
 fn parse_cookies(header: &str) -> Vec<(String, String)> {
     header
         .split(';')
