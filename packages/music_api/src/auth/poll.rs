@@ -60,21 +60,18 @@ impl PollAuth {
     }
 
     /// Sets the timeout duration.
-    #[must_use]
     pub fn timeout(&mut self, timeout: impl Into<Duration>) -> &mut Self {
         self.timeout = timeout.into();
         self
     }
 
     /// Sets the timeout duration to the given number of seconds.
-    #[must_use]
     pub const fn timeout_secs(&mut self, timeout: u64) -> &mut Self {
         self.timeout = Duration::from_secs(timeout);
         self
     }
 
     /// Sets the timeout duration to the given number of milliseconds.
-    #[must_use]
     pub const fn timeout_millis(&mut self, timeout: u64) -> &mut Self {
         self.timeout = Duration::from_millis(timeout);
         self
