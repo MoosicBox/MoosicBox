@@ -90,13 +90,441 @@ impl<T> AllOrSome<T> {
 }
 
 #[cfg(test)]
-#[test]
-fn tests() {
-    assert!(AllOrSome::<()>::All.is_all());
-    assert!(!AllOrSome::<()>::All.is_some());
+mod tests {
+    use super::*;
 
-    assert!(!AllOrSome::Some(()).is_all());
-    assert!(AllOrSome::Some(()).is_some());
+    #[test]
+    fn test_all_or_some_is_all_and_is_some() {
+        assert!(AllOrSome::<()>::All.is_all());
+        assert!(!AllOrSome::<()>::All.is_some());
+
+        assert!(!AllOrSome::Some(()).is_all());
+        assert!(AllOrSome::Some(()).is_some());
+    }
+
+    #[test]
+    fn test_all_or_some_default_is_all() {
+        let default: AllOrSome<Vec<String>> = AllOrSome::default();
+        assert!(default.is_all());
+    }
+
+    #[test]
+    fn test_all_or_some_as_ref() {
+        let all = AllOrSome::<String>::All;
+        assert_eq!(all.as_ref(), None);
+
+        let some = AllOrSome::Some(String::from("test"));
+        assert_eq!(some.as_ref(), Some(&String::from("test")));
+    }
+
+    #[test]
+    fn test_all_or_some_as_mut() {
+        let mut all = AllOrSome::<String>::All;
+        assert_eq!(all.as_mut(), None);
+
+        let mut some = AllOrSome::Some(String::from("test"));
+        if let Some(value) = some.as_mut() {
+            value.push_str("_modified");
+        }
+        assert_eq!(some.as_ref(), Some(&String::from("test_modified")));
+    }
+
+    #[test]
+    fn test_cors_default() {
+        let cors = Cors::default();
+        assert!(matches!(cors.allowed_origins, AllOrSome::Some(ref v) if v.is_empty()));
+        assert!(matches!(cors.allowed_methods, AllOrSome::Some(ref v) if v.is_empty()));
+        assert!(matches!(cors.allowed_headers, AllOrSome::Some(ref v) if v.is_empty()));
+        assert!(matches!(cors.expose_headers, AllOrSome::Some(ref v) if v.is_empty()));
+        assert!(!cors.supports_credentials);
+        assert_eq!(cors.max_age, None);
+    }
+
+    #[test]
+    fn test_cors_allow_any_origin() {
+        let cors = Cors::default().allow_any_origin();
+        assert!(cors.allowed_origins.is_all());
+    }
+
+    #[test]
+    fn test_cors_allow_origin_single() {
+        let cors = Cors::default().allow_origin("https://example.com");
+        match cors.allowed_origins {
+            AllOrSome::Some(origins) => {
+                assert_eq!(origins.len(), 1);
+                assert_eq!(origins[0], "https://example.com");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_origin_multiple() {
+        let cors = Cors::default()
+            .allow_origin("https://example.com")
+            .allow_origin("https://test.com");
+        match cors.allowed_origins {
+            AllOrSome::Some(origins) => {
+                assert_eq!(origins.len(), 2);
+                assert_eq!(origins[0], "https://example.com");
+                assert_eq!(origins[1], "https://test.com");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_origin_after_allow_any_has_no_effect() {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_origin("https://example.com");
+        assert!(cors.allowed_origins.is_all());
+    }
+
+    #[test]
+    fn test_cors_allowed_origins_iterator() {
+        let origins = vec!["https://a.com", "https://b.com", "https://c.com"];
+        let cors = Cors::default().allowed_origins(origins);
+        match cors.allowed_origins {
+            AllOrSome::Some(result) => {
+                assert_eq!(result.len(), 3);
+                assert_eq!(result[0], "https://a.com");
+                assert_eq!(result[1], "https://b.com");
+                assert_eq!(result[2], "https://c.com");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allowed_origins_after_allow_any_has_no_effect() {
+        let origins = vec!["https://a.com", "https://b.com"];
+        let cors = Cors::default().allow_any_origin().allowed_origins(origins);
+        assert!(cors.allowed_origins.is_all());
+    }
+
+    #[test]
+    fn test_cors_allow_any_method() {
+        let cors = Cors::default().allow_any_method();
+        assert!(cors.allowed_methods.is_all());
+    }
+
+    #[test]
+    fn test_cors_allow_method_single() {
+        let cors = Cors::default().allow_method(Method::Get);
+        match cors.allowed_methods {
+            AllOrSome::Some(methods) => {
+                assert_eq!(methods.len(), 1);
+                assert_eq!(methods[0], Method::Get);
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_method_multiple() {
+        let cors = Cors::default()
+            .allow_method(Method::Get)
+            .allow_method(Method::Post)
+            .allow_method(Method::Put);
+        match cors.allowed_methods {
+            AllOrSome::Some(methods) => {
+                assert_eq!(methods.len(), 3);
+                assert_eq!(methods[0], Method::Get);
+                assert_eq!(methods[1], Method::Post);
+                assert_eq!(methods[2], Method::Put);
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_method_after_allow_any_has_no_effect() {
+        let cors = Cors::default().allow_any_method().allow_method(Method::Get);
+        assert!(cors.allowed_methods.is_all());
+    }
+
+    #[test]
+    fn test_cors_allowed_methods_iterator() {
+        let methods = vec![Method::Get, Method::Post, Method::Delete];
+        let cors = Cors::default().allowed_methods(methods);
+        match cors.allowed_methods {
+            AllOrSome::Some(result) => {
+                assert_eq!(result.len(), 3);
+                assert_eq!(result[0], Method::Get);
+                assert_eq!(result[1], Method::Post);
+                assert_eq!(result[2], Method::Delete);
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allowed_methods_after_allow_any_has_no_effect() {
+        let methods = vec![Method::Get, Method::Post];
+        let cors = Cors::default().allow_any_method().allowed_methods(methods);
+        assert!(cors.allowed_methods.is_all());
+    }
+
+    #[test]
+    fn test_cors_allow_any_header() {
+        let cors = Cors::default().allow_any_header();
+        assert!(cors.allowed_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_allow_header_single() {
+        let cors = Cors::default().allow_header("Content-Type");
+        match cors.allowed_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 1);
+                assert_eq!(headers[0], "Content-Type");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_header_multiple() {
+        let cors = Cors::default()
+            .allow_header("Content-Type")
+            .allow_header("Authorization")
+            .allow_header("X-Custom-Header");
+        match cors.allowed_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 3);
+                assert_eq!(headers[0], "Content-Type");
+                assert_eq!(headers[1], "Authorization");
+                assert_eq!(headers[2], "X-Custom-Header");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allow_header_after_allow_any_has_no_effect() {
+        let cors = Cors::default()
+            .allow_any_header()
+            .allow_header("Content-Type");
+        assert!(cors.allowed_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_allowed_headers_iterator() {
+        let headers = vec!["Content-Type", "Authorization", "X-Api-Key"];
+        let cors = Cors::default().allowed_headers(headers);
+        match cors.allowed_headers {
+            AllOrSome::Some(result) => {
+                assert_eq!(result.len(), 3);
+                assert_eq!(result[0], "Content-Type");
+                assert_eq!(result[1], "Authorization");
+                assert_eq!(result[2], "X-Api-Key");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_allowed_headers_after_allow_any_has_no_effect() {
+        let headers = vec!["Content-Type", "Authorization"];
+        let cors = Cors::default().allow_any_header().allowed_headers(headers);
+        assert!(cors.allowed_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_expose_any_header() {
+        let cors = Cors::default().expose_any_header();
+        assert!(cors.expose_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_expose_header_single() {
+        let cors = Cors::default().expose_header("X-Custom-Header");
+        match cors.expose_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 1);
+                assert_eq!(headers[0], "X-Custom-Header");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_expose_header_multiple() {
+        let cors = Cors::default()
+            .expose_header("X-Custom-Header")
+            .expose_header("X-Request-Id")
+            .expose_header("X-Rate-Limit");
+        match cors.expose_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 3);
+                assert_eq!(headers[0], "X-Custom-Header");
+                assert_eq!(headers[1], "X-Request-Id");
+                assert_eq!(headers[2], "X-Rate-Limit");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_expose_header_after_expose_any_has_no_effect() {
+        let cors = Cors::default()
+            .expose_any_header()
+            .expose_header("X-Custom-Header");
+        assert!(cors.expose_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_expose_headers_iterator() {
+        let headers = vec!["X-Header-1", "X-Header-2", "X-Header-3"];
+        let cors = Cors::default().expose_headers(headers);
+        match cors.expose_headers {
+            AllOrSome::Some(result) => {
+                assert_eq!(result.len(), 3);
+                assert_eq!(result[0], "X-Header-1");
+                assert_eq!(result[1], "X-Header-2");
+                assert_eq!(result[2], "X-Header-3");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn test_cors_expose_headers_after_expose_any_has_no_effect() {
+        let headers = vec!["X-Header-1", "X-Header-2"];
+        let cors = Cors::default().expose_any_header().expose_headers(headers);
+        assert!(cors.expose_headers.is_all());
+    }
+
+    #[test]
+    fn test_cors_support_credentials() {
+        let cors = Cors::default().support_credentials();
+        assert!(cors.supports_credentials);
+    }
+
+    #[test]
+    fn test_cors_max_age() {
+        let cors = Cors::default().max_age(3600);
+        assert_eq!(cors.max_age, Some(3600));
+    }
+
+    #[test]
+    fn test_cors_max_age_with_option() {
+        let cors = Cors::default().max_age(Some(7200));
+        assert_eq!(cors.max_age, Some(7200));
+
+        let cors_none = Cors::default().max_age(None);
+        assert_eq!(cors_none.max_age, None);
+    }
+
+    #[test]
+    fn test_cors_builder_chain_permissive() {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .expose_any_header()
+            .support_credentials()
+            .max_age(3600);
+
+        assert!(cors.allowed_origins.is_all());
+        assert!(cors.allowed_methods.is_all());
+        assert!(cors.allowed_headers.is_all());
+        assert!(cors.expose_headers.is_all());
+        assert!(cors.supports_credentials);
+        assert_eq!(cors.max_age, Some(3600));
+    }
+
+    #[test]
+    fn test_cors_builder_chain_restrictive() {
+        let cors = Cors::default()
+            .allow_origin("https://example.com")
+            .allow_method(Method::Get)
+            .allow_method(Method::Post)
+            .allow_header("Content-Type")
+            .allow_header("Authorization")
+            .expose_header("X-Request-Id")
+            .support_credentials()
+            .max_age(1800);
+
+        match cors.allowed_origins {
+            AllOrSome::Some(origins) => {
+                assert_eq!(origins.len(), 1);
+                assert_eq!(origins[0], "https://example.com");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        match cors.allowed_methods {
+            AllOrSome::Some(methods) => {
+                assert_eq!(methods.len(), 2);
+                assert_eq!(methods[0], Method::Get);
+                assert_eq!(methods[1], Method::Post);
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        match cors.allowed_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 2);
+                assert_eq!(headers[0], "Content-Type");
+                assert_eq!(headers[1], "Authorization");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        match cors.expose_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 1);
+                assert_eq!(headers[0], "X-Request-Id");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        assert!(cors.supports_credentials);
+        assert_eq!(cors.max_age, Some(1800));
+    }
+
+    #[test]
+    fn test_cors_combining_individual_and_iterator_methods() {
+        let cors = Cors::default()
+            .allow_origin("https://example.com")
+            .allowed_origins(vec!["https://test.com", "https://demo.com"])
+            .allow_method(Method::Get)
+            .allowed_methods(vec![Method::Post, Method::Put])
+            .allow_header("Content-Type")
+            .allowed_headers(vec!["Authorization", "X-Api-Key"]);
+
+        match cors.allowed_origins {
+            AllOrSome::Some(origins) => {
+                assert_eq!(origins.len(), 3);
+                assert_eq!(origins[0], "https://example.com");
+                assert_eq!(origins[1], "https://test.com");
+                assert_eq!(origins[2], "https://demo.com");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        match cors.allowed_methods {
+            AllOrSome::Some(methods) => {
+                assert_eq!(methods.len(), 3);
+                assert_eq!(methods[0], Method::Get);
+                assert_eq!(methods[1], Method::Post);
+                assert_eq!(methods[2], Method::Put);
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+
+        match cors.allowed_headers {
+            AllOrSome::Some(headers) => {
+                assert_eq!(headers.len(), 3);
+                assert_eq!(headers[0], "Content-Type");
+                assert_eq!(headers[1], "Authorization");
+                assert_eq!(headers[2], "X-Api-Key");
+            }
+            AllOrSome::All => panic!("Expected Some, got All"),
+        }
+    }
 }
 
 /// CORS (Cross-Origin Resource Sharing) configuration.
