@@ -73,3 +73,116 @@ pub fn parse_range(range: &str) -> std::result::Result<Range, ParseRangesError> 
 pub fn parse_ranges(ranges: &str) -> std::result::Result<Vec<Range>, ParseRangesError> {
     ranges.split(',').map(parse_range).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_range_with_both_bounds() {
+        let range = parse_range("100-200").unwrap();
+        assert_eq!(range.start, Some(100));
+        assert_eq!(range.end, Some(200));
+    }
+
+    #[test]
+    fn test_parse_range_with_start_only() {
+        let range = parse_range("500-").unwrap();
+        assert_eq!(range.start, Some(500));
+        assert_eq!(range.end, None);
+    }
+
+    #[test]
+    fn test_parse_range_with_end_only() {
+        let range = parse_range("-1023").unwrap();
+        assert_eq!(range.start, None);
+        assert_eq!(range.end, Some(1023));
+    }
+
+    #[test]
+    fn test_parse_range_zero_values() {
+        let range = parse_range("0-0").unwrap();
+        assert_eq!(range.start, Some(0));
+        assert_eq!(range.end, Some(0));
+
+        let range = parse_range("0-100").unwrap();
+        assert_eq!(range.start, Some(0));
+        assert_eq!(range.end, Some(100));
+    }
+
+    #[test]
+    fn test_parse_range_invalid_number() {
+        let result = parse_range("abc-123");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseRangesError::Parse(_)));
+    }
+
+    #[test]
+    fn test_parse_range_too_few_values() {
+        let result = parse_range("100");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseRangesError::TooFewValues(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_range_too_many_values() {
+        let result = parse_range("100-200-300");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseRangesError::TooManyValues(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_range_empty_string() {
+        let result = parse_range("");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseRangesError::TooFewValues(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_ranges_multiple_ranges() {
+        let ranges = parse_ranges("0-100,200-300,400-").unwrap();
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(ranges[0].start, Some(0));
+        assert_eq!(ranges[0].end, Some(100));
+        assert_eq!(ranges[1].start, Some(200));
+        assert_eq!(ranges[1].end, Some(300));
+        assert_eq!(ranges[2].start, Some(400));
+        assert_eq!(ranges[2].end, None);
+    }
+
+    #[test]
+    fn test_parse_ranges_single_range() {
+        let ranges = parse_ranges("0-1023").unwrap();
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, Some(0));
+        assert_eq!(ranges[0].end, Some(1023));
+    }
+
+    #[test]
+    fn test_parse_ranges_with_invalid_range() {
+        let result = parse_ranges("0-100,invalid,200-300");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_ranges_empty_string() {
+        let ranges = parse_ranges("").unwrap_err();
+        assert!(matches!(ranges, ParseRangesError::TooFewValues(_)));
+    }
+
+    #[test]
+    fn test_parse_range_large_values() {
+        let range = parse_range("1000000-9999999").unwrap();
+        assert_eq!(range.start, Some(1_000_000));
+        assert_eq!(range.end, Some(9_999_999));
+    }
+}

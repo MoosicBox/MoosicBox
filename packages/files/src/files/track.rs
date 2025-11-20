@@ -1194,3 +1194,91 @@ pub async fn get_or_init_track_size(
         .await?
         .ok_or_else(|| TrackInfoError::NotFound(track_id.to_owned()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "format-aac")]
+    #[test]
+    fn test_audio_format_to_content_type_aac() {
+        assert_eq!(
+            audio_format_to_content_type(&AudioFormat::Aac),
+            Some("audio/m4a".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-flac")]
+    #[test]
+    fn test_audio_format_to_content_type_flac() {
+        assert_eq!(
+            audio_format_to_content_type(&AudioFormat::Flac),
+            Some("audio/flac".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-mp3")]
+    #[test]
+    fn test_audio_format_to_content_type_mp3() {
+        assert_eq!(
+            audio_format_to_content_type(&AudioFormat::Mp3),
+            Some("audio/mp3".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-opus")]
+    #[test]
+    fn test_audio_format_to_content_type_opus() {
+        assert_eq!(
+            audio_format_to_content_type(&AudioFormat::Opus),
+            Some("audio/opus".to_string())
+        );
+    }
+
+    #[test]
+    fn test_audio_format_to_content_type_source() {
+        assert_eq!(audio_format_to_content_type(&AudioFormat::Source), None);
+    }
+
+    #[test]
+    fn test_visualize_empty_buffer() {
+        use symphonia::core::audio::AudioBuffer;
+
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let buffer = AudioBuffer::<i16>::new(0, spec);
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_visualize_with_data() {
+        use symphonia::core::audio::Signal as _;
+
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(100, spec);
+
+        // Fill with some test data
+        for ch in 0..buffer.spec().channels.count() {
+            let chan = buffer.chan_mut(ch);
+            for (i, sample) in chan.iter_mut().enumerate() {
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                {
+                    *sample = (i * 100) as i16;
+                }
+            }
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 100);
+        // First value should be 0 (average of channel samples which are 0)
+        assert_eq!(result[0], 0);
+    }
+}
