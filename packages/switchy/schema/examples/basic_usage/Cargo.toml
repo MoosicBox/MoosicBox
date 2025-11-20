@@ -26,6 +26,15 @@ switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
 switchy_schema              = { workspace = true }
 tokio                       = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+test-log = { workspace = true }
+
 [features]
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",

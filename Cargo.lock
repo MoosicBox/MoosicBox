@@ -1800,9 +1800,11 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "env_logger 0.11.8",
+ "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
+ "test-log",
  "tokio",
 ]
 
