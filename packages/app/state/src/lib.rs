@@ -2195,3 +2195,107 @@ impl AppState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_state_error_unknown() {
+        let err = AppStateError::unknown("test error message");
+        assert!(matches!(err, AppStateError::Unknown(_)));
+        assert_eq!(err.to_string(), "Unknown(test error message)");
+    }
+
+    #[test]
+    fn test_app_state_error_unknown_from_string() {
+        let err = AppStateError::unknown(String::from("dynamic error"));
+        assert!(matches!(err, AppStateError::Unknown(_)));
+        assert_eq!(err.to_string(), "Unknown(dynamic error)");
+    }
+
+    #[test]
+    fn test_update_app_state_default() {
+        let state = UpdateAppState::default();
+        assert!(state.connection_id.is_none());
+        assert!(state.connection_name.is_none());
+        assert!(state.api_url.is_none());
+        assert!(state.client_id.is_none());
+        assert!(state.signature_token.is_none());
+        assert!(state.api_token.is_none());
+        assert!(state.profile.is_none());
+        assert!(state.playback_target.is_none());
+        assert!(state.current_session_id.is_none());
+    }
+
+    #[test]
+    fn test_update_app_state_display() {
+        let state = UpdateAppState {
+            connection_id: Some(Some("test-id".to_string())),
+            api_url: Some(Some("http://example.com".to_string())),
+            ..Default::default()
+        };
+        let display = format!("{state}");
+        assert!(display.contains("connection_id"));
+        assert!(display.contains("test-id"));
+    }
+
+    #[test]
+    fn test_app_state_new() {
+        let state = AppState::new();
+        assert!(state.get_default_download_location().is_none());
+    }
+
+    #[test]
+    fn test_app_state_default() {
+        let state = AppState::default();
+        assert!(state.get_default_download_location().is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_default_download_location() {
+        let state = AppState::new();
+        assert!(state.get_default_download_location().is_none());
+
+        // Setting without persistence would panic, so we just verify getter works
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_with_persistence_in_memory() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        // Verify persistence is set
+        assert!(state.persistence.read().await.is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_get_current_session_none() {
+        let state = AppState::new();
+        let session = state.get_current_session().await;
+        assert!(session.is_none());
+    }
+
+    #[test]
+    fn test_proxy_request_error_display() {
+        let err = ProxyRequestError::FailureResponse {
+            status: 404,
+            text: "Not Found".to_string(),
+        };
+        assert_eq!(err.to_string(), "Failure response (404): Not Found");
+    }
+
+    #[test]
+    fn test_fetch_audio_zones_error_display() {
+        let err = FetchAudioZonesError::MissingProfile;
+        assert_eq!(err.to_string(), "Missing profile");
+    }
+
+    #[test]
+    fn test_register_players_error_display() {
+        let err = RegisterPlayersError::MissingProfile;
+        assert_eq!(err.to_string(), "Missing profile");
+    }
+}

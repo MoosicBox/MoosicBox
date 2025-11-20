@@ -389,3 +389,49 @@ impl AppState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_persistence_key_string_conversion() {
+        let key = PersistenceKey::ConnectionId;
+        let str_key: String = key.into();
+        assert_eq!(str_key, "CONNECTION_ID");
+    }
+
+    #[test]
+    fn test_persistence_key_display() {
+        assert_eq!(PersistenceKey::ConnectionId.to_string(), "CONNECTION_ID");
+        assert_eq!(
+            PersistenceKey::ConnectionName.to_string(),
+            "CONNECTION_NAME"
+        );
+        assert_eq!(PersistenceKey::Connection.to_string(), "CONNECTION");
+        assert_eq!(PersistenceKey::Connections.to_string(), "CONNECTIONS");
+        assert_eq!(
+            PersistenceKey::DefaultDownloadLocation.to_string(),
+            "DEFAULT_DOWNLOAD_LOCATION"
+        );
+    }
+
+    #[test]
+    fn test_persistence_key_from_str() {
+        use std::str::FromStr;
+
+        let key = PersistenceKey::from_str("CONNECTION_ID").unwrap();
+        assert!(matches!(key, PersistenceKey::ConnectionId));
+
+        let key = PersistenceKey::from_str("DEFAULT_DOWNLOAD_LOCATION").unwrap();
+        assert!(matches!(key, PersistenceKey::DefaultDownloadLocation));
+    }
+
+    #[test]
+    fn test_persistence_key_from_str_invalid() {
+        use std::str::FromStr;
+
+        let result = PersistenceKey::from_str("INVALID_KEY");
+        assert!(result.is_err());
+    }
+}
