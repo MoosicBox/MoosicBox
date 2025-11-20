@@ -45,16 +45,32 @@ struct Cli {
     root: Option<String>,
 }
 
+/// Checks if the given attributes contain `#[inject_yields]`.
+///
+/// # Returns
+///
+/// Returns `true` if any attribute has the path identifier "`inject_yields`", `false` otherwise.
+#[must_use]
 fn has_inject_attr(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| a.path().is_ident("inject_yields"))
 }
 
+/// Visitor that walks the AST checking for async functions missing `#[inject_yields]`.
+///
+/// This visitor traverses items in a Rust source file and collects warnings
+/// for any async function or method that lacks the `#[inject_yields]` attribute.
 struct Checker<'a> {
+    /// The file path being checked, used in warning messages
     file: &'a str,
+    /// Accumulated warnings about missing attributes
     warnings: Vec<String>,
 }
 
 impl<'ast> Visit<'ast> for Checker<'_> {
+    /// Visits each item in the AST, checking async functions for the `#[inject_yields]` attribute.
+    ///
+    /// Skips items that already have `#[inject_yields]` at the item, impl, or module level.
+    /// Records warnings for async functions and methods that are missing the attribute.
     fn visit_item(&mut self, item: &'ast Item) {
         let skip = match item {
             Item::Fn(func) => has_inject_attr(&func.attrs),
@@ -94,6 +110,16 @@ impl<'ast> Visit<'ast> for Checker<'_> {
     }
 }
 
+/// Main entry point for the `switchy_async_cargo` tool.
+///
+/// Scans Rust source files in the workspace (or specified root directory) and
+/// warns about async functions missing the `#[inject_yields]` attribute.
+///
+/// # Panics
+///
+/// Panics if:
+/// * The `CARGO_MANIFEST_DIR` environment variable is not set when no `--root` is provided
+/// * File system operations fail unexpectedly (e.g., permissions issues)
 fn main() {
     pretty_env_logger::init();
 
