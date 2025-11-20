@@ -173,3 +173,72 @@ fn headers_to_btree(value: &reqwest::header::HeaderMap) -> BTreeMap<String, Stri
 
     headers
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_headers_to_btree_empty() {
+        let header_map = reqwest::header::HeaderMap::new();
+        let result = headers_to_btree(&header_map);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_headers_to_btree_single_header() {
+        let mut header_map = reqwest::header::HeaderMap::new();
+        header_map.insert("content-type", "application/json".parse().unwrap());
+        let result = headers_to_btree(&header_map);
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+    }
+
+    #[test]
+    fn test_headers_to_btree_multiple_headers() {
+        let mut header_map = reqwest::header::HeaderMap::new();
+        header_map.insert("content-type", "application/json".parse().unwrap());
+        header_map.insert("authorization", "Bearer token".parse().unwrap());
+        let result = headers_to_btree(&header_map);
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            result.get("authorization"),
+            Some(&"Bearer token".to_string())
+        );
+    }
+
+    #[test]
+    fn test_headers_to_btree_sorted_order() {
+        let mut header_map = reqwest::header::HeaderMap::new();
+        header_map.insert("zebra", "value1".parse().unwrap());
+        header_map.insert("alpha", "value2".parse().unwrap());
+        header_map.insert("middle", "value3".parse().unwrap());
+        let result = headers_to_btree(&header_map);
+        let keys: Vec<&String> = result.keys().collect();
+        assert_eq!(keys, vec!["alpha", "middle", "zebra"]);
+    }
+
+    #[test]
+    fn test_client_new() {
+        let reqwest_client = reqwest::Client::new();
+        let _client = Client::new(reqwest_client);
+        // If we get here without panic, the test passes
+    }
+
+    #[test]
+    fn test_client_builder_build() {
+        let builder = ClientBuilder;
+        let result =
+            GenericClientBuilder::<crate::ReqwestRequestBuilder, crate::ReqwestClient>::build(
+                builder,
+            );
+        assert!(result.is_ok());
+    }
+}

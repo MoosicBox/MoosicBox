@@ -130,3 +130,38 @@ impl GenericResponse for Response {
         Box::pin(futures_util::stream::empty())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simulator_client_builder_succeeds() {
+        let builder = ClientBuilder;
+        let result =
+            GenericClientBuilder::<crate::SimulatorRequestBuilder, crate::SimulatorClient>::build(
+                builder,
+            );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_simulator_response_returns_ok_status() {
+        let response = Response::default();
+        assert_eq!(response.status(), StatusCode::Ok);
+    }
+
+    #[test]
+    fn test_simulator_response_returns_empty_headers() {
+        let mut response = Response::default();
+        let headers = response.headers();
+        assert!(headers.is_empty());
+    }
+
+    #[test]
+    fn test_simulator_client_creates_request_builder() {
+        let client = Client::new();
+        let _builder = client.request(Method::Get, "http://example.com");
+        // If we get here without panic, the test passes
+    }
+}
