@@ -6137,6 +6137,7 @@ dependencies = [
  "log 0.4.28",
  "maud",
  "md5",
+ "pretty_assertions",
 ]
 
 [[package]]
