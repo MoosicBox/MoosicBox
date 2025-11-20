@@ -112,6 +112,69 @@ fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Er
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_album_id_for_source_library_valid() {
+        let source = ApiSource::library();
+        let result = album_id_for_source("123", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::Number(123));
+    }
+
+    #[test]
+    fn test_album_id_for_source_library_invalid() {
+        let source = ApiSource::library();
+        let result = album_id_for_source("not_a_number", &source);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_album_id_for_source_library_empty() {
+        let source = ApiSource::library();
+        let result = album_id_for_source("", &source);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_album_id_for_source_tidal() {
+        let source = ApiSource::register("Tidal", "Tidal");
+        let result = album_id_for_source("tidal123", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::String("tidal123".to_string()));
+    }
+
+    #[test]
+    fn test_album_id_for_source_qobuz() {
+        let source = ApiSource::register("Qobuz", "Qobuz");
+        let result = album_id_for_source("qobuz456", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::String("qobuz456".to_string()));
+    }
+
+    #[test]
+    fn test_album_id_for_source_external_with_numeric_string() {
+        let source = ApiSource::register("Tidal", "Tidal");
+        let result = album_id_for_source("999", &source);
+        assert!(result.is_ok());
+        // For external sources, numeric strings remain as strings
+        assert_eq!(result.unwrap(), Id::String("999".to_string()));
+    }
+
+    #[test]
+    fn test_get_artist_error_conversion_invalid_request() {
+        let error = GetArtistError::InvalidRequest;
+        let actix_error: actix_web::Error = error.into();
+        // Should convert to bad request
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::BAD_REQUEST
+        );
+    }
+}
+
 /// Error types that can occur during menu API operations.
 #[derive(Debug, Error)]
 pub enum MenuError {

@@ -106,3 +106,225 @@ pub async fn get_all_artists(
 
     Ok(sort_artists(filter_artists(artists, request), request))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_artist(id: u64, title: &str) -> LibraryArtist {
+        use moosicbox_music_models::ApiSources;
+
+        LibraryArtist {
+            id,
+            title: title.to_string(),
+            cover: None,
+            api_sources: ApiSources::default(),
+        }
+    }
+
+    #[test]
+    fn test_filter_artists_by_name() {
+        let artists = vec![
+            create_test_artist(1, "The Beatles"),
+            create_test_artist(2, "Pink Floyd"),
+            create_test_artist(3, "The Rolling Stones"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("the".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|a| a.title == "The Beatles"));
+        assert!(filtered.iter().any(|a| a.title == "The Rolling Stones"));
+        assert!(!filtered.iter().any(|a| a.title == "Pink Floyd"));
+    }
+
+    #[test]
+    fn test_filter_artists_by_name_case_insensitive() {
+        let artists = vec![
+            create_test_artist(1, "METALLICA"),
+            create_test_artist(2, "metallica underground"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("metal".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_artists_by_search() {
+        let artists = vec![
+            create_test_artist(1, "AC/DC"),
+            create_test_artist(2, "Coldplay"),
+            create_test_artist(3, "AC/DC Tribute Band"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: None,
+                search: Some("ac/dc".to_string()),
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|a| a.title == "AC/DC"));
+        assert!(filtered.iter().any(|a| a.title == "AC/DC Tribute Band"));
+    }
+
+    #[test]
+    fn test_filter_artists_with_no_filters() {
+        let artists = vec![
+            create_test_artist(1, "Artist One"),
+            create_test_artist(2, "Artist Two"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_artists_no_matches() {
+        let artists = vec![
+            create_test_artist(1, "Artist One"),
+            create_test_artist(2, "Artist Two"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("nonexistent".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert_eq!(filtered.len(), 0);
+    }
+
+    #[test]
+    fn test_sort_artists_name_asc() {
+        let artists = vec![
+            create_test_artist(1, "Zebra"),
+            create_test_artist(2, "alpha"),
+            create_test_artist(3, "Beta"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        assert_eq!(sorted[0].title, "alpha");
+        assert_eq!(sorted[1].title, "Beta");
+        assert_eq!(sorted[2].title, "Zebra");
+    }
+
+    #[test]
+    fn test_sort_artists_name_desc() {
+        let artists = vec![
+            create_test_artist(1, "alpha"),
+            create_test_artist(2, "Zebra"),
+            create_test_artist(3, "Beta"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameDesc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        assert_eq!(sorted[0].title, "Zebra");
+        assert_eq!(sorted[1].title, "Beta");
+        assert_eq!(sorted[2].title, "alpha");
+    }
+
+    #[test]
+    fn test_sort_artists_no_sort_specified() {
+        let artists = vec![
+            create_test_artist(1, "Zebra"),
+            create_test_artist(2, "alpha"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        // When no sort is specified, should default to NameAsc behavior
+        assert_eq!(sorted[0].title, "alpha");
+        assert_eq!(sorted[1].title, "Zebra");
+    }
+
+    #[test]
+    fn test_sort_artists_case_insensitive() {
+        let artists = vec![
+            create_test_artist(1, "abc"),
+            create_test_artist(2, "ABC"),
+            create_test_artist(3, "AbC"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        // All should be treated as equal case-insensitively
+        assert_eq!(sorted.len(), 3);
+    }
+}
