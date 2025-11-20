@@ -373,3 +373,291 @@ impl From<Track> for ApiAlbum {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_artist_to_api_artist() {
+        let artist = Artist {
+            id: Id::Number(1),
+            title: "Test Artist".to_string(),
+            cover: Some("cover.jpg".to_string()),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let api_artist: ApiArtist = artist.clone().into();
+        assert_eq!(api_artist.artist_id, Id::Number(1));
+        assert_eq!(api_artist.title, "Test Artist");
+        assert!(api_artist.contains_cover);
+        assert!(api_artist.api_source.is_library());
+
+        // Test without cover
+        let artist_no_cover = Artist {
+            cover: None,
+            ..artist
+        };
+        let api_artist_no_cover: ApiArtist = artist_no_cover.into();
+        assert!(!api_artist_no_cover.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_api_artist_to_artist() {
+        let api_artist = ApiArtist {
+            artist_id: Id::Number(1),
+            title: "Test Artist".to_string(),
+            contains_cover: true,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let artist: Artist = api_artist.clone().into();
+        assert_eq!(artist.id, Id::Number(1));
+        assert_eq!(artist.title, "Test Artist");
+        assert_eq!(artist.cover, Some("1".to_string())); // ID becomes the cover
+
+        // Test without cover
+        let api_artist_no_cover = ApiArtist {
+            contains_cover: false,
+            ..api_artist
+        };
+        let artist_no_cover: Artist = api_artist_no_cover.into();
+        assert_eq!(artist_no_cover.cover, None);
+    }
+
+    #[test_log::test]
+    fn test_track_to_api_track() {
+        let track = Track {
+            id: Id::Number(1),
+            number: 5,
+            title: "Test Track".to_string(),
+            duration: 180.5,
+            album: "Test Album".to_string(),
+            album_id: Id::Number(10),
+            album_type: AlbumType::Lp,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(20),
+            file: Some("/music/track.flac".to_string()),
+            artwork: Some("artwork.jpg".to_string()),
+            blur: false,
+            bytes: 1024,
+            format: Some(AudioFormat::Source),
+            bit_depth: Some(24),
+            audio_bitrate: Some(320_000),
+            overall_bitrate: Some(350_000),
+            sample_rate: Some(48_000),
+            channels: Some(2),
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: ApiSources::default(),
+        };
+
+        let api_track: ApiTrack = track.into();
+        assert_eq!(api_track.track_id, Id::Number(1));
+        assert_eq!(api_track.number, 5);
+        assert_eq!(api_track.title, "Test Track");
+        assert!((api_track.duration - 180.5).abs() < f64::EPSILON);
+        assert_eq!(api_track.album, "Test Album");
+        assert!(api_track.contains_cover);
+        assert_eq!(api_track.format, Some(AudioFormat::Source));
+        assert_eq!(api_track.bit_depth, Some(24));
+        assert_eq!(api_track.sample_rate, Some(48_000));
+    }
+
+    #[test_log::test]
+    fn test_api_track_to_track() {
+        let api_track = ApiTrack {
+            track_id: Id::Number(1),
+            number: 5,
+            title: "Test Track".to_string(),
+            duration: 180.5,
+            album: "Test Album".to_string(),
+            album_id: Id::Number(10),
+            album_type: AlbumType::Lp,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(20),
+            contains_cover: true,
+            blur: false,
+            format: Some(AudioFormat::Source),
+            bit_depth: Some(24),
+            audio_bitrate: Some(320_000),
+            overall_bitrate: Some(350_000),
+            sample_rate: Some(48_000),
+            channels: Some(2),
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: ApiSources::default(),
+        };
+
+        let track: Track = api_track.into();
+        assert_eq!(track.id, Id::Number(1));
+        assert_eq!(track.number, 5);
+        assert_eq!(track.title, "Test Track");
+        assert_eq!(track.file, None); // API track has no file
+        assert_eq!(track.artwork, Some("1".to_string())); // ID becomes artwork
+        assert_eq!(track.bytes, 0); // API track has no bytes
+    }
+
+    #[test_log::test]
+    fn test_album_version_quality_conversions() {
+        let quality = AlbumVersionQuality {
+            format: Some(AudioFormat::Source),
+            bit_depth: Some(24),
+            sample_rate: Some(48_000),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        };
+
+        let api_quality: ApiAlbumVersionQuality = quality.clone().into();
+        assert_eq!(api_quality.format, Some(AudioFormat::Source));
+        assert_eq!(api_quality.bit_depth, Some(24));
+        assert_eq!(api_quality.sample_rate, Some(48_000));
+        assert_eq!(api_quality.channels, Some(2));
+
+        let back_to_quality: AlbumVersionQuality = api_quality.into();
+        assert_eq!(back_to_quality, quality);
+    }
+
+    #[test_log::test]
+    fn test_album_to_api_album() {
+        use moosicbox_date_utils::chrono::NaiveDate;
+
+        let date = NaiveDate::from_ymd_opt(2023, 1, 15)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+
+        let album = Album {
+            id: Id::Number(1),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(10),
+            album_type: AlbumType::Lp,
+            date_released: Some(date),
+            date_added: Some(date),
+            artwork: Some("artwork.jpg".to_string()),
+            directory: Some("/music/album".to_string()),
+            blur: false,
+            versions: vec![],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        };
+
+        let api_album: ApiAlbum = album.into();
+        assert_eq!(api_album.album_id, Id::Number(1));
+        assert_eq!(api_album.title, "Test Album");
+        assert!(api_album.contains_cover);
+        assert!(api_album.date_released.is_some());
+        assert!(api_album.date_added.is_some());
+    }
+
+    #[test_log::test]
+    fn test_api_album_to_album() {
+        let api_album = ApiAlbum {
+            album_id: Id::Number(1),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(10),
+            album_type: AlbumType::Lp,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            contains_cover: true,
+            blur: false,
+            versions: vec![],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        };
+
+        let album: Album = api_album.try_into().unwrap();
+        assert_eq!(album.id, Id::Number(1));
+        assert_eq!(album.title, "Test Album");
+        assert_eq!(album.artwork, Some("1".to_string()));
+        assert!(album.date_released.is_some());
+        assert!(album.date_added.is_some());
+        assert_eq!(album.directory, None); // API album has no directory
+    }
+
+    #[test_log::test]
+    fn test_api_album_to_album_invalid_date() {
+        let api_album = ApiAlbum {
+            date_released: Some("invalid-date".to_string()),
+            ..Default::default()
+        };
+
+        let result: Result<Album, _> = api_album.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_api_track_to_api_album() {
+        let api_track = ApiTrack {
+            track_id: Id::Number(1),
+            album_id: Id::Number(100),
+            album: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(50),
+            album_type: AlbumType::Live,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            contains_cover: true,
+            blur: false,
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: ApiSources::default(),
+            ..Default::default()
+        };
+
+        let api_album: ApiAlbum = api_track.clone().into();
+        assert_eq!(api_album.album_id, Id::Number(100));
+        assert_eq!(api_album.title, "Test Album");
+        assert_eq!(api_album.artist, "Test Artist");
+        assert_eq!(api_album.album_type, AlbumType::Live);
+        assert!(api_album.contains_cover);
+
+        // Test reference conversion
+        let api_album_ref: ApiAlbum = (&api_track).into();
+        assert_eq!(api_album_ref.album_id, Id::Number(100));
+    }
+
+    #[test_log::test]
+    fn test_track_to_api_album() {
+        let track = Track {
+            id: Id::Number(1),
+            album_id: Id::Number(100),
+            album: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(50),
+            album_type: AlbumType::EpsAndSingles,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            artwork: Some("artwork.jpg".to_string()),
+            blur: true,
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: ApiSources::default(),
+            ..Default::default()
+        };
+
+        let api_album: ApiAlbum = track.clone().into();
+        assert_eq!(api_album.album_id, Id::Number(100));
+        assert_eq!(api_album.title, "Test Album");
+        assert_eq!(api_album.album_type, AlbumType::EpsAndSingles);
+        assert!(api_album.contains_cover);
+        assert!(api_album.blur);
+
+        // Test reference conversion
+        let api_album_ref: ApiAlbum = (&track).into();
+        assert_eq!(api_album_ref.album_id, Id::Number(100));
+    }
+}

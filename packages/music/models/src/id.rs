@@ -693,7 +693,10 @@ mod test {
 
     use crate::{
         ApiSource,
-        id::{Id, parse_id_ranges},
+        id::{
+            ApiId, Id, IdType, ParseIdsError, parse_id_ranges, parse_id_sequences,
+            parse_integer_ranges_to_ids, TryFromIdError,
+        },
     };
 
     #[test_log::test]
@@ -733,5 +736,250 @@ mod test {
                 Id::String("f".into()),
             ]
         );
+    }
+
+    #[test_log::test]
+    fn test_id_from_str_library() {
+        let library = ApiSource::library();
+
+        // Library source should parse as number
+        let id = Id::from_str("123", &library);
+        assert_eq!(id, Id::Number(123));
+        assert!(id.is_number());
+        assert_eq!(id.as_u64(), Some(123));
+        assert_eq!(id.as_number(), Some(123));
+    }
+
+    #[test_log::test]
+    fn test_id_from_str_api() {
+        let api = ApiSource::register("TestAPI", "TestAPI");
+
+        // API source should parse as string
+        let id = Id::from_str("abc123", &api);
+        assert_eq!(id, Id::String("abc123".to_string()));
+        assert!(id.is_string());
+        assert_eq!(id.as_str(), Some("abc123"));
+    }
+
+    #[test_log::test]
+    fn test_id_try_from_str_error() {
+        let library = ApiSource::library();
+
+        // Invalid number should error
+        let result = Id::try_from_str("not-a-number", &library);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_id_default_value() {
+        let library = ApiSource::library();
+        let id = Id::default_value(&library);
+        assert_eq!(id, Id::Number(0));
+
+        let api = ApiSource::register("API", "API");
+        let id = Id::default_value(&api);
+        assert_eq!(id, Id::String(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_id_conversions_to_string() {
+        // Test String -> Id
+        let id: Id = "test".into();
+        assert_eq!(id, Id::String("test".to_string()));
+
+        let id: Id = String::from("test").into();
+        assert_eq!(id, Id::String("test".to_string()));
+
+        let s = String::from("test");
+        let id: Id = (&s).into();
+        assert_eq!(id, Id::String("test".to_string()));
+
+        // Test Id -> String (try_from)
+        let id = Id::String("test".to_string());
+        let s: String = id.clone().try_into().unwrap();
+        assert_eq!(s, "test");
+
+        let s: String = (&id).try_into().unwrap();
+        assert_eq!(s, "test");
+
+        let str_ref: &str = (&id).try_into().unwrap();
+        assert_eq!(str_ref, "test");
+
+        // Test error case
+        let id = Id::Number(123);
+        let result: Result<String, _> = id.try_into();
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            TryFromIdError::InvalidType("String".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_id_conversions_to_u64() {
+        // Test u64 -> Id
+        let id: Id = 123u64.into();
+        assert_eq!(id, Id::Number(123));
+
+        let id: Id = (&123u64).into();
+        assert_eq!(id, Id::Number(123));
+
+        // Test Id -> u64 (try_from)
+        let id = Id::Number(123);
+        let n: u64 = id.clone().try_into().unwrap();
+        assert_eq!(n, 123);
+
+        let n: u64 = (&id).try_into().unwrap();
+        assert_eq!(n, 123);
+
+        // Test error case
+        let id = Id::String("test".to_string());
+        let result: Result<u64, _> = id.try_into();
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            TryFromIdError::InvalidType("u64".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_id_conversions_to_i32() {
+        // Test i32 -> Id
+        let id: Id = 123i32.into();
+        assert_eq!(id, Id::Number(123));
+
+        let id: Id = (&123i32).into();
+        assert_eq!(id, Id::Number(123));
+
+        // Test Id -> i32 (try_from)
+        let id = Id::Number(123);
+        let n: i32 = id.clone().try_into().unwrap();
+        assert_eq!(n, 123);
+
+        let n: i32 = (&id).try_into().unwrap();
+        assert_eq!(n, 123);
+
+        // Test error case
+        let id = Id::String("test".to_string());
+        let result: Result<i32, _> = id.try_into();
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            TryFromIdError::InvalidType("i32".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_id_display() {
+        let id = Id::Number(123);
+        assert_eq!(id.to_string(), "123");
+
+        let id = Id::String("test".to_string());
+        assert_eq!(id.to_string(), "test");
+    }
+
+    #[test_log::test]
+    fn test_id_serialization() {
+        // Test number
+        let id = Id::Number(123);
+        let json = serde_json::to_string(&id).unwrap();
+        assert_eq!(json, "123");
+
+        let deserialized: Id = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, id);
+
+        // Test string
+        let id = Id::String("test".to_string());
+        let json = serde_json::to_string(&id).unwrap();
+        assert_eq!(json, r#""test""#);
+
+        let deserialized: Id = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, id);
+    }
+
+    #[test_log::test]
+    fn test_parse_id_sequences() {
+        let library = ApiSource::library();
+
+        let result = parse_id_sequences("1,2,3,4,5", &library).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Id::Number(1),
+                Id::Number(2),
+                Id::Number(3),
+                Id::Number(4),
+                Id::Number(5)
+            ]
+        );
+
+        let api = ApiSource::register("SeqAPI", "SeqAPI");
+        let result = parse_id_sequences("a,b,c", &api).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Id::String("a".to_string()),
+                Id::String("b".to_string()),
+                Id::String("c".to_string())
+            ]
+        );
+
+        // Test error case
+        let result = parse_id_sequences("not,a,number", &library);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_parse_id_ranges_errors() {
+        let library = ApiSource::library();
+
+        // Test unmatched range (odd number of range parts)
+        let result = parse_id_ranges("1-2-3", &library);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseIdsError::UnmatchedRange(_)
+        ));
+
+        // Test range too large
+        let result = parse_id_ranges("1-200000", &library);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseIdsError::RangeTooLarge(_)
+        ));
+    }
+
+    #[test_log::test]
+    fn test_parse_integer_ranges_to_ids() {
+        let result = parse_integer_ranges_to_ids("1,3,5-8").unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Id::Number(1),
+                Id::Number(3),
+                Id::Number(5),
+                Id::Number(6),
+                Id::Number(7),
+                Id::Number(8)
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn test_api_id() {
+        let source = ApiSource::register("TestAPIId", "TestAPIId");
+        let id = Id::Number(42);
+        let api_id = ApiId::new(source.clone(), id.clone());
+
+        assert_eq!(api_id.source, source);
+        assert_eq!(api_id.id, id);
+    }
+
+    #[test_log::test]
+    fn test_id_type_display() {
+        assert_eq!(IdType::Artist.to_string(), "artist");
+        assert_eq!(IdType::Album.to_string(), "album");
+        assert_eq!(IdType::Track.to_string(), "track");
     }
 }
