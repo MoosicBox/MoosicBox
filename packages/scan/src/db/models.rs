@@ -1,3 +1,8 @@
+//! Data structures for scan location database records.
+//!
+//! This module provides types representing scan locations stored in the database,
+//! including conversions from database rows to Rust types.
+
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
 use serde::{Deserialize, Serialize};
 use switchy_database::{AsId, DatabaseValue};
