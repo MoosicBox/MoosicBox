@@ -2827,3 +2827,278 @@ impl MusicApi for YtMusicApi {
         Ok(results.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_replace_all_single() {
+        let input = "Hello :name, welcome!";
+        let result = replace_all(input, &[(":name", "World")]);
+        assert_eq!(result, "Hello World, welcome!");
+    }
+
+    #[test]
+    fn test_replace_all_multiple() {
+        let input = "User :userId has :count items";
+        let result = replace_all(input, &[(":userId", "123"), (":count", "5")]);
+        assert_eq!(result, "User 123 has 5 items");
+    }
+
+    #[test]
+    fn test_replace_all_no_matches() {
+        let input = "No placeholders here";
+        let result = replace_all(input, &[(":missing", "value")]);
+        assert_eq!(result, "No placeholders here");
+    }
+
+    #[test]
+    fn test_replace_all_empty() {
+        let input = "Test string";
+        let result = replace_all(input, &[]);
+        assert_eq!(result, "Test string");
+    }
+
+    #[test]
+    fn test_attach_query_string_single() {
+        let result = attach_query_string("https://api.example.com/endpoint", &[("key", "value")]);
+        assert_eq!(result, "https://api.example.com/endpoint?key=value");
+    }
+
+    #[test]
+    fn test_attach_query_string_multiple() {
+        let result = attach_query_string(
+            "https://api.example.com/data",
+            &[("offset", "10"), ("limit", "20"), ("sort", "desc")],
+        );
+        assert_eq!(
+            result,
+            "https://api.example.com/data?offset=10&limit=20&sort=desc"
+        );
+    }
+
+    #[test]
+    fn test_attach_query_string_empty() {
+        let result = attach_query_string("https://api.example.com/test", &[]);
+        assert_eq!(result, "https://api.example.com/test?");
+    }
+
+    #[test]
+    fn test_attach_query_string_special_chars() {
+        let result = attach_query_string("https://api.example.com/search", &[("q", "hello world")]);
+        assert_eq!(result, "https://api.example.com/search?q=hello+world");
+    }
+
+    #[test]
+    fn test_yt_album_type_to_album_type() {
+        use moosicbox_music_models::AlbumType as MusicAlbumType;
+        assert_eq!(
+            MusicAlbumType::from(YtAlbumType::Lp),
+            MusicAlbumType::Lp
+        );
+        assert_eq!(
+            MusicAlbumType::from(YtAlbumType::EpsAndSingles),
+            MusicAlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            MusicAlbumType::from(YtAlbumType::Compilations),
+            MusicAlbumType::Compilations
+        );
+    }
+
+    #[test]
+    fn test_yt_audio_quality_from_track_audio_quality() {
+        assert_eq!(
+            YtAudioQuality::from(TrackAudioQuality::Low),
+            YtAudioQuality::High
+        );
+        assert_eq!(
+            YtAudioQuality::from(TrackAudioQuality::FlacLossless),
+            YtAudioQuality::Lossless
+        );
+        assert_eq!(
+            YtAudioQuality::from(TrackAudioQuality::FlacHiRes),
+            YtAudioQuality::HiResLossless
+        );
+        assert_eq!(
+            YtAudioQuality::from(TrackAudioQuality::FlacHighestRes),
+            YtAudioQuality::HiResLossless
+        );
+    }
+
+    #[test]
+    fn test_yt_album_order_direction_from_album_sort() {
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::ArtistAsc),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::NameAsc),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::ReleaseDateAsc),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::DateAddedAsc),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::ArtistDesc),
+            YtAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::NameDesc),
+            YtAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::ReleaseDateDesc),
+            YtAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumSort::DateAddedDesc),
+            YtAlbumOrderDirection::Desc
+        );
+    }
+
+    #[test]
+    fn test_method_display() {
+        assert_eq!(Method::Get.to_string(), "GET");
+        assert_eq!(Method::Post.to_string(), "POST");
+        assert_eq!(Method::Delete.to_string(), "DELETE");
+    }
+
+    #[test]
+    fn test_method_from_str() {
+        assert_eq!(Method::from_str("GET").unwrap(), Method::Get);
+        assert_eq!(Method::from_str("POST").unwrap(), Method::Post);
+        assert_eq!(Method::from_str("DELETE").unwrap(), Method::Delete);
+        assert!(Method::from_str("PUT").is_err());
+    }
+
+    #[test]
+    fn test_yt_device_type_enum() {
+        assert_eq!(YtDeviceType::Browser.as_ref(), "BROWSER");
+        assert_eq!(
+            YtDeviceType::from_str("BROWSER").unwrap(),
+            YtDeviceType::Browser
+        );
+    }
+
+    #[test]
+    fn test_yt_artist_order_enum() {
+        assert_eq!(YtArtistOrder::Date.as_ref(), "DATE");
+        assert_eq!(
+            YtArtistOrder::from_str("DATE").unwrap(),
+            YtArtistOrder::Date
+        );
+    }
+
+    #[test]
+    fn test_yt_artist_order_direction_enum() {
+        assert_eq!(YtArtistOrderDirection::Asc.as_ref(), "ASC");
+        assert_eq!(YtArtistOrderDirection::Desc.as_ref(), "DESC");
+        assert_eq!(
+            YtArtistOrderDirection::from_str("ASC").unwrap(),
+            YtArtistOrderDirection::Asc
+        );
+        assert_eq!(
+            YtArtistOrderDirection::from_str("DESC").unwrap(),
+            YtArtistOrderDirection::Desc
+        );
+    }
+
+    #[test]
+    fn test_yt_album_order_enum() {
+        assert_eq!(YtAlbumOrder::Date.as_ref(), "DATE");
+        assert_eq!(YtAlbumOrder::from_str("DATE").unwrap(), YtAlbumOrder::Date);
+    }
+
+    #[test]
+    fn test_yt_album_order_from_album_sort() {
+        // All AlbumSort variants should map to Date for YouTube Music
+        assert_eq!(YtAlbumOrder::from(AlbumSort::ArtistAsc), YtAlbumOrder::Date);
+        assert_eq!(YtAlbumOrder::from(AlbumSort::NameAsc), YtAlbumOrder::Date);
+        assert_eq!(
+            YtAlbumOrder::from(AlbumSort::ReleaseDateAsc),
+            YtAlbumOrder::Date
+        );
+        assert_eq!(
+            YtAlbumOrder::from(AlbumSort::DateAddedAsc),
+            YtAlbumOrder::Date
+        );
+    }
+
+    #[test]
+    fn test_yt_album_order_direction_enum() {
+        assert_eq!(YtAlbumOrderDirection::Asc.as_ref(), "ASC");
+        assert_eq!(YtAlbumOrderDirection::Desc.as_ref(), "DESC");
+        assert_eq!(
+            YtAlbumOrderDirection::from_str("ASC").unwrap(),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from_str("DESC").unwrap(),
+            YtAlbumOrderDirection::Desc
+        );
+    }
+
+    #[test]
+    fn test_yt_track_order_enum() {
+        assert_eq!(YtTrackOrder::Date.as_ref(), "DATE");
+        assert_eq!(YtTrackOrder::from_str("DATE").unwrap(), YtTrackOrder::Date);
+    }
+
+    #[test]
+    fn test_yt_track_order_direction_enum() {
+        assert_eq!(YtTrackOrderDirection::Asc.as_ref(), "ASC");
+        assert_eq!(YtTrackOrderDirection::Desc.as_ref(), "DESC");
+        assert_eq!(
+            YtTrackOrderDirection::from_str("ASC").unwrap(),
+            YtTrackOrderDirection::Asc
+        );
+        assert_eq!(
+            YtTrackOrderDirection::from_str("DESC").unwrap(),
+            YtTrackOrderDirection::Desc
+        );
+    }
+
+    #[test]
+    fn test_yt_album_type_enum() {
+        assert_eq!(YtAlbumType::Lp.as_ref(), "LP");
+        assert_eq!(YtAlbumType::EpsAndSingles.as_ref(), "EPSANDSINGLES");
+        assert_eq!(YtAlbumType::Compilations.as_ref(), "COMPILATIONS");
+        assert_eq!(YtAlbumType::from_str("LP").unwrap(), YtAlbumType::Lp);
+        assert_eq!(
+            YtAlbumType::from_str("EPSANDSINGLES").unwrap(),
+            YtAlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            YtAlbumType::from_str("COMPILATIONS").unwrap(),
+            YtAlbumType::Compilations
+        );
+    }
+
+    #[test]
+    fn test_yt_audio_quality_enum() {
+        assert_eq!(YtAudioQuality::High.as_ref(), "HIGH");
+        assert_eq!(YtAudioQuality::Lossless.as_ref(), "LOSSLESS");
+        assert_eq!(YtAudioQuality::HiResLossless.as_ref(), "HI_RES_LOSSLESS");
+        assert_eq!(
+            YtAudioQuality::from_str("HIGH").unwrap(),
+            YtAudioQuality::High
+        );
+        assert_eq!(
+            YtAudioQuality::from_str("LOSSLESS").unwrap(),
+            YtAudioQuality::Lossless
+        );
+        assert_eq!(
+            YtAudioQuality::from_str("HI_RES_LOSSLESS").unwrap(),
+            YtAudioQuality::HiResLossless
+        );
+    }
+}

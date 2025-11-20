@@ -76,7 +76,7 @@ impl From<YtArtist> for ApiArtist {
 /// Size options for `YouTube` Music artist profile images.
 ///
 /// Different resolution options for retrieving artist thumbnails, ranging from 160px to 750px.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum YtArtistImageSize {
     /// Maximum resolution (750x750 pixels)
     Max, // 750
@@ -285,7 +285,7 @@ impl From<YtAlbum> for ApiGlobalSearchResult {
 /// Size options for `YouTube` Music album cover images.
 ///
 /// Different resolution options for retrieving album artwork, ranging from 80px thumbnails to 1280px maximum resolution.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum YtAlbumImageSize {
     /// Maximum resolution (1280x1280 pixels)
     Max, // 1280
@@ -2343,6 +2343,273 @@ impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
         Self {
             position: u32::try_from(position).unwrap(),
             results: [artists, albums, tracks].concat(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_yt_artist_image_size_from_u16() {
+        assert_eq!(YtArtistImageSize::from(50u16), YtArtistImageSize::Small);
+        assert_eq!(YtArtistImageSize::from(160u16), YtArtistImageSize::Small);
+        assert_eq!(YtArtistImageSize::from(161u16), YtArtistImageSize::Medium);
+        assert_eq!(YtArtistImageSize::from(320u16), YtArtistImageSize::Medium);
+        assert_eq!(YtArtistImageSize::from(321u16), YtArtistImageSize::Large);
+        assert_eq!(YtArtistImageSize::from(480u16), YtArtistImageSize::Large);
+        assert_eq!(YtArtistImageSize::from(481u16), YtArtistImageSize::Max);
+        assert_eq!(YtArtistImageSize::from(1000u16), YtArtistImageSize::Max);
+    }
+
+    #[test]
+    fn test_yt_artist_image_size_to_u16() {
+        assert_eq!(u16::from(YtArtistImageSize::Small), 160);
+        assert_eq!(u16::from(YtArtistImageSize::Medium), 320);
+        assert_eq!(u16::from(YtArtistImageSize::Large), 480);
+        assert_eq!(u16::from(YtArtistImageSize::Max), 750);
+    }
+
+    #[test]
+    fn test_yt_artist_image_size_display() {
+        assert_eq!(YtArtistImageSize::Small.to_string(), "160");
+        assert_eq!(YtArtistImageSize::Medium.to_string(), "320");
+        assert_eq!(YtArtistImageSize::Large.to_string(), "480");
+        assert_eq!(YtArtistImageSize::Max.to_string(), "750");
+    }
+
+    #[test]
+    fn test_yt_album_image_size_from_u16() {
+        assert_eq!(YtAlbumImageSize::from(50u16), YtAlbumImageSize::Thumbnail);
+        assert_eq!(YtAlbumImageSize::from(80u16), YtAlbumImageSize::Thumbnail);
+        assert_eq!(YtAlbumImageSize::from(81u16), YtAlbumImageSize::Small);
+        assert_eq!(YtAlbumImageSize::from(160u16), YtAlbumImageSize::Small);
+        assert_eq!(YtAlbumImageSize::from(161u16), YtAlbumImageSize::Medium);
+        assert_eq!(YtAlbumImageSize::from(320u16), YtAlbumImageSize::Medium);
+        assert_eq!(YtAlbumImageSize::from(321u16), YtAlbumImageSize::Large);
+        assert_eq!(YtAlbumImageSize::from(640u16), YtAlbumImageSize::Large);
+        assert_eq!(YtAlbumImageSize::from(641u16), YtAlbumImageSize::Max);
+        assert_eq!(YtAlbumImageSize::from(2000u16), YtAlbumImageSize::Max);
+    }
+
+    #[test]
+    fn test_yt_album_image_size_to_u16() {
+        assert_eq!(u16::from(YtAlbumImageSize::Thumbnail), 80);
+        assert_eq!(u16::from(YtAlbumImageSize::Small), 160);
+        assert_eq!(u16::from(YtAlbumImageSize::Medium), 320);
+        assert_eq!(u16::from(YtAlbumImageSize::Large), 640);
+        assert_eq!(u16::from(YtAlbumImageSize::Max), 1280);
+    }
+
+    #[test]
+    fn test_yt_album_image_size_display() {
+        assert_eq!(YtAlbumImageSize::Thumbnail.to_string(), "80");
+        assert_eq!(YtAlbumImageSize::Small.to_string(), "160");
+        assert_eq!(YtAlbumImageSize::Medium.to_string(), "320");
+        assert_eq!(YtAlbumImageSize::Large.to_string(), "640");
+        assert_eq!(YtAlbumImageSize::Max.to_string(), "1280");
+    }
+
+    #[test]
+    fn test_yt_search_artist_picture_url() {
+        let artist = YtSearchArtist {
+            id: 123,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            r#type: "ARTIST".to_string(),
+            name: "Test Artist".to_string(),
+        };
+
+        assert_eq!(
+            artist.picture_url(YtArtistImageSize::Small),
+            Some("https://resources.yt.com/images/abc/def/ghi/160x160.jpg".to_string())
+        );
+        assert_eq!(
+            artist.picture_url(YtArtistImageSize::Max),
+            Some("https://resources.yt.com/images/abc/def/ghi/750x750.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_yt_search_artist_picture_url_none() {
+        let artist = YtSearchArtist {
+            id: 123,
+            picture: None,
+            contains_cover: false,
+            r#type: "ARTIST".to_string(),
+            name: "Test Artist".to_string(),
+        };
+
+        assert_eq!(artist.picture_url(YtArtistImageSize::Small), None);
+    }
+
+    #[test]
+    fn test_yt_search_album_cover_url() {
+        let album = YtSearchAlbum {
+            id: 456,
+            artists: vec![],
+            contains_cover: true,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: Some("xyz-123-abc".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 85,
+            release_date: Some("2024-01-01".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(
+            album.cover_url(YtAlbumImageSize::Medium),
+            Some("https://resources.yt.com/images/xyz/123/abc/320x320.jpg".to_string())
+        );
+        assert_eq!(
+            album.cover_url(YtAlbumImageSize::Large),
+            Some("https://resources.yt.com/images/xyz/123/abc/640x640.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_yt_search_album_cover_url_none() {
+        let album = YtSearchAlbum {
+            id: 456,
+            artists: vec![],
+            contains_cover: false,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 85,
+            release_date: Some("2024-01-01".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(album.cover_url(YtAlbumImageSize::Medium), None);
+    }
+
+    #[test]
+    fn test_yt_album_cover_url() {
+        let album = YtAlbum {
+            id: "album123".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: "artist456".to_string(),
+            album_type: crate::YtAlbumType::Lp,
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            cover: Some("cover-id-test".to_string()),
+            duration: 2400,
+            explicit: false,
+            number_of_tracks: 10,
+            popularity: 90,
+            release_date: Some("2023-12-01".to_string()),
+            title: "Greatest Hits".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(
+            album.cover_url(YtAlbumImageSize::Thumbnail),
+            Some("https://resources.yt.com/images/cover/id/test/80x80.jpg".to_string())
+        );
+        assert_eq!(
+            album.cover_url(YtAlbumImageSize::Max),
+            Some("https://resources.yt.com/images/cover/id/test/1280x1280.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_yt_artist_to_api_global_search_result() {
+        let artist = YtArtist {
+            id: "artist789".to_string(),
+            picture: Some("pic-url".to_string()),
+            contains_cover: true,
+            popularity: 95,
+            name: "Famous Artist".to_string(),
+        };
+
+        let result: ApiGlobalSearchResult = artist.into();
+        match result {
+            ApiGlobalSearchResult::Artist(artist_result) => {
+                assert_eq!(artist_result.title, "Famous Artist");
+                assert_eq!(artist_result.contains_cover, true);
+                assert_eq!(artist_result.blur, false);
+            }
+            _ => panic!("Expected artist search result"),
+        }
+    }
+
+    #[test]
+    fn test_yt_track_to_api_global_search_result() {
+        let track = YtTrack {
+            id: "track123".to_string(),
+            track_number: 5,
+            artist_id: "artist999".to_string(),
+            artist: "Track Artist".to_string(),
+            artist_cover: Some("artist-cover".to_string()),
+            album_id: "album888".to_string(),
+            album: "Track Album".to_string(),
+            album_type: crate::YtAlbumType::EpsAndSingles,
+            album_cover: Some("album-cover".to_string()),
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 180,
+            explicit: false,
+            isrc: "USABC1234567".to_string(),
+            popularity: 75,
+            title: "Great Track".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let result: ApiGlobalSearchResult = track.into();
+        match result {
+            ApiGlobalSearchResult::Track(track_result) => {
+                assert_eq!(track_result.title, "Great Track");
+                assert_eq!(track_result.artist, "Track Artist");
+                assert_eq!(track_result.album, "Track Album");
+                assert_eq!(track_result.contains_cover, true);
+                assert_eq!(track_result.blur, false);
+            }
+            _ => panic!("Expected track search result"),
+        }
+    }
+
+    #[test]
+    fn test_yt_album_to_api_global_search_result() {
+        let album = YtAlbum {
+            id: "album_id".to_string(),
+            artist: "Album Artist".to_string(),
+            artist_id: "artist_id".to_string(),
+            album_type: crate::YtAlbumType::Compilations,
+            contains_cover: false,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Label".to_string()),
+            cover: None,
+            duration: 3000,
+            explicit: true,
+            number_of_tracks: 15,
+            popularity: 80,
+            release_date: Some("2024-06-15".to_string()),
+            title: "Compilation Album".to_string(),
+            media_metadata_tags: vec!["tag1".to_string()],
+        };
+
+        let result: ApiGlobalSearchResult = album.into();
+        match result {
+            ApiGlobalSearchResult::Album(album_result) => {
+                assert_eq!(album_result.title, "Compilation Album");
+                assert_eq!(album_result.artist, "Album Artist");
+                assert_eq!(album_result.contains_cover, false);
+                assert_eq!(album_result.blur, false);
+                assert_eq!(album_result.date_released, Some("2024-06-15".to_string()));
+            }
+            _ => panic!("Expected album search result"),
         }
     }
 }
