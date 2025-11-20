@@ -344,7 +344,10 @@ mod tests {
 
         let index_migration = AddEmailIndex;
         assert_eq!(index_migration.id(), "003_add_email_index");
-        assert_eq!(index_migration.description(), Some("Add index on users.email"));
+        assert_eq!(
+            index_migration.description(),
+            Some("Add index on users.email")
+        );
 
         Ok(())
     }

@@ -163,3 +163,376 @@ fn main() {
         process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn test_has_inject_attr_with_inject_yields() {
+        let attrs: Vec<Attribute> = vec![parse_quote!(#[inject_yields])];
+        assert!(has_inject_attr(&attrs));
+    }
+
+    #[test]
+    fn test_has_inject_attr_without_inject_yields() {
+        let attrs: Vec<Attribute> = vec![parse_quote!(#[allow(dead_code)])];
+        assert!(!has_inject_attr(&attrs));
+    }
+
+    #[test]
+    fn test_has_inject_attr_empty_attributes() {
+        let attrs: Vec<Attribute> = vec![];
+        assert!(!has_inject_attr(&attrs));
+    }
+
+    #[test]
+    fn test_has_inject_attr_multiple_attributes_with_inject_yields() {
+        let attrs: Vec<Attribute> = vec![
+            parse_quote!(#[allow(dead_code)]),
+            parse_quote!(#[inject_yields]),
+            parse_quote!(#[inline]),
+        ];
+        assert!(has_inject_attr(&attrs));
+    }
+
+    #[test]
+    fn test_has_inject_attr_similar_named_attributes() {
+        let attrs: Vec<Attribute> =
+            vec![parse_quote!(#[inject_something]), parse_quote!(#[yields])];
+        assert!(!has_inject_attr(&attrs));
+    }
+
+    #[test]
+    fn test_checker_detects_async_fn_without_attribute() {
+        let code = r#"
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("test_function"));
+        assert!(checker.warnings[0].contains("missing #[inject_yields]"));
+    }
+
+    #[test]
+    fn test_checker_allows_async_fn_with_attribute() {
+        let code = r#"
+            #[inject_yields]
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_ignores_sync_fn() {
+        let code = r#"
+            fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_detects_async_method_in_impl_without_attribute() {
+        let code = r#"
+            struct MyStruct;
+            impl MyStruct {
+                async fn my_method(&self) {
+                    println!("test");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("my_method"));
+        assert!(checker.warnings[0].contains("async method"));
+        assert!(checker.warnings[0].contains("missing #[inject_yields]"));
+    }
+
+    #[test]
+    fn test_checker_allows_async_method_with_method_level_attribute() {
+        let code = r#"
+            struct MyStruct;
+            impl MyStruct {
+                #[inject_yields]
+                async fn my_method(&self) {
+                    println!("test");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_allows_async_method_with_impl_level_attribute() {
+        let code = r#"
+            struct MyStruct;
+            #[inject_yields]
+            impl MyStruct {
+                async fn my_method(&self) {
+                    println!("test");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_allows_functions_in_module_with_attribute() {
+        let code = r#"
+            #[inject_yields]
+            mod my_module {
+                async fn test_function() {
+                    println!("test");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_detects_multiple_async_functions() {
+        let code = r#"
+            async fn first_function() {
+                println!("first");
+            }
+
+            async fn second_function() {
+                println!("second");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 2);
+        assert!(checker.warnings[0].contains("first_function"));
+        assert!(checker.warnings[1].contains("second_function"));
+    }
+
+    #[test]
+    fn test_checker_mixed_async_and_sync_functions() {
+        let code = r#"
+            async fn async_function() {
+                println!("async");
+            }
+
+            fn sync_function() {
+                println!("sync");
+            }
+
+            #[inject_yields]
+            async fn attributed_async_function() {
+                println!("attributed");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("async_function"));
+    }
+
+    #[test]
+    fn test_checker_impl_with_multiple_methods() {
+        let code = r"
+            struct MyStruct;
+            impl MyStruct {
+                async fn method1(&self) {}
+
+                fn sync_method(&self) {}
+
+                #[inject_yields]
+                async fn method2(&self) {}
+
+                async fn method3(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 2);
+        assert!(checker.warnings.iter().any(|w| w.contains("method1")));
+        assert!(checker.warnings.iter().any(|w| w.contains("method3")));
+        assert!(!checker.warnings.iter().any(|w| w.contains("method2")));
+        assert!(!checker.warnings.iter().any(|w| w.contains("sync_method")));
+    }
+
+    #[test]
+    fn test_checker_trait_impl_methods() {
+        let code = r#"
+            struct MyStruct;
+            impl MyTrait for MyStruct {
+                async fn trait_method(&self) {
+                    println!("implementation");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // The trait impl's async method should be flagged
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("trait_method"));
+    }
+
+    #[test]
+    fn test_checker_exempts_trait_impl_with_attribute() {
+        let code = r#"
+            struct MyStruct;
+            #[inject_yields]
+            impl MyTrait for MyStruct {
+                async fn trait_method(&self) {
+                    println!("implementation");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // The impl has inject_yields attribute, so no warnings
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_nested_items() {
+        let code = r"
+            mod outer {
+                async fn outer_function() {}
+
+                mod inner {
+                    async fn inner_function() {}
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 2);
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("outer_function"))
+        );
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("inner_function"))
+        );
+    }
+
+    #[test]
+    fn test_checker_attribute_with_arguments() {
+        let code = r#"
+            #[inject_yields(some_arg)]
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should still recognize inject_yields even with arguments
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_checker_warning_format_includes_filename() {
+        let code = r#"
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "path/to/file.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].starts_with("path/to/file.rs:"));
+    }
+}
