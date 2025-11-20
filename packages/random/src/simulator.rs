@@ -184,3 +184,186 @@ impl ::rand::RngCore for SimulatorRng {
         <Self as GenericRng>::try_fill_bytes(self, dest)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simulator_rng_seeded_reproducibility() {
+        let rng1 = SimulatorRng::new(12345_u64);
+        let rng2 = SimulatorRng::new(12345_u64);
+
+        let values1: Vec<u32> = (0..10).map(|_| rng1.next_u32()).collect();
+        let values2: Vec<u32> = (0..10).map(|_| rng2.next_u32()).collect();
+
+        assert_eq!(
+            values1, values2,
+            "Same seed should produce same sequence in simulator"
+        );
+    }
+
+    #[test]
+    fn test_initial_seed_returns_consistent_value() {
+        let seed1 = initial_seed();
+        let seed2 = initial_seed();
+        assert_eq!(
+            seed1, seed2,
+            "initial_seed should return the same value when called multiple times"
+        );
+    }
+
+    #[test]
+    fn test_gen_seed_produces_different_values() {
+        let seed1 = gen_seed();
+        let seed2 = gen_seed();
+        assert_ne!(
+            seed1, seed2,
+            "gen_seed should produce different values on subsequent calls"
+        );
+    }
+
+    #[test]
+    fn test_reset_seed_changes_seed() {
+        let original_seed = seed();
+        reset_seed();
+        let new_seed = seed();
+
+        assert_ne!(
+            original_seed, new_seed,
+            "reset_seed should change the thread-local seed"
+        );
+    }
+
+    #[test]
+    fn test_reset_seed_produces_reproducible_sequence() {
+        reset_seed();
+        let current_seed = seed();
+
+        let rng = rng();
+        let values1: Vec<u32> = (0..10).map(|_| rng.next_u32()).collect();
+
+        reset_rng();
+        let values2: Vec<u32> = (0..10).map(|_| rng.next_u32()).collect();
+
+        // After reset_rng, we should get the same sequence again
+        assert_eq!(
+            values1, values2,
+            "reset_rng should restore RNG to produce same sequence from current seed"
+        );
+
+        // Verify the seed hasn't changed
+        assert_eq!(current_seed, seed(), "Seed should remain unchanged");
+    }
+
+    #[test]
+    fn test_simulator_rng_with_none_seed_uses_thread_local() {
+        // Set a known seed
+        reset_seed();
+        let thread_seed = seed();
+
+        let sim_rng = SimulatorRng::new::<u64, Option<u64>>(None);
+        let explicit_rng = SimulatorRng::new(thread_seed);
+
+        // Both should produce the same sequence since they use the same seed
+        let values1: Vec<u32> = (0..5).map(|_| sim_rng.next_u32()).collect();
+
+        // Reset to get the same sequence
+        let values2: Vec<u32> = (0..5).map(|_| explicit_rng.next_u32()).collect();
+
+        assert_eq!(
+            values1, values2,
+            "RNG with None should use thread-local seed"
+        );
+    }
+
+    #[test]
+    fn test_rng_function_returns_thread_local() {
+        let rng1 = rng();
+        let rng2 = rng();
+
+        // They should be clones sharing the same state
+        let val1 = rng1.next_u32();
+        let val2 = rng2.next_u32();
+
+        // They share state, so values should be different (state advanced)
+        assert_ne!(val1, val2, "Thread-local RNGs share state");
+    }
+
+    #[test]
+    fn test_seed_function_returns_current_thread_seed() {
+        reset_seed();
+        let current_seed = seed();
+
+        // Create RNG with this seed
+        let sim_rng = SimulatorRng::new(current_seed);
+        let thread_rng = rng();
+
+        // Reset thread RNG to compare
+        reset_rng();
+
+        let val1 = sim_rng.next_u32();
+        let val2 = thread_rng.next_u32();
+
+        // They should produce the same value since they use the same seed
+        assert_eq!(
+            val1, val2,
+            "Thread seed should match what thread-local RNG uses"
+        );
+    }
+
+    #[test]
+    fn test_contains_fixed_seed_reflects_env_var() {
+        // This test documents the behavior but doesn't change env vars
+        // as that would affect other tests
+        let _has_fixed_seed = contains_fixed_seed();
+
+        // The function should execute without panicking
+        // Test passes if no panic occurs
+    }
+
+    #[test]
+    fn test_thread_isolation() {
+        use std::sync::mpsc;
+        use std::thread;
+
+        let (tx1, rx1) = mpsc::channel();
+        let (tx2, rx2) = mpsc::channel();
+
+        // Thread 1: reset seed and generate values
+        let handle1 = thread::spawn(move || {
+            reset_seed();
+            let seed = seed();
+            let rng = rng();
+            let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
+            tx1.send((seed, values)).unwrap();
+        });
+
+        // Thread 2: reset seed and generate values
+        let handle2 = thread::spawn(move || {
+            reset_seed();
+            let seed = seed();
+            let rng = rng();
+            let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
+            tx2.send((seed, values)).unwrap();
+        });
+
+        handle1.join().unwrap();
+        handle2.join().unwrap();
+
+        let (seed1, values1) = rx1.recv().unwrap();
+        let (seed2, values2) = rx2.recv().unwrap();
+
+        // Different threads should get different seeds
+        assert_ne!(
+            seed1, seed2,
+            "Different threads should have independent seeds"
+        );
+
+        // And therefore different value sequences
+        assert_ne!(
+            values1, values2,
+            "Different threads should produce different sequences"
+        );
+    }
+}

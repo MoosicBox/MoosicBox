@@ -109,3 +109,128 @@ impl ::rand::RngCore for RandRng {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rand_rng_seeded_reproducibility() {
+        let rng1 = RandRng::new(12345_u64);
+        let rng2 = RandRng::new(12345_u64);
+
+        let values1: Vec<u32> = (0..10).map(|_| rng1.next_u32()).collect();
+        let values2: Vec<u32> = (0..10).map(|_| rng2.next_u32()).collect();
+
+        assert_eq!(
+            values1, values2,
+            "Same seed should produce same sequence in rand backend"
+        );
+    }
+
+    #[test]
+    fn test_rand_rng_different_seeds_produce_different_values() {
+        let rng1 = RandRng::new(12345_u64);
+        let rng2 = RandRng::new(54321_u64);
+
+        let value1 = rng1.next_u32();
+        let value2 = rng2.next_u32();
+
+        assert_ne!(
+            value1, value2,
+            "Different seeds should produce different values"
+        );
+    }
+
+    #[test]
+    fn test_rand_rng_with_none_seed_from_entropy() {
+        let rng = RandRng::new::<u64, Option<u64>>(None);
+
+        // Should be able to generate values without panicking
+        let _value = rng.next_u32();
+        let _value = rng.next_u64();
+    }
+
+    #[test]
+    fn test_global_rng_function() {
+        let rng1 = rng();
+        let rng2 = rng();
+
+        // Both should work and share state
+        let val1 = rng1.next_u32();
+        let val2 = rng2.next_u32();
+
+        // They share state, so values should be different (state advanced)
+        assert_ne!(val1, val2, "Global RNGs share state");
+    }
+
+    #[test]
+    fn test_rand_rng_next_i32_produces_valid_range() {
+        let rng = RandRng::new(42_u64);
+
+        // This test simply verifies that next_i32() executes without panicking
+        // The range check is redundant since i32 always contains all i32 values
+        for _ in 0..100 {
+            let _value = rng.next_i32();
+            // Any i32 value is valid
+        }
+    }
+
+    #[test]
+    fn test_rand_rng_fill_bytes() {
+        let rng = RandRng::new(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        rng.fill_bytes(&mut buffer);
+
+        // Verify that not all bytes are zero (extremely unlikely with proper RNG)
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test]
+    fn test_rand_rng_try_fill_bytes_success() {
+        let rng = RandRng::new(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        let result = rng.try_fill_bytes(&mut buffer);
+        assert!(result.is_ok(), "try_fill_bytes should succeed");
+
+        // Verify that not all bytes are zero
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test]
+    fn test_rand_rng_core_trait_implementation() {
+        let rng = RandRng::new(42_u64);
+
+        // Test RngCore trait methods through GenericRng
+        let _u32_val = rng.next_u32();
+        let _u64_val = rng.next_u64();
+
+        let mut bytes = [0_u8; 16];
+        rng.fill_bytes(&mut bytes);
+        assert!(bytes.iter().any(|&x| x != 0));
+
+        let mut bytes2 = [0_u8; 16];
+        let result = rng.try_fill_bytes(&mut bytes2);
+        assert!(result.is_ok());
+        assert!(bytes2.iter().any(|&x| x != 0));
+    }
+
+    #[test]
+    fn test_global_rng_static_initialization() {
+        // Access the global RNG multiple times
+        let _rng1 = &*RNG;
+        let _rng2 = &*RNG;
+
+        // Should not panic and should be accessible
+        let _val = RNG.next_u32();
+        // Test passes if no panic occurs
+    }
+}

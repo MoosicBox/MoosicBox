@@ -437,3 +437,342 @@ impl_rng!(simulator, simulator::SimulatorRng);
 
 #[cfg(all(not(feature = "simulator"), feature = "rand"))]
 impl_rng!(rand, rand::RandRng);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_seeded_rng_reproducibility() {
+        let rng1 = Rng::from_seed(12345_u64);
+        let rng2 = Rng::from_seed(12345_u64);
+
+        let values1: Vec<u32> = (0..10).map(|_| rng1.next_u32()).collect();
+        let values2: Vec<u32> = (0..10).map(|_| rng2.next_u32()).collect();
+
+        assert_eq!(values1, values2, "Same seed should produce same sequence");
+    }
+
+    #[test]
+    fn test_seeded_rng_different_seeds_produce_different_values() {
+        let rng1 = Rng::from_seed(12345_u64);
+        let rng2 = Rng::from_seed(54321_u64);
+
+        let value1 = rng1.next_u32();
+        let value2 = rng2.next_u32();
+
+        assert_ne!(
+            value1, value2,
+            "Different seeds should produce different values"
+        );
+    }
+
+    #[test]
+    fn test_gen_range_produces_values_in_range() {
+        let rng = Rng::from_seed(42_u64);
+
+        for _ in 0..100 {
+            let value = rng.gen_range(1..=100);
+            assert!(
+                (1..=100).contains(&value),
+                "Generated value {value} should be in range [1, 100]"
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot sample empty range")]
+    fn test_gen_range_panics_on_empty_range() {
+        let rng = Rng::from_seed(42_u64);
+        let _value = rng.gen_range(1..1);
+    }
+
+    #[test]
+    fn test_gen_range_dist_produces_scaled_values() {
+        let rng = Rng::from_seed(42_u64);
+
+        // gen_range_dist applies non-uniform distribution that can scale values down
+        // So values may be outside the original range
+        for _ in 0..100 {
+            let value = rng.gen_range_dist(1..=100, 2.0);
+            // Values should be >= 0 (scaled down from range)
+            assert!(value >= 0, "Generated value {value} should be non-negative");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot sample empty range")]
+    fn test_gen_range_dist_panics_on_empty_range() {
+        let rng = Rng::from_seed(42_u64);
+        let _value = rng.gen_range_dist(1..1, 2.0);
+    }
+
+    #[test]
+    fn test_gen_range_disti_produces_scaled_values() {
+        let rng = Rng::from_seed(42_u64);
+
+        // gen_range_disti applies non-uniform distribution that can scale values down
+        // So values may be outside the original range
+        for _ in 0..100 {
+            let value = rng.gen_range_disti(1..=100, 2);
+            // Values should be >= 0 (scaled down from range)
+            assert!(value >= 0, "Generated value {value} should be non-negative");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot sample empty range")]
+    fn test_gen_range_disti_panics_on_empty_range() {
+        let rng = Rng::from_seed(42_u64);
+        let _value = rng.gen_range_disti(1..1, 2);
+    }
+
+    #[test]
+    fn test_non_uniform_distribute_f64_scales_value() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        let distributed = non_uniform_distribute_f64(original_value, 1.0, &rng);
+        assert!(
+            distributed <= original_value,
+            "Distributed value should be <= original with pow >= 1"
+        );
+        assert!(distributed > 0.0, "Distributed value should be positive");
+    }
+
+    #[test]
+    fn test_non_uniform_distribute_f64_with_different_powers() {
+        let rng = Rng::from_seed(42_u64);
+        let value = 100.0;
+
+        let dist_pow1 = non_uniform_distribute_f64(value, 1.0, &rng);
+        let dist_pow2 = non_uniform_distribute_f64(value, 2.0, &rng);
+
+        // Both should be valid and within bounds
+        assert!(dist_pow1 > 0.0 && dist_pow1 <= value);
+        assert!(dist_pow2 > 0.0 && dist_pow2 <= value);
+    }
+
+    #[test]
+    fn test_non_uniform_distribute_i32_scales_value() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        let distributed = non_uniform_distribute_i32(original_value, 1, &rng);
+        assert!(
+            distributed <= original_value,
+            "Distributed value should be <= original with pow >= 1"
+        );
+        assert!(distributed > 0.0, "Distributed value should be positive");
+    }
+
+    #[test]
+    fn test_gen_bool_with_zero_probability() {
+        let rng = Rng::from_seed(42_u64);
+
+        let results: Vec<bool> = (0..100).map(|_| rng.gen_bool(0.0)).collect();
+        assert!(
+            results.iter().all(|&x| !x),
+            "gen_bool(0.0) should always return false"
+        );
+    }
+
+    #[test]
+    fn test_gen_bool_with_one_probability() {
+        let rng = Rng::from_seed(42_u64);
+
+        let results: Vec<bool> = (0..100).map(|_| rng.gen_bool(1.0)).collect();
+        assert!(
+            results.iter().all(|&x| x),
+            "gen_bool(1.0) should always return true"
+        );
+    }
+
+    #[test]
+    fn test_gen_bool_with_half_probability() {
+        let rng = Rng::from_seed(42_u64);
+
+        let results: Vec<bool> = (0..1000).map(|_| rng.gen_bool(0.5)).collect();
+        let true_count = results.iter().filter(|&&x| x).count();
+
+        // With 1000 samples and 0.5 probability, we expect roughly 500 trues
+        // Allow for statistical variance (between 400 and 600)
+        assert!(
+            (400..=600).contains(&true_count),
+            "gen_bool(0.5) should produce roughly 50% true values, got {true_count}/1000"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidProbability")]
+    fn test_gen_bool_panics_on_invalid_probability() {
+        let rng = Rng::from_seed(42_u64);
+        let _result = rng.gen_bool(1.5); // Invalid probability > 1.0
+    }
+
+    #[test]
+    fn test_gen_ratio_zero_numerator() {
+        let rng = Rng::from_seed(42_u64);
+
+        let results: Vec<bool> = (0..100).map(|_| rng.gen_ratio(0, 10)).collect();
+        assert!(
+            results.iter().all(|&x| !x),
+            "gen_ratio(0, 10) should always return false"
+        );
+    }
+
+    #[test]
+    fn test_gen_ratio_equal_numerator_denominator() {
+        let rng = Rng::from_seed(42_u64);
+
+        let results: Vec<bool> = (0..100).map(|_| rng.gen_ratio(10, 10)).collect();
+        assert!(
+            results.iter().all(|&x| x),
+            "gen_ratio(10, 10) should always return true"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidProbability")]
+    fn test_gen_ratio_panics_on_numerator_greater_than_denominator() {
+        let rng = Rng::from_seed(42_u64);
+        let _result = rng.gen_ratio(11, 10);
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidProbability")]
+    fn test_gen_ratio_panics_on_zero_denominator() {
+        let rng = Rng::from_seed(42_u64);
+        let _result = rng.gen_ratio(1, 0);
+    }
+
+    #[test]
+    fn test_fill_bytes() {
+        let rng = Rng::from_seed(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        rng.fill_bytes(&mut buffer);
+
+        // Verify that not all bytes are zero (extremely unlikely with proper RNG)
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test]
+    fn test_try_fill_bytes_success() {
+        let rng = Rng::from_seed(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        let result = rng.try_fill_bytes(&mut buffer);
+        assert!(result.is_ok(), "try_fill_bytes should succeed");
+
+        // Verify that not all bytes are zero
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test]
+    fn test_fill_array() {
+        let rng = Rng::from_seed(42_u64);
+        let mut array = [0_u32; 10];
+
+        rng.fill(&mut array[..]);
+
+        // Verify that not all elements are zero
+        assert!(
+            array.iter().any(|&x| x != 0),
+            "Fill should produce non-zero values"
+        );
+    }
+
+    #[test]
+    fn test_try_fill_array_success() {
+        let rng = Rng::from_seed(42_u64);
+        let mut array = [0_u32; 10];
+
+        let result = rng.try_fill(&mut array[..]);
+        assert!(result.is_ok(), "try_fill should succeed");
+
+        // Verify that not all elements are zero
+        assert!(
+            array.iter().any(|&x| x != 0),
+            "Fill should produce non-zero values"
+        );
+    }
+
+    #[test]
+    fn test_random_generates_different_types() {
+        let rng = Rng::from_seed(42_u64);
+
+        let _u8_val: u8 = rng.random();
+        let _u16_val: u16 = rng.random();
+        let _u32_val: u32 = rng.random();
+        let _u64_val: u64 = rng.random();
+        let _i8_val: i8 = rng.random();
+        let _i16_val: i16 = rng.random();
+        let _i32_val: i32 = rng.random();
+        let _i64_val: i64 = rng.random();
+        let _f32_val: f32 = rng.random();
+        let _f64_val: f64 = rng.random();
+
+        // Test passes if no panics occur
+    }
+
+    #[test]
+    fn test_rng_clone_shares_state() {
+        let rng1 = Rng::from_seed(42_u64);
+        let rng2 = rng1.clone();
+
+        // Both should advance the same internal state
+        let val1 = rng1.next_u32();
+        let val2 = rng2.next_u32();
+
+        // They should not be equal because they share state and val1 advanced it
+        assert_ne!(val1, val2, "Cloned RNGs share the same state");
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_f64_convertible_roundtrip_f64() {
+        let original = 42.5_f64;
+        let converted = original.into_f64();
+        let back = f64::from_f64(converted);
+        assert_eq!(original, back, "f64 conversion should be lossless");
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_f64_convertible_roundtrip_f32() {
+        let original = 42.5_f32;
+        let converted = original.into_f64();
+        let back = f32::from_f64(converted);
+        assert_eq!(original, back, "f32 conversion should be lossless");
+    }
+
+    #[test]
+    fn test_f64_convertible_integer_rounding() {
+        let value = 42.7_f64;
+        let as_u32 = u32::from_f64(value);
+        assert_eq!(as_u32, 43, "Should round 42.7 to 43");
+
+        let value = 42.3_f64;
+        let as_u32 = u32::from_f64(value);
+        assert_eq!(as_u32, 42, "Should round 42.3 to 42");
+    }
+
+    #[test]
+    fn test_next_i32_range() {
+        let rng = Rng::from_seed(42_u64);
+
+        // This test simply verifies that next_i32() executes without panicking
+        // The range check is redundant since i32 always contains all i32 values
+        for _ in 0..100 {
+            let _value = rng.next_i32();
+            // Any i32 value is valid
+        }
+    }
+}
