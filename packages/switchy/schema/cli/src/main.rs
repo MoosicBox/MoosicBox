@@ -2126,4 +2126,309 @@ mod tests {
             _ => panic!("Expected Validate command"),
         }
     }
+
+    #[test]
+    fn test_create_migration_with_empty_name() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        // Test creating a migration with empty name
+        let result = create_migration("", &migrations_dir);
+
+        assert!(result.is_err(), "Should fail with empty migration name");
+        match result {
+            Err(CliError::Config(message)) => {
+                assert_eq!(message, "Migration name cannot be empty");
+            }
+            _ => panic!("Expected Config error for empty name"),
+        }
+    }
+
+    #[test]
+    fn test_create_migration_creates_directory_structure() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        // Create a migration
+        let result = create_migration("add_users_table", &migrations_dir);
+        assert!(result.is_ok(), "Failed to create migration");
+
+        // Verify the migrations directory was created
+        assert!(
+            switchy_fs::exists(&migrations_dir),
+            "Migrations directory should exist"
+        );
+
+        // Find the created migration directory
+        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        assert_eq!(entries.len(), 1, "Should create exactly one migration");
+
+        let created_migration_dir = entries[0].path();
+
+        // Verify both SQL files exist in the migration directory
+        let up_sql = created_migration_dir.join("up.sql");
+        let down_sql = created_migration_dir.join("down.sql");
+        assert!(switchy_fs::exists(&up_sql), "up.sql should exist");
+        assert!(switchy_fs::exists(&down_sql), "down.sql should exist");
+    }
+
+    #[test]
+    fn test_create_migration_with_special_characters_in_name() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        // Test with various special characters that should be valid in filenames
+        let names = vec![
+            "add_users-table",
+            "update_schema_v2",
+            "fix-bug-123",
+            "add_column_with_underscores",
+        ];
+
+        for name in names {
+            let result = create_migration(name, &migrations_dir);
+            assert!(result.is_ok(), "Should create migration with name '{name}'");
+        }
+
+        // Verify all migrations were created
+        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            entries.len(),
+            4,
+            "Should create migrations for all valid names"
+        );
+    }
+
+    #[test]
+    fn test_create_migration_file_content() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        let migration_name = "add_products_table";
+        let result = create_migration(migration_name, &migrations_dir);
+        assert!(result.is_ok(), "Failed to create migration");
+
+        // Find the migration directory
+        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        let migration_path = entries[0].path();
+
+        // Read and verify up.sql content
+        let up_content = switchy_fs::sync::read_to_string(migration_path.join("up.sql"))
+            .expect("Failed to read up.sql");
+        assert!(
+            up_content.contains(&format!("-- Migration: {migration_name}")),
+            "up.sql should contain migration name in header"
+        );
+        assert!(
+            up_content.contains("-- Add your forward migration SQL here"),
+            "up.sql should contain instruction comment"
+        );
+        assert!(
+            up_content.contains("-- This file will be executed when running migrations"),
+            "up.sql should contain usage description"
+        );
+
+        // Read and verify down.sql content
+        let down_content = switchy_fs::sync::read_to_string(migration_path.join("down.sql"))
+            .expect("Failed to read down.sql");
+        assert!(
+            down_content.contains(&format!("-- Rollback: {migration_name}")),
+            "down.sql should contain migration name in header"
+        );
+        assert!(
+            down_content.contains("-- Add your rollback migration SQL here"),
+            "down.sql should contain instruction comment"
+        );
+        assert!(
+            down_content.contains("-- Should reverse the changes made in up.sql"),
+            "down.sql should contain reversal instruction"
+        );
+    }
+
+    #[test]
+    fn test_cli_parsing_mark_all_completed_pending_only() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "mark-all-completed",
+            "--database-url",
+            "sqlite://test.db",
+        ]);
+
+        match cli.command {
+            Commands::MarkAllCompleted {
+                database_url,
+                migrations_dir,
+                migration_table,
+                include_failed,
+                include_in_progress,
+                all,
+                drop,
+                force,
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(migrations_dir, PathBuf::from("./migrations"));
+                assert_eq!(migration_table, "__switchy_migrations");
+                assert!(!include_failed);
+                assert!(!include_in_progress);
+                assert!(!all);
+                assert!(!drop);
+                assert!(!force);
+            }
+            _ => panic!("Expected MarkAllCompleted command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_mark_all_completed_with_all_flags() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "mark-all-completed",
+            "--database-url",
+            "postgres://localhost/test",
+            "--include-failed",
+            "--include-in-progress",
+            "--all",
+            "--drop",
+            "--force",
+        ]);
+
+        match cli.command {
+            Commands::MarkAllCompleted {
+                database_url,
+                include_failed,
+                include_in_progress,
+                all,
+                drop,
+                force,
+                ..
+            } => {
+                assert_eq!(database_url, "postgres://localhost/test");
+                assert!(include_failed);
+                assert!(include_in_progress);
+                assert!(all);
+                assert!(drop);
+                assert!(force);
+            }
+            _ => panic!("Expected MarkAllCompleted command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_migrate_with_require_checksum_validation() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "migrate",
+            "--database-url",
+            "sqlite://test.db",
+            "--require-checksum-validation",
+        ]);
+
+        match cli.command {
+            Commands::Migrate {
+                database_url,
+                require_checksum_validation,
+                ..
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert!(require_checksum_validation);
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_migrate_with_up_to() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "migrate",
+            "--database-url",
+            "postgres://localhost/test",
+            "--up-to",
+            "20231201000000_target_migration",
+        ]);
+
+        match cli.command {
+            Commands::Migrate {
+                database_url,
+                up_to,
+                steps,
+                ..
+            } => {
+                assert_eq!(database_url, "postgres://localhost/test");
+                assert_eq!(up_to, Some("20231201000000_target_migration".to_string()));
+                assert_eq!(steps, None);
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_migrate_with_steps() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "migrate",
+            "--database-url",
+            "sqlite://test.db",
+            "--steps",
+            "5",
+        ]);
+
+        match cli.command {
+            Commands::Migrate {
+                database_url,
+                up_to,
+                steps,
+                ..
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(up_to, None);
+                assert_eq!(steps, Some(5));
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_error_from_migration_error() {
+        let migration_error =
+            switchy_schema::MigrationError::Discovery("test_migration not found".to_string());
+        let cli_error = CliError::Migration(migration_error);
+
+        let error_string = format!("{cli_error}");
+        assert!(error_string.contains("test_migration"));
+    }
+
+    #[test]
+    fn test_cli_error_from_io_error() {
+        let io_error = std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "Access denied to migration file",
+        );
+        let cli_error = CliError::Io(io_error);
+
+        let error_string = format!("{cli_error}");
+        assert!(error_string.contains("Access denied") || error_string.contains("migration"));
+    }
+
+    #[test]
+    fn test_cli_error_from_validation_error() {
+        let migration_error =
+            switchy_schema::MigrationError::Validation("Invalid migration format".to_string());
+        let cli_error = CliError::Migration(migration_error);
+
+        let error_string = format!("{cli_error}");
+        assert!(error_string.contains("validation") || error_string.contains("Invalid"));
+    }
 }
