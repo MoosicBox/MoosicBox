@@ -151,12 +151,21 @@ mod egui {
     pub type EguiRenderer = hyperchad_renderer_egui::EguiRenderer<EguiCalculator>;
 
     impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
+        /// Calculates layout for a container using egui font metrics.
+        ///
+        /// # Panics
+        ///
+        /// * If the calculator has not been initialized with an egui context
         fn calc(&self, container: &mut hyperchad_router::Container) -> bool {
             self.0.as_ref().unwrap().calc(container)
         }
     }
 
     impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
+        /// Initializes the calculator with egui context and font metrics.
+        ///
+        /// This sets up default font sizes and margins for various HTML elements
+        /// (h1-h6, paragraphs) scaled by a factor of 14/16 relative to standard sizes.
         fn with_context(mut self, context: egui::Context) -> Self {
             const DELTA: f32 = 14.0f32 / 16.0;
             self.0 = Some(Arc::new(Calculator::new(
@@ -191,9 +200,11 @@ mod egui {
 
     #[async_trait]
     impl Generator for EguiRenderer {
+        /// No-op generator for egui renderer (static generation not supported for native GUI).
+        ///
         /// # Errors
         ///
-        /// * Infallible
+        /// * This implementation never returns an error
         async fn generate(&self, _router: &Router, _output: Option<String>) -> Result<(), Error> {
             Ok(())
         }
@@ -201,9 +212,11 @@ mod egui {
 
     #[async_trait]
     impl Cleaner for EguiRenderer {
+        /// No-op cleaner for egui renderer (no output to clean for native GUI).
+        ///
         /// # Errors
         ///
-        /// * Infallible
+        /// * This implementation never returns an error
         async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
             Ok(())
         }
@@ -278,9 +291,11 @@ mod fltk {
 
     #[async_trait]
     impl Generator for FltkRenderer {
+        /// No-op generator for fltk renderer (static generation not supported for native GUI).
+        ///
         /// # Errors
         ///
-        /// * Infallible
+        /// * This implementation never returns an error
         async fn generate(&self, _router: &Router, _output: Option<String>) -> Result<(), Error> {
             Ok(())
         }
@@ -288,9 +303,11 @@ mod fltk {
 
     #[async_trait]
     impl Cleaner for FltkRenderer {
+        /// No-op cleaner for fltk renderer (no output to clean for native GUI).
+        ///
         /// # Errors
         ///
-        /// * Infallible
+        /// * This implementation never returns an error
         async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
             Ok(())
         }
@@ -547,9 +564,13 @@ pub mod html {
 
                 /// Recursively copies a directory and all its contents to a destination.
                 ///
+                /// Entries are sorted alphabetically for deterministic processing.
+                ///
                 /// # Errors
                 ///
-                /// * If any file or directory I/O operation fails
+                /// * If directory creation fails
+                /// * If reading directory entries fails
+                /// * If copying files fails
                 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
                     std::fs::create_dir_all(dst)?;
                     let mut entries: Vec<_> =
@@ -602,9 +623,11 @@ pub mod html {
 
     #[async_trait]
     impl<T: HtmlApp + ToRenderRunner + Send + Sync> Cleaner for HtmlRenderer<T> {
+        /// Removes the generated output directory and all its contents.
+        ///
         /// # Errors
         ///
-        /// * If the `App` fails to clean the output directory
+        /// * [`Error::IO`] if directory removal fails
         async fn clean(&self, output: Option<String>) -> Result<(), Error> {
             let output = output.unwrap_or_else(|| {
                 CARGO_MANIFEST_DIR
@@ -1023,6 +1046,11 @@ pub mod stub {
 
     #[async_trait]
     impl Generator for StubRenderer {
+        /// No-op generator for stub renderer (used for testing).
+        ///
+        /// # Errors
+        ///
+        /// * This implementation never returns an error
         async fn generate(
             &self,
             _router: &hyperchad_router::Router,
@@ -1034,6 +1062,11 @@ pub mod stub {
 
     #[async_trait]
     impl Cleaner for StubRenderer {
+        /// No-op cleaner for stub renderer (used for testing).
+        ///
+        /// # Errors
+        ///
+        /// * This implementation never returns an error
         async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
             Ok(())
         }
@@ -1043,6 +1076,11 @@ pub mod stub {
     pub struct StubRunner;
 
     impl RenderRunner for StubRunner {
+        /// No-op run method that immediately returns success.
+        ///
+        /// # Errors
+        ///
+        /// * This implementation never returns an error
         fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
             Ok(())
         }

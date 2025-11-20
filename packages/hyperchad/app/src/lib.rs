@@ -707,6 +707,19 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(())
     }
 
+    /// Gets or creates the async runtime handle.
+    ///
+    /// If a runtime handle was provided to the builder, returns that handle.
+    /// Otherwise, creates a new runtime with thread configuration from the
+    /// `MAX_THREADS` environment variable (defaults to 64 threads).
+    ///
+    /// # Errors
+    ///
+    /// * If the runtime fails to initialize
+    ///
+    /// # Panics
+    ///
+    /// * If the `MAX_THREADS` environment variable exceeds `u16::MAX`
     fn runtime_handle(&mut self) -> Result<Handle, Error> {
         Ok(if let Some(handle) = self.runtime_handle.clone() {
             handle
