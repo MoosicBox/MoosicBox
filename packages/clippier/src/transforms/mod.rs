@@ -128,6 +128,7 @@ pub fn dry_run_transforms(
 }
 
 /// Check if two matrix entries represent the same logical entry
+#[must_use]
 fn entries_match_key(
     a: &serde_json::Map<String, serde_json::Value>,
     b: &serde_json::Map<String, serde_json::Value>,
