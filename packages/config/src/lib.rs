@@ -361,3 +361,320 @@ mod db_impl {
         crate::db::get_profiles(db).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    // Test lock to ensure tests that modify ROOT_DIR run serially
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[test]
+    fn test_app_type_display() {
+        assert_eq!(AppType::App.to_string(), "app");
+        assert_eq!(AppType::Server.to_string(), "server");
+        assert_eq!(AppType::Local.to_string(), "local");
+    }
+
+    #[test]
+    fn test_app_type_from_to_str() {
+        let app_str: &str = AppType::App.into();
+        assert_eq!(app_str, "app");
+
+        let server_str: &str = AppType::Server.into();
+        assert_eq!(server_str, "server");
+
+        let local_str: &str = AppType::Local.into();
+        assert_eq!(local_str, "local");
+    }
+
+    #[test]
+    fn test_set_and_get_root_dir() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let custom_path = PathBuf::from("/custom/moosicbox/path");
+        set_root_dir(custom_path.clone());
+
+        let retrieved_path = get_root_dir();
+        assert_eq!(retrieved_path, Some(custom_path));
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_config_dir_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        // Set a known root directory
+        let temp_root = std::env::temp_dir().join("test_config_dir");
+        set_root_dir(temp_root.clone());
+
+        let config_dir = get_config_dir_path();
+        assert_eq!(config_dir, Some(temp_root));
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_app_config_dir_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_app_config");
+        set_root_dir(temp_root.clone());
+
+        let app_path = get_app_config_dir_path(AppType::Server);
+        assert_eq!(app_path, Some(temp_root.join("server")));
+
+        let app_path = get_app_config_dir_path(AppType::App);
+        assert_eq!(app_path, Some(temp_root.join("app")));
+
+        let local_path = get_app_config_dir_path(AppType::Local);
+        assert_eq!(local_path, Some(temp_root.join("local")));
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_profiles_dir_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_profiles_dir");
+        set_root_dir(temp_root.clone());
+
+        let profiles_path = get_profiles_dir_path(AppType::Server);
+        assert_eq!(
+            profiles_path,
+            Some(temp_root.join("server").join("profiles"))
+        );
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_profile_dir_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_profile_dir");
+        set_root_dir(temp_root.clone());
+
+        let profile_path = get_profile_dir_path(AppType::Server, "production");
+        assert_eq!(
+            profile_path,
+            Some(temp_root.join("server").join("profiles").join("production"))
+        );
+
+        let default_profile = get_profile_dir_path(AppType::App, "default");
+        assert_eq!(
+            default_profile,
+            Some(temp_root.join("app").join("profiles").join("default"))
+        );
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_cache_dir_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_cache_dir");
+        set_root_dir(temp_root.clone());
+
+        let cache_path = get_cache_dir_path();
+        assert_eq!(cache_path, Some(temp_root.join("cache")));
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_make_config_dir_path_creates_directory() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_make_config_dir");
+        // Clean up if exists from previous test
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        set_root_dir(temp_root.clone());
+
+        let config_path = make_config_dir_path();
+        assert_eq!(config_path, Some(temp_root.clone()));
+        assert!(temp_root.is_dir(), "Directory should be created");
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_make_config_dir_path_returns_existing_directory() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_existing_config_dir");
+        // Pre-create the directory
+        std::fs::create_dir_all(&temp_root).unwrap();
+
+        set_root_dir(temp_root.clone());
+
+        let config_path = make_config_dir_path();
+        assert_eq!(config_path, Some(temp_root.clone()));
+        assert!(temp_root.is_dir());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_make_profile_dir_path_creates_directory() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_make_profile_dir");
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        set_root_dir(temp_root.clone());
+
+        let profile_path = make_profile_dir_path(AppType::Server, "test_profile");
+        let expected_path = temp_root
+            .join("server")
+            .join("profiles")
+            .join("test_profile");
+        assert_eq!(profile_path, Some(expected_path.clone()));
+        assert!(
+            expected_path.is_dir(),
+            "Profile directory should be created"
+        );
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_make_cache_dir_path_creates_directory() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_make_cache_dir");
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        set_root_dir(temp_root.clone());
+
+        let cache_path = make_cache_dir_path();
+        let expected_path = temp_root.join("cache");
+        assert_eq!(cache_path, Some(expected_path.clone()));
+        assert!(expected_path.is_dir(), "Cache directory should be created");
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_get_tests_dir_path_uniqueness() {
+        // Each call should return a different path (different timestamp)
+        let path1 = get_tests_dir_path();
+        // Small delay to ensure different timestamp
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let path2 = get_tests_dir_path();
+
+        assert_ne!(path1, path2, "Each call should generate a unique path");
+
+        // Both should be in the temp directory
+        let temp_dir = std::env::temp_dir();
+        assert!(path1.starts_with(&temp_dir));
+        assert!(path2.starts_with(&temp_dir));
+
+        // Both should contain the process ID
+        let pid = std::process::id();
+        let path1_str = path1.to_string_lossy();
+        let path2_str = path2.to_string_lossy();
+        assert!(path1_str.contains(&format!("moosicbox_tests_{pid}_")));
+        assert!(path2_str.contains(&format!("moosicbox_tests_{pid}_")));
+    }
+
+    #[test]
+    fn test_get_root_dir_caches_result() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        // Set a custom root
+        let custom_root = std::env::temp_dir().join("test_cache_behavior");
+        set_root_dir(custom_root.clone());
+
+        // First call initializes
+        let first_call = get_root_dir();
+        assert_eq!(first_call, Some(custom_root.clone()));
+
+        // Second call should return cached value
+        let second_call = get_root_dir();
+        assert_eq!(second_call, Some(custom_root));
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test]
+    fn test_path_functions_with_different_app_types() {
+        let _lock = TEST_LOCK.lock().unwrap();
+
+        let temp_root = std::env::temp_dir().join("test_app_types");
+        set_root_dir(temp_root.clone());
+
+        // Test all AppType variants
+        for app_type in [AppType::App, AppType::Server, AppType::Local] {
+            let app_dir = get_app_config_dir_path(app_type);
+            let prof_dir = get_profiles_dir_path(app_type);
+            let specific_profile_dir = get_profile_dir_path(app_type, "test");
+
+            let app_type_str: &str = app_type.into();
+            assert_eq!(app_dir, Some(temp_root.join(app_type_str)));
+            assert_eq!(
+                prof_dir,
+                Some(temp_root.join(app_type_str).join("profiles"))
+            );
+            assert_eq!(
+                specific_profile_dir,
+                Some(temp_root.join(app_type_str).join("profiles").join("test"))
+            );
+        }
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+}
