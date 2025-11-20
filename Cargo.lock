@@ -5170,6 +5170,7 @@ name = "gpipe_ast"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "serde_yaml 0.9.34+deprecated",
 ]
 

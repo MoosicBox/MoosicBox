@@ -280,3 +280,522 @@ pub struct Matrix {
     #[serde(default)]
     pub exclude: Vec<BTreeMap<String, String>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workflow_serde_basic() {
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Test Workflow".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_serde_with_triggers() {
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "CI Workflow".to_string(),
+            triggers: vec![
+                Trigger {
+                    trigger_type: TriggerType::Push,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string(), "develop".to_string()]),
+                        types: None,
+                        cron: None,
+                    },
+                },
+                Trigger {
+                    trigger_type: TriggerType::PullRequest,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string()]),
+                        types: Some(vec!["opened".to_string(), "synchronize".to_string()]),
+                        cron: None,
+                    },
+                },
+            ],
+            actions: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_serde_with_schedule_trigger() {
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Scheduled Workflow".to_string(),
+            triggers: vec![Trigger {
+                trigger_type: TriggerType::Schedule,
+                config: TriggerConfig {
+                    branches: None,
+                    types: None,
+                    cron: Some("0 0 * * *".to_string()),
+                },
+            }],
+            actions: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_serde_with_manual_trigger() {
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Manual Workflow".to_string(),
+            triggers: vec![Trigger {
+                trigger_type: TriggerType::Manual,
+                config: TriggerConfig {
+                    branches: None,
+                    types: None,
+                    cron: None,
+                },
+            }],
+            actions: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_github_action() {
+        let mut actions = BTreeMap::new();
+        actions.insert(
+            "checkout".to_string(),
+            ActionDef {
+                action_type: ActionType::Github,
+                config: ActionConfig {
+                    repo: Some("actions/checkout@v4".to_string()),
+                    path: None,
+                    name: None,
+                    description: None,
+                    inputs: None,
+                    outputs: None,
+                    runs: None,
+                },
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Workflow with Actions".to_string(),
+            triggers: vec![],
+            actions,
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_file_action() {
+        let mut actions = BTreeMap::new();
+        actions.insert(
+            "custom".to_string(),
+            ActionDef {
+                action_type: ActionType::File,
+                config: ActionConfig {
+                    repo: None,
+                    path: Some(".github/actions/custom/action.yml".to_string()),
+                    name: None,
+                    description: None,
+                    inputs: None,
+                    outputs: None,
+                    runs: None,
+                },
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Workflow with File Action".to_string(),
+            triggers: vec![],
+            actions,
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_inline_action() {
+        let mut actions = BTreeMap::new();
+        actions.insert(
+            "inline-action".to_string(),
+            ActionDef {
+                action_type: ActionType::Inline,
+                config: ActionConfig {
+                    repo: None,
+                    path: None,
+                    name: Some("Test Action".to_string()),
+                    description: Some("A test inline action".to_string()),
+                    inputs: Some(BTreeMap::from([(
+                        "input1".to_string(),
+                        ActionInput {
+                            description: "First input".to_string(),
+                            required: true,
+                            default: None,
+                        },
+                    )])),
+                    outputs: Some(BTreeMap::from([(
+                        "output1".to_string(),
+                        ActionOutput {
+                            description: "First output".to_string(),
+                        },
+                    )])),
+                    runs: Some(ActionRuns {
+                        steps: vec![crate::Step::RunScript {
+                            id: None,
+                            run: "echo 'test'".to_string(),
+                            env: BTreeMap::new(),
+                            if_condition: None,
+                            continue_on_error: false,
+                            working_directory: None,
+                        }],
+                    }),
+                },
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Workflow with Inline Action".to_string(),
+            triggers: vec![],
+            actions,
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_jobs() {
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "build".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::from([("NODE_ENV".to_string(), "production".to_string())]),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: Some("build-step".to_string()),
+                    run: "npm run build".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Build Workflow".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_job_dependencies() {
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "build".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec!["build".to_string()],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+        jobs.insert(
+            "deploy".to_string(),
+            Job {
+                needs: vec!["build".to_string(), "test".to_string()],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Pipeline with Dependencies".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_matrix_strategy() {
+        let matrix = Matrix {
+            variables: BTreeMap::from([
+                (
+                    "os".to_string(),
+                    vec![
+                        "ubuntu-latest".to_string(),
+                        "windows-latest".to_string(),
+                        "macos-latest".to_string(),
+                    ],
+                ),
+                (
+                    "rust".to_string(),
+                    vec!["stable".to_string(), "nightly".to_string()],
+                ),
+            ]),
+            exclude: vec![],
+        };
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: Some(MatrixStrategy { matrix }),
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "cargo test".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Matrix Workflow".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_matrix_exclusions() {
+        let matrix = Matrix {
+            variables: BTreeMap::from([
+                (
+                    "os".to_string(),
+                    vec![
+                        "ubuntu-latest".to_string(),
+                        "windows-latest".to_string(),
+                        "macos-latest".to_string(),
+                    ],
+                ),
+                (
+                    "rust".to_string(),
+                    vec!["stable".to_string(), "nightly".to_string()],
+                ),
+            ]),
+            exclude: vec![
+                BTreeMap::from([
+                    ("os".to_string(), "windows-latest".to_string()),
+                    ("rust".to_string(), "nightly".to_string()),
+                ]),
+                BTreeMap::from([
+                    ("os".to_string(), "macos-latest".to_string()),
+                    ("rust".to_string(), "nightly".to_string()),
+                ]),
+            ],
+        };
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: Some(MatrixStrategy { matrix }),
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Matrix with Exclusions".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_workflow_with_job_condition() {
+        let condition = Expression::binary_op(
+            Expression::variable(["github", "ref"]),
+            crate::BinaryOperator::Equal,
+            Expression::string("refs/heads/main"),
+        );
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "deploy".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![],
+                if_condition: Some(condition),
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Conditional Job Workflow".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test]
+    fn test_complete_workflow() {
+        let mut actions = BTreeMap::new();
+        actions.insert(
+            "checkout".to_string(),
+            ActionDef {
+                action_type: ActionType::Github,
+                config: ActionConfig {
+                    repo: Some("actions/checkout@v4".to_string()),
+                    path: None,
+                    name: None,
+                    description: None,
+                    inputs: None,
+                    outputs: None,
+                    runs: None,
+                },
+            },
+        );
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::from([("RUST_BACKTRACE".to_string(), "1".to_string())]),
+                strategy: Some(MatrixStrategy {
+                    matrix: Matrix {
+                        variables: BTreeMap::from([(
+                            "os".to_string(),
+                            vec!["ubuntu-latest".to_string(), "macos-latest".to_string()],
+                        )]),
+                        exclude: vec![],
+                    },
+                }),
+                steps: vec![
+                    crate::Step::UseAction {
+                        id: Some("checkout".to_string()),
+                        uses: "checkout".to_string(),
+                        with: BTreeMap::new(),
+                        env: BTreeMap::new(),
+                        if_condition: None,
+                        continue_on_error: false,
+                    },
+                    crate::Step::RunScript {
+                        id: Some("test".to_string()),
+                        run: "cargo test".to_string(),
+                        env: BTreeMap::new(),
+                        if_condition: None,
+                        continue_on_error: false,
+                        working_directory: None,
+                    },
+                ],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Complete Test Workflow".to_string(),
+            triggers: vec![
+                Trigger {
+                    trigger_type: TriggerType::Push,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string()]),
+                        types: None,
+                        cron: None,
+                    },
+                },
+                Trigger {
+                    trigger_type: TriggerType::PullRequest,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string()]),
+                        types: Some(vec!["opened".to_string()]),
+                        cron: None,
+                    },
+                },
+            ],
+            actions,
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+}
