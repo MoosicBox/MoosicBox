@@ -296,3 +296,109 @@ pub async fn fetch_signature_token(
 
     Ok(response.json::<Value>().await?.to_value("token")?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::test::TestRequest;
+
+    #[test]
+    fn test_is_authorized_without_user_agent() {
+        let req = TestRequest::default().to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test]
+    fn test_is_authorized_with_regular_user_agent() {
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "Mozilla/5.0"))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test]
+    fn test_is_authorized_with_tunnel_user_agent() {
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "MOOSICBOX_TUNNEL"))
+            .to_http_request();
+        assert!(!is_authorized(&req));
+    }
+
+    #[test]
+    fn test_is_authorized_with_empty_user_agent() {
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", ""))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test]
+    fn test_is_authorized_with_case_sensitive_tunnel() {
+        // Test that the check is case-sensitive
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "moosicbox_tunnel"))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test]
+    fn test_is_authorized_with_partial_match() {
+        // Test that partial matches don't trigger unauthorized
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "MOOSICBOX_TUNNEL_PROXY"))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test_log::test]
+    fn test_non_tunnel_request_authorized_blocks_tunnel() {
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "MOOSICBOX_TUNNEL"))
+            .to_http_request();
+
+        let mut payload = Payload::None;
+        let result = NonTunnelRequestAuthorized::from_request(&req, &mut payload).into_inner();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.to_string(), "Unauthorized");
+        }
+    }
+
+    #[test]
+    fn test_non_tunnel_request_authorized_allows_regular_requests() {
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "Mozilla/5.0"))
+            .to_http_request();
+
+        let mut payload = Payload::None;
+        let result = NonTunnelRequestAuthorized::from_request(&req, &mut payload).into_inner();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_non_tunnel_request_authorized_allows_no_user_agent() {
+        let req = TestRequest::default().to_http_request();
+
+        let mut payload = Payload::None;
+        let result = NonTunnelRequestAuthorized::from_request(&req, &mut payload).into_inner();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_client_id_returns_valid_uuid() {
+        let client_id = create_client_id();
+        // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        assert_eq!(client_id.len(), 36);
+        assert_eq!(client_id.chars().filter(|&c| c == '-').count(), 4);
+    }
+
+    #[test]
+    fn test_create_client_id_generates_unique_ids() {
+        let id1 = create_client_id();
+        let id2 = create_client_id();
+        assert_ne!(id1, id2);
+    }
+}
