@@ -397,3 +397,267 @@ impl<T> From<&TypedWriter<T>> for TypedStream<T> {
         Self { receiver }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::StreamExt;
+    use std::io::Write;
+
+    // ===== ByteWriter/ByteStream Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_multiple_streams() {
+        // Test that multiple streams receive the same data
+        let mut writer = ByteWriter::default();
+        let mut stream1 = writer.stream();
+        let mut stream2 = writer.stream();
+
+        // Write data
+        writer.write_all(b"hello").unwrap();
+        writer.write_all(b" world").unwrap();
+        writer.close();
+
+        // Both streams should receive the same data
+        let data1_chunk1 = stream1.next().await.unwrap().unwrap();
+        let data1_chunk2 = stream1.next().await.unwrap().unwrap();
+        let data1_end = stream1.next().await.unwrap().unwrap();
+
+        let data2_chunk1 = stream2.next().await.unwrap().unwrap();
+        let data2_chunk2 = stream2.next().await.unwrap().unwrap();
+        let data2_end = stream2.next().await.unwrap().unwrap();
+
+        assert_eq!(data1_chunk1, b"hello"[..]);
+        assert_eq!(data1_chunk2, b" world"[..]);
+        assert_eq!(data1_end.len(), 0); // Empty bytes from close()
+
+        assert_eq!(data2_chunk1, b"hello"[..]);
+        assert_eq!(data2_chunk2, b" world"[..]);
+        assert_eq!(data2_end.len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_close() {
+        // Test that close sends empty bytes signal
+        let mut writer = ByteWriter::default();
+        let mut stream = writer.stream();
+
+        writer.write_all(b"test").unwrap();
+        writer.close();
+
+        let data = stream.next().await.unwrap().unwrap();
+        assert_eq!(data, b"test"[..]);
+
+        let close_signal = stream.next().await.unwrap().unwrap();
+        assert_eq!(close_signal.len(), 0, "close() should send empty bytes");
+    }
+
+    #[test]
+    fn test_byte_writer_empty_write() {
+        // Test that writing empty buffer returns 0
+        let mut writer = ByteWriter::default();
+        let result = writer.write(&[]).unwrap();
+        assert_eq!(result, 0, "Writing empty buffer should return 0");
+    }
+
+    #[test]
+    fn test_byte_writer_bytes_written() {
+        // Test that bytes_written counter is accurate
+        let mut writer = ByteWriter::default();
+        assert_eq!(writer.bytes_written(), 0);
+
+        writer.write_all(b"hello").unwrap();
+        assert_eq!(writer.bytes_written(), 5);
+
+        writer.write_all(b" world").unwrap();
+        assert_eq!(writer.bytes_written(), 11);
+    }
+
+    #[test]
+    fn test_byte_writer_flush() {
+        // Test that flush is a no-op and doesn't error
+        let mut writer = ByteWriter::default();
+        writer.write_all(b"test").unwrap();
+        assert!(writer.flush().is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_stream_disconnection_cleanup() {
+        // Test that disconnected receivers are removed from sender list
+        let mut writer = ByteWriter::default();
+        let stream1 = writer.stream();
+        let stream2 = writer.stream();
+
+        // Initially 2 senders
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Drop stream1
+        drop(stream1);
+
+        // Write should trigger cleanup of disconnected receiver
+        writer.write_all(b"test").unwrap();
+
+        // Should have only 1 sender now
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // Drop stream2
+        drop(stream2);
+
+        // Write should cleanup the last sender
+        writer.write_all(b"more").unwrap();
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_no_streams() {
+        // Test writing without any streams connected
+        let mut writer = ByteWriter::default();
+
+        // Should not panic or error when writing without streams
+        let result = writer.write_all(b"data");
+        assert!(result.is_ok());
+        assert_eq!(writer.bytes_written(), 4);
+    }
+
+    #[test]
+    fn test_byte_writer_id_uniqueness() {
+        // Test that each writer gets a unique ID
+        let writer1 = ByteWriter::default();
+        let writer2 = ByteWriter::default();
+        let writer3 = ByteWriter::default();
+
+        assert_ne!(writer1.id, writer2.id);
+        assert_ne!(writer2.id, writer3.id);
+        assert_ne!(writer1.id, writer3.id);
+    }
+
+    // ===== TypedWriter/TypedStream Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_multiple_streams() {
+        // Test that multiple typed streams receive the same data
+        let writer = TypedWriter::<i32>::default();
+        let mut stream1 = writer.stream();
+        let mut stream2 = writer.stream();
+
+        // Write values
+        writer.write(42);
+        writer.write(100);
+
+        // Both streams should receive the same values
+        let val1_1 = stream1.next().await.unwrap();
+        let val1_2 = stream1.next().await.unwrap();
+
+        let val2_1 = stream2.next().await.unwrap();
+        let val2_2 = stream2.next().await.unwrap();
+
+        assert_eq!(val1_1, 42);
+        assert_eq!(val1_2, 100);
+        assert_eq!(val2_1, 42);
+        assert_eq!(val2_2, 100);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_disconnection_cleanup() {
+        // Test that disconnected receivers are removed
+        let writer = TypedWriter::<String>::default();
+        let stream1 = writer.stream();
+        let stream2 = writer.stream();
+
+        // Initially 2 senders
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Drop stream1
+        drop(stream1);
+
+        // Write should trigger cleanup
+        writer.write("test".to_string());
+
+        // Should have only 1 sender now
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // Drop stream2
+        drop(stream2);
+
+        // Write should cleanup the last sender
+        writer.write("more".to_string());
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_single_stream_no_clone() {
+        // Test that with a single stream, value is moved (not cloned)
+        // This is harder to verify directly, but we can test the behavior
+        let writer = TypedWriter::<Vec<u8>>::default();
+        let mut stream = writer.stream();
+
+        writer.write(vec![1, 2, 3]);
+
+        let received = stream.next().await.unwrap();
+        assert_eq!(received, vec![1, 2, 3]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_different_types() {
+        // Test TypedWriter with different types
+
+        // String type
+        let writer_string = TypedWriter::<String>::default();
+        let mut stream_string = writer_string.stream();
+        writer_string.write("hello".to_string());
+        assert_eq!(stream_string.next().await.unwrap(), "hello");
+
+        // Tuple type
+        let writer_tuple = TypedWriter::<(i32, String)>::default();
+        let mut stream_tuple = writer_tuple.stream();
+        writer_tuple.write((42, "answer".to_string()));
+        assert_eq!(
+            stream_tuple.next().await.unwrap(),
+            (42, "answer".to_string())
+        );
+    }
+
+    #[test]
+    fn test_typed_writer_id_uniqueness() {
+        // Test that each typed writer gets a unique ID
+        let writer1 = TypedWriter::<i32>::default();
+        let writer2 = TypedWriter::<i32>::default();
+        let writer3 = TypedWriter::<String>::default();
+
+        assert_ne!(writer1.id, writer2.id);
+        assert_ne!(writer2.id, writer3.id);
+        assert_ne!(writer1.id, writer3.id);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_no_streams() {
+        // Test writing without any streams connected
+        let writer = TypedWriter::<i32>::default();
+
+        // Should not panic when writing without streams
+        writer.write(42);
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    #[cfg(feature = "stalled-monitor")]
+    #[test]
+    fn test_byte_stream_stalled_monitor_conversion() {
+        // Test that ByteStream can be converted to StalledReadMonitor
+        let writer = ByteWriter::default();
+        let stream = writer.stream();
+
+        let _monitor = stream.stalled_monitor();
+        // If we get here without panic, the conversion works
+    }
+
+    #[cfg(feature = "stalled-monitor")]
+    #[test]
+    fn test_typed_stream_stalled_monitor_conversion() {
+        // Test that TypedStream can be converted to StalledReadMonitor
+        let writer = TypedWriter::<i32>::default();
+        let stream = writer.stream();
+
+        let _monitor = stream.stalled_monitor();
+        // If we get here without panic, the conversion works
+    }
+}
