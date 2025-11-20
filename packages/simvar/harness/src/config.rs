@@ -190,7 +190,7 @@ impl SimConfig {
 /// Properties describing a simulation run.
 ///
 /// Contains the configuration and metadata about a specific simulation run.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimProperties {
     /// Configuration used for this simulation run.
     pub config: SimConfig,
@@ -205,7 +205,7 @@ pub struct SimProperties {
 /// Runtime metrics from a simulation run.
 ///
 /// Captures timing and step count information after a simulation completes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimRunProperties {
     /// Number of simulation steps executed.
     pub steps: u64,
@@ -461,4 +461,217 @@ fn get_run_command(skip_env: &[&str], seed: u64) -> String {
     }
 
     format!("SIMULATOR_SEED={seed} {env_vars}{cmd}")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn test_sim_config_new() {
+        let config = SimConfig::new();
+
+        assert_eq!(config.seed, 0);
+        assert!((config.fail_rate - 0.0).abs() < f64::EPSILON);
+        assert!((config.repair_rate - 1.0).abs() < f64::EPSILON);
+        assert_eq!(config.tcp_capacity, 64);
+        assert_eq!(config.udp_capacity, 64);
+        assert!(!config.enable_random_order);
+        assert_eq!(config.min_message_latency, Duration::from_millis(0));
+        assert_eq!(config.max_message_latency, Duration::from_millis(1000));
+        assert_eq!(config.duration, Duration::MAX);
+        assert_eq!(config.tick_duration, Duration::from_millis(1));
+    }
+
+    #[test]
+    fn test_sim_config_default() {
+        let config = SimConfig::default();
+        let expected = SimConfig::new();
+
+        assert_eq!(config.seed, expected.seed);
+        assert!((config.fail_rate - expected.fail_rate).abs() < f64::EPSILON);
+        assert!((config.repair_rate - expected.repair_rate).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_sim_config_builder_pattern() {
+        let mut config = SimConfig::new();
+
+        let _ = config
+            .fail_rate(0.5)
+            .repair_rate(0.8)
+            .tcp_capacity(128)
+            .udp_capacity(256)
+            .enable_random_order(true)
+            .min_message_latency(Duration::from_millis(10))
+            .max_message_latency(Duration::from_millis(500))
+            .duration(Duration::from_secs(60))
+            .tick_duration(Duration::from_millis(5));
+
+        assert!((config.fail_rate - 0.5).abs() < f64::EPSILON);
+        assert!((config.repair_rate - 0.8).abs() < f64::EPSILON);
+        assert_eq!(config.tcp_capacity, 128);
+        assert_eq!(config.udp_capacity, 256);
+        assert!(config.enable_random_order);
+        assert_eq!(config.min_message_latency, Duration::from_millis(10));
+        assert_eq!(config.max_message_latency, Duration::from_millis(500));
+        assert_eq!(config.duration, Duration::from_secs(60));
+        assert_eq!(config.tick_duration, Duration::from_millis(5));
+    }
+
+    #[test]
+    fn test_sim_result_is_success() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let success = SimResult::Success {
+            props: props.clone(),
+            run: run.clone(),
+        };
+        assert!(success.is_success());
+
+        let fail = SimResult::Fail {
+            props,
+            run,
+            error: Some("test error".to_string()),
+            panic: None,
+        };
+        assert!(!fail.is_success());
+    }
+
+    #[test]
+    fn test_sim_result_accessors() {
+        let config = SimConfig::new();
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: Some(42),
+            extra: vec![("key".to_string(), "value".to_string())],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let result = SimResult::Success { props, run };
+
+        assert_eq!(result.props().run_number, 1);
+        assert_eq!(result.props().thread_id, Some(42));
+        assert_eq!(result.run().steps, 100);
+        assert_eq!(result.run().real_time_millis, 1000);
+        assert_eq!(result.run().sim_time_millis, 5000);
+        assert_eq!(result.config().seed, 0);
+    }
+
+    #[test]
+    fn test_path_parsing_logic() {
+        // Test parsing logic for target/debug paths
+        let debug_path = "target/debug/test_binary";
+        let components: Vec<&str> = debug_path.split('/').collect();
+
+        assert_eq!(components[0], "target");
+        assert_eq!(components[1], "debug");
+        assert_eq!(components[2], "test_binary");
+
+        // Test parsing logic for target/release paths
+        let release_path = "target/release/test_binary";
+        let components: Vec<&str> = release_path.split('/').collect();
+
+        assert_eq!(components[0], "target");
+        assert_eq!(components[1], "release");
+        assert_eq!(components[2], "test_binary");
+
+        // Test parsing logic for target/custom-profile paths
+        let custom_path = "target/custom-profile/test_binary";
+        let components: Vec<&str> = custom_path.split('/').collect();
+
+        assert_eq!(components[0], "target");
+        assert_eq!(components[1], "custom-profile");
+        assert_eq!(components[2], "test_binary");
+    }
+
+    #[test]
+    fn test_run_info_formatting() {
+        let config = SimConfig {
+            seed: 12345,
+            fail_rate: 0.1,
+            repair_rate: 0.9,
+            tcp_capacity: 64,
+            udp_capacity: 64,
+            enable_random_order: true,
+            min_message_latency: Duration::from_millis(10),
+            max_message_latency: Duration::from_millis(100),
+            duration: Duration::from_secs(60),
+            tick_duration: Duration::from_millis(1),
+            #[cfg(feature = "time")]
+            epoch_offset: 0,
+            #[cfg(feature = "time")]
+            step_multiplier: 1,
+        };
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![("custom_prop".to_string(), "test_value".to_string())],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("seed=12345"));
+        assert!(info.contains("fail_rate=0.1"));
+        assert!(info.contains("repair_rate=0.9"));
+        assert!(info.contains("tcp_capacity=64"));
+        assert!(info.contains("udp_capacity=64"));
+        assert!(info.contains("enable_random_order=true"));
+        assert!(info.contains("min_message_latency=10"));
+        assert!(info.contains("max_message_latency=100"));
+        assert!(info.contains("duration=60000"));
+        assert!(info.contains("custom_prop=test_value"));
+    }
+
+    #[test]
+    fn test_run_info_with_duration_max() {
+        let config = SimConfig {
+            duration: Duration::MAX,
+            ..SimConfig::new()
+        };
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+        assert!(info.contains("duration=forever"));
+    }
+
+    #[test]
+    fn test_run_info_with_thread_id() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 5,
+            thread_id: Some(42),
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+        assert!(info.contains("thread_id=42"));
+    }
 }

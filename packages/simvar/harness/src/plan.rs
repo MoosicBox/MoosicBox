@@ -66,3 +66,121 @@ where
     /// Adds an interaction to the plan.
     fn add_interaction(&mut self, interaction: T);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestPlan {
+        interactions: Vec<String>,
+        index: usize,
+    }
+
+    impl TestPlan {
+        fn new() -> Self {
+            Self {
+                interactions: Vec::new(),
+                index: 0,
+            }
+        }
+    }
+
+    impl InteractionPlan<String> for TestPlan {
+        fn step(&mut self) -> Option<&String> {
+            let result = self.interactions.get(self.index);
+            if result.is_some() {
+                self.index += 1;
+            }
+            result
+        }
+
+        fn gen_interactions(&mut self, count: u64) {
+            for i in 0..count {
+                self.interactions.push(format!("interaction-{i}"));
+            }
+        }
+
+        fn add_interaction(&mut self, interaction: String) {
+            self.interactions.push(interaction);
+        }
+    }
+
+    #[test]
+    fn test_interaction_plan_step() {
+        let mut plan = TestPlan::new();
+        plan.add_interaction("first".to_string());
+        plan.add_interaction("second".to_string());
+        plan.add_interaction("third".to_string());
+
+        assert_eq!(plan.step(), Some(&"first".to_string()));
+        assert_eq!(plan.step(), Some(&"second".to_string()));
+        assert_eq!(plan.step(), Some(&"third".to_string()));
+        assert_eq!(plan.step(), None);
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test]
+    fn test_interaction_plan_gen_interactions() {
+        let mut plan = TestPlan::new();
+        plan.gen_interactions(5);
+
+        assert_eq!(plan.interactions.len(), 5);
+        assert_eq!(plan.step(), Some(&"interaction-0".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-1".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-2".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-3".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-4".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test]
+    fn test_interaction_plan_with_gen_interactions() {
+        let mut plan = TestPlan::new().with_gen_interactions(3);
+
+        assert_eq!(plan.interactions.len(), 3);
+        assert_eq!(plan.step(), Some(&"interaction-0".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-1".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-2".to_string()));
+    }
+
+    #[test]
+    fn test_interaction_plan_with_interaction() {
+        let mut plan = TestPlan::new()
+            .with_interaction("first".to_string())
+            .with_interaction("second".to_string());
+
+        assert_eq!(plan.interactions.len(), 2);
+        assert_eq!(plan.step(), Some(&"first".to_string()));
+        assert_eq!(plan.step(), Some(&"second".to_string()));
+    }
+
+    #[test]
+    fn test_interaction_plan_builder_chain() {
+        let mut plan = TestPlan::new()
+            .with_interaction("manual-1".to_string())
+            .with_gen_interactions(2)
+            .with_interaction("manual-2".to_string());
+
+        assert_eq!(plan.step(), Some(&"manual-1".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-0".to_string()));
+        assert_eq!(plan.step(), Some(&"interaction-1".to_string()));
+        assert_eq!(plan.step(), Some(&"manual-2".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test]
+    fn test_interaction_plan_empty() {
+        let mut plan = TestPlan::new();
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test]
+    fn test_interaction_plan_gen_zero_interactions() {
+        let mut plan = TestPlan::new();
+        plan.gen_interactions(0);
+
+        assert_eq!(plan.interactions.len(), 0);
+        assert_eq!(plan.step(), None);
+    }
+}

@@ -83,3 +83,105 @@ impl TimeFormat for u128 {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_time_format_milliseconds_only() {
+        assert_eq!(500_u128.into_formatted(), "500ms");
+        assert_eq!(0_u128.into_formatted(), "0ms");
+        assert_eq!(999_u128.into_formatted(), "999ms");
+    }
+
+    #[test]
+    fn test_time_format_seconds() {
+        assert_eq!(1000_u128.into_formatted(), "1s, 0ms");
+        assert_eq!(5500_u128.into_formatted(), "5s, 500ms");
+        assert_eq!(59_999_u128.into_formatted(), "59s, 999ms");
+    }
+
+    #[test]
+    fn test_time_format_minutes() {
+        assert_eq!(60_000_u128.into_formatted(), "1 minute, 0s, 0ms");
+        assert_eq!(120_000_u128.into_formatted(), "2 minutes, 0s, 0ms");
+        assert_eq!(90_500_u128.into_formatted(), "1 minute, 30s, 500ms");
+        assert_eq!(3_599_999_u128.into_formatted(), "59 minutes, 59s, 999ms");
+    }
+
+    #[test]
+    fn test_time_format_hours() {
+        assert_eq!(3_600_000_u128.into_formatted(), "1 hour, 0 minutes, 0s, 0ms");
+        assert_eq!(
+            7_200_000_u128.into_formatted(),
+            "2 hours, 0 minutes, 0s, 0ms"
+        );
+        assert_eq!(
+            3_661_500_u128.into_formatted(),
+            "1 hour, 1 minute, 1s, 500ms"
+        );
+    }
+
+    #[test]
+    fn test_time_format_days() {
+        assert_eq!(
+            86_400_000_u128.into_formatted(),
+            "1 day, 0 hours, 0 minutes, 0s, 0ms"
+        );
+        assert_eq!(
+            172_800_000_u128.into_formatted(),
+            "2 days, 0 hours, 0 minutes, 0s, 0ms"
+        );
+        assert_eq!(
+            90_061_500_u128.into_formatted(),
+            "1 day, 1 hour, 1 minute, 1s, 500ms"
+        );
+    }
+
+    #[test]
+    fn test_time_format_years() {
+        assert_eq!(
+            31_536_000_000_u128.into_formatted(),
+            "1 year, 0 days, 0 hours, 0 minutes, 0s, 0ms"
+        );
+        assert_eq!(
+            63_072_000_000_u128.into_formatted(),
+            "2 years, 0 days, 0 hours, 0 minutes, 0s, 0ms"
+        );
+    }
+
+    #[test]
+    fn test_time_format_pluralization() {
+        // Test singular forms
+        assert_eq!(60_000_u128.into_formatted(), "1 minute, 0s, 0ms");
+        assert_eq!(3_600_000_u128.into_formatted(), "1 hour, 0 minutes, 0s, 0ms");
+        assert_eq!(
+            86_400_000_u128.into_formatted(),
+            "1 day, 0 hours, 0 minutes, 0s, 0ms"
+        );
+
+        // Test plural forms
+        assert_eq!(120_000_u128.into_formatted(), "2 minutes, 0s, 0ms");
+        assert_eq!(
+            7_200_000_u128.into_formatted(),
+            "2 hours, 0 minutes, 0s, 0ms"
+        );
+        assert_eq!(
+            172_800_000_u128.into_formatted(),
+            "2 days, 0 hours, 0 minutes, 0s, 0ms"
+        );
+    }
+
+    #[test]
+    fn test_time_format_u32() {
+        assert_eq!(500_u32.into_formatted(), "500ms");
+        assert_eq!(5000_u32.into_formatted(), "5s, 0ms");
+    }
+
+    #[test]
+    fn test_time_format_u64() {
+        assert_eq!(500_u64.into_formatted(), "500ms");
+        assert_eq!(5000_u64.into_formatted(), "5s, 0ms");
+    }
+}

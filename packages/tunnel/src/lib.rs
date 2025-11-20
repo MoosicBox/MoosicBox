@@ -700,7 +700,6 @@ mod tests {
         assert!(matches!(result.unwrap_err(), TryFromBytesError::Serde(_)));
     }
 
-
     #[cfg(feature = "base64")]
     #[test]
     fn test_tunnel_response_from_base64_missing_prefix() {
@@ -735,7 +734,6 @@ mod tests {
             Base64DecodeError::InvalidContent(_)
         ));
     }
-
 
     #[test]
     fn test_tunnel_request_http_serialization() {
