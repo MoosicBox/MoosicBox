@@ -552,6 +552,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use switchy_database::query::FilterableQuery;
     use switchy_schema_test_utils::TestError;
     use switchy_schema_test_utils::mutations::MutationProvider;
 
@@ -694,5 +695,358 @@ mod tests {
 
         let no_mutation = provider.get_mutation("nonexistent").await;
         assert!(no_mutation.is_none());
+    }
+
+    /// Tests unique email constraint violation.
+    ///
+    /// Verifies that attempting to insert a user with a duplicate email address
+    /// fails due to the unique constraint on the email field.
+    #[switchy_async::test]
+    async fn test_unique_email_constraint() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create users table
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Insert first user
+        db.insert("users")
+            .value("name", "Alice Johnson")
+            .value("email", "alice@example.com")
+            .value("status", "active")
+            .execute(db.as_ref())
+            .await?;
+
+        // Attempt to insert user with duplicate email should fail
+        let result = db
+            .insert("users")
+            .value("name", "Alice Duplicate")
+            .value("email", "alice@example.com")
+            .value("status", "active")
+            .execute(db.as_ref())
+            .await;
+
+        assert!(result.is_err(), "Expected unique constraint violation");
+        Ok(())
+    }
+
+    /// Tests invalid foreign key constraint handling.
+    ///
+    /// Verifies that posts referencing non-existent users are handled appropriately.
+    /// Note: SQLite foreign key enforcement depends on PRAGMA settings.
+    #[switchy_async::test]
+    async fn test_invalid_foreign_key_reference() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create tables
+        let create_users = CreateUsersTable;
+        let create_posts = CreatePostsTable;
+
+        create_users.up(db.as_ref()).await?;
+        create_posts.up(db.as_ref()).await?;
+
+        // Attempt to insert post with non-existent user_id
+        // Note: This may succeed in SQLite if foreign keys aren't enforced
+        let result = db
+            .insert("posts")
+            .value("user_id", 9999)
+            .value("title", "Orphan Post")
+            .value("content", "This post has no user")
+            .value("published", 0)
+            .execute(db.as_ref())
+            .await;
+
+        // For SQLite without foreign key enforcement, this will succeed
+        // This test documents the current behavior
+        assert!(
+            result.is_ok(),
+            "SQLite allows foreign key violations by default"
+        );
+
+        Ok(())
+    }
+
+    /// Tests migration rollback operations.
+    ///
+    /// Verifies that all migrations can be rolled back successfully using their
+    /// down() methods and that tables are properly dropped.
+    #[switchy_async::test]
+    async fn test_migration_rollbacks() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Apply all migrations
+        let create_users = CreateUsersTable;
+        let create_posts = CreatePostsTable;
+        let create_analytics = CreateAnalyticsTable;
+        let add_indexes = AddPerformanceIndexes;
+
+        create_users.up(db.as_ref()).await?;
+        create_posts.up(db.as_ref()).await?;
+        create_analytics.up(db.as_ref()).await?;
+        add_indexes.up(db.as_ref()).await?;
+
+        // Verify tables exist
+        let tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users', 'posts', 'analytics')";
+        let results = db.query_raw(tables_query).await?;
+        assert!(
+            !results.is_empty(),
+            "Expected tables to exist after migrations"
+        );
+
+        // Rollback indexes
+        add_indexes.down(db.as_ref()).await?;
+
+        // Verify indexes are dropped
+        let indexes_query =
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'";
+        let results = db.query_raw(indexes_query).await?;
+        // Should only have idx_users_email remaining (created with users table)
+        assert_eq!(results.len(), 1, "Expected only email index after rollback");
+
+        // Rollback analytics table
+        create_analytics.down(db.as_ref()).await?;
+
+        // Rollback posts table
+        create_posts.down(db.as_ref()).await?;
+
+        // Rollback users table
+        create_users.down(db.as_ref()).await?;
+
+        // Verify all tables are dropped
+        let final_tables = db.query_raw(tables_query).await?;
+        assert!(
+            final_tables.is_empty(),
+            "Expected all tables to be dropped after full rollback"
+        );
+
+        Ok(())
+    }
+
+    /// Tests default values are properly applied.
+    ///
+    /// Verifies that default values for status and published fields are correctly
+    /// applied when not explicitly specified during insertion.
+    #[switchy_async::test]
+    async fn test_default_values() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create tables
+        let create_users = CreateUsersTable;
+        let create_posts = CreatePostsTable;
+
+        create_users.up(db.as_ref()).await?;
+        create_posts.up(db.as_ref()).await?;
+
+        // Insert user without specifying status (should default to 'active')
+        db.insert("users")
+            .value("name", "Default User")
+            .value("email", "default@example.com")
+            .execute(db.as_ref())
+            .await?;
+
+        // Verify default status value
+        let user_results = switchy_database::query::select("users")
+            .columns(&["status"])
+            .where_eq("email", "default@example.com")
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(user_results.len(), 1);
+        let status = user_results[0].get("status");
+        assert!(status.is_some(), "Status should have a value");
+        if let Some(switchy_database::DatabaseValue::String(s)) = status {
+            assert_eq!(s, "active", "Default status should be 'active'");
+        }
+
+        // Insert user explicitly
+        db.insert("users")
+            .value("name", "Test User")
+            .value("email", "test@example.com")
+            .value("status", "active")
+            .execute(db.as_ref())
+            .await?;
+
+        // Insert post without specifying published (should default to 0/false)
+        db.insert("posts")
+            .value("user_id", 1)
+            .value("title", "Default Post")
+            .value("content", "Testing defaults")
+            .execute(db.as_ref())
+            .await?;
+
+        // Verify default published value
+        let post_results = switchy_database::query::select("posts")
+            .columns(&["published"])
+            .where_eq("title", "Default Post")
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(post_results.len(), 1);
+        let published = post_results[0].get("published");
+        assert!(published.is_some(), "Published should have a value");
+        match published {
+            Some(switchy_database::DatabaseValue::Int64(val)) => {
+                assert_eq!(val, 0, "Default published should be 0 (false)");
+            }
+            _ => panic!("Expected Int64 value for published"),
+        }
+
+        Ok(())
+    }
+
+    /// Tests analytics table creation and data insertion.
+    ///
+    /// Verifies that the analytics table can be created and populated with
+    /// event tracking data for different users.
+    #[switchy_async::test]
+    async fn test_analytics_table_operations() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create necessary tables
+        let create_users = CreateUsersTable;
+        let create_analytics = CreateAnalyticsTable;
+
+        create_users.up(db.as_ref()).await?;
+        create_analytics.up(db.as_ref()).await?;
+
+        // Insert test users
+        db.insert("users")
+            .value("name", "Analytics User 1")
+            .value("email", "analytics1@example.com")
+            .value("status", "active")
+            .execute(db.as_ref())
+            .await?;
+
+        db.insert("users")
+            .value("name", "Analytics User 2")
+            .value("email", "analytics2@example.com")
+            .value("status", "active")
+            .execute(db.as_ref())
+            .await?;
+
+        // Insert analytics events with different user_ids
+        db.insert("analytics")
+            .value("user_id", 1)
+            .value("event_type", "page_view")
+            .value("event_data", r#"{"page": "/home"}"#)
+            .execute(db.as_ref())
+            .await?;
+
+        db.insert("analytics")
+            .value("user_id", 2)
+            .value("event_type", "click")
+            .value("event_data", r#"{"button": "submit"}"#)
+            .execute(db.as_ref())
+            .await?;
+
+        // Verify analytics data was inserted
+        let results = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(results.len(), 2, "Expected 2 analytics events");
+
+        // Verify events for each user
+        let user1_events = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .where_eq("user_id", 1)
+            .execute(db.as_ref())
+            .await?;
+        assert_eq!(user1_events.len(), 1);
+
+        let user2_events = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .where_eq("user_id", 2)
+            .execute(db.as_ref())
+            .await?;
+        assert_eq!(user2_events.len(), 1);
+
+        Ok(())
+    }
+
+    /// Tests analytics data insertion using the `InsertAnalyticsData` executable.
+    ///
+    /// Verifies that the bulk analytics data insertion executable works correctly
+    /// and inserts the expected number of events.
+    #[switchy_async::test]
+    async fn test_insert_analytics_data_executable() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create necessary tables
+        let create_users = CreateUsersTable;
+        let create_analytics = CreateAnalyticsTable;
+
+        create_users.up(db.as_ref()).await?;
+        create_analytics.up(db.as_ref()).await?;
+
+        // Insert test users first
+        let insert_users = InsertTestUsers;
+        insert_users.execute(db.as_ref()).await?;
+
+        // Insert analytics data using the executable
+        let insert_analytics = InsertAnalyticsData;
+        insert_analytics.execute(db.as_ref()).await?;
+
+        // Verify analytics data was inserted
+        let results = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(results.len(), 5, "Expected 5 analytics events");
+
+        // Verify event types
+        let login_events = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .where_eq("event_type", "login")
+            .execute(db.as_ref())
+            .await?;
+        assert_eq!(login_events.len(), 3, "Expected 3 login events");
+
+        let post_events = switchy_database::query::select("analytics")
+            .columns(&["*"])
+            .where_eq("event_type", "post_created")
+            .execute(db.as_ref())
+            .await?;
+        assert_eq!(post_events.len(), 2, "Expected 2 post_created events");
+
+        Ok(())
+    }
+
+    /// Tests migration metadata methods.
+    ///
+    /// Verifies that migration ID and description methods return correct values
+    /// for all migration types.
+    #[switchy_async::test]
+    async fn test_migration_metadata() {
+        let create_users = CreateUsersTable;
+        let create_posts = CreatePostsTable;
+        let create_analytics = CreateAnalyticsTable;
+        let add_indexes = AddPerformanceIndexes;
+
+        // Test migration IDs
+        assert_eq!(create_users.id(), "001_create_users");
+        assert_eq!(create_posts.id(), "002_create_posts");
+        assert_eq!(create_analytics.id(), "003_create_analytics");
+        assert_eq!(add_indexes.id(), "004_add_performance_indexes");
+
+        // Test migration descriptions
+        assert_eq!(
+            create_users.description(),
+            Some("Create users table with status field")
+        );
+        assert_eq!(
+            create_posts.description(),
+            Some("Create posts table with published flag")
+        );
+        assert_eq!(
+            create_analytics.description(),
+            Some("Create analytics table for tracking user events")
+        );
+        assert_eq!(
+            add_indexes.description(),
+            Some("Add performance indexes on foreign keys and common query fields")
+        );
     }
 }
