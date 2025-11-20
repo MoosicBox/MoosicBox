@@ -1918,3 +1918,373 @@ pub fn send_playback_event(update: &UpdateSession, playback: &Playback) {
         listener(update, playback);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_track(id: u64) -> Track {
+        Track {
+            id: id.into(),
+            number: 1,
+            title: format!("Track {id}"),
+            duration: 180.0,
+            album: "Test Album".to_string(),
+            album_id: 1.into(),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artist: "Test Artist".to_string(),
+            artist_id: 1.into(),
+            file: None,
+            artwork: None,
+            blur: false,
+            bytes: 0,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: moosicbox_music_models::TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: moosicbox_music_models::ApiSources::default(),
+        }
+    }
+
+    #[test]
+    fn test_same_active_track_no_changes() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // No position change, no tracks change
+        assert!(same_active_track(None, None, &playback));
+    }
+
+    #[test]
+    fn test_same_active_track_same_position_no_tracks() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Same position, no new tracks
+        assert!(same_active_track(Some(0), None, &playback));
+    }
+
+    #[test]
+    fn test_same_active_track_different_position_no_tracks() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Different position, no new tracks
+        assert!(!same_active_track(Some(1), None, &playback));
+    }
+
+    #[test]
+    fn test_same_active_track_same_track_at_position() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Same track at current position
+        assert!(same_active_track(None, Some(&playback.tracks), &playback));
+    }
+
+    #[test]
+    fn test_same_active_track_different_track_at_position() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Different track at current position
+        let new_tracks = vec![create_test_track(3), create_test_track(2)];
+        assert!(!same_active_track(None, Some(&new_tracks), &playback));
+    }
+
+    #[test]
+    fn test_same_active_track_with_position_and_tracks() {
+        let tracks = vec![
+            create_test_track(1),
+            create_test_track(2),
+            create_test_track(3),
+        ];
+        let playback = Playback::new(
+            tracks.clone(),
+            Some(1),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Position 1, same track at position 1
+        assert!(same_active_track(Some(1), Some(&tracks), &playback));
+
+        // Position 2, different from playback position 1
+        assert!(!same_active_track(Some(2), Some(&tracks), &playback));
+    }
+
+    #[test]
+    fn test_playback_new_creates_valid_instance() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(0.8),
+            PlaybackQuality::default(),
+            123,
+            "test-profile".to_string(),
+            None,
+        );
+
+        assert_eq!(playback.session_id, 123);
+        assert_eq!(playback.profile, "test-profile");
+        assert_eq!(playback.tracks.len(), 1);
+        assert!(!playback.playing);
+        assert_eq!(playback.position, 0);
+        assert!((playback.volume.load(std::sync::atomic::Ordering::SeqCst) - 0.8).abs() < 0.001);
+        assert!((playback.progress - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_playback_new_defaults_position_to_zero() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            None,
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        assert_eq!(playback.position, 0);
+    }
+
+    #[test]
+    fn test_playback_to_api_playback_conversion() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let mut playback = Playback::new(
+            tracks,
+            Some(1),
+            AtomicF64::new(0.7),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+        playback.playing = true;
+        playback.progress = 45.5;
+
+        let api_playback: ApiPlayback = playback.into();
+
+        assert_eq!(api_playback.track_ids.len(), 2);
+        assert_eq!(api_playback.track_ids[0], "1");
+        assert_eq!(api_playback.track_ids[1], "2");
+        assert!(api_playback.playing);
+        assert_eq!(api_playback.position, 1);
+        assert!((api_playback.seek - 45.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_playback_status_struct() {
+        let status = PlaybackStatus { success: true };
+        assert!(status.success);
+
+        let status = PlaybackStatus { success: false };
+        assert!(!status.success);
+    }
+
+    #[test]
+    fn test_playback_type_default_is_default() {
+        let playback_type = PlaybackType::default();
+        assert!(matches!(playback_type, PlaybackType::Default));
+    }
+
+    #[test]
+    fn test_playback_retry_options_constants() {
+        assert_eq!(DEFAULT_SEEK_RETRY_OPTIONS.max_attempts, 10);
+        assert_eq!(
+            DEFAULT_SEEK_RETRY_OPTIONS.retry_delay,
+            std::time::Duration::from_millis(100)
+        );
+
+        assert_eq!(DEFAULT_PLAYBACK_RETRY_OPTIONS.max_attempts, 10);
+        assert_eq!(
+            DEFAULT_PLAYBACK_RETRY_OPTIONS.retry_delay,
+            std::time::Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn test_player_source_debug_format() {
+        let source = PlayerSource::Local;
+        let debug_str = format!("{source:?}");
+        assert!(debug_str.contains("Local"));
+
+        let source = PlayerSource::Remote {
+            host: "http://localhost:8080".to_string(),
+            query: None,
+            headers: None,
+        };
+        let debug_str = format!("{source:?}");
+        assert!(debug_str.contains("Remote"));
+        assert!(debug_str.contains("localhost"));
+    }
+
+    #[test]
+    fn test_set_service_port() {
+        set_service_port(9876);
+        assert_eq!(*SERVICE_PORT.read().unwrap(), Some(9876));
+    }
+
+    #[test]
+    fn test_playback_handler_new_creates_valid_instance() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let handler = PlaybackHandler::new(MockPlayer);
+        assert!(handler.playback.read().unwrap().is_none());
+        assert!(handler.output.is_none());
+    }
+
+    #[test]
+    fn test_player_error_display() {
+        let error = PlayerError::NoPlayersPlaying;
+        assert_eq!(error.to_string(), "No players playing");
+
+        let error = PlayerError::TrackNotFound(42.into());
+        assert!(error.to_string().contains("Track not found"));
+        assert!(error.to_string().contains("42"));
+
+        let error = PlayerError::PositionOutOfBounds(99);
+        assert!(error.to_string().contains("Position out of bounds"));
+        assert!(error.to_string().contains("99"));
+    }
+
+    #[test]
+    fn test_trigger_playback_event_with_no_changes() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        // Same playback state - should not trigger event
+        trigger_playback_event(&playback, &playback);
+        // No assertion needed - just verifying it doesn't panic
+    }
+
+    #[test]
+    fn test_trigger_playback_event_with_playing_change() {
+        let tracks = vec![create_test_track(1)];
+        let mut playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+        playback1.playing = false;
+
+        let mut playback2 = playback1.clone();
+        playback2.playing = true;
+
+        // Different playing state - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+        // No assertion needed - just verifying it doesn't panic
+    }
+
+    #[test]
+    fn test_trigger_playback_event_without_target_does_nothing() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None, // No playback target
+        );
+
+        let mut playback2 = playback.clone();
+        playback2.playing = true;
+
+        // Should return early without triggering
+        trigger_playback_event(&playback2, &playback);
+    }
+}
