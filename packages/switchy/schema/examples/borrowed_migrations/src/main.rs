@@ -201,6 +201,7 @@ impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
         Ok(())
     }
 
+    /// Returns a description of the migration
     fn description(&self) -> Option<&str> {
         Some("Configuration-based table creation")
     }
