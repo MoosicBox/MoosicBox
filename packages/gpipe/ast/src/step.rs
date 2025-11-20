@@ -142,3 +142,278 @@ impl Step {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_script_id_present() {
+        let step = Step::RunScript {
+            id: Some("test-step".to_string()),
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert_eq!(step.id(), Some("test-step"));
+    }
+
+    #[test]
+    fn test_run_script_id_absent() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert_eq!(step.id(), None);
+    }
+
+    #[test]
+    fn test_use_action_id_present() {
+        let step = Step::UseAction {
+            id: Some("action-step".to_string()),
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert_eq!(step.id(), Some("action-step"));
+    }
+
+    #[test]
+    fn test_use_action_id_absent() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert_eq!(step.id(), None);
+    }
+
+    #[test]
+    fn test_run_script_if_condition_present() {
+        let condition = Expression::boolean(true);
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+
+    #[test]
+    fn test_run_script_if_condition_absent() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert_eq!(step.if_condition(), None);
+    }
+
+    #[test]
+    fn test_use_action_if_condition_present() {
+        let condition = Expression::boolean(false);
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+        };
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+
+    #[test]
+    fn test_use_action_if_condition_absent() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert_eq!(step.if_condition(), None);
+    }
+
+    #[test]
+    fn test_run_script_continue_on_error_true() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: true,
+            working_directory: None,
+        };
+        assert!(step.continue_on_error());
+    }
+
+    #[test]
+    fn test_run_script_continue_on_error_false() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert!(!step.continue_on_error());
+    }
+
+    #[test]
+    fn test_use_action_continue_on_error_true() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: true,
+        };
+        assert!(step.continue_on_error());
+    }
+
+    #[test]
+    fn test_use_action_continue_on_error_false() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert!(!step.continue_on_error());
+    }
+
+    #[test]
+    fn test_run_script_env_empty() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert!(step.env().is_empty());
+    }
+
+    #[test]
+    fn test_run_script_env_with_values() {
+        let env = BTreeMap::from([
+            ("VAR1".to_string(), "value1".to_string()),
+            ("VAR2".to_string(), "value2".to_string()),
+        ]);
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: env.clone(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+        assert_eq!(step.env(), &env);
+    }
+
+    #[test]
+    fn test_use_action_env_empty() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert!(step.env().is_empty());
+    }
+
+    #[test]
+    fn test_use_action_env_with_values() {
+        let env = BTreeMap::from([
+            ("ENV_VAR".to_string(), "env_value".to_string()),
+            ("TOKEN".to_string(), "secret".to_string()),
+        ]);
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: env.clone(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+        assert_eq!(step.env(), &env);
+    }
+
+    #[test]
+    fn test_run_script_serde() {
+        let step = Step::RunScript {
+            id: Some("test".to_string()),
+            run: "cargo test".to_string(),
+            env: BTreeMap::from([("RUST_BACKTRACE".to_string(), "1".to_string())]),
+            if_condition: Some(Expression::boolean(true)),
+            continue_on_error: true,
+            working_directory: Some("./packages/core".to_string()),
+        };
+
+        let json = serde_json::to_string(&step).unwrap();
+        let deserialized: Step = serde_json::from_str(&json).unwrap();
+        assert_eq!(step, deserialized);
+    }
+
+    #[test]
+    fn test_use_action_serde() {
+        let step = Step::UseAction {
+            id: Some("checkout".to_string()),
+            uses: "actions/checkout@v4".to_string(),
+            with: BTreeMap::from([("ref".to_string(), "main".to_string())]),
+            env: BTreeMap::from([("GITHUB_TOKEN".to_string(), "token".to_string())]),
+            if_condition: Some(Expression::variable(["github", "ref"])),
+            continue_on_error: false,
+        };
+
+        let json = serde_json::to_string(&step).unwrap();
+        let deserialized: Step = serde_json::from_str(&json).unwrap();
+        assert_eq!(step, deserialized);
+    }
+
+    #[test]
+    fn test_step_with_complex_condition() {
+        let condition = Expression::binary_op(
+            Expression::variable(["github", "event_name"]),
+            crate::BinaryOperator::Equal,
+            Expression::string("push"),
+        );
+
+        let step = Step::RunScript {
+            id: Some("conditional-step".to_string()),
+            run: "echo 'Running on push'".to_string(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+}

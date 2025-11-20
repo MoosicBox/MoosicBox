@@ -17,6 +17,9 @@ examples = false
 serde      = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [features]
 default = []
 
