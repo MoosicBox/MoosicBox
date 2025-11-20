@@ -8255,6 +8255,7 @@ dependencies = [
  "colored",
  "log 0.4.28",
  "moosicbox_env_utils",
+ "test-log",
 ]
 
 [[package]]
