@@ -394,3 +394,238 @@ struct StatusResponse {
     /// Total number of requests served since server start
     requests_served: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use simvar::SimConfig;
+    use std::time::Duration;
+
+    #[test]
+    fn test_bootstrap_new_has_correct_defaults() {
+        let bootstrap = BasicWebServerBootstrap::new();
+
+        assert_eq!(
+            bootstrap.server_port, 8080,
+            "Default server port should be 8080"
+        );
+        assert_eq!(
+            bootstrap.client_count, 3,
+            "Default client count should be 3"
+        );
+        assert_eq!(
+            bootstrap.request_interval,
+            Duration::from_millis(500),
+            "Default request interval should be 500ms"
+        );
+    }
+
+    #[test]
+    fn test_bootstrap_props_contains_all_config_values() {
+        let bootstrap = BasicWebServerBootstrap::new();
+        let props = bootstrap.props();
+
+        // Verify we have exactly 3 properties
+        assert_eq!(props.len(), 3, "Should have exactly 3 properties");
+
+        // Convert to map for easier testing
+        let props_map: std::collections::BTreeMap<_, _> = props.into_iter().collect();
+
+        assert_eq!(
+            props_map.get("server_port"),
+            Some(&"8080".to_string()),
+            "server_port property should be present and correct"
+        );
+        assert_eq!(
+            props_map.get("client_count"),
+            Some(&"3".to_string()),
+            "client_count property should be present and correct"
+        );
+        assert_eq!(
+            props_map.get("request_interval_ms"),
+            Some(&"500".to_string()),
+            "request_interval_ms property should be present and correct"
+        );
+    }
+
+    #[test]
+    fn test_bootstrap_build_sim_sets_duration() {
+        let bootstrap = BasicWebServerBootstrap::new();
+        let config = SimConfig::default();
+
+        let updated_config = bootstrap.build_sim(config);
+
+        assert_eq!(
+            updated_config.duration,
+            Duration::from_secs(10),
+            "Simulation duration should be set to 10 seconds"
+        );
+    }
+
+    #[test]
+    fn test_bootstrap_build_sim_enables_random_order() {
+        let bootstrap = BasicWebServerBootstrap::new();
+        let config = SimConfig::default();
+
+        let updated_config = bootstrap.build_sim(config);
+
+        assert!(
+            updated_config.enable_random_order,
+            "Random order should be enabled"
+        );
+    }
+
+    #[test]
+    fn test_echo_request_serialization() {
+        let request = EchoRequest {
+            message: "test message".to_string(),
+            timestamp: 1_234_567_890,
+        };
+
+        let json = serde_json::to_string(&request).expect("Should serialize EchoRequest");
+        let deserialized: EchoRequest =
+            serde_json::from_str(&json).expect("Should deserialize EchoRequest");
+
+        assert_eq!(deserialized.message, "test message");
+        assert_eq!(deserialized.timestamp, 1_234_567_890);
+    }
+
+    #[test]
+    fn test_echo_request_with_empty_message() {
+        let request = EchoRequest {
+            message: String::new(),
+            timestamp: 0,
+        };
+
+        let json = serde_json::to_string(&request)
+            .expect("Should serialize EchoRequest with empty message");
+        let deserialized: EchoRequest =
+            serde_json::from_str(&json).expect("Should deserialize EchoRequest with empty message");
+
+        assert_eq!(deserialized.message, "");
+        assert_eq!(deserialized.timestamp, 0);
+    }
+
+    #[test]
+    fn test_echo_response_serialization() {
+        let response = EchoResponse {
+            echo: "response message".to_string(),
+            received_at: 1_234_567_890,
+            server_time: 1_234_567_900,
+        };
+
+        let json = serde_json::to_string(&response).expect("Should serialize EchoResponse");
+        let deserialized: EchoResponse =
+            serde_json::from_str(&json).expect("Should deserialize EchoResponse");
+
+        assert_eq!(deserialized.echo, "response message");
+        assert_eq!(deserialized.received_at, 1_234_567_890);
+        assert_eq!(deserialized.server_time, 1_234_567_900);
+    }
+
+    #[test]
+    fn test_status_response_serialization() {
+        let response = StatusResponse {
+            status: "running".to_string(),
+            uptime_seconds: 3600,
+            requests_served: 100,
+        };
+
+        let json = serde_json::to_string(&response).expect("Should serialize StatusResponse");
+        let deserialized: StatusResponse =
+            serde_json::from_str(&json).expect("Should deserialize StatusResponse");
+
+        assert_eq!(deserialized.status, "running");
+        assert_eq!(deserialized.uptime_seconds, 3600);
+        assert_eq!(deserialized.requests_served, 100);
+    }
+
+    #[test]
+    fn test_status_response_with_large_values() {
+        let response = StatusResponse {
+            status: "running".to_string(),
+            uptime_seconds: u64::MAX,
+            requests_served: u64::MAX,
+        };
+
+        let json = serde_json::to_string(&response)
+            .expect("Should serialize StatusResponse with large values");
+        let deserialized: StatusResponse = serde_json::from_str(&json)
+            .expect("Should deserialize StatusResponse with large values");
+
+        assert_eq!(deserialized.status, "running");
+        assert_eq!(deserialized.uptime_seconds, u64::MAX);
+        assert_eq!(deserialized.requests_served, u64::MAX);
+    }
+
+    #[test]
+    fn test_echo_request_json_format() {
+        let request = EchoRequest {
+            message: "test".to_string(),
+            timestamp: 123,
+        };
+
+        let json = serde_json::to_string(&request).expect("Should serialize EchoRequest");
+
+        // Verify JSON contains expected fields
+        assert!(
+            json.contains(r#""message""#),
+            "JSON should contain message field"
+        );
+        assert!(
+            json.contains(r#""timestamp""#),
+            "JSON should contain timestamp field"
+        );
+        assert!(
+            json.contains(r#""test""#),
+            "JSON should contain message value"
+        );
+    }
+
+    #[test]
+    fn test_echo_response_json_format() {
+        let response = EchoResponse {
+            echo: "test".to_string(),
+            received_at: 100,
+            server_time: 200,
+        };
+
+        let json = serde_json::to_string(&response).expect("Should serialize EchoResponse");
+
+        // Verify JSON contains expected fields
+        assert!(json.contains(r#""echo""#), "JSON should contain echo field");
+        assert!(
+            json.contains(r#""received_at""#),
+            "JSON should contain received_at field"
+        );
+        assert!(
+            json.contains(r#""server_time""#),
+            "JSON should contain server_time field"
+        );
+    }
+
+    #[test]
+    fn test_status_response_json_format() {
+        let response = StatusResponse {
+            status: "healthy".to_string(),
+            uptime_seconds: 60,
+            requests_served: 10,
+        };
+
+        let json = serde_json::to_string(&response).expect("Should serialize StatusResponse");
+
+        // Verify JSON contains expected fields
+        assert!(
+            json.contains(r#""status""#),
+            "JSON should contain status field"
+        );
+        assert!(
+            json.contains(r#""uptime_seconds""#),
+            "JSON should contain uptime_seconds field"
+        );
+        assert!(
+            json.contains(r#""requests_served""#),
+            "JSON should contain requests_served field"
+        );
+    }
+}
