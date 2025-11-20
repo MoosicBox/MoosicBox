@@ -566,6 +566,8 @@ impl BranchBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use std::time::Duration;
 
     #[test]
     fn test_test_plan_creation() {
@@ -606,5 +608,409 @@ mod tests {
         result.add_error("Test error");
         assert!(!result.success);
         assert_eq!(result.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_test_result_failure_creation() {
+        let result = TestResult::failure("Something went wrong");
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0], "Something went wrong");
+        assert_eq!(result.warnings.len(), 0);
+        assert_eq!(result.steps_executed, 0);
+        assert_eq!(result.execution_time, Duration::ZERO);
+    }
+
+    #[test]
+    fn test_test_result_with_step_count() {
+        let result = TestResult::success().with_step_count(5);
+        assert!(result.success);
+        assert_eq!(result.steps_executed, 5);
+    }
+
+    #[test]
+    fn test_test_result_with_execution_time() {
+        let duration = Duration::from_secs(10);
+        let result = TestResult::success().with_execution_time(duration);
+        assert_eq!(result.execution_time, duration);
+    }
+
+    #[test]
+    fn test_test_result_add_warning() {
+        let mut result = TestResult::success();
+        result.add_warning("This is a warning");
+        assert!(result.success); // Warnings don't affect success
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0], "This is a warning");
+    }
+
+    #[test]
+    fn test_test_result_multiple_errors() {
+        let mut result = TestResult::success();
+        result.add_error("First error");
+        result.add_error("Second error");
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 2);
+        assert_eq!(result.errors[0], "First error");
+        assert_eq!(result.errors[1], "Second error");
+    }
+
+    #[test]
+    fn test_test_result_builder_chaining() {
+        let result = TestResult::success()
+            .with_step_count(10)
+            .with_execution_time(Duration::from_millis(500));
+        assert!(result.success);
+        assert_eq!(result.steps_executed, 10);
+        assert_eq!(result.execution_time, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_test_plan_default() {
+        let plan = TestPlan::default();
+        assert_eq!(plan.steps.len(), 0);
+        assert!(plan.setup.is_none());
+        assert!(plan.teardown.is_none());
+        assert!(plan.timeout.is_none());
+        assert_eq!(plan.retry_count, 0);
+    }
+
+    #[test]
+    fn test_test_plan_with_setup() {
+        let setup = SetupStep {
+            description: "Initialize database".to_string(),
+            steps: vec![],
+        };
+        let plan = TestPlan::new().with_setup(setup);
+        assert!(plan.setup.is_some());
+        assert_eq!(plan.setup.unwrap().description, "Initialize database");
+    }
+
+    #[test]
+    fn test_test_plan_with_teardown() {
+        let teardown = TeardownStep {
+            description: "Cleanup resources".to_string(),
+            steps: vec![],
+        };
+        let plan = TestPlan::new().with_teardown(teardown);
+        assert!(plan.teardown.is_some());
+        assert_eq!(plan.teardown.unwrap().description, "Cleanup resources");
+    }
+
+    #[test]
+    fn test_test_plan_with_timeout() {
+        let timeout = Duration::from_secs(30);
+        let plan = TestPlan::new().with_timeout(timeout);
+        assert_eq!(plan.timeout, Some(timeout));
+    }
+
+    #[test]
+    fn test_test_plan_with_retry_count() {
+        let plan = TestPlan::new().with_retry_count(3);
+        assert_eq!(plan.retry_count, 3);
+    }
+
+    #[test]
+    fn test_test_plan_navigation_methods() {
+        let plan = TestPlan::new()
+            .navigate_to("https://example.com")
+            .go_back()
+            .go_forward()
+            .reload()
+            .set_hash("section1");
+
+        assert_eq!(plan.steps.len(), 5);
+        match &plan.steps[0] {
+            TestStep::Navigation(NavigationStep::GoTo { url }) => {
+                assert_eq!(url, "https://example.com");
+            }
+            _ => panic!("Expected Navigation step"),
+        }
+    }
+
+    #[test]
+    fn test_test_plan_interaction_methods() {
+        let plan = TestPlan::new()
+            .click("#button")
+            .double_click("#item")
+            .right_click("#menu")
+            .hover("#tooltip")
+            .focus("#input")
+            .blur("#field");
+
+        assert_eq!(plan.steps.len(), 6);
+    }
+
+    #[test]
+    fn test_test_plan_key_interactions() {
+        let plan = TestPlan::new()
+            .key_press(workflow::Key::Enter)
+            .key_sequence(vec![workflow::Key::Control, workflow::Key::C]);
+
+        assert_eq!(plan.steps.len(), 2);
+    }
+
+    #[test]
+    fn test_test_plan_scroll() {
+        let plan = TestPlan::new().scroll(workflow::ScrollDirection::Down, 100);
+        assert_eq!(plan.steps.len(), 1);
+    }
+
+    #[test]
+    fn test_test_plan_form_methods() {
+        let plan = TestPlan::new()
+            .fill_form(FormData::new().text("username", "test"))
+            .fill_field("#email", "test@example.com")
+            .select_option("#country", "US");
+
+        assert_eq!(plan.steps.len(), 3);
+    }
+
+    #[test]
+    fn test_test_plan_wait_methods() {
+        let plan = TestPlan::new()
+            .wait_for_element("#result")
+            .wait_for_url("/success")
+            .sleep(Duration::from_secs(1));
+
+        assert_eq!(plan.steps.len(), 3);
+    }
+
+    #[test]
+    fn test_test_plan_include() {
+        let plan1 = TestPlan::new().navigate_to("/page1");
+        let plan2 = TestPlan::new().click("#button");
+        let combined = plan1.include(plan2);
+
+        assert_eq!(combined.steps.len(), 2);
+    }
+
+    #[test]
+    fn test_parallel_builder_single_branch() {
+        let plan = TestPlan::new()
+            .parallel()
+            .branch("task1")
+            .step(TestStep::Navigation(NavigationStep::GoTo {
+                url: "/page".to_string(),
+            }))
+            .join_all();
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Control(ControlStep::Parallel { branches }) = &plan.steps[0] {
+            assert_eq!(branches.len(), 1);
+            assert!(branches.contains_key("task1"));
+        } else {
+            panic!("Expected parallel step");
+        }
+    }
+
+    #[test]
+    fn test_parallel_builder_multiple_branches() {
+        let plan = TestPlan::new()
+            .parallel()
+            .branch("task1")
+            .step(TestStep::Navigation(NavigationStep::GoTo {
+                url: "/page1".to_string(),
+            }))
+            .branch("task2")
+            .step(TestStep::Navigation(NavigationStep::GoTo {
+                url: "/page2".to_string(),
+            }))
+            .join_all();
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Control(ControlStep::Parallel { branches }) = &plan.steps[0] {
+            assert_eq!(branches.len(), 2);
+            assert!(branches.contains_key("task1"));
+            assert!(branches.contains_key("task2"));
+        } else {
+            panic!("Expected parallel step");
+        }
+    }
+
+    #[test]
+    fn test_loop_builder_multiple_steps() {
+        let plan = TestPlan::new()
+            .repeat(5)
+            .step(TestStep::Interaction(InteractionStep::Click {
+                selector: "#next".to_string(),
+            }))
+            .step(TestStep::Wait(WaitStep::Duration {
+                duration: Duration::from_millis(100),
+            }))
+            .end_repeat();
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Control(ControlStep::Loop { count, steps }) = &plan.steps[0] {
+            assert_eq!(*count, 5);
+            assert_eq!(steps.len(), 2);
+        } else {
+            panic!("Expected loop step");
+        }
+    }
+
+    #[test]
+    fn test_wait_step_serialization() {
+        let wait_element = WaitStep::ElementExists {
+            selector: "#result".to_string(),
+        };
+        let json = serde_json::to_string(&wait_element).unwrap();
+        let deserialized: WaitStep = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            WaitStep::ElementExists { selector } => assert_eq!(selector, "#result"),
+            _ => panic!("Expected ElementExists variant"),
+        }
+    }
+
+    #[test]
+    fn test_wait_step_url_contains_serialization() {
+        let wait_url = WaitStep::UrlContains {
+            fragment: "/dashboard".to_string(),
+        };
+        let json = serde_json::to_string(&wait_url).unwrap();
+        let deserialized: WaitStep = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            WaitStep::UrlContains { fragment } => assert_eq!(fragment, "/dashboard"),
+            _ => panic!("Expected UrlContains variant"),
+        }
+    }
+
+    #[test]
+    fn test_wait_step_duration_serialization() {
+        let wait_duration = WaitStep::Duration {
+            duration: Duration::from_secs(5),
+        };
+        let json = serde_json::to_string(&wait_duration).unwrap();
+        let deserialized: WaitStep = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            WaitStep::Duration { duration } => assert_eq!(duration, Duration::from_secs(5)),
+            _ => panic!("Expected Duration variant"),
+        }
+    }
+
+    #[test]
+    fn test_test_error_display() {
+        let error = TestError::StepFailed {
+            step: "Click button".to_string(),
+            reason: "Element not visible".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(
+            display,
+            "Test step failed: Click button - Element not visible"
+        );
+    }
+
+    #[test]
+    fn test_test_error_wait_timeout_display() {
+        let error = TestError::WaitTimeout {
+            condition: "Element #result to appear".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(display, "Wait timeout: Element #result to appear");
+    }
+
+    #[test]
+    fn test_test_error_element_not_found_display() {
+        let error = TestError::ElementNotFound {
+            selector: "#missing".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(display, "Element not found: #missing");
+    }
+
+    #[test]
+    fn test_test_error_http_request_failed_display() {
+        let error = TestError::HttpRequestFailed {
+            url: "https://api.example.com/data".to_string(),
+            reason: "Connection timeout".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(
+            display,
+            "HTTP request failed: https://api.example.com/data - Connection timeout"
+        );
+    }
+
+    #[test]
+    fn test_test_error_form_validation_failed_display() {
+        let error = TestError::FormValidationFailed {
+            field: "email".to_string(),
+            reason: "Invalid format".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(display, "Form validation failed: email - Invalid format");
+    }
+
+    #[test]
+    fn test_test_error_navigation_failed_display() {
+        let error = TestError::NavigationFailed {
+            url: "/admin".to_string(),
+            reason: "Access denied".to_string(),
+        };
+        let display = format!("{error}");
+        assert_eq!(display, "Navigation failed: /admin - Access denied");
+    }
+
+    #[test]
+    fn test_test_result_serialization() {
+        let result = TestResult {
+            success: true,
+            steps_executed: 10,
+            execution_time: Duration::from_secs(5),
+            errors: vec!["Error 1".to_string()],
+            warnings: vec!["Warning 1".to_string()],
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: TestResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.success, result.success);
+        assert_eq!(deserialized.steps_executed, result.steps_executed);
+        assert_eq!(deserialized.errors, result.errors);
+        assert_eq!(deserialized.warnings, result.warnings);
+    }
+
+    #[test]
+    fn test_test_plan_serialization() {
+        let plan = TestPlan::new()
+            .navigate_to("/test")
+            .click("#button")
+            .with_timeout(Duration::from_secs(30))
+            .with_retry_count(2);
+
+        let json = serde_json::to_string(&plan).unwrap();
+        let deserialized: TestPlan = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.steps.len(), 2);
+        assert_eq!(deserialized.timeout, Some(Duration::from_secs(30)));
+        assert_eq!(deserialized.retry_count, 2);
+    }
+
+    #[test]
+    fn test_complex_test_plan_with_all_features() {
+        let setup = SetupStep {
+            description: "Setup database".to_string(),
+            steps: vec![TestStep::Navigation(NavigationStep::GoTo {
+                url: "/setup".to_string(),
+            })],
+        };
+        let teardown = TeardownStep {
+            description: "Cleanup".to_string(),
+            steps: vec![],
+        };
+
+        let plan = TestPlan::new()
+            .with_setup(setup)
+            .with_teardown(teardown)
+            .with_timeout(Duration::from_secs(60))
+            .with_retry_count(3)
+            .navigate_to("/app")
+            .fill_form(FormData::new().text("name", "Test User"))
+            .click("#submit")
+            .wait_for_element("#success");
+
+        assert!(plan.setup.is_some());
+        assert!(plan.teardown.is_some());
+        assert_eq!(plan.timeout, Some(Duration::from_secs(60)));
+        assert_eq!(plan.retry_count, 3);
+        assert_eq!(plan.steps.len(), 4);
     }
 }

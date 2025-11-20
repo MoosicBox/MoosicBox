@@ -323,10 +323,7 @@ mod tests {
     fn test_event_into_bytes_multiline_data() {
         let event = Event::Data(EventData::new("line1\nline2\nline3"));
         let bytes = event.into_bytes();
-        assert_eq!(
-            bytes.as_ref(),
-            b"data: line1\ndata: line2\ndata: line3\n\n"
-        );
+        assert_eq!(bytes.as_ref(), b"data: line1\ndata: line2\ndata: line3\n\n");
     }
 
     #[test]

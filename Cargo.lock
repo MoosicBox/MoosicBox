@@ -6258,6 +6258,7 @@ name = "hyperchad_test_utils"
 version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
