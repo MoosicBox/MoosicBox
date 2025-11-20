@@ -1336,8 +1336,12 @@ mod tests {
     #[test]
     fn test_tool_available_handles_various_invalid_inputs() {
         // Test various invalid tool names to ensure the function handles them gracefully
-        assert!(!tool_available("definitely-not-a-real-cargo-subcommand-xyz"));
-        assert!(!tool_available("invalid-tool-name-with-many-hyphens-123456"));
+        assert!(!tool_available(
+            "definitely-not-a-real-cargo-subcommand-xyz"
+        ));
+        assert!(!tool_available(
+            "invalid-tool-name-with-many-hyphens-123456"
+        ));
         assert!(!tool_available(""));
     }
 }

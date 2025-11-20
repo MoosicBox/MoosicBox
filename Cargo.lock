@@ -5878,6 +5878,8 @@ dependencies = [
  "hyperchad",
  "log 0.4.28",
  "switchy",
+ "switchy_async",
+ "test-log",
 ]
 
 [[package]]

@@ -4620,13 +4620,19 @@ mod tests {
         #[test]
         fn test_split_empty_slice() {
             let data: Vec<i32> = vec![];
-            assert!(split(&data, 3).next().is_none(), "Empty slice should produce no chunks");
+            assert!(
+                split(&data, 3).next().is_none(),
+                "Empty slice should produce no chunks"
+            );
         }
 
         #[test]
         fn test_split_zero_chunks() {
             let data = vec![1, 2, 3, 4, 5];
-            assert!(split(&data, 0).next().is_none(), "Zero chunks should produce no chunks");
+            assert!(
+                split(&data, 0).next().is_none(),
+                "Zero chunks should produce no chunks"
+            );
         }
 
         #[test]
