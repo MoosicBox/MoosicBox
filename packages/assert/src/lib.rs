@@ -772,15 +772,15 @@ mod tests {
     fn test_assert_disabled_no_op() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         // Should not exit or do anything when condition is false
-        assert!(false);
-        assert!(false, "this message should not appear");
+        crate::assert!(false);
+        crate::assert!(false, "this message should not appear");
     }
 
     #[test_log::test]
     fn test_assert_disabled_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert!(true);
-        assert!(true, "condition is true");
+        crate::assert!(true);
+        crate::assert!(true, "condition is true");
     }
 
     // Test assert_or_err! macro with ENABLE_ASSERT disabled
@@ -790,7 +790,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(value: i32) -> Result<i32, TestError> {
-            assert_or_err!(value >= 0, TestError::InvalidValue,);
+            crate::assert_or_err!(value >= 0, TestError::InvalidValue,);
             Ok(value * 2)
         }
 
@@ -804,7 +804,12 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(value: i32) -> Result<i32, TestError> {
-            assert_or_err!(value >= 0, TestError::InvalidValue, "value was {}", value);
+            crate::assert_or_err!(
+                value >= 0,
+                TestError::InvalidValue,
+                "value was {}",
+                value
+            );
             Ok(value * 2)
         }
 
@@ -818,7 +823,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(value: i32) -> Result<i32, TestError> {
-            assert_or_err!(
+            crate::assert_or_err!(
                 value <= 100,
                 TestError::InvalidValue,
                 "Value {} exceeds maximum",
@@ -837,17 +842,17 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         // This should log an error but not exit
-        assert_or_error!(false, "This is a test error message");
+        crate::assert_or_error!(false, "This is a test error message");
 
         // With formatting
         let value = 42;
-        assert_or_error!(false, "Value is {}", value);
+        crate::assert_or_error!(false, "Value is {}", value);
     }
 
     #[test_log::test]
     fn test_assert_or_error_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert_or_error!(true, "This should not log");
+        crate::assert_or_error!(true, "This should not log");
     }
 
     // Test assert_or_panic! macro with ENABLE_ASSERT disabled
@@ -855,13 +860,13 @@ mod tests {
     #[should_panic(expected = "Expected panic message")]
     fn test_assert_or_panic_panics_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert_or_panic!(false, "Expected panic message");
+        crate::assert_or_panic!(false, "Expected panic message");
     }
 
     #[test_log::test]
     fn test_assert_or_panic_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert_or_panic!(true, "Should not panic");
+        crate::assert_or_panic!(true, "Should not panic");
     }
 
     // Test assert_or_unimplemented! macro with ENABLE_ASSERT disabled
@@ -869,21 +874,21 @@ mod tests {
     #[should_panic(expected = "not implemented")]
     fn test_assert_or_unimplemented_calls_unimplemented_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert_or_unimplemented!(false, "Feature not implemented");
+        crate::assert_or_unimplemented!(false, "Feature not implemented");
     }
 
     #[test_log::test]
     fn test_assert_or_unimplemented_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert_or_unimplemented!(true, "Should not call unimplemented");
+        crate::assert_or_unimplemented!(true, "Should not call unimplemented");
     }
 
     // Test die! macro with ENABLE_ASSERT disabled (no-op)
     #[test_log::test]
     fn test_die_disabled_no_op() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die!();
-        die!("This message should not exit");
+        crate::die!();
+        crate::die!("This message should not exit");
     }
 
     // Test die_or_err! macro with ENABLE_ASSERT disabled
@@ -893,7 +898,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function() -> Result<(), TestError> {
-            die_or_err!(TestError::Critical, "Critical failure");
+            crate::die_or_err!(TestError::Critical, "Critical failure");
         }
 
         let result = test_function();
@@ -906,7 +911,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(code: i32) -> Result<(), TestError> {
-            die_or_err!(TestError::Critical, "Error code: {}", code);
+            crate::die_or_err!(TestError::Critical, "Error code: {}", code);
         }
 
         let result = test_function(500);
@@ -917,16 +922,16 @@ mod tests {
     #[test_log::test]
     fn test_die_or_error_logs_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die_or_error!("This is a critical error");
-        die_or_error!("Error with value: {}", 42);
+        crate::die_or_error!("This is a critical error");
+        crate::die_or_error!("Error with value: {}", 42);
     }
 
     // Test die_or_warn! macro with ENABLE_ASSERT disabled
     #[test_log::test]
     fn test_die_or_warn_logs_warning_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die_or_warn!("This is a warning");
-        die_or_warn!("Warning with value: {}", 100);
+        crate::die_or_warn!("This is a warning");
+        crate::die_or_warn!("Warning with value: {}", 100);
     }
 
     // Test die_or_panic! macro with ENABLE_ASSERT disabled
@@ -934,14 +939,14 @@ mod tests {
     #[should_panic(expected = "Expected panic")]
     fn test_die_or_panic_panics_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die_or_panic!("Expected panic");
+        crate::die_or_panic!("Expected panic");
     }
 
     #[test_log::test]
     #[should_panic(expected = "Panic with code: 404")]
     fn test_die_or_panic_with_formatting() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die_or_panic!("Panic with code: {}", 404);
+        crate::die_or_panic!("Panic with code: {}", 404);
     }
 
     // Test die_or_unimplemented! macro with ENABLE_ASSERT disabled
@@ -949,7 +954,7 @@ mod tests {
     #[should_panic(expected = "not implemented")]
     fn test_die_or_unimplemented_calls_unimplemented_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        die_or_unimplemented!("Not implemented yet");
+        crate::die_or_unimplemented!("Not implemented yet");
     }
 
     // Note: die_or_propagate! tests omitted due to macro expansion issues with std::process::exit
@@ -964,7 +969,7 @@ mod tests {
         let mut counter = 0;
 
         // When disabled, the expression should NOT be evaluated
-        assert!({
+        crate::assert!({
             counter += 1;
             false
         });
@@ -985,7 +990,7 @@ mod tests {
         }
 
         fn test_function() -> Result<(), ComplexError> {
-            assert_or_err!(
+            crate::assert_or_err!(
                 false,
                 ComplexError {
                     code: 42,
@@ -1011,7 +1016,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function() -> Result<(), TestError> {
-            assert_or_err!(true, TestError::InvalidValue,);
+            crate::assert_or_err!(true, TestError::InvalidValue,);
             Ok(())
         }
 
@@ -1022,7 +1027,7 @@ mod tests {
     #[test_log::test]
     fn test_assert_with_trailing_comma() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
-        assert!(true,);
+        crate::assert!(true,);
     }
 
     #[test_log::test]
@@ -1031,7 +1036,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function() -> Result<(), TestError> {
-            assert_or_err!(true, TestError::InvalidValue,);
+            crate::assert_or_err!(true, TestError::InvalidValue,);
             Ok(())
         }
 
@@ -1045,9 +1050,21 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(a: i32, b: i32) -> Result<i32, TestError> {
-            assert_or_err!(a >= 0, TestError::InvalidValue, "a must be non-negative");
-            assert_or_err!(b >= 0, TestError::InvalidValue, "b must be non-negative");
-            assert_or_err!(a + b <= 100, TestError::InvalidValue, "sum too large");
+            crate::assert_or_err!(
+                a >= 0,
+                TestError::InvalidValue,
+                "a must be non-negative"
+            );
+            crate::assert_or_err!(
+                b >= 0,
+                TestError::InvalidValue,
+                "b must be non-negative"
+            );
+            crate::assert_or_err!(
+                a + b <= 100,
+                TestError::InvalidValue,
+                "sum too large"
+            );
             Ok(a + b)
         }
 
