@@ -1317,3 +1317,386 @@ pub fn container_element_to_html_response(
         inline_css,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::override_item_to_css_name;
+    use hyperchad_transformer::{Calculation, OverrideItem};
+
+    #[test]
+    fn test_number_to_html_string_real() {
+        assert_eq!(number_to_html_string(&Number::Real(10.5), false), "10.5");
+        assert_eq!(number_to_html_string(&Number::Real(10.5), true), "10.5px");
+        assert_eq!(number_to_html_string(&Number::Real(0.0), true), "0px");
+    }
+
+    #[test]
+    fn test_number_to_html_string_integer() {
+        assert_eq!(number_to_html_string(&Number::Integer(42), false), "42");
+        assert_eq!(number_to_html_string(&Number::Integer(42), true), "42px");
+        assert_eq!(number_to_html_string(&Number::Integer(0), true), "0px");
+    }
+
+    #[test]
+    fn test_number_to_html_string_percent() {
+        assert_eq!(
+            number_to_html_string(&Number::RealPercent(50.5), false),
+            "50.5%"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::RealPercent(50.5), true),
+            "50.5%"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::IntegerPercent(100), false),
+            "100%"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::IntegerPercent(100), true),
+            "100%"
+        );
+    }
+
+    #[test]
+    fn test_number_to_html_string_viewport_units() {
+        assert_eq!(
+            number_to_html_string(&Number::RealVw(50.5), false),
+            "50.5vw"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::IntegerVh(100), false),
+            "100vh"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::RealDvw(25.0), false),
+            "25dvw"
+        );
+        assert_eq!(
+            number_to_html_string(&Number::IntegerDvh(75), false),
+            "75dvh"
+        );
+    }
+
+    #[test]
+    fn test_number_to_html_string_calc() {
+        let calc = Number::Calc(Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::RealPercent(100.0)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+        ));
+        assert_eq!(number_to_html_string(&calc, true), "calc(100% + 20px)");
+    }
+
+    #[test]
+    fn test_color_to_css_string_rgb() {
+        let color = Color {
+            r: 255,
+            g: 128,
+            b: 0,
+            a: None,
+        };
+        assert_eq!(color_to_css_string(color), "rgb(255,128,0)");
+    }
+
+    #[test]
+    fn test_color_to_css_string_rgba() {
+        let color = Color {
+            r: 255,
+            g: 128,
+            b: 0,
+            a: Some(128),
+        };
+        assert_eq!(
+            color_to_css_string(color),
+            "rgba(255,128,0,0.5019607843137255)"
+        );
+    }
+
+    #[test]
+    fn test_color_to_css_string_rgba_transparent() {
+        let color = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: Some(0),
+        };
+        assert_eq!(color_to_css_string(color), "rgba(0,0,0,0)");
+    }
+
+    #[test]
+    fn test_color_to_css_string_rgba_opaque() {
+        let color = Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: Some(255),
+        };
+        assert_eq!(color_to_css_string(color), "rgba(255,255,255,1)");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_number() {
+        let calc = Calculation::Number(Box::new(Number::Integer(42)));
+        assert_eq!(calc_to_css_string(&calc, true), "42px");
+        assert_eq!(calc_to_css_string(&calc, false), "42");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_add() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::RealPercent(100.0)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "100% + 20px");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_subtract() {
+        let calc = Calculation::Subtract(
+            Box::new(Calculation::Number(Box::new(Number::RealVh(100.0)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(50)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "100vh - 50px");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_multiply() {
+        let calc = Calculation::Multiply(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(2)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "10px * 2");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_divide() {
+        let calc = Calculation::Divide(
+            Box::new(Calculation::Number(Box::new(Number::Integer(100)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(2)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "100px / 2");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_grouping() {
+        let calc = Calculation::Grouping(Box::new(Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(1)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(2)))),
+        )));
+        assert_eq!(calc_to_css_string(&calc, true), "(1px + 2px)");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_min() {
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::RealPercent(100.0)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(500)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "min(100%, 500px)");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_max() {
+        let calc = Calculation::Max(
+            Box::new(Calculation::Number(Box::new(Number::Integer(300)))),
+            Box::new(Calculation::Number(Box::new(Number::RealPercent(50.0)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "max(300px, 50%)");
+    }
+
+    #[test]
+    fn test_calc_to_css_string_complex() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Multiply(
+                Box::new(Calculation::Number(Box::new(Number::RealPercent(50.0)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(2)))),
+            )),
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+        );
+        assert_eq!(calc_to_css_string(&calc, true), "50% * 2 + 10px");
+    }
+
+    #[test]
+    fn test_write_attr() {
+        let mut buffer = Vec::new();
+        write_attr(&mut buffer, b"id", b"test-id").unwrap();
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), " id=\"test-id\"");
+    }
+
+    #[test]
+    fn test_write_attr_empty_value() {
+        let mut buffer = Vec::new();
+        write_attr(&mut buffer, b"class", b"").unwrap();
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), " class=\"\"");
+    }
+
+    #[test]
+    fn test_write_css_attr() {
+        let mut buffer = Vec::new();
+        write_css_attr(&mut buffer, b"color", b"red").unwrap();
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), "color:red;");
+    }
+
+    #[test]
+    fn test_write_css_attr_with_units() {
+        let mut buffer = Vec::new();
+        write_css_attr(&mut buffer, b"width", b"100px").unwrap();
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), "width:100px;");
+    }
+
+    #[test]
+    fn test_write_css_attr_important() {
+        let mut buffer = Vec::new();
+        write_css_attr_important(&mut buffer, b"display", b"none").unwrap();
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            "display:none !important;"
+        );
+    }
+
+    #[test]
+    fn test_write_css_attr_important_with_value() {
+        let mut buffer = Vec::new();
+        write_css_attr_important(&mut buffer, b"margin", b"0").unwrap();
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            "margin:0 !important;"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_dimensions() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Width(Number::Integer(100))),
+            b"width"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Height(Number::Integer(100))),
+            b"height"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MinWidth(Number::Integer(0))),
+            b"min-width"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MaxHeight(Number::Integer(500))),
+            b"max-height"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_margins() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MarginLeft(Number::Integer(10))),
+            b"margin-left"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MarginRight(Number::Integer(10))),
+            b"margin-right"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MarginTop(Number::Integer(10))),
+            b"margin-top"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::MarginBottom(Number::Integer(10))),
+            b"margin-bottom"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_padding() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::PaddingLeft(Number::Integer(5))),
+            b"padding-left"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::PaddingRight(Number::Integer(5))),
+            b"padding-right"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::PaddingTop(Number::Integer(5))),
+            b"padding-top"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::PaddingBottom(Number::Integer(5))),
+            b"padding-bottom"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_layout() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Direction(LayoutDirection::Row)),
+            b"flex-direction"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::JustifyContent(JustifyContent::Center)),
+            b"justify-content"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::AlignItems(AlignItems::Center)),
+            b"align-items"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_text() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::FontSize(Number::Integer(16))),
+            b"font-size"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::TextAlign(TextAlign::Center)),
+            b"text-align"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::WhiteSpace(WhiteSpace::Normal)),
+            b"white-space"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_visibility() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Hidden(true)),
+            b"display"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Visibility(Visibility::Hidden)),
+            b"visibility"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_borders() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::BorderTopLeftRadius(Number::Integer(5))),
+            b"border-top-left-radius"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::BorderTopRightRadius(Number::Integer(5))),
+            b"border-top-right-radius"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::BorderBottomLeftRadius(Number::Integer(5))),
+            b"border-bottom-left-radius"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::BorderBottomRightRadius(Number::Integer(5))),
+            b"border-bottom-right-radius"
+        );
+    }
+
+    #[test]
+    fn test_override_item_to_css_name_transform() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::TranslateX(Number::Integer(10))),
+            b"transform"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::TranslateY(Number::Integer(10))),
+            b"transform"
+        );
+    }
+}
