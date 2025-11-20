@@ -267,3 +267,308 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(any(feature = "actix", feature = "simulator"))]
+    mod handler_tests {
+        use super::*;
+        use moosicbox_web_server::FromRequest;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_basic_info_handler_returns_formatted_response() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/basic-info")
+                .with_query_string("test=1&debug=true")
+                .with_header("user-agent", "TestAgent/1.0")
+                .with_header("content-type", "application/json");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract RequestData");
+
+            let response = basic_info_handler(data)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Basic Request Info:"));
+            assert!(body_str.contains("Method: Get"));
+            assert!(body_str.contains("Path: /basic-info"));
+            assert!(body_str.contains("Query: test=1&debug=true"));
+            assert!(body_str.contains("User Agent: Some(\"TestAgent/1.0\")"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_basic_info_handler_handles_empty_query() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/basic-info");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract RequestData");
+
+            let response = basic_info_handler(data)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Basic Request Info:"));
+            assert!(body_str.contains("Query: "));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_double_data_handler_extracts_same_data() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Post, "/double")
+                .with_query_string("param1=value1&param2=value2")
+                .with_header("user-agent", "DoubleTest/1.0");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data1 = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract first RequestData");
+            let data2 = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract second RequestData");
+
+            let response = double_data_handler(data1, data2)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Double RequestData:"));
+            assert!(body_str.contains("Data1 Method: Post"));
+            assert!(body_str.contains("Data2 Method: Post"));
+            assert!(body_str.contains("Path: /double"));
+            assert!(body_str.contains("Same data: true"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_double_data_handler_with_different_methods() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Put, "/double");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data1 = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract first RequestData");
+            let data2 = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract second RequestData");
+
+            let response = double_data_handler(data1, data2)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Data1 Method: Put"));
+            assert!(body_str.contains("Data2 Method: Put"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_error_demo_handler_displays_query_string() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error")
+                .with_query_string("error=test&code=500");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract RequestData");
+
+            let response = error_demo_handler(data)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Basic Handler Demo:"));
+            assert!(body_str.contains("Query String: 'error=test&code=500'"));
+            assert!(body_str.contains("No JSON or query parsing dependencies needed"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_error_demo_handler_handles_no_query_string() {
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data = RequestData::from_request_sync(&http_request)
+                .expect("Failed to extract RequestData");
+
+            let response = error_demo_handler(data)
+                .await
+                .expect("Handler should return Ok response");
+
+            let body = response.body.expect("Response should have body");
+            let body_str = match body {
+                moosicbox_web_server::HttpResponseBody::Bytes(bytes) => {
+                    String::from_utf8(bytes.to_vec()).expect("Body should be valid UTF-8")
+                }
+            };
+            assert!(body_str.contains("Query String: ''"));
+        }
+    }
+
+    #[cfg(feature = "actix")]
+    mod actix_tests {
+        use super::*;
+
+        #[test]
+        fn test_actix_routes_configuration() {
+            let routes = [
+                moosicbox_web_server::Route::with_handler1(
+                    moosicbox_web_server::Method::Get,
+                    "/basic-info",
+                    basic_info_handler,
+                ),
+                moosicbox_web_server::Route::with_handler2(
+                    moosicbox_web_server::Method::Get,
+                    "/double",
+                    double_data_handler,
+                ),
+                moosicbox_web_server::Route::with_handler1(
+                    moosicbox_web_server::Method::Get,
+                    "/error",
+                    error_demo_handler,
+                ),
+            ];
+
+            assert_eq!(routes.len(), 3, "Should have 3 routes configured");
+            assert_eq!(routes[0].path, "/basic-info");
+            assert_eq!(routes[1].path, "/double");
+            assert_eq!(routes[2].path, "/error");
+        }
+    }
+
+    #[cfg(feature = "simulator")]
+    mod simulator_tests {
+        use super::*;
+
+        #[test]
+        fn test_simulator_routes_configuration() {
+            let routes = [
+                moosicbox_web_server::Route::with_handler1(
+                    moosicbox_web_server::Method::Get,
+                    "/basic-info",
+                    basic_info_handler,
+                ),
+                moosicbox_web_server::Route::with_handler2(
+                    moosicbox_web_server::Method::Get,
+                    "/double",
+                    double_data_handler,
+                ),
+                moosicbox_web_server::Route::with_handler1(
+                    moosicbox_web_server::Method::Get,
+                    "/error",
+                    error_demo_handler,
+                ),
+            ];
+
+            assert_eq!(routes.len(), 3, "Should have 3 routes configured");
+            assert_eq!(routes[0].path, "/basic-info");
+            assert_eq!(routes[1].path, "/double");
+            assert_eq!(routes[2].path, "/error");
+        }
+
+        #[test]
+        fn test_run_simulator_examples_creates_valid_request_data() {
+            use moosicbox_web_server::FromRequest;
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/basic-info")
+                .with_query_string("test=1&debug=true")
+                .with_header("user-agent", "MoosicBox-BasicTest/1.0")
+                .with_header("content-type", "application/json");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data = RequestData::from_request_sync(&http_request)
+                .expect("Should successfully extract RequestData");
+
+            assert_eq!(data.method, moosicbox_web_server::Method::Get);
+            assert_eq!(data.path, "/basic-info");
+            assert_eq!(data.query, "test=1&debug=true");
+            assert_eq!(data.headers.len(), 2);
+        }
+
+        #[test]
+        fn test_double_request_data_extraction() {
+            use moosicbox_web_server::FromRequest;
+            use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+
+            let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/double")
+                .with_query_string("param1=value1&param2=value2")
+                .with_header("user-agent", "MoosicBox-DoubleTest/1.0");
+
+            let stub = SimulationStub::new(request);
+            let http_request = moosicbox_web_server::HttpRequest::Stub(
+                moosicbox_web_server::Stub::Simulator(stub),
+            );
+
+            let data1 = RequestData::from_request_sync(&http_request)
+                .expect("Should successfully extract first RequestData");
+            let data2 = RequestData::from_request_sync(&http_request)
+                .expect("Should successfully extract second RequestData");
+
+            assert_eq!(data1.method, data2.method);
+            assert_eq!(data1.path, data2.path);
+            assert_eq!(data1.query, data2.query);
+        }
+    }
+}

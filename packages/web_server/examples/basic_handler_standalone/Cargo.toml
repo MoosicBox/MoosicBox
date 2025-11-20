@@ -19,3 +19,8 @@ simulator        = ["moosicbox_web_server/simulator"]
 
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["simulator"] }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true, features = ["macros", "rt"] }
