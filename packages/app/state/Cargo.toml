@@ -43,6 +43,9 @@ strum      = { workspace = true }
 thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros"] }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["all-sources", "upnp"]
 

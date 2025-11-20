@@ -389,3 +389,342 @@ impl AppState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_persistence_key_display() {
+        assert_eq!(PersistenceKey::ConnectionId.to_string(), "CONNECTION_ID");
+        assert_eq!(
+            PersistenceKey::ConnectionName.to_string(),
+            "CONNECTION_NAME"
+        );
+        assert_eq!(PersistenceKey::Connection.to_string(), "CONNECTION");
+        assert_eq!(PersistenceKey::Connections.to_string(), "CONNECTIONS");
+        assert_eq!(
+            PersistenceKey::DefaultDownloadLocation.to_string(),
+            "DEFAULT_DOWNLOAD_LOCATION"
+        );
+    }
+
+    #[test]
+    fn test_persistence_key_as_ref() {
+        let key = PersistenceKey::ConnectionId;
+        let key_ref: &str = key.as_ref();
+        assert_eq!(key_ref, "CONNECTION_ID");
+    }
+
+    #[test]
+    fn test_persistence_key_from_string() {
+        use std::str::FromStr;
+
+        assert!(matches!(
+            PersistenceKey::from_str("CONNECTION_ID").unwrap(),
+            PersistenceKey::ConnectionId
+        ));
+        assert!(matches!(
+            PersistenceKey::from_str("CONNECTION_NAME").unwrap(),
+            PersistenceKey::ConnectionName
+        ));
+        assert!(matches!(
+            PersistenceKey::from_str("CONNECTION").unwrap(),
+            PersistenceKey::Connection
+        ));
+        assert!(matches!(
+            PersistenceKey::from_str("CONNECTIONS").unwrap(),
+            PersistenceKey::Connections
+        ));
+        assert!(matches!(
+            PersistenceKey::from_str("DEFAULT_DOWNLOAD_LOCATION").unwrap(),
+            PersistenceKey::DefaultDownloadLocation
+        ));
+    }
+
+    #[test]
+    fn test_persistence_key_from_string_invalid() {
+        use std::str::FromStr;
+
+        assert!(PersistenceKey::from_str("INVALID_KEY").is_err());
+        assert!(PersistenceKey::from_str("connection_id").is_err()); // lowercase
+        assert!(PersistenceKey::from_str("").is_err());
+    }
+
+    #[test]
+    fn test_persistence_key_into_string() {
+        let key = PersistenceKey::ConnectionId;
+        let key_string: String = key.into();
+        assert_eq!(key_string, "CONNECTION_ID");
+    }
+
+    #[test]
+    fn test_persistence_key_debug() {
+        let key = PersistenceKey::Connection;
+        let debug_str = format!("{key:?}");
+        assert_eq!(debug_str, "Connection");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_with_persistence_in_memory() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        assert!(state.persistence.read().await.is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_add_and_get_connections() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection = Connection {
+            name: "Test Server".to_string(),
+            api_url: "https://test.example.com".to_string(),
+        };
+
+        let connections = state
+            .add_connection(connection.clone())
+            .await
+            .expect("Failed to add connection");
+
+        assert_eq!(connections.len(), 1);
+        assert_eq!(connections[0].name, "Test Server");
+
+        let retrieved_connections = state
+            .get_connections()
+            .await
+            .expect("Failed to get connections");
+
+        assert_eq!(retrieved_connections.len(), 1);
+        assert_eq!(retrieved_connections[0], connection);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_set_and_get_current_connection() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection = Connection {
+            name: "Current Server".to_string(),
+            api_url: "https://current.example.com".to_string(),
+        };
+
+        state
+            .set_current_connection(&connection)
+            .await
+            .expect("Failed to set current connection");
+
+        let current = state
+            .get_current_connection()
+            .await
+            .expect("Failed to get current connection")
+            .expect("No current connection found");
+
+        assert_eq!(current, connection);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_remove_current_connection() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection = Connection {
+            name: "Temp Server".to_string(),
+            api_url: "https://temp.example.com".to_string(),
+        };
+
+        state
+            .set_current_connection(&connection)
+            .await
+            .expect("Failed to set current connection");
+
+        let removed = state
+            .remove_current_connection()
+            .await
+            .expect("Failed to remove current connection")
+            .expect("No connection to remove");
+
+        assert_eq!(removed, connection);
+
+        let current = state
+            .get_current_connection()
+            .await
+            .expect("Failed to get current connection");
+
+        assert!(current.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_delete_connection() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection1 = Connection {
+            name: "Server 1".to_string(),
+            api_url: "https://server1.example.com".to_string(),
+        };
+
+        let connection2 = Connection {
+            name: "Server 2".to_string(),
+            api_url: "https://server2.example.com".to_string(),
+        };
+
+        state
+            .add_connection(connection1.clone())
+            .await
+            .expect("Failed to add connection 1");
+        state
+            .add_connection(connection2.clone())
+            .await
+            .expect("Failed to add connection 2");
+
+        let remaining = state
+            .delete_connection("Server 1")
+            .await
+            .expect("Failed to delete connection");
+
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "Server 2");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_delete_current_connection() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection = Connection {
+            name: "Current".to_string(),
+            api_url: "https://current.example.com".to_string(),
+        };
+
+        state
+            .add_connection(connection.clone())
+            .await
+            .expect("Failed to add connection");
+
+        // First connection is automatically set as current
+        let current = state
+            .get_current_connection()
+            .await
+            .expect("Failed to get current connection");
+        assert!(current.is_some());
+
+        state
+            .delete_connection("Current")
+            .await
+            .expect("Failed to delete connection");
+
+        let current_after = state
+            .get_current_connection()
+            .await
+            .expect("Failed to get current connection");
+        assert!(current_after.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_update_connection() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection = Connection {
+            name: "Original".to_string(),
+            api_url: "https://original.example.com".to_string(),
+        };
+
+        state
+            .add_connection(connection.clone())
+            .await
+            .expect("Failed to add connection");
+
+        let updated_connection = Connection {
+            name: "Updated".to_string(),
+            api_url: "https://updated.example.com".to_string(),
+        };
+
+        let connections = state
+            .update_connection("Original", updated_connection.clone())
+            .await
+            .expect("Failed to update connection");
+
+        assert_eq!(connections.len(), 1);
+        assert_eq!(connections[0].name, "Updated");
+        assert_eq!(connections[0].api_url, "https://updated.example.com");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_get_or_init_connection_id() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let connection_id1 = state
+            .get_or_init_connection_id()
+            .await
+            .expect("Failed to get connection ID");
+
+        assert!(!connection_id1.is_empty());
+
+        // Getting again should return the same ID
+        let connection_id2 = state
+            .get_or_init_connection_id()
+            .await
+            .expect("Failed to get connection ID");
+
+        assert_eq!(connection_id1, connection_id2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_connection_name_persistence() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        state
+            .update_connection_name("My Connection")
+            .await
+            .expect("Failed to update connection name");
+
+        let name = state
+            .get_connection_name()
+            .await
+            .expect("Failed to get connection name")
+            .expect("No connection name found");
+
+        assert_eq!(name, "My Connection");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_app_state_default_download_location() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+
+        let path = "/downloads/music";
+        state
+            .set_default_download_location(path.to_string())
+            .await
+            .expect("Failed to set default download location");
+
+        let retrieved_path = state.get_default_download_location();
+
+        assert_eq!(retrieved_path, Some(path.to_string()));
+    }
+}
