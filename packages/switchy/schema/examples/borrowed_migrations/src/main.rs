@@ -451,4 +451,193 @@ mod tests {
         assert!(ids.contains(&"create_categories"));
         assert!(ids.contains(&"create_articles"));
     }
+
+    #[test]
+    fn test_database_config_initialization() {
+        let config = DatabaseConfig::new();
+
+        assert_eq!(config.table_prefix, "app_");
+        assert_eq!(config.default_charset, "utf8mb4");
+        assert_eq!(config.tables.len(), 2);
+        assert!(config.tables.contains_key("users"));
+        assert!(config.tables.contains_key("posts"));
+    }
+
+    #[test]
+    fn test_database_config_users_table() {
+        let config = DatabaseConfig::new();
+        let users_table = config.tables.get("users").unwrap();
+
+        assert_eq!(users_table.name, "users");
+        assert_eq!(users_table.primary_key, "id");
+        assert_eq!(users_table.columns.len(), 4);
+
+        // Verify column structure
+        let id_col = &users_table.columns[0];
+        assert_eq!(id_col.name, "id");
+        assert_eq!(id_col.data_type, DataType::Int);
+        assert!(!id_col.nullable);
+
+        let username_col = &users_table.columns[1];
+        assert_eq!(username_col.name, "username");
+        assert_eq!(username_col.data_type, DataType::VarChar(50));
+        assert!(!username_col.nullable);
+
+        let email_col = &users_table.columns[2];
+        assert_eq!(email_col.name, "email");
+        assert_eq!(email_col.data_type, DataType::VarChar(255));
+        assert!(!email_col.nullable);
+
+        let created_at_col = &users_table.columns[3];
+        assert_eq!(created_at_col.name, "created_at");
+        assert_eq!(created_at_col.data_type, DataType::DateTime);
+        assert!(!created_at_col.nullable);
+    }
+
+    #[test]
+    fn test_database_config_posts_table() {
+        let config = DatabaseConfig::new();
+        let posts_table = config.tables.get("posts").unwrap();
+
+        assert_eq!(posts_table.name, "posts");
+        assert_eq!(posts_table.primary_key, "id");
+        assert_eq!(posts_table.columns.len(), 4);
+
+        // Verify nullable column
+        let content_col = &posts_table.columns[3];
+        assert_eq!(content_col.name, "content");
+        assert_eq!(content_col.data_type, DataType::Text);
+        assert!(content_col.nullable);
+    }
+
+    #[test]
+    fn test_config_based_migration_with_nonexistent_table() {
+        let config = DatabaseConfig::new();
+        let migration =
+            ConfigBasedMigration::new(String::from("test_migration"), &config, "nonexistent_table");
+
+        assert_eq!(migration.id(), "test_migration");
+        assert_eq!(migration.table_name, "nonexistent_table");
+    }
+
+    #[test]
+    fn test_create_table_migration_with_multiple_columns() {
+        let columns = [
+            ("id", DataType::Int),
+            ("name", DataType::VarChar(100)),
+            ("email", DataType::VarChar(255)),
+            ("age", DataType::Int),
+            ("bio", DataType::Text),
+        ];
+
+        let migration = create_table_migration("complex_table", &columns, "id");
+        assert_eq!(migration.id(), "create_complex_table");
+    }
+
+    #[test]
+    fn test_create_table_migration_with_different_data_types() {
+        let columns = [
+            ("id", DataType::Int),
+            ("price", DataType::Decimal(10, 2)),
+            ("created_at", DataType::DateTime),
+            ("description", DataType::Text),
+        ];
+
+        let migration = create_table_migration("product", &columns, "id");
+        assert_eq!(migration.id(), "create_product");
+    }
+
+    #[test]
+    fn test_create_table_migration_with_varchar_variations() {
+        let columns = [
+            ("id", DataType::Int),
+            ("short_field", DataType::VarChar(10)),
+            ("medium_field", DataType::VarChar(100)),
+            ("long_field", DataType::VarChar(1000)),
+        ];
+
+        let migration = create_table_migration("varchar_test", &columns, "id");
+        assert_eq!(migration.id(), "create_varchar_test");
+    }
+
+    #[switchy_async::test]
+    async fn test_config_based_migration_source_produces_all_table_migrations() {
+        let config = DatabaseConfig::new();
+        let source = ConfigBasedMigrationSource::new(&config);
+        let migrations = source.migrations().await.unwrap();
+
+        let ids: Vec<&str> = migrations.iter().map(|m| m.as_ref().id()).collect();
+        assert!(ids.contains(&"create_posts"));
+        assert!(ids.contains(&"create_users"));
+    }
+
+    #[test]
+    fn test_blog_schema_migrations_structure() {
+        let migrations = create_blog_schema_migrations();
+
+        // Verify each migration has the expected ID format
+        for migration in &migrations {
+            let id = migration.id();
+            assert!(id.starts_with("create_"));
+            assert!(id == "create_authors" || id == "create_categories" || id == "create_articles");
+        }
+    }
+
+    #[test]
+    fn test_blog_schema_ordering() {
+        let migrations = create_blog_schema_migrations();
+
+        // Verify migrations are in the expected order
+        assert_eq!(migrations[0].id(), "create_authors");
+        assert_eq!(migrations[1].id(), "create_categories");
+        assert_eq!(migrations[2].id(), "create_articles");
+    }
+
+    #[test]
+    fn test_config_based_migration_borrows_correctly() {
+        let config = DatabaseConfig::new();
+        let table_name = "users";
+
+        // This test verifies that the migration correctly borrows from config and table_name
+        let migration = ConfigBasedMigration::new(String::from("borrow_test"), &config, table_name);
+
+        // The borrowed references should match the originals
+        assert_eq!(migration.table_name, table_name);
+        assert_eq!(migration.config.table_prefix, config.table_prefix);
+    }
+
+    #[test]
+    fn test_config_based_migration_source_empty_config() {
+        let mut config = DatabaseConfig::new();
+        config.tables.clear(); // Empty the tables
+
+        let _source = ConfigBasedMigrationSource::new(&config);
+
+        // This tests the edge case of an empty configuration
+        // The source should still be valid even if there are no tables
+        assert_eq!(config.tables.len(), 0);
+    }
+
+    #[switchy_async::test]
+    async fn test_config_based_migration_source_with_empty_tables() {
+        let mut config = DatabaseConfig::new();
+        config.tables.clear();
+
+        let source = ConfigBasedMigrationSource::new(&config);
+        let migrations = source.migrations().await.unwrap();
+
+        // Should produce no migrations when there are no tables
+        assert_eq!(migrations.len(), 0);
+    }
+
+    #[test]
+    fn test_create_table_migration_with_non_id_primary_key() {
+        let columns = [
+            ("uuid", DataType::VarChar(36)),
+            ("name", DataType::VarChar(100)),
+        ];
+
+        let migration = create_table_migration("uuid_table", &columns, "uuid");
+        assert_eq!(migration.id(), "create_uuid_table");
+    }
 }
