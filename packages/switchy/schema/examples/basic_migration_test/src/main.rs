@@ -337,4 +337,221 @@ mod tests {
         verify_migrations_full_cycle(db.as_ref(), migrations).await?;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_add_users_status_column_migration() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // First create the users table
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Apply the status column migration
+        let add_status = AddUsersStatusColumn;
+        add_status.up(db.as_ref()).await?;
+
+        // Verify the status column exists with default value by inserting a row
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')")
+            .await?;
+
+        // Query the inserted row to verify status has the default value
+        let result = switchy_database::query::select("users")
+            .columns(&["status"])
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(result.len(), 1);
+        match result[0].get("status") {
+            Some(DatabaseValue::String(s)) => assert_eq!(s, "active"),
+            _ => panic!("Expected status to be 'active'"),
+        }
+
+        // Test down migration (should succeed even though it's a no-op in this example)
+        add_status.down(db.as_ref()).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_posts_table_migration() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // First create the users table (required for foreign key)
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Apply the posts table migration
+        let create_posts = CreatePostsTable;
+        create_posts.up(db.as_ref()).await?;
+
+        // Verify the posts table exists and we can query it
+        let result = switchy_database::query::select("posts")
+            .columns(&["id"])
+            .limit(0)
+            .execute(db.as_ref())
+            .await;
+        assert!(result.is_ok());
+
+        // Test down migration
+        create_posts.down(db.as_ref()).await?;
+
+        // Verify the table was dropped
+        let result = switchy_database::query::select("posts")
+            .columns(&["id"])
+            .limit(0)
+            .execute(db.as_ref())
+            .await;
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_unique_email_constraint() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create the users table with unique email constraint
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Insert a user
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('User 1', 'test@example.com')")
+            .await?;
+
+        // Try to insert another user with the same email - should fail
+        let result = db
+            .exec_raw("INSERT INTO users (name, email) VALUES ('User 2', 'test@example.com')")
+            .await;
+
+        assert!(result.is_err(), "Expected unique constraint violation");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_foreign_key_constraint() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create both users and posts tables
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        let create_posts = CreatePostsTable;
+        create_posts.up(db.as_ref()).await?;
+
+        // Insert a valid user
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('Valid User', 'valid@example.com')")
+            .await?;
+
+        // Insert a post with valid user_id (1) - should succeed
+        // SQLite auto-increment starts at 1
+        let valid_post_result = db
+            .exec_raw("INSERT INTO posts (user_id, title) VALUES (1, 'Valid Post')")
+            .await;
+        assert!(
+            valid_post_result.is_ok(),
+            "Valid foreign key insert should succeed"
+        );
+
+        // Try to insert a post with invalid user_id - should fail due to foreign key constraint
+        let result = db
+            .exec_raw("INSERT INTO posts (user_id, title) VALUES (9999, 'Invalid Post')")
+            .await;
+
+        assert!(result.is_err(), "Expected foreign key constraint violation");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_created_at_default_value() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create the users table
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Insert a user without specifying created_at
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')")
+            .await?;
+
+        // Query the inserted row to verify created_at was set automatically
+        let result = switchy_database::query::select("users")
+            .columns(&["created_at"])
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(result.len(), 1);
+        let created_at = result[0].get("created_at");
+        assert!(
+            created_at.is_some(),
+            "created_at should have a default value"
+        );
+
+        // Verify it's not null
+        match created_at {
+            Some(DatabaseValue::String(s)) => {
+                assert!(!s.is_empty(), "created_at should not be empty");
+            }
+            _ => panic!("Expected created_at to be a String"),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_data_persistence_across_status_migration() -> std::result::Result<(), TestError> {
+        let db = create_empty_in_memory().await?;
+
+        // Create users table
+        let create_users = CreateUsersTable;
+        create_users.up(db.as_ref()).await?;
+
+        // Insert test data
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('Test User 1', 'user1@example.com')")
+            .await?;
+        db.exec_raw("INSERT INTO users (name, email) VALUES ('Test User 2', 'user2@example.com')")
+            .await?;
+
+        // Verify we have 2 users
+        let result = switchy_database::query::select("users")
+            .columns(&["id", "name", "email"])
+            .execute(db.as_ref())
+            .await?;
+        assert_eq!(result.len(), 2);
+
+        // Apply status column migration
+        let add_status = AddUsersStatusColumn;
+        add_status.up(db.as_ref()).await?;
+
+        // Verify data still exists and has the new status column with default value
+        let result = switchy_database::query::select("users")
+            .columns(&["id", "name", "email", "status"])
+            .execute(db.as_ref())
+            .await?;
+
+        assert_eq!(result.len(), 2);
+
+        // Check first user
+        match result[0].get("name") {
+            Some(DatabaseValue::String(s)) => assert_eq!(s, "Test User 1"),
+            _ => panic!("Expected name to be 'Test User 1'"),
+        }
+        match result[0].get("status") {
+            Some(DatabaseValue::String(s)) => assert_eq!(s, "active"),
+            _ => panic!("Expected status to be 'active'"),
+        }
+
+        // Check second user
+        match result[1].get("name") {
+            Some(DatabaseValue::String(s)) => assert_eq!(s, "Test User 2"),
+            _ => panic!("Expected name to be 'Test User 2'"),
+        }
+        match result[1].get("status") {
+            Some(DatabaseValue::String(s)) => assert_eq!(s, "active"),
+            _ => panic!("Expected status to be 'active'"),
+        }
+
+        Ok(())
+    }
 }
