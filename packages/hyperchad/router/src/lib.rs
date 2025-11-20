@@ -1227,6 +1227,9 @@ impl Default for Router {
 }
 
 /// A navigation request consisting of a path and client information.
+///
+/// This is a lightweight wrapper type used for programmatic navigation.
+/// It contains the target path and information about the client making the request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Navigation(String, Arc<ClientInfo>);
 
