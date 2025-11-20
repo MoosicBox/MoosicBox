@@ -8066,6 +8066,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_logging",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "switchy_fs",
