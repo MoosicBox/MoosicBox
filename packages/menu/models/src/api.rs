@@ -98,3 +98,269 @@ impl From<AlbumVersion> for ApiAlbumVersion {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::float_cmp)]
+
+    use super::*;
+    use moosicbox_music_models::{AudioFormat, Track, TrackApiSource, id::Id};
+
+    /// Creates a test `ApiAlbumVersion` with all quality fields populated.
+    fn create_test_api_album_version() -> ApiAlbumVersion {
+        ApiAlbumVersion {
+            tracks: vec![
+                ApiTrack {
+                    track_id: Id::Number(1),
+                    title: "Test Track 1".to_string(),
+                    ..Default::default()
+                },
+                ApiTrack {
+                    track_id: Id::Number(2),
+                    title: "Test Track 2".to_string(),
+                    ..Default::default()
+                },
+            ],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(24),
+            sample_rate: Some(96000),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        }
+    }
+
+    /// Creates a test `ApiAlbumVersion` with no quality fields populated.
+    fn create_test_api_album_version_no_quality() -> ApiAlbumVersion {
+        ApiAlbumVersion {
+            tracks: vec![ApiTrack {
+                track_id: Id::Number(1),
+                title: "Test Track".to_string(),
+                ..Default::default()
+            }],
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: TrackApiSource::Local,
+        }
+    }
+
+    /// Creates a test `AlbumVersion` with all quality fields populated.
+    fn create_test_album_version() -> AlbumVersion {
+        AlbumVersion {
+            tracks: vec![
+                Track {
+                    id: Id::Number(1),
+                    title: "Test Track 1".to_string(),
+                    ..Default::default()
+                },
+                Track {
+                    id: Id::Number(2),
+                    title: "Test Track 2".to_string(),
+                    ..Default::default()
+                },
+            ],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(24),
+            sample_rate: Some(96000),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_album_version_ref_to_quality_extracts_all_fields() {
+        let api_version = create_test_api_album_version();
+        let quality: AlbumVersionQuality = (&api_version).into();
+
+        assert_eq!(quality.format, Some(AudioFormat::Flac));
+        assert_eq!(quality.bit_depth, Some(24));
+        assert_eq!(quality.sample_rate, Some(96000));
+        assert_eq!(quality.channels, Some(2));
+        assert_eq!(quality.source, TrackApiSource::Local);
+    }
+
+    #[test_log::test]
+    fn test_api_album_version_ref_to_quality_with_no_quality_fields() {
+        let api_version = create_test_api_album_version_no_quality();
+        let quality: AlbumVersionQuality = (&api_version).into();
+
+        assert_eq!(quality.format, None);
+        assert_eq!(quality.bit_depth, None);
+        assert_eq!(quality.sample_rate, None);
+        assert_eq!(quality.channels, None);
+        assert_eq!(quality.source, TrackApiSource::Local);
+    }
+
+    #[test_log::test]
+    fn test_api_album_version_owned_to_quality_extracts_all_fields() {
+        let api_version = create_test_api_album_version();
+        let quality: AlbumVersionQuality = api_version.into();
+
+        assert_eq!(quality.format, Some(AudioFormat::Flac));
+        assert_eq!(quality.bit_depth, Some(24));
+        assert_eq!(quality.sample_rate, Some(96000));
+        assert_eq!(quality.channels, Some(2));
+        assert_eq!(quality.source, TrackApiSource::Local);
+    }
+
+    #[test_log::test]
+    fn test_api_album_version_to_album_version_preserves_all_fields() {
+        let api_version = create_test_api_album_version();
+        let num_tracks = api_version.tracks.len();
+
+        let domain_version: AlbumVersion = api_version.into();
+
+        assert_eq!(domain_version.tracks.len(), num_tracks);
+        assert_eq!(domain_version.format, Some(AudioFormat::Flac));
+        assert_eq!(domain_version.bit_depth, Some(24));
+        assert_eq!(domain_version.sample_rate, Some(96000));
+        assert_eq!(domain_version.channels, Some(2));
+        assert_eq!(domain_version.source, TrackApiSource::Local);
+    }
+
+    #[test_log::test]
+    fn test_api_album_version_to_album_version_transforms_tracks() {
+        let api_version = ApiAlbumVersion {
+            tracks: vec![
+                ApiTrack {
+                    track_id: Id::Number(1),
+                    title: "Track 1".to_string(),
+                    number: 1,
+                    duration: 180.5,
+                    ..Default::default()
+                },
+                ApiTrack {
+                    track_id: Id::Number(2),
+                    title: "Track 2".to_string(),
+                    number: 2,
+                    duration: 240.0,
+                    ..Default::default()
+                },
+            ],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(16),
+            sample_rate: Some(44100),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        };
+
+        let domain_version: AlbumVersion = api_version.into();
+
+        assert_eq!(domain_version.tracks.len(), 2);
+        assert_eq!(domain_version.tracks[0].id, Id::Number(1));
+        assert_eq!(domain_version.tracks[0].title, "Track 1");
+        assert_eq!(domain_version.tracks[0].number, 1);
+        assert_eq!(domain_version.tracks[0].duration, 180.5);
+        assert_eq!(domain_version.tracks[1].id, Id::Number(2));
+        assert_eq!(domain_version.tracks[1].title, "Track 2");
+        assert_eq!(domain_version.tracks[1].number, 2);
+        assert_eq!(domain_version.tracks[1].duration, 240.0);
+    }
+
+    #[test_log::test]
+    fn test_album_version_to_api_album_version_preserves_all_fields() {
+        let domain_version = create_test_album_version();
+        let num_tracks = domain_version.tracks.len();
+
+        let api_version: ApiAlbumVersion = domain_version.into();
+
+        assert_eq!(api_version.tracks.len(), num_tracks);
+        assert_eq!(api_version.format, Some(AudioFormat::Flac));
+        assert_eq!(api_version.bit_depth, Some(24));
+        assert_eq!(api_version.sample_rate, Some(96000));
+        assert_eq!(api_version.channels, Some(2));
+        assert_eq!(api_version.source, TrackApiSource::Local);
+    }
+
+    #[test_log::test]
+    fn test_album_version_to_api_album_version_transforms_tracks() {
+        let domain_version = AlbumVersion {
+            tracks: vec![
+                Track {
+                    id: Id::Number(1),
+                    title: "Track 1".to_string(),
+                    number: 1,
+                    duration: 180.5,
+                    ..Default::default()
+                },
+                Track {
+                    id: Id::Number(2),
+                    title: "Track 2".to_string(),
+                    number: 2,
+                    duration: 240.0,
+                    ..Default::default()
+                },
+            ],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(16),
+            sample_rate: Some(44100),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        };
+
+        let api_version: ApiAlbumVersion = domain_version.into();
+
+        assert_eq!(api_version.tracks.len(), 2);
+        assert_eq!(api_version.tracks[0].track_id, Id::Number(1));
+        assert_eq!(api_version.tracks[0].title, "Track 1");
+        assert_eq!(api_version.tracks[0].number, 1);
+        assert_eq!(api_version.tracks[0].duration, 180.5);
+        assert_eq!(api_version.tracks[1].track_id, Id::Number(2));
+        assert_eq!(api_version.tracks[1].title, "Track 2");
+        assert_eq!(api_version.tracks[1].number, 2);
+        assert_eq!(api_version.tracks[1].duration, 240.0);
+    }
+
+    #[test_log::test]
+    fn test_roundtrip_album_version_to_api_and_back() {
+        let original = AlbumVersion {
+            tracks: vec![Track {
+                id: Id::Number(1),
+                title: "Test Track".to_string(),
+                number: 1,
+                duration: 200.0,
+                ..Default::default()
+            }],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(24),
+            sample_rate: Some(96000),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        };
+
+        let api_version: ApiAlbumVersion = original.clone().into();
+        let roundtrip: AlbumVersion = api_version.into();
+
+        // Verify quality fields are preserved
+        assert_eq!(roundtrip.format, original.format);
+        assert_eq!(roundtrip.bit_depth, original.bit_depth);
+        assert_eq!(roundtrip.sample_rate, original.sample_rate);
+        assert_eq!(roundtrip.channels, original.channels);
+        assert_eq!(roundtrip.source, original.source);
+
+        // Verify track data is preserved
+        assert_eq!(roundtrip.tracks.len(), original.tracks.len());
+        assert_eq!(roundtrip.tracks[0].id, original.tracks[0].id);
+        assert_eq!(roundtrip.tracks[0].title, original.tracks[0].title);
+        assert_eq!(roundtrip.tracks[0].number, original.tracks[0].number);
+        assert_eq!(roundtrip.tracks[0].duration, original.tracks[0].duration);
+    }
+
+    #[test_log::test]
+    fn test_conversion_with_empty_tracks() {
+        let api_version = ApiAlbumVersion {
+            tracks: vec![],
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(16),
+            sample_rate: Some(44100),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+        };
+
+        let domain_version: AlbumVersion = api_version.into();
+
+        assert_eq!(domain_version.tracks.len(), 0);
+        assert_eq!(domain_version.format, Some(AudioFormat::Flac));
+    }
+}

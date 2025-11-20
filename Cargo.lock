@@ -8761,6 +8761,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_music_models",
  "serde",
+ "test-log",
  "utoipa",
 ]
 
