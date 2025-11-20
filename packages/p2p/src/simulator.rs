@@ -1162,7 +1162,6 @@ mod tests {
         assert!(!conn.is_connected());
     }
 
-
     #[test]
     fn test_simulator_connection_calculate_path_latency() {
         let mut graph = NetworkGraph::new();

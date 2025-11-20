@@ -484,3 +484,41 @@ pub type PositionInfoSubscriptionAction =
 /// Callback function for transport info subscription events.
 pub type TransportInfoSubscriptionAction =
     Box<dyn (Fn(TransportInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upnp_context_new() {
+        let ctx = UpnpContext::new();
+        assert_eq!(ctx.subscription_id, 1);
+        assert!(ctx.status_join_handles.is_empty());
+        assert!(ctx.status_tokens.is_empty());
+        assert!(ctx.token.is_none());
+    }
+
+    #[test]
+    fn test_upnp_context_default() {
+        let ctx = UpnpContext::default();
+        assert_eq!(ctx.subscription_id, 1);
+        assert!(ctx.status_join_handles.is_empty());
+        assert!(ctx.status_tokens.is_empty());
+        assert!(ctx.token.is_none());
+    }
+
+    #[test]
+    fn test_listener_error_from_send_error() {
+        let (tx, _rx) = flume::bounded::<usize>(1);
+        drop(_rx);
+        let send_error = tx.send(42).unwrap_err();
+        let listener_error: ListenerError = send_error.into();
+        assert!(matches!(listener_error, ListenerError::Send));
+    }
+
+    #[test]
+    fn test_listener_error_display() {
+        let error = ListenerError::Send;
+        assert_eq!(error.to_string(), "Failed to send");
+    }
+}

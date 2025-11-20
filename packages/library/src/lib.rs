@@ -2210,5 +2210,4 @@ mod test {
         let desc = LibraryTrackOrderDirection::from(TrackOrderDirection::Descending);
         assert_eq!(desc, LibraryTrackOrderDirection::Desc);
     }
-
 }

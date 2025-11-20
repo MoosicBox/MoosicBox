@@ -171,7 +171,7 @@ path!(
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use utoipa::openapi::{path::*, HttpMethod, PathItem, Paths};
+    use utoipa::openapi::{HttpMethod, PathItem, Paths, path::*};
 
     #[test]
     fn test_init_returns_valid_openapi_spec() {

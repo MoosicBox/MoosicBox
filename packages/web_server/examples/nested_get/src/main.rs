@@ -42,16 +42,18 @@ async fn main() {
         .allow_any_header()
         .expose_any_header();
 
-    let server = moosicbox_web_server::WebServerBuilder::new()
-        .with_cors(cors)
-        .with_scope(Scope::new("/nested").get("/example", |req| {
-            let path = req.path().to_string();
-            let query = req.query_string().to_string();
-            Box::pin(async move {
-                Ok(HttpResponse::ok().with_body(format!("hello, world! path={path} query={query}")))
-            })
-        }))
-        .build();
+    let server =
+        moosicbox_web_server::WebServerBuilder::new()
+            .with_cors(cors)
+            .with_scope(Scope::new("/nested").get("/example", |req| {
+                let path = req.path().to_string();
+                let query = req.query_string().to_string();
+                Box::pin(async move {
+                    Ok(HttpResponse::ok()
+                        .with_body(format!("hello, world! path={path} query={query}")))
+                })
+            }))
+            .build();
 
     server.start().await;
 }
@@ -66,8 +68,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_with_query_parameters() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example")
@@ -102,8 +104,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_without_query_parameters() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example");
@@ -142,8 +144,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_with_special_characters_in_query() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example")
@@ -174,8 +176,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_with_deeply_nested_path() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example/deep/path/segments");
@@ -201,8 +203,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_with_multiple_query_parameters() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example")
@@ -229,8 +231,8 @@ mod tests {
         #[test]
         fn test_nested_example_handler_response_status() {
             use moosicbox_web_server::{
-                simulator::{SimulationRequest, SimulationStub},
                 Method, Stub,
+                simulator::{SimulationRequest, SimulationStub},
             };
 
             let request = SimulationRequest::new(Method::Get, "/nested/example")

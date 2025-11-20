@@ -225,7 +225,7 @@ pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
 mod tests {
     use super::*;
     use moosicbox_music_models::{
-        id::Id, AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, TrackApiSource,
+        AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, TrackApiSource, id::Id,
     };
     use pretty_assertions::assert_eq;
 

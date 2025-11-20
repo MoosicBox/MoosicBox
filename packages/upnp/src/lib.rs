@@ -1221,3 +1221,244 @@ impl UpnpDeviceScanner {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_str_to_duration_valid_formats() {
+        assert_eq!(str_to_duration("00:00:00"), 0);
+        assert_eq!(str_to_duration("00:00:01"), 1);
+        assert_eq!(str_to_duration("00:01:00"), 60);
+        assert_eq!(str_to_duration("01:00:00"), 3600);
+        assert_eq!(str_to_duration("00:03:31"), 211);
+        assert_eq!(str_to_duration("01:30:45"), 5445);
+        assert_eq!(str_to_duration("10:15:20"), 36_920);
+    }
+
+    #[test]
+    fn test_duration_to_string_various_durations() {
+        assert_eq!(duration_to_string(0), "00:00:00");
+        assert_eq!(duration_to_string(1), "00:00:01");
+        assert_eq!(duration_to_string(60), "00:01:00");
+        assert_eq!(duration_to_string(3600), "01:00:00");
+        assert_eq!(duration_to_string(211), "00:03:31");
+        assert_eq!(duration_to_string(5445), "01:30:45");
+        assert_eq!(duration_to_string(36_920), "10:15:20");
+    }
+
+    #[test]
+    fn test_duration_roundtrip_conversion() {
+        let test_cases = vec![
+            "00:00:00", "00:00:30", "00:05:45", "01:23:45", "10:00:00", "23:59:59",
+        ];
+
+        for original in test_cases {
+            let seconds = str_to_duration(original);
+            let converted = duration_to_string(seconds);
+            assert_eq!(
+                original, converted,
+                "Roundtrip conversion failed for {original}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_track_metadata_complete() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+            <item id="0" parentID="-1" restricted="false">
+                <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+                <dc:title>Friday</dc:title>
+                <dc:creator>Rebecca Black</dc:creator>
+                <upnp:artist>Rebecca Black</upnp:artist>
+                <upnp:album>Friday</upnp:album>
+                <upnp:originalTrackNumber>1</upnp:originalTrackNumber>
+                <res duration="00:03:31" protocolInfo="http-get:*:audio/flac:*">http://192.168.1.1:8001/track?trackId=123</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata");
+        assert_eq!(result.items.len(), 1);
+
+        let item = &result.items[0];
+        assert_eq!(
+            item.upnp_class.as_deref(),
+            Some("object.item.audioItem.musicTrack")
+        );
+        assert_eq!(item.dc_title.as_deref(), Some("Friday"));
+        assert_eq!(item.dc_creator.as_deref(), Some("Rebecca Black"));
+        assert_eq!(item.upnp_artist.as_deref(), Some("Rebecca Black"));
+        assert_eq!(item.upnp_album.as_deref(), Some("Friday"));
+        assert_eq!(item.upnp_original_track_number.as_deref(), Some("1"));
+        assert_eq!(item.res.duration, Some(211));
+        assert_eq!(
+            item.res.protocol_info.as_deref(),
+            Some("http-get:*:audio/flac:*")
+        );
+        assert_eq!(item.res.source, "http://192.168.1.1:8001/track?trackId=123");
+    }
+
+    #[test]
+    fn test_parse_track_metadata_minimal() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+                <res>http://example.com/track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse minimal metadata");
+        assert_eq!(result.items.len(), 1);
+
+        let item = &result.items[0];
+        assert!(item.upnp_class.is_none());
+        assert!(item.dc_title.is_none());
+        assert!(item.dc_creator.is_none());
+        assert!(item.upnp_artist.is_none());
+        assert!(item.upnp_album.is_none());
+        assert!(item.upnp_original_track_number.is_none());
+        assert!(item.res.duration.is_none());
+        assert!(item.res.protocol_info.is_none());
+        assert_eq!(item.res.source, "http://example.com/track.mp3");
+    }
+
+    #[test]
+    fn test_parse_track_metadata_multiple_items() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <item id="0" parentID="-1" restricted="false">
+                <dc:title>Track 1</dc:title>
+                <res>http://example.com/track1.mp3</res>
+            </item>
+            <item id="1" parentID="-1" restricted="false">
+                <dc:title>Track 2</dc:title>
+                <res>http://example.com/track2.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse multiple items");
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(result.items[0].dc_title.as_deref(), Some("Track 1"));
+        assert_eq!(result.items[1].dc_title.as_deref(), Some("Track 2"));
+    }
+
+    #[test]
+    fn test_parse_track_metadata_missing_res_element() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml);
+        assert!(
+            result.is_err(),
+            "Expected error when res element is missing"
+        );
+        match result {
+            Err(ActionError::MissingProperty(_)) => {}
+            _ => panic!("Expected MissingProperty error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_track_metadata_empty_document() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"></DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse empty document");
+        assert_eq!(result.items.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_track_metadata_with_xml_escaping() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <item id="0" parentID="-1" restricted="false">
+                <dc:title>Track &amp; Title</dc:title>
+                <res>http://example.com/track?id=1&amp;format=mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse escaped XML");
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].dc_title.as_deref(), Some("Track & Title"));
+        assert_eq!(
+            result.items[0].res.source,
+            "http://example.com/track?id=1&format=mp3"
+        );
+    }
+
+    mod cache_tests {
+        use super::*;
+
+        #[test]
+        fn test_cache_device_not_found_by_udn() {
+            let result = cache::get_device("uuid:nonexistent-device");
+            assert!(result.is_err());
+            match result {
+                Err(ScanError::DeviceUdnNotFound { device_udn }) => {
+                    assert_eq!(device_udn, "uuid:nonexistent-device");
+                }
+                _ => panic!("Expected DeviceUdnNotFound error"),
+            }
+        }
+
+        #[test]
+        fn test_cache_device_not_found_by_url() {
+            let result = cache::get_device_from_url("http://192.168.1.100:1234/device");
+            assert!(result.is_err());
+            match result {
+                Err(ScanError::DeviceUrlNotFound { device_url }) => {
+                    assert_eq!(device_url, "http://192.168.1.100:1234/device");
+                }
+                _ => panic!("Expected DeviceUrlNotFound error"),
+            }
+        }
+
+        #[test]
+        fn test_cache_service_not_found() {
+            let result = cache::get_service(
+                "uuid:nonexistent-device",
+                "urn:upnp-org:serviceId:AVTransport",
+            );
+            assert!(result.is_err());
+            match result {
+                Err(ScanError::DeviceUdnNotFound { device_udn }) => {
+                    assert_eq!(device_udn, "uuid:nonexistent-device");
+                }
+                _ => panic!("Expected DeviceUdnNotFound error"),
+            }
+        }
+
+        #[test]
+        fn test_public_get_device_not_found() {
+            let result = get_device("uuid:nonexistent");
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_public_get_service_not_found() {
+            let result = get_service("uuid:nonexistent", "urn:upnp-org:serviceId:AVTransport");
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_public_get_device_and_service_not_found() {
+            let result =
+                get_device_and_service("uuid:nonexistent", "urn:upnp-org:serviceId:AVTransport");
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_public_get_device_from_url_not_found() {
+            let result = get_device_from_url("http://192.168.1.100:1234/device");
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_public_get_device_and_service_from_url_not_found() {
+            let result = get_device_and_service_from_url(
+                "http://192.168.1.100:1234/device",
+                "urn:upnp-org:serviceId:AVTransport",
+            );
+            assert!(result.is_err());
+        }
+    }
+}

@@ -72,3 +72,88 @@ impl From<&Service> for UpnpService {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upnp_device_with_volume() {
+        let device = UpnpDevice {
+            name: "Test Device".to_string(),
+            udn: "uuid:test-123".to_string(),
+            volume: None,
+            services: vec![],
+        };
+
+        let updated = device.with_volume(Some("50".to_string()));
+        assert_eq!(updated.volume, Some("50".to_string()));
+        assert_eq!(updated.name, "Test Device");
+        assert_eq!(updated.udn, "uuid:test-123");
+    }
+
+    #[test]
+    fn test_upnp_device_with_volume_none() {
+        let device = UpnpDevice {
+            name: "Test Device".to_string(),
+            udn: "uuid:test-123".to_string(),
+            volume: Some("30".to_string()),
+            services: vec![],
+        };
+
+        let updated = device.with_volume(None);
+        assert!(updated.volume.is_none());
+    }
+
+    #[test]
+    fn test_upnp_device_with_services() {
+        let device = UpnpDevice {
+            name: "Test Device".to_string(),
+            udn: "uuid:test-123".to_string(),
+            volume: None,
+            services: vec![],
+        };
+
+        let services = vec![
+            UpnpService {
+                id: "urn:upnp-org:serviceId:AVTransport".to_string(),
+                r#type: "urn:schemas-upnp-org:service:AVTransport:1".to_string(),
+            },
+            UpnpService {
+                id: "urn:upnp-org:serviceId:RenderingControl".to_string(),
+                r#type: "urn:schemas-upnp-org:service:RenderingControl:1".to_string(),
+            },
+        ];
+
+        let updated = device.with_services(services.clone());
+        assert_eq!(updated.services.len(), 2);
+        assert_eq!(updated.services[0].id, "urn:upnp-org:serviceId:AVTransport");
+        assert_eq!(
+            updated.services[1].id,
+            "urn:upnp-org:serviceId:RenderingControl"
+        );
+    }
+
+    #[test]
+    fn test_upnp_device_builder_pattern() {
+        let device = UpnpDevice {
+            name: "Test Device".to_string(),
+            udn: "uuid:test-123".to_string(),
+            volume: None,
+            services: vec![],
+        };
+
+        let service = UpnpService {
+            id: "urn:upnp-org:serviceId:AVTransport".to_string(),
+            r#type: "urn:schemas-upnp-org:service:AVTransport:1".to_string(),
+        };
+
+        let updated = device
+            .with_volume(Some("75".to_string()))
+            .with_services(vec![service]);
+
+        assert_eq!(updated.volume, Some("75".to_string()));
+        assert_eq!(updated.services.len(), 1);
+        assert_eq!(updated.services[0].id, "urn:upnp-org:serviceId:AVTransport");
+    }
+}

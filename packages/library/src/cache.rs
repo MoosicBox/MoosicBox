@@ -160,12 +160,17 @@ mod tests {
                 key: "test_error",
                 expiration: Duration::from_secs(60),
             },
-            || async { Err::<CacheItemType, TestError>(TestError::TestError("Test error".to_string())) },
+            || async {
+                Err::<CacheItemType, TestError>(TestError::TestError("Test error".to_string()))
+            },
         )
         .await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), TestError::TestError("Test error".to_string()));
+        assert_eq!(
+            result.unwrap_err(),
+            TestError::TestError("Test error".to_string())
+        );
     }
 
     #[test]
