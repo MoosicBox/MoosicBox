@@ -280,6 +280,25 @@ impl<T: Clone> TypedWriter<T> {
     /// The value is cloned for each connected stream except the last one, which
     /// receives the original value. Disconnected receivers are automatically removed.
     ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_stream_utils::TypedWriter;
+    /// use futures::StreamExt;
+    ///
+    /// # async fn example() {
+    /// let writer = TypedWriter::<String>::default();
+    /// let mut stream1 = writer.stream();
+    /// let mut stream2 = writer.stream();
+    ///
+    /// writer.write("hello".to_string());
+    ///
+    /// // Both streams receive the same value
+    /// assert_eq!(stream1.next().await, Some("hello".to_string()));
+    /// assert_eq!(stream2.next().await, Some("hello".to_string()));
+    /// # }
+    /// ```
+    ///
     /// # Panics
     ///
     /// * If the internal `RwLock` is poisoned
