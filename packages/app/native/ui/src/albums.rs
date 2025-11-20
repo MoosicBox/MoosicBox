@@ -1003,3 +1003,234 @@ pub fn load_albums(
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_album_cover_url_with_cover() {
+        let url = album_cover_url(
+            "http://localhost:8080",
+            &Id::Number(123),
+            &ApiSource::library(),
+            true,
+            200,
+            200,
+        );
+        assert!(url.contains("http://localhost:8080/files/albums/123/200x200"));
+        assert!(url.contains("moosicboxProfile=master"));
+    }
+
+    #[test]
+    fn test_album_cover_url_without_cover() {
+        let url = album_cover_url(
+            "http://localhost:8080",
+            &Id::Number(123),
+            &ApiSource::library(),
+            false,
+            200,
+            200,
+        );
+        assert_eq!(url, "/public/img/album.svg");
+    }
+
+    #[test]
+    fn test_album_cover_url_from_album_with_cover() {
+        let album = ApiAlbum {
+            album_id: Id::Number(456),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(789),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            contains_cover: true,
+            blur: false,
+            date_released: None,
+            date_added: None,
+            versions: vec![],
+            album_source: moosicbox_music_models::AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let url = album_cover_url_from_album("http://example.com", &album, 150, 150);
+        assert!(url.contains("http://example.com/files/albums/456/150x150"));
+        assert!(url.contains("moosicboxProfile=master"));
+    }
+
+    #[test]
+    fn test_album_cover_url_from_album_without_cover() {
+        let album = ApiAlbum {
+            album_id: Id::Number(456),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(789),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            contains_cover: false,
+            blur: false,
+            date_released: None,
+            date_added: None,
+            versions: vec![],
+            album_source: moosicbox_music_models::AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let url = album_cover_url_from_album("http://example.com", &album, 150, 150);
+        assert_eq!(url, "/public/img/album.svg");
+    }
+
+    #[test]
+    fn test_album_cover_url_from_track_with_cover() {
+        let track = ApiTrack {
+            track_id: Id::Number(1),
+            number: 1,
+            title: "Test Track".to_string(),
+            duration: 180.0,
+            album: "Test Album".to_string(),
+            album_id: Id::Number(100),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(200),
+            blur: false,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: moosicbox_music_models::ApiSources::default(),
+            contains_cover: true,
+        };
+
+        let url = album_cover_url_from_track("http://test.com", &track, 100, 100);
+        assert!(url.contains("http://test.com/files/albums/100/100x100"));
+        assert!(url.contains("moosicboxProfile=master"));
+    }
+
+    #[test]
+    fn test_album_cover_url_from_track_without_cover() {
+        let track = ApiTrack {
+            track_id: Id::Number(1),
+            number: 1,
+            title: "Test Track".to_string(),
+            duration: 180.0,
+            album: "Test Album".to_string(),
+            album_id: Id::Number(100),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(200),
+            blur: false,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: moosicbox_music_models::ApiSources::default(),
+            contains_cover: false,
+        };
+
+        let url = album_cover_url_from_track("http://test.com", &track, 100, 100);
+        assert_eq!(url, "/public/img/album.svg");
+    }
+
+    #[test]
+    fn test_album_page_url_minimal() {
+        let url = album_page_url("123", false, None, None, None, None);
+        assert_eq!(url, "/albums?albumId=123");
+    }
+
+    #[test]
+    fn test_album_page_url_with_full() {
+        let url = album_page_url("123", true, None, None, None, None);
+        assert_eq!(url, "/albums?albumId=123&full=true");
+    }
+
+    #[test]
+    fn test_album_page_url_with_source() {
+        let url = album_page_url("123", false, Some(&ApiSource::library()), None, None, None);
+        assert!(url.contains("/albums?albumId=123"));
+        assert!(url.contains("source="));
+    }
+
+    #[test]
+    fn test_album_page_url_with_version_source() {
+        let url = album_page_url("123", false, None, Some(&TrackApiSource::Local), None, None);
+        assert_eq!(url, "/albums?albumId=123&versionSource=LOCAL");
+    }
+
+    #[test]
+    fn test_album_page_url_with_sample_rate() {
+        let url = album_page_url("123", false, None, None, Some(44100), None);
+        assert_eq!(url, "/albums?albumId=123&sampleRate=44100");
+    }
+
+    #[test]
+    fn test_album_page_url_with_bit_depth() {
+        let url = album_page_url("123", false, None, None, None, Some(16));
+        assert_eq!(url, "/albums?albumId=123&bitDepth=16");
+    }
+
+    #[test]
+    fn test_album_page_url_all_parameters() {
+        let url = album_page_url(
+            "456",
+            true,
+            Some(&ApiSource::library()),
+            Some(&TrackApiSource::Local),
+            Some(96000),
+            Some(24),
+        );
+        assert!(url.contains("/albums?albumId=456"));
+        assert!(url.contains("full=true"));
+        assert!(url.contains("source="));
+        assert!(url.contains("versionSource=LOCAL"));
+        assert!(url.contains("sampleRate=96000"));
+        assert!(url.contains("bitDepth=24"));
+    }
+
+    #[test]
+    fn test_album_page_url_string_id() {
+        let url = album_page_url("abc-def-123", false, None, None, None, None);
+        assert_eq!(url, "/albums?albumId=abc-def-123");
+    }
+
+    #[test]
+    fn test_album_cover_url_different_sizes() {
+        let url = album_cover_url(
+            "http://localhost:8080",
+            &Id::Number(123),
+            &ApiSource::library(),
+            true,
+            500,
+            300,
+        );
+        assert!(url.contains("http://localhost:8080/files/albums/123/500x300"));
+        assert!(url.contains("moosicboxProfile=master"));
+    }
+
+    #[test]
+    fn test_album_cover_url_with_api_source() {
+        let url = album_cover_url(
+            "http://localhost:8080",
+            &Id::Number(999),
+            &ApiSource::library(),
+            true,
+            200,
+            200,
+        );
+        assert!(url.contains("http://localhost:8080/files/albums/999/200x200"));
+        assert!(url.contains("moosicboxProfile=master"));
+    }
+}
