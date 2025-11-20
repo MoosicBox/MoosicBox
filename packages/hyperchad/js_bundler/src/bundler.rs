@@ -43,3 +43,32 @@ pub fn bundle(target: &Path, out: &Path) {
 
     unreachable!();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_manifest_dir_str_is_not_empty() {
+        // MANIFEST_DIR_STR should contain a valid path
+        assert!(!MANIFEST_DIR_STR.is_empty());
+        assert!(MANIFEST_DIR_STR.contains("hyperchad"));
+        assert!(MANIFEST_DIR_STR.contains("js_bundler"));
+    }
+
+    #[test]
+    fn test_manifest_dir_is_valid_path() {
+        // MANIFEST_DIR should be a valid, existing directory
+        assert!(MANIFEST_DIR.exists());
+        assert!(MANIFEST_DIR.is_dir());
+        assert!(MANIFEST_DIR.ends_with("js_bundler"));
+    }
+
+    #[test]
+    fn test_manifest_dir_contains_cargo_toml() {
+        // The manifest directory should contain Cargo.toml
+        let cargo_toml = MANIFEST_DIR.join("Cargo.toml");
+        assert!(cargo_toml.exists());
+        assert!(cargo_toml.is_file());
+    }
+}
