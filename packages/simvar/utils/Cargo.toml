@@ -23,6 +23,10 @@ switchy = { workspace = true, features = [
     "async-util",
 ] }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros"] }
+test-log      = { workspace = true }
+
 [features]
 default = []
 

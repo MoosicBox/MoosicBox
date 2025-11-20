@@ -13852,6 +13852,8 @@ name = "simvar_utils"
 version = "0.1.0"
 dependencies = [
  "switchy",
+ "switchy_async",
+ "test-log",
 ]
 
 [[package]]
