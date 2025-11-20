@@ -25,6 +25,9 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 url        = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
 [features]
 default = []
 

@@ -525,3 +525,308 @@ pub mod fragments {
             .wait_for_element(":focus")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_interaction_step_click_description() {
+        let step = InteractionStep::Click {
+            selector: "#submit-button".to_string(),
+        };
+        assert_eq!(step.description(), "Click #submit-button");
+    }
+
+    #[test]
+    fn test_interaction_step_double_click_description() {
+        let step = InteractionStep::DoubleClick {
+            selector: ".item".to_string(),
+        };
+        assert_eq!(step.description(), "Double-click .item");
+    }
+
+    #[test]
+    fn test_interaction_step_right_click_description() {
+        let step = InteractionStep::RightClick {
+            selector: "#context-menu".to_string(),
+        };
+        assert_eq!(step.description(), "Right-click #context-menu");
+    }
+
+    #[test]
+    fn test_interaction_step_hover_description() {
+        let step = InteractionStep::Hover {
+            selector: ".tooltip-trigger".to_string(),
+        };
+        assert_eq!(step.description(), "Hover over .tooltip-trigger");
+    }
+
+    #[test]
+    fn test_interaction_step_focus_description() {
+        let step = InteractionStep::Focus {
+            selector: "input[name='email']".to_string(),
+        };
+        assert_eq!(step.description(), "Focus input[name='email']");
+    }
+
+    #[test]
+    fn test_interaction_step_blur_description() {
+        let step = InteractionStep::Blur {
+            selector: "#search-field".to_string(),
+        };
+        assert_eq!(step.description(), "Blur #search-field");
+    }
+
+    #[test]
+    fn test_interaction_step_key_press_description() {
+        let step = InteractionStep::KeyPress { key: Key::Enter };
+        assert_eq!(step.description(), "Press key Enter");
+    }
+
+    #[test]
+    fn test_interaction_step_key_sequence_description() {
+        let step = InteractionStep::KeySequence {
+            keys: vec![Key::Control, Key::C],
+        };
+        let desc = step.description();
+        assert!(desc.contains("Press key sequence"));
+        assert!(desc.contains("Control"));
+        assert!(desc.contains("C"));
+    }
+
+    #[test]
+    fn test_interaction_step_scroll_description() {
+        let step = InteractionStep::Scroll {
+            direction: ScrollDirection::Down,
+            amount: 500,
+        };
+        let desc = step.description();
+        assert!(desc.contains("Scroll"));
+        assert!(desc.contains("Down"));
+        assert!(desc.contains("500"));
+    }
+
+    #[test]
+    fn test_interaction_step_drag_and_drop_description() {
+        let step = InteractionStep::DragAndDrop {
+            from_selector: "#draggable".to_string(),
+            to_selector: "#dropzone".to_string(),
+        };
+        assert_eq!(step.description(), "Drag from #draggable to #dropzone");
+    }
+
+    #[test]
+    fn test_interaction_step_mouse_move_description() {
+        let step = InteractionStep::MouseMove { x: 100, y: 200 };
+        assert_eq!(step.description(), "Move mouse to (100, 200)");
+    }
+
+    #[test]
+    fn test_interaction_step_mouse_down_description() {
+        let step = InteractionStep::MouseDown {
+            button: MouseButton::Left,
+        };
+        let desc = step.description();
+        assert!(desc.contains("Mouse down"));
+        assert!(desc.contains("Left"));
+    }
+
+    #[test]
+    fn test_interaction_step_mouse_up_description() {
+        let step = InteractionStep::MouseUp {
+            button: MouseButton::Right,
+        };
+        let desc = step.description();
+        assert!(desc.contains("Mouse up"));
+        assert!(desc.contains("Right"));
+    }
+
+    #[test]
+    fn test_control_step_loop_description() {
+        let step = ControlStep::Loop {
+            count: 5,
+            steps: vec![],
+        };
+        assert_eq!(step.description(), "Loop 5 times with 0 steps");
+    }
+
+    #[test]
+    fn test_control_step_for_each_description() {
+        let data = vec![serde_json::json!({"id": 1}), serde_json::json!({"id": 2})];
+        let step = ControlStep::ForEach {
+            data,
+            steps: vec![],
+        };
+        assert_eq!(step.description(), "For each of 2 items with 0 steps");
+    }
+
+    #[test]
+    fn test_control_step_parallel_description() {
+        let mut branches = BTreeMap::new();
+        branches.insert("task1".to_string(), vec![]);
+        branches.insert("task2".to_string(), vec![]);
+        let step = ControlStep::Parallel { branches };
+        assert_eq!(step.description(), "Parallel execution with 2 branches");
+    }
+
+    #[test]
+    fn test_control_step_try_description_full() {
+        let step = ControlStep::Try {
+            steps: vec![],
+            catch_steps: Some(vec![]),
+            finally_steps: Some(vec![]),
+        };
+        assert_eq!(step.description(), "Try 0 steps with catch with finally");
+    }
+
+    #[test]
+    fn test_control_step_try_description_catch_only() {
+        let step = ControlStep::Try {
+            steps: vec![],
+            catch_steps: Some(vec![]),
+            finally_steps: None,
+        };
+        assert_eq!(step.description(), "Try 0 steps with catch");
+    }
+
+    #[test]
+    fn test_control_step_try_description_finally_only() {
+        let step = ControlStep::Try {
+            steps: vec![],
+            catch_steps: None,
+            finally_steps: Some(vec![]),
+        };
+        assert_eq!(step.description(), "Try 0 steps with finally");
+    }
+
+    #[test]
+    fn test_control_step_try_description_no_catch_or_finally() {
+        let step = ControlStep::Try {
+            steps: vec![],
+            catch_steps: None,
+            finally_steps: None,
+        };
+        assert_eq!(step.description(), "Try 0 steps");
+    }
+
+    #[test]
+    fn test_control_step_retry_description_with_delay() {
+        let step = ControlStep::Retry {
+            steps: vec![],
+            max_attempts: 3,
+            delay: Some(Duration::from_secs(1)),
+        };
+        let desc = step.description();
+        assert!(desc.contains("Retry 0 steps up to 3 times"));
+        assert!(desc.contains("1s"));
+    }
+
+    #[test]
+    fn test_control_step_retry_description_no_delay() {
+        let step = ControlStep::Retry {
+            steps: vec![],
+            max_attempts: 5,
+            delay: None,
+        };
+        assert_eq!(step.description(), "Retry 0 steps up to 5 times");
+    }
+
+    #[test]
+    fn test_control_step_constructors() {
+        let loop_step = ControlStep::loop_count(10, vec![]);
+        match loop_step {
+            ControlStep::Loop { count, .. } => assert_eq!(count, 10),
+            _ => panic!("Expected Loop variant"),
+        }
+
+        let for_each_step = ControlStep::for_each(vec![serde_json::json!(1)], vec![]);
+        match for_each_step {
+            ControlStep::ForEach { data, .. } => assert_eq!(data.len(), 1),
+            _ => panic!("Expected ForEach variant"),
+        }
+
+        let parallel_step = ControlStep::parallel(BTreeMap::new());
+        match parallel_step {
+            ControlStep::Parallel { branches } => assert_eq!(branches.len(), 0),
+            _ => panic!("Expected Parallel variant"),
+        }
+
+        let try_step = ControlStep::try_catch(vec![], Some(vec![]), None);
+        match try_step {
+            ControlStep::Try { catch_steps, .. } => assert!(catch_steps.is_some()),
+            _ => panic!("Expected Try variant"),
+        }
+
+        let retry_step = ControlStep::retry(vec![], 3, Some(Duration::from_millis(100)));
+        match retry_step {
+            ControlStep::Retry {
+                max_attempts,
+                delay,
+                ..
+            } => {
+                assert_eq!(max_attempts, 3);
+                assert_eq!(delay, Some(Duration::from_millis(100)));
+            }
+            _ => panic!("Expected Retry variant"),
+        }
+    }
+
+    #[test]
+    fn test_fragments_login_flow() {
+        let plan = fragments::login_flow("testuser", "password123");
+        assert!(plan.steps.len() >= 4); // Should have navigate, wait, fill_form, click, wait_for_url
+    }
+
+    #[test]
+    fn test_fragments_logout_flow() {
+        let plan = fragments::logout_flow();
+        assert!(plan.steps.len() >= 3); // Should have click, wait, click, wait
+    }
+
+    #[test]
+    fn test_fragments_navigation_test() {
+        let plan = fragments::navigation_test();
+        assert!(plan.steps.len() >= 5); // Should have multiple navigation steps
+    }
+
+    #[test]
+    fn test_fragments_form_validation_test() {
+        let plan = fragments::form_validation_test("#contact-form");
+        assert!(plan.steps.len() >= 3); // Should have multiple validation steps
+    }
+
+    #[test]
+    fn test_fragments_accessibility_test() {
+        let plan = fragments::accessibility_test();
+        assert!(plan.steps.len() >= 4); // Should have navigation and keyboard tests
+    }
+
+    #[test]
+    fn test_interaction_step_serialization() {
+        let step = InteractionStep::Click {
+            selector: "#button".to_string(),
+        };
+        let json = serde_json::to_string(&step).unwrap();
+        let deserialized: InteractionStep = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            InteractionStep::Click { selector } => assert_eq!(selector, "#button"),
+            _ => panic!("Expected Click variant"),
+        }
+    }
+
+    #[test]
+    fn test_control_step_serialization() {
+        let step = ControlStep::Loop {
+            count: 3,
+            steps: vec![],
+        };
+        let json = serde_json::to_string(&step).unwrap();
+        let deserialized: ControlStep = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            ControlStep::Loop { count, .. } => assert_eq!(count, 3),
+            _ => panic!("Expected Loop variant"),
+        }
+    }
+}
