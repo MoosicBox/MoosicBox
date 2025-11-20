@@ -85,3 +85,61 @@ pub trait ExtendHtmlRenderer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_html_renderer_event_pub_new() {
+        let (pub_handle, rx) = HtmlRendererEventPub::new();
+        assert!(!rx.is_disconnected());
+        drop(pub_handle);
+        assert!(rx.is_disconnected());
+    }
+
+    #[test]
+    fn test_html_renderer_event_pub_publish() {
+        let (pub_handle, rx) = HtmlRendererEventPub::new();
+        let event = RendererEvent::Event {
+            name: "test".to_string(),
+            value: None,
+        };
+        pub_handle.publish(event).unwrap();
+        let received = rx.recv().unwrap();
+        assert!(matches!(received, RendererEvent::Event { .. }));
+    }
+
+    #[test]
+    fn test_html_renderer_event_pub_publish_disconnected() {
+        let (pub_handle, rx) = HtmlRendererEventPub::new();
+        drop(rx);
+        let event = RendererEvent::Event {
+            name: "test".to_string(),
+            value: None,
+        };
+        let result = pub_handle.publish(event);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_html_renderer_event_pub_clone() {
+        let (pub_handle, rx) = HtmlRendererEventPub::new();
+        let pub_handle_clone = pub_handle.clone();
+
+        let event1 = RendererEvent::Event {
+            name: "event1".to_string(),
+            value: Some("value1".to_string()),
+        };
+        let event2 = RendererEvent::Event {
+            name: "event2".to_string(),
+            value: Some("value2".to_string()),
+        };
+
+        pub_handle.publish(event1).unwrap();
+        pub_handle_clone.publish(event2).unwrap();
+
+        assert!(rx.recv().is_ok());
+        assert!(rx.recv().is_ok());
+    }
+}

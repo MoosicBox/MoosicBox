@@ -95,3 +95,13 @@ actions = ["hyperchad_renderer_html_actix?/actions"]
 sse     = ["hyperchad_renderer_html_actix?/sse"]
 
 extend = ["dep:thiserror"]
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+test-log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
