@@ -2655,3 +2655,541 @@ fn replace_param_in_block(
         statements: transformed_statements?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperchad_actions::dsl::{BinaryOp, Expression, Literal, Pattern, Statement};
+
+    #[test]
+    fn test_context_default_creates_one_scope() {
+        let context = Context::default();
+        assert_eq!(context.scopes.len(), 1);
+    }
+
+    #[test]
+    fn test_context_add_variable() {
+        let mut context = Context::default();
+        context.add_variable("x");
+        assert!(context.is_variable_defined("x"));
+    }
+
+    #[test]
+    fn test_context_is_variable_defined_returns_false_for_undefined() {
+        let context = Context::default();
+        assert!(!context.is_variable_defined("undefined_var"));
+    }
+
+    #[test]
+    fn test_context_is_variable_defined_returns_true_after_adding() {
+        let mut context = Context::default();
+        context.add_variable("my_var");
+        assert!(context.is_variable_defined("my_var"));
+    }
+
+    #[test]
+    fn test_context_multiple_variables_in_same_scope() {
+        let mut context = Context::default();
+        context.add_variable("x");
+        context.add_variable("y");
+        context.add_variable("z");
+        assert!(context.is_variable_defined("x"));
+        assert!(context.is_variable_defined("y"));
+        assert!(context.is_variable_defined("z"));
+    }
+
+    #[test]
+    fn test_context_resolve_enum_variant_generates_correct_code() {
+        let result = Context::resolve_enum_variant("Visibility", "Hidden");
+        let result_str = result.to_string();
+        assert!(result_str.contains("Visibility"));
+        assert!(result_str.contains("Hidden"));
+    }
+
+    #[test]
+    fn test_generate_pattern_code_for_literal_integer() {
+        let pattern = Pattern::Literal(Literal::Integer(42));
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("42"));
+    }
+
+    #[test]
+    fn test_generate_pattern_code_for_literal_string() {
+        let pattern = Pattern::Literal(Literal::String("test".to_string()));
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("test"));
+    }
+
+    #[test]
+    fn test_generate_pattern_code_for_variable() {
+        let pattern = Pattern::Variable("x".to_string());
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "x");
+    }
+
+    #[test]
+    fn test_generate_pattern_code_for_wildcard() {
+        let pattern = Pattern::Wildcard;
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "_");
+    }
+
+    #[test]
+    fn test_generate_pattern_code_for_enum_variant() {
+        let pattern = Pattern::Variant {
+            enum_name: "Option".to_string(),
+            variant: "Some".to_string(),
+            fields: vec![],
+        };
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("Option"));
+        assert!(result_str.contains("Some"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_integer() {
+        let literal = Literal::Integer(123);
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("123i64"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_float() {
+        let literal = Literal::Float(3.14);
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("3.14f64"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_string() {
+        let literal = Literal::String("hello".to_string());
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("hello"));
+        assert!(result_str.contains("to_string"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_bool_true() {
+        let literal = Literal::Bool(true);
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("Literal :: Bool"));
+        assert!(result_str.contains("true"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_bool_false() {
+        let literal = Literal::Bool(false);
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("Literal :: Bool"));
+        assert!(result_str.contains("false"));
+    }
+
+    #[test]
+    fn test_generate_literal_code_for_unit() {
+        let literal = Literal::Unit;
+        let result = generate_literal_code(&literal);
+        let result_str = result.to_string();
+        assert!(result_str.contains("Literal :: Unit"));
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_add() {
+        let result = generate_binary_op_code(&BinaryOp::Add);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "+");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_subtract() {
+        let result = generate_binary_op_code(&BinaryOp::Subtract);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "-");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_multiply() {
+        let result = generate_binary_op_code(&BinaryOp::Multiply);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "*");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_divide() {
+        let result = generate_binary_op_code(&BinaryOp::Divide);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "/");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_modulo() {
+        let result = generate_binary_op_code(&BinaryOp::Modulo);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "%");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_and() {
+        let result = generate_binary_op_code(&BinaryOp::And);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "&&");
+    }
+
+    #[test]
+    fn test_generate_binary_op_code_or() {
+        let result = generate_binary_op_code(&BinaryOp::Or);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "||");
+    }
+
+    #[test]
+    fn test_generate_unary_op_code_not() {
+        let result = generate_unary_op_code(&UnaryOp::Not);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "!");
+    }
+
+    #[test]
+    fn test_generate_unary_op_code_minus() {
+        let result = generate_unary_op_code(&UnaryOp::Minus);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "-");
+    }
+
+    #[test]
+    fn test_generate_unary_op_code_plus() {
+        let result = generate_unary_op_code(&UnaryOp::Plus);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "+");
+    }
+
+    #[test]
+    fn test_generate_unary_op_code_ref() {
+        let result = generate_unary_op_code(&UnaryOp::Ref);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "&");
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_literal() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::Integer(42));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hyperchad_actions :: dsl :: Expression :: Literal"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_undefined_variable() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("undefined".to_string());
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert_eq!(result_str, "undefined");
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_defined_variable() {
+        let mut context = Context::default();
+        context.add_variable("my_var");
+        let expr = Expression::Variable("my_var".to_string());
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementVariable"));
+        assert!(result_str.contains("my_var"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_enum_variant() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("Key::Escape".to_string());
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Key"));
+        assert!(result_str.contains("Escape"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_add() {
+        let mut context = Context::default();
+        let left = Expression::Literal(Literal::Integer(1));
+        let right = Expression::Literal(Literal::Integer(2));
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Add,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("plus"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_subtract() {
+        let mut context = Context::default();
+        let left = Expression::Literal(Literal::Integer(5));
+        let right = Expression::Literal(Literal::Integer(3));
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Subtract,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("minus"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_multiply() {
+        let mut context = Context::default();
+        let left = Expression::Literal(Literal::Integer(3));
+        let right = Expression::Literal(Literal::Integer(4));
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Multiply,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("multiply"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_divide() {
+        let mut context = Context::default();
+        let left = Expression::Literal(Literal::Integer(10));
+        let right = Expression::Literal(Literal::Integer(2));
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Divide,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("divide"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_equal() {
+        let mut context = Context::default();
+        let left = Expression::Variable("x".to_string());
+        let right = Expression::Variable("y".to_string());
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Equal,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hyperchad_actions :: logic :: eq"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_binary_equal_with_enum_variant() {
+        let mut context = Context::default();
+        let left = Expression::Variable("value".to_string());
+        let right = Expression::Variable("Key::Escape".to_string());
+        let expr = Expression::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Equal,
+            right: Box::new(right),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        // Enum variant should be wrapped in Value::from
+        assert!(result_str.contains("hyperchad_actions :: logic :: Value :: from"));
+        assert!(result_str.contains("Key"));
+        assert!(result_str.contains("Escape"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_unary_not() {
+        let mut context = Context::default();
+        let inner = Expression::Literal(Literal::Bool(true));
+        let expr = Expression::Unary {
+            op: UnaryOp::Not,
+            expr: Box::new(inner),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("!"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_unary_minus() {
+        let mut context = Context::default();
+        let inner = Expression::Literal(Literal::Integer(42));
+        let expr = Expression::Unary {
+            op: UnaryOp::Minus,
+            expr: Box::new(inner),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("-"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_grouping() {
+        let mut context = Context::default();
+        let inner = Expression::Binary {
+            left: Box::new(Expression::Literal(Literal::Integer(1))),
+            op: BinaryOp::Add,
+            right: Box::new(Expression::Literal(Literal::Integer(2))),
+        };
+        let expr = Expression::Grouping(Box::new(inner));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Grouping"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_array() {
+        let mut context = Context::default();
+        let expr = Expression::Array(vec![
+            Expression::Literal(Literal::Integer(1)),
+            Expression::Literal(Literal::Integer(2)),
+            Expression::Literal(Literal::Integer(3)),
+        ]);
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("vec !"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_empty_array() {
+        let mut context = Context::default();
+        let expr = Expression::Array(vec![]);
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("vec !"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_tuple() {
+        let mut context = Context::default();
+        let expr = Expression::Tuple(vec![
+            Expression::Literal(Literal::Integer(1)),
+            Expression::Literal(Literal::String("test".to_string())),
+        ]);
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("("));
+        assert!(result_str.contains(","));
+        assert!(result_str.contains(")"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_closure_with_params() {
+        let mut context = Context::default();
+        let expr = Expression::Closure {
+            params: vec!["x".to_string(), "y".to_string()],
+            body: Box::new(Expression::Variable("x".to_string())),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("|"));
+        assert!(result_str.contains("x"));
+        assert!(result_str.contains("y"));
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_raw_rust() {
+        let mut context = Context::default();
+        let expr = Expression::RawRust("some_function()".to_string());
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert_eq!(result_str, "some_function ()");
+    }
+
+    #[test]
+    fn test_generate_expression_code_for_raw_rust_invalid() {
+        let mut context = Context::default();
+        let expr = Expression::RawRust("{{{{invalid".to_string());
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_generate_statement_code_for_let() {
+        let mut context = Context::default();
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            value: Expression::Literal(Literal::Integer(42)),
+        };
+        let result = generate_statement_code(&mut context, &stmt).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hyperchad_actions :: ActionType :: Let"));
+        assert!(result_str.contains("x"));
+    }
+
+    #[test]
+    fn test_generate_action_for_id_show_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "show", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("show_str_id"));
+    }
+
+    #[test]
+    fn test_generate_action_for_id_hide_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "hide", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hide_str_id"));
+    }
+
+    #[test]
+    fn test_generate_action_for_id_show_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "show", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test]
+    fn test_generate_action_for_id_unknown_method_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "unknown_method", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown method"));
+    }
+
+    #[test]
+    fn test_generate_action_for_class_show_no_args() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "show", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("show_str_class"));
+        assert!(result_str.contains("test-class"));
+    }
+
+    #[test]
+    fn test_generate_action_for_class_hide_no_args() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "hide", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hide_str_class"));
+    }
+
+    #[test]
+    fn test_generate_action_for_class_unknown_method_returns_error() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "unknown", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown method"));
+    }
+}
