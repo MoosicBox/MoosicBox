@@ -332,3 +332,468 @@ fn get_workspace_members(
 
     Ok(members)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_extract_features_with_valid_features() {
+        let cargo_toml = toml::from_str::<Value>(
+            r#"
+[features]
+default = ["feature1"]
+feature1 = ["dep1/feature1"]
+feature2 = []
+"#,
+        )
+        .unwrap();
+
+        let features = extract_features(&cargo_toml);
+
+        assert_eq!(features.len(), 3);
+        assert_eq!(features.get("default"), Some(&vec!["feature1".to_string()]));
+        assert_eq!(
+            features.get("feature1"),
+            Some(&vec!["dep1/feature1".to_string()])
+        );
+        assert_eq!(features.get("feature2"), Some(&vec![]));
+    }
+
+    #[test]
+    fn test_extract_features_empty_cargo_toml() {
+        let cargo_toml = toml::from_str::<Value>("[package]\nname = \"test\"").unwrap();
+        let features = extract_features(&cargo_toml);
+        assert!(features.is_empty());
+    }
+
+    #[test]
+    fn test_extract_features_non_array_values() {
+        let cargo_toml = toml::from_str::<Value>(
+            r#"
+[features]
+valid = ["dep1"]
+invalid = "string_value"
+"#,
+        )
+        .unwrap();
+
+        let features = extract_features(&cargo_toml);
+        assert_eq!(features.len(), 1);
+        assert!(features.contains_key("valid"));
+        assert!(!features.contains_key("invalid"));
+    }
+
+    #[test]
+    fn test_package_info_depends_on() {
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features: BTreeMap::new(),
+            dependencies: vec![
+                DependencyInfo {
+                    name: "dep1".to_string(),
+                    optional: false,
+                    workspace_member: false,
+                    features: vec![],
+                },
+                DependencyInfo {
+                    name: "dep2".to_string(),
+                    optional: true,
+                    workspace_member: true,
+                    features: vec!["feature1".to_string()],
+                },
+            ],
+        };
+
+        assert!(pkg_info.depends_on("dep1"));
+        assert!(pkg_info.depends_on("dep2"));
+        assert!(!pkg_info.depends_on("dep3"));
+    }
+
+    #[test]
+    fn test_package_info_has_feature() {
+        let mut features = BTreeMap::new();
+        features.insert("feature1".to_string(), vec![]);
+        features.insert("feature2".to_string(), vec!["dep1/feature2".to_string()]);
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![],
+        };
+
+        assert!(pkg_info.has_feature("feature1"));
+        assert!(pkg_info.has_feature("feature2"));
+        assert!(!pkg_info.has_feature("feature3"));
+    }
+
+    #[test]
+    fn test_package_info_feature_definition() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "test_feature".to_string(),
+            vec!["dep1/feature1".to_string(), "dep2/feature2".to_string()],
+        );
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![],
+        };
+
+        let def = pkg_info.feature_definition("test_feature");
+        assert!(def.is_some());
+        assert_eq!(def.unwrap().len(), 2);
+
+        assert!(pkg_info.feature_definition("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_feature_activates_dependencies_basic() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "test_feature".to_string(),
+            vec![
+                "dep1/feature1".to_string(),
+                "standalone_feature".to_string(),
+            ],
+        );
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![DependencyInfo {
+                name: "dep1".to_string(),
+                optional: false,
+                workspace_member: false,
+                features: vec![],
+            }],
+        };
+
+        let activated = pkg_info.feature_activates_dependencies("test_feature");
+        assert_eq!(activated.len(), 1);
+        assert_eq!(activated[0].name, "dep1");
+        assert_eq!(activated[0].features, vec!["feature1".to_string()]);
+    }
+
+    #[test]
+    fn test_feature_activates_dependencies_with_optional() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "test_feature".to_string(),
+            vec!["dep1?/feature1".to_string(), "dep2/feature2".to_string()],
+        );
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![
+                DependencyInfo {
+                    name: "dep1".to_string(),
+                    optional: true,
+                    workspace_member: false,
+                    features: vec![],
+                },
+                DependencyInfo {
+                    name: "dep2".to_string(),
+                    optional: false,
+                    workspace_member: true,
+                    features: vec![],
+                },
+            ],
+        };
+
+        let activated = pkg_info.feature_activates_dependencies("test_feature");
+        assert_eq!(activated.len(), 2);
+        assert_eq!(activated[0].name, "dep1");
+        assert_eq!(activated[0].features, vec!["feature1".to_string()]);
+        assert_eq!(activated[1].name, "dep2");
+        assert_eq!(activated[1].features, vec!["feature2".to_string()]);
+    }
+
+    #[test]
+    fn test_feature_activates_dependencies_nonexistent_feature() {
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features: BTreeMap::new(),
+            dependencies: vec![],
+        };
+
+        let activated = pkg_info.feature_activates_dependencies("nonexistent");
+        assert!(activated.is_empty());
+    }
+
+    #[test]
+    fn test_feature_activates_dependencies_no_slash() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "test_feature".to_string(),
+            vec!["standalone".to_string(), "another_standalone".to_string()],
+        );
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![],
+        };
+
+        let activated = pkg_info.feature_activates_dependencies("test_feature");
+        assert!(activated.is_empty());
+    }
+
+    #[test]
+    fn test_skips_feature_on_os_no_clippier_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: temp_dir.path().to_path_buf(),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features: BTreeMap::new(),
+            dependencies: vec![],
+        };
+
+        assert!(!pkg_info.skips_feature_on_os("feature1", "linux"));
+    }
+
+    #[test]
+    fn test_skips_feature_on_os_with_config() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let clippier_toml = r#"
+[[config]]
+os = "windows"
+skip-features = ["windows_only_feature"]
+
+[[config]]
+os = "linux"
+skip-features = ["linux_only_feature"]
+"#;
+        fs::write(temp_dir.path().join("clippier.toml"), clippier_toml).unwrap();
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: temp_dir.path().to_path_buf(),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features: BTreeMap::new(),
+            dependencies: vec![],
+        };
+
+        assert!(pkg_info.skips_feature_on_os("windows_only_feature", "windows"));
+        assert!(pkg_info.skips_feature_on_os("linux_only_feature", "linux"));
+        assert!(!pkg_info.skips_feature_on_os("windows_only_feature", "linux"));
+        assert!(!pkg_info.skips_feature_on_os("nonexistent_feature", "linux"));
+    }
+
+    #[test]
+    fn test_skips_feature_on_os_malformed_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join("clippier.toml"),
+            "invalid toml content [[[",
+        )
+        .unwrap();
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: temp_dir.path().to_path_buf(),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features: BTreeMap::new(),
+            dependencies: vec![],
+        };
+
+        assert!(!pkg_info.skips_feature_on_os("feature1", "linux"));
+    }
+
+    #[test]
+    fn test_get_all_features() {
+        let mut features = BTreeMap::new();
+        features.insert("feature1".to_string(), vec![]);
+        features.insert("feature2".to_string(), vec!["dep1/feature2".to_string()]);
+        features.insert("feature3".to_string(), vec![]);
+
+        let pkg_info = PackageInfo {
+            name: "test_pkg".to_string(),
+            path: PathBuf::from("/test"),
+            cargo_toml: Value::Table(toml::map::Map::new()),
+            features,
+            dependencies: vec![],
+        };
+
+        let all_features = pkg_info.get_all_features();
+        assert_eq!(all_features.len(), 3);
+        assert!(all_features.contains(&"feature1".to_string()));
+        assert!(all_features.contains(&"feature2".to_string()));
+        assert!(all_features.contains(&"feature3".to_string()));
+    }
+
+    #[test]
+    fn test_extract_dependencies_all_sections() {
+        let cargo_toml = toml::from_str::<Value>(
+            r#"
+[package]
+name = "test_pkg"
+
+[dependencies]
+regular_dep = "1.0"
+optional_dep = { version = "1.0", optional = true, features = ["feature1"] }
+
+[dev-dependencies]
+dev_dep = "2.0"
+
+[build-dependencies]
+build_dep = { version = "3.0", features = ["build_feature"] }
+"#,
+        )
+        .unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = []",
+        )
+        .unwrap();
+
+        let workspace = WorkspaceContext::new(temp_dir.path()).unwrap();
+        let deps = extract_dependencies(&cargo_toml, &workspace, temp_dir.path());
+
+        assert_eq!(deps.len(), 4);
+
+        let regular_dep = deps.iter().find(|d| d.name == "regular_dep").unwrap();
+        assert!(!regular_dep.optional);
+        assert!(regular_dep.features.is_empty());
+
+        let optional_dep = deps.iter().find(|d| d.name == "optional_dep").unwrap();
+        assert!(optional_dep.optional);
+        assert_eq!(optional_dep.features, vec!["feature1".to_string()]);
+
+        let dev_dep = deps.iter().find(|d| d.name == "dev_dep").unwrap();
+        assert!(!dev_dep.optional);
+
+        let build_dep = deps.iter().find(|d| d.name == "build_dep").unwrap();
+        assert_eq!(build_dep.features, vec!["build_feature".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_dependencies_empty() {
+        let cargo_toml = toml::from_str::<Value>("[package]\nname = \"test_pkg\"").unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = []",
+        )
+        .unwrap();
+
+        let workspace = WorkspaceContext::new(temp_dir.path()).unwrap();
+        let deps = extract_dependencies(&cargo_toml, &workspace, temp_dir.path());
+
+        assert!(deps.is_empty());
+    }
+
+    #[test]
+    fn test_get_workspace_members_simple() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path();
+
+        // Create workspace
+        fs::write(
+            root.join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["pkg1", "pkg2"]
+"#,
+        )
+        .unwrap();
+
+        // Create pkg1
+        let pkg1 = root.join("pkg1");
+        fs::create_dir(&pkg1).unwrap();
+        fs::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
+
+        // Create pkg2
+        let pkg2 = root.join("pkg2");
+        fs::create_dir(&pkg2).unwrap();
+        fs::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
+
+        let workspace = WorkspaceContext::new(root).unwrap();
+        let members = get_workspace_members(&workspace, root).unwrap();
+
+        assert_eq!(members.len(), 2);
+        assert!(members.contains_key("pkg1"));
+        assert!(members.contains_key("pkg2"));
+    }
+
+    #[test]
+    fn test_get_workspace_members_with_glob() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path();
+
+        // Create workspace with glob pattern
+        fs::write(
+            root.join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["packages/*"]
+"#,
+        )
+        .unwrap();
+
+        // Create packages directory
+        let packages_dir = root.join("packages");
+        fs::create_dir(&packages_dir).unwrap();
+
+        // Create pkg1
+        let pkg1 = packages_dir.join("pkg1");
+        fs::create_dir(&pkg1).unwrap();
+        fs::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
+
+        // Create pkg2
+        let pkg2 = packages_dir.join("pkg2");
+        fs::create_dir(&pkg2).unwrap();
+        fs::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
+
+        let workspace = WorkspaceContext::new(root).unwrap();
+        let members = get_workspace_members(&workspace, root).unwrap();
+
+        assert_eq!(members.len(), 2);
+        assert!(members.contains_key("pkg1"));
+        assert!(members.contains_key("pkg2"));
+    }
+
+    #[test]
+    fn test_get_workspace_members_missing_cargo_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path();
+
+        fs::write(
+            root.join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["pkg1"]
+"#,
+        )
+        .unwrap();
+
+        // Create directory without Cargo.toml
+        fs::create_dir(root.join("pkg1")).unwrap();
+
+        let workspace = WorkspaceContext::new(root).unwrap();
+        let members = get_workspace_members(&workspace, root).unwrap();
+
+        assert!(members.is_empty());
+    }
+}

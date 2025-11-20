@@ -728,3 +728,438 @@ pub fn find_packages_affected_by_external_deps_with_mapping(
 
     package_to_deps
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_cargo_lock_changes_version_change() {
+        let changes = vec![
+            (' ', "[[package]]".to_string()),
+            ('+', "name = \"serde\"".to_string()),
+            ('-', "version = \"1.0.0\"".to_string()),
+            ('+', "version = \"1.0.1\"".to_string()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        assert_eq!(result, vec!["serde"]);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_changes_new_package() {
+        let changes = vec![
+            ('+', "[[package]]".to_string()),
+            ('+', "name = \"new_dep\"".to_string()),
+            ('+', "version = \"1.0.0\"".to_string()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        assert_eq!(result, vec!["new_dep"]);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_changes_checksum_only() {
+        let changes = vec![
+            (' ', "[[package]]".to_string()),
+            (' ', "name = \"unchanged\"".to_string()),
+            (' ', "version = \"1.0.0\"".to_string()),
+            ('-', "checksum = \"abc123\"".to_string()),
+            ('+', "checksum = \"def456\"".to_string()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        assert!(result.is_empty(), "Checksum-only changes should be ignored");
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_changes_multiple_packages() {
+        let changes = vec![
+            (' ', "[[package]]".to_string()),
+            ('+', "name = \"dep1\"".to_string()),
+            ('-', "version = \"1.0.0\"".to_string()),
+            ('+', "version = \"1.0.1\"".to_string()),
+            (' ', String::new()),
+            (' ', "[[package]]".to_string()),
+            ('+', "name = \"dep2\"".to_string()),
+            ('+', "version = \"2.0.0\"".to_string()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        assert_eq!(result, vec!["dep1", "dep2"]);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_changes_empty_lines() {
+        let changes = vec![
+            (' ', "[[package]]".to_string()),
+            ('+', "name = \"test_dep\"".to_string()),
+            ('+', "version = \"1.0.0\"".to_string()),
+            (' ', String::new()),
+            (' ', String::new()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        assert_eq!(result, vec!["test_dep"]);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_changes_new_package_detection() {
+        let changes = vec![
+            ('+', "[[package]]".to_string()),
+            ('+', "name = \"new_package\"".to_string()),
+            ('+', "version = \"1.0.0\"".to_string()),
+        ];
+
+        let result = parse_cargo_lock_changes(&changes);
+        // Should detect as a new package since [[package]] line is marked with '+'
+        assert_eq!(result, vec!["new_package"]);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_empty_input() {
+        let changes: Vec<(char, String)> = vec![];
+        let result = parse_cargo_lock_changes(&changes);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_basic() {
+        let content = r#"
+version = 3
+
+[[package]]
+name = "serde"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "toml"
+version = "0.5.0"
+dependencies = [
+    "serde",
+]
+"#;
+
+        let result = parse_cargo_lock(content).unwrap();
+        assert_eq!(result.version, 3);
+        assert_eq!(result.package.len(), 2);
+
+        let serde_pkg = result.package.iter().find(|p| p.name == "serde").unwrap();
+        assert_eq!(serde_pkg.version, "1.0.0");
+        assert!(serde_pkg.source.is_some());
+
+        let toml_pkg = result.package.iter().find(|p| p.name == "toml").unwrap();
+        assert_eq!(toml_pkg.version, "0.5.0");
+        assert_eq!(toml_pkg.dependencies.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_empty() {
+        let content = r"
+version = 3
+";
+
+        let result = parse_cargo_lock(content).unwrap();
+        assert_eq!(result.version, 3);
+        assert!(result.package.is_empty());
+    }
+
+    #[test]
+    fn test_parse_cargo_lock_missing_version() {
+        // Test with missing version field - should default to 3
+        let content = r"
+[[package]]
+name = 'test'
+version = '1.0.0'
+";
+
+        let result = parse_cargo_lock(content);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().version, 3);
+    }
+
+    #[test]
+    fn test_find_transitively_affected_external_deps_direct_only() {
+        let cargo_lock = CargoLock {
+            version: 3,
+            package: vec![
+                CargoLockPackage {
+                    name: "dep1".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: None,
+                },
+                CargoLockPackage {
+                    name: "dep2".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: Some(vec!["dep1".to_string()]),
+                },
+            ],
+        };
+
+        let changed = vec!["dep1".to_string()];
+        let result = find_transitively_affected_external_deps(&cargo_lock, &changed);
+
+        assert!(result.contains(&"dep1".to_string()));
+        assert!(result.contains(&"dep2".to_string()));
+    }
+
+    #[test]
+    fn test_find_transitively_affected_external_deps_no_dependents() {
+        let cargo_lock = CargoLock {
+            version: 3,
+            package: vec![CargoLockPackage {
+                name: "standalone".to_string(),
+                version: "1.0.0".to_string(),
+                source: None,
+                dependencies: None,
+            }],
+        };
+
+        let changed = vec!["standalone".to_string()];
+        let result = find_transitively_affected_external_deps(&cargo_lock, &changed);
+
+        assert_eq!(result, vec!["standalone"]);
+    }
+
+    #[test]
+    fn test_find_transitively_affected_external_deps_chain() {
+        let cargo_lock = CargoLock {
+            version: 3,
+            package: vec![
+                CargoLockPackage {
+                    name: "dep1".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: None,
+                },
+                CargoLockPackage {
+                    name: "dep2".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: Some(vec!["dep1 1.0.0".to_string()]),
+                },
+                CargoLockPackage {
+                    name: "dep3".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: Some(vec!["dep2 1.0.0".to_string()]),
+                },
+            ],
+        };
+
+        let changed = vec!["dep1".to_string()];
+        let result = find_transitively_affected_external_deps(&cargo_lock, &changed);
+
+        assert!(result.contains(&"dep1".to_string()));
+        assert!(result.contains(&"dep2".to_string()));
+        assert!(result.contains(&"dep3".to_string()));
+    }
+
+    #[test]
+    fn test_find_transitively_affected_with_previous_new_deps() {
+        let previous = CargoLock {
+            version: 3,
+            package: vec![CargoLockPackage {
+                name: "existing".to_string(),
+                version: "1.0.0".to_string(),
+                source: None,
+                dependencies: None,
+            }],
+        };
+
+        let current = CargoLock {
+            version: 3,
+            package: vec![
+                CargoLockPackage {
+                    name: "existing".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: None,
+                },
+                CargoLockPackage {
+                    name: "new_dep".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: None,
+                },
+            ],
+        };
+
+        let changed = vec!["new_dep".to_string()];
+        let result = find_transitively_affected_external_deps_with_previous(
+            &current,
+            Some(&previous),
+            &changed,
+        );
+
+        assert_eq!(result, vec!["new_dep"]);
+    }
+
+    #[test]
+    fn test_find_transitively_affected_with_previous_changed_deps() {
+        let previous = CargoLock {
+            version: 3,
+            package: vec![CargoLockPackage {
+                name: "dep1".to_string(),
+                version: "1.0.0".to_string(),
+                source: None,
+                dependencies: None,
+            }],
+        };
+
+        let current = CargoLock {
+            version: 3,
+            package: vec![
+                CargoLockPackage {
+                    name: "dep1".to_string(),
+                    version: "2.0.0".to_string(),
+                    source: None,
+                    dependencies: None,
+                },
+                CargoLockPackage {
+                    name: "dep2".to_string(),
+                    version: "1.0.0".to_string(),
+                    source: None,
+                    dependencies: Some(vec!["dep1 2.0.0".to_string()]),
+                },
+            ],
+        };
+
+        let changed = vec!["dep1".to_string()];
+        let result = find_transitively_affected_external_deps_with_previous(
+            &current,
+            Some(&previous),
+            &changed,
+        );
+
+        assert!(result.contains(&"dep1".to_string()));
+        assert!(result.contains(&"dep2".to_string()));
+    }
+
+    #[test]
+    fn test_find_packages_affected_by_external_deps_basic() {
+        let mut dep_map = BTreeMap::new();
+        dep_map.insert(
+            "serde".to_string(),
+            vec!["pkg1".to_string(), "pkg2".to_string()],
+        );
+        dep_map.insert("tokio".to_string(), vec!["pkg1".to_string()]);
+
+        let changed = vec!["serde".to_string()];
+        let result = find_packages_affected_by_external_deps(&dep_map, &changed);
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&"pkg1".to_string()));
+        assert!(result.contains(&"pkg2".to_string()));
+    }
+
+    #[test]
+    fn test_find_packages_affected_by_external_deps_multiple_changes() {
+        let mut dep_map = BTreeMap::new();
+        dep_map.insert("serde".to_string(), vec!["pkg1".to_string()]);
+        dep_map.insert("tokio".to_string(), vec!["pkg2".to_string()]);
+
+        let changed = vec!["serde".to_string(), "tokio".to_string()];
+        let result = find_packages_affected_by_external_deps(&dep_map, &changed);
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&"pkg1".to_string()));
+        assert!(result.contains(&"pkg2".to_string()));
+    }
+
+    #[test]
+    fn test_find_packages_affected_by_external_deps_no_match() {
+        let mut dep_map = BTreeMap::new();
+        dep_map.insert("serde".to_string(), vec!["pkg1".to_string()]);
+
+        let changed = vec!["unknown_dep".to_string()];
+        let result = find_packages_affected_by_external_deps(&dep_map, &changed);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_find_packages_affected_with_mapping() {
+        let mut dep_map = BTreeMap::new();
+        dep_map.insert(
+            "serde".to_string(),
+            vec!["pkg1".to_string(), "pkg2".to_string()],
+        );
+        dep_map.insert(
+            "tokio".to_string(),
+            vec!["pkg1".to_string(), "pkg3".to_string()],
+        );
+
+        let changed = vec!["serde".to_string(), "tokio".to_string()];
+        let result = find_packages_affected_by_external_deps_with_mapping(&dep_map, &changed);
+
+        assert_eq!(result.len(), 3);
+
+        let pkg1_deps = result.get("pkg1").unwrap();
+        assert_eq!(pkg1_deps.len(), 2);
+        assert!(pkg1_deps.contains(&"serde".to_string()));
+        assert!(pkg1_deps.contains(&"tokio".to_string()));
+
+        let pkg2_deps = result.get("pkg2").unwrap();
+        assert_eq!(pkg2_deps, &vec!["serde".to_string()]);
+
+        let pkg3_deps = result.get("pkg3").unwrap();
+        assert_eq!(pkg3_deps, &vec!["tokio".to_string()]);
+    }
+
+    #[test]
+    fn test_find_packages_affected_with_mapping_dedup() {
+        let mut dep_map = BTreeMap::new();
+        dep_map.insert("serde".to_string(), vec!["pkg1".to_string()]);
+
+        // Same dependency listed twice
+        let changed = vec!["serde".to_string(), "serde".to_string()];
+        let result = find_packages_affected_by_external_deps_with_mapping(&dep_map, &changed);
+
+        let pkg1_deps = result.get("pkg1").unwrap();
+        assert_eq!(pkg1_deps.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_dependency_name_simple() {
+        assert_eq!(parse_dependency_name("serde"), "serde");
+    }
+
+    #[test]
+    fn test_parse_dependency_name_with_version() {
+        assert_eq!(parse_dependency_name("serde 1.0.0"), "serde");
+    }
+
+    #[test]
+    fn test_parse_dependency_name_with_features() {
+        assert_eq!(
+            parse_dependency_name("serde 1.0.0 (registry+https://...)"),
+            "serde"
+        );
+    }
+
+    #[test]
+    fn test_parse_dependency_name_empty() {
+        assert_eq!(parse_dependency_name(""), String::new());
+    }
+
+    #[test]
+    fn test_cargo_lock_package_serialization() {
+        let package = CargoLockPackage {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            source: Some("registry".to_string()),
+            dependencies: Some(vec!["dep1".to_string()]),
+        };
+
+        let json = serde_json::to_string(&package).unwrap();
+        let deserialized: CargoLockPackage = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.name, "test");
+        assert_eq!(deserialized.version, "1.0.0");
+        assert_eq!(deserialized.source, Some("registry".to_string()));
+    }
+}
