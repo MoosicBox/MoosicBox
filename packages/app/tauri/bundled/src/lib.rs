@@ -28,6 +28,19 @@ use switchy_async::sync::oneshot;
 use tauri::RunEvent;
 
 /// Commands for the Tauri bundled app service.
+///
+/// These commands control the lifecycle and event handling of the embedded
+/// `MoosicBox` server within the Tauri application.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_app_tauri_bundled::Command;
+/// use switchy_async::sync::oneshot;
+///
+/// let (sender, receiver) = oneshot::channel();
+/// let cmd = Command::WaitForStartup { sender };
+/// ```
 #[derive(Debug, AsRefStr)]
 pub enum Command {
     /// Process a Tauri run event.
@@ -39,6 +52,7 @@ pub enum Command {
 }
 
 impl std::fmt::Display for Command {
+    /// Formats the command as a string using its `AsRefStr` representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -75,8 +89,7 @@ impl service::Processor for service::Service {
     ///
     /// # Errors
     ///
-    /// * If the server handle fails to join during shutdown
-    /// * If an IO error occurs in the embedded server during shutdown
+    /// * `WaitForShutdown` - Returns error if the server handle fails to join or if an IO error occurs in the embedded server
     async fn process_command(
         ctx: Arc<RwLock<Context>>,
         command: Command,
@@ -122,6 +135,9 @@ impl service::Processor for service::Service {
 }
 
 /// Context for the Tauri bundled app service.
+///
+/// Holds the runtime state of the embedded server, including its join handle
+/// and startup notification channel.
 pub struct Context {
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
     receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
@@ -204,7 +220,7 @@ impl Context {
     ///
     /// # Errors
     ///
-    /// * If an IO error occurs
+    /// * Returns error if shutdown fails (currently always succeeds)
     pub fn handle_event(&self, event: &Arc<RunEvent>) -> Result<(), std::io::Error> {
         if let tauri::RunEvent::ExitRequested { .. } = **event {
             self.shutdown()?;
@@ -212,11 +228,11 @@ impl Context {
         Ok(())
     }
 
-    /// Shuts down the embedded server.
+    /// Shuts down the embedded server by aborting its runtime handle.
     ///
     /// # Errors
     ///
-    /// * Currently always succeeds, but returns `Result` to allow for future error conditions
+    /// * Currently always succeeds, but returns `Result` for API consistency and to allow for future error conditions
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
         if let Some(handle) = &self.server_handle {
             handle.abort();
