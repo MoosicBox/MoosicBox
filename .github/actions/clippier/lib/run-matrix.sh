@@ -237,13 +237,36 @@ write_run_subsection() {
     local total_failed=$(echo "$run_json" | jq -r '.total_failed')
     local failures=$(echo "$run_json" | jq -c '.failures')
 
-    echo "---" >> $GITHUB_STEP_SUMMARY
+    # Determine if should be open based on auto-expand setting AND failures
+    local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
+    local details_tag="<details>"
+
+    case "$auto_expand" in
+        "always")
+            details_tag="<details open>"
+            ;;
+        "failures")
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+        "never")
+            details_tag="<details>"
+            ;;
+        *)
+            # Default to "failures" behavior
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+    esac
+
+    # Write collapsible section
     echo "" >> $GITHUB_STEP_SUMMARY
-    echo "### 📦 $label: $package" >> $GITHUB_STEP_SUMMARY
+    echo "$details_tag" >> $GITHUB_STEP_SUMMARY
+    echo "<summary><b>📦 $label: $package</b> - $(get_status_emoji_and_text "$total_runs" "$total_passed" "$total_failed")</summary>" >> $GITHUB_STEP_SUMMARY
     echo "" >> $GITHUB_STEP_SUMMARY
     echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
-    echo "" >> $GITHUB_STEP_SUMMARY
-    echo "**Stats:** $total_passed/$total_runs passed" >> $GITHUB_STEP_SUMMARY
     echo "" >> $GITHUB_STEP_SUMMARY
 
     if [[ "$total_failed" -gt 0 ]]; then
@@ -329,6 +352,9 @@ write_run_subsection() {
         echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
     fi
+
+    echo "</details>" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
 }
 
 # Flush combined summary from accumulated state
