@@ -362,11 +362,29 @@ flush_combined_summary() {
     local title="Combined Test Results"
     [[ "$group_name" != "default" ]] && title="$title: $group_name"
 
-    # Determine if should be open based on failures
+    # Determine if should be open based on auto-expand setting
+    local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
     local details_tag="<details>"
-    if [[ "$total_failed" -gt 0 ]]; then
-        details_tag="<details open>"
-    fi
+
+    case "$auto_expand" in
+        "always")
+            details_tag="<details open>"
+            ;;
+        "failures")
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+        "never")
+            details_tag="<details>"
+            ;;
+        *)
+            # Default to "failures" behavior
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+    esac
 
     # Write header
     echo "$details_tag" >> $GITHUB_STEP_SUMMARY
