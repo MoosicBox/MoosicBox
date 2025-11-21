@@ -4,7 +4,7 @@ author: "MoosicBox"
 
 inputs:
     command:
-        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, run-matrix)"
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, run-matrix, run-matrix-flush)"
         required: true
 
     workspace-path:
@@ -379,6 +379,16 @@ inputs:
         required: false
         default: "bash"
 
+    run-matrix-summary-mode:
+        description: "Summary mode: individual (default), combined, or group:<name>"
+        required: false
+        default: "individual"
+
+    run-matrix-summary-flush:
+        description: "Whether to flush accumulated summaries (for combined/group modes)"
+        required: false
+        default: "false"
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -613,6 +623,8 @@ runs:
               INPUT_RUN_MATRIX_GENERATE_SUMMARY: ${{ inputs.run-matrix-generate-summary }}
               INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND: ${{ inputs.run-matrix-summary-auto-expand }}
               INPUT_RUN_MATRIX_DEBUG_SHELLS: ${{ inputs.run-matrix-debug-shells }}
+              INPUT_RUN_MATRIX_SUMMARY_MODE: ${{ inputs.run-matrix-summary-mode }}
+              INPUT_RUN_MATRIX_SUMMARY_FLUSH: ${{ inputs.run-matrix-summary-flush }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

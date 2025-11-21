@@ -1130,6 +1130,11 @@ main() {
         return
     fi
 
+    if [[ "$INPUT_COMMAND" == "run-matrix-flush" ]]; then
+        run_matrix_flush_command
+        return
+    fi
+
     # Set phase for other commands
     CONTEXT_PHASE="git detection"
     detect_git_range

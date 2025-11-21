@@ -10,6 +10,7 @@
 # - Multiple execution strategies (sequential, parallel, combined, chunked)
 # - Full failure tracking and reporting
 # - Rich GitHub Actions summary generation
+# - Configurable summary modes (individual, combined, group)
 #
 # Dependencies:
 #   - lib/template.sh: Template rendering and strategy functions
@@ -18,6 +19,9 @@
 #   run_matrix_command  # Reads from INPUT_RUN_MATRIX_* environment variables
 #
 # =============================================================================
+
+# Global variables for state management
+SUMMARY_STATE_DIR="${RUNNER_TEMP:-/tmp}/run-matrix-summary-state"
 
 # Strip ANSI color codes from text
 #
@@ -118,6 +122,279 @@ get_debug_command() {
     fi
 }
 
+# Initialize summary state directory
+#
+# Creates the state directory for accumulating summary data in combined mode.
+# Safe to call multiple times.
+#
+# Side effects:
+#   Creates $SUMMARY_STATE_DIR directory
+init_summary_state() {
+    mkdir -p "$SUMMARY_STATE_DIR"
+}
+
+# Accumulate summary data to JSON state file
+#
+# Stores run results in a JSON file for later aggregation in combined mode.
+# Each run's data is appended to an array in the state file.
+#
+# Arguments:
+#   $1 - group_name: Name of the group (e.g., "default", "tests", "validation")
+#   $2 - package_name: Name of the package being tested
+#   $3 - working_dir: Working directory where commands were executed
+#   $4 - label: Custom label for the test run
+#   $5 - total_runs: Total number of command runs
+#   $6 - total_passed: Number of passed runs
+#   $7 - total_failed: Number of failed runs
+#   $8 - failures_json: JSON array of failure objects
+#
+# Side effects:
+#   Creates or appends to $SUMMARY_STATE_DIR/group_<name>.json
+accumulate_summary_to_state() {
+    local group_name="$1"
+    local package_name="$2"
+    local working_dir="$3"
+    local label="$4"
+    local total_runs="$5"
+    local total_passed="$6"
+    local total_failed="$7"
+    local failures_json="$8"
+
+    init_summary_state
+
+    local state_file="$SUMMARY_STATE_DIR/group_${group_name}.json"
+
+    # Create JSON object with this run's data
+    local run_data=$(jq -n \
+        --arg pkg "$package_name" \
+        --arg label "$label" \
+        --arg working_dir "$working_dir" \
+        --argjson total_runs "$total_runs" \
+        --argjson total_passed "$total_passed" \
+        --argjson total_failed "$total_failed" \
+        --argjson failures "$failures_json" \
+        '{
+            package: $pkg,
+            label: $label,
+            working_dir: $working_dir,
+            total_runs: $total_runs,
+            total_passed: $total_passed,
+            total_failed: $total_failed,
+            failures: $failures
+        }')
+
+    # Append to state file (create array if doesn't exist)
+    if [[ -f "$state_file" ]]; then
+        local temp_file=$(mktemp)
+        jq ". += [$run_data]" "$state_file" > "$temp_file"
+        mv "$temp_file" "$state_file"
+    else
+        echo "[$run_data]" > "$state_file"
+    fi
+
+    echo "📝 Accumulated summary data for group: $group_name"
+}
+
+# Get status emoji and text based on results
+#
+# Arguments:
+#   $1 - total_runs: Total number of runs
+#   $2 - total_passed: Number of passed runs
+#   $3 - total_failed: Number of failed runs
+#
+# Returns:
+#   Formatted status string on stdout
+get_status_emoji_and_text() {
+    local total_runs="$1"
+    local total_passed="$2"
+    local total_failed="$3"
+
+    if [[ "$total_failed" -gt 0 ]]; then
+        echo "❌ $total_failed/$total_runs failed"
+    else
+        echo "✅ $total_passed/$total_runs passed"
+    fi
+}
+
+# Write a single run subsection in combined summary
+#
+# Writes detailed test results for one run-matrix invocation as a subsection
+# within a combined summary.
+#
+# Arguments:
+#   $1 - run_json: JSON object containing run data
+#
+# Side effects:
+#   Appends to $GITHUB_STEP_SUMMARY
+write_run_subsection() {
+    local run_json="$1"
+
+    local label=$(echo "$run_json" | jq -r '.label')
+    local package=$(echo "$run_json" | jq -r '.package')
+    local working_dir=$(echo "$run_json" | jq -r '.working_dir')
+    local total_runs=$(echo "$run_json" | jq -r '.total_runs')
+    local total_passed=$(echo "$run_json" | jq -r '.total_passed')
+    local total_failed=$(echo "$run_json" | jq -r '.total_failed')
+    local failures=$(echo "$run_json" | jq -c '.failures')
+
+    echo "---" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+    echo "### 📦 $label: $package" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+    echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+    echo "**Stats:** $total_passed/$total_runs passed" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    if [[ "$total_failed" -gt 0 ]]; then
+        echo "#### ❌ Failures ($total_failed)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Write failure details (similar to individual mode)
+        echo "$failures" | jq -c '.[]' | while IFS= read -r failure_json; do
+            local cmd=$(echo "$failure_json" | jq -r '.command')
+            local features=$(echo "$failure_json" | jq -r '.feature_combo')
+            local exit_code=$(echo "$failure_json" | jq -r '.exit_code')
+            local duration=$(echo "$failure_json" | jq -r '.duration_secs')
+            local output_file=$(echo "$failure_json" | jq -r '.output_file')
+
+            echo "##### 🔴 Features: \`$features\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Exit Code:** $exit_code  " >> $GITHUB_STEP_SUMMARY
+            echo "**Duration:** ${duration}s" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Script (collapsible)
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>📋 Script</b></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "$cmd" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Debug reproduction commands (collapsible)
+            local debug_shells="${INPUT_RUN_MATRIX_DEBUG_SHELLS:-bash}"
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>🔄 Reproduce Locally</b></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Parse comma-separated shell list and generate commands for each
+            IFS=',' read -ra SHELLS <<< "$debug_shells"
+            for shell in "${SHELLS[@]}"; do
+                # Trim whitespace
+                shell=$(echo "$shell" | xargs)
+
+                # Capitalize shell name for display (bash 3.2 compatible)
+                local first_char="$(echo "${shell:0:1}" | tr '[:lower:]' '[:upper:]')"
+                local shell_display="${first_char}${shell:1}"
+
+                # Generate debug command for this shell
+                local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$cmd")
+
+                echo "**$shell_display:**" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`$shell" >> $GITHUB_STEP_SUMMARY
+                echo "$debug_cmd" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+            done
+
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Error output (expanded by default)
+            echo "<details open>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            if [[ -f "$output_file" ]]; then
+                local max_lines="${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}"
+                if [[ "$max_lines" -gt 0 ]]; then
+                    tail -"$max_lines" "$output_file" | strip_ansi_codes >> $GITHUB_STEP_SUMMARY
+                else
+                    cat "$output_file" | strip_ansi_codes >> $GITHUB_STEP_SUMMARY
+                fi
+                rm -f "$output_file"
+            else
+                echo "Error: Output file not found" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+        done
+    else
+        echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+    fi
+}
+
+# Flush combined summary from accumulated state
+#
+# Writes all accumulated run results for a group into a single combined
+# summary section in GitHub Actions.
+#
+# Arguments:
+#   $1 - group_name: Name of the group to flush
+#
+# Side effects:
+#   Appends to $GITHUB_STEP_SUMMARY
+#   Removes state file after writing
+flush_combined_summary() {
+    local group_name="$1"
+    local state_file="$SUMMARY_STATE_DIR/group_${group_name}.json"
+
+    if [[ ! -f "$state_file" ]]; then
+        echo "⚠️  No accumulated summary data found for group: $group_name"
+        return
+    fi
+
+    local runs_data=$(cat "$state_file")
+
+    # Calculate aggregate statistics
+    local total_runs=$(echo "$runs_data" | jq '[.[].total_runs] | add // 0')
+    local total_passed=$(echo "$runs_data" | jq '[.[].total_passed] | add // 0')
+    local total_failed=$(echo "$runs_data" | jq '[.[].total_failed] | add // 0')
+
+    # Determine title based on group name
+    local title="Combined Test Results"
+    [[ "$group_name" != "default" ]] && title="$title: $group_name"
+
+    # Determine if should be open based on failures
+    local details_tag="<details>"
+    if [[ "$total_failed" -gt 0 ]]; then
+        details_tag="<details open>"
+    fi
+
+    # Write header
+    echo "$details_tag" >> $GITHUB_STEP_SUMMARY
+    echo "<summary><b>🧪 $title</b> - $(get_status_emoji_and_text "$total_runs" "$total_passed" "$total_failed")</summary>" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    # Aggregate statistics table
+    echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+    echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+    echo "| Total Runs | $total_runs |" >> $GITHUB_STEP_SUMMARY
+    echo "| ✅ Passed | $total_passed |" >> $GITHUB_STEP_SUMMARY
+    echo "| ❌ Failed | $total_failed |" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    # Write each test category as subsection
+    echo "$runs_data" | jq -c '.[]' | while IFS= read -r run_json; do
+        write_run_subsection "$run_json"
+    done
+
+    echo "</details>" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    echo "✅ Flushed combined summary for group: $group_name"
+
+    # Clean up state file
+    rm -f "$state_file"
+}
+
 # Generate GitHub Actions summary for run-matrix results
 #
 # Creates a comprehensive markdown summary including:
@@ -125,6 +402,11 @@ get_debug_command() {
 # - Detailed failure information for each failed run
 # - Full error output (last N lines)
 # - Command reproduction instructions
+#
+# Supports multiple summary modes:
+# - individual: Write summary immediately (default)
+# - combined: Accumulate to state file, flush later
+# - group:<name>: Accumulate to named group, flush later
 #
 # Arguments:
 #   $1 - package_name: Name of the package being tested
@@ -138,11 +420,65 @@ get_debug_command() {
 # Environment:
 #   GITHUB_STEP_SUMMARY: Path to GitHub Actions step summary file
 #   INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: Max lines of output to show
+#   INPUT_RUN_MATRIX_SUMMARY_MODE: Summary mode (individual/combined/group:<name>)
+#   INPUT_RUN_MATRIX_SUMMARY_FLUSH: Whether to flush accumulated summaries
+#
+# Side effects:
+#   Appends to $GITHUB_STEP_SUMMARY file (individual mode)
+#   OR creates/appends to state file (combined/group mode)
+#   Removes temporary output files
+generate_run_matrix_summary() {
+    local package_name="$1"
+    local working_dir="$2"
+    local label="$3"
+    local total_runs="$4"
+    local total_passed="$5"
+    local total_failed="$6"
+    shift 6
+    local failures_json="$1"
+
+    # Parse summary mode
+    local summary_mode="${INPUT_RUN_MATRIX_SUMMARY_MODE:-individual}"
+    local group_name="default"
+
+    if [[ "$summary_mode" =~ ^group:(.+)$ ]]; then
+        group_name="${BASH_REMATCH[1]}"
+        summary_mode="combined"
+    fi
+
+    # Handle different summary modes
+    case "$summary_mode" in
+        "individual")
+            # Write summary immediately (current behavior)
+            write_individual_summary "$package_name" "$working_dir" "$label" \
+                "$total_runs" "$total_passed" "$total_failed" "$failures_json"
+            ;;
+        "combined")
+            # Accumulate to state file
+            accumulate_summary_to_state "$group_name" "$package_name" "$working_dir" "$label" \
+                "$total_runs" "$total_passed" "$total_failed" "$failures_json"
+
+            # Flush if requested
+            if [[ "${INPUT_RUN_MATRIX_SUMMARY_FLUSH:-false}" == "true" ]]; then
+                flush_combined_summary "$group_name"
+            fi
+            ;;
+        *)
+            echo "⚠️  Unknown summary mode: $summary_mode (falling back to individual)"
+            write_individual_summary "$package_name" "$working_dir" "$label" \
+                "$total_runs" "$total_passed" "$total_failed" "$failures_json"
+            ;;
+    esac
+}
+
+# Write individual summary (original behavior)
+#
+# Arguments: Same as generate_run_matrix_summary
 #
 # Side effects:
 #   Appends to $GITHUB_STEP_SUMMARY file
 #   Removes temporary output files
-generate_run_matrix_summary() {
+write_individual_summary() {
     local package_name="$1"
     local working_dir="$2"
     local label="$3"
@@ -586,6 +922,54 @@ run_matrix_command() {
         echo "✅ All tests passed: $total_runs/$total_runs"
         exit 0
     fi
+}
+
+# Flush accumulated summaries command
+#
+# Flushes all accumulated summary data from combined/group modes.
+# This command is designed to be called as a separate workflow step
+# after all run-matrix steps have completed.
+#
+# Environment Variables (inputs):
+#   None required - automatically discovers all accumulated groups
+#
+# Side effects:
+#   Writes accumulated summaries to $GITHUB_STEP_SUMMARY
+#   Removes all state files
+#
+# Exit codes:
+#   0: Successfully flushed all summaries (or no summaries to flush)
+run_matrix_flush_command() {
+    CONTEXT_PHASE="run-matrix-flush"
+    echo "🧹 Flushing accumulated run-matrix summaries"
+
+    # Check if state directory exists
+    if [[ ! -d "$SUMMARY_STATE_DIR" ]]; then
+        echo "ℹ️  No accumulated summaries to flush (state directory doesn't exist)"
+        return 0
+    fi
+
+    # Find all group state files
+    local found_groups=false
+    for state_file in "$SUMMARY_STATE_DIR"/group_*.json; do
+        if [[ -f "$state_file" ]]; then
+            found_groups=true
+            local group_name=$(basename "$state_file" .json | sed 's/^group_//')
+            echo "📝 Flushing summary group: $group_name"
+            flush_combined_summary "$group_name"
+        fi
+    done
+
+    if [[ "$found_groups" == "false" ]]; then
+        echo "ℹ️  No accumulated summaries to flush"
+    else
+        echo "✅ Successfully flushed all accumulated summaries"
+    fi
+
+    # Cleanup state directory
+    rm -rf "$SUMMARY_STATE_DIR"
+
+    return 0
 }
 
 # =============================================================================
