@@ -1016,6 +1016,222 @@ run_matrix_flush_command() {
     return 0
 }
 
+# Aggregate failures from multiple matrix jobs into a single workflow-wide summary
+#
+# Discovers all downloaded test result JSON artifacts and combines them into
+# a single failures-only summary. This is designed to run in a separate job
+# after all matrix jobs complete, providing a centralized view of all failures.
+#
+# Algorithm:
+# 1. Find all group_*.json files in current directory (downloaded artifacts)
+# 2. Parse each JSON file and extract packages with failures
+# 3. Aggregate by package → category → failures
+# 4. Calculate workflow-wide statistics
+# 5. Generate single markdown summary showing only failures
+#
+# Environment:
+#   GITHUB_STEP_SUMMARY: Path to GitHub Actions step summary file
+#   INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: Max lines of error output to show
+#
+# Side effects:
+#   Writes to $GITHUB_STEP_SUMMARY
+#
+# Exit codes:
+#   0: Success (summary generated or no failures found)
+#   1: Error discovering or parsing artifacts
+run_matrix_aggregate_failures_command() {
+    CONTEXT_PHASE="run-matrix-aggregate-failures"
+    echo "🔥 Aggregating failures from all matrix jobs"
+
+    # Find all group JSON files in current directory
+    local json_files=()
+    for file in group_*.json; do
+        if [[ -f "$file" ]]; then
+            json_files+=("$file")
+        fi
+    done
+
+    if [[ ${#json_files[@]} -eq 0 ]]; then
+        echo "ℹ️  No test result artifacts found - all tests may have passed!"
+        echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: All tests passed! No failures to report." >> $GITHUB_STEP_SUMMARY
+        return 0
+    fi
+
+    echo "📂 Found ${#json_files[@]} test result artifact(s)"
+
+    # Parse all JSON files and collect packages with failures
+    local all_packages_json="[]"
+    local total_packages=0
+    local packages_with_failures=0
+    local total_failures=0
+
+    for json_file in "${json_files[@]}"; do
+        echo "  Processing: $json_file"
+
+        # Read the JSON file (it's an array of run results)
+        local file_content
+        if ! file_content=$(cat "$json_file" 2>/dev/null); then
+            echo "⚠️  Warning: Failed to read $json_file, skipping"
+            continue
+        fi
+
+        # Validate JSON
+        if ! echo "$file_content" | jq empty 2>/dev/null; then
+            echo "⚠️  Warning: Invalid JSON in $json_file, skipping"
+            continue
+        fi
+
+        # Extract packages with failures from this file
+        local packages_in_file=$(echo "$file_content" | jq -c '[.[] | select(.total_failed > 0)]')
+        local failure_count=$(echo "$packages_in_file" | jq 'length')
+
+        if [[ "$failure_count" -gt 0 ]]; then
+            echo "    Found $failure_count package(s) with failures"
+            all_packages_json=$(echo "$all_packages_json" | jq -c ". + $packages_in_file")
+            packages_with_failures=$((packages_with_failures + failure_count))
+        fi
+
+        # Count all packages and failures
+        local file_total=$(echo "$file_content" | jq 'length')
+        local file_failures=$(echo "$file_content" | jq '[.[].total_failed] | add // 0')
+        total_packages=$((total_packages + file_total))
+        total_failures=$((total_failures + file_failures))
+    done
+
+    echo "📊 Summary: $total_failures total failures across $packages_with_failures packages"
+
+    if [[ "$packages_with_failures" -eq 0 ]]; then
+        echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: All tests passed across all $total_packages test categories!" >> $GITHUB_STEP_SUMMARY
+        return 0
+    fi
+
+    # Generate summary header
+    echo "# 🔥 Workflow-Wide Failures Summary" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    local packages_passed=$((total_packages - packages_with_failures))
+    echo "**Total**: $total_failures failures across $packages_with_failures $(if [[ $packages_with_failures -eq 1 ]]; then echo "category"; else echo "categories"; fi)" >> $GITHUB_STEP_SUMMARY
+    if [[ "$packages_passed" -gt 0 ]]; then
+        echo "($packages_passed $(if [[ $packages_passed -eq 1 ]]; then echo "category"; else echo "categories"; fi) passed, not shown)" >> $GITHUB_STEP_SUMMARY
+    fi
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    # Group packages by package name and write each as a section
+    echo "$all_packages_json" | jq -c 'group_by(.package) | .[]' | while IFS= read -r package_group; do
+        local package_name=$(echo "$package_group" | jq -r '.[0].package')
+        local package_total_failures=$(echo "$package_group" | jq '[.[].total_failed] | add')
+
+        echo "<details open>" >> $GITHUB_STEP_SUMMARY
+        echo "<summary><b>📦 $package_name</b> - ❌ $package_total_failures $(if [[ $package_total_failures -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Write each category (label) within this package
+        echo "$package_group" | jq -c '.[]' | while IFS= read -r run_json; do
+            local label=$(echo "$run_json" | jq -r '.label')
+            local working_dir=$(echo "$run_json" | jq -r '.working_dir')
+            local total_failed=$(echo "$run_json" | jq -r '.total_failed')
+            local failures=$(echo "$run_json" | jq -c '.failures')
+
+            echo "<details open>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>🔴 $label</b> - $total_failed $(if [[ $total_failed -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Write each failure
+            echo "$failures" | jq -c '.[]' | while IFS= read -r failure_json; do
+                local cmd=$(echo "$failure_json" | jq -r '.command')
+                local features=$(echo "$failure_json" | jq -r '.feature_combo')
+                local exit_code=$(echo "$failure_json" | jq -r '.exit_code')
+                local duration=$(echo "$failure_json" | jq -r '.duration_secs')
+                local error_output=$(echo "$failure_json" | jq -r '.error_output // empty')
+
+                echo "##### 🔴 Features: \`$features\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "**Exit Code:** $exit_code  " >> $GITHUB_STEP_SUMMARY
+                echo "**Duration:** ${duration}s" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+
+                # Script (collapsible)
+                echo "<details>" >> $GITHUB_STEP_SUMMARY
+                echo "<summary><b>📋 Script</b></summary>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+                echo "$cmd" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "</details>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+
+                # Debug reproduction commands (collapsible)
+                local debug_shells="${INPUT_RUN_MATRIX_DEBUG_SHELLS:-bash}"
+                echo "<details>" >> $GITHUB_STEP_SUMMARY
+                echo "<summary><b>🔄 Reproduce Locally</b></summary>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+
+                # Parse comma-separated shell list and generate commands for each
+                IFS=',' read -ra SHELLS <<< "$debug_shells"
+                for shell in "${SHELLS[@]}"; do
+                    # Trim whitespace
+                    shell=$(echo "$shell" | xargs)
+
+                    # Capitalize shell name for display (bash 3.2 compatible)
+                    local first_char="$(echo "${shell:0:1}" | tr '[:lower:]' '[:upper:]')"
+                    local shell_display="${first_char}${shell:1}"
+
+                    # Generate debug command for this shell
+                    local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$cmd")
+
+                    echo "**$shell_display:**" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`$shell" >> $GITHUB_STEP_SUMMARY
+                    echo "$debug_cmd" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                done
+
+                echo "</details>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+
+                # Error output (expanded by default)
+                echo "<details open>" >> $GITHUB_STEP_SUMMARY
+                echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+                if [[ -n "$error_output" ]]; then
+                    # Use embedded error output from JSON
+                    local max_lines="${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}"
+                    if [[ "$max_lines" -gt 0 ]]; then
+                        echo "$error_output" | tail -"$max_lines" >> $GITHUB_STEP_SUMMARY
+                    else
+                        echo "$error_output" >> $GITHUB_STEP_SUMMARY
+                    fi
+                else
+                    echo "Error: Output not available" >> $GITHUB_STEP_SUMMARY
+                fi
+
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "</details>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+            done
+
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+        done
+
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+    done
+
+    echo "✅ Successfully generated workflow-wide failures summary"
+    return 0
+}
+
 # =============================================================================
 # End of run-matrix Command Implementation
 # =============================================================================

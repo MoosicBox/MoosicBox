@@ -1135,6 +1135,11 @@ main() {
         return
     fi
 
+    if [[ "$INPUT_COMMAND" == "run-matrix-aggregate-failures" ]]; then
+        run_matrix_aggregate_failures_command
+        return
+    fi
+
     # Set phase for other commands
     CONTEXT_PHASE="git detection"
     detect_git_range

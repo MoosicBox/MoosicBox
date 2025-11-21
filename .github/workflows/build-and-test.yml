@@ -437,6 +437,42 @@ jobs:
               with:
                   command: run-matrix-flush
 
+            - name: Upload failure data for workflow summary
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-results-${{ matrix.package.name }}-${{ matrix.package.os }}-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/run-matrix-summary-state/group_default.json
+                  if-no-files-found: ignore
+
+    generate-failures-summary:
+        name: Generate Workflow Failures Summary
+        runs-on: ubuntu-latest
+        needs: [build]
+        if: always()
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Download failure artifacts from current attempt
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: test-results-*-attempt-${{ github.run_attempt }}
+                  path: ./failure-data
+                  merge-multiple: true
+
+            - name: Generate workflow-wide failures summary
+              shell: bash
+              working-directory: ./failure-data
+              run: |
+                  ${{ github.workspace }}/.github/actions/clippier/action.sh
+              env:
+                  INPUT_COMMAND: run-matrix-aggregate-failures
+                  GITHUB_WORKSPACE: ${{ github.workspace }}
+                  GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+                  GITHUB_OUTPUT: ${{ github.output }}
+                  RUNNER_TEMP: ${{ runner.temp }}
+
     build-docker-images:
         runs-on: ubuntu-latest
         needs: [determine-affected-packages]
