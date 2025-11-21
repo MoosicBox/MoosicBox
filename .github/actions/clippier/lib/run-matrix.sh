@@ -346,6 +346,11 @@ run_matrix_command() {
     CONTEXT_PHASE="run-matrix"
     echo "🧪 Running matrix tests with template-based commands"
 
+    # Disable ERR trap and errexit - we handle errors explicitly in this function
+    # This prevents the generic error handler from interfering with our detailed failure tracking
+    trap - ERR
+    set +e  # Disable errexit so we can handle failures explicitly
+
     # Validate required inputs
     if [[ -z "$INPUT_RUN_MATRIX_PACKAGE_JSON" ]]; then
         echo "❌ ERROR: run-matrix-package-json is required"
@@ -572,6 +577,7 @@ run_matrix_command() {
     fi
 
     # Exit with appropriate code
+    # Note: We don't need to re-enable 'set -e' here because we exit explicitly
     if [[ "$total_failed" -gt 0 ]]; then
         echo "❌ Tests failed: $total_failed/$total_runs"
         exit 1
