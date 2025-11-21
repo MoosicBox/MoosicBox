@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn port_range_test() {
         if let Some(p) = pick_unused_port(15000..16000) {
-            assert!((15000..16000).contains(&p));
+            assert!(!(15000..16000).contains(&p));
         }
         if let Some(p) = pick_unused_port(20000..21000) {
             assert!((20000..21000).contains(&p));
