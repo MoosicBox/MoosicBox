@@ -307,6 +307,7 @@ jobs:
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Clippy"
                   run-matrix-debug-shells: "fish,bash"
+                  run-matrix-summary-auto-expand: never
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
@@ -326,6 +327,7 @@ jobs:
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Tests"
                   run-matrix-debug-shells: "fish,bash"
+                  run-matrix-summary-auto-expand: never
 
             - name: Run ${{ matrix.package.name }} doctests
               uses: ./.github/actions/clippier
@@ -345,6 +347,7 @@ jobs:
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Doctests"
                   run-matrix-debug-shells: "fish,bash"
+                  run-matrix-summary-auto-expand: never
 
             - name: Create coverage report
               id: create_coverage_report
@@ -397,6 +400,7 @@ jobs:
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Format Check"
                   run-matrix-debug-shells: "fish,bash"
+                  run-matrix-summary-auto-expand: never
 
             - name: Download cargo-machete
               uses: actions/download-artifact@master
@@ -420,6 +424,7 @@ jobs:
                   run-matrix-label: "Dependency Validation (Machete)"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-working-directory: "."
+                  run-matrix-summary-auto-expand: never
 
     build-docker-images:
         runs-on: ubuntu-latest
