@@ -308,6 +308,7 @@ jobs:
                   run-matrix-label: "Clippy"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-mode: "combined"
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
@@ -328,6 +329,7 @@ jobs:
                   run-matrix-label: "Tests"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-mode: "combined"
 
             - name: Run ${{ matrix.package.name }} doctests
               uses: ./.github/actions/clippier
@@ -348,6 +350,7 @@ jobs:
                   run-matrix-label: "Doctests"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-mode: "combined"
 
             - name: Create coverage report
               id: create_coverage_report
@@ -401,6 +404,7 @@ jobs:
                   run-matrix-label: "Format Check"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-mode: "combined"
 
             - name: Download cargo-machete
               uses: actions/download-artifact@master
@@ -425,6 +429,13 @@ jobs:
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-working-directory: "."
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-mode: "combined"
+
+            - name: Generate combined test summary
+              if: always()
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix-flush
 
     build-docker-images:
         runs-on: ubuntu-latest
