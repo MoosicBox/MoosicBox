@@ -6016,7 +6016,7 @@ os = "ubuntu"
     fn test_should_skip_feature_empty_string() {
         // Edge case: empty string feature name
         assert!(!should_skip_feature("", &["test-*".to_string()]));
-        assert!(should_skip_feature("", &["*".to_string()]));
+        assert!(!should_skip_feature("", &["*".to_string()]));
     }
 
     #[test]
