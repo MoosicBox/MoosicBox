@@ -248,8 +248,9 @@ generate_run_matrix_summary() {
                 # Trim whitespace
                 shell=$(echo "$shell" | xargs)
 
-                # Capitalize shell name for display
-                local shell_display="${shell^}"
+                # Capitalize shell name for display (bash 3.2 compatible)
+                local first_char="$(echo "${shell:0:1}" | tr '[:lower:]' '[:upper:]')"
+                local shell_display="${first_char}${shell:1}"
 
                 # Generate debug command for this shell
                 local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$cmd")
