@@ -993,24 +993,7 @@ run_matrix_flush_command() {
         return 0
     fi
 
-    # Find all group state files
-    local found_groups=false
-    for state_file in "$SUMMARY_STATE_DIR"/group_*.json; do
-        if [[ -f "$state_file" ]]; then
-            found_groups=true
-            local group_name=$(basename "$state_file" .json | sed 's/^group_//')
-            echo "📝 Flushing summary group: $group_name"
-            flush_combined_summary "$group_name"
-        fi
-    done
-
-    if [[ "$found_groups" == "false" ]]; then
-        echo "ℹ️  No accumulated summaries to flush"
-    else
-        echo "✅ Successfully flushed all accumulated summaries"
-    fi
-
-    # Prepare upload artifact if requested
+    # Prepare upload artifact BEFORE flushing (which deletes the files)
     local prepare_upload="${INPUT_RUN_MATRIX_PREPARE_UPLOAD:-false}"
     if [[ "$prepare_upload" == "true" ]]; then
         local package_name="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME}"
@@ -1037,6 +1020,23 @@ run_matrix_flush_command() {
                 echo "failure-artifact-path=" >> $GITHUB_OUTPUT
             fi
         fi
+    fi
+
+    # Find all group state files and flush them
+    local found_groups=false
+    for state_file in "$SUMMARY_STATE_DIR"/group_*.json; do
+        if [[ -f "$state_file" ]]; then
+            found_groups=true
+            local group_name=$(basename "$state_file" .json | sed 's/^group_//')
+            echo "📝 Flushing summary group: $group_name"
+            flush_combined_summary "$group_name"
+        fi
+    done
+
+    if [[ "$found_groups" == "false" ]]; then
+        echo "ℹ️  No accumulated summaries to flush"
+    else
+        echo "✅ Successfully flushed all accumulated summaries"
     fi
 
     # Cleanup state directory
