@@ -137,9 +137,9 @@ handle_binary_not_found() {
     exit 1
 }
 
-# Skip clippier binary check for setup command (doesn't need clippier)
+# Skip clippier binary check for commands that don't need clippier binary
 CONTEXT_PHASE="binary validation"
-if [[ "$INPUT_COMMAND" != "setup" ]]; then
+if [[ "$INPUT_COMMAND" != "setup" && "$INPUT_COMMAND" != "run-matrix-aggregate-failures" && "$INPUT_COMMAND" != "run-matrix-flush" && "$INPUT_COMMAND" != "run-matrix" ]]; then
     if [[ ! -f "$CLIPPIER_BIN" ]]; then
         echo "Error: clippier binary not found at $CLIPPIER_BIN"
         handle_binary_not_found
