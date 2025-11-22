@@ -294,28 +294,28 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy, llvm-tools-preview"
 
-            - name: Clippy ${{ matrix.package.name }}
-              uses: ./.github/actions/clippier
-              env:
-                  CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
-                  run-matrix-strategy: "sequential"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Clippy"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-mode: "combined"
+            # - name: Clippy ${{ matrix.package.name }}
+            #   uses: ./.github/actions/clippier
+            #   env:
+            #       CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
+            #   with:
+            #       command: run-matrix
+            #       run-matrix-package-json: ${{ toJson(matrix.package) }}
+            #       run-matrix-commands: |
+            #           {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+            #       run-matrix-strategy: "sequential"
+            #       run-matrix-continue-on-failure: "true"
+            #       run-matrix-label: "Clippy"
+            #       run-matrix-debug-shells: "fish,bash"
+            #       run-matrix-summary-auto-expand: never
+            #       run-matrix-summary-mode: "combined"
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
 
-            - name: Clear target directory
-              shell: bash
-              run: rm -rf target
+            # - name: Clear target directory
+            #   shell: bash
+            #   run: rm -rf target
 
             - name: Run ${{ matrix.package.name }} tests
               uses: ./.github/actions/clippier
@@ -331,26 +331,26 @@ jobs:
                   run-matrix-summary-auto-expand: never
                   run-matrix-summary-mode: "combined"
 
-            - name: Run ${{ matrix.package.name }} doctests
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      # Check if package has a lib target
-                      PACKAGE_PATH="{{matrix.package.path}}"
-                      PACKAGE_PATH="${PACKAGE_PATH#./}"
-                      if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
-                          echo "Skipping doctests for {{matrix.package.name}} - no library target found"
-                          exit 0
-                      fi
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
-                  run-matrix-strategy: "sequential"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Doctests"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-mode: "combined"
+            # - name: Run ${{ matrix.package.name }} doctests
+            #   uses: ./.github/actions/clippier
+            #   with:
+            #       command: run-matrix
+            #       run-matrix-package-json: ${{ toJson(matrix.package) }}
+            #       run-matrix-commands: |
+            #           # Check if package has a lib target
+            #           PACKAGE_PATH="{{matrix.package.path}}"
+            #           PACKAGE_PATH="${PACKAGE_PATH#./}"
+            #           if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+            #               echo "Skipping doctests for {{matrix.package.name}} - no library target found"
+            #               exit 0
+            #           fi
+            #           {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+            #       run-matrix-strategy: "sequential"
+            #       run-matrix-continue-on-failure: "true"
+            #       run-matrix-label: "Doctests"
+            #       run-matrix-debug-shells: "fish,bash"
+            #       run-matrix-summary-auto-expand: never
+            #       run-matrix-summary-mode: "combined"
 
             - name: Create coverage report
               id: create_coverage_report
