@@ -240,23 +240,28 @@ write_run_subsection() {
     # Determine if should be open based on auto-expand setting AND failures
     local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
     local details_tag="<details>"
+    local error_details_tag="<details>"
 
     case "$auto_expand" in
         "always")
             details_tag="<details open>"
+            error_details_tag="<details open>"
             ;;
         "failures")
             if [[ "$total_failed" -gt 0 ]]; then
                 details_tag="<details open>"
+                error_details_tag="<details open>"
             fi
             ;;
         "never")
             details_tag="<details>"
+            error_details_tag="<details>"
             ;;
         *)
             # Default to "failures" behavior
             if [[ "$total_failed" -gt 0 ]]; then
                 details_tag="<details open>"
+                error_details_tag="<details open>"
             fi
             ;;
     esac
@@ -327,8 +332,8 @@ write_run_subsection() {
             echo "</details>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
-            # Error output (expanded by default)
-            echo "<details open>" >> $GITHUB_STEP_SUMMARY
+            # Error output
+            echo "$error_details_tag" >> $GITHUB_STEP_SUMMARY
             echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -348,6 +353,7 @@ write_run_subsection() {
             echo "</details>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
         done
+
     else
         echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -538,23 +544,28 @@ write_individual_summary() {
     # Determine if should be open based on auto-expand setting
     local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
     local details_tag="<details>"
+    local error_details_tag="<details>"
 
     case "$auto_expand" in
         "always")
             details_tag="<details open>"
+            error_details_tag="<details open>"
             ;;
         "failures")
             if [[ "$total_failed" -gt 0 ]]; then
                 details_tag="<details open>"
+                error_details_tag="<details open>"
             fi
             ;;
         "never")
             details_tag="<details>"
+            error_details_tag="<details>"
             ;;
         *)
             # Default to "failures" behavior
             if [[ "$total_failed" -gt 0 ]]; then
                 details_tag="<details open>"
+                error_details_tag="<details open>"
             fi
             ;;
     esac
@@ -646,7 +657,7 @@ write_individual_summary() {
             echo "" >> $GITHUB_STEP_SUMMARY
 
             # Error output (expanded by default)
-            echo "<details open>" >> $GITHUB_STEP_SUMMARY
+            echo "$error_details_tag" >> $GITHUB_STEP_SUMMARY
             echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -1080,6 +1091,47 @@ run_matrix_aggregate_failures_command() {
     CONTEXT_PHASE="run-matrix-aggregate-failures"
     echo "🔥 Aggregating failures from all matrix jobs"
 
+    # Change to working directory if specified
+    if [[ -n "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
+        echo "📂 Changing to working directory: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
+        cd "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" || {
+            echo "❌ Failed to change to directory: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
+            exit 1
+        }
+    fi
+
+    # Determine auto-expand behavior
+    local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
+    local package_details="<details>"
+    local category_details="<details>"
+    local error_details="<details>"
+
+    case "$auto_expand" in
+        "always")
+            package_details="<details open>"
+            category_details="<details open>"
+            error_details="<details open>"
+            ;;
+        "failures")
+            # Since this is failures-only summary, expand by default
+            package_details="<details open>"
+            category_details="<details open>"
+            error_details="<details open>"
+            ;;
+        "never")
+            # User wants everything collapsed
+            package_details="<details>"
+            category_details="<details>"
+            error_details="<details>"
+            ;;
+        *)
+            # Default to failures behavior
+            package_details="<details open>"
+            category_details="<details open>"
+            error_details="<details open>"
+            ;;
+    esac
+
     # Find all group JSON files in current directory
     # Pattern: group_default_*.json (includes package name in filename)
     local json_files=()
@@ -1174,7 +1226,7 @@ run_matrix_aggregate_failures_command() {
         local package_name=$(echo "$package_group" | jq -r '.[0].package')
         local package_total_failures=$(echo "$package_group" | jq '[.[].total_failed] | add')
 
-        echo "<details open>" >> $GITHUB_STEP_SUMMARY
+        echo "$package_details" >> $GITHUB_STEP_SUMMARY
         echo "<summary><b>📦 $package_name</b> - ❌ $package_total_failures $(if [[ $package_total_failures -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
@@ -1185,7 +1237,7 @@ run_matrix_aggregate_failures_command() {
             local total_failed=$(echo "$run_json" | jq -r '.total_failed')
             local failures=$(echo "$run_json" | jq -c '.failures')
 
-            echo "<details open>" >> $GITHUB_STEP_SUMMARY
+            echo "$category_details" >> $GITHUB_STEP_SUMMARY
             echo "<summary><b>🔴 $label</b> - $total_failed $(if [[ $total_failed -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
@@ -1245,8 +1297,8 @@ run_matrix_aggregate_failures_command() {
                 echo "</details>" >> $GITHUB_STEP_SUMMARY
                 echo "" >> $GITHUB_STEP_SUMMARY
 
-                # Error output (expanded by default)
-                echo "<details open>" >> $GITHUB_STEP_SUMMARY
+                # Error output
+                echo "$error_details" >> $GITHUB_STEP_SUMMARY
                 echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
                 echo "" >> $GITHUB_STEP_SUMMARY
                 echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

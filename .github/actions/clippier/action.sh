@@ -5,10 +5,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Change to repository root (clippier needs to run from repo root for git operations)
-# Skip for commands that need to run in their invoked directory
-if [[ "$INPUT_COMMAND" != "run-matrix-aggregate-failures" ]]; then
-    cd "${GITHUB_WORKSPACE}"
-fi
+cd "${GITHUB_WORKSPACE}"
 
 CLIPPIER_BIN="${GITHUB_WORKSPACE}/target/release/clippier"
 GIT_BASE=""

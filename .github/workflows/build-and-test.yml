@@ -440,6 +440,7 @@ jobs:
                   run-matrix-prepare-upload: true
                   run-matrix-upload-package-name: ${{ matrix.package.name }}
                   run-matrix-upload-package-os: ${{ matrix.package.os }}
+                  run-matrix-summary-auto-expand: never
 
             - name: Upload failure data for workflow summary
               if: always()
@@ -466,16 +467,11 @@ jobs:
                   merge-multiple: true
 
             - name: Generate workflow-wide failures summary
-              shell: bash
-              working-directory: ./failure-data
-              run: |
-                  ${{ github.workspace }}/.github/actions/clippier/action.sh
-              env:
-                  INPUT_COMMAND: run-matrix-aggregate-failures
-                  GITHUB_WORKSPACE: ${{ github.workspace }}
-                  GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
-                  GITHUB_OUTPUT: ${{ github.output }}
-                  RUNNER_TEMP: ${{ runner.temp }}
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix-aggregate-failures
+                  run-matrix-working-directory: ./failure-data
+                  run-matrix-summary-auto-expand: never
 
     build-docker-images:
         runs-on: ubuntu-latest
