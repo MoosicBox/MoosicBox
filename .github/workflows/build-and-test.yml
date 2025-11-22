@@ -446,7 +446,7 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: test-results-${{ matrix.package.name }}-${{ matrix.package.os }}-attempt-${{ github.run_attempt }}
+                  name: test-results-${{ matrix.package.name }}-${{ matrix.package.os }}-${{ strategy.job-index }}
                   path: ${{ steps.flush.outputs.failure-artifact-path }}
                   if-no-files-found: ignore
 
@@ -459,10 +459,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Download failure artifacts from current attempt
+            - name: Download failure artifacts
               uses: actions/download-artifact@v4
               with:
-                  pattern: test-results-*-attempt-${{ github.run_attempt }}
+                  pattern: test-results-*
                   path: ./failure-data
                   merge-multiple: true
 
