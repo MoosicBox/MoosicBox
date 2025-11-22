@@ -185,7 +185,8 @@ accumulate_summary_to_state() {
 
     # Append to state file (create array if doesn't exist)
     if [[ -f "$state_file" ]]; then
-        local temp_file=$(mktemp)
+        local temp_file
+        temp_file=$(mktemp)
         jq ". += [$run_data]" "$state_file" > "$temp_file"
         mv "$temp_file" "$state_file"
     else
@@ -1093,11 +1094,16 @@ run_matrix_aggregate_failures_command() {
 
     # Change to working directory if specified
     if [[ -n "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
+        if [[ ! -d "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
+            echo "ℹ️  Working directory doesn't exist: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
+            echo "ℹ️  No test failure artifacts were found - all tests may have passed!"
+            echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status**: All tests passed! No failures to report." >> $GITHUB_STEP_SUMMARY
+            return 0
+        fi
         echo "📂 Changing to working directory: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
-        cd "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" || {
-            echo "❌ Failed to change to directory: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
-            exit 1
-        }
+        cd "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
     fi
 
     # Determine auto-expand behavior

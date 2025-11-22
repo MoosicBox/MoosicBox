@@ -443,7 +443,7 @@ jobs:
                   run-matrix-summary-auto-expand: never
 
             - name: Upload failure data for workflow summary
-              if: always()
+              if: always() && steps.flush.outputs.failure-artifact-path != ''
               uses: actions/upload-artifact@v4
               with:
                   name: test-results-${{ matrix.package.name }}-${{ matrix.package.os }}-${{ strategy.job-index }}

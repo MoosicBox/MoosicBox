@@ -535,7 +535,7 @@ runs:
           uses: actions/cache@v4
           with:
               path: ./target/release/clippier
-              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ hashFiles('.clippier-source/packages/clippier/**', 'packages/clippier/**') }}
+              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ hashFiles('packages/clippier/**') }}
 
         - name: Build clippier
           if: inputs.command != 'setup'
