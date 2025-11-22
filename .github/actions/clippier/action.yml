@@ -389,6 +389,19 @@ inputs:
         required: false
         default: "false"
 
+    run-matrix-prepare-upload:
+        description: "Prepare failure artifact for upload with unique filename (used with run-matrix-flush)"
+        required: false
+        default: "false"
+
+    run-matrix-upload-package-name:
+        description: "Package name for failure artifact filename (required if run-matrix-prepare-upload is true)"
+        required: false
+
+    run-matrix-upload-package-os:
+        description: "Package OS for failure artifact filename (required if run-matrix-prepare-upload is true)"
+        required: false
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -458,6 +471,10 @@ outputs:
     run-failed:
         description: "Number of failed runs"
         value: ${{ steps.run-action.outputs.run-failed }}
+
+    failure-artifact-path:
+        description: "Path to prepared failure artifact file (for run-matrix-flush with prepare-upload enabled)"
+        value: ${{ steps.run-action.outputs.failure-artifact-path }}
 
 runs:
     using: "composite"
@@ -625,6 +642,9 @@ runs:
               INPUT_RUN_MATRIX_DEBUG_SHELLS: ${{ inputs.run-matrix-debug-shells }}
               INPUT_RUN_MATRIX_SUMMARY_MODE: ${{ inputs.run-matrix-summary-mode }}
               INPUT_RUN_MATRIX_SUMMARY_FLUSH: ${{ inputs.run-matrix-summary-flush }}
+              INPUT_RUN_MATRIX_PREPARE_UPLOAD: ${{ inputs.run-matrix-prepare-upload }}
+              INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME: ${{ inputs.run-matrix-upload-package-name }}
+              INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS: ${{ inputs.run-matrix-upload-package-os }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

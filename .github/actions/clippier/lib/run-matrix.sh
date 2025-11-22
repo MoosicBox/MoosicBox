@@ -1010,6 +1010,35 @@ run_matrix_flush_command() {
         echo "✅ Successfully flushed all accumulated summaries"
     fi
 
+    # Prepare upload artifact if requested
+    local prepare_upload="${INPUT_RUN_MATRIX_PREPARE_UPLOAD:-false}"
+    if [[ "$prepare_upload" == "true" ]]; then
+        local package_name="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME}"
+        local package_os="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS}"
+
+        if [[ -z "$package_name" || -z "$package_os" ]]; then
+            echo "⚠️  Warning: prepare-upload enabled but package-name or package-os not provided"
+        else
+            # Create upload directory
+            local upload_dir="${RUNNER_TEMP:-/tmp}/failure-upload"
+            mkdir -p "$upload_dir"
+
+            # Copy and rename the group_default.json file if it exists
+            local source_file="$SUMMARY_STATE_DIR/group_default.json"
+            if [[ -f "$source_file" ]]; then
+                local target_file="$upload_dir/group_default_${package_name}_${package_os}.json"
+                cp "$source_file" "$target_file"
+                echo "📦 Prepared failure artifact: $target_file"
+
+                # Output the path for the workflow to use
+                echo "failure-artifact-path=$target_file" >> $GITHUB_OUTPUT
+            else
+                echo "ℹ️  No failure data to prepare for upload (group_default.json not found)"
+                echo "failure-artifact-path=" >> $GITHUB_OUTPUT
+            fi
+        fi
+    fi
+
     # Cleanup state directory
     rm -rf "$SUMMARY_STATE_DIR"
 
@@ -1044,8 +1073,9 @@ run_matrix_aggregate_failures_command() {
     echo "🔥 Aggregating failures from all matrix jobs"
 
     # Find all group JSON files in current directory
+    # Pattern: group_default_*.json (includes package name in filename)
     local json_files=()
-    for file in group_*.json; do
+    for file in group_default_*.json; do
         if [[ -f "$file" ]]; then
             json_files+=("$file")
         fi
