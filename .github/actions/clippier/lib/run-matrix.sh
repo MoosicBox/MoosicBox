@@ -877,7 +877,13 @@ run_matrix_command() {
         else
             total_failed=$((total_failed + 1))
 
-            # Create failure JSON
+            # Read and store error output directly in JSON for artifact upload
+            local error_output=""
+            if [[ -f "$output_file" ]]; then
+                error_output=$(cat "$output_file" | strip_ansi_codes)
+            fi
+
+            # Create failure JSON with error output embedded
             local failure_json=$(jq -n \
                 --arg pkg "$package_name" \
                 --arg path "$package_path" \
@@ -887,6 +893,7 @@ run_matrix_command() {
                 --arg script_template "$script_template" \
                 --argjson exit_code "$exit_code" \
                 --arg output_file "$output_file" \
+                --arg error_output "$error_output" \
                 --arg duration "$duration" \
                 --argjson iteration "$iteration" \
                 '{
@@ -898,6 +905,7 @@ run_matrix_command() {
                     command_template: $script_template,
                     exit_code: $exit_code,
                     output_file: $output_file,
+                    error_output: $error_output,
                     duration_secs: ($duration | tonumber),
                     iteration: $iteration
                 }')
