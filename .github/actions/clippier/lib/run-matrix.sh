@@ -165,14 +165,14 @@ accumulate_summary_to_state() {
     local state_file="$SUMMARY_STATE_DIR/group_${group_name}.json"
 
     # Create JSON object with this run's data
-    local run_data=$(jq -n \
+    # Use pipe approach to avoid "Argument list too long" errors with large failure data
+    local run_data=$(echo "$failures_json" | jq -c \
         --arg pkg "$package_name" \
         --arg label "$label" \
         --arg working_dir "$working_dir" \
         --argjson total_runs "$total_runs" \
         --argjson total_passed "$total_passed" \
         --argjson total_failed "$total_failed" \
-        --argjson failures "$failures_json" \
         '{
             package: $pkg,
             label: $label,
@@ -180,7 +180,7 @@ accumulate_summary_to_state() {
             total_runs: $total_runs,
             total_passed: $total_passed,
             total_failed: $total_failed,
-            failures: $failures
+            failures: .
         }')
 
     # Append to state file (create array if doesn't exist)
@@ -1100,7 +1100,8 @@ run_matrix_aggregate_failures_command() {
     echo "📂 Found ${#json_files[@]} test result artifact(s)"
 
     # Parse all JSON files and collect packages with failures
-    local all_packages_json="[]"
+    # Use temp files to avoid "Argument list too long" errors with large data
+    local package_files=()
     local total_packages=0
     local packages_with_failures=0
     local total_failures=0
@@ -1127,7 +1128,10 @@ run_matrix_aggregate_failures_command() {
 
         if [[ "$failure_count" -gt 0 ]]; then
             echo "    Found $failure_count package(s) with failures"
-            all_packages_json=$(echo "$all_packages_json" | jq -c ". + $packages_in_file")
+            # Save to temp file instead of building large string
+            local temp_file=$(mktemp)
+            echo "$packages_in_file" > "$temp_file"
+            package_files+=("$temp_file")
             packages_with_failures=$((packages_with_failures + failure_count))
         fi
 
@@ -1137,6 +1141,13 @@ run_matrix_aggregate_failures_command() {
         total_packages=$((total_packages + file_total))
         total_failures=$((total_failures + file_failures))
     done
+
+    # Merge all failure files at once using jq
+    local all_packages_json="[]"
+    if [[ ${#package_files[@]} -gt 0 ]]; then
+        all_packages_json=$(jq -c -s 'flatten' "${package_files[@]}")
+        rm -f "${package_files[@]}"
+    fi
 
     echo "📊 Summary: $total_failures total failures across $packages_with_failures packages"
 
