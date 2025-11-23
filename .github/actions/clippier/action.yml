@@ -531,14 +531,26 @@ runs:
               path: .clippier-source
 
         - name: Cache clippier binary
-          if: inputs.skip-cache != 'true' && inputs.command != 'setup'
+          if: |
+              inputs.skip-cache != 'true' && (
+                inputs.command == 'features' ||
+                inputs.command == 'packages' ||
+                inputs.command == 'affected-packages' ||
+                inputs.command == 'workspace-deps' ||
+                inputs.command == 'validate-feature-propagation'
+              )
           uses: actions/cache@v4
           with:
               path: ./target/release/clippier
               key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ hashFiles('packages/clippier/**') }}
 
         - name: Build clippier
-          if: inputs.command != 'setup'
+          if: |
+              inputs.command == 'features' ||
+              inputs.command == 'packages' ||
+              inputs.command == 'affected-packages' ||
+              inputs.command == 'workspace-deps' ||
+              inputs.command == 'validate-feature-propagation'
           shell: bash
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
