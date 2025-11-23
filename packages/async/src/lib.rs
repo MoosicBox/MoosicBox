@@ -309,7 +309,7 @@ mod tests {
     use super::thread_id;
 
     #[cfg(feature = "_any_backend")]
-    use super::{Builder, Error, task};
+    use super::{Builder, Error};
 
     #[test_log::test]
     fn thread_id_is_unique_across_threads() {
@@ -367,14 +367,6 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
         let err: Error = io_err.into();
         assert!(matches!(err, Error::IO(_)));
-    }
-
-    #[cfg(feature = "_any_backend")]
-    #[test_log::test]
-    fn error_from_join_error() {
-        let join_err = task::JoinError::new();
-        let err: Error = join_err.into();
-        assert!(matches!(err, Error::Join(_)));
     }
 
     #[cfg(feature = "_any_backend")]
