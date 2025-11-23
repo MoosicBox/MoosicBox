@@ -15339,6 +15339,7 @@ dependencies = [
  "chrono",
  "log 0.4.28",
  "scoped-tls",
+ "serial_test",
  "switchy_random",
  "test-log",
 ]

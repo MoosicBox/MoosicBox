@@ -24,7 +24,8 @@ log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+serial_test = { workspace = true }
+test-log    = { workspace = true }
 
 [features]
 default = ["simulator", "std"]

@@ -260,9 +260,20 @@ pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::time::Duration;
 
+    // Note: All tests in this module use #[serial] because they interact with:
+    // 1. Thread-local state (EPOCH_OFFSET, STEP_MULTIPLIER, STEP) that can be reused
+    //    between tests when the test runner's thread pool reuses threads
+    // 2. Global environment variables (SIMULATOR_EPOCH_OFFSET, SIMULATOR_STEP_MULTIPLIER)
+    // 3. The test_reset_step_multiplier test modifies environment variables using unsafe blocks
+    //
+    // Running these tests in parallel causes race conditions where one test's state changes
+    // affect another test's expectations. The serial_test crate ensures tests run one at a time.
+
     #[test_log::test]
+    #[serial]
     fn test_epoch_offset_initialization() {
         // Reset to get a fresh epoch offset
         reset_epoch_offset();
@@ -277,6 +288,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reset_epoch_offset() {
         reset_epoch_offset();
         let first = epoch_offset();
@@ -290,6 +302,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_step_multiplier_initialization() {
         reset_step_multiplier();
         let multiplier = step_multiplier();
@@ -302,37 +315,50 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reset_step_multiplier() {
-        // Temporarily remove the env var to allow random generation
+        // Save original value
         let original = std::env::var("SIMULATOR_STEP_MULTIPLIER").ok();
-        unsafe {
-            std::env::remove_var("SIMULATOR_STEP_MULTIPLIER");
-        }
 
+        // Set a known value and reset to it
+        unsafe {
+            std::env::set_var("SIMULATOR_STEP_MULTIPLIER", "100");
+        }
         reset_step_multiplier();
         let first = step_multiplier();
+        assert_eq!(first, 100, "Should use env var value");
 
+        // Change to a different value and reset again
+        unsafe {
+            std::env::set_var("SIMULATOR_STEP_MULTIPLIER", "200");
+        }
         reset_step_multiplier();
         let second = step_multiplier();
+        assert_eq!(second, 200, "Should use new env var value");
+
+        // Verify they're different
+        assert_ne!(first, second);
 
         // Restore original value
-        if let Some(val) = original {
-            unsafe {
+        match original {
+            Some(val) => unsafe {
                 std::env::set_var("SIMULATOR_STEP_MULTIPLIER", val);
-            }
+            },
+            None => unsafe {
+                std::env::remove_var("SIMULATOR_STEP_MULTIPLIER");
+            },
         }
-
-        // After reset, we should get a different value (with extremely high probability)
-        assert_ne!(first, second);
     }
 
     #[test_log::test]
+    #[serial]
     fn test_current_step_starts_at_zero() {
         reset_step();
         assert_eq!(current_step(), 0);
     }
 
     #[test_log::test]
+    #[serial]
     fn test_set_step() {
         reset_step();
 
@@ -345,6 +371,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_next_step() {
         reset_step();
         assert_eq!(current_step(), 0);
@@ -359,6 +386,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reset_step() {
         set_step(100);
         assert_eq!(current_step(), 100);
@@ -368,6 +396,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_now_advances_with_steps() {
         reset_epoch_offset();
         reset_step_multiplier();
@@ -394,6 +423,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_now_calculation() {
         reset_step();
         reset_epoch_offset();
@@ -419,6 +449,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_instant_now_advances_with_steps() {
         reset_step_multiplier();
         reset_step();
@@ -444,6 +475,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_instant_now_calculation() {
         reset_step();
         reset_step_multiplier();
@@ -459,6 +491,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_with_real_time_now() {
         reset_step();
         reset_epoch_offset();
@@ -492,6 +525,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_with_real_time_instant() {
         reset_step();
         reset_step_multiplier();
@@ -514,6 +548,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_with_real_time_nested() {
         reset_step();
 
@@ -547,6 +582,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_step_counter_independence_across_resets() {
         // Set up initial state
         set_step(100);
@@ -562,6 +598,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_time_simulation_consistency() {
         // Test that time calculation is consistent
         reset_step();
@@ -583,6 +620,7 @@ mod tests {
 
     #[cfg(feature = "chrono")]
     #[test_log::test]
+    #[serial]
     fn test_datetime_utc_now() {
         reset_step();
         reset_epoch_offset();
@@ -600,6 +638,7 @@ mod tests {
 
     #[cfg(feature = "chrono")]
     #[test_log::test]
+    #[serial]
     fn test_datetime_local_now() {
         reset_step();
         reset_epoch_offset();
@@ -617,6 +656,7 @@ mod tests {
 
     #[cfg(feature = "chrono")]
     #[test_log::test]
+    #[serial]
     fn test_datetime_with_real_time() {
         reset_step();
 
@@ -642,6 +682,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_step_multiplier_never_zero() {
         // Even if random generation produces 0, it should be corrected to 1
         // We can't easily test this directly, but we can verify the invariant
@@ -651,6 +692,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_large_step_values() {
         reset_step_multiplier();
         let multiplier = step_multiplier();
@@ -673,6 +715,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_epoch_offset_caching() {
         reset_epoch_offset();
 
@@ -688,6 +731,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_step_multiplier_caching() {
         reset_step_multiplier();
 
