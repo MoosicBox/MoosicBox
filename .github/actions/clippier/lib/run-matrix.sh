@@ -238,6 +238,13 @@ write_run_subsection() {
     local total_failed=$(echo "$run_json" | jq -r '.total_failed')
     local failures=$(echo "$run_json" | jq -c '.failures')
 
+    # Check if should only generate summary on failure
+    local only_on_failure="${INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE:-false}"
+    if [[ "$only_on_failure" == "true" && "$total_failed" -eq 0 ]]; then
+        echo "ℹ️  All tests passed for $package - skipping subsection (only-on-failure mode)"
+        return 0
+    fi
+
     # Determine if should be open based on auto-expand setting AND failures
     local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
     local details_tag="<details>"
@@ -391,6 +398,15 @@ flush_combined_summary() {
     local total_passed=$(echo "$runs_data" | jq '[.[].total_passed] | add // 0')
     local total_failed=$(echo "$runs_data" | jq '[.[].total_failed] | add // 0')
 
+    # Check if should only generate summary on failure
+    local only_on_failure="${INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE:-false}"
+    if [[ "$only_on_failure" == "true" && "$total_failed" -eq 0 ]]; then
+        echo "ℹ️  All tests passed in group '$group_name' - skipping summary (only-on-failure mode)"
+        # Clean up state file
+        rm -f "$state_file"
+        return 0
+    fi
+
     # Determine title based on group name
     local title="Combined Test Results"
     [[ "$group_name" != "default" ]] && title="$title: $group_name"
@@ -538,6 +554,13 @@ write_individual_summary() {
     local total_failed="$6"
     shift 6
     local failures_json="$1"
+
+    # Check if should only generate summary on failure
+    local only_on_failure="${INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE:-false}"
+    if [[ "$only_on_failure" == "true" && "$total_failed" -eq 0 ]]; then
+        echo "ℹ️  All tests passed - skipping summary (only-on-failure mode)"
+        return 0
+    fi
 
     local title="Test Results: $package_name"
     [[ -n "$label" ]] && title="$label: $package_name"

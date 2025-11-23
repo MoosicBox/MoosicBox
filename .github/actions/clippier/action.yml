@@ -384,6 +384,11 @@ inputs:
         required: false
         default: "individual"
 
+    run-matrix-summary-only-on-failure:
+        description: "Only generate summary if there are failures (no output when all tests pass)"
+        required: false
+        default: "false"
+
     run-matrix-summary-flush:
         description: "Whether to flush accumulated summaries (for combined/group modes)"
         required: false
@@ -660,6 +665,7 @@ runs:
               INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND: ${{ inputs.run-matrix-summary-auto-expand }}
               INPUT_RUN_MATRIX_DEBUG_SHELLS: ${{ inputs.run-matrix-debug-shells }}
               INPUT_RUN_MATRIX_SUMMARY_MODE: ${{ inputs.run-matrix-summary-mode }}
+              INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE: ${{ inputs.run-matrix-summary-only-on-failure }}
               INPUT_RUN_MATRIX_SUMMARY_FLUSH: ${{ inputs.run-matrix-summary-flush }}
               INPUT_RUN_MATRIX_PREPARE_UPLOAD: ${{ inputs.run-matrix-prepare-upload }}
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME: ${{ inputs.run-matrix-upload-package-name }}
