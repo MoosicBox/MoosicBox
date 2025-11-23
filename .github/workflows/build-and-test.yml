@@ -308,6 +308,7 @@ jobs:
                   run-matrix-label: "Clippy"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
                   run-matrix-summary-mode: "combined"
 
             - name: cargo install cargo-llvm-cov
@@ -329,6 +330,7 @@ jobs:
                   run-matrix-label: "Tests"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
                   run-matrix-summary-mode: "combined"
 
             - name: Run ${{ matrix.package.name }} doctests
@@ -350,6 +352,7 @@ jobs:
                   run-matrix-label: "Doctests"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
                   run-matrix-summary-mode: "combined"
 
             - name: Create coverage report
@@ -404,6 +407,7 @@ jobs:
                   run-matrix-label: "Format Check"
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
                   run-matrix-summary-mode: "combined"
 
             - name: Download cargo-machete
@@ -429,6 +433,7 @@ jobs:
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-working-directory: "."
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
                   run-matrix-summary-mode: "combined"
 
             - name: Generate combined test summary and prepare upload
@@ -441,6 +446,7 @@ jobs:
                   run-matrix-upload-package-name: ${{ matrix.package.name }}
                   run-matrix-upload-package-os: ${{ matrix.package.os }}
                   run-matrix-summary-auto-expand: never
+                  run-matrix-summary-only-on-failure: true
 
             - name: Upload failure data for workflow summary
               if: always() && steps.flush.outputs.failure-artifact-path != ''
