@@ -29,6 +29,7 @@ default = ["all-plugins"]
 
 fail-on-warnings = []
 
+_any-plugins = []
 all-plugins = [
     "plugin-actions",
     "plugin-canvas",
@@ -43,7 +44,7 @@ all-plugins = [
     "plugin-uuid",
 ]
 
-_actions = []
+_actions = ["_any-plugins"]
 plugin-actions = [
     "plugin-actions-change",
     "plugin-actions-click",
@@ -71,14 +72,14 @@ plugin-actions-mouse-down = ["_actions"]
 plugin-actions-mouse-over = ["_actions"]
 plugin-actions-resize = ["_actions"]
 
-plugin-canvas        = []
-plugin-event         = []
-plugin-form          = []
-plugin-http-events   = []
-plugin-idiomorph     = []
-plugin-nav           = []
-plugin-routing       = []
-plugin-sse           = []
-plugin-tauri-event   = []
-plugin-uuid          = []
-plugin-uuid-insecure = []
+plugin-canvas        = ["_any-plugins"]
+plugin-event         = ["_any-plugins"]
+plugin-form          = ["_any-plugins"]
+plugin-http-events   = ["_any-plugins"]
+plugin-idiomorph     = ["_any-plugins"]
+plugin-nav           = ["_any-plugins"]
+plugin-routing       = ["_any-plugins"]
+plugin-sse           = ["_any-plugins"]
+plugin-tauri-event   = ["_any-plugins"]
+plugin-uuid          = ["_any-plugins"]
+plugin-uuid-insecure = ["_any-plugins"]

@@ -559,66 +559,66 @@ mod tests {
     #[test_log::test]
     fn test_track_key_local_file_with_id() {
         let source = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track.flac".to_string(),
             track_id: Some("123".into()),
             source: TrackApiSource::Api(ApiSource::library()),
         };
-        let key = track_key(&source, AudioFormat::Flac);
-        assert_eq!(key, "local:API:Library:FLAC:id:123:FLAC");
+        let key = track_key(&source, AudioFormat::Source);
+        assert_eq!(key, "local:API:Library:SOURCE:id:123:SOURCE");
     }
 
     #[test_log::test]
     fn test_track_key_local_file_without_id() {
         let source = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track.flac".to_string(),
             track_id: None,
             source: TrackApiSource::Api(ApiSource::library()),
         };
-        let key = track_key(&source, AudioFormat::Flac);
-        assert_eq!(key, "local:API:Library:FLAC:/music/track.flac:FLAC");
+        let key = track_key(&source, AudioFormat::Source);
+        assert_eq!(key, "local:API:Library:SOURCE:/music/track.flac:SOURCE");
     }
 
     #[cfg(feature = "format-aac")]
     #[test_log::test]
     fn test_track_key_format_conversion() {
         let source = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track.flac".to_string(),
             track_id: Some("456".into()),
             source: TrackApiSource::Api(ApiSource::library()),
         };
         let key = track_key(&source, AudioFormat::Aac);
-        assert_eq!(key, "local:API:Library:FLAC:id:456:AAC");
+        assert_eq!(key, "local:API:Library:SOURCE:id:456:AAC");
     }
 
     #[test_log::test]
     fn test_track_key_remote_url_with_id() {
         let source = TrackSource::RemoteUrl {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             url: "https://example.com/track.flac".to_string(),
             track_id: Some("789".into()),
             source: TrackApiSource::Api(ApiSource::library()),
             headers: None,
         };
-        let key = track_key(&source, AudioFormat::Flac);
-        assert_eq!(key, "remote:API:Library:FLAC:id:789:FLAC:");
+        let key = track_key(&source, AudioFormat::Source);
+        assert_eq!(key, "remote:API:Library:SOURCE:id:789:SOURCE:");
     }
 
     #[test_log::test]
     fn test_track_key_remote_url_without_id() {
         let source = TrackSource::RemoteUrl {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             url: "https://example.com/track.flac".to_string(),
             track_id: None,
             source: TrackApiSource::Api(ApiSource::library()),
             headers: None,
         };
-        let key = track_key(&source, AudioFormat::Flac);
+        let key = track_key(&source, AudioFormat::Source);
         assert_eq!(
             key,
-            "remote:API:Library:FLAC:https://example.com/track.flac:FLAC:"
+            "remote:API:Library:SOURCE:https://example.com/track.flac:SOURCE:"
         );
     }
 
@@ -629,36 +629,36 @@ mod tests {
             ("X-Custom".to_string(), "value".to_string()),
         ];
         let source = TrackSource::RemoteUrl {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             url: "https://example.com/track.flac".to_string(),
             track_id: Some("999".into()),
             source: TrackApiSource::Api(ApiSource::library()),
             headers: Some(headers),
         };
-        let key = track_key(&source, AudioFormat::Flac);
+        let key = track_key(&source, AudioFormat::Source);
         assert_eq!(
             key,
-            "remote:API:Library:FLAC:id:999:FLAC:Authorization:Bearer token,X-Custom:value"
+            "remote:API:Library:SOURCE:id:999:SOURCE:Authorization:Bearer token,X-Custom:value"
         );
     }
 
     #[test_log::test]
     fn test_track_key_different_sources_different_keys() {
         let source1 = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track1.flac".to_string(),
             track_id: Some("1".into()),
             source: TrackApiSource::Api(ApiSource::library()),
         };
         let source2 = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track2.flac".to_string(),
             track_id: Some("2".into()),
             source: TrackApiSource::Api(ApiSource::library()),
         };
 
-        let key1 = track_key(&source1, AudioFormat::Flac);
-        let key2 = track_key(&source2, AudioFormat::Flac);
+        let key1 = track_key(&source1, AudioFormat::Source);
+        let key2 = track_key(&source2, AudioFormat::Source);
 
         assert_ne!(key1, key2);
     }
@@ -666,14 +666,14 @@ mod tests {
     #[test_log::test]
     fn test_track_key_same_source_same_key() {
         let source = TrackSource::LocalFilePath {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             path: "/music/track.flac".to_string(),
             track_id: Some("123".into()),
             source: TrackApiSource::Api(ApiSource::library()),
         };
 
-        let key1 = track_key(&source, AudioFormat::Flac);
-        let key2 = track_key(&source, AudioFormat::Flac);
+        let key1 = track_key(&source, AudioFormat::Source);
+        let key2 = track_key(&source, AudioFormat::Source);
 
         assert_eq!(key1, key2);
     }

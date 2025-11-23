@@ -394,6 +394,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
     }
 }
 
+#[cfg(any(feature = "actions", feature = "assets"))]
 #[cfg(test)]
 mod tests {
     use super::*;

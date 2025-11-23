@@ -1420,11 +1420,11 @@ mod decoder_tests {
         assert_eq!(Decoder::calculate_silk_delay_samples(0), 0);
     }
 
+    #[cfg(not(feature = "silk"))]
     #[test_log::test]
     fn test_algorithmic_delay_samples_without_silk() {
-        let _decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-        #[cfg(not(feature = "silk"))]
-        assert_eq!(_decoder.algorithmic_delay_samples(), 0);
+        let decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        assert_eq!(decoder.algorithmic_delay_samples(), 0);
     }
 
     #[test_log::test]

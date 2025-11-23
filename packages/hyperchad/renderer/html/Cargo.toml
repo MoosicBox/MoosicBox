@@ -16,6 +16,9 @@ examples = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 hyperchad_renderer                 = { workspace = true, features = ["canvas", "html"] }
 hyperchad_renderer_html_actix      = { workspace = true, optional = true }
@@ -104,3 +107,4 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 test-log = { workspace = true }
+tokio = { workspace = true }

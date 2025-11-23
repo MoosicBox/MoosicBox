@@ -13,6 +13,9 @@ version     = "0.1.4"
 [package.metadata]
 examples = true
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 moosicbox_assert = { workspace = true }
 
@@ -31,6 +34,7 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 test-log = { workspace = true }
+tokio = { workspace = true }
 
 [features]
 default = ["futures-channel"]

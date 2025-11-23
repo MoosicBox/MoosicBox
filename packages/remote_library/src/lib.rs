@@ -1153,12 +1153,12 @@ mod tests {
         let track_or_id = TrackOrId::Id(track_id);
         let track_source = TrackSource::LocalFilePath {
             path: "/tmp/test.mp3".into(),
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
             track_id: None,
             source: TrackApiSource::Local,
         };
         let quality = PlaybackQuality {
-            format: AudioFormat::Flac,
+            format: AudioFormat::Source,
         };
 
         let result = api.track_size(track_or_id, &track_source, quality).await;

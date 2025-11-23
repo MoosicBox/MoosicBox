@@ -16,6 +16,9 @@ examples = false
 [package.metadata.workspaces]
 group = "simvar"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 switchy = { workspace = true, features = [
     "async",
@@ -24,8 +27,9 @@ switchy = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-switchy_async = { workspace = true, features = ["macros"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
+tokio         = { workspace = true }
 
 [features]
 default = []

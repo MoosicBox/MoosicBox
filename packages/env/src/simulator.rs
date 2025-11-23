@@ -493,6 +493,8 @@ mod tests {
     #[test_log::test]
     fn test_global_var() {
         // This tests the global PROVIDER functions
+        // Ensure the variable doesn't exist from a previous test
+        remove_var("GLOBAL_TEST");
         set_var("GLOBAL_TEST", "global_value");
         assert_eq!(var("GLOBAL_TEST").unwrap(), "global_value");
         remove_var("GLOBAL_TEST");
@@ -529,6 +531,10 @@ mod tests {
 
     #[test_log::test]
     fn test_global_var_exists() {
+        // Ensure clean state
+        remove_var("EXISTS_GLOBAL");
+        assert!(!var_exists("EXISTS_GLOBAL"));
+
         set_var("EXISTS_GLOBAL", "yes");
         assert!(var_exists("EXISTS_GLOBAL"));
         remove_var("EXISTS_GLOBAL");

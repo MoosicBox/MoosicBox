@@ -306,10 +306,10 @@ mod tests {
         thread,
     };
 
-    use super::{Builder, Error, thread_id};
+    use super::thread_id;
 
     #[cfg(feature = "_any_backend")]
-    use super::task;
+    use super::{Builder, Error, task};
 
     #[test_log::test]
     fn thread_id_is_unique_across_threads() {

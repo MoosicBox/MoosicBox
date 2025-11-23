@@ -144,12 +144,12 @@ impl<P: StatePersistence> StateStore<P> {
     }
 }
 
+#[cfg(feature = "persistence-sqlite")]
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
 
-    #[cfg(feature = "persistence-sqlite")]
     use crate::sqlite::SqlitePersistence;
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -158,7 +158,6 @@ mod tests {
         name: String,
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_cache_hit_after_get() -> Result<(), Error> {
         // Test that values retrieved from persistence are cached for subsequent gets
@@ -184,7 +183,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_cache_invalidation_on_remove() -> Result<(), Error> {
         // Test that cache is properly invalidated when removing items
@@ -210,7 +208,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_cache_invalidation_on_clear() -> Result<(), Error> {
         // Test that cache is properly cleared when clearing the entire store
@@ -242,7 +239,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_take_removes_from_cache_and_returns_value() -> Result<(), Error> {
         // Test that take removes from both cache and persistence while returning the value
@@ -269,7 +265,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_take_nonexistent_key_returns_none() -> Result<(), Error> {
         // Test that taking a nonexistent key returns None without errors
@@ -282,7 +277,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_update_existing_key() -> Result<(), Error> {
         // Test that setting an existing key updates both cache and persistence
@@ -311,7 +305,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_empty_string_key() -> Result<(), Error> {
         // Test that empty string keys are handled correctly
@@ -331,7 +324,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_special_characters_in_key() -> Result<(), Error> {
         // Test that keys with special characters are handled correctly
@@ -351,7 +343,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_complex_nested_data() -> Result<(), Error> {
         // Test serialization and deserialization of complex nested structures
@@ -389,7 +380,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "persistence-sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_multiple_independent_keys() -> Result<(), Error> {
         // Test that multiple keys can coexist independently

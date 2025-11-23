@@ -303,11 +303,24 @@ mod tests {
 
     #[test_log::test]
     fn test_reset_step_multiplier() {
+        // Temporarily remove the env var to allow random generation
+        let original = std::env::var("SIMULATOR_STEP_MULTIPLIER").ok();
+        unsafe {
+            std::env::remove_var("SIMULATOR_STEP_MULTIPLIER");
+        }
+
         reset_step_multiplier();
         let first = step_multiplier();
 
         reset_step_multiplier();
         let second = step_multiplier();
+
+        // Restore original value
+        if let Some(val) = original {
+            unsafe {
+                std::env::set_var("SIMULATOR_STEP_MULTIPLIER", val);
+            }
+        }
 
         // After reset, we should get a different value (with extremely high probability)
         assert_ne!(first, second);

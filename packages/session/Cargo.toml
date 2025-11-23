@@ -40,6 +40,7 @@ thiserror  = { workspace = true }
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
+tokio         = { workspace = true }
 
 [features]
 default = ["all-formats", "api", "events", "openapi"]

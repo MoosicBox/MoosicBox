@@ -517,8 +517,12 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Da
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "local")]
     use moosicbox_schema::get_sqlite_library_migrations;
+    #[cfg(feature = "local")]
     use std::sync::Arc;
+    #[cfg(feature = "local")]
     use switchy_schema_test_utils::MigrationTestBuilder;
 
     #[test_log::test]

@@ -16,6 +16,9 @@ examples = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 hyperchad_renderer = { workspace = true }
 hyperchad_router   = { workspace = true, features = ["static-routes"] }
@@ -26,6 +29,7 @@ log = { workspace = true }
 pretty_assertions = { workspace = true }
 switchy_async     = { workspace = true, features = ["macros", "tokio"] }
 test-log          = { workspace = true }
+tokio             = { workspace = true }
 
 [features]
 default = []

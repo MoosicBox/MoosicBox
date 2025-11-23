@@ -298,15 +298,13 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "all-plugins")]
     #[test_log::test]
     fn test_hash_differs_from_just_plugins_string() {
         // The hash should differ from just "plugins" if any features are enabled
         use sha2_const_stable::Sha256;
 
         let plugins_only_hash = Sha256::new().update(b"plugins").finalize();
-
-        // With default features enabled, hash should differ from just "plugins"
-        #[cfg(feature = "all-plugins")]
         assert_ne!(
             RAW_HASH, plugins_only_hash,
             "With all-plugins feature enabled, hash should differ from just 'plugins'"
@@ -326,7 +324,7 @@ mod tests {
         }
 
         // When no features are enabled, should just be "plugins"
-        #[cfg(not(feature = "all-plugins"))]
+        #[cfg(not(feature = "_any-plugins"))]
         {
             assert_eq!(
                 PLUGIN_HASH, "plugins",

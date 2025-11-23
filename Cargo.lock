@@ -6026,6 +6026,7 @@ dependencies = [
  "switchy_http_models",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "uaparser",
 ]
 
@@ -6062,6 +6063,7 @@ dependencies = [
  "pretty_assertions",
  "switchy_async",
  "test-log",
+ "tokio",
 ]
 
 [[package]]
@@ -6173,6 +6175,7 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -8419,6 +8422,7 @@ dependencies = [
  "moosicbox_assert",
  "switchy_async",
  "test-log",
+ "tokio",
 ]
 
 [[package]]
@@ -13874,6 +13878,7 @@ dependencies = [
  "switchy",
  "switchy_async",
  "test-log",
+ "tokio",
 ]
 
 [[package]]
@@ -15195,6 +15200,7 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]

@@ -1277,7 +1277,7 @@ pub mod sync {
         }
 
         #[test_log::test]
-        #[cfg(feature = "sync")]
+        #[cfg(all(feature = "sync", feature = "async"))]
         fn test_into_async_conversion() {
             use std::io::{Seek as _, SeekFrom, Write as _};
 

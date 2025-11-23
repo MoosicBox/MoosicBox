@@ -363,7 +363,9 @@ mod tests {
         let html = Content::Html("<h1>Test</h1>".to_string());
         match html {
             Content::Html(s) => assert_eq!(s, "<h1>Test</h1>"),
-            _ => panic!("Expected Html variant"),
+            Content::Raw { .. } => panic!("Expected Html variant"),
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected Html variant"),
         }
     }
 
@@ -372,7 +374,9 @@ mod tests {
         let html = Content::Html(String::new());
         match html {
             Content::Html(s) => assert!(s.is_empty()),
-            _ => panic!("Expected Html variant"),
+            Content::Raw { .. } => panic!("Expected Html variant"),
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected Html variant"),
         }
     }
 
@@ -393,7 +397,9 @@ mod tests {
                 assert_eq!(d, data);
                 assert_eq!(ct, content_type);
             }
-            _ => panic!("Expected Raw variant"),
+            Content::Html(_) => panic!("Expected Raw variant"),
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected Raw variant"),
         }
     }
 
@@ -413,7 +419,9 @@ mod tests {
                 assert_eq!(d, data);
                 assert_eq!(ct, "image/png");
             }
-            _ => panic!("Expected Raw variant"),
+            Content::Html(_) => panic!("Expected Raw variant"),
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected Raw variant"),
         }
     }
 
@@ -459,6 +467,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "assets")]
     #[test_log::test]
     fn test_lambda_app_new() {
         #[derive(Clone)]
@@ -502,7 +511,6 @@ mod tests {
         let app = LambdaApp::new(processor);
 
         // Verify the app was created successfully
-        #[cfg(feature = "assets")]
         assert!(app.static_asset_routes.is_empty());
     }
 

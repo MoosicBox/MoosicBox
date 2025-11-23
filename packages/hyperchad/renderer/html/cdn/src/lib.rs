@@ -226,6 +226,7 @@ mod tests {
             .expect("Should return content");
 
         // Verify the original handler's content is preserved
+        #[allow(clippy::match_wildcard_for_single_variants)]
         let text = match content {
             Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
             _ => panic!("Expected Raw content"),

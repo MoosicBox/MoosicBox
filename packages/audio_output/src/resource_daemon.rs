@@ -314,10 +314,10 @@ mod tests {
         std::thread::sleep(Duration::from_millis(100));
 
         let state = daemon.state();
-        assert!(matches!(
-            state,
-            DaemonState::Quitting(_) | DaemonState::Quit(_)
-        ));
+        assert!(
+            matches!(state, DaemonState::Quitting(_) | DaemonState::Quit(_)),
+            "Expected 'Quitting' or 'Quit' state, but got {state:?}"
+        );
     }
 
     #[test_log::test]
@@ -350,10 +350,10 @@ mod tests {
         std::thread::sleep(Duration::from_millis(100));
 
         let state = daemon.state();
-        assert!(matches!(
-            state,
-            DaemonState::Quitting(_) | DaemonState::Quit(_)
-        ));
+        assert!(
+            matches!(state, DaemonState::Quitting(_) | DaemonState::Quit(_)),
+            "Expected 'Quitting' or 'Quit' state, but got {state:?}"
+        );
     }
 
     #[test_log::test]

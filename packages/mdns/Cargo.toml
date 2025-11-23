@@ -16,9 +16,11 @@ examples = true
 [package.metadata.workspaces]
 group = "switchy"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 moosicbox_assert = { workspace = true }
-
 
 # Scanner dependencies
 kanal = { workspace = true, optional = true }
@@ -37,7 +39,9 @@ mdns-sd     = { workspace = true }
 thiserror   = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
 
 [features]
 default = ["scanner", "simulator"]
