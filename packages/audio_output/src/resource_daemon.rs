@@ -171,7 +171,68 @@ impl<T, QuitReason: Clone + Send + 'static> Drop for ResourceDaemon<T, QuitReaso
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+
+    /// Wait for a daemon state to satisfy a predicate condition with timeout.
+    ///
+    /// This helper function polls the daemon state until either:
+    /// - The predicate returns true, OR
+    /// - The timeout is exceeded
+    ///
+    /// # Errors
+    ///
+    /// * If the timeout is exceeded before the predicate is satisfied
+    fn wait_for_state<T, QuitReason: Clone + Send + Debug + 'static>(
+        daemon: &ResourceDaemon<T, QuitReason>,
+        predicate: impl Fn(&DaemonState<QuitReason>) -> bool,
+        timeout: Duration,
+    ) -> Result<DaemonState<QuitReason>, String> {
+        let start = Instant::now();
+        let poll_interval = Duration::from_millis(1);
+
+        loop {
+            let state = daemon.state();
+            if predicate(&state) {
+                return Ok(state);
+            }
+
+            if start.elapsed() > timeout {
+                return Err(format!(
+                    "Timeout after {timeout:?} waiting for state condition, current state: {state:?}",
+                ));
+            }
+
+            std::thread::sleep(poll_interval);
+        }
+    }
+
+    /// Wait for a condition to become true with timeout.
+    ///
+    /// # Errors
+    ///
+    /// * If the timeout is exceeded before the condition becomes true
+    fn wait_for_condition(
+        condition: impl Fn() -> bool,
+        timeout: Duration,
+        description: &str,
+    ) -> Result<(), String> {
+        let start = Instant::now();
+        let poll_interval = Duration::from_millis(1);
+
+        loop {
+            if condition() {
+                return Ok(());
+            }
+
+            if start.elapsed() > timeout {
+                return Err(format!(
+                    "Timeout after {timeout:?} waiting for: {description}",
+                ));
+            }
+
+            std::thread::sleep(poll_interval);
+        }
+    }
 
     #[test_log::test]
     fn test_daemon_state_debug() {
@@ -234,10 +295,14 @@ mod tests {
     fn test_resource_daemon_new_with_error() {
         let daemon = ResourceDaemon::<i32, String>::new(|_signal| Err("error".to_string()));
 
-        // Give the thread time to complete
-        std::thread::sleep(Duration::from_millis(50));
+        // Wait for the daemon to reach Quit state
+        let state = wait_for_state(
+            &daemon,
+            |s| matches!(s, DaemonState::Quit(_)),
+            Duration::from_secs(1),
+        )
+        .expect("Daemon should reach Quit state");
 
-        let state = daemon.state();
         assert!(matches!(state, DaemonState::Quit(Some(ref s)) if s == "error"));
     }
 
@@ -251,8 +316,15 @@ mod tests {
             Ok(42)
         });
 
-        // Verify resource was created
-        std::thread::sleep(Duration::from_millis(50));
+        // Wait for resource to be created
+        let counter_check = counter.clone();
+        wait_for_condition(
+            || *counter_check.lock().unwrap() == 1,
+            Duration::from_secs(1),
+            "resource creation",
+        )
+        .expect("Resource should be created");
+
         assert_eq!(*counter.lock().unwrap(), 1);
 
         // Quit the daemon
@@ -287,15 +359,19 @@ mod tests {
                 })
             });
 
-            // Wait for resource to be created
-            std::thread::sleep(Duration::from_millis(50));
+            // Verify resource exists (not dropped yet)
             assert!(!*dropped.lock().unwrap());
         } // daemon is dropped here
 
-        // Wait for daemon thread to clean up
-        std::thread::sleep(Duration::from_millis(50));
+        // Wait for resource to be dropped
+        let dropped_check = dropped.clone();
+        wait_for_condition(
+            || *dropped_check.lock().unwrap(),
+            Duration::from_secs(1),
+            "resource to be dropped",
+        )
+        .expect("Resource should be dropped");
 
-        // Verify resource was dropped
         assert!(*dropped.lock().unwrap());
     }
 
@@ -304,16 +380,19 @@ mod tests {
         let daemon = ResourceDaemon::<i32, String>::new(|signal| {
             // Dispatch quit signal from within the provider
             std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(50));
                 signal.dispatch("internal quit".to_string());
             });
             Ok(42)
         });
 
-        // Wait for signal to be dispatched
-        std::thread::sleep(Duration::from_millis(100));
+        // Wait for signal to be dispatched and daemon to transition
+        let state = wait_for_state(
+            &daemon,
+            |s| matches!(s, DaemonState::Quitting(_) | DaemonState::Quit(_)),
+            Duration::from_secs(1),
+        )
+        .expect("Daemon should reach Quitting or Quit state");
 
-        let state = daemon.state();
         assert!(
             matches!(state, DaemonState::Quitting(_) | DaemonState::Quit(_)),
             "Expected 'Quitting' or 'Quit' state, but got {state:?}"
@@ -328,7 +407,7 @@ mod tests {
             Ok(42)
         });
 
-        std::thread::sleep(Duration::from_millis(50));
+        // The daemon should be in Holding state (no wait needed for synchronous check)
         assert_eq!(daemon.state(), DaemonState::Holding);
     }
 
@@ -340,16 +419,20 @@ mod tests {
 
             // Both signals should work
             std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(50));
                 signal_clone.dispatch("cloned signal".to_string());
             });
 
             Ok(42)
         });
 
-        std::thread::sleep(Duration::from_millis(100));
+        // Wait for signal to be dispatched
+        let state = wait_for_state(
+            &daemon,
+            |s| matches!(s, DaemonState::Quitting(_) | DaemonState::Quit(_)),
+            Duration::from_secs(1),
+        )
+        .expect("Daemon should reach Quitting or Quit state");
 
-        let state = daemon.state();
         assert!(
             matches!(state, DaemonState::Quitting(_) | DaemonState::Quit(_)),
             "Expected 'Quitting' or 'Quit' state, but got {state:?}"
@@ -367,8 +450,21 @@ mod tests {
             Ok(42)
         });
 
+        // Wait for resource creation to complete
+        let state_log_check = state_log.clone();
+        wait_for_condition(
+            || {
+                state_log_check
+                    .lock()
+                    .unwrap()
+                    .contains(&"created".to_string())
+            },
+            Duration::from_secs(1),
+            "resource creation",
+        )
+        .expect("Resource should be created");
+
         // Initial state should be Holding
-        std::thread::sleep(Duration::from_millis(50));
         assert_eq!(daemon.state(), DaemonState::Holding);
 
         // Quit the daemon
@@ -383,7 +479,7 @@ mod tests {
     fn test_multiple_quit_calls() {
         let mut daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
 
-        std::thread::sleep(Duration::from_millis(50));
+        // Daemon should start in Holding state
         assert_eq!(daemon.state(), DaemonState::Holding);
 
         // First quit
@@ -394,8 +490,9 @@ mod tests {
         daemon.quit("second".to_string());
         let state2 = daemon.state();
 
-        // State should remain the same
+        // State should remain the same (both should be Quit with "first")
         assert_eq!(state1, state2);
+        assert!(matches!(state1, DaemonState::Quit(Some(ref s)) if s == "first"));
     }
 
     #[test_log::test]
