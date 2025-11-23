@@ -38,6 +38,7 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
+serial_test   = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
 tokio         = { workspace = true }

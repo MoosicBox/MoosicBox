@@ -9287,6 +9287,7 @@ dependencies = [
  "moosicbox_session_models",
  "serde",
  "serde_json",
+ "serial_test",
  "switchy_async",
  "switchy_database",
  "test-log",

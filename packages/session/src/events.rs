@@ -92,8 +92,15 @@ pub async fn send_players_updated_event() -> Result<(), Vec<Box<dyn std::error::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+
+    // Note: All tests in this module use #[serial] because they interact with the global
+    // PLAYERS_UPDATED_EVENT_LISTENERS state. Running these tests in parallel would cause
+    // race conditions where one test's .clear() or listener registration affects another
+    // test's expectations. The serial_test crate ensures these tests run one at a time.
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_on_players_updated_event_registers_listener() {
         // Note: Due to global state, count will include listeners from other tests
         let initial_count = PLAYERS_UPDATED_EVENT_LISTENERS.read().await.len();
@@ -106,6 +113,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_trigger_players_updated_event_calls_all_listeners() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -138,7 +146,7 @@ mod tests {
 
         // Trigger the event
         let result = trigger_players_updated_event().await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Expected Ok result, got {result:?}");
 
         // Both listeners should have been called
         assert_eq!(counter1.load(Ordering::SeqCst), 1);
@@ -146,6 +154,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_trigger_players_updated_event_collects_errors() {
         use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -180,7 +189,7 @@ mod tests {
 
         // Trigger should collect errors
         let result = trigger_players_updated_event().await;
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected Err result, got {result:?}");
 
         // Both listeners should have been called despite one failing
         assert!(success_called.load(Ordering::SeqCst));
@@ -193,15 +202,17 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_send_players_updated_event_with_no_listeners() {
         // Clear listeners and test empty case
         PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
 
         let result = send_players_updated_event().await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Expected Ok result, got {result:?}");
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_multiple_errors_collected() {
         // Clear existing listeners
         PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
@@ -218,7 +229,7 @@ mod tests {
         .await;
 
         let result = trigger_players_updated_event().await;
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected Err result, got {result:?}");
 
         if let Err(errors) = result {
             assert_eq!(errors.len(), 2);
