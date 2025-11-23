@@ -1045,19 +1045,28 @@ run_matrix_flush_command() {
         if [[ -z "$package_name" || -z "$package_os" ]]; then
             echo "⚠️  Warning: prepare-upload enabled but package-name or package-os not provided"
         else
-            # Create upload directory
-            local upload_dir="${RUNNER_TEMP:-/tmp}/failure-upload"
-            mkdir -p "$upload_dir"
-
-            # Copy and rename the group_default.json file if it exists
             local source_file="$SUMMARY_STATE_DIR/group_default.json"
-            if [[ -f "$source_file" ]]; then
-                local target_file="$upload_dir/group_default_${package_name}_${package_os}.json"
-                cp "$source_file" "$target_file"
-                echo "📦 Prepared failure artifact: $target_file"
 
-                # Output the path for the workflow to use
-                echo "failure-artifact-path=$target_file" >> $GITHUB_OUTPUT
+            # Check if we should only upload on failure
+            local only_on_failure="${INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE:-false}"
+
+            if [[ -f "$source_file" ]]; then
+                # Check if there are any failures in the state file
+                local has_failures=$(cat "$source_file" | jq '([.[].total_failed] | add // 0) > 0')
+
+                if [[ "$only_on_failure" == "true" && "$has_failures" == "false" ]]; then
+                    echo "ℹ️  All tests passed - skipping artifact preparation (only-on-failure mode)"
+                    echo "failure-artifact-path=" >> $GITHUB_OUTPUT
+                else
+                    # Create upload directory and prepare artifact
+                    local upload_dir="${RUNNER_TEMP:-/tmp}/failure-upload"
+                    mkdir -p "$upload_dir"
+
+                    local target_file="$upload_dir/group_default_${package_name}_${package_os}.json"
+                    cp "$source_file" "$target_file"
+                    echo "📦 Prepared failure artifact: $target_file"
+                    echo "failure-artifact-path=$target_file" >> $GITHUB_OUTPUT
+                fi
             else
                 echo "ℹ️  No failure data to prepare for upload (group_default.json not found)"
                 echo "failure-artifact-path=" >> $GITHUB_OUTPUT

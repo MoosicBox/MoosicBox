@@ -399,6 +399,11 @@ inputs:
         required: false
         default: "false"
 
+    run-matrix-prepare-upload-only-on-failure:
+        description: "Only prepare upload artifact if there are failures (default: false for backwards compatibility)"
+        required: false
+        default: "false"
+
     run-matrix-upload-package-name:
         description: "Package name for failure artifact filename (required if run-matrix-prepare-upload is true)"
         required: false
@@ -668,6 +673,7 @@ runs:
               INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE: ${{ inputs.run-matrix-summary-only-on-failure }}
               INPUT_RUN_MATRIX_SUMMARY_FLUSH: ${{ inputs.run-matrix-summary-flush }}
               INPUT_RUN_MATRIX_PREPARE_UPLOAD: ${{ inputs.run-matrix-prepare-upload }}
+              INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-prepare-upload-only-on-failure }}
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME: ${{ inputs.run-matrix-upload-package-name }}
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS: ${{ inputs.run-matrix-upload-package-os }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}

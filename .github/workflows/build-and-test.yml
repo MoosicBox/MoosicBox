@@ -443,6 +443,7 @@ jobs:
               with:
                   command: run-matrix-flush
                   run-matrix-prepare-upload: true
+                  run-matrix-prepare-upload-only-on-failure: true
                   run-matrix-upload-package-name: ${{ matrix.package.name }}
                   run-matrix-upload-package-os: ${{ matrix.package.os }}
                   run-matrix-summary-auto-expand: never
