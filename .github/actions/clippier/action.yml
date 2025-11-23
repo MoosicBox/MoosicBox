@@ -486,6 +486,10 @@ outputs:
         description: "Path to prepared failure artifact file (for run-matrix-flush with prepare-upload enabled)"
         value: ${{ steps.run-action.outputs.failure-artifact-path }}
 
+    failure-artifact-name:
+        description: "Stable artifact name generated from matrix package JSON (for run-matrix-flush with prepare-upload enabled)"
+        value: ${{ steps.run-action.outputs.failure-artifact-name }}
+
 runs:
     using: "composite"
     steps:

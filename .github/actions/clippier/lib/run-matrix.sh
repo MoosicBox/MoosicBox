@@ -1039,12 +1039,38 @@ run_matrix_flush_command() {
     # Prepare upload artifact BEFORE flushing (which deletes the files)
     local prepare_upload="${INPUT_RUN_MATRIX_PREPARE_UPLOAD:-false}"
     if [[ "$prepare_upload" == "true" ]]; then
-        local package_name="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME}"
-        local package_os="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS}"
+        # Generate stable artifact name from matrix package JSON
+        local package_json="${INPUT_RUN_MATRIX_PACKAGE_JSON}"
+        local artifact_name=""
 
-        if [[ -z "$package_name" || -z "$package_os" ]]; then
-            echo "⚠️  Warning: prepare-upload enabled but package-name or package-os not provided"
+        if [[ -n "$package_json" ]]; then
+            # Extract package name and OS from JSON
+            local package_name=$(echo "$package_json" | jq -r '.name')
+            local package_os=$(echo "$package_json" | jq -r '.os')
+
+            # Generate stable hash from entire matrix package (sorted for consistency)
+            local matrix_hash=$(echo "$package_json" | jq -S -c '.' | md5sum | cut -c1-8)
+
+            # Create stable artifact name
+            artifact_name="test-results-${package_name}-${package_os}-${matrix_hash}"
+
+            echo "failure-artifact-name=$artifact_name" >> $GITHUB_OUTPUT
+            echo "📛 Generated stable artifact name: $artifact_name (hash: $matrix_hash)"
         else
+            # Fallback to legacy behavior using explicit inputs
+            local package_name="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME}"
+            local package_os="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS}"
+
+            if [[ -n "$package_name" && -n "$package_os" ]]; then
+                artifact_name="test-results-${package_name}-${package_os}"
+                echo "failure-artifact-name=$artifact_name" >> $GITHUB_OUTPUT
+                echo "📛 Generated artifact name (legacy): $artifact_name"
+            else
+                echo "⚠️  Warning: prepare-upload enabled but package-json not provided and package-name/package-os missing"
+            fi
+        fi
+
+        if [[ -n "$artifact_name" ]]; then
             local source_file="$SUMMARY_STATE_DIR/group_default.json"
 
             # Check if we should only upload on failure
@@ -1062,7 +1088,8 @@ run_matrix_flush_command() {
                     local upload_dir="${RUNNER_TEMP:-/tmp}/failure-upload"
                     mkdir -p "$upload_dir"
 
-                    local target_file="$upload_dir/group_default_${package_name}_${package_os}.json"
+                    # Use artifact name for the file
+                    local target_file="$upload_dir/${artifact_name}.json"
                     cp "$source_file" "$target_file"
                     echo "📦 Prepared failure artifact: $target_file"
                     echo "failure-artifact-path=$target_file" >> $GITHUB_OUTPUT
@@ -1104,7 +1131,7 @@ run_matrix_flush_command() {
 # after all matrix jobs complete, providing a centralized view of all failures.
 #
 # Algorithm:
-# 1. Find all group_*.json files in current directory (downloaded artifacts)
+# 1. Find all test-results-*.json files in current directory (downloaded artifacts)
 # 2. Parse each JSON file and extract packages with failures
 # 3. Aggregate by package → category → failures
 # 4. Calculate workflow-wide statistics
@@ -1170,10 +1197,10 @@ run_matrix_aggregate_failures_command() {
             ;;
     esac
 
-    # Find all group JSON files in current directory
-    # Pattern: group_default_*.json (includes package name in filename)
+    # Find all test result artifact files in current directory
+    # Pattern: test-results-*.json (downloaded and merged from all matrix jobs)
     local json_files=()
-    for file in group_default_*.json; do
+    for file in test-results-*.json; do
         if [[ -f "$file" ]]; then
             json_files+=("$file")
         fi
