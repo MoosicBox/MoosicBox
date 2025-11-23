@@ -523,7 +523,14 @@ runs:
               cmake-version: "3.x"
 
         - name: Checkout MoosicBox for clippier
-          if: inputs.command != 'setup' && inputs.clippier-version != ''
+          if: |
+              inputs.clippier-version != '' && (
+                inputs.command == 'features' ||
+                inputs.command == 'packages' ||
+                inputs.command == 'affected-packages' ||
+                inputs.command == 'workspace-deps' ||
+                inputs.command == 'validate-feature-propagation'
+              )
           uses: actions/checkout@v4
           with:
               repository: MoosicBox/MoosicBox
