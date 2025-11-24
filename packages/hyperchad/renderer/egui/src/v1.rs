@@ -5,7 +5,7 @@
 //! management capabilities.
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
@@ -244,17 +244,17 @@ fn map_element_target<R>(
 }
 
 #[allow(clippy::too_many_lines)]
-fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut HashSet<usize>) {
+fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut BTreeSet<usize>) {
     fn check_value(
         value: &Value,
         root: &Container,
-        watch_positions: &mut HashSet<usize>,
+        watch_positions: &mut BTreeSet<usize>,
         id: usize,
     ) {
         fn check_calc_value(
             calc: &hyperchad_actions::logic::CalcValue,
             root: &Container,
-            watch_positions: &mut HashSet<usize>,
+            watch_positions: &mut BTreeSet<usize>,
             id: usize,
         ) {
             match calc {
@@ -303,7 +303,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 fn check_arithmetic(
                     arithmetic: &hyperchad_actions::logic::Arithmetic,
                     root: &Container,
-                    watch_positions: &mut HashSet<usize>,
+                    watch_positions: &mut BTreeSet<usize>,
                     id: usize,
                 ) {
                     match arithmetic {
@@ -336,7 +336,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
     fn check_action(
         action: &hyperchad_actions::ActionType,
         root: &Container,
-        watch_positions: &mut HashSet<usize>,
+        watch_positions: &mut BTreeSet<usize>,
         id: usize,
     ) {
         match action {
@@ -680,13 +680,13 @@ enum AppImage {
 }
 
 struct RenderContext<'a> {
-    viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
-    images: &'a mut HashMap<String, AppImage>,
-    canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
+    viewport_listeners: &'a mut BTreeMap<usize, ViewportListener>,
+    images: &'a mut BTreeMap<String, AppImage>,
+    canvas_actions: &'a mut BTreeMap<String, Vec<CanvasAction>>,
     route_requests: &'a mut Vec<usize>,
-    checkboxes: &'a mut HashMap<egui::Id, bool>,
-    positions: &'a mut HashMap<usize, egui::Rect>,
-    watch_positions: &'a mut HashSet<usize>,
+    checkboxes: &'a mut BTreeMap<egui::Id, bool>,
+    positions: &'a mut BTreeMap<usize, egui::Rect>,
+    watch_positions: &'a mut BTreeSet<usize>,
     // Shared action handler for all action processing
     action_handler: EguiActionHandler<'a>,
     // Action context for UI operations
@@ -707,15 +707,15 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     sender: Sender<String>,
     event: Sender<AppEvent>,
     event_receiver: Receiver<AppEvent>,
-    viewport_listeners: Arc<RwLock<HashMap<usize, ViewportListener>>>,
-    images: Arc<RwLock<HashMap<String, AppImage>>>,
-    canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
+    viewport_listeners: Arc<RwLock<BTreeMap<usize, ViewportListener>>>,
+    images: Arc<RwLock<BTreeMap<String, AppImage>>>,
+    canvas_actions: Arc<RwLock<BTreeMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
     // Removed: action_handler - now created locally as needed to avoid lifetime issues
     action_context: EguiActionContext,
-    checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
-    positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
-    watch_positions: Arc<RwLock<HashSet<usize>>>,
+    checkboxes: Arc<RwLock<BTreeMap<egui::Id, bool>>>,
+    positions: Arc<RwLock<BTreeMap<usize, egui::Rect>>>,
+    watch_positions: Arc<RwLock<BTreeSet<usize>>>,
     router: Router,
     background: Option<Color32>,
     title: Option<String>,
@@ -725,7 +725,7 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
     resize_handlers: Arc<RwLock<Vec<Handler>>>,
     immediate_handlers: Arc<RwLock<Vec<Handler>>>,
-    immediate_elements_handled: Arc<RwLock<HashSet<usize>>>,
+    immediate_elements_handled: Arc<RwLock<BTreeSet<usize>>>,
     client_info: Arc<ClientInfo>,
 }
 
@@ -926,9 +926,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             sender: sender.clone(),
             event,
             event_receiver,
-            viewport_listeners: Arc::new(RwLock::new(HashMap::new())),
-            images: Arc::new(RwLock::new(HashMap::new())),
-            canvas_actions: Arc::new(RwLock::new(HashMap::new())),
+            viewport_listeners: Arc::new(RwLock::new(BTreeMap::new())),
+            images: Arc::new(RwLock::new(BTreeMap::new())),
+            canvas_actions: Arc::new(RwLock::new(BTreeMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
             // Removed: action_handler initialization
             action_context: EguiActionContext {
@@ -936,9 +936,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 sender,
                 request_action: request_action.clone(),
             },
-            checkboxes: Arc::new(RwLock::new(HashMap::new())),
-            positions: Arc::new(RwLock::new(HashMap::new())),
-            watch_positions: Arc::new(RwLock::new(HashSet::new())),
+            checkboxes: Arc::new(RwLock::new(BTreeMap::new())),
+            positions: Arc::new(RwLock::new(BTreeMap::new())),
+            watch_positions: Arc::new(RwLock::new(BTreeSet::new())),
             router,
             background: None,
             title: None,
@@ -1256,7 +1256,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn update_frame_size(&self, width: f32, height: f32) {
-        *self.viewport_listeners.write().unwrap() = HashMap::new();
+        *self.viewport_listeners.write().unwrap() = BTreeMap::new();
 
         log::debug!(
             "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
@@ -3000,7 +3000,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         ui: &mut Ui,
         ctx: &egui::Context,
         input: &Input,
-        checkboxes: &mut HashMap<egui::Id, bool>,
+        checkboxes: &mut BTreeMap<egui::Id, bool>,
     ) -> Option<Response> {
         match input {
             Input::Text { .. } | Input::Password { .. } => {
@@ -3092,7 +3092,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     fn render_checkbox_input(
         ui: &mut Ui,
         input: &Input,
-        checkboxes: &mut HashMap<egui::Id, bool>,
+        checkboxes: &mut BTreeMap<egui::Id, bool>,
     ) -> Response {
         let Input::Checkbox { checked } = input else {
             unreachable!();

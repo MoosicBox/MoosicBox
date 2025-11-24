@@ -2240,7 +2240,7 @@ fn rusqlite_exec_modify_column_workaround(
     let temp_column = format!(
         "{}_temp_{}",
         column_name,
-        std::time::SystemTime::now()
+        switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
@@ -2688,7 +2688,7 @@ fn rusqlite_exec_table_recreation_workaround(
         let temp_table = format!(
             "{}_temp_{}",
             table_name,
-            std::time::SystemTime::now()
+            switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
@@ -4158,7 +4158,7 @@ mod tests {
     fn create_test_db() -> RusqliteDatabase {
         // Use unique in-memory database name for each test to avoid conflicts
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
@@ -4423,7 +4423,7 @@ mod tests {
         use tokio::sync::Mutex;
 
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
@@ -4828,7 +4828,7 @@ mod tests {
         use tokio::sync::Mutex;
 
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();

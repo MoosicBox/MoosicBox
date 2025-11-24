@@ -34,11 +34,12 @@ utoipa    = { workspace = true, optional = true }
 serde      = { workspace = true }
 serde_with = { workspace = true, features = ["macros"] }
 
-home       = { workspace = true }
-json5      = { workspace = true }
-log        = { workspace = true }
-switchy_fs = { workspace = true, features = ["std", "sync"] }
-thiserror  = { workspace = true }
+home         = { workspace = true }
+json5        = { workspace = true }
+log          = { workspace = true }
+switchy_fs   = { workspace = true, features = ["std", "sync"] }
+switchy_time = { workspace = true, features = ["std"] }
+thiserror    = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
@@ -53,7 +54,10 @@ fail-on-warnings = [
     "moosicbox_profiles?/fail-on-warnings",
     "switchy_database?/fail-on-warnings",
     "switchy_fs/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
 ]
+
+simulator = ["switchy_fs/simulator", "switchy_time/simulator"]
 
 db = [
     "dep:moosicbox_json_utils",

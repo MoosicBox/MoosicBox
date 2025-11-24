@@ -2229,7 +2229,7 @@ async fn exec_modify_column_workaround(
     let temp_column = format!(
         "{}_temp_{}",
         column_name,
-        std::time::SystemTime::now()
+        switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
@@ -2462,7 +2462,7 @@ async fn exec_table_recreation_workaround(
         let temp_table = format!(
             "{}_temp_{}",
             table_name,
-            std::time::SystemTime::now()
+            switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()

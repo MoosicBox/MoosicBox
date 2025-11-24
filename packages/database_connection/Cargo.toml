@@ -19,6 +19,7 @@ group = "switchy"
 [dependencies]
 switchy_database = { workspace = true }
 switchy_env      = { workspace = true, features = ["std"] }
+switchy_time     = { workspace = true, features = ["std"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -59,6 +60,7 @@ default = [
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",
     "switchy_env/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
 ]
 
 tls = ["sqlx/tls-rustls", "switchy_database/tls"]
@@ -92,4 +94,8 @@ turso = ["sqlite", "switchy_database/turso"]
 
 database-connection-turso = ["turso"]
 
-simulator = ["switchy_database/simulator", "switchy_env/simulator"]
+simulator = [
+    "switchy_database/simulator",
+    "switchy_env/simulator",
+    "switchy_time/simulator",
+]

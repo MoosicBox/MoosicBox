@@ -36,8 +36,8 @@ swc_ecma_transforms_typescript = { workspace = true, optional = true }
 swc_ecma_visit                 = { workspace = true, optional = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
-test-log = { workspace = true }
+switchy_fs = { workspace = true, features = ["sync"] }
+test-log   = { workspace = true }
 
 [features]
 default = ["all-web-toolchains", "esbuild", "swc"]
