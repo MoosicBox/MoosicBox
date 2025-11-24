@@ -415,6 +415,9 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 #### HyperChad UI
 
+- **[details_summary](packages/hyperchad/examples/details_summary)** - Details/summary collapsible elements
+- **[http_events](packages/hyperchad/examples/http_events)** - HTTP request lifecycle events
+- **[markdown](packages/hyperchad/examples/markdown)** - Markdown rendering with GitHub Flavored Markdown
 - **[basic_web_server](packages/hyperchad/renderer/html/web_server/examples/basic_web_server)** - HyperChad web server
 
 #### Filesystem
