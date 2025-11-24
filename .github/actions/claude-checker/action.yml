@@ -512,7 +512,10 @@ runs:
               claude_code_oauth_token: ${{ inputs.claude_token }}
               stream_output_file: ${{ inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true' && format('{0}/claude-stream.jsonl', runner.temp) || '' }}
               prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
-              claude_args: ${{ inputs.claude_args }}
+              claude_args: >-
+                  ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
+                  ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || '' }}
+                  ${{ inputs.claude_args }}
 
         - name: Stop stream watcher
           if: always() && inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
