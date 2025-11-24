@@ -294,66 +294,74 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy, llvm-tools-preview"
 
-            - name: Clippy ${{ matrix.package.name }}
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+
+            - name: Download cargo-machete
+              uses: actions/download-artifact@master
+              with:
+                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
+                  path: ~/.cargo/bin
+
+            - name: Make cargo-machete executable
+              shell: bash
+              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
+
+            - name: Test suite for ${{ matrix.package.name }}
+              id: test-suite
               uses: ./.github/actions/clippier
               env:
                   CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
               with:
                   command: run-matrix
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
-                  run-matrix-strategy: "sequential"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Clippy"
+                  run-matrix-steps: |
+                      clear-target-1:
+                        commands: rm -rf target
+
+                      clippy:
+                        commands: |
+                          {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+                        label: "Clippy"
+                        strategy: "sequential"
+
+                      tests:
+                        commands: |
+                          {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+                        label: "Tests"
+                        strategy: "sequential"
+
+                      doctests:
+                        commands: |
+                          # Check if package has a lib target
+                          PACKAGE_PATH="{{matrix.package.path}}"
+                          PACKAGE_PATH="${PACKAGE_PATH#./}"
+                          if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+                              echo "Skipping doctests for {{matrix.package.name}} - no library target found"
+                              exit 0
+                          fi
+                          {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+                        label: "Doctests"
+                        strategy: "sequential"
+
+                      clear-target-2:
+                        commands: rm -rf target
+
+                      format:
+                        commands: |
+                          cargo{{if matrix.package.nightly}} +nightly{{endif}}{{if runner.debug}} -vv{{endif}} fmt --all -- --check
+                        label: "Format Check"
+                        strategy: "combined"
+
+                      machete:
+                        commands: |
+                          ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }} --with-metadata {{matrix.package.path}}
+                        label: "Dependency Validation (Machete)"
+                        strategy: "combined"
+                        working-directory: "."
+
                   run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-                  run-matrix-summary-mode: "combined"
-
-            - name: cargo install cargo-llvm-cov
-              uses: taiki-e/install-action@cargo-llvm-cov
-
-            - name: Clear target directory
-              shell: bash
-              run: rm -rf target
-
-            - name: Run ${{ matrix.package.name }} tests
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
-                  run-matrix-strategy: "sequential"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Tests"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-                  run-matrix-summary-mode: "combined"
-
-            - name: Run ${{ matrix.package.name }} doctests
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      # Check if package has a lib target
-                      PACKAGE_PATH="{{matrix.package.path}}"
-                      PACKAGE_PATH="${PACKAGE_PATH#./}"
-                      if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
-                          echo "Skipping doctests for {{matrix.package.name}} - no library target found"
-                          exit 0
-                      fi
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
-                  run-matrix-strategy: "sequential"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Doctests"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-                  run-matrix-summary-mode: "combined"
+                  run-matrix-auto-upload: true
 
             - name: Create coverage report
               id: create_coverage_report
@@ -382,10 +390,6 @@ jobs:
                       echo "has_coverage=true" >> $GITHUB_OUTPUT
                   fi
 
-            - name: Clear target directory
-              shell: bash
-              run: rm -rf target
-
             - name: Upload coverage reports to Codecov
               if: steps.create_coverage_report.outputs.has_coverage == 'true'
               uses: codecov/codecov-action@v5
@@ -395,65 +399,12 @@ jobs:
                   flags: ${{ matrix.package.name }}
                   fail_ci_if_error: true
 
-            - name: Format ${{ matrix.package.name }}
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      cargo{{if matrix.package.nightly}} +nightly{{endif}}{{if runner.debug}} -vv{{endif}} fmt --all -- --check
-                  run-matrix-strategy: "combined"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Format Check"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-                  run-matrix-summary-mode: "combined"
-
-            - name: Download cargo-machete
-              uses: actions/download-artifact@master
-              with:
-                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
-                  path: ~/.cargo/bin
-
-            - name: Make cargo-machete executable
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
-
-            - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-commands: |
-                      ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }} --with-metadata {{matrix.package.path}}
-                  run-matrix-strategy: "combined"
-                  run-matrix-continue-on-failure: "true"
-                  run-matrix-label: "Dependency Validation (Machete)"
-                  run-matrix-debug-shells: "fish,bash"
-                  run-matrix-working-directory: "."
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-                  run-matrix-summary-mode: "combined"
-
-            - name: Generate combined test summary and prepare upload
-              id: flush
-              if: always()
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix-flush
-                  run-matrix-prepare-upload: true
-                  run-matrix-prepare-upload-only-on-failure: true
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-summary-only-on-failure: true
-
             - name: Upload failure data for workflow summary
-              if: always() && steps.flush.outputs.failure-artifact-path != ''
+              if: always() && steps.test-suite.outputs.failure-artifact-path != ''
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ steps.flush.outputs.failure-artifact-name }}
-                  path: ${{ steps.flush.outputs.failure-artifact-path }}
+                  name: ${{ steps.test-suite.outputs.failure-artifact-name }}
+                  path: ${{ steps.test-suite.outputs.failure-artifact-path }}
                   if-no-files-found: ignore
                   overwrite: true
 
