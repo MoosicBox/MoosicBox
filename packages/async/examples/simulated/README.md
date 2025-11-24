@@ -88,9 +88,8 @@ cargo run --package async_simulated --features simulator
 The output will show concurrent execution with timestamps:
 
 ```
-Begin Asynchronous Execution (seed=12345)
 block on
-Blocking Function Polled To Completion
+Begin Asynchronous Execution (seed=12345)
 Spawned Fn #00: Start 1634664688
 Spawned Fn #01: Start 1634664688
 Spawned Fn #02: Start 1634664688
@@ -106,6 +105,7 @@ Spawned Fn #03: Ended 1634664697
 Spawned Fn #00: Inner 1634664698
 Spawned Fn #03: Inner 1634664698
 Spawned Fn #02: Inner 1634664702
+Blocking Function Polled To Completion
 End of Asynchronous Execution
 ```
 
