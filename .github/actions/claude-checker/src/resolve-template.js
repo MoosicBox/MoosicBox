@@ -79,7 +79,10 @@ function loadTemplate() {
 
     if (templateFile) {
         console.log(`📄 Loading template from file: ${templateFile}`);
-        const filePath = path.resolve(process.cwd(), templateFile);
+        const filePath = path.resolve(
+            process.env.GITHUB_WORKSPACE || process.cwd(),
+            templateFile,
+        );
         if (!fs.existsSync(filePath)) {
             throw new Error(`Template file not found: ${filePath}`);
         }
