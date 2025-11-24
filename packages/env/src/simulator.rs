@@ -305,8 +305,21 @@ pub fn reset() {
 mod tests {
     use super::*;
     use crate::EnvProvider;
+    use serial_test::serial;
+
+    // Note: All tests in this module use #[serial] because they interact with the global
+    // PROVIDER singleton (LazyLock<SimulatorEnv>). This global state contains a BTreeMap
+    // of environment variables that is shared across all tests.
+    //
+    // Running these tests in parallel causes race conditions where:
+    // 1. test_global_vars() and test_global_clear() call clear() which removes ALL variables
+    // 2. test_global_reset() calls reset() which restores defaults and removes custom vars
+    // 3. These operations can occur while other tests are setting/reading variables
+    //
+    // The serial_test crate ensures these tests run one at a time, preventing interference.
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_new_has_defaults() {
         let env = SimulatorEnv::new();
         assert_eq!(env.var("SIMULATOR_SEED").unwrap(), "12345");
@@ -316,6 +329,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_set_and_get_var() {
         let env = SimulatorEnv::new();
         env.set_var("TEST_VAR", "test_value");
@@ -323,6 +337,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_set_var_overwrites() {
         let env = SimulatorEnv::new();
         env.set_var("TEST_VAR", "first");
@@ -331,6 +346,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_remove_var() {
         let env = SimulatorEnv::new();
         env.set_var("TEST_VAR", "test_value");
@@ -344,6 +360,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_clear() {
         let env = SimulatorEnv::new();
         env.set_var("TEST_VAR", "test_value");
@@ -359,6 +376,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_reset() {
         let env = SimulatorEnv::new();
         env.set_var("CUSTOM_VAR", "custom_value");
@@ -374,6 +392,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_or_with_existing() {
         let env = SimulatorEnv::new();
         env.set_var("TEST_VAR", "actual_value");
@@ -381,12 +400,14 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_or_with_missing() {
         let env = SimulatorEnv::new();
         assert_eq!(env.var_or("MISSING_VAR", "default_value"), "default_value");
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_success() {
         let env = SimulatorEnv::new();
         env.set_var("NUMBER", "42");
@@ -395,6 +416,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_error() {
         let env = SimulatorEnv::new();
         env.set_var("NOT_A_NUMBER", "abc");
@@ -403,6 +425,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_not_found() {
         let env = SimulatorEnv::new();
         let result: Result<i32> = env.var_parse("MISSING");
@@ -410,6 +433,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_or_with_valid() {
         let env = SimulatorEnv::new();
         env.set_var("NUMBER", "100");
@@ -418,6 +442,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_or_with_invalid() {
         let env = SimulatorEnv::new();
         env.set_var("NOT_A_NUMBER", "xyz");
@@ -426,6 +451,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_or_with_missing() {
         let env = SimulatorEnv::new();
         let result: i32 = env.var_parse_or("MISSING", 42);
@@ -433,6 +459,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_opt_some() {
         let env = SimulatorEnv::new();
         env.set_var("NUMBER", "123");
@@ -441,6 +468,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_opt_none() {
         let env = SimulatorEnv::new();
         let result: Option<i32> = env.var_parse_opt("MISSING").unwrap();
@@ -448,6 +476,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_parse_opt_parse_error() {
         let env = SimulatorEnv::new();
         env.set_var("NOT_A_NUMBER", "not_an_int");
@@ -456,6 +485,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_exists_true() {
         let env = SimulatorEnv::new();
         env.set_var("EXISTS", "yes");
@@ -463,12 +493,14 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_var_exists_false() {
         let env = SimulatorEnv::new();
         assert!(!env.var_exists("DOES_NOT_EXIST"));
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_vars() {
         let env = SimulatorEnv::new();
         env.clear();
@@ -482,6 +514,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_env_default_trait() {
         let env1 = SimulatorEnv::default();
         let env2 = SimulatorEnv::new();
@@ -491,6 +524,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var() {
         // This tests the global PROVIDER functions
         // Ensure the variable doesn't exist from a previous test
@@ -501,12 +535,14 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_or() {
         remove_var("MISSING_GLOBAL");
         assert_eq!(var_or("MISSING_GLOBAL", "fallback"), "fallback");
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_parse() {
         set_var("GLOBAL_NUMBER", "777");
         let result: i32 = var_parse("GLOBAL_NUMBER").unwrap();
@@ -515,6 +551,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_parse_or() {
         remove_var("MISSING_NUMBER");
         let result: i32 = var_parse_or("MISSING_NUMBER", 999);
@@ -522,6 +559,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_parse_opt() {
         set_var("OPTIONAL_NUMBER", "555");
         let result: Option<i32> = var_parse_opt("OPTIONAL_NUMBER").unwrap();
@@ -530,6 +568,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_exists() {
         // Ensure clean state
         remove_var("EXISTS_GLOBAL");
@@ -542,6 +581,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_vars() {
         clear();
         set_var("VARS_TEST1", "val1");
@@ -555,6 +595,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_clear() {
         set_var("TO_BE_CLEARED", "value");
         clear();
@@ -563,6 +604,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_reset() {
         set_var("TO_BE_RESET", "custom");
         reset();
@@ -572,6 +614,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_simulator_defaults_completeness() {
         let env = SimulatorEnv::new();
 
@@ -595,6 +638,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_parse_various_types() {
         let env = SimulatorEnv::new();
 

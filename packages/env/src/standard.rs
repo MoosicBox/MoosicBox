@@ -128,6 +128,7 @@ pub fn vars() -> BTreeMap<String, String> {
 mod tests {
     use super::*;
     use crate::EnvProvider;
+    use serial_test::serial;
 
     #[test_log::test]
     fn test_standard_env_new() {
@@ -135,7 +136,10 @@ mod tests {
         // Just verify we can create it without panicking
     }
 
+    // Tests that modify environment variables must run serially to avoid interference
+    // between parallel test executions, since env vars are process-global.
     #[test_log::test]
+    #[serial]
     fn test_standard_env_default_trait() {
         let env1 = StandardEnv;
         let env2 = StandardEnv::new();
@@ -152,6 +156,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_exists_with_set_var() {
         // Set a test variable in the actual environment
         unsafe {
@@ -168,6 +173,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_or_with_existing() {
         unsafe {
             std::env::set_var("STANDARD_ENV_TEST_VAR_OR", "actual");
@@ -191,6 +197,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_parse() {
         unsafe {
             std::env::set_var("STANDARD_ENV_NUMBER", "42");
@@ -206,6 +213,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_parse_error() {
         unsafe {
             std::env::set_var("STANDARD_ENV_NOT_A_NUMBER", "not_a_number");
@@ -221,6 +229,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_parse_or() {
         unsafe {
             std::env::set_var("STANDARD_ENV_PARSE_OR", "100");
@@ -243,6 +252,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_parse_opt_some() {
         unsafe {
             std::env::set_var("STANDARD_ENV_OPT", "123");
@@ -265,6 +275,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_parse_opt_error() {
         unsafe {
             std::env::set_var("STANDARD_ENV_OPT_ERROR", "not_a_number");
@@ -280,6 +291,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_standard_env_var_exists() {
         unsafe {
             std::env::set_var("STANDARD_ENV_EXISTS", "yes");
@@ -304,6 +316,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var() {
         unsafe {
             std::env::set_var("GLOBAL_STANDARD_TEST", "global_value");
@@ -322,6 +335,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_parse() {
         unsafe {
             std::env::set_var("GLOBAL_STANDARD_NUMBER", "777");
@@ -342,6 +356,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_parse_opt() {
         unsafe {
             std::env::set_var("OPTIONAL_STANDARD_NUMBER", "555");
@@ -356,6 +371,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_var_exists() {
         unsafe {
             std::env::set_var("EXISTS_STANDARD_GLOBAL", "yes");

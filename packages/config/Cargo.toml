@@ -41,7 +41,8 @@ switchy_fs = { workspace = true, features = ["std", "sync"] }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+serial_test = { workspace = true }
+test-log    = { workspace = true }
 
 [features]
 default = ["api", "db", "file", "openapi"]

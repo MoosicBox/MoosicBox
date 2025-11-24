@@ -8439,6 +8439,7 @@ dependencies = [
  "nanoid",
  "serde",
  "serde_with",
+ "serial_test",
  "switchy_database",
  "switchy_fs",
  "test-log",
@@ -15137,6 +15138,7 @@ name = "switchy_env"
 version = "0.1.0"
 dependencies = [
  "log 0.4.28",
+ "serial_test",
  "test-log",
  "thiserror 2.0.17",
 ]

@@ -365,10 +365,10 @@ mod db_impl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{LazyLock, Mutex};
+    use serial_test::serial;
 
-    // Test lock to ensure tests that modify ROOT_DIR run serially
-    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    // Note: Tests that modify ROOT_DIR via set_root_dir() must use #[serial]
+    // to prevent parallel execution from causing interference across test modules.
 
     #[test_log::test]
     fn test_app_type_display() {
@@ -390,9 +390,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_set_and_get_root_dir() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let custom_path = PathBuf::from("/custom/moosicbox/path");
         set_root_dir(custom_path.clone());
 
@@ -406,9 +405,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_config_dir_path() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         // Set a known root directory
         let temp_root = std::env::temp_dir().join("test_config_dir");
         set_root_dir(temp_root.clone());
@@ -423,9 +421,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_app_config_dir_path() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_app_config");
         set_root_dir(temp_root.clone());
 
@@ -445,9 +442,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_profiles_dir_path() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_profiles_dir");
         set_root_dir(temp_root.clone());
 
@@ -464,9 +460,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_profile_dir_path() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_profile_dir");
         set_root_dir(temp_root.clone());
 
@@ -489,9 +484,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_cache_dir_path() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_cache_dir");
         set_root_dir(temp_root.clone());
 
@@ -505,9 +499,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_make_config_dir_path_creates_directory() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_make_config_dir");
         // Clean up if exists from previous test
         let _ = std::fs::remove_dir_all(&temp_root);
@@ -528,9 +521,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_make_config_dir_path_returns_existing_directory() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_existing_config_dir");
         // Pre-create the directory
         std::fs::create_dir_all(&temp_root).unwrap();
@@ -551,9 +543,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_make_profile_dir_path_creates_directory() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_make_profile_dir");
         let _ = std::fs::remove_dir_all(&temp_root);
 
@@ -580,9 +571,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_make_cache_dir_path_creates_directory() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_make_cache_dir");
         let _ = std::fs::remove_dir_all(&temp_root);
 
@@ -627,8 +617,6 @@ mod tests {
 
     #[test_log::test]
     fn test_get_root_dir_caches_result() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         // Set a custom root
         let custom_root = std::env::temp_dir().join("test_cache_behavior");
         set_root_dir(custom_root.clone());
@@ -648,9 +636,8 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_path_functions_with_different_app_types() {
-        let _lock = TEST_LOCK.lock().unwrap();
-
         let temp_root = std::env::temp_dir().join("test_app_types");
         set_root_dir(temp_root.clone());
 

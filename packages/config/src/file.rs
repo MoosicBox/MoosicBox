@@ -305,11 +305,8 @@ pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConf
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{LazyLock, Mutex};
+    use serial_test::serial;
     use switchy_fs::sync;
-
-    // Test lock to ensure tests that modify ROOT_DIR run serially
-    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn test_parse_global_config_json5() {
@@ -455,9 +452,10 @@ mod tests {
     }
 
     // Tests for load_global_config()
+    // Tests that modify ROOT_DIR must run serially to avoid interference
     #[test]
+    #[serial]
     fn test_load_global_config_with_json5_file() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -489,8 +487,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_global_config_with_json_file() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -514,8 +512,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_global_config_returns_default_when_file_missing() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -532,8 +530,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_global_config_parse_error() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -552,8 +550,8 @@ mod tests {
 
     // Tests for load_profile_config()
     #[test]
+    #[serial]
     fn test_load_profile_config_with_json5_file() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let profiles_dir = temp_path
@@ -585,8 +583,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_profile_config_returns_default_when_file_missing() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let profiles_dir = temp_path
@@ -606,8 +604,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_profile_config_parse_error() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let profiles_dir = temp_path
@@ -629,8 +627,8 @@ mod tests {
 
     // Tests for load_merged_config()
     #[test]
+    #[serial]
     fn test_load_merged_config_combines_global_and_profile() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -692,8 +690,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_merged_config_with_missing_files() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -713,8 +711,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_merged_config_global_parse_error_propagates() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
@@ -734,8 +732,8 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_merged_config_profile_parse_error_propagates() {
-        let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
         let app_dir = temp_path.join("server");
