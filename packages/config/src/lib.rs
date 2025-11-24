@@ -593,6 +593,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_tests_dir_path_uniqueness() {
         // Each call should return a different path (different timestamp)
         let path1 = get_tests_dir_path();
@@ -616,6 +617,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_get_root_dir_caches_result() {
         // Set a custom root
         let custom_root = std::env::temp_dir().join("test_cache_behavior");
