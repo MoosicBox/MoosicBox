@@ -748,6 +748,53 @@ write_individual_summary() {
 #   GITHUB_OUTPUT: Path to GitHub Actions output file
 #   GITHUB_STEP_SUMMARY: Path to GitHub Actions summary file
 #
+# Parse run-matrix-steps YAML/JSON input into JSON
+#
+# Arguments:
+#   $1: YAML/JSON string containing step definitions
+#
+# Returns:
+#   JSON object with step definitions
+#
+# Exit codes:
+#   0: Success
+#   1: Parse error or invalid format
+parse_run_matrix_steps() {
+    local steps_input="$1"
+
+    # Try to parse as JSON first (more efficient if already JSON)
+    if echo "$steps_input" | jq empty 2>/dev/null; then
+        echo "$steps_input"
+        return 0
+    fi
+
+    # Parse YAML to JSON using Ruby (available in GitHub Actions runners)
+    local steps_json
+    if ! steps_json=$(ruby -ryaml -rjson -e 'puts JSON.generate(YAML.load(STDIN.read))' <<< "$steps_input" 2>/dev/null); then
+        echo "❌ Error: Failed to parse run-matrix-steps as YAML or JSON" >&2
+        return 1
+    fi
+
+    # Validate structure
+    if ! echo "$steps_json" | jq -e 'type == "object"' > /dev/null 2>&1; then
+        echo "❌ Error: run-matrix-steps must be a YAML/JSON object with step definitions" >&2
+        echo "   Example:" >&2
+        echo "   run-matrix-steps: |" >&2
+        echo "     clippy:" >&2
+        echo "       commands: cargo clippy {{clippier.feature-flags}}" >&2
+        echo "       label: \"Clippy\"" >&2
+        return 1
+    fi
+
+    echo "$steps_json"
+    return 0
+}
+
+# Single-command mode for run-matrix
+#
+# This is the original run_matrix_command implementation, now refactored
+# into a separate function to support multi-step mode.
+#
 # Outputs (written to GITHUB_OUTPUT):
 #   run-success: Overall success (true/false)
 #   run-total: Total number of runs
@@ -758,8 +805,7 @@ write_individual_summary() {
 # Exit codes:
 #   0: All tests passed
 #   1: One or more tests failed OR configuration error
-run_matrix_command() {
-    CONTEXT_PHASE="run-matrix"
+run_matrix_single_command_mode() {
     echo "🧪 Running matrix tests with template-based commands"
 
     # Disable ERR trap and errexit - we handle errors explicitly in this function
@@ -1000,14 +1046,282 @@ run_matrix_command() {
         echo "run-results=[]" >> $GITHUB_OUTPUT
     fi
 
-    # Exit with appropriate code
-    # Note: We don't need to re-enable 'set -e' here because we exit explicitly
+    # Return with appropriate code
+    # Note: We don't need to re-enable 'set -e' here because we return explicitly
     if [[ "$total_failed" -gt 0 ]]; then
         echo "❌ Tests failed: $total_failed/$total_runs"
-        exit 1
+        return 1
     else
         echo "✅ All tests passed: $total_runs/$total_runs"
-        exit 0
+        return 0
+    fi
+}
+
+# Multi-step mode for run-matrix
+#
+# Executes multiple labeled command groups in sequence, each with their own settings.
+# All steps share the same summary mode (combined) and accumulate into a single state.
+#
+# Environment Variables (inputs):
+#   INPUT_RUN_MATRIX_STEPS: YAML/JSON object with step definitions
+#   INPUT_RUN_MATRIX_AUTO_UPLOAD: Auto-flush and prepare artifact after all steps
+#   INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: Only upload if failures occurred
+#   All other INPUT_RUN_MATRIX_* variables serve as global defaults
+#
+# Outputs (written to GITHUB_OUTPUT):
+#   run-success: Overall success (all steps passed)
+#   run-total: Total runs across all steps
+#   run-passed: Total passed across all steps
+#   run-failed: Total failed across all steps
+#   run-results: Combined JSON array of all failures
+#   failure-artifact-path: Path to prepared artifact (if auto-upload enabled)
+#   failure-artifact-name: Name of prepared artifact (if auto-upload enabled)
+#
+# Exit codes:
+#   0: All steps passed
+#   1: One or more steps failed OR configuration error
+run_matrix_multi_step_mode() {
+    echo "🔄 Running multi-step matrix execution"
+
+    # Parse steps definition
+    local steps_json
+    if ! steps_json=$(parse_run_matrix_steps "$INPUT_RUN_MATRIX_STEPS"); then
+        return 1
+    fi
+
+    # Get step IDs (keys)
+    local step_ids
+    if ! step_ids=$(echo "$steps_json" | jq -r 'keys[]' 2>/dev/null); then
+        echo "❌ Error: Failed to extract step IDs from run-matrix-steps"
+        return 1
+    fi
+
+    # Convert to array
+    local -a step_ids_array=()
+    while IFS= read -r step_id; do
+        step_ids_array+=("$step_id")
+    done <<< "$step_ids"
+
+    local total_steps=${#step_ids_array[@]}
+
+    if [[ $total_steps -eq 0 ]]; then
+        echo "⚠️  Warning: No steps defined in run-matrix-steps"
+        return 0
+    fi
+
+    echo "📋 Found $total_steps step(s) to execute: ${step_ids_array[*]}"
+
+    # Track overall success
+    local all_steps_passed=true
+    local total_steps_run=0
+    local total_steps_passed=0
+    local total_steps_failed=0
+    local aggregate_runs=0
+    local aggregate_passed=0
+    local aggregate_failed=0
+
+    # Execute each step in order
+    for step_id in "${step_ids_array[@]}"; do
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🔧 Step: $step_id"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Extract step configuration
+        local step_config
+        step_config=$(echo "$steps_json" | jq -c ".\"$step_id\"")
+        local step_commands
+        step_commands=$(echo "$step_config" | jq -r '.commands // empty')
+
+        if [[ -z "$step_commands" ]]; then
+            echo "⚠️  Warning: Step '$step_id' has no commands, skipping"
+            continue
+        fi
+
+        # Merge step-specific settings with global defaults
+        local step_label
+        step_label=$(echo "$step_config" | jq -r ".label // \"$step_id\"")
+        local step_strategy
+        local step_strategy_explicit
+        step_strategy_explicit=$(echo "$step_config" | jq -r '.strategy // empty')
+
+        if [[ -n "$step_strategy_explicit" ]]; then
+            # Step explicitly specifies strategy - use it
+            step_strategy="$step_strategy_explicit"
+        elif [[ "$has_label" == "false" ]]; then
+            # Unlabeled utility step without explicit strategy - default to 'combined'
+            step_strategy="combined"
+        else
+            # Labeled step without explicit strategy - use global default
+            step_strategy="${INPUT_RUN_MATRIX_STRATEGY:-sequential}"
+        fi
+        local step_continue
+        step_continue=$(echo "$step_config" | jq -r ".\"continue-on-failure\" // \"${INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE:-true}\"")
+        local step_max_lines
+        step_max_lines=$(echo "$step_config" | jq -r ".\"max-output-lines\" // \"${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}\"")
+        local step_working_dir
+        step_working_dir=$(echo "$step_config" | jq -r ".\"working-directory\" // \"${INPUT_RUN_MATRIX_WORKING_DIRECTORY}\"")
+        local step_fail_fast
+        step_fail_fast=$(echo "$step_config" | jq -r ".\"fail-fast\" // \"${INPUT_RUN_MATRIX_FAIL_FAST:-false}\"")
+        local step_skip_doctest
+        step_skip_doctest=$(echo "$step_config" | jq -r ".\"skip-doctest-check\" // \"${INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK:-false}\"")
+
+        echo "  Label: $step_label"
+        echo "  Strategy: $step_strategy"
+
+        # Temporarily override INPUT variables for this step
+        local ORIG_COMMANDS="$INPUT_RUN_MATRIX_COMMANDS"
+        local ORIG_LABEL="$INPUT_RUN_MATRIX_LABEL"
+        local ORIG_STRATEGY="$INPUT_RUN_MATRIX_STRATEGY"
+        local ORIG_CONTINUE="$INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE"
+        local ORIG_MAX_LINES="$INPUT_RUN_MATRIX_MAX_OUTPUT_LINES"
+        local ORIG_WORKING_DIR="$INPUT_RUN_MATRIX_WORKING_DIRECTORY"
+        local ORIG_FAIL_FAST="$INPUT_RUN_MATRIX_FAIL_FAST"
+        local ORIG_SKIP_DOCTEST="$INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK"
+        local ORIG_SUMMARY_MODE="$INPUT_RUN_MATRIX_SUMMARY_MODE"
+
+        export INPUT_RUN_MATRIX_COMMANDS="$step_commands"
+        export INPUT_RUN_MATRIX_LABEL="$step_label"
+        export INPUT_RUN_MATRIX_STRATEGY="$step_strategy"
+        export INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE="$step_continue"
+        export INPUT_RUN_MATRIX_MAX_OUTPUT_LINES="$step_max_lines"
+        export INPUT_RUN_MATRIX_WORKING_DIRECTORY="$step_working_dir"
+        export INPUT_RUN_MATRIX_FAIL_FAST="$step_fail_fast"
+        export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$step_skip_doctest"
+        # Force combined mode for multi-step to accumulate all results
+        export INPUT_RUN_MATRIX_SUMMARY_MODE="combined"
+
+        # Run the step using existing single-command logic
+        local step_exit_code=0
+        run_matrix_single_command_mode || step_exit_code=$?
+
+        # Capture step outputs (GitHub Actions outputs are global, so we read them back)
+        local step_runs=0
+        local step_passed=0
+        local step_failed=0
+
+        # Try to read outputs from the most recent run (parse from GITHUB_OUTPUT if possible)
+        # For now, we'll infer from exit code
+        if [[ $step_exit_code -eq 0 ]]; then
+            ((total_steps_passed++))
+            echo "✅ Step '$step_id' completed successfully"
+        else
+            ((total_steps_failed++))
+            all_steps_passed=false
+            echo "❌ Step '$step_id' failed (exit code: $step_exit_code)"
+
+            if [[ "$step_fail_fast" == "true" ]]; then
+                echo "🛑 Fail-fast enabled for step '$step_id', stopping execution"
+
+                # Restore original INPUT variables before breaking
+                export INPUT_RUN_MATRIX_COMMANDS="$ORIG_COMMANDS"
+                export INPUT_RUN_MATRIX_LABEL="$ORIG_LABEL"
+                export INPUT_RUN_MATRIX_STRATEGY="$ORIG_STRATEGY"
+                export INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE="$ORIG_CONTINUE"
+                export INPUT_RUN_MATRIX_MAX_OUTPUT_LINES="$ORIG_MAX_LINES"
+                export INPUT_RUN_MATRIX_WORKING_DIRECTORY="$ORIG_WORKING_DIR"
+                export INPUT_RUN_MATRIX_FAIL_FAST="$ORIG_FAIL_FAST"
+                export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$ORIG_SKIP_DOCTEST"
+                export INPUT_RUN_MATRIX_SUMMARY_MODE="$ORIG_SUMMARY_MODE"
+
+                break
+            fi
+        fi
+
+        ((total_steps_run++))
+
+        # Restore original INPUT variables
+        export INPUT_RUN_MATRIX_COMMANDS="$ORIG_COMMANDS"
+        export INPUT_RUN_MATRIX_LABEL="$ORIG_LABEL"
+        export INPUT_RUN_MATRIX_STRATEGY="$ORIG_STRATEGY"
+        export INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE="$ORIG_CONTINUE"
+        export INPUT_RUN_MATRIX_MAX_OUTPUT_LINES="$ORIG_MAX_LINES"
+        export INPUT_RUN_MATRIX_WORKING_DIRECTORY="$ORIG_WORKING_DIR"
+        export INPUT_RUN_MATRIX_FAIL_FAST="$ORIG_FAIL_FAST"
+        export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$ORIG_SKIP_DOCTEST"
+        export INPUT_RUN_MATRIX_SUMMARY_MODE="$ORIG_SUMMARY_MODE"
+    done
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📊 Multi-step execution summary:"
+    echo "   Total steps: $total_steps_run"
+    echo "   Passed: $total_steps_passed"
+    echo "   Failed: $total_steps_failed"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Handle auto-upload if enabled
+    if [[ "${INPUT_RUN_MATRIX_AUTO_UPLOAD:-false}" == "true" ]]; then
+        echo ""
+        echo "🔄 Auto-upload enabled, flushing and preparing artifact..."
+
+        # Set up for flush
+        export INPUT_RUN_MATRIX_SUMMARY_FLUSH="true"
+        export INPUT_RUN_MATRIX_PREPARE_UPLOAD="true"
+        export INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE="${INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE:-true}"
+
+        # Run flush command
+        run_matrix_flush_command
+    fi
+
+    # The outputs are already written by run_matrix_single_command_mode
+    # We just need to return the appropriate exit code
+
+    if [[ "$all_steps_passed" == "true" ]]; then
+        echo "✅ All steps passed"
+        return 0
+    else
+        echo "❌ One or more steps failed"
+        return 1
+    fi
+}
+
+# Main run-matrix command entry point
+#
+# Routes to either single-command mode or multi-step mode based on inputs.
+# Validates that commands and steps are mutually exclusive.
+#
+# Outputs (written to GITHUB_OUTPUT):
+#   run-success: Overall success (true/false)
+#   run-total: Total number of runs
+#   run-passed: Number of passed runs
+#   run-failed: Number of failed runs
+#   run-results: JSON array of failure details
+#   failure-artifact-path: Path to prepared artifact (multi-step + auto-upload)
+#   failure-artifact-name: Name of prepared artifact (multi-step + auto-upload)
+#
+# Exit codes:
+#   0: All tests passed
+#   1: One or more tests failed OR configuration error
+run_matrix_command() {
+    CONTEXT_PHASE="run-matrix"
+
+    # Validation: commands vs steps (mutually exclusive)
+    local has_commands="${INPUT_RUN_MATRIX_COMMANDS:+true}"
+    local has_steps="${INPUT_RUN_MATRIX_STEPS:+true}"
+
+    if [[ "$has_commands" == "true" && "$has_steps" == "true" ]]; then
+        echo "❌ Error: Cannot use both run-matrix-commands and run-matrix-steps"
+        echo "   Please use only one of these inputs"
+        echo ""
+        echo "   For single command execution, use: run-matrix-commands"
+        echo "   For multi-step execution, use: run-matrix-steps"
+        return 1
+    fi
+
+    if [[ "$has_commands" != "true" && "$has_steps" != "true" ]]; then
+        echo "❌ Error: Must provide either run-matrix-commands or run-matrix-steps"
+        echo ""
+        echo "   For single command execution, use: run-matrix-commands"
+        echo "   For multi-step execution, use: run-matrix-steps"
+        return 1
+    fi
+
+    # Route to appropriate mode
+    if [[ "$has_steps" == "true" ]]; then
+        run_matrix_multi_step_mode
+    else
+        run_matrix_single_command_mode
     fi
 }
 

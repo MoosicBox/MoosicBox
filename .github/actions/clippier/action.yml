@@ -310,11 +310,39 @@ inputs:
                 cargo clippy --all-targets {{clippier.feature-flags}}
                 cargo test {{clippier.feature-flags}}
                 cargo test --doc {{clippier.feature-flags}}
+
+            Cannot be used together with run-matrix-steps.
         required: false
-        default: |
-            cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy --all-targets --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
-            cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
-            cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+
+    run-matrix-steps:
+        description: |
+            Multi-step run-matrix execution. Define multiple labeled command groups to run in sequence.
+            Each step can have its own commands, label, strategy, and override global settings.
+
+            Format (YAML object):
+              step-id:
+                commands: |
+                  command template here
+                label: "Display Name"       # Optional, defaults to step-id
+                strategy: "sequential"      # Optional, overrides run-matrix-strategy
+                continue-on-failure: true   # Optional, overrides run-matrix-continue-on-failure
+                max-output-lines: 200       # Optional, overrides run-matrix-max-output-lines
+                working-directory: "."      # Optional, overrides run-matrix-working-directory
+                skip-doctest-check: false   # Optional, overrides run-matrix-skip-doctest-check
+                fail-fast: false            # Optional, overrides run-matrix-fail-fast
+
+            Cannot be used together with run-matrix-commands.
+
+            Example:
+              run-matrix-steps: |
+                clippy:
+                  commands: cargo clippy {{clippier.feature-flags}}
+                  label: "Clippy"
+                tests:
+                  commands: cargo test {{clippier.feature-flags}}
+                  label: "Tests"
+                  strategy: "parallel"
+        required: false
 
     run-matrix-strategy:
         description: |
@@ -372,22 +400,22 @@ inputs:
     run-matrix-summary-auto-expand:
         description: "Auto-expand summary details (always, failures, never)"
         required: false
-        default: "failures"
+        default: "never"
 
     run-matrix-debug-shells:
-        description: "Comma-separated list of shell formats for debug reproduction commands (bash, fish, zsh). Default: bash"
+        description: "Comma-separated list of shell formats for debug reproduction commands (bash, fish, zsh)"
         required: false
         default: "bash"
 
     run-matrix-summary-mode:
-        description: "Summary mode: individual (default), combined, or group:<name>"
+        description: "Summary mode: individual, combined (default), or group:<name>"
         required: false
-        default: "individual"
+        default: "combined"
 
     run-matrix-summary-only-on-failure:
         description: "Only generate summary if there are failures (no output when all tests pass)"
         required: false
-        default: "false"
+        default: "true"
 
     run-matrix-summary-flush:
         description: "Whether to flush accumulated summaries (for combined/group modes)"
@@ -411,6 +439,21 @@ inputs:
     run-matrix-upload-package-os:
         description: "Package OS for failure artifact filename (required if run-matrix-prepare-upload is true)"
         required: false
+
+    run-matrix-auto-upload:
+        description: |
+            Automatically flush and prepare upload artifact when run-matrix completes.
+            When enabled, run-matrix-flush is called automatically after all steps complete,
+            and failure-artifact-path/failure-artifact-name outputs are populated.
+
+            Users still need a separate upload-artifact step to actually upload the artifact.
+        required: false
+        default: "false"
+
+    run-matrix-auto-upload-only-on-failure:
+        description: "Only prepare upload artifact if there are failures (requires run-matrix-auto-upload)"
+        required: false
+        default: "true"
 
 outputs:
     matrix:
@@ -661,6 +704,7 @@ runs:
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
               INPUT_RUN_MATRIX_PACKAGE_JSON: ${{ inputs.run-matrix-package-json }}
               INPUT_RUN_MATRIX_COMMANDS: ${{ inputs.run-matrix-commands }}
+              INPUT_RUN_MATRIX_STEPS: ${{ inputs.run-matrix-steps }}
               INPUT_RUN_MATRIX_STRATEGY: ${{ inputs.run-matrix-strategy }}
               INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE: ${{ inputs.run-matrix-continue-on-failure }}
               INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: ${{ inputs.run-matrix-max-output-lines }}
@@ -680,6 +724,8 @@ runs:
               INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-prepare-upload-only-on-failure }}
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME: ${{ inputs.run-matrix-upload-package-name }}
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS: ${{ inputs.run-matrix-upload-package-os }}
+              INPUT_RUN_MATRIX_AUTO_UPLOAD: ${{ inputs.run-matrix-auto-upload }}
+              INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-auto-upload-only-on-failure }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}
