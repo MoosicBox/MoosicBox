@@ -8599,6 +8599,7 @@ dependencies = [
  "moosicbox_search",
  "serde",
  "serde_json",
+ "serial_test",
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_async",

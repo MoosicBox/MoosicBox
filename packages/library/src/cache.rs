@@ -114,6 +114,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::sync::Arc;
     use thiserror::Error;
 
@@ -123,7 +124,10 @@ mod tests {
         TestError(String),
     }
 
+    // Note: These tests must be run in serial to prevent race conditions with accessing the CACHE_MAP
+
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn get_or_set_to_cache_computes_value_on_first_call() {
         clear_cache();
 
@@ -152,6 +156,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn get_or_set_to_cache_handles_errors() {
         clear_cache();
 
@@ -174,7 +179,10 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn clear_cache_removes_all_entries() {
+        clear_cache();
+
         // Add some entries via direct write to test clearing
         CACHE_MAP.write().unwrap().insert(
             "test_clear_1".to_string(),

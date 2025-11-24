@@ -46,6 +46,11 @@ strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 
+[dev-dependencies]
+serial_test   = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
+test-log      = { workspace = true }
+
 [features]
 default = ["all-encoders", "api", "openapi"]
 
@@ -107,7 +112,3 @@ format-aac  = ["moosicbox_library_models/aac", "moosicbox_music_models/aac"]
 format-flac = ["moosicbox_library_models/flac", "moosicbox_music_models/flac"]
 format-mp3  = ["moosicbox_library_models/mp3", "moosicbox_music_models/mp3"]
 format-opus = ["moosicbox_library_models/opus", "moosicbox_music_models/opus"]
-
-[dev-dependencies]
-switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
-test-log      = { workspace = true }
