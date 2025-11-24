@@ -1138,9 +1138,22 @@ run_matrix_multi_step_mode() {
             continue
         fi
 
+        # Check if step has a label (determines if summary should be generated)
+        local step_label_from_config
+        step_label_from_config=$(echo "$step_config" | jq -r '.label // empty')
+
+        local has_label=false
+        local step_label="$step_id"  # Default for logging
+
+        if [[ -n "$step_label_from_config" ]]; then
+            has_label=true
+            step_label="$step_label_from_config"
+            echo "  Label: $step_label"
+        else
+            echo "  Label: (none - utility step, no summary)"
+        fi
+
         # Merge step-specific settings with global defaults
-        local step_label
-        step_label=$(echo "$step_config" | jq -r ".label // \"$step_id\"")
         local step_strategy
         local step_strategy_explicit
         step_strategy_explicit=$(echo "$step_config" | jq -r '.strategy // empty')
@@ -1166,8 +1179,8 @@ run_matrix_multi_step_mode() {
         local step_skip_doctest
         step_skip_doctest=$(echo "$step_config" | jq -r ".\"skip-doctest-check\" // \"${INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK:-false}\"")
 
-        echo "  Label: $step_label"
         echo "  Strategy: $step_strategy"
+        echo "  Generate Summary: $has_label"
 
         # Temporarily override INPUT variables for this step
         local ORIG_COMMANDS="$INPUT_RUN_MATRIX_COMMANDS"
@@ -1179,6 +1192,7 @@ run_matrix_multi_step_mode() {
         local ORIG_FAIL_FAST="$INPUT_RUN_MATRIX_FAIL_FAST"
         local ORIG_SKIP_DOCTEST="$INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK"
         local ORIG_SUMMARY_MODE="$INPUT_RUN_MATRIX_SUMMARY_MODE"
+        local ORIG_GENERATE_SUMMARY="$INPUT_RUN_MATRIX_GENERATE_SUMMARY"
 
         export INPUT_RUN_MATRIX_COMMANDS="$step_commands"
         export INPUT_RUN_MATRIX_LABEL="$step_label"
@@ -1190,6 +1204,13 @@ run_matrix_multi_step_mode() {
         export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$step_skip_doctest"
         # Force combined mode for multi-step to accumulate all results
         export INPUT_RUN_MATRIX_SUMMARY_MODE="combined"
+
+        # Key feature: Only generate summary if step has a label
+        if [[ "$has_label" == "true" ]]; then
+            export INPUT_RUN_MATRIX_GENERATE_SUMMARY="${ORIG_GENERATE_SUMMARY:-true}"
+        else
+            export INPUT_RUN_MATRIX_GENERATE_SUMMARY="false"
+        fi
 
         # Run the step using existing single-command logic
         local step_exit_code=0
@@ -1223,6 +1244,7 @@ run_matrix_multi_step_mode() {
                 export INPUT_RUN_MATRIX_FAIL_FAST="$ORIG_FAIL_FAST"
                 export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$ORIG_SKIP_DOCTEST"
                 export INPUT_RUN_MATRIX_SUMMARY_MODE="$ORIG_SUMMARY_MODE"
+                export INPUT_RUN_MATRIX_GENERATE_SUMMARY="$ORIG_GENERATE_SUMMARY"
 
                 break
             fi
@@ -1240,6 +1262,7 @@ run_matrix_multi_step_mode() {
         export INPUT_RUN_MATRIX_FAIL_FAST="$ORIG_FAIL_FAST"
         export INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK="$ORIG_SKIP_DOCTEST"
         export INPUT_RUN_MATRIX_SUMMARY_MODE="$ORIG_SUMMARY_MODE"
+        export INPUT_RUN_MATRIX_GENERATE_SUMMARY="$ORIG_GENERATE_SUMMARY"
     done
 
     echo ""

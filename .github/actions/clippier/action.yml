@@ -323,7 +323,7 @@ inputs:
               step-id:
                 commands: |
                   command template here
-                label: "Display Name"       # Optional, defaults to step-id
+                label: "Display Name"       # Optional - if omitted, step runs but produces no summary
                 strategy: "sequential"      # Optional, overrides run-matrix-strategy
                 continue-on-failure: true   # Optional, overrides run-matrix-continue-on-failure
                 max-output-lines: 200       # Optional, overrides run-matrix-max-output-lines
@@ -331,13 +331,18 @@ inputs:
                 skip-doctest-check: false   # Optional, overrides run-matrix-skip-doctest-check
                 fail-fast: false            # Optional, overrides run-matrix-fail-fast
 
+            Steps without a 'label' property execute normally but don't appear in the test summary.
+            This is useful for utility steps like clearing directories or setup operations.
+
             Cannot be used together with run-matrix-commands.
 
             Example:
               run-matrix-steps: |
+                clear-target:
+                  commands: rm -rf target    # No label = runs silently, no summary
                 clippy:
                   commands: cargo clippy {{clippier.feature-flags}}
-                  label: "Clippy"
+                  label: "Clippy"            # Has label = appears in summary
                 tests:
                   commands: cargo test {{clippier.feature-flags}}
                   label: "Tests"
