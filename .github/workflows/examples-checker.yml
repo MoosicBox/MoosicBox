@@ -33,12 +33,6 @@ on:
                     - "claude-3-haiku-20240307"
                 default: ""
 
-            max_tokens:
-                description: "Maximum tokens per request (leave empty for default)"
-                required: false
-                type: string
-                default: ""
-
             max_turns:
                 description: "Maximum conversation turns (leave empty for default)"
                 required: false
@@ -179,7 +173,6 @@ jobs:
                   extract_commit_message: true
 
                   model: ${{ inputs.model }}
-                  max_tokens: ${{ inputs.max_tokens }}
                   max_turns: ${{ inputs.max_turns }}
                   claude_args: --allowedTools Edit,Read,Write,Bash
 

@@ -191,9 +191,6 @@ inputs:
     model:
         description: "Claude model"
         required: false
-    max_tokens:
-        description: "Max tokens"
-        required: false
     max_turns:
         description: "Max turns"
         required: false

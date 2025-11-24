@@ -198,7 +198,6 @@ jobs:
 | `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                           |
 | `summary_title`                    | Title for workflow summary section                                       | `💭 Claude Execution Details`     |
 | `model`                            | Claude model                                                             |                                   |
-| `max_tokens`                       | Max tokens                                                               |                                   |
 | `max_turns`                        | Max turns                                                                |                                   |
 | `claude_args`                      | Additional Claude Code arguments                                         |                                   |
 | `working_directory`                | Working directory                                                        | `.`                               |
