@@ -89,6 +89,10 @@ impl Default for PortReservation<std::ops::RangeInclusive<Port>> {
     }
 }
 
+fn reservation_is_free(ports: &BTreeSet<Port>, port: Port) -> bool {
+    !ports.contains(&port) && is_free(port)
+}
+
 impl<R: PortRange> PortReservation<R> {
     /// Creates a new port reservation system with the specified range
     ///
@@ -116,10 +120,6 @@ impl<R: PortRange> PortReservation<R> {
             range,
             reserved_ports: Mutex::new(BTreeSet::new()),
         }
-    }
-
-    fn is_free(ports: &BTreeSet<Port>, port: Port) -> bool {
-        !ports.contains(&port) && is_free(port)
     }
 
     /// Reserve a port for use
@@ -159,7 +159,7 @@ impl<R: PortRange> PortReservation<R> {
             }
 
             // Use the existing is_free function to check if the port is free
-            if Self::is_free(&reserved_ports, port) {
+            if reservation_is_free(&reserved_ports, port) {
                 reserved_ports.insert(port);
                 ports.push(port);
             }
@@ -196,7 +196,7 @@ impl<R: PortRange> PortReservation<R> {
         let port = self
             .range
             .iter()
-            .find(|x| Self::is_free(&reserved_ports, *x))?;
+            .find(|x| reservation_is_free(&reserved_ports, *x))?;
 
         reserved_ports.insert(port);
 
@@ -291,6 +291,32 @@ impl<R: PortRange> PortReservation<R> {
     pub fn is_reserved(&self, port: Port) -> bool {
         self.reserved_ports.lock().unwrap().contains(&port)
     }
+
+    /// Check if a port is free
+    ///
+    /// # Parameters
+    ///
+    /// * `port` - The port to check
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the port is free, `false` otherwise
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "reservation")]
+    /// # {
+    /// use openport::PortReservation;
+    /// let reservation = PortReservation::new(15000..16000);
+    /// let port = reservation.reserve_port();
+    /// assert!(reservation.is_free(port.unwrap()));
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn is_free(&self, port: Port) -> bool {
+        !self.reserved_ports.lock().unwrap().contains(&port)
+    }
 }
 
 #[cfg(test)]
@@ -373,7 +399,16 @@ mod tests {
     #[test_log::test]
     fn test_reserve_more_than_available() {
         // Use a very small range to test this edge case
-        let reservation = PortReservation::new(15000..15002);
+        let mut i = 15000;
+        let reservation = loop {
+            let reservation = PortReservation::new(i..i + 2);
+            if reservation.is_free(i) {
+                break reservation;
+            } else if i >= 16000 {
+                panic!("Too many ports reserved");
+            }
+            i += 1;
+        };
         let ports = reservation.reserve_ports(10); // Try to reserve 10 from a range of 2
 
         // Should get at most 2 ports (the number available in the range)
@@ -381,7 +416,7 @@ mod tests {
         assert!(!ports.is_empty()); // Should still get some ports if available
 
         for port in ports {
-            assert!((15000..15002).contains(&port));
+            assert!((i..i + 2).contains(&port));
             assert!(reservation.is_reserved(port));
         }
     }
