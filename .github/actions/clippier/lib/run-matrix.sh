@@ -1283,8 +1283,14 @@ run_matrix_multi_step_mode() {
         export INPUT_RUN_MATRIX_PREPARE_UPLOAD="true"
         export INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE="${INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE:-true}"
 
+        # Save current phase context before flush changes it
+        local saved_phase="$CONTEXT_PHASE"
+
         # Run flush command
         run_matrix_flush_command
+
+        # Restore phase context so error reporting shows correct phase
+        CONTEXT_PHASE="$saved_phase"
     fi
 
     # The outputs are already written by run_matrix_single_command_mode
