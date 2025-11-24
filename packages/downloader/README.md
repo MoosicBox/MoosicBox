@@ -294,13 +294,9 @@ async fn manage_locations(db: &LibraryDatabase) -> Result<(), Box<dyn std::error
 
 ## Configuration
 
-### Environment Variables
+### Download Directory
 
-| Variable               | Description                  | Default           |
-| ---------------------- | ---------------------------- | ----------------- |
-| `MOOSICBOX_CONFIG_DIR` | Configuration directory path | Platform-specific |
-
-The default download directory is `{MOOSICBOX_CONFIG_DIR}/downloads`.
+The default download directory is `~/.local/moosicbox/downloads`.
 
 ### Feature Flags
 
@@ -545,7 +541,7 @@ Downloads automatically resume from where they left off if interrupted. The down
 
 - Checks existing file size
 - Uses HTTP range requests to resume from the last byte
-- Retries on timeout with exponential backoff (via recursive retry logic)
+- Retries on timeout (via recursive retry logic)
 
 ### Automatic Scanning
 
