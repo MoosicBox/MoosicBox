@@ -1091,7 +1091,8 @@ run_matrix_multi_step_mode() {
 
     # Get step IDs (keys)
     local step_ids
-    if ! step_ids=$(echo "$steps_json" | jq -r 'keys[]' 2>/dev/null); then
+    # Use to_entries to preserve insertion order from YAML (keys[] sorts alphabetically)
+    if ! step_ids=$(echo "$steps_json" | jq -r 'to_entries | .[].key' 2>/dev/null); then
         echo "❌ Error: Failed to extract step IDs from run-matrix-steps"
         return 1
     fi
