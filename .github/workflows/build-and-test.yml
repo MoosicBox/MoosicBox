@@ -363,6 +363,10 @@ jobs:
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-auto-upload: true
 
+            - name: Clear target directory
+              shell: bash
+              run: rm -rf target
+
             - name: Create coverage report
               id: create_coverage_report
               shell: bash
