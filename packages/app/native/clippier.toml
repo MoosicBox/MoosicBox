@@ -1,3 +1,6 @@
+[parallelization]
+chunked = 10
+
 [[ci-steps]]
 toolchain = "free_disk_space"
 
