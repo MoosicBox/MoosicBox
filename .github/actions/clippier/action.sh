@@ -1126,8 +1126,15 @@ main() {
     fi
 
     if [[ "$INPUT_COMMAND" == "run-matrix" ]]; then
+        # Disable error trap - run_matrix_command handles its own exit codes
+        # (test failures should exit 1 without triggering "Action Failed" error summary)
+        set +e
         run_matrix_command
-        return
+        local exit_code=$?
+        set -e
+
+        # Exit with the captured code (workflow step fails on test failure, but no misleading error summary)
+        exit $exit_code
     fi
 
     if [[ "$INPUT_COMMAND" == "run-matrix-flush" ]]; then
