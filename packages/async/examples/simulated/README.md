@@ -6,7 +6,7 @@ A demonstration of concurrent task spawning and execution using the switchy asyn
 
 This example showcases how to spawn multiple concurrent tasks using the switchy async runtime. It demonstrates task spawning, nested futures, random delays, and concurrent execution patterns with deterministic simulation support.
 
-## What it demonstrates
+## What This Example Demonstrates
 
 - **Task spawning** - Creating multiple concurrent tasks with `task::spawn`
 - **Nested futures** - Spawning tasks from within other tasks
@@ -15,7 +15,54 @@ This example showcases how to spawn multiple concurrent tasks using the switchy 
 - **Runtime management** - Proper runtime lifecycle and cleanup
 - **Simulation support** - Deterministic execution with seeded randomness
 
-## Code walkthrough
+## Prerequisites
+
+- Understanding of async task spawning and futures
+- Familiarity with concurrent programming concepts
+- Basic knowledge of random number generation (helpful but not required)
+- No additional setup required - example runs standalone
+
+## Running the Example
+
+```bash
+cargo run --manifest-path packages/async/examples/simulated/Cargo.toml
+```
+
+### With Simulation Features
+
+```bash
+cargo run --manifest-path packages/async/examples/simulated/Cargo.toml --features simulator
+```
+
+## Expected Output
+
+The output will show concurrent execution with timestamps:
+
+```
+Begin Asynchronous Execution (seed=12345)
+block on
+Blocking Function Polled To Completion
+Spawned Fn #00: Start 1634664688
+Spawned Fn #01: Start 1634664688
+Spawned Fn #02: Start 1634664688
+Spawned Fn #03: Start 1634664688
+Spawned Fn #04: Start 1634664688
+Spawned Fn #01: Ended 1634664690
+Spawned Fn #01: Inner 1634664691
+Spawned Fn #04: Ended 1634664694
+Spawned Fn #04: Inner 1634664695
+Spawned Fn #00: Ended 1634664697
+Spawned Fn #02: Ended 1634664697
+Spawned Fn #03: Ended 1634664697
+Spawned Fn #00: Inner 1634664698
+Spawned Fn #03: Inner 1634664698
+Spawned Fn #02: Inner 1634664702
+End of Asynchronous Execution
+```
+
+**Note**: The exact order and timing will vary between runs due to randomness, but with simulation features enabled, execution becomes deterministic.
+
+## Code Walkthrough
 
 The example:
 
@@ -26,7 +73,7 @@ The example:
 5. **Demonstrates blocking operations** alongside concurrent tasks
 6. **Waits for all tasks to complete** before shutting down
 
-## Key concepts
+## Key Concepts
 
 ### Task Spawning
 
@@ -71,47 +118,31 @@ runtime.wait()?;
 
 Coordinating between blocking operations and spawned tasks.
 
-## Running the example
+## Testing the Example
 
-```bash
-cargo run --package async_simulated
-```
+Try experimenting with the code:
 
-### With simulation features
+1. **Run with different backends**:
 
-```bash
-cargo run --package async_simulated --features simulator
-```
+    - Default (Tokio): Non-deterministic execution, real-time delays
+    - With `--features simulator`: Deterministic execution with controlled time
 
-## Expected output
+2. **Observe concurrency**:
 
-The output will show concurrent execution with timestamps:
+    - Watch the order of "Start" messages (all appear together)
+    - Note that "Ended" messages appear at different times based on random delays
+    - See how nested tasks complete after their parent tasks
 
-```
-Begin Asynchronous Execution (seed=12345)
-block on
-Blocking Function Polled To Completion
-Spawned Fn #00: Start 1634664688
-Spawned Fn #01: Start 1634664688
-Spawned Fn #02: Start 1634664688
-Spawned Fn #03: Start 1634664688
-Spawned Fn #04: Start 1634664688
-Spawned Fn #01: Ended 1634664690
-Spawned Fn #01: Inner 1634664691
-Spawned Fn #04: Ended 1634664694
-Spawned Fn #04: Inner 1634664695
-Spawned Fn #00: Ended 1634664697
-Spawned Fn #02: Ended 1634664697
-Spawned Fn #03: Ended 1634664697
-Spawned Fn #00: Inner 1634664698
-Spawned Fn #03: Inner 1634664698
-Spawned Fn #02: Inner 1634664702
-End of Asynchronous Execution
-```
+3. **Modify task count**:
 
-**Note**: The exact order and timing will vary between runs due to randomness, but with simulation features enabled, execution becomes deterministic.
+    - Change the loop from `0..5` to `0..10` to spawn more tasks
+    - Observe how the runtime handles increased concurrency
 
-## Use cases
+4. **Adjust delays**:
+    - Modify the `gen_range(1..10)` values to change delay ranges
+    - See how this affects the interleaving of task completion
+
+## Use Cases
 
 This pattern is useful for:
 
@@ -121,7 +152,27 @@ This pattern is useful for:
 - **Testing async code** - Deterministic simulation for reliable tests
 - **Load simulation** - Simulating concurrent user requests or operations
 
-## Features
+## Troubleshooting
+
+### Tasks complete in unexpected order
+
+- This is normal! Concurrent tasks don't have a guaranteed execution order
+- Use the `simulator` feature for deterministic ordering in tests
+- Check that you're not making assumptions about task completion sequence
+
+### "Blocking Function Polled To Completion" appears before spawned tasks
+
+- This is expected behavior - `block_on` is polled to completion first
+- Spawned tasks continue running after `block_on` returns
+- The `runtime.wait()` call ensures all spawned tasks complete
+
+### Different output each run
+
+- Random number generation causes timing variations
+- Use `--features simulator` for reproducible execution
+- The seed is printed at the start for debugging purposes
+
+## Advanced Features
 
 ### Simulation Support
 
@@ -144,15 +195,7 @@ When built with the `simulator` feature:
 - `switchy_time` - Time utilities with simulation support (features: "simulator")
 - `pretty_env_logger` - Logging setup
 
-## Comparison with other examples
+## Related Examples
 
-| Example                       | Focus                | Key Feature               |
-| ----------------------------- | -------------------- | ------------------------- |
-| [Cancel](../cancel/README.md) | Graceful shutdown    | Cancellation tokens       |
-| **Simulated**                 | Concurrent execution | Task spawning and nesting |
-
-## Related
-
-- [`switchy_async`](../../README.md) - Main async runtime package
-- [`switchy_random`](../../../random/README.md) - Random number generation
-- [Cancel Example](../cancel/README.md) - Cancellation and shutdown patterns
+- [Basic Usage Example](../basic_usage/README.md) - Runtime fundamentals and simple task spawning
+- [Cancel Example](../cancel/README.md) - Graceful shutdown with cancellation tokens

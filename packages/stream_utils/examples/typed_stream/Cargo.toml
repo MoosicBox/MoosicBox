@@ -1,0 +1,22 @@
+[package]
+description = "Example demonstrating TypedWriter and TypedStream in moosicbox_stream_utils"
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_stream_utils", "stream", "typed"]
+license     = { workspace = true }
+name        = "moosicbox_stream_utils_typed_stream_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "typed_stream_example"
+path = "src/main.rs"
+
+[dependencies]
+futures                = { workspace = true }
+moosicbox_stream_utils = { workspace = true }
+tokio                  = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_stream_utils/fail-on-warnings"]

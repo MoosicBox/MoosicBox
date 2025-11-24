@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating basic file I/O operations in switchy_fs"
+edition     = { workspace = true }
+keywords    = ["example", "file-io", "switchy_fs"]
+license     = { workspace = true }
+name        = "switchy_fs_basic_file_io_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_file_io_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_fs = { workspace = true, features = ["sync"] }
+
+[features]
+default          = ["std"]
+fail-on-warnings = ["switchy_fs/fail-on-warnings"]
+
+simulator = ["switchy_fs/simulator"]
+std       = ["switchy_fs/std"]

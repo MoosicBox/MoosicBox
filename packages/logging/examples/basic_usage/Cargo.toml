@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic logging setup and usage in moosicbox_logging"
+edition     = { workspace = true }
+keywords    = ["example", "logging", "moosicbox_logging"]
+license     = { workspace = true }
+name        = "moosicbox_logging_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_logging = { workspace = true, default-features = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_logging/fail-on-warnings"]

@@ -4383,9 +4383,9 @@ pub fn handle_packages_command(
     changed_files: Option<&[String]>,
     #[cfg(feature = "git-diff")] git_base: Option<&str>,
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
-    include_reasoning: bool,
+    #[cfg(feature = "git-diff")] include_reasoning: bool,
     max_parallel: Option<u16>,
-    ignore_patterns: Option<&[String]>,
+    #[cfg(feature = "git-diff")] ignore_patterns: Option<&[String]>,
     skip_if: &[String],
     include_if: &[String],
     output: OutputType,
@@ -4537,12 +4537,12 @@ pub fn handle_packages_command(
         }
 
         // Find packages affected by file changes
-        let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
         let mut file_affected_packages = if all_changed_files.is_empty() {
             Vec::new()
         } else {
             #[cfg(feature = "git-diff")]
             {
+                let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
                 if include_reasoning {
                     let with_reasoning = find_affected_packages_with_reasoning(
                         &path,

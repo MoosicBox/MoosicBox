@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating JSON POST requests in switchy_http"
+edition     = { workspace = true }
+keywords    = ["example", "json", "post", "switchy_http"]
+license     = { workspace = true }
+name        = "switchy_http_json_post_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "json_post_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_http = { workspace = true, features = ["json", "reqwest"] }
+
+log               = { workspace = true }
+pretty_env_logger = { workspace = true }
+serde             = { workspace = true, features = ["derive"] }
+serde_json        = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_http/fail-on-warnings"]

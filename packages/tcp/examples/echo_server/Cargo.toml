@@ -1,0 +1,28 @@
+[package]
+description = "Example demonstrating a simple TCP echo server using switchy_tcp"
+edition     = { workspace = true }
+keywords    = ["echo", "example", "server", "switchy_tcp"]
+license     = { workspace = true }
+name        = "switchy_tcp_echo_server_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "echo_server_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_tcp = { workspace = true, default-features = false, features = [
+    "tokio",
+] }
+tokio = { workspace = true, features = [
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_tcp/fail-on-warnings"]

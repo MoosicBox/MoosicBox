@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating custom EnvProvider implementations with switchy_env"
+edition     = { workspace = true }
+keywords    = ["custom", "example", "provider", "switchy_env"]
+license     = { workspace = true }
+name        = "switchy_env_custom_provider_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "custom_provider_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_env = { workspace = true, features = ["std"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_env/fail-on-warnings"]

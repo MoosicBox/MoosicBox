@@ -1278,6 +1278,7 @@ fn test_handle_packages_command_basic() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
         None,
@@ -1319,6 +1320,7 @@ fn test_handle_packages_command_json_output() {
         None,
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1347,8 +1349,10 @@ fn test_handle_packages_command_raw_output() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1382,8 +1386,10 @@ fn test_handle_packages_command_with_specific_packages() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1421,8 +1427,10 @@ fn test_handle_packages_command_with_max_parallel() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         Some(3),
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1452,8 +1460,10 @@ fn test_handle_packages_command_no_os_filter() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1489,8 +1499,10 @@ fn test_handle_packages_command_nonexistent_package() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1527,8 +1539,10 @@ members = []
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1684,8 +1698,10 @@ fn test_handle_packages_command_mixed_valid_invalid() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1724,8 +1740,10 @@ fn test_handle_packages_command_all_packages() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],

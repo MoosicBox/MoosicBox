@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic usage of switchy_random"
+edition     = { workspace = true }
+keywords    = ["example", "random", "switchy_random"]
+license     = { workspace = true }
+name        = "switchy_random_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_random = { workspace = true, features = ["rand"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_random/fail-on-warnings"]

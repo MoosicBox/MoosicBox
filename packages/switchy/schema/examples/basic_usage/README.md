@@ -25,10 +25,23 @@ This example demonstrates the core functionality of `switchy_schema` using type-
 3. **Error Handling**: Proper error propagation with `MigrationError`
 4. **Database Abstraction**: Uses `switchy_database` for database-agnostic operations (demonstrated with SQLite)
 
+## Prerequisites
+
+- Rust 1.70 or later
+- Basic understanding of database schemas and migrations
+- Familiarity with async Rust (`async`/`await`)
+
 ## Running the Example
 
 ```bash
-cargo run --bin basic_usage
+cargo run --manifest-path packages/switchy/schema/examples/basic_usage/Cargo.toml
+```
+
+Or from the example directory:
+
+```bash
+cd packages/switchy/schema/examples/basic_usage
+cargo run
 ```
 
 ## Expected Output
@@ -124,3 +137,27 @@ Uncomment the rollback section at the end of `main()` to see rollback in action:
 ```rust
 runner.rollback(db, switchy_schema::runner::RollbackStrategy::Steps(1)).await?;
 ```
+
+## Testing the Example
+
+The example runs against an in-memory SQLite database, so each run starts fresh. You can verify:
+
+1. **Migration tracking**: Check that migrations transition from ❌ Pending to ✅ Applied
+2. **Data insertion**: Verify that the user data is successfully inserted and queried
+3. **Schema evolution**: Observe that the `created_at` column is added in the third migration
+
+## Troubleshooting
+
+**Issue**: `error: no bin target named 'basic_usage'`
+
+- **Solution**: Run from repository root with full manifest path, or `cd` into the example directory first
+
+**Issue**: Migrations appear to run but no output is shown
+
+- **Solution**: Check that you're running the correct binary. The output includes emoji indicators (🚀, ✅, etc.)
+
+## Related Examples
+
+- **[borrowed_migrations](../borrowed_migrations/)** - Working with non-static lifetimes and borrowed data
+- **[static_migrations](../static_migrations/)** - Multiple migration discovery methods
+- **[basic_migration_test](../basic_migration_test/)** - Testing migrations with `verify_migrations_full_cycle`

@@ -18,9 +18,7 @@ use bytes::BytesMut;
 // Module that contains all real_fs functionality
 #[cfg(feature = "simulator-real-fs")]
 mod real_fs_support {
-    use bytes::BytesMut;
     use scoped_tls::scoped_thread_local;
-    use std::sync::{Arc, Mutex};
 
     pub struct RealFs;
 
@@ -43,12 +41,18 @@ mod real_fs_support {
     }
 
     // Simple conversion for std::fs::File to simulator File
+    #[cfg(feature = "std")]
     pub fn convert_std_file_to_simulator(
         std_file: std::fs::File,
         path: impl AsRef<std::path::Path>,
         write: bool,
     ) -> std::io::Result<super::sync::File> {
-        use std::io::Read;
+        use std::{
+            io::Read,
+            sync::{Arc, Mutex},
+        };
+
+        use bytes::BytesMut;
 
         let mut std_file = std_file;
         let mut content = Vec::new();
@@ -69,6 +73,10 @@ mod real_fs_support {
         path: impl AsRef<std::path::Path>,
         write: bool,
     ) -> std::io::Result<super::unsync::File> {
+        use std::sync::{Arc, Mutex};
+
+        use bytes::BytesMut;
+
         let path_buf = path.as_ref().to_path_buf();
         let content = switchy_async::task::spawn_blocking(move || {
             use std::io::Read;

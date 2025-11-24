@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic async runtime usage in switchy_async"
+edition     = { workspace = true }
+keywords    = ["example", "runtime", "switchy_async"]
+license     = { workspace = true }
+name        = "switchy_async_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_async = { workspace = true, features = ["time", "tokio"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_async/fail-on-warnings"]

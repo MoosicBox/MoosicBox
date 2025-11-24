@@ -605,8 +605,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_base.as_deref(),
             #[cfg(feature = "git-diff")]
             git_head.as_deref(),
+            #[cfg(feature = "git-diff")]
             include_reasoning,
             max_parallel,
+            #[cfg(feature = "git-diff")]
             Some(&ignore),
             &skip_if,
             &include_if,

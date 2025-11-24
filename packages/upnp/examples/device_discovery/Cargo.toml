@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating UPnP device discovery in switchy_upnp"
+edition     = { workspace = true }
+keywords    = ["discovery", "example", "switchy_upnp", "upnp"]
+license     = { workspace = true }
+name        = "switchy_upnp_device_discovery_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "device_discovery_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_upnp = { workspace = true, default-features = false }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_upnp/fail-on-warnings"]
