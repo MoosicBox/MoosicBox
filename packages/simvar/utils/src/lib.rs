@@ -200,8 +200,9 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_reset_simulator_cancellation_token() {
-        // Ensure global is not cancelled
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         // Cancel the token
         cancel_simulation();
@@ -215,7 +216,10 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_cancel_simulation_sets_cancelled_state() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
         reset_simulator_cancellation_token();
+
         assert!(!is_simulator_cancelled());
 
         cancel_simulation();
@@ -225,8 +229,9 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_is_simulator_cancelled_respects_global_cancellation() {
-        reset_simulator_cancellation_token();
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         assert!(!is_simulator_cancelled());
 
@@ -238,8 +243,9 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_global_cancellation_independent_from_local() {
-        reset_simulator_cancellation_token();
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         cancel_simulation();
         // Local cancelled but not global directly
@@ -250,7 +256,12 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_reset_global_simulator_cancellation_token() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
+
         cancel_global_simulation();
+
         assert!(is_global_simulator_cancelled());
 
         reset_global_simulator_cancellation_token();
@@ -260,8 +271,9 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_run_until_simulation_cancelled_completes_normally() {
-        reset_simulator_cancellation_token();
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         let result = run_until_simulation_cancelled(async { 42 }).await;
         assert_eq!(result, Some(42));
@@ -270,8 +282,9 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_run_until_simulation_cancelled_with_local_cancellation() {
-        reset_simulator_cancellation_token();
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         let cancel_task = async {
             cancel_simulation();
@@ -292,8 +305,9 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_run_until_simulation_cancelled_with_global_cancellation() {
-        reset_simulator_cancellation_token();
+        // Reset all states
         reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
 
         let cancel_task = async {
             cancel_global_simulation();
