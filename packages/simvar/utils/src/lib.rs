@@ -169,9 +169,17 @@ where
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
+    // Note: All tests in this module use #[serial] because they interact with the global
+    // SIMULATOR_CANCELLATION_TOKEN state. Running these tests in parallel would cause
+    // race conditions where one test's state changes affect another test's expectations.
+    // The serial_test crate ensures these tests run one at a time.
+
     #[test_log::test]
+    #[serial]
     fn test_worker_thread_id_returns_unique_ids() {
         let id1 = worker_thread_id();
         let id2 = worker_thread_id();
@@ -180,6 +188,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_worker_thread_id_uniqueness_across_threads() {
         let id1 = worker_thread_id();
         let handle = std::thread::spawn(worker_thread_id);
@@ -189,6 +198,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reset_simulator_cancellation_token() {
         // Ensure global is not cancelled
         reset_global_simulator_cancellation_token();
@@ -203,6 +213,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_cancel_simulation_sets_cancelled_state() {
         reset_simulator_cancellation_token();
         assert!(!is_simulator_cancelled());
@@ -212,6 +223,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_is_simulator_cancelled_respects_global_cancellation() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -224,6 +236,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_global_cancellation_independent_from_local() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -235,6 +248,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reset_global_simulator_cancellation_token() {
         cancel_global_simulation();
         assert!(is_global_simulator_cancelled());
@@ -244,6 +258,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_run_until_simulation_cancelled_completes_normally() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -253,6 +268,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_run_until_simulation_cancelled_with_local_cancellation() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -274,6 +290,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial]
     async fn test_run_until_simulation_cancelled_with_global_cancellation() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();

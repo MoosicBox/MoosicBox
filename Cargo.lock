@@ -13877,6 +13877,7 @@ dependencies = [
 name = "simvar_utils"
 version = "0.1.0"
 dependencies = [
+ "serial_test",
  "switchy",
  "switchy_async",
  "test-log",
