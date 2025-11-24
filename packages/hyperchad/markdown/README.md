@@ -28,5 +28,5 @@ println!("{}", container); // HTML output
 
 - `default` - Includes `emoji` and `xss-protection`
 - `emoji` - Enable emoji shortcode replacement (e.g., `:rocket:` → 🚀)
-- `syntax-highlighting` - Enable code block syntax highlighting support
+- `syntax-highlighting` - Enable syntax highlighting for debug logging output of Containers (does not apply syntax highlighting to code block content)
 - `xss-protection` - Filter dangerous HTML tags and attributes
