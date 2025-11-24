@@ -79,7 +79,7 @@ println!("Title: {}, Duration: {}s", title, duration);
 ### Optional Value Handling
 
 ```rust
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::serde_json::ToValue;
 
 let data = serde_json::json!({
     "name": "John",
