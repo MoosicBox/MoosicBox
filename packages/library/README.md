@@ -181,6 +181,7 @@ fn example_filtering() {
 
 ```rust
 use moosicbox_library::{search, LibrarySearchType};
+use moosicbox_music_api_models::search::api::ApiGlobalSearchResult;
 
 fn search_library() -> Result<(), Box<dyn std::error::Error>> {
     let query = "Pink Floyd";
@@ -198,25 +199,19 @@ fn search_library() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     println!("Search results for '{}':", query);
+    println!("Found {} results", results.results.len());
 
-    if let Some(artists) = &results.artists {
-        println!("  Artists: {}", artists.len());
-        for artist in artists {
-            println!("    {}", artist.title);
-        }
-    }
-
-    if let Some(albums) = &results.albums {
-        println!("  Albums: {}", albums.len());
-        for album in albums {
-            println!("    {} - {}", album.artist, album.title);
-        }
-    }
-
-    if let Some(tracks) = &results.tracks {
-        println!("  Tracks: {}", tracks.len());
-        for track in tracks {
-            println!("    {} - {}", track.artist, track.title);
+    for result in &results.results {
+        match result {
+            ApiGlobalSearchResult::Artist(artist) => {
+                println!("  Artist: {}", artist.title);
+            }
+            ApiGlobalSearchResult::Album(album) => {
+                println!("  Album: {} - {}", album.artist, album.title);
+            }
+            ApiGlobalSearchResult::Track(track) => {
+                println!("  Track: {} - {}", track.artist, track.title);
+            }
         }
     }
 
