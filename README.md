@@ -250,6 +250,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[hyperchad_app](packages/hyperchad/app)** - HyperChad application framework
 - **[hyperchad_color](packages/hyperchad/color)** - Color utilities and theming
 - **[hyperchad_js_bundler](packages/hyperchad/js_bundler)** - JavaScript bundling for HyperChad
+- **[hyperchad_markdown](packages/hyperchad/markdown)** - Markdown to HyperChad conversion with GitHub Flavored Markdown support
 - **[hyperchad_router](packages/hyperchad/router)** - Client-side routing system
 - **[hyperchad_state](packages/hyperchad/state)** - State management for HyperChad
 - **[hyperchad_template](packages/hyperchad/template)** - Template system and DSL
