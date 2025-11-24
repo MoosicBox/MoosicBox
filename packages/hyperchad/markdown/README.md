@@ -28,4 +28,5 @@ println!("{}", container); // HTML output
 
 - `default` - Includes `emoji` and `xss-protection`
 - `emoji` - Enable emoji shortcode replacement (e.g., `:rocket:` → 🚀)
+- `syntax-highlighting` - Enable code block syntax highlighting support
 - `xss-protection` - Filter dangerous HTML tags and attributes
