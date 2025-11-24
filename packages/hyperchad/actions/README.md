@@ -196,14 +196,13 @@ let navigate = ActionType::Navigate {
 ### Conditional Logic (with `logic` feature)
 
 ```rust
-use hyperchad_actions::logic::{If, Value, Condition, get_visibility_str_id};
-use hyperchad_transformer_models::Visibility;
+use hyperchad_actions::logic::{If, Value, Condition, get_visibility_str_id, visible};
 
 // Conditional action based on element state
 let conditional = ActionType::Logic(If {
     condition: Condition::Eq(
         get_visibility_str_id("menu").into(),
-        Visibility::Visible.into(),
+        visible(),
     ),
     actions: vec![ActionType::hide_str_id("menu").into()],
     else_actions: vec![ActionType::show_str_id("menu").into()],
