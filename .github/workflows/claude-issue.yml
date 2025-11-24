@@ -143,7 +143,7 @@ jobs:
                   additional_permissions: |
                       actions: read
 
-                  claude_args: '--allowedTools "Edit,Read,Write,Bash"'
+                  claude_args: '--model claude-opus-4-5-20251101 --allowedTools "Edit,Read,Write,Bash"'
 
                   prompt: |
                       You are helping solve a GitHub issue. A user has mentioned @claude in an issue.

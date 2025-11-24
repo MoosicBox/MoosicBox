@@ -267,7 +267,7 @@ jobs:
                       actions: read
 
                   # Grant access to file editing tools and all bash commands
-                  claude_args: '--allowedTools "Edit,Read,Write,Bash"'
+                  claude_args: '--model claude-opus-4-5-20251101 --allowedTools "Edit,Read,Write,Bash"'
 
                   prompt: |
                       You are helping with a GitHub repository. A user has mentioned @claude in a comment.

@@ -175,7 +175,7 @@ jobs:
               uses: BSteffaniak/claude-code-action@dev
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-                  claude_args: '--allowedTools "Edit,Read,Write,Bash"'
+                  claude_args: '--model claude-opus-4-5-20251101 --allowedTools "Edit,Read,Write,Bash"'
                   prompt: |
                       You are helping resolve merge conflicts on a GitHub Pull Request.
 
