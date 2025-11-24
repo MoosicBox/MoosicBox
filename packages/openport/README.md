@@ -19,8 +19,8 @@ OpenPort provides a minimal set of functions to:
 [dependencies]
 openport = { path = "../openport" }
 
-# Enable random port selection
-openport = { path = "../openport", features = ["rand"] }
+# Or with random port selection feature
+# openport = { path = "../openport", features = ["rand"] }
 ```
 
 ## Usage
