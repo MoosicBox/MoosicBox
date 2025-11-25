@@ -132,6 +132,10 @@ impl From<ApiLibraryAlbum> for ApiAlbum {
 impl TryFrom<ApiLibraryAlbum> for Album {
     type Error = chrono::ParseError;
 
+    /// Converts an API library album to a generic album.
+    ///
+    /// Parses date strings and creates artwork path from album ID if cover exists.
+    ///
     /// # Errors
     ///
     /// * If `date_released` or `date_added` contains an invalid date string
