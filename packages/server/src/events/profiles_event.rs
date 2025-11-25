@@ -1,3 +1,9 @@
+//! Profile management event handling and initialization.
+//!
+//! This module handles profile lifecycle events including creating and removing profiles,
+//! initializing profile-specific databases, and setting up music API instances for each
+//! profile's enabled services (Library, Tidal, Qobuz, `YouTube` Music).
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use moosicbox_config::AppType;

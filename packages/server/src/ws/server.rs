@@ -237,11 +237,19 @@ impl WsServer {
         )
     }
 
+    /// Registers a player action callback for a specific player ID.
+    ///
+    /// Player actions are invoked when playback commands are received from connected clients
+    /// for the associated player.
     #[cfg(feature = "player")]
     pub fn add_player_action(&mut self, id: u64, action: PlayerAction) {
         self.player_actions.push((id, action));
     }
 
+    /// Adds an additional WebSocket sender for message forwarding.
+    ///
+    /// This is used to forward messages through the tunnel connection when the `tunnel`
+    /// feature is enabled.
     #[cfg(feature = "tunnel")]
     pub fn add_sender(&mut self, sender: Box<dyn WebsocketSender>) {
         self.senders.push(sender);
@@ -459,6 +467,15 @@ impl WsServer {
         Ok(())
     }
 
+    /// Runs the WebSocket server message processing loop.
+    ///
+    /// This function consumes the server instance and processes commands until the server
+    /// is shut down via the cancellation token. Each command is processed in a separate
+    /// spawned task for concurrent handling.
+    ///
+    /// # Errors
+    ///
+    /// * If an I/O error occurs during command processing
     pub async fn run(self) -> io::Result<()> {
         let token = self.token.clone();
         let cmd_rx = self.cmd_rx.clone();
@@ -534,6 +551,10 @@ impl WebsocketSender for WsServerHandle {
 }
 
 impl WsServerHandle {
+    /// Registers a player action callback for a specific player ID.
+    ///
+    /// Sends a command to the WebSocket server to register the player action, which will
+    /// be invoked when playback commands are received for the specified player.
     #[cfg(feature = "player")]
     pub async fn add_player_action(&self, player_id: u64, action: PlayerAction) {
         log::trace!("Sending AddPlayerAction command id={player_id}");
@@ -577,6 +598,10 @@ impl WsServerHandle {
         })
     }
 
+    /// Sends a message to a specific connection.
+    ///
+    /// The message is sent asynchronously through the command channel and the function
+    /// awaits confirmation of delivery to the WebSocket server's internal queue.
     pub async fn send(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Send command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
@@ -596,6 +621,10 @@ impl WsServerHandle {
         });
     }
 
+    /// Broadcasts a message to all connected WebSocket clients.
+    ///
+    /// The message is sent asynchronously through the command channel and delivered to
+    /// all active connections in the main room.
     pub async fn broadcast(&self, msg: impl Into<String> + Send) {
         log::trace!("Sending Broadcast command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
@@ -615,6 +644,10 @@ impl WsServerHandle {
         });
     }
 
+    /// Broadcasts a message to all connected WebSocket clients except the specified connection.
+    ///
+    /// This is useful for avoiding echo when the originating connection should not receive
+    /// its own broadcast message.
     pub async fn broadcast_except(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending BroadcastExcept command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
@@ -669,6 +702,9 @@ impl WsServerHandle {
         }
     }
 
+    /// Shuts down the WebSocket server by cancelling its processing loop.
+    ///
+    /// After shutdown, the server will stop accepting new commands and connections.
     pub fn shutdown(&self) {
         self.token.cancel();
     }
