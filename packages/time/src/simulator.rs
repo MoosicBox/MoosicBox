@@ -21,6 +21,10 @@ use std::{
 use scoped_tls::scoped_thread_local;
 
 /// Marker type for temporarily using real system time instead of simulated time.
+///
+/// This type is used internally by [`with_real_time`] to track when code should
+/// use actual system time rather than simulated time. It has no public methods
+/// and is only used as a scoped thread-local marker.
 pub struct RealTime;
 
 scoped_thread_local! {
@@ -31,6 +35,17 @@ scoped_thread_local! {
 ///
 /// This temporarily disables time simulation for the duration of the function call,
 /// allowing code to access actual system time even when running in simulator mode.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_time::simulator::{with_real_time, now};
+///
+/// // Inside this closure, now() returns actual system time
+/// let real_time = with_real_time(|| {
+///     now()
+/// });
+/// ```
 pub fn with_real_time<T>(f: impl FnOnce() -> T) -> T {
     REAL_TIME.set(&RealTime, f)
 }
