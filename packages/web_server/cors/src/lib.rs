@@ -71,7 +71,6 @@ impl<T> AllOrSome<T> {
     }
 
     /// Provides a shared reference to `T` if variant is `Some`.
-    #[must_use]
     pub const fn as_ref(&self) -> Option<&T> {
         match *self {
             Self::All => None,
@@ -80,7 +79,6 @@ impl<T> AllOrSome<T> {
     }
 
     /// Provides a mutable reference to `T` if variant is `Some`.
-    #[must_use]
     pub const fn as_mut(&mut self) -> Option<&mut T> {
         match *self {
             Self::All => None,
