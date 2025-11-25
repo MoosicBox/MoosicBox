@@ -48,40 +48,40 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     response.push_str("=== New Handler System Demonstration ===\n\n");
 
     // Test method()
-    let _ = writeln!(response, "HTTP Method: {:?}", data.method);
+    writeln!(response, "HTTP Method: {:?}", data.method).unwrap();
 
     // Test path()
-    let _ = writeln!(response, "Path: {}", data.path);
+    writeln!(response, "Path: {}", data.path).unwrap();
 
     // Test query_string()
     if data.query.is_empty() {
         response.push_str("Query String: None\n");
     } else {
-        let _ = writeln!(response, "Query String: {}", data.query);
+        writeln!(response, "Query String: {}", data.query).unwrap();
     }
 
     // Test headers
     if let Some(user_agent) = &data.user_agent {
-        let _ = writeln!(response, "User-Agent: {user_agent}");
+        writeln!(response, "User-Agent: {user_agent}").unwrap();
     } else {
         response.push_str("User-Agent: None\n");
     }
 
     if let Some(content_type) = &data.content_type {
-        let _ = writeln!(response, "Content-Type: {content_type}");
+        writeln!(response, "Content-Type: {content_type}").unwrap();
     } else {
         response.push_str("Content-Type: None\n");
     }
 
     // Test headers collection
-    let _ = writeln!(response, "All Headers: {} found", data.headers.len());
+    writeln!(response, "All Headers: {} found", data.headers.len()).unwrap();
     for (name, value) in &data.headers {
-        let _ = writeln!(response, "  {name}: {value}");
+        writeln!(response, "  {name}: {value}").unwrap();
     }
 
     // Test remote_addr()
     if let Some(addr) = data.remote_addr {
-        let _ = writeln!(response, "Remote Address: {addr}");
+        writeln!(response, "Remote Address: {addr}").unwrap();
     } else {
         response.push_str("Remote Address: None\n");
     }
