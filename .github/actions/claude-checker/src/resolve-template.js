@@ -248,80 +248,199 @@ function applyFrontmatterDefaults(frontmatter, baseVars) {
 }
 
 /**
+ * Load and render a partial template
+ * Resolution order: partial frontmatter defaults < parent vars < explicit overrides
+ */
+function loadPartial(name, parentVars, overrideParams = {}) {
+    const partialPath = path.join(
+        __dirname,
+        '..',
+        'templates',
+        'partials',
+        `${name}.md`,
+    );
+
+    if (!fs.existsSync(partialPath)) {
+        throw new Error(
+            `Partial not found: ${name} (looked at ${partialPath})`,
+        );
+    }
+
+    const content = fs.readFileSync(partialPath, 'utf8');
+    const { data: partialFrontmatter, content: partialBody } = matter(content);
+
+    // Resolution order: partial defaults < parent vars < explicit overrides
+    const mergedVars = {
+        ...partialFrontmatter, // lowest: partial's own defaults
+        ...parentVars, // middle: inherited from parent
+        ...overrideParams, // highest: explicit include() params
+    };
+
+    // Render the partial with merged variables (recursive to support nested includes)
+    return renderTemplate(partialBody, mergedVars);
+}
+
+/**
+ * Extract balanced expression from template starting at position
+ * Handles nested braces properly
+ * startPos should point to the first character after '${'
+ */
+function extractExpression(template, startPos) {
+    // Start at depth 1 because we're already inside ${ ... }
+    let depth = 1;
+    let inString = false;
+    let stringChar = '';
+    let i = startPos;
+
+    while (i < template.length) {
+        const char = template[i];
+        const prevChar = i > 0 ? template[i - 1] : '';
+
+        // Handle string boundaries (skip escaped quotes)
+        if ((char === '"' || char === "'") && prevChar !== '\\') {
+            if (!inString) {
+                inString = true;
+                stringChar = char;
+            } else if (char === stringChar) {
+                inString = false;
+            }
+        }
+
+        // Only count braces outside of strings
+        if (!inString) {
+            if (char === '{') {
+                depth++;
+            } else if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                    // Found the closing brace of ${ ... }
+                    return {
+                        expression: template.slice(startPos, i),
+                        endPos: i,
+                    };
+                }
+            }
+        }
+
+        i++;
+    }
+
+    return null; // Unbalanced braces
+}
+
+/**
  * Render template by replacing ${var_name} with values
  * Supports basic conditionals: ${condition ? 'true' : 'false'}
+ * Supports include('partial-name') and include('partial-name', { overrides })
  */
 function renderTemplate(template, vars) {
-    return template.replace(/\$\{([^}]+)\}/g, (match, expression) => {
-        try {
-            // Simple variable reference
-            if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(expression.trim())) {
-                const value = vars[expression.trim()];
-                return value !== undefined && value !== null
-                    ? String(value)
-                    : '';
+    let result = '';
+    let lastEnd = 0;
+    let i = 0;
+
+    while (i < template.length) {
+        // Look for ${
+        if (template[i] === '$' && template[i + 1] === '{') {
+            // Add text before this expression
+            result += template.slice(lastEnd, i);
+
+            // Extract the full expression with balanced braces
+            const extracted = extractExpression(template, i + 2);
+            if (!extracted) {
+                // Unbalanced braces, treat as literal
+                result += '${';
+                lastEnd = i + 2;
+                i += 2;
+                continue;
             }
 
-            // Expression evaluation (ternary, concatenation, etc.)
-            // Create a safe evaluation context
-            const evalContext = { ...vars };
+            const { expression, endPos } = extracted;
+            const replacement = evaluateExpression(expression, vars);
+            result += replacement;
 
-            // Add helper functions
-            evalContext.derive_package_name = (packagePath) => {
-                if (!packagePath || packagePath === '.') return '';
-
-                // Try to read package name from Cargo.toml or package.json
-                try {
-                    const cargoPath = path.join(
-                        process.cwd(),
-                        packagePath,
-                        'Cargo.toml',
-                    );
-                    if (fs.existsSync(cargoPath)) {
-                        const cargoContent = fs.readFileSync(cargoPath, 'utf8');
-                        const match = cargoContent.match(
-                            /^\[package\][\s\S]*?name\s*=\s*"([^"]+)"/m,
-                        );
-                        if (match) return match[1];
-                    }
-                } catch {}
-
-                try {
-                    const pkgPath = path.join(
-                        process.cwd(),
-                        packagePath,
-                        'package.json',
-                    );
-                    if (fs.existsSync(pkgPath)) {
-                        const pkg = JSON.parse(
-                            fs.readFileSync(pkgPath, 'utf8'),
-                        );
-                        if (pkg.name) return pkg.name;
-                    }
-                } catch {}
-
-                // Fallback to directory name
-                return packagePath.split('/').pop() || '';
-            };
-
-            // Build safe evaluation function
-            const evalFn = new Function(
-                ...Object.keys(evalContext),
-                `return ${expression};`,
-            );
-            const result = evalFn(...Object.values(evalContext));
-
-            return result !== undefined && result !== null
-                ? String(result)
-                : '';
-        } catch (error) {
-            console.warn(
-                `⚠️ Failed to evaluate expression: ${expression}`,
-                error.message,
-            );
-            return match;
+            lastEnd = endPos + 1;
+            i = endPos + 1;
+        } else {
+            i++;
         }
-    });
+    }
+
+    // Add remaining text
+    result += template.slice(lastEnd);
+    return result;
+}
+
+/**
+ * Evaluate a single expression
+ */
+function evaluateExpression(expression, vars) {
+    try {
+        // Simple variable reference
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(expression.trim())) {
+            const value = vars[expression.trim()];
+            return value !== undefined && value !== null ? String(value) : '';
+        }
+
+        // Expression evaluation (ternary, concatenation, etc.)
+        // Create a safe evaluation context
+        const evalContext = { ...vars };
+
+        // Add helper functions
+        evalContext.derive_package_name = (packagePath) => {
+            if (!packagePath || packagePath === '.') return '';
+
+            // Try to read package name from Cargo.toml or package.json
+            try {
+                const cargoPath = path.join(
+                    process.cwd(),
+                    packagePath,
+                    'Cargo.toml',
+                );
+                if (fs.existsSync(cargoPath)) {
+                    const cargoContent = fs.readFileSync(cargoPath, 'utf8');
+                    const match = cargoContent.match(
+                        /^\[package\][\s\S]*?name\s*=\s*"([^"]+)"/m,
+                    );
+                    if (match) return match[1];
+                }
+            } catch {}
+
+            try {
+                const pkgPath = path.join(
+                    process.cwd(),
+                    packagePath,
+                    'package.json',
+                );
+                if (fs.existsSync(pkgPath)) {
+                    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                    if (pkg.name) return pkg.name;
+                }
+            } catch {}
+
+            // Fallback to directory name
+            return packagePath.split('/').pop() || '';
+        };
+
+        // Add include() helper for composable partials
+        evalContext.include = (partialName, overrideParams = {}) => {
+            return loadPartial(partialName, vars, overrideParams);
+        };
+
+        // Build safe evaluation function
+        const evalFn = new Function(
+            ...Object.keys(evalContext),
+            `return ${expression};`,
+        );
+        const result = evalFn(...Object.values(evalContext));
+
+        return result !== undefined && result !== null ? String(result) : '';
+    } catch (error) {
+        console.warn(
+            `⚠️ Failed to evaluate expression: ${expression}`,
+            error.message,
+        );
+        return '${' + expression + '}';
+    }
 }
 
 /**

@@ -28,28 +28,7 @@ ${issue_body}
 
 Latest Comment: "${comment_body}"
 
-STEP 1 - WRITE YOUR UNDERSTANDING:
-Before doing anything else, analyze the request and write your understanding to a file.
-
-Process:
-
-1. Quickly read and analyze the user's message
-2. Determine: Is it a Question or Command? What's the scope?
-3. Summarize in 1-2 sentences what you plan to do
-4. Write to /tmp/claude_understanding.txt immediately
-
-Guidelines for the summary:
-
-- **Questions**: "I'll explain [topic] in the context of [file/code]"
-- **Commands**: "I'll [action] by [approach]"
-- **Unclear requests**: "I need clarification on [specific aspect]"
-- Write ONLY the understanding text (no markdown formatting, no prefix)
-
-Example:
-
-```bash
-echo "I'll investigate the issue and implement a fix for the reported bug." > /tmp/claude_understanding.txt
-```
+${include('understanding-step')}
 
 STEP 2 - ANALYZE THE ISSUE:
 
@@ -59,46 +38,11 @@ GUIDELINES:
 
 CRITICAL: Your default behavior is to EXPLAIN and ANALYZE, NOT to implement code changes.
 
-1. **Determining User Intent - Questions vs Implementation Requests**:
-
-    **Default: EXPLAIN ONLY (no code changes)**
-    For most messages, just provide analysis, recommendations, or explanations:
-    - ❌ "what do you think about this issue?" → EXPLAIN your thoughts
-    - ❌ "how would you solve this?" → EXPLAIN the approach, don't implement
-    - ❌ "can you help with this?" → ASK for clarification on what kind of help
-    - ❌ "thoughts on this bug?" → ANALYZE and explain the issue
-    - ❌ "why is this happening?" → EXPLAIN the root cause
-    - ❌ "is this a good idea?" → PROVIDE your analysis
-    - ❌ Any message with "?" → Assume they want explanation unless explicitly requesting implementation
-
-    **ONLY implement code if the user EXPLICITLY requests it with clear action verbs:**
-    - ✅ "fix this issue"
-    - ✅ "implement a solution"
-    - ✅ "create a PR for this"
-    - ✅ "solve this bug"
-    - ✅ "make the changes"
-    - ✅ "patch this"
-    - ✅ "please fix"
-    - ✅ "implement X"
+1. ${include('question-vs-command', { default_behavior: 'explain' })}
 
     **When implementing (ONLY if explicitly requested):**
-    → **CRITICAL - MANDATORY VERIFICATION BEFORE ANY COMMIT:**
 
-    Before creating ANY commit, you MUST run the following verification checklist from AGENTS.md:
-
-    MANDATORY CHECKS (ALWAYS REQUIRED):
-    1. Run `cargo fmt` (format all code - NOT --check)
-    2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
-    3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
-    4. Run `npx prettier --write "**/*.{md,yaml,yml}"` from workspace root (format markdown and YAML files)
-    5. Run `~/.cargo/bin/taplo format` from workspace root (format all TOML files)
-
-    ADDITIONAL CHECKS (when applicable): 4. Run `cargo build -p [package]` if changes affect specific package 5. Run `cargo test -p [package]` if test coverage exists 6. Run package-specific build/test commands if documented in AGENTS.md
-
-    If ANY verification check fails, you MUST fix the issues before committing.
-    NEVER commit code that doesn't pass all verification checks.
-
-    This is a NON-NEGOTIABLE requirement - no exceptions.
+${include('rust/verification-checklist', { package_name: '' })}
 
     → Create commits with descriptive messages
     → Commit message format: "fix: [description] (#${issue_number})"

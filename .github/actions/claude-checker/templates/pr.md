@@ -34,29 +34,7 @@ ${code_file ? '\nSPECIFIC CODE CONTEXT (this is what the user is asking about):\
   ${thread_history ? '\nTHREAD HISTORY (previous discussion on this code):\n' + thread_history + '\n' : ''}
 - User's latest message: "${comment_body}"
 
-STEP 1 - WRITE YOUR UNDERSTANDING:
-Before doing anything else, analyze the request and write your understanding to a file.
-
-Process:
-
-1. Quickly read and analyze the user's message
-2. Determine: Is it a Question or Command? What's the scope?
-3. Summarize in 1-2 sentences what you plan to do
-4. Write to /tmp/claude_understanding.txt immediately
-
-Guidelines for the summary:
-
-- **Questions**: "I'll explain [topic] in the context of [file/code]"
-- **Commands**: "I'll [action] by [approach]" (e.g., "I'll format all README files using prettier and commit to this PR branch")
-- **Unclear requests**: "I need clarification on [specific aspect]"
-- Keep it brief but specific - mention the scope (1 file vs all files, etc.)
-- Write ONLY the understanding text (no markdown formatting, no prefix)
-
-Example:
-
-```bash
-echo "I'll explain the purpose of PR #164 by examining its title, description, and changes." > /tmp/claude_understanding.txt
-```
+${include('understanding-step')}
 
 STEP 2 - ANALYZE THE SPECIFIC CONTEXT:
 
@@ -76,26 +54,12 @@ GUIDELINES:
       → Implement changes to the SPECIFIC code mentioned
       → **CRITICAL - MANDATORY VERIFICATION BEFORE ANY COMMIT:**
 
-        Before creating ANY commit, you MUST run the following verification checklist from AGENTS.md:
+${include('rust/verification-checklist', { package_name: '' })}
 
-        MANDATORY CHECKS (ALWAYS REQUIRED):
-        1. Run `cargo fmt` (format all code - NOT --check)
-        2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
-        3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
-        4. Run `npx prettier --write "**/*.{md,yaml,yml}"` from workspace root (format markdown and YAML files)
-        5. Run `~/.cargo/bin/taplo format` from workspace root (format all TOML files)
-
-        ADDITIONAL CHECKS (when applicable): 4. Run `cargo build -p [package]` if changes affect specific package 5. Run `cargo test -p [package]` if test coverage exists 6. Run package-specific build/test commands if documented in AGENTS.md
-
-        If ANY verification check fails, you MUST fix the issues before committing.
-        NEVER commit code that doesn't pass all verification checks.
-
-        This is a NON-NEGOTIABLE requirement - no exceptions.
-
-        → Create commits with descriptive messages
-        → **DO NOT push commits - the workflow will handle pushing safely**
-        → After committing, your work is done - the workflow will automatically push for you
-        → The workflow has built-in conflict detection and fallback branch creation
+      → Create commits with descriptive messages
+      → **DO NOT push commits - the workflow will handle pushing safely**
+      → After committing, your work is done - the workflow will automatically push for you
+      → The workflow has built-in conflict detection and fallback branch creation
 
 2. **CRITICAL - Clean Commit History**:
     - **NEVER create merge commits** - always use `git rebase` to integrate changes

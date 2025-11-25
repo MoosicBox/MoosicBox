@@ -46,59 +46,10 @@ Check that ALL public APIs in ${target_path} have:
 - **CRITICAL**: Do NOT add `#[must_use]` to functions returning Result or Option - these types are already marked `#[must_use]` and adding it to the function is redundant and will cause clippy warnings
 - Clippy's `must_use_candidate` lint will suggest where to add `#[must_use]` - but only follow this suggestion for non-Result/non-Option return types
 
-## Verification (MANDATORY)
+${include('rust/verification-checklist', { package_name: package_name, run_tests: false, run_doc_check: true })}
 
-Before creating ANY commit, you MUST run:
+${include('commit-message-instructions', { commit_type: 'changes to rustdoc', example_bullets: '- Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases\\n- Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection\\n- Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines', no_changes_message: 'No changes required - documentation is adequate' })}
 
-1. Run `cargo fmt`
-2. Run `cargo clippy --all-targets -- -D warnings`
-3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root
-4. Run `npx prettier --write "**/*.{md,yaml,yml}"` from workspace root
-5. Run `~/.cargo/bin/taplo format` from workspace root
-6. Run `cargo doc -p ${package_name} --no-deps` to verify docs build
-
-If ANY check fails, fix the issues before committing.
-NEVER commit code that doesn't pass all checks.
-
-## 📝 Commit Message Instructions
-
-If you make changes to rustdoc, you MUST provide a commit message description.
-
-At the END of your response, include a section formatted EXACTLY as follows:
-
-```
-COMMIT_MESSAGE_START
-- Brief description of documentation changes (1-2 sentences per major item)
-- Focus on what was missing or incorrect
-COMMIT_MESSAGE_END
-```
-
-Example:
-
-```
-COMMIT_MESSAGE_START
-- Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
-- Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
-- Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
-COMMIT_MESSAGE_END
-```
-
-Requirements:
-
-- Keep each bullet point concise (1-2 sentences max)
-- Focus on WHAT was documented/fixed and WHY (what was missing or incorrect)
-- Use bullet points with dashes (-)
-- Do not include code snippets or line numbers
-- If no changes needed, output "No changes required - documentation is adequate"
-- DO NOT push
-
-## Response Guidelines
-
-When responding to users:
-
-- NEVER reference files in /tmp or other temporary directories - users cannot access these
-- Always include plans, summaries, and important information directly in your comment response
-- If you create a plan or analysis, paste the full content in your response, not just a file path
-- Remember: you run on an ephemeral server - any files you create are only accessible during your execution
+${include('response-guidelines')}
 
 ${custom_guidelines}
