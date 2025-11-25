@@ -1126,8 +1126,8 @@ setup_workspace_ci_environment() {
 
         # Check for common cargo tools
         if echo "$toolchains" | jq -e 'map(select(. == "cargo-machete" or . == "machete")) | length > 0' >/dev/null 2>&1; then
-            echo "📦 Installing cargo-machete"
-            cargo install cargo-machete || true
+            echo "📦 Installing cargo-machete (from BSteffaniak fork)"
+            cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete || true
         fi
 
         if echo "$toolchains" | jq -e 'map(select(. == "taplo" or . == "taplo-cli")) | length > 0' >/dev/null 2>&1; then
