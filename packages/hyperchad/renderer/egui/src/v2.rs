@@ -4,10 +4,6 @@
 //! featuring improved rendering architecture and simplified action handling compared
 //! to version 1.
 
-#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
-
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, LazyLock, RwLock},
