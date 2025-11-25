@@ -6,6 +6,10 @@
 //! * Keeping temp directories (preventing automatic cleanup)
 //! * Manually closing temp directories for immediate cleanup
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use switchy_fs::{TempDir, tempdir};
 
 fn main() -> std::io::Result<()> {
