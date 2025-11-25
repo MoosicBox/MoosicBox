@@ -64,7 +64,7 @@ pub async fn convert_to_api_music_api(
 ///
 /// Maps the internal authentication representation to the API's public `AuthMethod` enum.
 /// Returns `None` if the authentication type is not supported by the enabled features.
-fn auth_method(value: &Auth) -> Option<AuthMethod> {
+const fn auth_method(value: &Auth) -> Option<AuthMethod> {
     match value {
         #[cfg(feature = "auth-username-password")]
         Auth::UsernamePassword(..) => Some(AuthMethod::UsernamePassword),
@@ -182,7 +182,7 @@ mod tests {
                 assert_eq!(username, "test_user");
                 assert_eq!(password, "secret123");
             }
-            _ => panic!("Expected UsernamePassword variant"),
+            AuthValues::Poll => panic!("Expected UsernamePassword variant"),
         }
 
         assert!(json.contains("\"type\":\"username-password\""));
@@ -197,7 +197,7 @@ mod tests {
 
         match deserialized {
             AuthValues::Poll => {}
-            _ => panic!("Expected Poll variant"),
+            AuthValues::UsernamePassword { .. } => panic!("Expected Poll variant"),
         }
 
         assert!(json.contains("\"type\":\"poll\""));
