@@ -5,6 +5,29 @@
 //! and [`std::io::Seek`] for transparent remote file access.
 //!
 //! Available when the `remote-bytestream` feature is enabled.
+//!
+//! # Examples
+//!
+//! Reading from a remote file:
+//!
+//! ```rust,no_run
+//! use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
+//! use switchy_async::util::CancellationToken;
+//! use std::io::Read;
+//!
+//! let abort = CancellationToken::new();
+//! let mut stream = RemoteByteStream::new(
+//!     "https://example.com/audio.mp3".to_string(),
+//!     Some(1024 * 1024), // 1MB file size
+//!     true,              // auto-start fetch
+//!     true,              // seekable
+//!     abort,
+//! );
+//!
+//! let mut buf = [0u8; 1024];
+//! // Reading will fetch data from the remote URL
+//! let bytes_read = stream.read(&mut buf).expect("failed to read");
+//! ```
 
 use std::cmp::min;
 use std::io::{Read, Seek};
