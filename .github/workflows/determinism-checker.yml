@@ -94,6 +94,7 @@ jobs:
               with:
                   command: workspace-toolchains
                   os: ubuntu
+                  jq-filter: '.toolchains |= map(select(. != "free_disk_space"))'
 
             - name: Setup workspace CI environment
               uses: ./.github/actions/clippier
