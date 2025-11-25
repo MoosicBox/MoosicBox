@@ -17,7 +17,7 @@ use syn::{
 // select! macro implementation for simulator mode
 // ============================================================================
 
-/// Transforms select macro input into a fused futures select call.
+/// Internal: Transforms select macro input into a fused futures select call.
 ///
 /// This function parses the input tokens as `SelectWithPathInput`, extracts the crate path
 /// and branches, wraps each future with `.fuse()` for safe polling, and generates either
@@ -25,6 +25,9 @@ use syn::{
 ///
 /// This provides 100% `tokio::select!` compatibility while automatically fusing
 /// futures/streams for the simulator runtime.
+///
+/// **Note:** This is an internal implementation detail of `switchy_async` and should not
+/// be called directly. Use the `select!` macro from `switchy_async` instead.
 pub fn select_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as SelectWithPathInput);
     let crate_path = input.crate_path;
