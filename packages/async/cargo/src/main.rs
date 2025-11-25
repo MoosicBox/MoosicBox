@@ -34,6 +34,9 @@ use std::{env, fs, process};
 use syn::{Attribute, File, ImplItem, ImplItemFn, Item, visit::Visit};
 use walkdir::WalkDir;
 
+/// Command-line interface for the `switchy_async_cargo` linter tool.
+///
+/// Provides options for specifying the root directory to scan for Rust source files.
 #[derive(Parser)]
 #[command(
     author,
@@ -41,6 +44,9 @@ use walkdir::WalkDir;
     about = "Warns about async fn missing #[inject_yields] in Rust workspace"
 )]
 struct Cli {
+    /// The root directory to scan for Rust source files.
+    ///
+    /// If not provided, defaults to the `CARGO_MANIFEST_DIR` environment variable.
     #[arg(long)]
     root: Option<String>,
 }
