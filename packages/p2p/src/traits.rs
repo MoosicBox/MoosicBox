@@ -47,7 +47,11 @@ pub trait P2PSystem: Send + Sync + 'static {
     // async fn listen(&self, addr: &str) -> P2PResult<Self::Listener>;
 }
 
-/// Node identity trait matching Iroh's capabilities
+/// Node identity trait for unique peer identification.
+///
+/// This trait defines the interface for node identifiers in a P2P network,
+/// supporting 256-bit (32-byte) identities compatible with ed25519 public key formats.
+/// Implementations must be cloneable, displayable, and thread-safe.
 pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
     /// Create node ID from 32 bytes (ed25519 public key format)
     ///
@@ -63,7 +67,11 @@ pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
     fn fmt_short(&self) -> String;
 }
 
-/// Connection trait for reliable message streams
+/// Connection trait for reliable message streams between peers.
+///
+/// This trait defines the interface for bidirectional communication channels
+/// between P2P nodes. Implementations handle message routing, delivery guarantees,
+/// and connection lifecycle management.
 #[async_trait]
 pub trait P2PConnection: Send + Sync + 'static {
     /// The type used to identify the remote peer in this connection

@@ -35,5 +35,8 @@ pub enum P2PError {
     // - Serialization errors
 }
 
-/// Convenience type alias for P2P results
+/// Convenience type alias for P2P operations that may fail.
+///
+/// This alias wraps `Result` with [`P2PError`] as the error type,
+/// providing a consistent error handling pattern across the crate.
 pub type P2PResult<T> = Result<T, P2PError>;

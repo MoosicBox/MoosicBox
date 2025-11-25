@@ -255,8 +255,10 @@ impl Default for NetworkGraph {
 pub struct SimulatorNodeId([u8; 32]);
 
 impl SimulatorNodeId {
-    /// Create a deterministic node ID from a string seed
-    /// Used for testing to create predictable node IDs
+    /// Creates a deterministic node ID from a string seed.
+    ///
+    /// This is useful for testing scenarios where predictable node IDs are needed.
+    /// The same seed will always produce the same node ID across invocations.
     #[must_use]
     pub fn from_seed(seed: &str) -> Self {
         // Convert string to u64 for seeding
@@ -270,19 +272,25 @@ impl SimulatorNodeId {
         Self(bytes)
     }
 
-    /// Create a node ID from raw bytes
+    /// Creates a node ID from raw 32-byte array.
+    ///
+    /// This constructor allows creating a node ID from known bytes,
+    /// such as when deserializing from storage or network.
     #[must_use]
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
-    /// Get the raw bytes of this node ID
+    /// Returns the raw 32-byte representation of this node ID.
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
-    /// Format as short hex string for display (first 5 bytes = 10 hex chars)
+    /// Formats the node ID as a short hex string for display.
+    ///
+    /// Returns the first 5 bytes (10 hex characters) of the node ID,
+    /// which is typically sufficient for human identification.
     #[must_use]
     pub fn fmt_short(&self) -> String {
         format!(
@@ -291,7 +299,10 @@ impl SimulatorNodeId {
         )
     }
 
-    /// Generate a random node ID (for production use)
+    /// Generates a random node ID for production use.
+    ///
+    /// Uses the system's random number generator to create a unique 256-bit identifier.
+    /// Each call produces a new, unique node ID with extremely high probability.
     #[must_use]
     pub fn generate() -> Self {
         let mut bytes = [0u8; 32];
@@ -322,7 +333,10 @@ pub struct SimulatorP2P {
 }
 
 impl SimulatorP2P {
-    /// Create a new simulator P2P instance with random node ID
+    /// Creates a new simulator P2P instance with a random node ID.
+    ///
+    /// The node starts with an empty network graph and no active connections.
+    /// Use [`with_seed`](Self::with_seed) for deterministic testing scenarios.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -332,7 +346,10 @@ impl SimulatorP2P {
         }
     }
 
-    /// Create a simulator P2P instance with deterministic node ID (for testing)
+    /// Creates a simulator P2P instance with a deterministic node ID.
+    ///
+    /// This constructor is useful for testing scenarios where reproducible node IDs
+    /// are required. The same seed will always produce the same node ID.
     #[must_use]
     pub fn with_seed(seed: &str) -> Self {
         Self {
@@ -342,7 +359,7 @@ impl SimulatorP2P {
         }
     }
 
-    /// Get this node's ID
+    /// Returns a reference to this node's unique identifier.
     #[must_use]
     pub const fn local_node_id(&self) -> &SimulatorNodeId {
         &self.node_id
@@ -588,13 +605,15 @@ impl SimulatorConnection {
         Err("No message available".to_string())
     }
 
-    /// Check if connection is still active
+    /// Returns whether the connection is still active.
+    ///
+    /// A connection becomes inactive after [`close`](Self::close) is called.
     #[must_use]
     pub fn is_connected(&self) -> bool {
         self.is_connected.load(Ordering::Relaxed)
     }
 
-    /// Get remote peer's node ID
+    /// Returns the remote peer's node ID.
     #[must_use]
     pub const fn remote_node_id(&self) -> &SimulatorNodeId {
         &self.remote_id
@@ -652,7 +671,10 @@ impl crate::traits::P2PNodeId for SimulatorNodeId {
     }
 }
 
-/// Create a deterministic node ID for testing
+/// Creates a deterministic node ID for testing purposes.
+///
+/// This is a convenience function that wraps [`SimulatorNodeId::from_seed`].
+/// The same name will always produce the same node ID.
 #[must_use]
 pub fn test_node_id(name: &str) -> SimulatorNodeId {
     SimulatorNodeId::from_seed(name)
