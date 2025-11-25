@@ -98,11 +98,11 @@ jobs:
               with:
                   node-version: "20"
 
-            - name: Install cargo-machete
-              run: cargo install cargo-machete || true
-
-            - name: Install taplo
-              run: cargo install taplo-cli || true
+            - name: Setup workspace CI environment
+              uses: ./.github/actions/clippier
+              with:
+                  command: workspace-setup
+                  os: ubuntu
 
             - name: Check determinism with Claude
               id: claude
