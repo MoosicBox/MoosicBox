@@ -143,13 +143,39 @@ struct ColumnInfo {
     primary_key: bool,
 }
 
-/// Placeholder for snapshot testing functionality
-/// Full implementation will come in Phase 11.4.2+
+/// Snapshot tester for database schema verification.
+///
+/// This struct provides snapshot testing functionality for verifying database
+/// schema state after migrations. Full implementation will come in Phase 11.4.2+.
 pub struct SnapshotTester {
     // Implementation to follow in subsequent phases
 }
 
-/// Migration snapshot test struct for verifying database schema changes
+/// Migration snapshot test for verifying database schema changes.
+///
+/// This struct provides a fluent builder interface for constructing and running
+/// migration snapshot tests. It captures database schema state and compares it
+/// against stored snapshots using insta's JSON snapshot testing.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "snapshots")]
+/// # {
+/// use switchy_schema_test_utils::MigrationSnapshotTest;
+/// use std::path::PathBuf;
+///
+/// # async fn example() -> Result<(), switchy_schema_test_utils::SnapshotError> {
+/// MigrationSnapshotTest::new("my_migration_test")
+///     .migrations_dir(PathBuf::from("migrations"))
+///     .expected_tables(vec!["users".to_string(), "posts".to_string()])
+///     .assert_schema(true)
+///     .run()
+///     .await?;
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[allow(clippy::struct_excessive_bools)]
 pub struct MigrationSnapshotTest {
     test_name: String,
