@@ -1,6 +1,6 @@
-//! Embedded server infrastructure for MoosicBox native applications.
+//! Embedded server infrastructure for `MoosicBox` native applications.
 //!
-//! This crate provides the bundled server component for Tauri-based MoosicBox applications,
+//! This crate provides the bundled server component for Tauri-based `MoosicBox` applications,
 //! managing an embedded HTTP server that handles music streaming and API requests. The server
 //! runs on `0.0.0.0:8016` and integrates with the Tauri application lifecycle.
 //!
@@ -25,6 +25,8 @@
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
 use moosicbox_config::AppType;
@@ -52,7 +54,7 @@ impl std::fmt::Display for Command {
 
 /// Async service implementation for processing application commands.
 ///
-/// This module provides the service infrastructure for handling [`Command`](super::Command)
+/// This module provides the service infrastructure for handling [`Command`]
 /// instances asynchronously, managing server lifecycle and event processing.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context);
@@ -93,12 +95,14 @@ impl service::Processor for service::Service {
         match command {
             Command::RunEvent { event } => {
                 log::debug!("process_command: Received RunEvent command");
-                if let Err(e) = ctx.read().await.handle_event(event) {
+                let result = ctx.read().await.handle_event(&event);
+                if let Err(e) = result {
                     log::error!("process_command: Failed to handle event: {e:?}");
                 }
             }
             Command::WaitForStartup { sender } => {
-                if let Some(receiver) = ctx.write().await.receiver.take() {
+                let receiver = ctx.write().await.receiver.take();
+                if let Some(receiver) = receiver {
                     log::debug!("process_command: Waiting for startup...");
                     if let Err(e) = receiver.await {
                         log::error!(
@@ -114,7 +118,8 @@ impl service::Processor for service::Service {
                 }
             }
             Command::WaitForShutdown { sender } => {
-                if let Some(handle) = ctx.write().await.server_handle.take() {
+                let handle = ctx.write().await.server_handle.take();
+                if let Some(handle) = handle {
                     handle.await??;
                 }
                 if let Err(e) = sender.send(()) {
@@ -167,17 +172,9 @@ impl Context {
     /// # Errors
     ///
     /// * Returns an error if shutting down the server fails during `ExitRequested` handling
-    pub fn handle_event(&self, event: Arc<RunEvent>) -> Result<(), std::io::Error> {
-        match *event {
-            tauri::RunEvent::Exit => {}
-            tauri::RunEvent::ExitRequested { .. } => {
-                self.shutdown()?;
-            }
-            tauri::RunEvent::WindowEvent { .. } => {}
-            tauri::RunEvent::Ready => {}
-            tauri::RunEvent::Resumed => {}
-            tauri::RunEvent::MainEventsCleared => {}
-            _ => {}
+    pub fn handle_event(&self, event: &RunEvent) -> Result<(), std::io::Error> {
+        if let tauri::RunEvent::ExitRequested { .. } = *event {
+            self.shutdown()?;
         }
         Ok(())
     }
