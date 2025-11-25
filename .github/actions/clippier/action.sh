@@ -1108,14 +1108,15 @@ setup_workspace_ci_environment() {
         CONTEXT_PHASE="installing system dependencies"
         echo "📥 Installing system dependencies"
 
-        echo "$dependencies" | jq -r '.[]' | while IFS= read -r cmd; do
+        # Use null-delimited output to handle multi-line commands correctly
+        while IFS= read -r -d '' cmd; do
             if [[ -n "$cmd" ]]; then
                 echo "  Running: $cmd"
                 if ! eval "$cmd"; then
                     echo "⚠️  Warning: Dependency command failed: $cmd"
                 fi
             fi
-        done
+        done < <(echo "$dependencies" | jq -j '.[] | . + "\u0000"')
     fi
 
     # Install cargo tools based on toolchains
@@ -1167,14 +1168,15 @@ setup_workspace_ci_environment() {
         CONTEXT_PHASE="running CI steps"
         echo "⚙️  Running CI setup steps"
 
-        echo "$ci_steps" | jq -r '.[]' | while IFS= read -r cmd; do
+        # Use null-delimited output to handle multi-line commands correctly
+        while IFS= read -r -d '' cmd; do
             if [[ -n "$cmd" ]]; then
                 echo "  Running: $cmd"
                 if ! eval "$cmd"; then
                     echo "⚠️  Warning: CI step failed: $cmd"
                 fi
             fi
-        done
+        done < <(echo "$ci_steps" | jq -j '.[] | . + "\u0000"')
     fi
 
     echo "✅ Workspace CI environment setup completed"
