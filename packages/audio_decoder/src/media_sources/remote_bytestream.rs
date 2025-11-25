@@ -1,3 +1,12 @@
+//! Remote byte stream media source for Symphonia.
+//!
+//! This module provides [`RemoteByteStreamMediaSource`](crate::media_sources::remote_bytestream::RemoteByteStreamMediaSource),
+//! a wrapper around [`RemoteByteStream`](moosicbox_stream_utils::remote_bytestream::RemoteByteStream)
+//! that implements Symphonia's `MediaSource` trait.
+//!
+//! This enables decoding audio from remote byte streams such as HTTP responses
+//! or other network-based data sources.
+
 use std::io::{Read, Seek};
 
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;

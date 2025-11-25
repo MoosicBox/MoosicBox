@@ -1,3 +1,14 @@
+//! Async HTTP streaming file source for Symphonia.
+//!
+//! This module provides [`StreamableFileAsync`](crate::media_sources::streamable_file_async::StreamableFileAsync),
+//! a media source that streams audio files asynchronously over HTTP. It automatically
+//! fetches chunks of the file as needed, allowing playback to begin before the entire
+//! file is downloaded.
+//!
+//! The implementation uses HTTP range requests to fetch chunks on-demand and maintains
+//! a buffer of downloaded data. It tracks which portions of the file have been
+//! downloaded to avoid redundant requests.
+
 use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 
