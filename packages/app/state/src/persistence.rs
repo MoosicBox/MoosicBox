@@ -1,3 +1,33 @@
+//! Persistent storage functionality for `MoosicBox` application state.
+//!
+//! This module provides persistence capabilities using `SQLite` as the backing store,
+//! allowing application state to be saved and restored across application restarts.
+//!
+//! # Features
+//!
+//! * File-based or in-memory `SQLite` storage
+//! * Connection management (add, update, delete, list)
+//! * Connection name and ID persistence
+//! * Default download location storage
+//!
+//! # Example
+//!
+//! ```no_run
+//! # use moosicbox_app_state::AppState;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create state with file-based persistence
+//! let state = AppState::new()
+//!     .with_persistence("/path/to/state.db")
+//!     .await?;
+//!
+//! // Or use in-memory persistence for testing
+//! let test_state = AppState::new()
+//!     .with_persistence_in_memory()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::{path::Path, sync::Arc};
 
 use hyperchad::state::{StatePersistence as _, sqlite::SqlitePersistence};
