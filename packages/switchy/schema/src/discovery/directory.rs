@@ -83,6 +83,7 @@ pub struct FileMigration {
 }
 
 impl FileMigration {
+    /// Create a new file-based migration
     #[must_use]
     pub const fn new(
         id: String,
@@ -97,6 +98,8 @@ impl FileMigration {
             down_sql,
         }
     }
+
+    /// Get the filesystem path to this migration's directory
     #[must_use]
     pub const fn path(&self) -> &PathBuf {
         &self.path
@@ -192,11 +195,13 @@ pub struct DirectoryMigrationSource {
 }
 
 impl DirectoryMigrationSource {
+    /// Create a new directory migration source from the given path
     #[must_use]
     pub const fn from_path(migrations_path: PathBuf) -> Self {
         Self { migrations_path }
     }
 
+    /// Get the path to the migrations directory
     #[must_use]
     pub const fn path(&self) -> &PathBuf {
         &self.migrations_path
