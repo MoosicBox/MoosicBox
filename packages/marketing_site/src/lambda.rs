@@ -41,9 +41,7 @@ static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
 ///
 /// # Panics
 ///
-/// * If static asset route registration fails (via [`init`])
-///
-/// [`init`]: crate::init
+/// * If static asset route registration fails (via [`moosicbox_marketing_site::init`])
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 
