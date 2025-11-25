@@ -1,3 +1,10 @@
+//! Font metrics implementation for the egui renderer.
+//!
+//! This module provides egui-specific implementations of font metrics,
+//! enabling text measurement and layout calculations using egui's font system.
+//! The `EguiFontMetrics` struct implements the `FontMetrics` trait from
+//! `hyperchad_transformer`.
+
 use eframe::egui::{self};
 use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds, FontMetricsRow};
 
