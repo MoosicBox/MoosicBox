@@ -2,7 +2,7 @@
 //!
 //! This module provides Actix-Web route handlers for managing music service providers,
 //! including listing APIs, authentication, library scanning, and search functionality.
-//! All endpoints are profile-aware and operate within the context of a MoosicBox profile.
+//! All endpoints are profile-aware and operate within the context of a `MoosicBox` profile.
 
 use std::collections::BTreeMap;
 
@@ -41,9 +41,9 @@ pub fn bind_services<
         .service(search_music_apis_endpoint)
 }
 
-/// OpenAPI specification for music API endpoints.
+/// `OpenAPI` specification for music API endpoints.
 ///
-/// Provides OpenAPI/Swagger documentation for all music API-related endpoints.
+/// Provides `OpenAPI`/Swagger documentation for all music API-related endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -408,7 +408,7 @@ pub async fn search_music_apis_endpoint(
         .as_ref()
         .map(|x| {
             x.split(',')
-                .map(|x| x.try_into())
+                .map(std::convert::TryInto::try_into)
                 .collect::<Result<Vec<ApiSource>, _>>()
                 .map_err(|e| ErrorBadRequest(format!("Invalid apiSource: {e:?}")))
         })
