@@ -37,6 +37,7 @@
 //! * `SWITCHY_MIGRATIONS_DIR`: Directory containing migration files (default: `./migrations`)
 //! * `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
