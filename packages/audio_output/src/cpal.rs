@@ -732,24 +732,28 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
-    /// Get the actual playback position in seconds based on consumed samples
+    /// Get the actual playback position in seconds based on consumed samples.
+    #[must_use]
     pub fn get_playback_position(&self) -> f64 {
         self.progress_tracker.get_position().unwrap_or(0.0)
     }
 
-    /// Get the actual output sample rate (not the input sample rate)
+    /// Get the actual output sample rate (not the input sample rate).
+    #[must_use]
     pub fn get_output_sample_rate(&self) -> u32 {
         self.cpal_output_sample_rate
             .load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Get the actual output channel count
+    /// Get the actual output channel count.
+    #[must_use]
     pub fn get_output_channels(&self) -> u32 {
         self.cpal_output_channels
             .load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Get the actual output audio specification
+    /// Get the actual output audio specification.
+    #[must_use]
     pub fn get_output_audio_spec(&self) -> symphonia::core::audio::SignalSpec {
         let rate = self.get_output_sample_rate();
         let channels = self.get_output_channels();

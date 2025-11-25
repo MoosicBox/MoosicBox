@@ -51,14 +51,17 @@ pub struct CpalStreamDaemon {
     shutdown_sender: Option<flume::Sender<()>>,
 }
 
-/// Handle for controlling the CPAL stream from external threads
+/// Handle for controlling the CPAL stream from external threads.
+///
+/// This handle provides a thread-safe way to send commands to a CPAL stream
+/// that lives in a dedicated daemon thread, solving the `!Send` issue on macOS.
 #[derive(Debug, Clone)]
 pub struct StreamHandle {
     command_sender: flume::Sender<(StreamCommand, flume::Sender<StreamResponse>)>,
 }
 
 impl StreamHandle {
-    /// Pause the stream
+    /// Pauses the audio stream.
     ///
     /// # Errors
     ///
@@ -68,7 +71,7 @@ impl StreamHandle {
         self.send_command(StreamCommand::Pause).await
     }
 
-    /// Resume the stream
+    /// Resumes the audio stream.
     ///
     /// # Errors
     ///
@@ -78,7 +81,7 @@ impl StreamHandle {
         self.send_command(StreamCommand::Resume).await
     }
 
-    /// Reset the stream (pause it)
+    /// Resets the audio stream by pausing it.
     ///
     /// # Errors
     ///
@@ -88,7 +91,9 @@ impl StreamHandle {
         self.send_command(StreamCommand::Reset).await
     }
 
-    /// Set the volume (this will be handled by the volume atomic, not the stream directly)
+    /// Sets the volume level (0.0 to 1.0).
+    ///
+    /// This is handled by the volume atomic, not the stream directly.
     ///
     /// # Errors
     ///
