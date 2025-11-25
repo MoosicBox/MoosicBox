@@ -191,12 +191,15 @@ impl Parse for SelectBranch {
 // join! and try_join! macro implementations for simulator mode
 // ============================================================================
 
-/// Transforms join macro input into a futures join call.
+/// Internal: Transforms join macro input into a futures join call.
 ///
 /// This function parses the input tokens as `JoinWithPathInput`, extracts the crate path
 /// and list of futures, and generates a `futures::join!` macro call with the provided futures.
 ///
 /// This provides 100% `tokio::join!` compatibility for the simulator runtime.
+///
+/// **Note:** This is an internal implementation detail of `switchy_async` and should not
+/// be called directly. Use the `join!` macro from `switchy_async` instead.
 pub fn join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
@@ -210,12 +213,15 @@ pub fn join_internal(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// Transforms `try_join` macro input into a futures `try_join` call.
+/// Internal: Transforms `try_join` macro input into a futures `try_join` call.
 ///
 /// This function parses the input tokens as `JoinWithPathInput`, extracts the crate path
 /// and list of futures, and generates a `futures::try_join!` macro call with the provided futures.
 ///
 /// This provides 100% `tokio::try_join!` compatibility for the simulator runtime.
+///
+/// **Note:** This is an internal implementation detail of `switchy_async` and should not
+/// be called directly. Use the `try_join!` macro from `switchy_async` instead.
 pub fn try_join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
