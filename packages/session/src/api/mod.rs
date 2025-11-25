@@ -53,6 +53,7 @@ use crate::{
 pub mod models;
 
 /// Binds session-related API endpoints to an Actix-Web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
