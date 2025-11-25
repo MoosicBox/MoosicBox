@@ -1,3 +1,19 @@
+//! `MoosicBox` server simulator binary.
+//!
+//! This binary runs the deterministic simulation of the `MoosicBox` server for testing purposes.
+//! It coordinates the server host and client simulators (health checker and fault injector)
+//! to verify system behavior under various conditions.
+//!
+//! # Usage
+//!
+//! ```sh
+//! cargo run -p moosicbox_server_simulator
+//! ```
+//!
+//! # Environment Variables
+//!
+//! * `PORT` - Optional port number for the `MoosicBox` server (default: auto-selected)
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
