@@ -101,7 +101,7 @@ pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&
                 return;
             }
             Err(e) => {
-                if let std::io::ErrorKind::NotFound = e.kind() {
+                if e.kind() == std::io::ErrorKind::NotFound {
                     println!("Binary {binary} not found");
                     continue;
                 }
