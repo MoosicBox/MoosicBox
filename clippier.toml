@@ -1,0 +1,11 @@
+# Workspace-level clippier configuration
+# This defines common toolchains and dependencies for workspace-level CI setup
+
+# Common toolchains needed for full workspace CI
+[[dependencies]]
+command   = "cargo install cargo-machete || true"
+toolchain = "cargo-machete"
+
+[[dependencies]]
+command   = "cargo install taplo-cli || true"
+toolchain = "taplo"
