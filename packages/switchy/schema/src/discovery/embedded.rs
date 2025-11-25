@@ -88,6 +88,7 @@ pub struct EmbeddedMigration {
 }
 
 impl EmbeddedMigration {
+    /// Create a new embedded migration with the given ID and content
     #[must_use]
     pub const fn new(id: String, up_content: Option<Bytes>, down_content: Option<Bytes>) -> Self {
         Self {
@@ -187,6 +188,7 @@ pub struct EmbeddedMigrationSource {
 }
 
 impl EmbeddedMigrationSource {
+    /// Create a new embedded migration source from an included directory
     #[must_use]
     pub const fn new(migrations_dir: &'static Dir<'static>) -> Self {
         Self { migrations_dir }

@@ -296,6 +296,7 @@ pub struct CodeMigrationSource<'a> {
 }
 
 impl<'a> CodeMigrationSource<'a> {
+    /// Create a new empty code migration source
     #[must_use]
     pub const fn new() -> Self {
         Self {
