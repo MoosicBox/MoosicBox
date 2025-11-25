@@ -187,6 +187,7 @@ pub enum SaveBytesStreamToFileError {
     Write {
         /// Number of bytes read before write error
         bytes_read: u64,
+        /// The underlying IO error
         #[source]
         source: tokio::io::Error,
     },
