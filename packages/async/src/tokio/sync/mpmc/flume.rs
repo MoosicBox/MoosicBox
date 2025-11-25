@@ -1,4 +1,5 @@
-//! Multi-producer, single-consumer channel implementation for tokio runtime.
+//! Multi-producer, multi-consumer channel implementation for tokio runtime.
+//!
 //! This wraps flume to provide additional methods needed by the codebase.
 
 use std::task::{Context, Poll};
