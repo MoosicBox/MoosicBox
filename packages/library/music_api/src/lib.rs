@@ -349,6 +349,13 @@ impl MusicApi for LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
+    /// Retrieves paginated album versions for a specific album.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch album versions from the library
+    ///
     /// # Panics
     ///
     /// * Will panic if the number of album versions exceeds `u32::MAX`
@@ -398,6 +405,14 @@ impl MusicApi for LibraryMusicApi {
         Ok(page)
     }
 
+    /// Retrieves albums by a specific artist with optional filtering and pagination.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch artist albums from the library
+    /// * If failed to convert library albums to API albums
+    ///
     /// # Panics
     ///
     /// * Will panic if any page in the paging response doesn't have a total
@@ -596,6 +611,12 @@ impl MusicApi for LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Retrieves the source location for a track at the specified quality.
+    ///
+    /// # Errors
+    ///
+    /// * If failed to fetch the track from the library
+    ///
     /// # Panics
     ///
     /// * Will panic if the regex pattern compilation fails (should never happen with a valid
@@ -632,6 +653,15 @@ impl MusicApi for LibraryMusicApi {
         }))
     }
 
+    /// Calculates or retrieves the size of a track in bytes at the specified quality.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If track ID conversion fails
+    /// * If encoding operation fails (when calculating size for encoded formats)
+    /// * If failed to get content length from remote URL
+    ///
     /// # Panics
     ///
     /// * Will panic if the audio file cannot be opened or if metadata cannot be read when using
