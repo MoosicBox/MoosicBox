@@ -1,4 +1,8 @@
-//! Cancellation example for the switchy_async runtime.
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
+//! Cancellation example for the `switchy_async` runtime.
 //!
 //! This example demonstrates how to use `CancellationToken` to gracefully shut down
 //! an async runtime when Ctrl+C is pressed. The example creates a long-running task
