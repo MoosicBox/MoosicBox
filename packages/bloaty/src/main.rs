@@ -1,3 +1,9 @@
+//! Binary size analysis CLI for Rust workspace packages.
+//!
+//! This module provides the command-line interface for the `bloaty` tool, which analyzes
+//! the size impact of Cargo features on library and binary targets. It coordinates
+//! package discovery, feature iteration, artifact building, and report generation.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
