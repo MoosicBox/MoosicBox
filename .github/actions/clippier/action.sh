@@ -143,7 +143,10 @@ handle_binary_not_found() {
 # Commands that DO need clippier (features, packages, workspace-setup, etc.) will fail if binary is missing.
 CONTEXT_PHASE="binary validation"
 if [[ "$INPUT_COMMAND" != "setup" && "$INPUT_COMMAND" != "run-matrix-aggregate-failures" && "$INPUT_COMMAND" != "run-matrix-flush" && "$INPUT_COMMAND" != "run-matrix" ]]; then
-    if [[ ! -f "$CLIPPIER_BIN" ]]; then
+    # workspace-setup with provided JSON doesn't need the clippier binary
+    if [[ "$INPUT_COMMAND" == "workspace-setup" && -n "$INPUT_WORKSPACE_TOOLCHAINS_JSON" ]]; then
+        echo "workspace-setup with provided toolchains JSON - skipping binary check"
+    elif [[ ! -f "$CLIPPIER_BIN" ]]; then
         echo "Error: clippier binary not found at $CLIPPIER_BIN"
         handle_binary_not_found
     fi
