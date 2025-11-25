@@ -88,21 +88,19 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
-            - name: Setup Rust
-              uses: dtolnay/rust-toolchain@stable
+            - name: Get workspace toolchains
+              id: toolchains
+              uses: ./.github/actions/clippier
               with:
-                  components: rustfmt, clippy
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
+                  command: workspace-toolchains
+                  os: ubuntu
 
             - name: Setup workspace CI environment
               uses: ./.github/actions/clippier
               with:
                   command: workspace-setup
                   os: ubuntu
+                  workspace-toolchains-json: ${{ steps.toolchains.outputs.raw-output }}
 
             - name: Check determinism with Claude
               id: claude

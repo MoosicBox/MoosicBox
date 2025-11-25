@@ -275,6 +275,10 @@ inputs:
         description: "JSON object containing matrix.package properties (for setup command)"
         required: false
 
+    workspace-toolchains-json:
+        description: "JSON object from workspace-toolchains command (for workspace-setup command). Required for proper toolchain detection (free_disk_space, node, nightly, etc.)"
+        required: false
+
     skip-checkout:
         description: "Skip repository checkout step (for setup command when already checked out)"
         required: false
@@ -593,6 +597,56 @@ runs:
 
         - name: Setup cmake
           if: inputs.command == 'setup'
+          uses: jwlawson/actions-setup-cmake@v2
+          with:
+              cmake-version: "3.x"
+
+        # workspace-setup steps (use workspace-toolchains-json input)
+        - name: Checkout repository (workspace-setup)
+          if: inputs.command == 'workspace-setup' && inputs.skip-checkout != 'true'
+          uses: actions/checkout@v4
+          with:
+              fetch-depth: ${{ inputs.checkout-fetch-depth }}
+              submodules: ${{ inputs.workspace-toolchains-json && fromJson(inputs.workspace-toolchains-json).git_submodules || false }}
+
+        - name: Free disk space (workspace-setup)
+          if: |
+              inputs.command == 'workspace-setup' &&
+              inputs.workspace-toolchains-json != '' &&
+              runner.os == 'Linux' &&
+              contains(fromJson(inputs.workspace-toolchains-json).toolchains || '[]', 'free_disk_space')
+          uses: jlumbroso/free-disk-space@main
+          with:
+              tool-cache: true
+
+        - name: Setup Rust toolchain (workspace-setup)
+          if: inputs.command == 'workspace-setup'
+          uses: dtolnay/rust-toolchain@stable
+          with:
+              # Use nightly if any packages require it
+              toolchain: ${{ inputs.workspace-toolchains-json && fromJson(inputs.workspace-toolchains-json).nightly_packages[0] && 'nightly' || 'stable' }}
+              components: ${{ inputs.rust-components }}
+
+        - name: Setup pnpm (workspace-setup)
+          if: |
+              inputs.command == 'workspace-setup' &&
+              inputs.workspace-toolchains-json != '' &&
+              contains(fromJson(inputs.workspace-toolchains-json).toolchains || '[]', 'node')
+          uses: pnpm/action-setup@v3
+          with:
+              version: 9
+
+        - name: Setup Node.js (workspace-setup)
+          if: |
+              inputs.command == 'workspace-setup' &&
+              inputs.workspace-toolchains-json != '' &&
+              contains(fromJson(inputs.workspace-toolchains-json).toolchains || '[]', 'node')
+          uses: actions/setup-node@v4
+          with:
+              node-version: latest
+
+        - name: Setup cmake (workspace-setup)
+          if: inputs.command == 'workspace-setup'
           uses: jwlawson/actions-setup-cmake@v2
           with:
               cmake-version: "3.x"
