@@ -343,6 +343,7 @@ impl<T> Page<T> {
     ///
     /// This method consumes the page and returns a new page with transformed items,
     /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
+    #[must_use]
     pub fn map<U, F>(self, mut f: F) -> Page<U>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
@@ -378,6 +379,7 @@ impl<T> Page<T> {
     ///
     /// This method consumes the page and returns a new page with items converted to type `TU`,
     /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
+    #[must_use]
     pub fn into<TU>(self) -> Page<TU>
     where
         T: Into<TU> + 'static,
@@ -745,6 +747,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     }
 
     /// Maps the items in this response and all future pages using the provided function.
+    #[must_use]
     pub fn map<U, F>(self, f: F) -> PagingResponse<U, E>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
@@ -772,6 +775,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     }
 
     /// Maps the error type in this response and all future pages using the provided function.
+    #[must_use]
     pub fn map_err<U, F>(self, f: F) -> PagingResponse<T, U>
     where
         F: FnMut(E) -> U + Send + Clone + 'static,
