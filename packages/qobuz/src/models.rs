@@ -1,3 +1,8 @@
+//! Data models for Qobuz API responses and internal representations.
+//!
+//! Contains types for albums, artists, tracks, images, genres, and search results,
+//! along with conversions to standard MoosicBox music models.
+
 use std::{fmt::Display, str::FromStr as _};
 
 use chrono::{DateTime, Utc};
