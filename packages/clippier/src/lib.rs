@@ -2406,13 +2406,14 @@ pub fn generate_dockerfile_content(
 
     // Install all packages in one command
     if !install_packages.is_empty() {
+        use std::fmt::Write as _;
         let mut packages: Vec<String> = install_packages.into_iter().collect();
         packages.sort();
-        writeln!(content, "    apt-get -y install {}", packages.join(" "))?;
+        write!(content, "    apt-get -y install {}", packages.join(" "))?;
         if custom_commands.is_empty() {
-            content.push('\n');
+            content.push_str("\n\n");
         } else {
-            writeln!(content, " && \\")?;
+            content.push_str(" && \\\n");
         }
     }
 
@@ -2421,15 +2422,15 @@ pub fn generate_dockerfile_content(
         if cmd.starts_with("sudo ") {
             // Remove sudo since we're already running as root in Docker
             let cmd_without_sudo = cmd.strip_prefix("sudo ").unwrap_or(cmd);
-            writeln!(content, "    {cmd_without_sudo}")?;
+            write!(content, "    {cmd_without_sudo}")?;
         } else {
-            writeln!(content, "    {cmd}")?;
+            write!(content, "    {cmd}")?;
         }
 
         if i < custom_commands.len() - 1 {
-            writeln!(content, " && \\")?;
+            content.push_str(" && \\\n");
         } else {
-            content.push('\n');
+            content.push_str("\n\n");
         }
     }
 
