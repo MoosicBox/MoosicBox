@@ -1,4 +1,4 @@
-//! Multi-producer, single-consumer channel implementation for simulator runtime.
+//! Multi-producer, multi-consumer channel implementation for simulator runtime.
 //!
 //! This provides cooperative yielding to avoid deadlocks in deterministic execution.
 //! The API is designed to be compatible with flume with Arc-based reference counting.
