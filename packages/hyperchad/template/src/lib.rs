@@ -690,6 +690,11 @@ pub use hyperchad_actions::logic::{IfExpression, Responsive, if_responsive};
 /// conditional expressions like `IfExpression<bool, Responsive>` when the `logic` feature is enabled.
 pub trait ToBool {
     /// Converts the value to a `bool`.
+    ///
+    /// This method extracts a boolean value from the implementing type.
+    /// For `bool`, it returns itself. For `IfExpression<bool, Responsive>`,
+    /// it evaluates the expression and returns the default or computed value.
+    #[must_use]
     fn to_bool(self) -> bool;
 }
 
@@ -714,6 +719,9 @@ impl ToBool for IfExpression<bool, Responsive> {
 /// handling the conversion chain properly without violating the orphan rule.
 pub trait IntoActionEffect {
     /// Converts the value into an `ActionEffect`.
+    ///
+    /// This method transforms the implementing type into an `ActionEffect`
+    /// that can be used in template action handlers.
     fn into_action_effect(self) -> actions::ActionEffect;
 }
 
@@ -763,6 +771,11 @@ impl IntoActionEffect for actions::logic::If {
 /// combinations of color and numeric types for defining borders.
 pub trait IntoBorder {
     /// Converts the value into a border tuple of `(Color, Number)`.
+    ///
+    /// Returns a tuple containing the border color and width.
+    /// The color can be specified as a `Color` instance, hex string (`&str`),
+    /// or `String`, while the width accepts various numeric types.
+    #[must_use]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number);
 }
 
@@ -1735,9 +1748,16 @@ pub mod color_functions {
         }
     }
 
-    /// Helper trait for converting RGB values from various numeric types to u8
+    /// Helper trait for converting RGB values from various numeric types to u8.
+    ///
+    /// This trait provides a unified way to convert various numeric types
+    /// (integers and floats) to the 0-255 range used by RGB color components.
     pub trait ToRgbValue {
-        /// Convert the value to an RGB component in the range 0-255
+        /// Convert the value to an RGB component in the range 0-255.
+        ///
+        /// Values outside the 0-255 range are clamped. Float values are
+        /// rounded to the nearest integer before clamping.
+        #[must_use]
         fn to_rgb_value(self) -> u8;
     }
 
