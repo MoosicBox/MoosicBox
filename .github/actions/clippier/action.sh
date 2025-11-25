@@ -1065,22 +1065,31 @@ setup_workspace_ci_environment() {
     local os="${INPUT_OS:-ubuntu}"
     echo "🖥️  Target OS: $os"
 
-    # Verify clippier binary exists
-    if [[ ! -f "$CLIPPIER_BIN" ]]; then
-        echo "❌ ERROR: clippier binary not found at $CLIPPIER_BIN"
-        handle_binary_not_found
-    fi
-
-    # Run clippier workspace-toolchains to get aggregated requirements
-    CONTEXT_PHASE="running workspace-toolchains"
-    echo "📦 Aggregating toolchains from all packages..."
-
     local toolchain_info
-    toolchain_info=$("$CLIPPIER_BIN" workspace-toolchains "${INPUT_WORKSPACE_PATH:-.}" --os "$os" --output json)
+    local using_provided_json=false
 
-    if [[ $? -ne 0 ]]; then
-        echo "❌ ERROR: Failed to run workspace-toolchains command"
-        handle_setup_error "workspace-toolchains command failed"
+    # Use provided JSON if available, otherwise run clippier
+    if [[ -n "$INPUT_WORKSPACE_TOOLCHAINS_JSON" ]]; then
+        echo "📋 Using provided workspace toolchains JSON"
+        toolchain_info="$INPUT_WORKSPACE_TOOLCHAINS_JSON"
+        using_provided_json=true
+    else
+        # Verify clippier binary exists
+        if [[ ! -f "$CLIPPIER_BIN" ]]; then
+            echo "❌ ERROR: clippier binary not found at $CLIPPIER_BIN"
+            handle_binary_not_found
+        fi
+
+        # Run clippier workspace-toolchains to get aggregated requirements
+        CONTEXT_PHASE="running workspace-toolchains"
+        echo "📦 Aggregating toolchains from all packages..."
+
+        toolchain_info=$("$CLIPPIER_BIN" workspace-toolchains "${INPUT_WORKSPACE_PATH:-.}" --os "$os" --output json)
+
+        if [[ $? -ne 0 ]]; then
+            echo "❌ ERROR: Failed to run workspace-toolchains command"
+            handle_setup_error "workspace-toolchains command failed"
+        fi
     fi
 
     echo "📋 Workspace toolchain info:"
@@ -1154,19 +1163,23 @@ setup_workspace_ci_environment() {
             cargo install cargo-audit || true
         fi
 
-        # Handle free_disk_space toolchain (just a note - actual action is in action.yml)
-        if echo "$toolchains" | jq -e 'map(select(. == "free_disk_space")) | length > 0' >/dev/null 2>&1; then
-            echo "⚠️  Note: free_disk_space toolchain detected. Please add jlumbroso/free-disk-space@main action before clippier setup."
-        fi
+        # Only show warnings when not using pre-provided JSON (fallback mode)
+        # When JSON is provided, action.yml handles these toolchains via dedicated steps
+        if [[ "$using_provided_json" != "true" ]]; then
+            # Handle free_disk_space toolchain (just a note - actual action is in action.yml)
+            if echo "$toolchains" | jq -e 'map(select(. == "free_disk_space")) | length > 0' >/dev/null 2>&1; then
+                echo "⚠️  Note: free_disk_space toolchain detected. Please add jlumbroso/free-disk-space@main action before clippier setup."
+            fi
 
-        # Handle node toolchain
-        if echo "$toolchains" | jq -e 'map(select(. == "node" or . == "nodejs" or . == "pnpm")) | length > 0' >/dev/null 2>&1; then
-            echo "⚠️  Note: Node.js toolchain detected. Please ensure pnpm/action-setup and actions/setup-node are in your workflow."
+            # Handle node toolchain
+            if echo "$toolchains" | jq -e 'map(select(. == "node" or . == "nodejs" or . == "pnpm")) | length > 0' >/dev/null 2>&1; then
+                echo "⚠️  Note: Node.js toolchain detected. Please ensure pnpm/action-setup and actions/setup-node are in your workflow."
+            fi
         fi
     fi
 
-    # Note about packages that require nightly
-    if [[ "$nightly_packages" != "[]" && "$nightly_packages" != "null" ]]; then
+    # Note about packages that require nightly (only in fallback mode)
+    if [[ "$using_provided_json" != "true" && "$nightly_packages" != "[]" && "$nightly_packages" != "null" ]]; then
         local nightly_list=$(echo "$nightly_packages" | jq -r 'join(", ")')
         echo "ℹ️  Note: Some packages require nightly toolchain: $nightly_list"
         echo "   Consider using dtolnay/rust-toolchain@nightly for these packages."

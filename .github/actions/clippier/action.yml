@@ -664,7 +664,7 @@ runs:
                 inputs.command == 'workspace-deps' ||
                 inputs.command == 'validate-feature-propagation' ||
                 inputs.command == 'workspace-toolchains' ||
-                inputs.command == 'workspace-setup'
+                (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
           uses: actions/checkout@v4
           with:
@@ -681,7 +681,7 @@ runs:
                 inputs.command == 'workspace-deps' ||
                 inputs.command == 'validate-feature-propagation' ||
                 inputs.command == 'workspace-toolchains' ||
-                inputs.command == 'workspace-setup'
+                (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
           uses: actions/cache@v4
           with:
@@ -696,7 +696,7 @@ runs:
               inputs.command == 'workspace-deps' ||
               inputs.command == 'validate-feature-propagation' ||
               inputs.command == 'workspace-toolchains' ||
-              inputs.command == 'workspace-setup'
+              (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
           shell: bash
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
@@ -782,6 +782,7 @@ runs:
               INPUT_TRANSFORM_TRACE: ${{ inputs.transform-trace }}
               INPUT_JQ_FILTER: ${{ inputs.jq-filter }}
               INPUT_PACKAGE_JSON: ${{ inputs.package-json }}
+              INPUT_WORKSPACE_TOOLCHAINS_JSON: ${{ inputs.workspace-toolchains-json }}
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
