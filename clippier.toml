@@ -3,9 +3,7 @@
 
 # Common toolchains needed for full workspace CI
 [[dependencies]]
-command   = "cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete || true"
 toolchain = "cargo-machete"
 
 [[dependencies]]
-command   = "cargo install taplo-cli || true"
 toolchain = "taplo"
