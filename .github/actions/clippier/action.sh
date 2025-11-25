@@ -137,7 +137,10 @@ handle_binary_not_found() {
     exit 1
 }
 
-# Skip clippier binary check for commands that don't need clippier binary
+# Skip clippier binary check for commands that don't need it:
+# - setup: uses package-json directly, no clippier needed
+# - run-matrix commands: use cached data, no clippier needed
+# Commands that DO need clippier (features, packages, workspace-setup, etc.) will fail if binary is missing.
 CONTEXT_PHASE="binary validation"
 if [[ "$INPUT_COMMAND" != "setup" && "$INPUT_COMMAND" != "run-matrix-aggregate-failures" && "$INPUT_COMMAND" != "run-matrix-flush" && "$INPUT_COMMAND" != "run-matrix" ]]; then
     if [[ ! -f "$CLIPPIER_BIN" ]]; then
@@ -512,6 +515,10 @@ build_clippier_command() {
         [[ -n "$INPUT_FEATURES" ]] && cmd="$cmd --features $INPUT_FEATURES"
         [[ -n "$INPUT_SKIP_FEATURES" ]] && cmd="$cmd --skip-features $INPUT_SKIP_FEATURES"
         [[ "$INPUT_STRICT_OPTIONAL" == "true" ]] && cmd="$cmd --strict-optional"
+        cmd="$cmd --output json"
+    elif [[ "$INPUT_COMMAND" == "workspace-toolchains" ]]; then
+        cmd="$cmd ${INPUT_WORKSPACE_PATH:-.}"
+        [[ -n "$INPUT_OS" ]] && cmd="$cmd --os $INPUT_OS"
         cmd="$cmd --output json"
     else
         echo "Error: Unknown command '$INPUT_COMMAND'"
@@ -1041,6 +1048,138 @@ handle_setup_error() {
     exit 1
 }
 
+# Setup CI environment at workspace level (aggregates all packages)
+setup_workspace_ci_environment() {
+    CONTEXT_PHASE="workspace setup"
+    echo "🔧 Setting up workspace-level CI environment"
+
+    local os="${INPUT_OS:-ubuntu}"
+    echo "🖥️  Target OS: $os"
+
+    # Verify clippier binary exists
+    if [[ ! -f "$CLIPPIER_BIN" ]]; then
+        echo "❌ ERROR: clippier binary not found at $CLIPPIER_BIN"
+        handle_binary_not_found
+    fi
+
+    # Run clippier workspace-toolchains to get aggregated requirements
+    CONTEXT_PHASE="running workspace-toolchains"
+    echo "📦 Aggregating toolchains from all packages..."
+
+    local toolchain_info
+    toolchain_info=$("$CLIPPIER_BIN" workspace-toolchains "${INPUT_WORKSPACE_PATH:-.}" --os "$os" --output json)
+
+    if [[ $? -ne 0 ]]; then
+        echo "❌ ERROR: Failed to run workspace-toolchains command"
+        handle_setup_error "workspace-toolchains command failed"
+    fi
+
+    echo "📋 Workspace toolchain info:"
+    echo "$toolchain_info" | jq . || echo "$toolchain_info"
+
+    local dependencies=$(echo "$toolchain_info" | jq -r '.dependencies // []')
+    local toolchains=$(echo "$toolchain_info" | jq -r '.toolchains // []')
+    local ci_steps=$(echo "$toolchain_info" | jq -r '.ci_steps // []')
+    local env_vars=$(echo "$toolchain_info" | jq -r '.env // {}')
+    local nightly_packages=$(echo "$toolchain_info" | jq -r '.nightly_packages // []')
+    local needs_git_submodules=$(echo "$toolchain_info" | jq -r '.git_submodules // false')
+
+    # Handle git submodules if needed
+    if [[ "$needs_git_submodules" == "true" ]]; then
+        CONTEXT_PHASE="initializing git submodules"
+        echo "🔀 Initializing git submodules"
+        git submodule update --init --recursive || true
+    fi
+
+    # Export environment variables
+    if [[ "$env_vars" != "{}" && "$env_vars" != "null" ]]; then
+        CONTEXT_PHASE="exporting environment variables"
+        echo "🌍 Exporting environment variables"
+        echo "$env_vars" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
+            if [[ -n "$key" ]]; then
+                echo "  $key=$value"
+                echo "$key=$value" >> "$GITHUB_ENV"
+            fi
+        done
+    fi
+
+    # Install system dependencies
+    if [[ "$dependencies" != "[]" && "$dependencies" != "null" ]]; then
+        CONTEXT_PHASE="installing system dependencies"
+        echo "📥 Installing system dependencies"
+
+        echo "$dependencies" | jq -r '.[]' | while IFS= read -r cmd; do
+            if [[ -n "$cmd" ]]; then
+                echo "  Running: $cmd"
+                if ! eval "$cmd"; then
+                    echo "⚠️  Warning: Dependency command failed: $cmd"
+                fi
+            fi
+        done
+    fi
+
+    # Install cargo tools based on toolchains
+    if [[ "$toolchains" != "[]" && "$toolchains" != "null" ]]; then
+        CONTEXT_PHASE="installing toolchains"
+        echo "🛠️  Installing toolchains"
+
+        # Check for common cargo tools
+        if echo "$toolchains" | jq -e 'map(select(. == "cargo-machete" or . == "machete")) | length > 0' >/dev/null 2>&1; then
+            echo "📦 Installing cargo-machete"
+            cargo install cargo-machete || true
+        fi
+
+        if echo "$toolchains" | jq -e 'map(select(. == "taplo" or . == "taplo-cli")) | length > 0' >/dev/null 2>&1; then
+            echo "📦 Installing taplo-cli"
+            cargo install taplo-cli || true
+        fi
+
+        if echo "$toolchains" | jq -e 'map(select(. == "cargo-deny" or . == "deny")) | length > 0' >/dev/null 2>&1; then
+            echo "📦 Installing cargo-deny"
+            cargo install cargo-deny || true
+        fi
+
+        if echo "$toolchains" | jq -e 'map(select(. == "cargo-audit" or . == "audit")) | length > 0' >/dev/null 2>&1; then
+            echo "📦 Installing cargo-audit"
+            cargo install cargo-audit || true
+        fi
+
+        # Handle free_disk_space toolchain (just a note - actual action is in action.yml)
+        if echo "$toolchains" | jq -e 'map(select(. == "free_disk_space")) | length > 0' >/dev/null 2>&1; then
+            echo "⚠️  Note: free_disk_space toolchain detected. Please add jlumbroso/free-disk-space@main action before clippier setup."
+        fi
+
+        # Handle node toolchain
+        if echo "$toolchains" | jq -e 'map(select(. == "node" or . == "nodejs" or . == "pnpm")) | length > 0' >/dev/null 2>&1; then
+            echo "⚠️  Note: Node.js toolchain detected. Please ensure pnpm/action-setup and actions/setup-node are in your workflow."
+        fi
+    fi
+
+    # Note about packages that require nightly
+    if [[ "$nightly_packages" != "[]" && "$nightly_packages" != "null" ]]; then
+        local nightly_list=$(echo "$nightly_packages" | jq -r 'join(", ")')
+        echo "ℹ️  Note: Some packages require nightly toolchain: $nightly_list"
+        echo "   Consider using dtolnay/rust-toolchain@nightly for these packages."
+    fi
+
+    # Run CI steps
+    if [[ "$ci_steps" != "[]" && "$ci_steps" != "null" ]]; then
+        CONTEXT_PHASE="running CI steps"
+        echo "⚙️  Running CI setup steps"
+
+        echo "$ci_steps" | jq -r '.[]' | while IFS= read -r cmd; do
+            if [[ -n "$cmd" ]]; then
+                echo "  Running: $cmd"
+                if ! eval "$cmd"; then
+                    echo "⚠️  Warning: CI step failed: $cmd"
+                fi
+            fi
+        done
+    fi
+
+    echo "✅ Workspace CI environment setup completed"
+}
+
 setup_ci_environment() {
     CONTEXT_PHASE="setup"
     echo "🔧 Setting up CI environment"
@@ -1122,6 +1261,11 @@ main() {
 
     if [[ "$INPUT_COMMAND" == "setup" ]]; then
         setup_ci_environment
+        return
+    fi
+
+    if [[ "$INPUT_COMMAND" == "workspace-setup" ]]; then
+        setup_workspace_ci_environment
         return
     fi
 
