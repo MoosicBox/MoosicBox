@@ -1,3 +1,13 @@
+//! Byte stream source implementation for Symphonia.
+//!
+//! This module provides [`ByteStreamSource`](crate::media_sources::bytestream_source::ByteStreamSource),
+//! a media source that reads from an asynchronous byte stream. It implements Symphonia's
+//! `MediaSource` trait, enabling audio decoding from streaming sources such as network
+//! connections or async readers.
+//!
+//! The implementation uses channels to coordinate between the async stream reader
+//! and the synchronous `Read` and `Seek` traits required by Symphonia.
+
 use std::cmp::min;
 use std::io::{Read, Seek};
 
