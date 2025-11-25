@@ -537,13 +537,19 @@ run_clippier() {
     local output
     output=$(eval "$cmd" | tail -1 | jq -c .)
 
-    # Apply jq filter if provided
+    printf '%s' "$output"
+}
+
+# Helper function to output matrix with optional jq-filter applied at the end of the pipeline
+output_matrix() {
+    local matrix_json="$1"
+
     if [[ -n "$INPUT_JQ_FILTER" ]]; then
         echo "🔧 Applying jq filter: $INPUT_JQ_FILTER" >&2
-        printf '%s' "$output" | jq -c "$INPUT_JQ_FILTER"
-    else
-        printf '%s' "$output"
+        matrix_json=$(printf '%s' "$matrix_json" | jq -c "$INPUT_JQ_FILTER")
     fi
+
+    echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
 }
 
 inject_custom_reasoning() {
@@ -1418,7 +1424,7 @@ main() {
         printf '%s' "$TRANSFORMED_OUTPUT" | jq -c '.[0:3]' >&2 || echo "Failed to display matrix" >&2
         echo "Matrix length: $(printf '%s' "$TRANSFORMED_OUTPUT" | jq 'length')" >&2
 
-        echo "matrix=$TRANSFORMED_OUTPUT" >> $GITHUB_OUTPUT
+        output_matrix "$TRANSFORMED_OUTPUT"
 
         local matrix_length=$(printf '%s' "$TRANSFORMED_OUTPUT" | jq 'length')
         if [[ "$matrix_length" -gt 0 ]]; then
@@ -1466,7 +1472,7 @@ main() {
             fi
         fi
     else
-        echo "matrix=$RAW_OUTPUT" >> $GITHUB_OUTPUT
+        output_matrix "$RAW_OUTPUT"
     fi
 
     echo "✅ Clippier action completed successfully"
