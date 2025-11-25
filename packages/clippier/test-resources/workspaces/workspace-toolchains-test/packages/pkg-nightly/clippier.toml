@@ -1,0 +1,8 @@
+# Package that requires nightly toolchain
+nightly = true
+
+[env]
+NIGHTLY_VAR = "from_nightly_pkg"
+
+[[ci-steps]]
+command = "echo nightly package setup"

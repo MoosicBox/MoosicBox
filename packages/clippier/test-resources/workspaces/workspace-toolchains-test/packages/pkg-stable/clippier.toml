@@ -1,0 +1,21 @@
+# Package with OS-specific dependencies (no nightly)
+[env]
+STABLE_VAR = "from_stable_pkg"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "sudo apt-get install libssl-dev"
+
+[[config]]
+os = "windows"
+
+[[config.dependencies]]
+command = "vcpkg install openssl"
+
+[[config]]
+os = "macos"
+
+[[config.dependencies]]
+command = "brew install openssl"

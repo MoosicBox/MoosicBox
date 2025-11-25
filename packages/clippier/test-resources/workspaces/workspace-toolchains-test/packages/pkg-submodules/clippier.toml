@@ -1,0 +1,5 @@
+# Package that requires git submodules
+git-submodules = true
+
+[[ci-steps]]
+command = "git submodule update --init"

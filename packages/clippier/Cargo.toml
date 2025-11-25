@@ -48,7 +48,7 @@ mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
 
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
-insta                   = { workspace = true, features = ["redactions", "yaml"] }
+insta                   = { workspace = true, features = ["json", "redactions", "yaml"] }
 test-log                = { workspace = true }
 
 [features]

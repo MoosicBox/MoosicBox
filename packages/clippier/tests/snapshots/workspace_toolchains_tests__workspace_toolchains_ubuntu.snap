@@ -1,0 +1,29 @@
+---
+source: packages/clippier/tests/workspace_toolchains_tests.rs
+expression: parsed
+---
+{
+  "ci_steps": [
+    "echo nightly package setup",
+    "git submodule update --init"
+  ],
+  "dependencies": [
+    "cargo install cargo-machete || true",
+    "cargo install taplo-cli || true",
+    "sudo apt-get install libssl-dev"
+  ],
+  "env": {
+    "NIGHTLY_VAR": "from_nightly_pkg",
+    "STABLE_VAR": "from_stable_pkg",
+    "WORKSPACE_VAR": "from_workspace"
+  },
+  "git_submodules": true,
+  "nightly_packages": [
+    "pkg-nightly",
+    "pkg-os-nightly"
+  ],
+  "toolchains": [
+    "cargo-machete",
+    "taplo"
+  ]
+}

@@ -1,0 +1,11 @@
+# Package that requires nightly only on Ubuntu
+[[config]]
+nightly = true
+os      = "ubuntu"
+
+[[config]]
+nightly = false
+os      = "windows"
+
+[[config]]
+os = "macos"

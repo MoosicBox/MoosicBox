@@ -1,0 +1,6 @@
+[package]
+edition = "2021"
+name    = "pkg-os-nightly"
+version = "0.1.0"
+
+[dependencies]

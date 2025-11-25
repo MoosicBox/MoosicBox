@@ -1,0 +1,11 @@
+# Workspace-level toolchains
+[[dependencies]]
+command   = "cargo install cargo-machete || true"
+toolchain = "cargo-machete"
+
+[[dependencies]]
+command   = "cargo install taplo-cli || true"
+toolchain = "taplo"
+
+[env]
+WORKSPACE_VAR = "from_workspace"
