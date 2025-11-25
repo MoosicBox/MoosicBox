@@ -15,7 +15,8 @@ use clippier::{
     OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
     handle_generate_dockerfile_command, handle_packages_command,
-    handle_validate_feature_propagation_command, handle_workspace_deps_command, print_human_output,
+    handle_validate_feature_propagation_command, handle_workspace_deps_command,
+    handle_workspace_toolchains_command, print_human_output,
 };
 
 #[derive(Parser)]
@@ -368,6 +369,20 @@ enum Commands {
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
+    /// Aggregate toolchains and dependencies from all workspace packages for CI setup
+    WorkspaceToolchains {
+        /// Path to the workspace root
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Target operating system (ubuntu, windows, macos)
+        #[arg(long)]
+        os: String,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
+        output: OutputType,
+    },
 }
 
 #[allow(clippy::too_many_lines)]
@@ -612,6 +627,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &include_if,
             output,
         )?,
+        Commands::WorkspaceToolchains {
+            workspace_root,
+            os,
+            output,
+        } => handle_workspace_toolchains_command(&workspace_root, &os, output)?,
     };
 
     if !result.is_empty() {

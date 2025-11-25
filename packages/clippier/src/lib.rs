@@ -4609,6 +4609,263 @@ pub fn handle_packages_command(
     Ok(result)
 }
 
+/// Aggregated toolchain information for workspace-level CI setup
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceToolchains {
+    /// System dependencies to install (commands to run)
+    pub dependencies: Vec<String>,
+    /// Toolchain identifiers (e.g., "cargo-machete", "taplo", "node")
+    pub toolchains: Vec<String>,
+    /// CI steps commands to run
+    pub ci_steps: Vec<String>,
+    /// Environment variables
+    pub env: BTreeMap<String, String>,
+    /// Whether nightly toolchain is needed
+    pub nightly: bool,
+    /// Whether git submodules are needed
+    pub git_submodules: bool,
+}
+
+/// Aggregates all toolchains and dependencies from workspace packages for CI setup.
+///
+/// Scans all packages in the workspace and collects their toolchains, dependencies,
+/// CI steps, and environment variables for the specified OS. This enables workspace-level
+/// CI setup without needing to specify a specific package.
+///
+/// # Arguments
+///
+/// * `workspace_root` - Path to the workspace root
+/// * `os` - Target operating system (e.g., "ubuntu", "windows", "macos")
+/// * `output` - Output format (JSON or Raw)
+///
+/// # Returns
+///
+/// JSON or raw text containing aggregated toolchain information
+///
+/// # Errors
+///
+/// * If workspace cannot be read
+/// * If any clippier.toml has invalid format
+/// * If JSON serialization fails
+#[allow(clippy::too_many_lines)]
+pub fn handle_workspace_toolchains_command(
+    workspace_root: &Path,
+    os: &str,
+    output: OutputType,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut all_dependencies: BTreeSet<String> = BTreeSet::new();
+    let mut all_toolchains: BTreeSet<String> = BTreeSet::new();
+    let mut all_ci_steps: BTreeSet<String> = BTreeSet::new();
+    let mut all_env: BTreeMap<String, String> = BTreeMap::new();
+    let mut needs_nightly = false;
+    let mut needs_git_submodules = false;
+
+    // First check for workspace-level clippier.toml
+    let workspace_clippier_path = workspace_root.join("clippier.toml");
+    if workspace_clippier_path.exists() {
+        let content = std::fs::read_to_string(&workspace_clippier_path)?;
+        if let Ok(conf) = toml::from_str::<WorkspaceClippierConf>(&content) {
+            log::debug!("Found workspace-level clippier.toml");
+
+            // Process workspace-level dependencies
+            if let Some(deps) = &conf.dependencies {
+                for dep in deps {
+                    if let Some(cmd) = &dep.command {
+                        all_dependencies.insert(cmd.clone());
+                    }
+                    if let Some(toolchain) = &dep.toolchain {
+                        all_toolchains.insert(toolchain.clone());
+                    }
+                }
+            }
+
+            // Process workspace-level ci_steps
+            if let Some(ci_steps) = &conf.ci_steps {
+                let steps: Vec<Step> = ci_steps.clone().into();
+                for step in steps {
+                    if let Some(cmd) = &step.command {
+                        all_ci_steps.insert(cmd.clone());
+                    }
+                    if let Some(toolchain) = &step.toolchain {
+                        all_toolchains.insert(toolchain.clone());
+                    }
+                }
+            }
+
+            // Process workspace-level env
+            if let Some(env) = &conf.env {
+                for (key, value) in env {
+                    let resolved_value = match value {
+                        ClippierEnv::Value(v) => v.clone(),
+                        ClippierEnv::FilteredValue { value, .. } => value.clone(),
+                    };
+                    all_env.insert(key.clone(), resolved_value);
+                }
+            }
+
+            if conf.nightly == Some(true) {
+                needs_nightly = true;
+            }
+            if conf.git_submodules == Some(true) {
+                needs_git_submodules = true;
+            }
+        }
+    }
+
+    // Scan all packages in the workspace
+    let packages_dir = workspace_root.join("packages");
+    if packages_dir.exists() {
+        for entry in walkdir::WalkDir::new(&packages_dir)
+            .min_depth(1)
+            .max_depth(3)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            let clippier_path = entry.path().join("clippier.toml");
+            if !clippier_path.exists() {
+                continue;
+            }
+
+            log::debug!("Processing clippier.toml at: {}", clippier_path.display());
+
+            let content = std::fs::read_to_string(&clippier_path)?;
+            let conf: ClippierConf = match toml::from_str(&content) {
+                Ok(c) => c,
+                Err(e) => {
+                    log::warn!("Failed to parse {}: {}", clippier_path.display(), e);
+                    continue;
+                }
+            };
+
+            // Process global settings
+            if conf.nightly == Some(true) {
+                needs_nightly = true;
+            }
+            if conf.git_submodules == Some(true) {
+                needs_git_submodules = true;
+            }
+
+            // Process global ci_steps
+            if let Some(ci_steps) = &conf.ci_steps {
+                let steps: Vec<Step> = ci_steps.clone().into();
+                for step in steps {
+                    if let Some(cmd) = &step.command {
+                        all_ci_steps.insert(cmd.clone());
+                    }
+                    if let Some(toolchain) = &step.toolchain {
+                        all_toolchains.insert(toolchain.clone());
+                    }
+                }
+            }
+
+            // Process global env
+            if let Some(env) = &conf.env {
+                for (key, value) in env {
+                    let resolved_value = match value {
+                        ClippierEnv::Value(v) => v.clone(),
+                        ClippierEnv::FilteredValue { value, .. } => value.clone(),
+                    };
+                    all_env.insert(key.clone(), resolved_value);
+                }
+            }
+
+            // Process OS-specific configs
+            if let Some(configs) = &conf.config {
+                for config in configs {
+                    if config.os != os {
+                        continue;
+                    }
+
+                    // Process config-specific settings
+                    if config.nightly == Some(true) {
+                        needs_nightly = true;
+                    }
+                    if config.git_submodules == Some(true) {
+                        needs_git_submodules = true;
+                    }
+
+                    // Process dependencies
+                    if let Some(deps) = &config.dependencies {
+                        for dep in deps {
+                            // Include all dependencies for workspace-level setup
+                            // (we don't filter by features since we want complete setup)
+                            if let Some(cmd) = &dep.command {
+                                all_dependencies.insert(cmd.clone());
+                            }
+                            if let Some(toolchain) = &dep.toolchain {
+                                all_toolchains.insert(toolchain.clone());
+                            }
+                        }
+                    }
+
+                    // Process CI steps
+                    if let Some(ci_steps) = &config.ci_steps {
+                        let steps: Vec<Step> = ci_steps.clone().into();
+                        for step in steps {
+                            if let Some(cmd) = &step.command {
+                                all_ci_steps.insert(cmd.clone());
+                            }
+                            if let Some(toolchain) = &step.toolchain {
+                                all_toolchains.insert(toolchain.clone());
+                            }
+                        }
+                    }
+
+                    // Process env
+                    if let Some(env) = &config.env {
+                        for (key, value) in env {
+                            let resolved_value = match value {
+                                ClippierEnv::Value(v) => v.clone(),
+                                ClippierEnv::FilteredValue { value, .. } => value.clone(),
+                            };
+                            all_env.insert(key.clone(), resolved_value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let result = WorkspaceToolchains {
+        dependencies: all_dependencies.into_iter().collect(),
+        toolchains: all_toolchains.into_iter().collect(),
+        ci_steps: all_ci_steps.into_iter().collect(),
+        env: all_env,
+        nightly: needs_nightly,
+        git_submodules: needs_git_submodules,
+    };
+
+    match output {
+        OutputType::Json => Ok(serde_json::to_string(&result)?),
+        OutputType::Raw => {
+            use std::fmt::Write as _;
+
+            let mut output = String::new();
+            output.push_str("Dependencies:\n");
+            for dep in &result.dependencies {
+                writeln!(output, "  {dep}")?;
+            }
+            output.push_str("\nToolchains:\n");
+            for toolchain in &result.toolchains {
+                writeln!(output, "  {toolchain}")?;
+            }
+            output.push_str("\nCI Steps:\n");
+            for step in &result.ci_steps {
+                writeln!(output, "  {step}")?;
+            }
+            if !result.env.is_empty() {
+                output.push_str("\nEnvironment:\n");
+                for (key, value) in &result.env {
+                    writeln!(output, "  {key}={value}")?;
+                }
+            }
+            writeln!(output, "\nNightly: {}", result.nightly)?;
+            writeln!(output, "Git Submodules: {}", result.git_submodules)?;
+            Ok(output)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
