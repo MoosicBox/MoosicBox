@@ -21,7 +21,6 @@ moosicbox_paging       = { workspace = true }
 switchy_http           = { workspace = true, features = ["json", "reqwest"] }
 
 async-trait = { workspace = true }
-log         = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true }
 urlencoding = { workspace = true }
