@@ -298,6 +298,10 @@ impl<R: PortRange> PortReservation<R> {
     ///
     /// * `port` - The port to check
     ///
+    /// # Panics
+    ///
+    /// * If `reserved_ports` lock is poisoned
+    ///
     /// # Returns
     ///
     /// Returns `true` if the port is free, `false` otherwise
