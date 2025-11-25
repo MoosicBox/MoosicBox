@@ -1,3 +1,11 @@
+//! HTTP API endpoints for Qobuz music service integration.
+//!
+//! This module provides actix-web route handlers for interacting with the Qobuz API,
+//! including authentication, browsing artists/albums/tracks, managing favorites,
+//! and searching the Qobuz catalog.
+//!
+//! Use [`bind_services`](crate::api::bind_services) to register all endpoints with an actix-web scope.
+
 #![allow(clippy::needless_for_each)]
 #![allow(clippy::future_not_send, clippy::module_name_repetitions)]
 

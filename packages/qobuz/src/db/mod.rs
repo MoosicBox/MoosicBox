@@ -1,3 +1,8 @@
+//! Database operations for persisting Qobuz authentication and configuration.
+//!
+//! Provides functions to store and retrieve access tokens, app configurations,
+//! secrets, and user settings required for Qobuz API authentication.
+
 use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
 use switchy::database::{profiles::LibraryDatabase, query::FilterableQuery};
 

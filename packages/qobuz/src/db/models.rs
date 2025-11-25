@@ -1,3 +1,8 @@
+//! Database model types for Qobuz configuration persistence.
+//!
+//! Contains structs representing stored Qobuz authentication tokens,
+//! application configuration, and user settings.
+
 use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::ToValue as _,
