@@ -1529,6 +1529,9 @@ run_matrix_aggregate_failures_command() {
         mkdir -p "$(dirname "$AGGREGATE_OUTPUT_FILE")"
         # Clear/create the output file
         > "$AGGREGATE_OUTPUT_FILE"
+        # Convert to absolute path before any cd operations
+        AGGREGATE_OUTPUT_FILE="$(cd "$(dirname "$AGGREGATE_OUTPUT_FILE")" && pwd)/$(basename "$AGGREGATE_OUTPUT_FILE")"
+        echo "📄 Resolved to absolute path: $AGGREGATE_OUTPUT_FILE"
     fi
 
     # Change to working directory if specified
