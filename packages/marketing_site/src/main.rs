@@ -27,6 +27,22 @@ use std::sync::Arc;
 use moosicbox_marketing_site::{ROUTER, VIEWPORT};
 use switchy_env::{var_parse_opt, var_parse_or};
 
+/// Runs the native desktop application for the `MoosicBox` marketing site.
+///
+/// Initializes logging, configures the async runtime, sets up window parameters
+/// from environment variables, and starts the application event loop.
+///
+/// # Errors
+///
+/// * If logging initialization fails
+/// * If async runtime building fails
+/// * If application building fails
+/// * If the application event loop fails
+///
+/// # Panics
+///
+/// * If `MAX_THREADS` exceeds `u16::MAX`
+/// * If static asset route registration fails (via [`moosicbox_marketing_site::init`])
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "profiling-tracing") {
