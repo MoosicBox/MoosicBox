@@ -163,7 +163,6 @@ where
     ///
     /// * If the internal resampler's `process_into_buffer` operation fails
     /// * If the audio is not stereo (2-channel) - the `to_audio_buffer` conversion will panic
-    #[must_use]
     pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
