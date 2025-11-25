@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Basic handler example demonstrating the `Route::with_handler()` method.
 //!
 //! This example shows how to use the clean async function syntax with
@@ -22,6 +26,8 @@
 //! cargo run --package basic_handler_example --features actix
 //! ```
 
+use std::fmt::Write;
+
 use moosicbox_web_server::{
     Error, FromRequest, HttpRequest, HttpResponse, Method, RequestData, Route,
 };
@@ -42,40 +48,40 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     response.push_str("=== New Handler System Demonstration ===\n\n");
 
     // Test method()
-    response.push_str(&format!("HTTP Method: {:?}\n", data.method));
+    let _ = writeln!(response, "HTTP Method: {:?}", data.method);
 
     // Test path()
-    response.push_str(&format!("Path: {}\n", data.path));
+    let _ = writeln!(response, "Path: {}", data.path);
 
     // Test query_string()
     if data.query.is_empty() {
         response.push_str("Query String: None\n");
     } else {
-        response.push_str(&format!("Query String: {}\n", data.query));
+        let _ = writeln!(response, "Query String: {}", data.query);
     }
 
     // Test headers
     if let Some(user_agent) = &data.user_agent {
-        response.push_str(&format!("User-Agent: {}\n", user_agent));
+        let _ = writeln!(response, "User-Agent: {user_agent}");
     } else {
         response.push_str("User-Agent: None\n");
     }
 
     if let Some(content_type) = &data.content_type {
-        response.push_str(&format!("Content-Type: {}\n", content_type));
+        let _ = writeln!(response, "Content-Type: {content_type}");
     } else {
         response.push_str("Content-Type: None\n");
     }
 
     // Test headers collection
-    response.push_str(&format!("All Headers: {} found\n", data.headers.len()));
+    let _ = writeln!(response, "All Headers: {} found", data.headers.len());
     for (name, value) in &data.headers {
-        response.push_str(&format!("  {}: {}\n", name, value));
+        let _ = writeln!(response, "  {name}: {value}");
     }
 
     // Test remote_addr()
     if let Some(addr) = data.remote_addr {
-        response.push_str(&format!("Remote Address: {}\n", addr));
+        let _ = writeln!(response, "Remote Address: {addr}");
     } else {
         response.push_str("Remote Address: None\n");
     }
@@ -85,10 +91,10 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
         .push_str("Body: Not available in RequestData (use Json<T> extractor for body parsing)\n");
 
     response.push_str("\n=== Route::with_handler() Working! ===\n");
-    response.push_str("✅ No more Box::pin(async move {...}) boilerplate!\n");
-    response.push_str("✅ Clean async function syntax!\n");
-    response.push_str("✅ Works with both Actix and Simulator backends!\n");
-    response.push_str("✅ RequestData provides Send-safe access to request info!\n");
+    response.push_str("No more Box::pin(async move {...}) boilerplate!\n");
+    response.push_str("Clean async function syntax!\n");
+    response.push_str("Works with both Actix and Simulator backends!\n");
+    response.push_str("RequestData provides Send-safe access to request info!\n");
 
     Ok(HttpResponse::ok().with_body(response))
 }
