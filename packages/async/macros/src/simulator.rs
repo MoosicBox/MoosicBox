@@ -17,9 +17,14 @@ use syn::{
 // select! macro implementation for simulator mode
 // ============================================================================
 
-/// Internal select! macro that accepts a crate path parameter
-/// This provides 100% `tokio::select`! compatibility while automatically
-/// fusing futures/streams for the simulator runtime
+/// Transforms select macro input into a fused futures select call.
+///
+/// This function parses the input tokens as `SelectWithPathInput`, extracts the crate path
+/// and branches, wraps each future with `.fuse()` for safe polling, and generates either
+/// a `select!` or `select_biased!` macro call depending on the input configuration.
+///
+/// This provides 100% `tokio::select!` compatibility while automatically fusing
+/// futures/streams for the simulator runtime.
 pub fn select_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as SelectWithPathInput);
     let crate_path = input.crate_path;
@@ -183,8 +188,12 @@ impl Parse for SelectBranch {
 // join! and try_join! macro implementations for simulator mode
 // ============================================================================
 
-/// Internal join! macro that accepts a crate path parameter
-/// This provides 100% `tokio::join!` compatibility for the simulator runtime
+/// Transforms join macro input into a futures join call.
+///
+/// This function parses the input tokens as `JoinWithPathInput`, extracts the crate path
+/// and list of futures, and generates a `futures::join!` macro call with the provided futures.
+///
+/// This provides 100% `tokio::join!` compatibility for the simulator runtime.
 pub fn join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
@@ -198,8 +207,12 @@ pub fn join_internal(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// Internal `try_join`! macro that accepts a crate path parameter
-/// This provides 100% `tokio::try_join!` compatibility for the simulator runtime
+/// Transforms `try_join` macro input into a futures `try_join` call.
+///
+/// This function parses the input tokens as `JoinWithPathInput`, extracts the crate path
+/// and list of futures, and generates a `futures::try_join!` macro call with the provided futures.
+///
+/// This provides 100% `tokio::try_join!` compatibility for the simulator runtime.
 pub fn try_join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
