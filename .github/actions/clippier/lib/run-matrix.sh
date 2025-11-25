@@ -1468,6 +1468,26 @@ run_matrix_flush_command() {
     return 0
 }
 
+# Write markdown content to both GITHUB_STEP_SUMMARY and optional output file
+#
+# Arguments:
+#   $1 - content: The markdown content to write
+#
+# Environment:
+#   GITHUB_STEP_SUMMARY: Path to GitHub Actions step summary file
+#   AGGREGATE_OUTPUT_FILE: Optional path to additional output file
+#
+# Side effects:
+#   Appends to $GITHUB_STEP_SUMMARY
+#   Appends to $AGGREGATE_OUTPUT_FILE if set
+write_aggregate_content() {
+    local content="$1"
+    echo "$content" >> $GITHUB_STEP_SUMMARY
+    if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+        echo "$content" >> "$AGGREGATE_OUTPUT_FILE"
+    fi
+}
+
 # Aggregate failures from multiple matrix jobs into a single workflow-wide summary
 #
 # Discovers all downloaded test result JSON artifacts and combines them into
@@ -1484,9 +1504,15 @@ run_matrix_flush_command() {
 # Environment:
 #   GITHUB_STEP_SUMMARY: Path to GitHub Actions step summary file
 #   INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: Max lines of error output to show
+#   INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE: Optional path to write markdown output
 #
 # Side effects:
 #   Writes to $GITHUB_STEP_SUMMARY
+#   Writes to $INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE if specified
+#
+# Outputs (written to GITHUB_OUTPUT):
+#   aggregate-summary-path: Path to generated markdown file (if output file specified)
+#   aggregate-summary-generated: true if summary was generated with content
 #
 # Exit codes:
 #   0: Success (summary generated or no failures found)
@@ -1495,14 +1521,32 @@ run_matrix_aggregate_failures_command() {
     CONTEXT_PHASE="run-matrix-aggregate-failures"
     echo "🔥 Aggregating failures from all matrix jobs"
 
+    # Set up output file if specified
+    AGGREGATE_OUTPUT_FILE="${INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE:-}"
+    if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+        echo "📄 Will also write summary to: $AGGREGATE_OUTPUT_FILE"
+        # Ensure parent directory exists
+        mkdir -p "$(dirname "$AGGREGATE_OUTPUT_FILE")"
+        # Clear/create the output file
+        > "$AGGREGATE_OUTPUT_FILE"
+    fi
+
     # Change to working directory if specified
     if [[ -n "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
         if [[ ! -d "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
             echo "ℹ️  Working directory doesn't exist: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
             echo "ℹ️  No test failure artifacts were found - all tests may have passed!"
-            echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status**: All tests passed! No failures to report." >> $GITHUB_STEP_SUMMARY
+            write_aggregate_content "# ✅ Workflow-Wide Test Results"
+            write_aggregate_content ""
+            write_aggregate_content "**Status**: All tests passed! No failures to report."
+            # Set outputs
+            if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+                echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
+                echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+            else
+                echo "aggregate-summary-path=" >> $GITHUB_OUTPUT
+                echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+            fi
             return 0
         fi
         echo "📂 Changing to working directory: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
@@ -1552,9 +1596,17 @@ run_matrix_aggregate_failures_command() {
 
     if [[ ${#json_files[@]} -eq 0 ]]; then
         echo "ℹ️  No test result artifacts found - all tests may have passed!"
-        echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Status**: All tests passed! No failures to report." >> $GITHUB_STEP_SUMMARY
+        write_aggregate_content "# ✅ Workflow-Wide Test Results"
+        write_aggregate_content ""
+        write_aggregate_content "**Status**: All tests passed! No failures to report."
+        # Set outputs
+        if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+            echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
+            echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+        else
+            echo "aggregate-summary-path=" >> $GITHUB_OUTPUT
+            echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+        fi
         return 0
     fi
 
@@ -1613,31 +1665,39 @@ run_matrix_aggregate_failures_command() {
     echo "📊 Summary: $total_failures total failures across $packages_with_failures packages"
 
     if [[ "$packages_with_failures" -eq 0 ]]; then
-        echo "# ✅ Workflow-Wide Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Status**: All tests passed across all $total_packages test categories!" >> $GITHUB_STEP_SUMMARY
+        write_aggregate_content "# ✅ Workflow-Wide Test Results"
+        write_aggregate_content ""
+        write_aggregate_content "**Status**: All tests passed across all $total_packages test categories!"
+        # Set outputs
+        if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+            echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
+            echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+        else
+            echo "aggregate-summary-path=" >> $GITHUB_OUTPUT
+            echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+        fi
         return 0
     fi
 
     # Generate summary header
-    echo "# 🔥 Workflow-Wide Failures Summary" >> $GITHUB_STEP_SUMMARY
-    echo "" >> $GITHUB_STEP_SUMMARY
+    write_aggregate_content "# 🔥 Workflow-Wide Failures Summary"
+    write_aggregate_content ""
 
     local packages_passed=$((total_packages - packages_with_failures))
-    echo "**Total**: $total_failures failures across $packages_with_failures $(if [[ $packages_with_failures -eq 1 ]]; then echo "category"; else echo "categories"; fi)" >> $GITHUB_STEP_SUMMARY
+    write_aggregate_content "**Total**: $total_failures failures across $packages_with_failures $(if [[ $packages_with_failures -eq 1 ]]; then echo "category"; else echo "categories"; fi)"
     if [[ "$packages_passed" -gt 0 ]]; then
-        echo "($packages_passed $(if [[ $packages_passed -eq 1 ]]; then echo "category"; else echo "categories"; fi) passed, not shown)" >> $GITHUB_STEP_SUMMARY
+        write_aggregate_content "($packages_passed $(if [[ $packages_passed -eq 1 ]]; then echo "category"; else echo "categories"; fi) passed, not shown)"
     fi
-    echo "" >> $GITHUB_STEP_SUMMARY
+    write_aggregate_content ""
 
     # Group packages by package name and write each as a section
     echo "$all_packages_json" | jq -c 'group_by(.package) | .[]' | while IFS= read -r package_group; do
         local package_name=$(echo "$package_group" | jq -r '.[0].package')
         local package_total_failures=$(echo "$package_group" | jq '[.[].total_failed] | add')
 
-        echo "$package_details" >> $GITHUB_STEP_SUMMARY
-        echo "<summary><b>📦 $package_name</b> - ❌ $package_total_failures $(if [[ $package_total_failures -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+        write_aggregate_content "$package_details"
+        write_aggregate_content "<summary><b>📦 $package_name</b> - ❌ $package_total_failures $(if [[ $package_total_failures -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>"
+        write_aggregate_content ""
 
         # Write each category (label) within this package
         echo "$package_group" | jq -c '.[]' | while IFS= read -r run_json; do
@@ -1646,11 +1706,11 @@ run_matrix_aggregate_failures_command() {
             local total_failed=$(echo "$run_json" | jq -r '.total_failed')
             local failures=$(echo "$run_json" | jq -c '.failures')
 
-            echo "$category_details" >> $GITHUB_STEP_SUMMARY
-            echo "<summary><b>🔴 $label</b> - $total_failed $(if [[ $total_failed -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            write_aggregate_content "$category_details"
+            write_aggregate_content "<summary><b>🔴 $label</b> - $total_failed $(if [[ $total_failed -eq 1 ]]; then echo "failure"; else echo "failures"; fi)</summary>"
+            write_aggregate_content ""
+            write_aggregate_content "**Working Directory:** \`$working_dir\`"
+            write_aggregate_content ""
 
             # Write each failure
             echo "$failures" | jq -c '.[]' | while IFS= read -r failure_json; do
@@ -1660,28 +1720,28 @@ run_matrix_aggregate_failures_command() {
                 local duration=$(echo "$failure_json" | jq -r '.duration_secs')
                 local error_output=$(echo "$failure_json" | jq -r '.error_output // empty')
 
-                echo "##### 🔴 Features: \`$features\`" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "**Exit Code:** $exit_code  " >> $GITHUB_STEP_SUMMARY
-                echo "**Duration:** ${duration}s" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "##### 🔴 Features: \`$features\`"
+                write_aggregate_content ""
+                write_aggregate_content "**Exit Code:** $exit_code  "
+                write_aggregate_content "**Duration:** ${duration}s"
+                write_aggregate_content ""
 
                 # Script (collapsible)
-                echo "<details>" >> $GITHUB_STEP_SUMMARY
-                echo "<summary><b>📋 Script</b></summary>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-                echo "$cmd" >> $GITHUB_STEP_SUMMARY
-                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "</details>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "<details>"
+                write_aggregate_content "<summary><b>📋 Script</b></summary>"
+                write_aggregate_content ""
+                write_aggregate_content "\`\`\`bash"
+                write_aggregate_content "$cmd"
+                write_aggregate_content "\`\`\`"
+                write_aggregate_content ""
+                write_aggregate_content "</details>"
+                write_aggregate_content ""
 
                 # Debug reproduction commands (collapsible)
                 local debug_shells="${INPUT_RUN_MATRIX_DEBUG_SHELLS:-bash}"
-                echo "<details>" >> $GITHUB_STEP_SUMMARY
-                echo "<summary><b>🔄 Reproduce Locally</b></summary>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "<details>"
+                write_aggregate_content "<summary><b>🔄 Reproduce Locally</b></summary>"
+                write_aggregate_content ""
 
                 # Parse comma-separated shell list and generate commands for each
                 IFS=',' read -ra SHELLS <<< "$debug_shells"
@@ -1696,47 +1756,58 @@ run_matrix_aggregate_failures_command() {
                     # Generate debug command for this shell
                     local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$cmd")
 
-                    echo "**$shell_display:**" >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`$shell" >> $GITHUB_STEP_SUMMARY
-                    echo "$debug_cmd" >> $GITHUB_STEP_SUMMARY
-                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
+                    write_aggregate_content "**$shell_display:**"
+                    write_aggregate_content "\`\`\`$shell"
+                    write_aggregate_content "$debug_cmd"
+                    write_aggregate_content "\`\`\`"
+                    write_aggregate_content ""
                 done
 
-                echo "</details>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "</details>"
+                write_aggregate_content ""
 
                 # Error output
-                echo "$error_details" >> $GITHUB_STEP_SUMMARY
-                echo "<summary><b>❌ Error Output</b></summary>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "$error_details"
+                write_aggregate_content "<summary><b>❌ Error Output</b></summary>"
+                write_aggregate_content ""
+                write_aggregate_content "\`\`\`"
 
                 if [[ -n "$error_output" ]]; then
                     # Use embedded error output from JSON
                     local max_lines="${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}"
                     if [[ "$max_lines" -gt 0 ]]; then
-                        echo "$error_output" | tail -"$max_lines" >> $GITHUB_STEP_SUMMARY
+                        local truncated_output=$(echo "$error_output" | tail -"$max_lines")
+                        write_aggregate_content "$truncated_output"
                     else
-                        echo "$error_output" >> $GITHUB_STEP_SUMMARY
+                        write_aggregate_content "$error_output"
                     fi
                 else
-                    echo "Error: Output not available" >> $GITHUB_STEP_SUMMARY
+                    write_aggregate_content "Error: Output not available"
                 fi
 
-                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "</details>" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
+                write_aggregate_content "\`\`\`"
+                write_aggregate_content ""
+                write_aggregate_content "</details>"
+                write_aggregate_content ""
             done
 
-            echo "</details>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            write_aggregate_content "</details>"
+            write_aggregate_content ""
         done
 
-        echo "</details>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+        write_aggregate_content "</details>"
+        write_aggregate_content ""
     done
+
+    # Set outputs
+    if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
+        echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
+        echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+        echo "📄 Summary also written to: $AGGREGATE_OUTPUT_FILE"
+    else
+        echo "aggregate-summary-path=" >> $GITHUB_OUTPUT
+        echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
+    fi
 
     echo "✅ Successfully generated workflow-wide failures summary"
     return 0

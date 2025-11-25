@@ -429,11 +429,21 @@ jobs:
                   merge-multiple: true
 
             - name: Generate workflow-wide failures summary
+              id: failures-summary
               uses: ./.github/actions/clippier
               with:
                   command: run-matrix-aggregate-failures
                   run-matrix-working-directory: ./failure-data
                   run-matrix-summary-auto-expand: never
+                  run-matrix-aggregate-output-file: ./failures-summary.md
+
+            - name: Upload failures summary artifact
+              if: always() && steps.failures-summary.outputs.aggregate-summary-path != ''
+              uses: actions/upload-artifact@v4
+              with:
+                  name: workflow-failures-summary
+                  path: ${{ steps.failures-summary.outputs.aggregate-summary-path }}
+                  if-no-files-found: ignore
 
     build-docker-images:
         runs-on: ubuntu-latest

@@ -460,6 +460,11 @@ inputs:
         required: false
         default: "true"
 
+    run-matrix-aggregate-output-file:
+        description: "Path to write aggregate failures summary markdown (for run-matrix-aggregate-failures command)"
+        required: false
+        default: ""
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -537,6 +542,14 @@ outputs:
     failure-artifact-name:
         description: "Stable artifact name generated from matrix package JSON (for run-matrix-flush with prepare-upload enabled)"
         value: ${{ steps.run-action.outputs.failure-artifact-name }}
+
+    aggregate-summary-path:
+        description: "Path to generated aggregate failures summary markdown (for run-matrix-aggregate-failures command)"
+        value: ${{ steps.run-action.outputs.aggregate-summary-path }}
+
+    aggregate-summary-generated:
+        description: "Whether aggregate summary was generated (true/false)"
+        value: ${{ steps.run-action.outputs.aggregate-summary-generated }}
 
 runs:
     using: "composite"
@@ -737,6 +750,7 @@ runs:
               INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS: ${{ inputs.run-matrix-upload-package-os }}
               INPUT_RUN_MATRIX_AUTO_UPLOAD: ${{ inputs.run-matrix-auto-upload }}
               INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-auto-upload-only-on-failure }}
+              INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE: ${{ inputs.run-matrix-aggregate-output-file }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}
