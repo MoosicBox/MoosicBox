@@ -455,8 +455,13 @@ impl ControlStep {
     }
 }
 
-/// Test fragments for reusable test scenarios
 pub mod fragments {
+    //! Reusable test fragments for common testing scenarios.
+    //!
+    //! This module provides pre-built test plans for common operations like user
+    //! authentication, navigation testing, form validation, and accessibility
+    //! testing. These fragments can be used directly or included in larger test
+    //! plans using [`TestPlan::include`].
     use super::Key;
     use crate::{FormData, TestPlan};
 
