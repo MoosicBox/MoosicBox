@@ -531,7 +531,16 @@ build_clippier_command() {
 run_clippier() {
     local cmd=$(build_clippier_command)
     echo "Running: $cmd" >&2
-    eval "$cmd" | tail -1 | jq -c .
+    local output
+    output=$(eval "$cmd" | tail -1 | jq -c .)
+
+    # Apply jq filter if provided
+    if [[ -n "$INPUT_JQ_FILTER" ]]; then
+        echo "🔧 Applying jq filter: $INPUT_JQ_FILTER" >&2
+        printf '%s' "$output" | jq -c "$INPUT_JQ_FILTER"
+    else
+        printf '%s' "$output"
+    fi
 }
 
 inject_custom_reasoning() {

@@ -251,6 +251,10 @@ inputs:
         required: false
         default: "false"
 
+    jq-filter:
+        description: "Optional jq filter to transform the JSON output (e.g., '.toolchains', 'map(.name)'). Applies to commands that produce JSON output like workspace-toolchains, features, packages, affected-packages, workspace-deps."
+        required: false
+
     clippier-version:
         description: "Git ref/tag for clippier (default: use from current repo)"
         required: false
@@ -776,6 +780,7 @@ runs:
               INPUT_DOCKER_NAME_PREFIX: ${{ inputs.docker-name-prefix }}
               INPUT_TRANSFORM_SCRIPTS: ${{ inputs.transform-scripts }}
               INPUT_TRANSFORM_TRACE: ${{ inputs.transform-trace }}
+              INPUT_JQ_FILTER: ${{ inputs.jq-filter }}
               INPUT_PACKAGE_JSON: ${{ inputs.package-json }}
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
