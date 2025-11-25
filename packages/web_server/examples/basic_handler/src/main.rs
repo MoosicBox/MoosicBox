@@ -28,9 +28,9 @@
 
 use std::fmt::Write;
 
-use moosicbox_web_server::{
-    Error, FromRequest, HttpRequest, HttpResponse, Method, RequestData, Route,
-};
+use moosicbox_web_server::{Error, HttpResponse, Method, RequestData, Route};
+#[cfg(any(feature = "simulator", not(feature = "actix")))]
+use moosicbox_web_server::{FromRequest, HttpRequest};
 
 /// Demonstrates the `Route::with_handler()` method with clean async function syntax.
 ///
@@ -104,12 +104,8 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
 /// Creates a route using `Route::with_handler1()` with the Actix backend enabled,
 /// showing how the new handler system eliminates the need for `Box::pin` boilerplate
 /// while maintaining compatibility with Actix Web.
-///
-/// # Errors
-///
-/// Returns an error if route creation or backend initialization fails.
 #[cfg(feature = "actix")]
-fn run_actix_example() -> Result<(), Box<dyn std::error::Error>> {
+fn run_actix_example() {
     println!("🚀 Running Actix Backend Example...");
 
     // NEW: Using Route::with_handler1() for 1-parameter handler - no more Box::pin boilerplate!
@@ -120,8 +116,6 @@ fn run_actix_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Path: {}", route.path);
     println!("   Handler: Clean async function (no Box::pin!)");
     println!("   Backend: Actix Web");
-
-    Ok(())
 }
 
 /// Demonstrates the handler system with the Simulator backend.
@@ -197,13 +191,17 @@ fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// * Backend example execution fails
 /// * No backend features are enabled
+#[cfg_attr(
+    all(feature = "actix", not(any(feature = "simulator", not(feature = "actix")))),
+    allow(clippy::unnecessary_wraps)
+)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Basic Handler Example - Route::with_handler() Method");
     println!("=====================================================\n");
 
     #[cfg(feature = "actix")]
     {
-        run_actix_example()?;
+        run_actix_example();
         println!();
     }
 

@@ -188,6 +188,7 @@ pub async fn auth_music_api_endpoint(
         .ok_or_else(|| ErrorNotFound(format!("MusicApi '{}' not found", query.api_source)))?;
 
     match form.0 {
+        #[cfg_attr(not(feature = "auth-username-password"), allow(unused_variables))]
         AuthValues::UsernamePassword { username, password } => {
             #[cfg(not(feature = "auth-username-password"))]
             return Err(ErrorBadRequest("Auth not supported"));
