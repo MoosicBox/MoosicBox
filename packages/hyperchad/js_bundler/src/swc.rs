@@ -4,7 +4,7 @@
 //! using SWC as the underlying bundler. It supports minification, module loading,
 //! and TypeScript compilation with configurable options.
 
-use std::{collections::BTreeMap, fs::create_dir_all, path::Path};
+use std::{collections::BTreeMap, collections::HashMap, fs::create_dir_all, path::Path};
 
 use anyhow::Error;
 use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord, ModuleType};
@@ -48,7 +48,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
         Loader { cm: cm.clone() },
         CachingResolver::new(
             4096,
-            NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true),
+            NodeModulesResolver::new(TargetEnv::Browser, HashMap::default(), true),
         ),
         swc_bundler::Config {
             require: false,
@@ -65,11 +65,11 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
     let mut entries = BTreeMap::new();
     entries.insert("main".to_string(), FileName::Real(target.to_path_buf()));
 
-    let mut bundles = bundler.bundle(entries.into_iter().collect()).unwrap();
-    println!("Bundled as {} bundles", bundles.len());
+    let mut output_bundles = bundler.bundle(entries.into_iter().collect()).unwrap();
+    println!("Bundled as {} bundles", output_bundles.len());
 
     if minify {
-        bundles = bundles
+        output_bundles = output_bundles
             .into_iter()
             .map(|mut bundle| {
                 GLOBALS.set(globals, || {
@@ -104,7 +104,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
             .collect();
     }
 
-    print_bundles(out, cm, bundles, minify);
+    print_bundles(out, &cm, output_bundles, minify);
 }
 
 /// Writes bundled modules to the output file.
@@ -117,7 +117,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
 /// * Panics if emitting the module to code fails.
 /// * Panics if creating parent directories fails.
 /// * Panics if writing the output file fails.
-fn print_bundles(out: &Path, cm: Lrc<SourceMap>, bundles: Vec<Bundle>, minify: bool) {
+fn print_bundles(out: &Path, cm: &Lrc<SourceMap>, bundles: Vec<Bundle>, minify: bool) {
     for bundled in bundles {
         let code = {
             let mut buf = vec![];
@@ -250,7 +250,7 @@ impl Load for Loader {
                 auto_accessors: false,
                 explicit_resource_management: false,
             }),
-            _ => panic!("Invalid file: {path:?}"),
+            _ => panic!("Invalid file: {}", path.display()),
         };
         let fm = self.cm.load_file(path)?;
 

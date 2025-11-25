@@ -3,6 +3,10 @@
 //! This crate provides functionality to bundle JavaScript and TypeScript files
 //! using either esbuild or SWC as the underlying bundler.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 #[cfg(any(feature = "esbuild", feature = "swc"))]
 pub(crate) mod bundler;
 
