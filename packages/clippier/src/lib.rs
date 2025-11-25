@@ -4620,8 +4620,8 @@ pub struct WorkspaceToolchains {
     pub ci_steps: Vec<String>,
     /// Environment variables
     pub env: BTreeMap<String, String>,
-    /// Whether nightly toolchain is needed
-    pub nightly: bool,
+    /// Package names that require nightly toolchain
+    pub nightly_packages: Vec<String>,
     /// Whether git submodules are needed
     pub git_submodules: bool,
 }
@@ -4657,7 +4657,7 @@ pub fn handle_workspace_toolchains_command(
     let mut all_toolchains: BTreeSet<String> = BTreeSet::new();
     let mut all_ci_steps: BTreeSet<String> = BTreeSet::new();
     let mut all_env: BTreeMap<String, String> = BTreeMap::new();
-    let mut needs_nightly = false;
+    let mut nightly_packages: BTreeSet<String> = BTreeSet::new();
     let mut needs_git_submodules = false;
 
     // First check for workspace-level clippier.toml
@@ -4703,9 +4703,8 @@ pub fn handle_workspace_toolchains_command(
                 }
             }
 
-            if conf.nightly == Some(true) {
-                needs_nightly = true;
-            }
+            // Note: workspace-level nightly is ignored since it doesn't have a package name
+            // nightly_packages only tracks specific packages that need nightly
             if conf.git_submodules == Some(true) {
                 needs_git_submodules = true;
             }
@@ -4728,6 +4727,33 @@ pub fn handle_workspace_toolchains_command(
 
             log::debug!("Processing clippier.toml at: {}", clippier_path.display());
 
+            // Try to get package name from Cargo.toml in the same directory
+            let entry_path = entry.path();
+            let cargo_toml_path = entry_path.join("Cargo.toml");
+            let package_name = if cargo_toml_path.exists() {
+                std::fs::read_to_string(&cargo_toml_path)
+                    .ok()
+                    .and_then(|content| toml::from_str::<Value>(&content).ok())
+                    .and_then(|value| {
+                        value
+                            .get("package")
+                            .and_then(|p| p.get("name"))
+                            .and_then(|n| n.as_str())
+                            .map(ToString::to_string)
+                    })
+            } else {
+                None
+            };
+
+            // Fallback to directory name if Cargo.toml doesn't have package name
+            let package_name = package_name.unwrap_or_else(|| {
+                entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            });
+
             let content = std::fs::read_to_string(&clippier_path)?;
             let conf: ClippierConf = match toml::from_str(&content) {
                 Ok(c) => c,
@@ -4739,7 +4765,7 @@ pub fn handle_workspace_toolchains_command(
 
             // Process global settings
             if conf.nightly == Some(true) {
-                needs_nightly = true;
+                nightly_packages.insert(package_name.clone());
             }
             if conf.git_submodules == Some(true) {
                 needs_git_submodules = true;
@@ -4778,7 +4804,7 @@ pub fn handle_workspace_toolchains_command(
 
                     // Process config-specific settings
                     if config.nightly == Some(true) {
-                        needs_nightly = true;
+                        nightly_packages.insert(package_name.clone());
                     }
                     if config.git_submodules == Some(true) {
                         needs_git_submodules = true;
@@ -4831,7 +4857,7 @@ pub fn handle_workspace_toolchains_command(
         toolchains: all_toolchains.into_iter().collect(),
         ci_steps: all_ci_steps.into_iter().collect(),
         env: all_env,
-        nightly: needs_nightly,
+        nightly_packages: nightly_packages.into_iter().collect(),
         git_submodules: needs_git_submodules,
     };
 
@@ -4859,8 +4885,13 @@ pub fn handle_workspace_toolchains_command(
                     writeln!(output, "  {key}={value}")?;
                 }
             }
-            writeln!(output, "\nNightly: {}", result.nightly)?;
-            writeln!(output, "Git Submodules: {}", result.git_submodules)?;
+            if !result.nightly_packages.is_empty() {
+                output.push_str("\nNightly Packages:\n");
+                for pkg in &result.nightly_packages {
+                    writeln!(output, "  {pkg}")?;
+                }
+            }
+            writeln!(output, "\nGit Submodules: {}", result.git_submodules)?;
             Ok(output)
         }
     }
