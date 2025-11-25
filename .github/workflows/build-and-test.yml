@@ -123,6 +123,7 @@ jobs:
                   transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   transform-scripts: .clippier/transforms/asio-filter.lua
                   git-strategy: workflow-history
+                  jq-filter: 'map(.toolchains |= (. // [] | map(select(. != "taplo" and . != "taplo-cli" and . != "cargo-machete" and . != "machete"))))'
                   ignore: |
                       **/*.md
                       **/*.txt
