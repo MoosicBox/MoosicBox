@@ -3,6 +3,10 @@
 //! This binary verifies that handler functions correctly implement the `IntoHandler`
 //! trait for various parameter combinations.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use moosicbox_web_server::Error;
 use moosicbox_web_server::handler::IntoHandler;
 use moosicbox_web_server::{HttpResponse, RequestInfo};
@@ -26,7 +30,8 @@ async fn simple_handler() -> Result<HttpResponse, Error> {
 ///
 /// Returns an error if the response cannot be created.
 async fn info_handler(info: RequestInfo) -> Result<HttpResponse, Error> {
-    let response = format!("Path: {}", info.path);
+    let path = &info.path;
+    let response = format!("Path: {path}");
     Ok(HttpResponse::ok().with_body(response))
 }
 

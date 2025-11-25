@@ -4,6 +4,10 @@
 //! with the Simulator backend, verifying that extractors work correctly without
 //! Send bound issues.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use moosicbox_web_server::{Headers, HttpResponse, Method, Query, RequestInfo, Route};
 use serde::Deserialize;
 
@@ -16,7 +20,7 @@ async fn simple_handler() -> Result<HttpResponse, moosicbox_web_server::Error> {
     Ok(HttpResponse::ok().with_body("Simple handler response - no params!"))
 }
 
-/// Test handler with RequestInfo extractor - Send-safe.
+/// Test handler with `RequestInfo` extractor - Send-safe.
 ///
 /// # Errors
 ///
@@ -26,17 +30,14 @@ async fn info_handler(info: RequestInfo) -> Result<HttpResponse, moosicbox_web_s
     Ok(HttpResponse::ok().with_body(response))
 }
 
-/// Test handler with Headers extractor - Send-safe.
+/// Test handler with `Headers` extractor - Send-safe.
 ///
 /// # Errors
 ///
 /// Returns an error if the response cannot be created.
 async fn headers_handler(headers: Headers) -> Result<HttpResponse, moosicbox_web_server::Error> {
-    let user_agent = headers
-        .user_agent()
-        .map(|ua| ua.as_str())
-        .unwrap_or("Unknown");
-    let response = format!("User-Agent: {}", user_agent);
+    let user_agent = headers.user_agent().map_or("Unknown", String::as_str);
+    let response = format!("User-Agent: {user_agent}");
     Ok(HttpResponse::ok().with_body(response))
 }
 
@@ -49,7 +50,7 @@ struct SearchQuery {
     limit: Option<u32>,
 }
 
-/// Test handler with Query extractor - Send-safe.
+/// Test handler with `Query` extractor - Send-safe.
 ///
 /// # Errors
 ///
@@ -59,7 +60,7 @@ async fn query_handler(
 ) -> Result<HttpResponse, moosicbox_web_server::Error> {
     let search_term = query.q.unwrap_or_else(|| "nothing".to_string());
     let limit = query.limit.unwrap_or(10);
-    let response = format!("Searching for '{}' with limit {}", search_term, limit);
+    let response = format!("Searching for '{search_term}' with limit {limit}");
     Ok(HttpResponse::ok().with_body(response))
 }
 
@@ -76,7 +77,7 @@ async fn multi_handler(
         "Path: {}, Method: {:?}, User-Agent: {}",
         info.path,
         info.method,
-        headers.user_agent().unwrap_or(&"Unknown".to_string())
+        headers.user_agent().map_or("Unknown", String::as_str)
     );
     Ok(HttpResponse::ok().with_body(response))
 }
