@@ -1139,3 +1139,268 @@ pub mod example_integration {
 
 // Re-export commonly used types
 pub use utils::{ContainerElementFinder, DefaultActionHandler};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============================================
+    // BTreeMapStyleManager tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_add_and_get_override() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+
+        assert!(manager.has_overrides(1));
+        assert_eq!(manager.get_current_value(1), Some(&100));
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_multiple_overrides_returns_last() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+        manager.add_override(1, StyleTrigger::CustomEvent, 200);
+        manager.add_override(1, StyleTrigger::UiEvent, 300);
+
+        // Last override wins
+        assert_eq!(manager.get_current_value(1), Some(&300));
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_remove_overrides_by_trigger() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+        manager.add_override(1, StyleTrigger::CustomEvent, 200);
+        manager.add_override(1, StyleTrigger::UiEvent, 300);
+
+        // Remove UiEvent overrides (100 and 300)
+        manager.remove_overrides(1, StyleTrigger::UiEvent);
+
+        // Should now return the CustomEvent override
+        assert_eq!(manager.get_current_value(1), Some(&200));
+        assert!(manager.has_overrides(1));
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_remove_all_overrides_clears_element() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+        manager.add_override(1, StyleTrigger::UiEvent, 200);
+
+        // Remove all UiEvent overrides
+        manager.remove_overrides(1, StyleTrigger::UiEvent);
+
+        // Element should have no overrides
+        assert!(!manager.has_overrides(1));
+        assert_eq!(manager.get_current_value(1), None);
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_remove_nonexistent_trigger_no_effect() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+
+        // Try to remove CustomEvent overrides (none exist)
+        manager.remove_overrides(1, StyleTrigger::CustomEvent);
+
+        // UiEvent override should still be there
+        assert_eq!(manager.get_current_value(1), Some(&100));
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_clear_element() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+        manager.add_override(1, StyleTrigger::CustomEvent, 200);
+
+        manager.clear_element(1);
+
+        assert!(!manager.has_overrides(1));
+        assert_eq!(manager.get_current_value(1), None);
+    }
+
+    #[test_log::test]
+    fn test_btree_map_style_manager_independent_elements() {
+        let mut manager: BTreeMapStyleManager<i32> = BTreeMapStyleManager::default();
+
+        manager.add_override(1, StyleTrigger::UiEvent, 100);
+        manager.add_override(2, StyleTrigger::UiEvent, 200);
+        manager.add_override(3, StyleTrigger::CustomEvent, 300);
+
+        assert_eq!(manager.get_current_value(1), Some(&100));
+        assert_eq!(manager.get_current_value(2), Some(&200));
+        assert_eq!(manager.get_current_value(3), Some(&300));
+        assert_eq!(manager.get_current_value(4), None);
+
+        // Clear one element shouldn't affect others
+        manager.clear_element(2);
+        assert_eq!(manager.get_current_value(1), Some(&100));
+        assert!(!manager.has_overrides(2));
+        assert_eq!(manager.get_current_value(3), Some(&300));
+    }
+
+    // ============================================
+    // should_trigger_action tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_should_trigger_action_click() {
+        assert!(should_trigger_action(&ActionTrigger::Click, "click"));
+        assert!(!should_trigger_action(&ActionTrigger::Click, "hover"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_click_outside() {
+        assert!(should_trigger_action(
+            &ActionTrigger::ClickOutside,
+            "click_outside"
+        ));
+        assert!(!should_trigger_action(
+            &ActionTrigger::ClickOutside,
+            "click"
+        ));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_hover() {
+        assert!(should_trigger_action(&ActionTrigger::Hover, "hover"));
+        assert!(!should_trigger_action(&ActionTrigger::Hover, "click"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_change() {
+        assert!(should_trigger_action(&ActionTrigger::Change, "change"));
+        assert!(!should_trigger_action(&ActionTrigger::Change, "hover"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_resize() {
+        assert!(should_trigger_action(&ActionTrigger::Resize, "resize"));
+        assert!(!should_trigger_action(&ActionTrigger::Resize, "change"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_immediate() {
+        assert!(should_trigger_action(
+            &ActionTrigger::Immediate,
+            "immediate"
+        ));
+        assert!(!should_trigger_action(&ActionTrigger::Immediate, "click"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_custom_event() {
+        assert!(should_trigger_action(
+            &ActionTrigger::Event("my-custom-event".to_string()),
+            "my-custom-event"
+        ));
+        assert!(!should_trigger_action(
+            &ActionTrigger::Event("my-custom-event".to_string()),
+            "other-event"
+        ));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_http_triggers() {
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpBeforeRequest,
+            "http_before_request"
+        ));
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpAfterRequest,
+            "http_after_request"
+        ));
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpRequestSuccess,
+            "http_request_success"
+        ));
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpRequestError,
+            "http_request_error"
+        ));
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpRequestAbort,
+            "http_request_abort"
+        ));
+        assert!(should_trigger_action(
+            &ActionTrigger::HttpRequestTimeout,
+            "http_request_timeout"
+        ));
+
+        // Check that they don't match wrong events
+        assert!(!should_trigger_action(
+            &ActionTrigger::HttpRequestSuccess,
+            "http_request_error"
+        ));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_mouse_down() {
+        assert!(should_trigger_action(
+            &ActionTrigger::MouseDown,
+            "mouse_down"
+        ));
+        assert!(!should_trigger_action(&ActionTrigger::MouseDown, "click"));
+    }
+
+    #[test_log::test]
+    fn test_should_trigger_action_key_down() {
+        assert!(should_trigger_action(&ActionTrigger::KeyDown, "key_down"));
+        assert!(!should_trigger_action(
+            &ActionTrigger::KeyDown,
+            "mouse_down"
+        ));
+    }
+
+    // ============================================
+    // utils::matches_trigger tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_matches_trigger_with_custom_event() {
+        use utils::matches_trigger;
+
+        // Custom event trigger should match when event name matches
+        assert!(matches_trigger(
+            &ActionTrigger::Event("my-event".to_string()),
+            "event",
+            Some("my-event")
+        ));
+
+        // Custom event trigger should not match when event name differs
+        assert!(!matches_trigger(
+            &ActionTrigger::Event("my-event".to_string()),
+            "event",
+            Some("other-event")
+        ));
+
+        // Custom event trigger should not match when no event name provided
+        assert!(!matches_trigger(
+            &ActionTrigger::Event("my-event".to_string()),
+            "event",
+            None
+        ));
+    }
+
+    #[test_log::test]
+    fn test_matches_trigger_fallback_to_should_trigger() {
+        use utils::matches_trigger;
+
+        // Non-event triggers should fall back to should_trigger_action
+        assert!(matches_trigger(&ActionTrigger::Click, "click", None));
+        assert!(!matches_trigger(&ActionTrigger::Click, "hover", None));
+        assert!(matches_trigger(
+            &ActionTrigger::Hover,
+            "hover",
+            Some("ignored")
+        ));
+    }
+}
