@@ -518,4 +518,224 @@ mod tests {
         // Mono output should have exactly as many samples as frames
         assert!(!output.is_empty());
     }
+
+    /// Test downsampling (higher to lower sample rate)
+    #[test_log::test]
+    fn test_resample_downsampling() {
+        let input_rate = 48000;
+        let output_rate = 44100;
+        let spec = SignalSpec::new(input_rate, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, output_rate, 1024);
+
+        // Create input buffer with a simple sine wave pattern
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
+        input_buffer.render_reserved(Some(1024));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                // Use a simple pattern to verify data flows through correctly
+                *sample = ((i as f32) * std::f32::consts::PI / 128.0).sin();
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        let output = result.unwrap();
+        // Verify output is stereo (even number of samples)
+        assert_eq!(output.len() % 2, 0);
+        // Verify we got some output samples
+        assert!(!output.is_empty());
+        // For downsampling 48kHz -> 44.1kHz, we expect fewer output samples than input
+        // Since we have 1024 frames * 2 channels = 2048 input samples interleaved,
+        // and the ratio is approximately 44100/48000 ≈ 0.919, we expect roughly
+        // 1024 * 0.919 ≈ 941 frames, so ~1882 interleaved samples
+        let output_frames = output.len() / 2;
+        assert!(
+            output_frames < 1024,
+            "Downsampling should produce fewer frames: got {output_frames} frames from 1024 input frames"
+        );
+    }
+
+    /// Test multiple consecutive resample cycles to verify state is properly managed
+    #[test_log::test]
+    fn test_multiple_resample_cycles() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+
+        // Perform multiple resample cycles
+        for cycle in 0..3 {
+            let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
+            input_buffer.render_reserved(Some(1024));
+            for ch in 0..spec.channels.count() {
+                let channel = input_buffer.chan_mut(ch);
+                for (i, sample) in channel.iter_mut().enumerate() {
+                    // Use cycle-dependent values to ensure we're getting fresh data each time
+                    *sample = ((i + cycle * 1024) as f32) / 3072.0;
+                }
+            }
+
+            let result = resampler.resample(&input_buffer);
+            assert!(result.is_some(), "Cycle {cycle} should produce output");
+
+            let output = result.unwrap();
+            assert!(
+                !output.is_empty(),
+                "Cycle {cycle} output should not be empty"
+            );
+            assert_eq!(
+                output.len() % 2,
+                0,
+                "Cycle {cycle} output should be stereo"
+            );
+        }
+    }
+
+    /// Test that flush handles remainder after multiple partial buffers
+    #[test_log::test]
+    fn test_flush_after_multiple_partial_buffers() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+
+        // Add 300 samples
+        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(300, spec);
+        input_buffer1.render_reserved(Some(300));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer1.chan_mut(ch);
+            for sample in channel.iter_mut() {
+                *sample = 0.3;
+            }
+        }
+        assert!(resampler.resample(&input_buffer1).is_none());
+
+        // Add another 200 samples (total 500, still less than 1024)
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(200, spec);
+        input_buffer2.render_reserved(Some(200));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer2.chan_mut(ch);
+            for sample in channel.iter_mut() {
+                *sample = 0.5;
+            }
+        }
+        assert!(resampler.resample(&input_buffer2).is_none());
+
+        // Add another 100 samples (total 600, still less than 1024)
+        let mut input_buffer3: AudioBuffer<f32> = AudioBuffer::new(100, spec);
+        input_buffer3.render_reserved(Some(100));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer3.chan_mut(ch);
+            for sample in channel.iter_mut() {
+                *sample = 0.7;
+            }
+        }
+        assert!(resampler.resample(&input_buffer3).is_none());
+
+        // Flush should process all accumulated samples (600 total) padded to 1024
+        let result = resampler.flush();
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert!(!output.is_empty());
+        assert_eq!(output.len() % 2, 0);
+    }
+
+    /// Test resampling with more than duration samples produces output and keeps remainder
+    #[test_log::test]
+    fn test_resample_excess_samples() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+
+        // Add 1500 samples (more than duration of 1024)
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1500, spec);
+        input_buffer.render_reserved(Some(1500));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = (i as f32) / 1500.0;
+            }
+        }
+
+        // First resample should consume 1024 samples
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        // There should be 476 samples remaining (1500 - 1024)
+        // Adding another 548 samples should trigger another output (476 + 548 = 1024)
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(548, spec);
+        input_buffer2.render_reserved(Some(548));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer2.chan_mut(ch);
+            for sample in channel.iter_mut() {
+                *sample = 0.5;
+            }
+        }
+
+        let result2 = resampler.resample(&input_buffer2);
+        assert!(
+            result2.is_some(),
+            "Should have enough samples after accumulation"
+        );
+    }
+
+    /// Test to_audio_buffer with empty samples
+    #[test_log::test]
+    fn test_to_audio_buffer_empty() {
+        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let samples: Vec<f32> = vec![];
+
+        let audio_buffer = to_audio_buffer(&samples, spec);
+        assert_eq!(audio_buffer.frames(), 0);
+    }
+
+    /// Test extreme sample rate conversion (large ratio)
+    #[test_log::test]
+    fn test_resample_large_rate_ratio() {
+        // Test 8kHz to 48kHz (6x upsampling)
+        let input_rate = 8000;
+        let output_rate = 48000;
+        let spec = SignalSpec::new(input_rate, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, output_rate, 512);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin();
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        let output = result.unwrap();
+        assert!(!output.is_empty());
+        assert_eq!(output.len() % 2, 0);
+
+        // With 6x upsampling, we expect significantly more output samples
+        let output_frames = output.len() / 2;
+        assert!(
+            output_frames > 512,
+            "6x upsampling should produce more frames: got {output_frames} frames from 512 input"
+        );
+    }
+
+    /// Test that resample_to_audio_buffer returns None when insufficient samples
+    #[test_log::test]
+    fn test_resample_to_audio_buffer_insufficient() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for sample in channel.iter_mut() {
+                *sample = 0.5;
+            }
+        }
+
+        let result = resampler.resample_to_audio_buffer(&input_buffer);
+        assert!(result.is_none());
+    }
+
 }
