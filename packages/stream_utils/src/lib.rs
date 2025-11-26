@@ -660,4 +660,226 @@ mod tests {
         let _monitor = stream.stalled_monitor();
         // If we get here without panic, the conversion works
     }
+
+    // ===== ByteWriter Clone Behavior Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_clone_shares_senders() {
+        // Test that cloned ByteWriter shares the same senders list
+        let writer = ByteWriter::default();
+        let mut cloned_writer = writer.clone();
+
+        // Create stream from original writer
+        let mut stream = writer.stream();
+
+        // Write from cloned writer should be received
+        cloned_writer.write_all(b"hello").unwrap();
+        cloned_writer.close();
+
+        let data = stream.next().await.unwrap().unwrap();
+        assert_eq!(data, b"hello"[..]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_clone_both_write() {
+        // Test that both original and cloned writers can write to the same streams
+        let mut writer = ByteWriter::default();
+        let mut cloned_writer = writer.clone();
+
+        let mut stream = writer.stream();
+
+        // Write from original
+        writer.write_all(b"from original").unwrap();
+        // Write from clone
+        cloned_writer.write_all(b"from clone").unwrap();
+        cloned_writer.close();
+
+        let data1 = stream.next().await.unwrap().unwrap();
+        let data2 = stream.next().await.unwrap().unwrap();
+        let close_signal = stream.next().await.unwrap().unwrap();
+
+        assert_eq!(data1, b"from original"[..]);
+        assert_eq!(data2, b"from clone"[..]);
+        assert_eq!(close_signal.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_byte_writer_clone_shares_bytes_written() {
+        // Test that cloned writers share the bytes_written counter
+        let mut writer = ByteWriter::default();
+        let cloned_writer = writer.clone();
+
+        assert_eq!(writer.bytes_written(), 0);
+        assert_eq!(cloned_writer.bytes_written(), 0);
+
+        writer.write_all(b"hello").unwrap();
+
+        // Both should reflect the same count
+        assert_eq!(writer.bytes_written(), 5);
+        assert_eq!(cloned_writer.bytes_written(), 5);
+    }
+
+    // ===== TypedWriter Clone Behavior Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_clone_shares_senders() {
+        // Test that cloned TypedWriter shares the same senders list
+        let writer = TypedWriter::<i32>::default();
+        let cloned_writer = writer.clone();
+
+        // Create stream from original writer
+        let mut stream = writer.stream();
+
+        // Write from cloned writer should be received
+        cloned_writer.write(42);
+
+        let data = stream.next().await.unwrap();
+        assert_eq!(data, 42);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_clone_both_write() {
+        // Test that both original and cloned writers can write to the same streams
+        let writer = TypedWriter::<String>::default();
+        let cloned_writer = writer.clone();
+
+        let mut stream = writer.stream();
+
+        // Write from original
+        writer.write("from original".to_string());
+        // Write from clone
+        cloned_writer.write("from clone".to_string());
+
+        let data1 = stream.next().await.unwrap();
+        let data2 = stream.next().await.unwrap();
+
+        assert_eq!(data1, "from original");
+        assert_eq!(data2, "from clone");
+    }
+
+    // ===== TypedWriter Multi-Disconnection Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_multiple_disconnection_ordering() {
+        // Test that multiple disconnected receivers are correctly removed
+        let writer = TypedWriter::<i32>::default();
+        let stream1 = writer.stream();
+        let stream2 = writer.stream();
+        let stream3 = writer.stream();
+        let mut stream4 = writer.stream();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 4);
+
+        // Drop first and third streams
+        drop(stream1);
+        drop(stream3);
+
+        // Write should trigger cleanup of disconnected receivers
+        writer.write(42);
+
+        // Should have 2 senders remaining
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Drop stream2
+        drop(stream2);
+
+        // Write again
+        writer.write(100);
+
+        // Should have 1 sender remaining
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // stream4 should have received both values
+        let val1 = stream4.next().await.unwrap();
+        let val2 = stream4.next().await.unwrap();
+        assert_eq!(val1, 42);
+        assert_eq!(val2, 100);
+    }
+
+    // ===== ByteWriter Close Edge Cases =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_close_with_disconnected_streams() {
+        // Test that close handles already-disconnected receivers
+        let writer = ByteWriter::default();
+        let stream1 = writer.stream();
+        let mut stream2 = writer.stream();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Drop stream1 before close
+        drop(stream1);
+
+        // Close should handle the disconnected receiver
+        writer.close();
+
+        // Should have 1 sender remaining (stream2 received close signal)
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // stream2 should receive the close signal
+        let close_signal = stream2.next().await.unwrap().unwrap();
+        assert_eq!(close_signal.len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_close_all_disconnected() {
+        // Test close when all streams are disconnected
+        let writer = ByteWriter::default();
+        let stream1 = writer.stream();
+        let stream2 = writer.stream();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Drop all streams
+        drop(stream1);
+        drop(stream2);
+
+        // Close should handle all disconnected receivers without panic
+        writer.close();
+
+        // Should have 0 senders remaining
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_byte_writer_close_no_streams() {
+        // Test close when no streams were ever created
+        let writer = ByteWriter::default();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+
+        // Close should work fine with no streams
+        writer.close();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    // ===== Stream Polling Edge Cases =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_stream_end_of_stream() {
+        // Test that stream properly returns None after sender is dropped
+        let writer = ByteWriter::default();
+        let mut stream = writer.stream();
+
+        // Drop the writer (which owns the sender list, but not senders directly)
+        // The sender is still in the senders list
+        drop(writer);
+
+        // Since the sender is no longer accessible, stream should end
+        let result = stream.next().await;
+        assert!(result.is_none(), "Stream should end when sender is dropped");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_stream_end_of_stream() {
+        // Test that typed stream properly returns None after writer is dropped
+        let writer = TypedWriter::<i32>::default();
+        let mut stream = writer.stream();
+
+        drop(writer);
+
+        let result = stream.next().await;
+        assert!(result.is_none(), "Stream should end when writer is dropped");
+    }
 }
