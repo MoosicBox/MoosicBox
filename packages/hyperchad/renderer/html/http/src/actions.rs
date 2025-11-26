@@ -67,8 +67,146 @@ pub fn handle_action(
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::BTreeMap, sync::Arc};
+
     use super::*;
+    use bytes::Bytes;
     use hyperchad_renderer::transformer::actions::logic::Value;
+    use hyperchad_router::RequestInfo;
+    use switchy::http::models::Method;
+
+    fn create_request_with_body(body: &[u8]) -> RouteRequest {
+        RouteRequest {
+            path: "/$action".to_string(),
+            method: Method::Post,
+            query: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
+            info: RequestInfo::default(),
+            body: Some(Arc::new(Bytes::copy_from_slice(body))),
+        }
+    }
+
+    fn create_request_without_body() -> RouteRequest {
+        RouteRequest {
+            path: "/$action".to_string(),
+            method: Method::Post,
+            query: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
+            info: RequestInfo::default(),
+            body: None,
+        }
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_string_action() {
+        let (tx, rx) = flume::unbounded();
+        let body = br#"{"action":"click"}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 204);
+
+        let (action_name, value) = rx.try_recv().unwrap();
+        assert_eq!(action_name, "click");
+        assert!(value.is_none());
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_string_action_and_value() {
+        let (tx, rx) = flume::unbounded();
+        let body = br#"{"action":"setValue","value":42}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 204);
+
+        let (action_name, value) = rx.try_recv().unwrap();
+        assert_eq!(action_name, "setValue");
+        assert!(value.is_some());
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_complex_json_action() {
+        let (tx, rx) = flume::unbounded();
+        let body = br#"{"action":{"type":"navigate","path":"/home"}}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 204);
+
+        let (action_name, value) = rx.try_recv().unwrap();
+        // Complex JSON action is serialized to JSON string
+        assert!(action_name.contains("navigate"));
+        assert!(action_name.contains("/home"));
+        assert!(value.is_none());
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_missing_body_returns_400() {
+        let (tx, _rx) = flume::unbounded();
+        let req = create_request_without_body();
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 400);
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_invalid_json_returns_400() {
+        let (tx, _rx) = flume::unbounded();
+        let body = b"not valid json";
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 400);
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_missing_action_field_returns_400() {
+        let (tx, _rx) = flume::unbounded();
+        let body = br#"{"value":42}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 400);
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_string_value() {
+        let (tx, rx) = flume::unbounded();
+        // Value::String is serialized as {"String": "value"}
+        let body = br#"{"action":"update","value":{"String":"hello"}}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 204);
+
+        let (action_name, value) = rx.try_recv().unwrap();
+        assert_eq!(action_name, "update");
+        match value {
+            Some(Value::String(s)) => assert_eq!(s, "hello"),
+            _ => panic!("Expected String value"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_handle_action_with_numeric_value() {
+        let (tx, rx) = flume::unbounded();
+        // Numeric values are deserialized as Value::Real
+        let body = br#"{"action":"setVolume","value":75}"#;
+        let req = create_request_with_body(body);
+
+        let response = handle_action(&tx, &req).unwrap();
+        assert_eq!(response.status(), 204);
+
+        let (action_name, value) = rx.try_recv().unwrap();
+        assert_eq!(action_name, "setVolume");
+        match value {
+            Some(Value::Real(v)) => assert!((v - 75.0).abs() < f32::EPSILON),
+            _ => panic!("Expected Real value, got {value:?}"),
+        }
+    }
 
     #[test_log::test]
     fn test_action_payload_deserialize_string_action() {

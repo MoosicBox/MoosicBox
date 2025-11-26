@@ -6183,6 +6183,7 @@ dependencies = [
 name = "hyperchad_renderer_html_http"
 version = "0.1.4"
 dependencies = [
+ "bytes",
  "flume",
  "http 1.4.0",
  "hyperchad_color",
@@ -6195,6 +6196,7 @@ dependencies = [
  "moosicbox_env_utils",
  "serde",
  "serde_json",
+ "switchy",
  "switchy_async",
  "switchy_fs",
  "test-log",
