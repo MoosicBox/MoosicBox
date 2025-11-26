@@ -656,4 +656,156 @@ mod tests {
         env.set_var("UNSIGNED", "42");
         assert_eq!(env.var_parse::<u32>("UNSIGNED").unwrap(), 42);
     }
+
+    #[test_log::test]
+    #[serial]
+    fn test_simulator_env_arc_sharing() {
+        // SimulatorEnv uses Arc<RwLock<...>> internally, so cloned instances share state
+        let env1 = SimulatorEnv::new();
+        let vars_clone = env1.vars.clone();
+        let env2 = SimulatorEnv { vars: vars_clone };
+
+        // Set a variable through env1
+        env1.set_var("SHARED_VAR", "from_env1");
+
+        // It should be visible through env2 since they share the same Arc
+        assert_eq!(env2.var("SHARED_VAR").unwrap(), "from_env1");
+
+        // Modify through env2
+        env2.set_var("SHARED_VAR", "from_env2");
+
+        // Change should be visible through env1
+        assert_eq!(env1.var("SHARED_VAR").unwrap(), "from_env2");
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_remove_nonexistent_var() {
+        let env = SimulatorEnv::new();
+
+        // Removing a non-existent variable should not panic
+        env.remove_var("DEFINITELY_DOES_NOT_EXIST_123456789");
+
+        // Environment should still work normally after
+        assert_eq!(env.var("PORT").unwrap(), "8080");
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_empty_string_value() {
+        let env = SimulatorEnv::new();
+        env.set_var("EMPTY_VAR", "");
+
+        // Reading an empty string should succeed
+        assert_eq!(env.var("EMPTY_VAR").unwrap(), "");
+
+        // Empty string exists
+        assert!(env.var_exists("EMPTY_VAR"));
+
+        // Parsing empty string as String should work
+        let s: String = env.var_parse("EMPTY_VAR").unwrap();
+        assert_eq!(s, "");
+
+        // Parsing empty string as number should fail with parse error
+        let result: Result<i32> = env.var_parse("EMPTY_VAR");
+        assert!(matches!(result, Err(EnvError::ParseError(_, _))));
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_concurrent_read_write() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let env = SimulatorEnv::new();
+        let vars = Arc::clone(&env.vars);
+
+        // Spawn multiple reader threads
+        let mut handles = vec![];
+        for i in 0..4 {
+            let vars_clone = vars.clone();
+            let handle = thread::spawn(move || {
+                let env = SimulatorEnv { vars: vars_clone };
+                for _ in 0..100 {
+                    // Read operations
+                    let _ = env.var("PORT");
+                    let _ = env.vars();
+                    let _ = env.var_exists("SIMULATOR_SEED");
+                }
+                i
+            });
+            handles.push(handle);
+        }
+
+        // Spawn a writer thread
+        let vars_clone = vars.clone();
+        let writer = thread::spawn(move || {
+            let env = SimulatorEnv { vars: vars_clone };
+            for j in 0..100 {
+                env.set_var("CONCURRENT_VAR", &format!("value_{j}"));
+            }
+        });
+
+        // All threads should complete without panicking (no deadlock, no data race)
+        for handle in handles {
+            handle.join().expect("Reader thread panicked");
+        }
+        writer.join().expect("Writer thread panicked");
+
+        // Final state should be consistent
+        let env = SimulatorEnv { vars };
+        assert!(env.var("CONCURRENT_VAR").is_ok());
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_real_env_vars_preserved_on_new() {
+        // Set a real env var before creating SimulatorEnv
+        unsafe {
+            std::env::set_var("REAL_TEST_VAR_FOR_SIMULATOR", "real_value");
+        }
+
+        let env = SimulatorEnv::new();
+
+        // The real env var should be present
+        assert_eq!(
+            env.var("REAL_TEST_VAR_FOR_SIMULATOR").unwrap(),
+            "real_value"
+        );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("REAL_TEST_VAR_FOR_SIMULATOR");
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_reset_reloads_real_env_vars() {
+        // Set up: ensure a real env var exists
+        unsafe {
+            std::env::set_var("REAL_VAR_FOR_RESET_TEST", "original");
+        }
+
+        let env = SimulatorEnv::new();
+        assert_eq!(env.var("REAL_VAR_FOR_RESET_TEST").unwrap(), "original");
+
+        // Clear the simulator env
+        env.clear();
+        assert!(env.var("REAL_VAR_FOR_RESET_TEST").is_err());
+
+        // Change the real env var
+        unsafe {
+            std::env::set_var("REAL_VAR_FOR_RESET_TEST", "changed");
+        }
+
+        // Reset should reload from the real environment
+        env.reset();
+        assert_eq!(env.var("REAL_VAR_FOR_RESET_TEST").unwrap(), "changed");
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("REAL_VAR_FOR_RESET_TEST");
+        }
+    }
 }
