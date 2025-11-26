@@ -35,6 +35,8 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
+bytes    = { workspace = true }
+switchy  = { workspace = true, features = ["http"] }
 test-log = { workspace = true }
 
 [features]
