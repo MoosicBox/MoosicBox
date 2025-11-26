@@ -177,7 +177,7 @@ mod tests {
         value: i32,
     }
 
-    #[switchy_async::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_sqlite_persistence() -> Result<(), crate::Error> {
         let persistence = SqlitePersistence::new_in_memory().await?;
         let store = StateStore::new(persistence);
@@ -213,5 +213,132 @@ mod tests {
         ));
 
         Ok::<(), crate::Error>(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_trait_take_returns_correct_value() -> Result<(), crate::Error> {
+        // Test that StatePersistence::take returns the deleted value directly
+        // (without going through StateStore cache)
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let settings = TestSettings {
+            name: "direct_take_test".to_string(),
+            value: 123,
+        };
+
+        // Set value directly through persistence
+        persistence.set("key", &settings).await?;
+
+        // Take should return the value
+        let taken: Option<TestSettings> = persistence.take("key").await?;
+        assert_eq!(taken, Some(settings));
+
+        // Value should no longer exist
+        let after_take: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(after_take, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_trait_take_nonexistent_returns_none() -> Result<(), crate::Error> {
+        // Test that StatePersistence::take returns None for nonexistent keys
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let taken: Option<TestSettings> = persistence.take("nonexistent_key").await?;
+        assert_eq!(taken, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_trait_remove_default_impl() -> Result<(), crate::Error> {
+        // Test the default remove implementation which calls take internally
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let settings = TestSettings {
+            name: "remove_test".to_string(),
+            value: 456,
+        };
+
+        persistence.set("key", &settings).await?;
+
+        // Verify value exists
+        let before: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(before, Some(settings));
+
+        // Use remove (default implementation)
+        persistence.remove("key").await?;
+
+        // Value should be gone
+        let after: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(after, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_upsert_updates_existing_key() -> Result<(), crate::Error> {
+        // Test that set performs an upsert (insert or update)
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let original = TestSettings {
+            name: "original".to_string(),
+            value: 1,
+        };
+        let updated = TestSettings {
+            name: "updated".to_string(),
+            value: 2,
+        };
+
+        // Insert
+        persistence.set("key", &original).await?;
+        let first: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(first, Some(original));
+
+        // Update (upsert)
+        persistence.set("key", &updated).await?;
+        let second: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(second, Some(updated));
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_clear_removes_all_entries() -> Result<(), crate::Error> {
+        // Test clear removes multiple entries at once
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let settings1 = TestSettings {
+            name: "first".to_string(),
+            value: 1,
+        };
+        let settings2 = TestSettings {
+            name: "second".to_string(),
+            value: 2,
+        };
+        let settings3 = TestSettings {
+            name: "third".to_string(),
+            value: 3,
+        };
+
+        persistence.set("key1", &settings1).await?;
+        persistence.set("key2", &settings2).await?;
+        persistence.set("key3", &settings3).await?;
+
+        // Verify all exist
+        assert!(persistence.get::<TestSettings>("key1").await?.is_some());
+        assert!(persistence.get::<TestSettings>("key2").await?.is_some());
+        assert!(persistence.get::<TestSettings>("key3").await?.is_some());
+
+        // Clear all
+        persistence.clear().await?;
+
+        // Verify all removed
+        assert!(persistence.get::<TestSettings>("key1").await?.is_none());
+        assert!(persistence.get::<TestSettings>("key2").await?.is_none());
+        assert!(persistence.get::<TestSettings>("key3").await?.is_none());
+
+        Ok(())
     }
 }
