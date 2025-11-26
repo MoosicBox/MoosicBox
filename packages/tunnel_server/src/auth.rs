@@ -16,6 +16,7 @@ use futures_util::Future;
 use futures_util::future::{Ready, err, ok};
 use qstring::QString;
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use crate::db::{DatabaseError, valid_client_access_token, valid_signature_token};
 
@@ -56,7 +57,11 @@ fn is_authorized(req: &HttpRequest) -> bool {
             auth
         };
 
-        return token == TUNNEL_ACCESS_TOKEN;
+        // Use constant-time comparison to prevent timing attacks
+        return token
+            .as_bytes()
+            .ct_eq(TUNNEL_ACCESS_TOKEN.as_bytes())
+            .into();
     }
 
     false
