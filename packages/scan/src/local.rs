@@ -617,3 +617,107 @@ async fn scan_dir(
 
     Ok(handles)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_extract_track_number_with_leading_digits() {
+        assert_eq!(extract_track_number("01 Song Title"), Some(1));
+        assert_eq!(extract_track_number("05 Song Title"), Some(5));
+        assert_eq!(extract_track_number("12 Song Title"), Some(12));
+        assert_eq!(extract_track_number("123 Song Title"), Some(123));
+    }
+
+    #[test_log::test]
+    fn test_extract_track_number_with_leading_zeros() {
+        // Leading zeros should be skipped
+        assert_eq!(extract_track_number("001 Song Title"), Some(1));
+        assert_eq!(extract_track_number("007 Song Title"), Some(7));
+        assert_eq!(extract_track_number("0010 Song Title"), Some(10));
+    }
+
+    #[test_log::test]
+    fn test_extract_track_number_all_zeros_returns_none() {
+        // All zeros should return None since skip_while removes them all
+        assert_eq!(extract_track_number("000 Song Title"), None);
+    }
+
+    #[test_log::test]
+    fn test_extract_track_number_without_number_prefix() {
+        assert_eq!(extract_track_number("Song Title"), None);
+        assert_eq!(extract_track_number("No Number Here"), None);
+    }
+
+    #[test_log::test]
+    fn test_extract_track_number_with_only_number() {
+        assert_eq!(extract_track_number("42"), Some(42));
+        assert_eq!(extract_track_number("7"), Some(7));
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_skips_leading_numbers_and_separators() {
+        assert_eq!(
+            extract_track_name("01 Song Title"),
+            Some("Song Title".to_string())
+        );
+        assert_eq!(
+            extract_track_name("01-Song Title"),
+            Some("Song Title".to_string())
+        );
+        assert_eq!(
+            extract_track_name("01_Song Title"),
+            Some("Song Title".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_with_multiple_separators() {
+        assert_eq!(
+            extract_track_name("01 - Song Title"),
+            Some("Song Title".to_string())
+        );
+        assert_eq!(
+            extract_track_name("01__Song Title"),
+            Some("Song Title".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_converts_underscores_to_spaces() {
+        assert_eq!(
+            extract_track_name("01_Song_Title"),
+            Some("Song Title".to_string())
+        );
+        assert_eq!(
+            extract_track_name("Song_With_Underscores"),
+            Some("Song With Underscores".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_without_number_prefix() {
+        assert_eq!(
+            extract_track_name("Song Title"),
+            Some("Song Title".to_string())
+        );
+        assert_eq!(
+            extract_track_name("Another Song"),
+            Some("Another Song".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_empty_after_skipping() {
+        // If only numbers and separators, should return None
+        assert_eq!(extract_track_name("01 "), None);
+        assert_eq!(extract_track_name("123-_-"), None);
+    }
+
+    #[test_log::test]
+    fn test_extract_track_name_number_only() {
+        // Pure numbers should return None
+        assert_eq!(extract_track_name("12345"), None);
+    }
+}
