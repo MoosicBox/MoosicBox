@@ -1652,3 +1652,408 @@ impl DeleteStatement<'_> {
         db.exec_delete_first(self).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DatabaseValue, sql_interval::SqlInterval};
+
+    mod expression_params_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_params_filters_null_values() {
+            let val = DatabaseValue::Null;
+            let params = val.params();
+            assert!(params.is_some());
+            assert!(params.unwrap().is_empty());
+        }
+
+        #[test_log::test]
+        fn test_params_filters_now() {
+            let val = DatabaseValue::Now;
+            let params = val.params();
+            assert!(params.is_some());
+            assert!(params.unwrap().is_empty());
+        }
+
+        #[test_log::test]
+        fn test_params_filters_now_plus() {
+            let val = DatabaseValue::NowPlus(SqlInterval::from_days(1));
+            let params = val.params();
+            assert!(params.is_some());
+            assert!(params.unwrap().is_empty());
+        }
+
+        #[test_log::test]
+        fn test_params_includes_regular_values() {
+            let val = DatabaseValue::Int64(42);
+            let params = val.params();
+            assert!(params.is_some());
+            let params = params.unwrap();
+            assert_eq!(params.len(), 1);
+            assert_eq!(params[0], &DatabaseValue::Int64(42));
+        }
+
+        #[test_log::test]
+        fn test_params_includes_string_values() {
+            let val = DatabaseValue::String("test".to_string());
+            let params = val.params();
+            assert!(params.is_some());
+            let params = params.unwrap();
+            assert_eq!(params.len(), 1);
+        }
+    }
+
+    mod and_expression_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_and_with_no_conditions_returns_none() {
+            let and_expr = And { conditions: vec![] };
+            assert!(and_expr.values().is_none());
+        }
+
+        #[test_log::test]
+        fn test_and_collects_values_from_conditions() {
+            let eq1 = where_eq("col1", DatabaseValue::Int64(1));
+            let eq2 = where_eq("col2", DatabaseValue::String("test".to_string()));
+
+            let and_expr = where_and(vec![Box::new(eq1), Box::new(eq2)]);
+            let values = and_expr.values();
+            assert!(values.is_some());
+            let values = values.unwrap();
+            assert_eq!(values.len(), 2);
+        }
+
+        #[test_log::test]
+        fn test_and_params_filters_non_bindable() {
+            let eq1 = where_eq("col1", DatabaseValue::Now);
+            let eq2 = where_eq("col2", DatabaseValue::Int64(42));
+
+            let and_expr = where_and(vec![Box::new(eq1), Box::new(eq2)]);
+            let params = and_expr.params();
+            assert!(params.is_some());
+            let params = params.unwrap();
+            // NOW() should be filtered out
+            assert_eq!(params.len(), 1);
+            assert_eq!(params[0], &DatabaseValue::Int64(42));
+        }
+    }
+
+    mod or_expression_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_or_with_no_conditions_returns_none() {
+            let or_expr = Or { conditions: vec![] };
+            assert!(or_expr.values().is_none());
+        }
+
+        #[test_log::test]
+        fn test_or_collects_values_from_conditions() {
+            let eq1 = where_eq("status", DatabaseValue::String("active".to_string()));
+            let eq2 = where_eq("status", DatabaseValue::String("pending".to_string()));
+
+            let or_expr = where_or(vec![Box::new(eq1), Box::new(eq2)]);
+            let values = or_expr.values();
+            assert!(values.is_some());
+            let values = values.unwrap();
+            assert_eq!(values.len(), 2);
+        }
+    }
+
+    mod in_expression_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_in_values_collection() {
+            let in_expr = where_in(
+                "id",
+                vec![
+                    DatabaseValue::Int64(1),
+                    DatabaseValue::Int64(2),
+                    DatabaseValue::Int64(3),
+                ],
+            );
+            let values = in_expr.values();
+            assert!(values.is_some());
+            let values = values.unwrap();
+            assert_eq!(values.len(), 3);
+        }
+
+        #[test_log::test]
+        fn test_not_in_values_collection() {
+            let not_in = where_not_in(
+                "status",
+                vec![
+                    DatabaseValue::String("deleted".to_string()),
+                    DatabaseValue::String("archived".to_string()),
+                ],
+            );
+            let values = not_in.values();
+            assert!(values.is_some());
+            let values = values.unwrap();
+            assert_eq!(values.len(), 2);
+        }
+    }
+
+    mod coalesce_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_coalesce_empty_returns_none() {
+            let coal = coalesce(vec![]);
+            assert!(coal.values().is_none());
+        }
+
+        #[test_log::test]
+        fn test_coalesce_collects_values() {
+            let coal = coalesce(vec![
+                Box::new(DatabaseValue::StringOpt(None)),
+                Box::new(DatabaseValue::String("default".to_string())),
+            ]);
+            let values = coal.values();
+            assert!(values.is_some());
+            let values = values.unwrap();
+            assert_eq!(values.len(), 2);
+        }
+    }
+
+    mod inlist_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_inlist_empty_returns_none() {
+            let list = InList { values: vec![] };
+            assert!(list.values().is_none());
+        }
+
+        #[test_log::test]
+        fn test_inlist_collects_values() {
+            let list = InList {
+                values: vec![
+                    Box::new(DatabaseValue::Int64(1)),
+                    Box::new(DatabaseValue::Int64(2)),
+                ],
+            };
+            let values = list.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 2);
+        }
+    }
+
+    mod comparison_expression_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_eq_values() {
+            let eq = where_eq("col", DatabaseValue::Int64(42));
+            let values = eq.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_not_eq_values() {
+            let neq = where_not_eq("col", DatabaseValue::String("test".to_string()));
+            let values = neq.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_gt_values() {
+            let gt = where_gt("age", DatabaseValue::Int32(18));
+            let values = gt.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_gte_values() {
+            let gte = where_gte("score", DatabaseValue::Int32(100));
+            let values = gte.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_lt_values() {
+            let lt = where_lt("quantity", DatabaseValue::Int32(10));
+            let values = lt.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_lte_values() {
+            let lte = where_lte("price", DatabaseValue::Real64(99.99));
+            let values = lte.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+    }
+
+    mod select_query_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_select_query_no_filters_returns_none() {
+            let query = select("users");
+            assert!(query.values().is_none());
+        }
+
+        #[test_log::test]
+        fn test_select_query_with_filter_values() {
+            let query = select("users").where_eq("id", DatabaseValue::Int64(1));
+            let values = query.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_select_query_with_multiple_filters() {
+            let query = select("users")
+                .where_eq("active", DatabaseValue::Bool(true))
+                .where_gt("age", DatabaseValue::Int32(18));
+            let values = query.values();
+            assert!(values.is_some());
+            assert_eq!(values.unwrap().len(), 2);
+        }
+    }
+
+    mod literal_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_literal_from_str() {
+            let lit: Literal = "COUNT(*)".into();
+            assert_eq!(lit.value, "COUNT(*)");
+        }
+
+        #[test_log::test]
+        fn test_literal_from_string() {
+            let lit: Literal = String::from("SUM(amount)").into();
+            assert_eq!(lit.value, "SUM(amount)");
+        }
+
+        #[test_log::test]
+        fn test_literal_function() {
+            let lit = literal("NOW()");
+            assert_eq!(lit.value, "NOW()");
+        }
+    }
+
+    mod identifier_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_identifier_from_str() {
+            let id: Identifier = "user_id".into();
+            assert_eq!(id.value, "user_id");
+        }
+
+        #[test_log::test]
+        fn test_identifier_from_string() {
+            let id: Identifier = String::from("column_name").into();
+            assert_eq!(id.value, "column_name");
+        }
+
+        #[test_log::test]
+        fn test_identifier_function() {
+            let id = identifier("table.column");
+            assert_eq!(id.value, "table.column");
+        }
+    }
+
+    mod join_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_inner_join_creation() {
+            let j = join("orders", "orders.user_id = users.id");
+            assert_eq!(j.table_name, "orders");
+            assert_eq!(j.on, "orders.user_id = users.id");
+            assert!(!j.left);
+        }
+
+        #[test_log::test]
+        fn test_left_join_creation() {
+            let j = left_join("addresses", "users.address_id = addresses.id");
+            assert_eq!(j.table_name, "addresses");
+            assert!(j.left);
+        }
+    }
+
+    mod sort_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_sort_ascending() {
+            let s = sort(identifier("name"), SortDirection::Asc);
+            assert!(matches!(s.direction, SortDirection::Asc));
+        }
+
+        #[test_log::test]
+        fn test_sort_descending() {
+            let s = sort(identifier("created_at"), SortDirection::Desc);
+            assert!(matches!(s.direction, SortDirection::Desc));
+        }
+    }
+
+    mod boxed_macro_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_boxed_empty() {
+            let v: Vec<Box<dyn BooleanExpression>> = boxed![];
+            assert!(v.is_empty());
+        }
+
+        #[test_log::test]
+        fn test_boxed_single() {
+            let v: Vec<Box<dyn BooleanExpression>> =
+                boxed![where_eq("id", DatabaseValue::Int64(1))];
+            assert_eq!(v.len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_boxed_multiple() {
+            let v: Vec<Box<dyn BooleanExpression>> = boxed![
+                where_eq("id", DatabaseValue::Int64(1)),
+                where_gt("age", DatabaseValue::Int32(18)),
+            ];
+            assert_eq!(v.len(), 2);
+        }
+    }
+
+    mod filterable_query_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_filter_if_some_with_value() {
+            let query =
+                select("users").filter_if_some(Some(where_eq("id", DatabaseValue::Int64(1))));
+            assert!(query.filters.is_some());
+            assert_eq!(query.filters.unwrap().len(), 1);
+        }
+
+        #[test_log::test]
+        fn test_filter_if_some_with_none() {
+            let query = select("users").filter_if_some::<Eq>(None);
+            assert!(query.filters.is_none());
+        }
+
+        #[test_log::test]
+        fn test_filters_adds_multiple() {
+            let conditions: Vec<Box<dyn BooleanExpression>> = vec![
+                Box::new(where_eq("a", DatabaseValue::Int64(1))),
+                Box::new(where_eq("b", DatabaseValue::Int64(2))),
+            ];
+            let query = select("table").filters(conditions);
+            assert!(query.filters.is_some());
+            assert_eq!(query.filters.unwrap().len(), 2);
+        }
+    }
+}
