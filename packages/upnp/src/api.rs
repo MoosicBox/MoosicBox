@@ -585,3 +585,93 @@ pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<BTreeMap
         .await?,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_action_error_missing_property_converts_to_internal_server_error() {
+        let error = ActionError::MissingProperty("TestProperty".to_string());
+        let actix_error: actix_web::Error = error.into();
+        // ErrorInternalServerError returns a 500 status
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_error_converts_to_failed_dependency() {
+        let error = ScanError::RenderingControlNotFound;
+        let actix_error: actix_web::Error = error.into();
+        // ErrorFailedDependency returns 424
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_error_device_udn_not_found_message() {
+        let error = ScanError::DeviceUdnNotFound {
+            device_udn: "uuid:test-device".to_string(),
+        };
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_error_device_url_not_found_message() {
+        let error = ScanError::DeviceUrlNotFound {
+            device_url: "http://192.168.1.100:8080".to_string(),
+        };
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_error_service_id_not_found() {
+        let error = ScanError::ServiceIdNotFound {
+            service_id: "urn:upnp-org:serviceId:AVTransport".to_string(),
+        };
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_error_media_renderer_not_found() {
+        let error = ScanError::MediaRendererNotFound;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+
+    #[test_log::test]
+    fn test_upnp_device_scanner_error_no_outputs_converts_to_failed_dependency() {
+        let error = UpnpDeviceScannerError::NoOutputs;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
+}

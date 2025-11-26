@@ -1385,6 +1385,88 @@ mod tests {
         );
     }
 
+    #[test_log::test]
+    fn test_parse_track_metadata_res_element_without_text_content() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+                <res protocolInfo="http-get:*:audio/mp3:*"></res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml);
+        assert!(
+            result.is_err(),
+            "Expected error when res element has no text content"
+        );
+        match result {
+            Err(ActionError::MissingProperty(msg)) => {
+                assert!(
+                    msg.contains("res"),
+                    "Error message should mention res: {msg}"
+                );
+            }
+            _ => panic!("Expected MissingProperty error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_case_insensitive_tag_names() {
+        // UPnP specs don't guarantee case consistency, test that we handle different cases
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <ITEM id="0" parentID="-1" restricted="false">
+                <upnp:CLASS>object.item.audioItem.musicTrack</upnp:CLASS>
+                <dc:TITLE>Uppercase Tags</dc:TITLE>
+                <RES>http://example.com/track.mp3</RES>
+            </ITEM>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse uppercase tags");
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(
+            result.items[0].upnp_class.as_deref(),
+            Some("object.item.audioItem.musicTrack")
+        );
+        assert_eq!(result.items[0].dc_title.as_deref(), Some("Uppercase Tags"));
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_invalid_xml() {
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+                <res>http://example.com/track.mp3
+            </item>"#; // Missing closing tags
+
+        let result = parse_track_metadata(xml);
+        assert!(result.is_err(), "Expected error when XML is invalid");
+        assert!(
+            matches!(result, Err(ActionError::Roxml(_))),
+            "Expected Roxml error variant"
+        );
+    }
+
+    #[test_log::test]
+    fn test_str_to_duration_boundary_values() {
+        // Test boundary between time units
+        assert_eq!(str_to_duration("00:00:59"), 59);
+        assert_eq!(str_to_duration("00:59:59"), 3599);
+        assert_eq!(str_to_duration("23:59:59"), 86399);
+        // Test with leading zeros
+        assert_eq!(str_to_duration("00:00:09"), 9);
+        assert_eq!(str_to_duration("00:09:00"), 540);
+        assert_eq!(str_to_duration("09:00:00"), 32400);
+    }
+
+    #[test_log::test]
+    fn test_duration_to_string_boundary_values() {
+        // Test boundary between time units
+        assert_eq!(duration_to_string(59), "00:00:59");
+        assert_eq!(duration_to_string(3599), "00:59:59");
+        assert_eq!(duration_to_string(86399), "23:59:59");
+        // Test large values beyond 24 hours
+        assert_eq!(duration_to_string(90000), "25:00:00");
+        assert_eq!(duration_to_string(360_000), "100:00:00");
+    }
+
     mod cache_tests {
         use super::*;
 

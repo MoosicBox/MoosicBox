@@ -521,4 +521,19 @@ mod tests {
         let error = ListenerError::Send;
         assert_eq!(error.to_string(), "Failed to send");
     }
+
+    #[test_log::test]
+    fn test_upnp_command_display_unsubscribe() {
+        let cmd = UpnpCommand::Unsubscribe {
+            subscription_id: 42,
+        };
+        assert_eq!(cmd.to_string(), "Unsubscribe");
+    }
+
+    #[test_log::test]
+    fn test_upnp_command_as_ref_variants() {
+        // Test that AsRefStr derives the expected string representations
+        let unsubscribe = UpnpCommand::Unsubscribe { subscription_id: 1 };
+        assert_eq!(unsubscribe.as_ref(), "Unsubscribe");
+    }
 }
