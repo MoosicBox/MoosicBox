@@ -1076,3 +1076,66 @@ pub async fn search_endpoint(
 
     Ok(Json(results.into()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_album_release_type_to_qobuz_release_type() {
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::Lp),
+            QobuzAlbumReleaseType::Album
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::Live),
+            QobuzAlbumReleaseType::Live
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::Compilations),
+            QobuzAlbumReleaseType::Compilation
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::EpsAndSingles),
+            QobuzAlbumReleaseType::EpSingle
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::Other),
+            QobuzAlbumReleaseType::Other
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumReleaseType::Download),
+            QobuzAlbumReleaseType::Download
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_sort_to_qobuz_album_sort() {
+        assert_eq!(
+            QobuzAlbumSort::from(AlbumSort::ReleaseDate),
+            QobuzAlbumSort::ReleaseDate
+        );
+        assert_eq!(
+            QobuzAlbumSort::from(AlbumSort::Relevant),
+            QobuzAlbumSort::Relevant
+        );
+        assert_eq!(
+            QobuzAlbumSort::from(AlbumSort::ReleaseDateByPriority),
+            QobuzAlbumSort::ReleaseDateByPriority
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_order_to_qobuz_album_order() {
+        assert_eq!(QobuzAlbumOrder::from(AlbumOrder::Asc), QobuzAlbumOrder::Asc);
+        assert_eq!(
+            QobuzAlbumOrder::from(AlbumOrder::Desc),
+            QobuzAlbumOrder::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_order_default_is_desc() {
+        assert_eq!(AlbumOrder::default(), AlbumOrder::Desc);
+    }
+}
