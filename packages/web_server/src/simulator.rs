@@ -1693,4 +1693,286 @@ mod tests {
         );
         assert_eq!(server.routes.len(), 1);
     }
+
+    // ==================== SimulationRequest Builder Tests ====================
+
+    #[test]
+    fn test_simulation_request_with_single_cookie() {
+        let req = SimulationRequest::new(Method::Get, "/test").with_cookie("session_id", "abc123");
+
+        assert_eq!(req.cookies.len(), 1);
+        assert_eq!(req.cookies.get("session_id"), Some(&"abc123".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_request_with_multiple_cookies() {
+        let cookies = vec![
+            ("session_id".to_string(), "abc123".to_string()),
+            ("user_pref".to_string(), "dark_mode".to_string()),
+            ("tracking".to_string(), "opt_out".to_string()),
+        ];
+
+        let req = SimulationRequest::new(Method::Get, "/test").with_cookies(cookies);
+
+        assert_eq!(req.cookies.len(), 3);
+        assert_eq!(req.cookies.get("session_id"), Some(&"abc123".to_string()));
+        assert_eq!(req.cookies.get("user_pref"), Some(&"dark_mode".to_string()));
+        assert_eq!(req.cookies.get("tracking"), Some(&"opt_out".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_request_with_remote_addr() {
+        let req =
+            SimulationRequest::new(Method::Get, "/test").with_remote_addr("192.168.1.100:8080");
+
+        assert_eq!(req.remote_addr, Some("192.168.1.100:8080".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_request_with_multiple_path_params() {
+        let mut params = PathParams::new();
+        params.insert("user_id".to_string(), "123".to_string());
+        params.insert("post_id".to_string(), "456".to_string());
+
+        let req = SimulationRequest::new(Method::Get, "/users/{user_id}/posts/{post_id}")
+            .with_path_params(params);
+
+        assert_eq!(req.path_params.len(), 2);
+        assert_eq!(req.path_params.get("user_id"), Some(&"123".to_string()));
+        assert_eq!(req.path_params.get("post_id"), Some(&"456".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_request_chained_builder() {
+        let mut path_params = PathParams::new();
+        path_params.insert("id".to_string(), "42".to_string());
+
+        let req = SimulationRequest::new(Method::Post, "/api/resource")
+            .with_query_string("format=json&pretty=true")
+            .with_header("Content-Type", "application/json")
+            .with_header("Authorization", "Bearer token123")
+            .with_cookie("session", "xyz789")
+            .with_remote_addr("10.0.0.1:12345")
+            .with_path_params(path_params)
+            .with_body(r#"{"name": "test"}"#);
+
+        assert_eq!(req.method, Method::Post);
+        assert_eq!(req.path, "/api/resource");
+        assert_eq!(req.query_string, "format=json&pretty=true");
+        assert_eq!(
+            req.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            req.headers.get("Authorization"),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(req.cookies.get("session"), Some(&"xyz789".to_string()));
+        assert_eq!(req.remote_addr, Some("10.0.0.1:12345".to_string()));
+        assert_eq!(req.path_params.get("id"), Some(&"42".to_string()));
+        assert!(req.body.is_some());
+    }
+
+    // ==================== SimulationStub Access Tests ====================
+
+    #[test]
+    fn test_simulation_stub_cookie_access() {
+        let req = SimulationRequest::new(Method::Get, "/test")
+            .with_cookie("auth_token", "secret123")
+            .with_cookie("user_id", "user_42");
+
+        let stub = SimulationStub::new(req);
+
+        assert_eq!(stub.cookie("auth_token"), Some("secret123"));
+        assert_eq!(stub.cookie("user_id"), Some("user_42"));
+        assert_eq!(stub.cookie("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_simulation_stub_cookies_returns_all() {
+        let req = SimulationRequest::new(Method::Get, "/test")
+            .with_cookie("a", "1")
+            .with_cookie("b", "2")
+            .with_cookie("c", "3");
+
+        let stub = SimulationStub::new(req);
+        let cookies = stub.cookies();
+
+        assert_eq!(cookies.len(), 3);
+        assert_eq!(cookies.get("a"), Some(&"1".to_string()));
+        assert_eq!(cookies.get("b"), Some(&"2".to_string()));
+        assert_eq!(cookies.get("c"), Some(&"3".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_stub_remote_addr_access() {
+        let req = SimulationRequest::new(Method::Get, "/test").with_remote_addr("127.0.0.1:55555");
+
+        let stub = SimulationStub::new(req);
+
+        assert_eq!(stub.remote_addr(), Some("127.0.0.1:55555"));
+    }
+
+    #[test]
+    fn test_simulation_stub_remote_addr_none() {
+        let req = SimulationRequest::new(Method::Get, "/test");
+        let stub = SimulationStub::new(req);
+
+        assert_eq!(stub.remote_addr(), None);
+    }
+
+    #[test]
+    fn test_simulation_stub_path_param_access() {
+        let mut params = PathParams::new();
+        params.insert("id".to_string(), "999".to_string());
+        params.insert("action".to_string(), "edit".to_string());
+
+        let req =
+            SimulationRequest::new(Method::Get, "/resource/{id}/{action}").with_path_params(params);
+
+        let stub = SimulationStub::new(req);
+
+        assert_eq!(stub.path_param("id"), Some("999"));
+        assert_eq!(stub.path_param("action"), Some("edit"));
+        assert_eq!(stub.path_param("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_simulation_stub_with_state_container() {
+        use crate::extractors::state::StateContainer;
+
+        #[derive(Debug, Clone, PartialEq)]
+        struct TestState {
+            value: i32,
+        }
+
+        let req = SimulationRequest::new(Method::Get, "/test");
+        let mut container = StateContainer::new();
+        container.insert(TestState { value: 42 });
+
+        let stub = SimulationStub::new(req).with_state_container(Arc::new(RwLock::new(container)));
+
+        let retrieved_state = stub.state::<TestState>();
+        assert!(retrieved_state.is_some());
+        assert_eq!(retrieved_state.unwrap().value, 42);
+    }
+
+    #[test]
+    fn test_simulation_stub_state_not_found() {
+        use crate::extractors::state::StateContainer;
+
+        #[derive(Debug, Clone)]
+        struct UnregisteredState;
+
+        let req = SimulationRequest::new(Method::Get, "/test");
+        let container = StateContainer::new();
+
+        let stub = SimulationStub::new(req).with_state_container(Arc::new(RwLock::new(container)));
+
+        let result = stub.state::<UnregisteredState>();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_simulation_stub_app_state_access() {
+        use crate::extractors::state::StateContainer;
+
+        let req = SimulationRequest::new(Method::Get, "/test");
+        let container = Arc::new(RwLock::new(StateContainer::new()));
+
+        let stub = SimulationStub::new(req).with_state_container(Arc::clone(&container));
+
+        assert!(stub.app_state().is_some());
+    }
+
+    #[test]
+    fn test_simulation_stub_app_state_none_when_not_set() {
+        let req = SimulationRequest::new(Method::Get, "/test");
+        let stub = SimulationStub::new(req);
+
+        assert!(stub.app_state().is_none());
+    }
+
+    #[test]
+    fn test_simulation_stub_from_simulation_request() {
+        let req =
+            SimulationRequest::new(Method::Post, "/api/data").with_header("X-Custom", "value");
+
+        let stub: SimulationStub = req.into();
+
+        assert_eq!(stub.method(), &Method::Post);
+        assert_eq!(stub.path(), "/api/data");
+        assert_eq!(stub.header("X-Custom"), Some("value"));
+    }
+
+    // ==================== Path Pattern Matching Edge Cases ====================
+
+    #[test]
+    fn test_match_path_with_multiple_parameters() {
+        let pattern = parse_path_pattern("/users/{user_id}/posts/{post_id}/comments/{comment_id}");
+
+        let result = match_path(&pattern, "/users/123/posts/456/comments/789");
+
+        assert!(result.is_some());
+        let params = result.unwrap();
+        assert_eq!(params.get("user_id"), Some(&"123".to_string()));
+        assert_eq!(params.get("post_id"), Some(&"456".to_string()));
+        assert_eq!(params.get("comment_id"), Some(&"789".to_string()));
+    }
+
+    #[test]
+    fn test_match_path_parameter_with_special_characters() {
+        let pattern = parse_path_pattern("/files/{filename}");
+
+        let result = match_path(&pattern, "/files/my-document_v2.pdf");
+
+        assert!(result.is_some());
+        let params = result.unwrap();
+        assert_eq!(
+            params.get("filename"),
+            Some(&"my-document_v2.pdf".to_string())
+        );
+    }
+
+    #[test]
+    fn test_match_path_empty_parameter_value() {
+        // This tests edge case where path segment is empty
+        let pattern = parse_path_pattern("/api/{version}/resource");
+
+        // Note: URL path /api//resource has empty segment which won't match
+        let result = match_path(&pattern, "/api//resource");
+        // Empty segments are filtered out, so this should not match
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_path_pattern_root_only() {
+        let pattern = parse_path_pattern("/");
+
+        assert!(pattern.segments().is_empty());
+    }
+
+    #[test]
+    fn test_parse_path_pattern_single_parameter() {
+        let pattern = parse_path_pattern("/{id}");
+
+        assert_eq!(pattern.segments().len(), 1);
+        assert_eq!(
+            pattern.segments()[0],
+            PathSegment::Parameter("id".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_path_pattern_consecutive_literals() {
+        let pattern = parse_path_pattern("/api/v1/users/list");
+
+        assert_eq!(pattern.segments().len(), 4);
+        assert!(
+            pattern
+                .segments()
+                .iter()
+                .all(|s| matches!(s, PathSegment::Literal(_)))
+        );
+    }
 }
