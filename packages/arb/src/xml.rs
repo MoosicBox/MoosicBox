@@ -131,3 +131,58 @@ impl Arbitrary for XmlAttrNameString {
         xml_attr_name_strategy().prop_map(Self).boxed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_null_as_invalid() {
+        assert!(is_invalid_xml_char('\u{0000}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_last_control_char_as_invalid() {
+        // U+001F is the last control character in the first range
+        assert!(is_invalid_xml_char('\u{001F}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_space_as_valid() {
+        // U+0020 (space) is the first character after the control range
+        assert!(!is_invalid_xml_char('\u{0020}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_replacement_char_as_valid() {
+        // U+FFFD (replacement character) should be valid
+        assert!(!is_invalid_xml_char('\u{FFFD}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_fffe_as_invalid() {
+        // U+FFFE is a non-character
+        assert!(is_invalid_xml_char('\u{FFFE}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_ffff_as_invalid() {
+        // U+FFFF is a non-character
+        assert!(is_invalid_xml_char('\u{FFFF}'));
+    }
+
+    #[test_log::test]
+    fn is_valid_xml_char_is_inverse_of_is_invalid_xml_char() {
+        // Test that is_valid_xml_char is the exact inverse for key boundary characters
+        let test_chars = [
+            '\u{0000}', '\u{001F}', '\u{0020}', 'A', '\u{FFFD}', '\u{FFFE}', '\u{FFFF}',
+        ];
+        for c in test_chars {
+            assert_eq!(
+                is_valid_xml_char(c),
+                !is_invalid_xml_char(c),
+                "is_valid_xml_char and is_invalid_xml_char should be inverses for {c:?}"
+            );
+        }
+    }
+}
