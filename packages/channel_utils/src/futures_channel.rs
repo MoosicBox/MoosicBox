@@ -822,4 +822,101 @@ mod tests {
             Poll::Pending
         ));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_interleave_send_and_unbounded_send() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        #[allow(clippy::cast_sign_loss)]
+        let tx = tx.with_priority(|msg: &i32| *msg as usize);
+
+        // First message goes directly (ready_to_send starts true)
+        tx.send(1).unwrap();
+
+        // These go to the priority buffer since ready_to_send is now false
+        tx.send(10).unwrap();
+        tx.send(5).unwrap();
+
+        // unbounded_send bypasses the buffer and goes directly to the channel
+        // This message will be received immediately after the first message
+        tx.unbounded_send(999).unwrap();
+
+        // More buffered messages
+        tx.send(3).unwrap();
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // First message sent via send() goes directly
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+
+        // unbounded_send message comes next (it's in the channel, not buffer)
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(999))
+        ));
+
+        // Now buffered messages flush in priority order: 10, 5, 3
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(3))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_fused_stream_termination_after_close() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.send(1).unwrap();
+        tx.send(2).unwrap();
+
+        // Not terminated while channel is open
+        assert!(!rx.is_terminated());
+
+        // Close the sender (uses Deref to access UnboundedSender::close)
+        tx.close_channel();
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // Messages sent before close should still be receivable
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(2))
+        ));
+
+        // After close and draining messages, poll returns None
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(None)
+        ));
+
+        // After receiving None, the stream is terminated
+        assert!(rx.is_terminated());
+    }
 }
