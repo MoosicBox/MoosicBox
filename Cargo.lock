@@ -8376,6 +8376,7 @@ dependencies = [
  "moosicbox_assert",
  "proptest",
  "serde_json",
+ "test-log",
 ]
 
 [[package]]
