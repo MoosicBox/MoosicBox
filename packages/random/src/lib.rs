@@ -775,4 +775,195 @@ mod tests {
             // Any i32 value is valid
         }
     }
+
+    #[test_log::test]
+    fn test_f64_convertible_negative_integer_rounding() {
+        // Negative values round away from zero - verify correct rounding behavior
+        let value = -42.7_f64;
+        let as_i32 = i32::from_f64(value);
+        assert_eq!(as_i32, -43, "Should round -42.7 to -43");
+
+        let value = -42.3_f64;
+        let as_i32 = i32::from_f64(value);
+        assert_eq!(as_i32, -42, "Should round -42.3 to -42");
+
+        // f64::round() rounds half away from zero
+        let value = -42.5_f64;
+        let as_i32 = i32::from_f64(value);
+        assert_eq!(
+            as_i32, -43,
+            "Should round -42.5 to -43 (round half away from zero)"
+        );
+    }
+
+    #[test_log::test]
+    fn test_f64_convertible_boundary_values() {
+        // Test rounding at half values
+        let value = 0.5_f64;
+        let as_u32 = u32::from_f64(value);
+        assert_eq!(as_u32, 1, "Should round 0.5 to 1");
+
+        let value = 1.5_f64;
+        let as_u32 = u32::from_f64(value);
+        assert_eq!(as_u32, 2, "Should round 1.5 to 2");
+
+        // Zero case
+        let value = 0.0_f64;
+        let as_u32 = u32::from_f64(value);
+        assert_eq!(as_u32, 0, "Should handle zero");
+
+        let as_i32 = i32::from_f64(value);
+        assert_eq!(as_i32, 0, "Should handle zero for signed");
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_f64_with_zero_power() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        // With pow=0, x^0 = 1, so result should equal original value * 1 = original
+        // Actually, the random factor^0 = 1, but the random factor is in range (0.0001..1.0)
+        // so random_factor.powf(0.0) = 1.0, meaning result = value * 1.0 = value
+        let distributed = non_uniform_distribute_f64(original_value, 0.0, &rng);
+        assert!(
+            (distributed - original_value).abs() < f64::EPSILON,
+            "With pow=0, distributed value should equal original (got {distributed}, expected {original_value})"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_i32_with_zero_power() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        // With pow=0, x^0 = 1, so result should equal original value
+        let distributed = non_uniform_distribute_i32(original_value, 0, &rng);
+        assert!(
+            (distributed - original_value).abs() < f64::EPSILON,
+            "With pow=0, distributed value should equal original (got {distributed}, expected {original_value})"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_f64_with_negative_power() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        // With negative power, random_factor^(-1) > 1 when random_factor < 1
+        // This means the result can be larger than the original value
+        let distributed = non_uniform_distribute_f64(original_value, -1.0, &rng);
+        assert!(
+            distributed > 0.0,
+            "Distributed value should be positive (got {distributed})"
+        );
+        // With negative power and random factor in (0.0001..1), the multiplier will be > 1
+        assert!(
+            distributed >= original_value,
+            "With negative power, distributed value ({distributed}) should be >= original ({original_value})"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_i32_with_negative_power() {
+        let rng = Rng::from_seed(42_u64);
+        let original_value = 100.0;
+
+        // With negative power, random_factor^(-1) > 1 when random_factor < 1
+        let distributed = non_uniform_distribute_i32(original_value, -1, &rng);
+        assert!(
+            distributed > 0.0,
+            "Distributed value should be positive (got {distributed})"
+        );
+        assert!(
+            distributed >= original_value,
+            "With negative power, distributed value ({distributed}) should be >= original ({original_value})"
+        );
+    }
+
+    #[test_log::test]
+    fn test_rng_wrapper_mutable_rng_core_interface() {
+        use ::rand::RngCore;
+
+        let mut rng = Rng::from_seed(42_u64);
+
+        // Test the mutable RngCore trait interface (lines 108-124 in lib.rs)
+        // These delegate to GenericRng but through &mut self
+        let val1 = RngCore::next_u32(&mut rng);
+        let val2 = RngCore::next_u64(&mut rng);
+        assert!(val1 > 0 || val2 > 0, "Should produce values");
+
+        let mut buffer = [0_u8; 16];
+        RngCore::fill_bytes(&mut rng, &mut buffer);
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Should fill with non-zero bytes"
+        );
+
+        let mut buffer2 = [0_u8; 16];
+        let result = RngCore::try_fill_bytes(&mut rng, &mut buffer2);
+        assert!(result.is_ok(), "try_fill_bytes should succeed");
+        assert!(
+            buffer2.iter().any(|&x| x != 0),
+            "Should fill with non-zero bytes"
+        );
+    }
+
+    #[test_log::test]
+    fn test_sample_with_uniform_distribution() {
+        use ::rand::distributions::Uniform;
+
+        let rng = Rng::from_seed(42_u64);
+        let dist = Uniform::new(0, 100);
+
+        for _ in 0..100 {
+            let value: i32 = rng.sample(dist);
+            assert!(
+                (0..100).contains(&value),
+                "Sampled value {value} should be in range [0, 100)"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_gen_range_with_various_numeric_types() {
+        let rng = Rng::from_seed(42_u64);
+
+        // Test different numeric types with gen_range
+        let _u8_val: u8 = rng.gen_range(0..=255);
+        let _i8_val: i8 = rng.gen_range(-128..=127);
+        let _u16_val: u16 = rng.gen_range(0..=1000);
+        let _i16_val: i16 = rng.gen_range(-1000..=1000);
+        let _u64_val: u64 = rng.gen_range(0..=1000);
+        let _i64_val: i64 = rng.gen_range(-1000..=1000);
+        let _f32_val: f32 = rng.gen_range(0.0..1.0_f32);
+        let _f64_val: f64 = rng.gen_range(0.0..1.0_f64);
+
+        // Test passes if no panics occur
+    }
+
+    #[test_log::test]
+    fn test_gen_range_dist_with_various_numeric_types() {
+        let rng = Rng::from_seed(42_u64);
+
+        // Test different numeric types with gen_range_dist
+        let _u32_val: u32 = rng.gen_range_dist(0..=100, 1.0);
+        let _i32_val: i32 = rng.gen_range_dist(0..=100, 1.0);
+        let _f32_val: f32 = rng.gen_range_dist(0.0..1.0_f32, 1.0);
+        let _f64_val: f64 = rng.gen_range_dist(0.0..1.0_f64, 1.0);
+
+        // Test passes if no panics occur
+    }
+
+    #[test_log::test]
+    fn test_gen_range_disti_with_various_numeric_types() {
+        let rng = Rng::from_seed(42_u64);
+
+        // Test different numeric types with gen_range_disti
+        let _u32_val: u32 = rng.gen_range_disti(0..=100, 1);
+        let _i32_val: i32 = rng.gen_range_disti(0..=100, 1);
+        let _f32_val: f32 = rng.gen_range_disti(0.0..1.0_f32, 1);
+        let _f64_val: f64 = rng.gen_range_disti(0.0..1.0_f64, 1);
+
+        // Test passes if no panics occur
+    }
 }
