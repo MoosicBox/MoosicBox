@@ -9329,6 +9329,7 @@ dependencies = [
  "switchy_async",
  "switchy_env",
  "switchy_telemetry",
+ "test-log",
  "tokio",
 ]
 
