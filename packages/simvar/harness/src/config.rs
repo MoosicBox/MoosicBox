@@ -641,4 +641,143 @@ mod tests {
         let args = get_cargoified_args();
         assert!(!args.is_empty());
     }
+
+    #[test_log::test]
+    fn test_run_info_basic_output() {
+        let mut config = SimConfig::new();
+        let _ = config.fail_rate(0.1).repair_rate(0.9).tcp_capacity(32);
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("seed=0"));
+        assert!(info.contains("fail_rate=0.1"));
+        assert!(info.contains("repair_rate=0.9"));
+        assert!(info.contains("tcp_capacity=32"));
+        assert!(info.contains("udp_capacity=64"));
+        assert!(info.contains("enable_random_order=false"));
+        assert!(info.contains("min_message_latency=0"));
+        assert!(info.contains("max_message_latency=1000"));
+        assert!(info.contains("duration=forever"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_with_thread_id() {
+        let config = SimConfig::new();
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: Some(42),
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("thread_id=42"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_without_thread_id() {
+        let config = SimConfig::new();
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(!info.contains("thread_id="));
+    }
+
+    #[test_log::test]
+    fn test_run_info_with_extra_properties() {
+        let config = SimConfig::new();
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![
+                ("custom_key".to_string(), "custom_value".to_string()),
+                ("another_key".to_string(), "another_value".to_string()),
+            ],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("custom_key=custom_value"));
+        assert!(info.contains("another_key=another_value"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_with_finite_duration() {
+        let mut config = SimConfig::new();
+        let _ = config.duration(Duration::from_millis(5000));
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("duration=5000"));
+    }
+
+    #[test_log::test]
+    fn test_simresult_fail_variants() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        // Test with error only
+        let fail_with_error = SimResult::Fail {
+            props: props.clone(),
+            run: run.clone(),
+            error: Some("test error message".to_string()),
+            panic: None,
+        };
+        assert!(!fail_with_error.is_success());
+        let display = fail_with_error.to_string();
+        assert!(display.contains("successful=false"));
+        assert!(display.contains("test error message"));
+
+        // Test with panic only
+        let fail_with_panic = SimResult::Fail {
+            props: props.clone(),
+            run: run.clone(),
+            error: None,
+            panic: Some("panic message".to_string()),
+        };
+        assert!(!fail_with_panic.is_success());
+        let display = fail_with_panic.to_string();
+        assert!(display.contains("panic message"));
+
+        // Test with both error and panic
+        let fail_with_both = SimResult::Fail {
+            props,
+            run,
+            error: Some("error".to_string()),
+            panic: Some("panic".to_string()),
+        };
+        assert!(!fail_with_both.is_success());
+    }
 }

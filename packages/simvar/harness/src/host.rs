@@ -141,3 +141,45 @@ impl Actor for &Host {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_host_returns_none_outside_context() {
+        // When called outside a host context, should return None
+        assert!(current_host().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_host_sets_context() {
+        let result = with_host("test-host".to_string(), str::to_string);
+        assert_eq!(result, "test-host");
+    }
+
+    #[test_log::test]
+    fn test_current_host_returns_name_inside_context() {
+        with_host("my-host".to_string(), |_| {
+            let name = current_host();
+            assert_eq!(name, Some("my-host".to_string()));
+        });
+
+        // After exiting the context, should be None again
+        assert!(current_host().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_host_nested_overwrites_outer() {
+        with_host("outer".to_string(), |_| {
+            assert_eq!(current_host(), Some("outer".to_string()));
+
+            with_host("inner".to_string(), |_| {
+                assert_eq!(current_host(), Some("inner".to_string()));
+            });
+
+            // After inner exits, should revert to outer
+            assert_eq!(current_host(), Some("outer".to_string()));
+        });
+    }
+}

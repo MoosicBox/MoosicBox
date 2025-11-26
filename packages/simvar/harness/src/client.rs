@@ -128,3 +128,45 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_context() {
+        // When called outside a client context, should return None
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_sets_context() {
+        let result = with_client("test-client".to_string(), str::to_string);
+        assert_eq!(result, "test-client");
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_name_inside_context() {
+        with_client("my-client".to_string(), |_| {
+            let name = current_client();
+            assert_eq!(name, Some("my-client".to_string()));
+        });
+
+        // After exiting the context, should be None again
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_nested_overwrites_outer() {
+        with_client("outer".to_string(), |_| {
+            assert_eq!(current_client(), Some("outer".to_string()));
+
+            with_client("inner".to_string(), |_| {
+                assert_eq!(current_client(), Some("inner".to_string()));
+            });
+
+            // After inner exits, should revert to outer
+            assert_eq!(current_client(), Some("outer".to_string()));
+        });
+    }
+}
