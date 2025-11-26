@@ -2287,4 +2287,487 @@ mod tests {
         // Should return early without triggering
         trigger_playback_event(&playback2, &playback);
     }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_with_position_change() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        let mut playback2 = playback1.clone();
+        playback2.position = 1;
+
+        // Different position - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_with_volume_change() {
+        let tracks = vec![create_test_track(1)];
+        let playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        let playback2 = playback1.clone();
+        // Volume change larger than 0.001 threshold
+        playback2
+            .volume
+            .store(0.5, std::sync::atomic::Ordering::SeqCst);
+
+        // Different volume - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_volume_within_threshold_no_change() {
+        let tracks = vec![create_test_track(1)];
+        let playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        let playback2 = playback1.clone();
+        // Volume change smaller than 0.001 threshold - should not be detected as change
+        playback2
+            .volume
+            .store(1.0005, std::sync::atomic::Ordering::SeqCst);
+
+        // Volume within threshold - should NOT trigger event (returns early)
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_with_seek_change() {
+        let tracks = vec![create_test_track(1)];
+        let mut playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+        playback1.progress = 10.0;
+
+        let mut playback2 = playback1.clone();
+        // Progress change that results in different integer (seek is compared as usize)
+        playback2.progress = 15.0;
+
+        // Different seek/progress - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_seek_same_second_no_change() {
+        let tracks = vec![create_test_track(1)];
+        let mut playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+        playback1.progress = 10.3;
+
+        let mut playback2 = playback1.clone();
+        // Progress change within the same second (cast to usize)
+        playback2.progress = 10.7;
+
+        // Same second - should NOT trigger event (returns early due to has_change=false)
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[cfg(feature = "flac")]
+    #[test_log::test]
+    fn test_trigger_playback_event_with_quality_change() {
+        let tracks = vec![create_test_track(1)];
+        let playback1 = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality {
+                format: moosicbox_music_models::AudioFormat::Source,
+            },
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        let mut playback2 = playback1.clone();
+        playback2.quality = PlaybackQuality {
+            format: moosicbox_music_models::AudioFormat::Flac,
+        };
+
+        // Different quality - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test]
+    fn test_trigger_playback_event_with_tracks_change() {
+        let tracks1 = vec![create_test_track(1)];
+        let playback1 = Playback::new(
+            tracks1,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+        );
+
+        let mut playback2 = playback1.clone();
+        playback2.tracks = vec![create_test_track(1), create_test_track(2)];
+
+        // Different tracks - should trigger event
+        trigger_playback_event(&playback2, &playback1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_retry_success_on_first_try() {
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: Result<i32, PlayerError> = handle_retry(
+            Some(PlaybackRetryOptions {
+                max_attempts: 3,
+                retry_delay: std::time::Duration::from_millis(1),
+            }),
+            move || {
+                let count = call_count_clone.clone();
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok::<i32, PlayerError>(42)
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_retry_success_after_retries() {
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: Result<i32, PlayerError> = handle_retry(
+            Some(PlaybackRetryOptions {
+                max_attempts: 5,
+                retry_delay: std::time::Duration::from_millis(1),
+            }),
+            move || {
+                let count = call_count_clone.clone();
+                async move {
+                    let current = count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if current < 2 {
+                        // Fail first two attempts
+                        Err(PlayerError::RetryRequested)
+                    } else {
+                        // Succeed on third attempt
+                        Ok::<i32, PlayerError>(42)
+                    }
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+        // Should have been called 3 times (2 failures + 1 success)
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_retry_exhausts_max_attempts() {
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: Result<i32, PlayerError> = handle_retry(
+            Some(PlaybackRetryOptions {
+                max_attempts: 3,
+                retry_delay: std::time::Duration::from_millis(1),
+            }),
+            move || {
+                let count = call_count_clone.clone();
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    // Always fail
+                    Err(PlayerError::RetryRequested)
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::RetryRequested)));
+        // Should have been called max_attempts times
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_retry_cancelled_returns_immediately() {
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: Result<i32, PlayerError> = handle_retry(
+            Some(PlaybackRetryOptions {
+                max_attempts: 5,
+                retry_delay: std::time::Duration::from_millis(1),
+            }),
+            move || {
+                let count = call_count_clone.clone();
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    // Return Cancelled error - should not retry
+                    Err(PlayerError::Cancelled)
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::Cancelled)));
+        // Should have been called only once - cancellation doesn't retry
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_retry_no_options_single_attempt() {
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: Result<i32, PlayerError> = handle_retry(None, move || {
+            let count = call_count_clone.clone();
+            async move {
+                count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                // Fail
+                Err(PlayerError::RetryRequested)
+            }
+        })
+        .await;
+
+        assert!(result.is_err());
+        // Without retry options, should only try once and fail
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test]
+    fn test_same_active_track_with_empty_tracks() {
+        let playback = Playback::new(
+            vec![],
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Empty tracks list should handle gracefully
+        assert!(same_active_track(None, None, &playback));
+        assert!(same_active_track(None, Some(&[]), &playback));
+    }
+
+    #[test_log::test]
+    fn test_same_active_track_position_out_of_bounds() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks.clone(),
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // When position (5) is out of bounds in provided tracks, tracks.get(5) returns None
+        // But playback has position 0, so playback.tracks.get(0) returns Some(track)
+        // Comparison is: None == Some(track) => false (tracks differ)
+        assert!(!same_active_track(Some(5), Some(&tracks), &playback));
+    }
+
+    #[test_log::test]
+    fn test_playback_abort_token_starts_uncancelled() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        assert!(!playback.abort.is_cancelled());
+    }
+
+    #[test_log::test]
+    fn test_playback_abort_token_can_be_cancelled() {
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        assert!(!playback.abort.is_cancelled());
+        playback.abort.cancel();
+        assert!(playback.abort.is_cancelled());
+    }
+
+    #[test_log::test]
+    fn test_player_error_variants_display() {
+        // Test additional error variants to ensure they display correctly
+        let error = PlayerError::UnsupportedFormat(moosicbox_music_models::AudioFormat::Source);
+        assert!(error.to_string().contains("Format not supported"));
+
+        let error = PlayerError::Seek("seek failed".to_string());
+        assert!(error.to_string().contains("Failed to seek"));
+        assert!(error.to_string().contains("seek failed"));
+
+        let error = PlayerError::InvalidSession {
+            session_id: 123,
+            message: "invalid".to_string(),
+        };
+        assert!(error.to_string().contains("123"));
+        assert!(error.to_string().contains("invalid"));
+
+        let error = PlayerError::MissingSessionId;
+        assert!(error.to_string().contains("Missing session ID"));
+
+        let error = PlayerError::MissingProfile;
+        assert!(error.to_string().contains("Missing profile"));
+
+        let error = PlayerError::InvalidState;
+        assert!(error.to_string().contains("Invalid state"));
+
+        let error = PlayerError::InvalidSource;
+        assert!(error.to_string().contains("Invalid source"));
+
+        let error = PlayerError::Cancelled;
+        assert!(error.to_string().contains("cancelled"));
+
+        let error = PlayerError::RetryRequested;
+        assert!(error.to_string().contains("retry"));
+    }
+
+    #[test_log::test]
+    fn test_playback_handler_with_playback_sets_playback() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let shared_playback = Arc::new(std::sync::RwLock::new(Some(Playback::new(
+            vec![create_test_track(1)],
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        ))));
+
+        let handler = PlaybackHandler::new(MockPlayer).with_playback(shared_playback.clone());
+
+        // Verify the playback was set
+        assert!(handler.playback.read().unwrap().is_some());
+
+        // Verify it's the same Arc (shared reference)
+        assert!(Arc::ptr_eq(&handler.playback, &shared_playback));
+    }
+
+    #[test_log::test]
+    fn test_playback_handler_with_output_sets_output() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let handler = PlaybackHandler::new(MockPlayer);
+        assert!(handler.output.is_none());
+
+        let output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>> = None;
+        let handler = handler.with_output(output);
+        assert!(handler.output.is_none());
+    }
 }
