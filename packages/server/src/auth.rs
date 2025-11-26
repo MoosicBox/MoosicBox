@@ -15,6 +15,7 @@ use std::{
     collections::BTreeMap,
     future::{Ready, ready},
 };
+use subtle::ConstantTimeEq;
 
 /// Static token authentication middleware factory.
 ///
@@ -112,7 +113,8 @@ fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
                 auth
             };
 
-            if token == expected {
+            // Use constant-time comparison to prevent timing attacks
+            if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
                 return true;
             }
             log::debug!("Incorrect AUTHORIZATION header value");
@@ -134,7 +136,8 @@ fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
         .map(|(_, value)| value);
 
     if let Some(token) = authorization {
-        if token == expected {
+        // Use constant-time comparison to prevent timing attacks
+        if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
             return true;
         }
         log::debug!("Incorrect AUTHORIZATION query param value");
@@ -143,4 +146,13 @@ fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
     }
 
     false
+}
+
+/// Performs constant-time comparison of two byte slices.
+///
+/// This function prevents timing attacks by ensuring that the comparison
+/// takes the same amount of time regardless of where the first difference
+/// occurs in the byte slices.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.ct_eq(b).into()
 }

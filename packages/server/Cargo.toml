@@ -96,6 +96,7 @@ utoipa-swagger-ui = { workspace = true, optional = true }
 
 # auth
 qstring = { workspace = true, optional = true }
+subtle  = { workspace = true, optional = true }
 
 # TLS
 rcgen = { workspace = true, optional = true }
@@ -213,7 +214,7 @@ asio = ["moosicbox_audio_output/asio", "moosicbox_player?/asio"]
 cpal = ["moosicbox_audio_output/cpal", "moosicbox_player?/cpal"]
 jack = ["moosicbox_audio_output/jack", "moosicbox_player?/jack"]
 
-static-token-auth = ["dep:qstring"]
+static-token-auth = ["dep:qstring", "dep:subtle"]
 
 all-encoders = [
     "all-os-encoders",

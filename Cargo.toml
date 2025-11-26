@@ -533,6 +533,7 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
 static_init = "1.0.4"
 strum = "0.27.2"
 strum_macros = "0.27.2"
+subtle = "2.6.1"
 swc_bundler = "35.0.0"
 swc_common = { version = "17.0.0", features = ["tty-emitter"] }
 swc_ecma_ast = "18.0.0"
