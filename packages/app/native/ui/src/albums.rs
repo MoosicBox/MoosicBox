@@ -1007,3 +1007,193 @@ pub fn load_albums(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod album_cover_url_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_returns_placeholder_when_no_cover() {
+            let result = album_cover_url(
+                "http://api.example.com",
+                &Id::Number(123),
+                &ApiSource::library(),
+                false,
+                200,
+                200,
+            );
+            assert_eq!(result, "/public/img/album.svg");
+        }
+
+        #[test_log::test]
+        fn test_returns_api_url_when_has_cover() {
+            let result = album_cover_url(
+                "http://api.example.com",
+                &Id::Number(123),
+                &ApiSource::library(),
+                true,
+                200,
+                200,
+            );
+            assert_eq!(
+                result,
+                "http://api.example.com/files/albums/123/200x200?moosicboxProfile=master&source=Library"
+            );
+        }
+
+        #[test_log::test]
+        fn test_uses_correct_dimensions() {
+            let result = album_cover_url(
+                "http://api.example.com",
+                &Id::Number(456),
+                &ApiSource::library(),
+                true,
+                300,
+                400,
+            );
+            assert!(result.contains("/300x400?"));
+        }
+    }
+
+    mod build_query_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_values_returns_empty_string() {
+            let result = build_query('?', &[]);
+            assert_eq!(result, "");
+        }
+
+        #[test_log::test]
+        fn test_skips_empty_values() {
+            let result = build_query('?', &[("key1", ""), ("key2", "value2")]);
+            assert_eq!(result, "?key2=value2");
+        }
+
+        #[test_log::test]
+        fn test_single_value() {
+            let result = build_query('?', &[("key", "value")]);
+            assert_eq!(result, "?key=value");
+        }
+
+        #[test_log::test]
+        fn test_multiple_values_joined_with_ampersand() {
+            let result = build_query('?', &[("key1", "value1"), ("key2", "value2")]);
+            assert_eq!(result, "?key1=value1&key2=value2");
+        }
+
+        #[test_log::test]
+        fn test_uses_custom_start_character() {
+            let result = build_query('&', &[("key", "value")]);
+            assert_eq!(result, "&key=value");
+        }
+
+        #[test_log::test]
+        fn test_all_empty_values_returns_empty_string() {
+            let result = build_query('?', &[("key1", ""), ("key2", "")]);
+            assert_eq!(result, "");
+        }
+    }
+
+    mod album_page_url_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_minimal_url_with_album_id_only() {
+            let result = album_page_url("123", false, None, None, None, None);
+            assert_eq!(result, "/albums?albumId=123");
+        }
+
+        #[test_log::test]
+        fn test_url_with_full_flag() {
+            let result = album_page_url("123", true, None, None, None, None);
+            assert_eq!(result, "/albums?albumId=123&full=true");
+        }
+
+        #[test_log::test]
+        fn test_url_with_api_source() {
+            let result =
+                album_page_url("123", false, Some(&ApiSource::library()), None, None, None);
+            assert_eq!(result, "/albums?albumId=123&source=Library");
+        }
+
+        #[test_log::test]
+        fn test_url_with_version_source() {
+            let result =
+                album_page_url("123", false, None, Some(&TrackApiSource::Local), None, None);
+            assert_eq!(result, "/albums?albumId=123&versionSource=LOCAL");
+        }
+
+        #[test_log::test]
+        fn test_url_with_sample_rate() {
+            let result = album_page_url("123", false, None, None, Some(44100), None);
+            assert_eq!(result, "/albums?albumId=123&sampleRate=44100");
+        }
+
+        #[test_log::test]
+        fn test_url_with_bit_depth() {
+            let result = album_page_url("123", false, None, None, None, Some(24));
+            assert_eq!(result, "/albums?albumId=123&bitDepth=24");
+        }
+
+        #[test_log::test]
+        fn test_url_with_all_parameters() {
+            let result = album_page_url(
+                "456",
+                true,
+                Some(&ApiSource::library()),
+                Some(&TrackApiSource::Local),
+                Some(96000),
+                Some(32),
+            );
+            assert_eq!(
+                result,
+                "/albums?albumId=456&full=true&source=Library&versionSource=LOCAL&sampleRate=96000&bitDepth=32"
+            );
+        }
+    }
+
+    mod albums_page_url_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_url_with_empty_sources() {
+            let result = albums_page_url(&[], AlbumSort::ArtistAsc);
+            assert_eq!(result, "/albums?sort=artist");
+        }
+
+        #[test_log::test]
+        fn test_url_with_sources() {
+            let result = albums_page_url(&[TrackApiSource::Local], AlbumSort::NameDesc);
+            assert_eq!(result, "/albums?sort=name-desc&sources=LOCAL");
+        }
+    }
+
+    mod filtered_sources_to_string_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_sources() {
+            let result = filtered_sources_to_string(&[]);
+            assert_eq!(result, "");
+        }
+
+        #[test_log::test]
+        fn test_single_source() {
+            let result = filtered_sources_to_string(&[TrackApiSource::Local]);
+            assert_eq!(result, "LOCAL");
+        }
+
+        #[test_log::test]
+        fn test_multiple_sources_comma_separated() {
+            let result = filtered_sources_to_string(&[
+                TrackApiSource::Local,
+                TrackApiSource::Api(ApiSource::library()),
+            ]);
+            assert_eq!(result, "LOCAL,API:Library");
+        }
+    }
+}

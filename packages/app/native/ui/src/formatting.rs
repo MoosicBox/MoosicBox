@@ -231,3 +231,167 @@ pub fn classify_name<T: AsRef<str>>(class: T) -> String {
         .to_ascii_lowercase()
         .replace(|c: char| !c.is_ascii_alphanumeric(), "-")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod time_format {
+        use super::*;
+
+        #[test_log::test]
+        fn test_u64_formats_seconds_only() {
+            assert_eq!(0_u64.into_formatted(), "0:00");
+            assert_eq!(5_u64.into_formatted(), "0:05");
+            assert_eq!(59_u64.into_formatted(), "0:59");
+        }
+
+        #[test_log::test]
+        fn test_u64_formats_minutes_and_seconds() {
+            assert_eq!(60_u64.into_formatted(), "1:00");
+            assert_eq!(61_u64.into_formatted(), "1:01");
+            assert_eq!(125_u64.into_formatted(), "2:05");
+            assert_eq!(599_u64.into_formatted(), "9:59");
+        }
+
+        #[test_log::test]
+        fn test_u64_formats_hours_minutes_seconds() {
+            assert_eq!(3600_u64.into_formatted(), "1:60:00");
+            assert_eq!(3661_u64.into_formatted(), "1:61:01");
+            assert_eq!(7325_u64.into_formatted(), "2:122:05");
+        }
+
+        #[test_log::test]
+        fn test_f64_rounds_to_nearest_integer() {
+            assert_eq!(0.4_f64.into_formatted(), "0:00");
+            assert_eq!(0.5_f64.into_formatted(), "0:01");
+            assert_eq!(59.4_f64.into_formatted(), "0:59");
+            assert_eq!(59.5_f64.into_formatted(), "1:00");
+        }
+
+        #[test_log::test]
+        fn test_f32_rounds_to_nearest_integer() {
+            assert_eq!(0.4_f32.into_formatted(), "0:00");
+            assert_eq!(0.5_f32.into_formatted(), "0:01");
+            assert_eq!(65.7_f32.into_formatted(), "1:06");
+        }
+    }
+
+    mod classify_name_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_converts_to_lowercase() {
+            assert_eq!(classify_name("LIBRARY"), "library");
+            assert_eq!(classify_name("MySource"), "mysource");
+        }
+
+        #[test_log::test]
+        fn test_replaces_spaces_with_hyphens() {
+            assert_eq!(classify_name("my source"), "my-source");
+            assert_eq!(classify_name("some long name"), "some-long-name");
+        }
+
+        #[test_log::test]
+        fn test_replaces_special_characters_with_hyphens() {
+            assert_eq!(classify_name("source@api"), "source-api");
+            assert_eq!(classify_name("api.source"), "api-source");
+            assert_eq!(classify_name("test_name"), "test-name");
+        }
+
+        #[test_log::test]
+        fn test_preserves_alphanumeric() {
+            assert_eq!(classify_name("api123"), "api123");
+            assert_eq!(classify_name("source2go"), "source2go");
+        }
+
+        #[test_log::test]
+        fn test_empty_string() {
+            assert_eq!(classify_name(""), "");
+        }
+    }
+
+    mod format_date_string_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_formats_valid_date() {
+            let result = format_date_string("2025-01-08", "%B %d, %Y");
+            assert_eq!(result, "January 08, 2025");
+        }
+
+        #[test_log::test]
+        fn test_formats_year_only() {
+            let result = format_date_string("2025-06-15", "%Y");
+            assert_eq!(result, "2025");
+        }
+
+        #[test_log::test]
+        fn test_invalid_date_returns_na() {
+            assert_eq!(format_date_string("invalid", "%Y-%m-%d"), "n/a");
+            assert_eq!(format_date_string("", "%Y"), "n/a");
+        }
+    }
+
+    mod format_size_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_formats_bytes() {
+            let result = format_size(500);
+            assert_eq!(result, "500 B");
+        }
+
+        #[test_log::test]
+        fn test_formats_kibibytes() {
+            let result = format_size(1024);
+            assert_eq!(result, "1.0 KiB");
+        }
+
+        #[test_log::test]
+        fn test_formats_mebibytes() {
+            let result = format_size(1024 * 1024);
+            assert_eq!(result, "1.0 MiB");
+        }
+
+        #[test_log::test]
+        fn test_formats_gibibytes() {
+            let result = format_size(1024 * 1024 * 1024);
+            assert_eq!(result, "1.0 GiB");
+        }
+    }
+
+    mod album_type_format_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_lp_formats_to_albums() {
+            assert_eq!(AlbumType::Lp.into_formatted(), "Albums");
+        }
+
+        #[test_log::test]
+        fn test_download_formats_to_albums() {
+            assert_eq!(AlbumType::Download.into_formatted(), "Albums");
+        }
+
+        #[test_log::test]
+        fn test_live_formats_to_live_albums() {
+            assert_eq!(AlbumType::Live.into_formatted(), "Live Albums");
+        }
+
+        #[test_log::test]
+        fn test_compilations_formats_correctly() {
+            assert_eq!(AlbumType::Compilations.into_formatted(), "Compilations");
+        }
+
+        #[test_log::test]
+        fn test_eps_and_singles_formats_correctly() {
+            assert_eq!(AlbumType::EpsAndSingles.into_formatted(), "EPs and Singles");
+        }
+
+        #[test_log::test]
+        fn test_other_formats_to_other_albums() {
+            assert_eq!(AlbumType::Other.into_formatted(), "Other Albums");
+        }
+    }
+}

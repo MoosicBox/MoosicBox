@@ -459,3 +459,67 @@ pub fn settings(
         &settings_page_content(connection_name, connections, selected, music_api_settings),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    mod connection_input_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_as_ref_name() {
+            assert_eq!(ConnectionInput::Name.as_ref(), "name");
+        }
+
+        #[test_log::test]
+        fn test_as_ref_api_url() {
+            assert_eq!(ConnectionInput::ApiUrl.as_ref(), "api-url");
+        }
+
+        #[test_log::test]
+        fn test_from_str_name() {
+            assert_eq!(
+                ConnectionInput::from_str("name").unwrap(),
+                ConnectionInput::Name
+            );
+        }
+
+        #[test_log::test]
+        fn test_from_str_api_url() {
+            assert_eq!(
+                ConnectionInput::from_str("api-url").unwrap(),
+                ConnectionInput::ApiUrl
+            );
+        }
+
+        #[test_log::test]
+        fn test_from_str_invalid() {
+            assert!(ConnectionInput::from_str("invalid").is_err());
+        }
+
+        #[test_log::test]
+        fn test_equality() {
+            assert_eq!(ConnectionInput::Name, ConnectionInput::Name);
+            assert_eq!(ConnectionInput::ApiUrl, ConnectionInput::ApiUrl);
+            assert_ne!(ConnectionInput::Name, ConnectionInput::ApiUrl);
+        }
+    }
+
+    mod auth_state_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_default_is_initial() {
+            assert_eq!(AuthState::default(), AuthState::Initial);
+        }
+
+        #[test_log::test]
+        fn test_equality() {
+            assert_eq!(AuthState::Initial, AuthState::Initial);
+            assert_eq!(AuthState::Polling, AuthState::Polling);
+            assert_ne!(AuthState::Initial, AuthState::Polling);
+        }
+    }
+}
