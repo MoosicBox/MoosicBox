@@ -60,6 +60,7 @@ rust_decimal = { workspace = true, optional = true, features = [
 uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 native-tls = { workspace = true }
 postgres-native-tls = { workspace = true }
@@ -72,13 +73,21 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 switchy_database_connection = { workspace = true, features = [
+    "mysql-sqlx",
+    "postgres-native-tls",
+    "postgres-raw",
+    "postgres-sqlx",
     "sqlite-rusqlite",
     "sqlite-sqlx",
     "turso",
 ] }
 test-log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 uuid = { workspace = true }
+
+[[bench]]
+harness = false
+name    = "database_benchmarks"
 
 [features]
 default = [

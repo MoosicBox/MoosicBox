@@ -593,6 +593,13 @@ webp = "0.3.1"
 whoami = "1.6.1"
 xml = "1.2.0"
 
+# Benchmarking
+criterion = { version = "0.5.1", default-features = false, features = [
+    "async_tokio",
+    "html_reports",
+    "plotters",
+] }
+
 [patch.crates-io]
 flacenc = { git = "https://github.com/BSteffaniak/flacenc-rs", branch = "unpin-built-version" }
 # actix-files             = { git = "https://github.com/actix/actix-web" }
