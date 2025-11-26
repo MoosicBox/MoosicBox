@@ -61,6 +61,8 @@ fn test_sync_function() {
     ```
 4. If tests fail with simvar, investigate and fix simulator compatibility issues
 
+${include('rust/switchy-packages')}
+
 ### Test Organization
 
 - Group tests in `#[cfg(test)]` modules
