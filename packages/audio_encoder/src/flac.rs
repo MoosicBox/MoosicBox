@@ -186,4 +186,54 @@ mod tests {
         // Empty input should still be handled (may produce header/metadata)
         assert!(result.is_ok());
     }
+
+    #[test_log::test]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn test_encode_flac_varying_samples() {
+        let mut encoder = encoder_flac().expect("Failed to create encoder");
+
+        // Generate a stereo audio pattern (512 samples * 2 channels = 1024 samples)
+        // This matches the block size of 512 samples
+        let block_size = 512;
+        let channels = 2;
+        let mut input: Vec<i32> = Vec::with_capacity(block_size * channels);
+
+        for i in 0..block_size {
+            // Generate sine wave pattern for 16-bit audio range
+            let t = i as f32 / 44100.0;
+            let left = ((t * 440.0 * std::f32::consts::TAU).sin() * 16000.0) as i32;
+            let right = ((t * 550.0 * std::f32::consts::TAU).sin() * 16000.0) as i32;
+            input.push(left);
+            input.push(right);
+        }
+
+        let mut output = vec![0u8; 16384];
+        let result = encode_flac(&mut encoder, &input, &mut output);
+
+        assert!(result.is_ok(), "Encoding varying samples should succeed");
+        let info = result.unwrap();
+
+        assert!(info.output_size > 0, "Should produce output");
+        assert_eq!(info.input_consumed, input.len(), "Should consume all input");
+    }
+
+    #[test_log::test]
+    fn test_encode_flac_output_buffer_content() {
+        let mut encoder = encoder_flac().expect("Failed to create encoder");
+
+        // Create a simple input
+        let input: Vec<i32> = vec![1000, -1000, 500, -500]; // Simple stereo pair
+        let mut output = vec![0u8; 8192];
+
+        let result = encode_flac(&mut encoder, &input, &mut output);
+        assert!(result.is_ok());
+        let info = result.unwrap();
+
+        // Verify that output contains actual data (not just zeros)
+        let output_slice = &output[..info.output_size];
+        assert!(
+            output_slice.iter().any(|&b| b != 0),
+            "Output should contain non-zero bytes"
+        );
+    }
 }
