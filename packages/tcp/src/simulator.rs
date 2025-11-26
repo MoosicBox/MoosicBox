@@ -1302,4 +1302,112 @@ mod test {
 
         runtime.wait().unwrap();
     }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_bidirectional_communication() {
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+            task::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+
+                // Read request from client
+                let mut buf = [0u8; 5];
+                stream.read_exact(&mut buf).await.unwrap();
+                assert_eq!(&buf, b"hello");
+
+                // Send response back to client
+                stream.write_all(b"world").await.unwrap();
+                stream.flush().await.unwrap();
+            });
+
+            let mut connection = TcpStream::connect(server_addr.to_string()).await.unwrap();
+
+            // Send request to server
+            connection.write_all(b"hello").await.unwrap();
+            connection.flush().await.unwrap();
+
+            // Read response from server
+            let mut buf = [0u8; 5];
+            connection.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"world");
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn next_port_wraps_around_at_u16_max() {
+        reset_next_port();
+
+        // Set port counter to u16::MAX - 1
+        NEXT_PORT.with_borrow(|x| {
+            x.store(u16::MAX - 1, Ordering::SeqCst);
+        });
+
+        // Get port at MAX - 1
+        let port1 = next_port();
+        assert_eq!(port1, u16::MAX - 1);
+
+        // Get port at MAX - this will trigger wraparound immediately
+        // because when fetch_add returns u16::MAX, the code resets to ephemeral_port_start
+        let port2 = next_port();
+        assert_eq!(port2, ephemeral_port_start());
+
+        // Next call returns ephemeral_port_start again because:
+        // 1. The store set the counter to ephemeral_port_start
+        // 2. fetch_add returns the old value (ephemeral_port_start) and stores ephemeral_port_start + 1
+        // So we get ephemeral_port_start again
+        let port3 = next_port();
+        assert_eq!(port3, ephemeral_port_start());
+
+        // Now we get ephemeral_port_start + 1
+        let port4 = next_port();
+        assert_eq!(port4, ephemeral_port_start() + 1);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_write_returns_error_when_receiver_dropped() {
+        // This test verifies that writing to a stream where the other end has been
+        // dropped will eventually return a BrokenPipe error.
+
+        // Create the channels directly to test the write half behavior
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded::<Bytes>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Create a write half with the orphaned sender
+        let mut write_half = TcpStreamWriteHalf { tx };
+
+        // Use the low-level poll_write to verify error behavior
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        let result = Pin::new(&mut write_half).poll_write(&mut cx, b"test data");
+
+        match result {
+            Poll::Ready(Err(e)) => {
+                assert_eq!(e.kind(), io::ErrorKind::BrokenPipe);
+            }
+            Poll::Ready(Ok(_)) => panic!("Expected BrokenPipe error, got success"),
+            Poll::Pending => panic!("Expected immediate error, got Pending"),
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn is_local_host_name_recognizes_localhost_addresses() {
+        assert!(is_local_host_name("0.0.0.0"));
+        assert!(is_local_host_name("127.0.0.1"));
+        assert!(!is_local_host_name("192.168.1.1"));
+        assert!(!is_local_host_name("localhost"));
+        assert!(!is_local_host_name("example.com"));
+    }
 }
