@@ -8289,6 +8289,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "switchy_async",
+ "test-log",
  "thiserror 2.0.17",
  "tokio",
  "tokio-tungstenite",

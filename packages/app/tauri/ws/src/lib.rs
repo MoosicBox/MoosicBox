@@ -207,8 +207,11 @@ impl WsClient {
     /// Returns a tuple containing the client and a handle to control the connection.
     #[must_use]
     pub fn new(url: String) -> (Self, WsHandle) {
+        Self::new_inner(url, CancellationToken::new())
+    }
+
+    fn new_inner(url: String, cancellation_token: CancellationToken) -> (Self, WsHandle) {
         let sender = Arc::new(RwLock::new(None));
-        let cancellation_token = CancellationToken::new();
         let handle = WsHandle {
             sender: sender.clone(),
             cancellation_token: cancellation_token.clone(),
@@ -461,5 +464,209 @@ impl WsClient {
         log::debug!("Handler closed");
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[test_log::test(tokio::test)]
+    async fn test_message_handler_text_message() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let text = "hello world".to_string();
+        let message = Message::Text(text.clone().into());
+
+        let result = WsClient::message_handler(tx, message).await;
+
+        assert!(result.is_ok());
+        let received = rx.recv().await.unwrap();
+        match received {
+            WsMessage::TextMessage(s) => assert_eq!(s, text),
+            _ => panic!("Expected TextMessage"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_message_handler_binary_message() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let data = vec![1u8, 2, 3, 4, 5];
+        let message = Message::Binary(data.clone().into());
+
+        let result = WsClient::message_handler(tx, message).await;
+
+        assert!(result.is_ok());
+        let received = rx.recv().await.unwrap();
+        match received {
+            WsMessage::Message(bytes) => assert_eq!(bytes.as_ref(), &data[..]),
+            _ => panic!("Expected Message with bytes"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_message_handler_ping() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let message = Message::Ping(vec![].into());
+
+        let result = WsClient::message_handler(tx, message).await;
+
+        assert!(result.is_ok());
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, WsMessage::Ping));
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_message_handler_pong_returns_ok_without_sending() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let message = Message::Pong(vec![].into());
+
+        let result = WsClient::message_handler(tx, message).await;
+
+        assert!(result.is_ok());
+        // Pong messages should not be forwarded
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_send_with_no_sender() {
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(None)),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        // Send should succeed silently when there's no sender
+        let result = handle.send("test message").await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_send_with_active_sender() {
+        let (tx, mut rx) = futures_channel::mpsc::unbounded();
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(Some(tx))),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        let result = handle.send("test message").await;
+
+        assert!(result.is_ok());
+        let received = rx.try_next().unwrap().unwrap();
+        match received {
+            WsMessage::TextMessage(s) => assert_eq!(s, "test message"),
+            _ => panic!("Expected TextMessage"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_send_with_closed_channel() {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        // Close the receiver to simulate channel being closed
+        drop(rx);
+
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(Some(tx))),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        let result = handle.send("test message").await;
+
+        assert!(result.is_err());
+        match result {
+            Err(WebsocketSendError::Unknown(msg)) => {
+                assert!(msg.contains("send"));
+            }
+            _ => panic!("Expected Unknown error"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_ping_with_no_sender() {
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(None)),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        // Ping should succeed silently when there's no sender
+        let result = handle.ping().await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_ping_with_active_sender() {
+        let (tx, mut rx) = futures_channel::mpsc::unbounded();
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(Some(tx))),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        let result = handle.ping().await;
+
+        assert!(result.is_ok());
+        let received = rx.try_next().unwrap().unwrap();
+        assert!(matches!(received, WsMessage::Ping));
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ws_handle_ping_with_closed_channel() {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        // Close the receiver to simulate channel being closed
+        drop(rx);
+
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(Some(tx))),
+            cancellation_token: CancellationToken::new(),
+        };
+
+        let result = handle.ping().await;
+
+        assert!(result.is_err());
+        match result {
+            Err(WebsocketSendError::Unknown(msg)) => {
+                assert!(msg.contains("send"));
+            }
+            _ => panic!("Expected Unknown error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_ws_handle_close_cancels_token() {
+        let token = CancellationToken::new();
+        let handle = WsHandle {
+            sender: Arc::new(RwLock::new(None)),
+            cancellation_token: token.clone(),
+        };
+
+        assert!(!token.is_cancelled());
+        handle.close();
+        assert!(token.is_cancelled());
+    }
+
+    #[test_log::test]
+    fn test_ws_client_new_returns_client_and_handle_with_shared_state() {
+        let (client, handle) = WsClient::new("ws://localhost:8080".to_string());
+
+        // Verify the URL is set correctly
+        assert_eq!(client.url, "ws://localhost:8080");
+
+        // Verify sender is initially None
+        assert!(client.sender.read().unwrap().is_none());
+        assert!(handle.sender.read().unwrap().is_none());
+
+        // Verify they share the same sender Arc
+        assert!(Arc::ptr_eq(&client.sender, &handle.sender));
+    }
+
+    #[test_log::test]
+    fn test_ws_client_with_cancellation_token_replaces_token() {
+        let (client, _handle) = WsClient::new("ws://localhost:8080".to_string());
+        let new_token = CancellationToken::new();
+
+        // Create a new client with a different token
+        let client_with_token = client.with_cancellation_token(new_token.clone());
+
+        // Verify the new token is used
+        new_token.cancel();
+        assert!(client_with_token.cancellation_token.is_cancelled());
     }
 }
