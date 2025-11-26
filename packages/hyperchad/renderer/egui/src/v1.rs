@@ -3788,3 +3788,174 @@ fn start_puffin_server() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperchad_renderer::canvas::{CanvasAction, Pos};
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_removes_actions_before_clear() {
+        let mut actions = vec![
+            CanvasAction::StrokeSize(1.0),
+            CanvasAction::Line(Pos(0.0, 0.0), Pos(10.0, 10.0)),
+            CanvasAction::Clear,
+            CanvasAction::StrokeSize(2.0),
+            CanvasAction::Line(Pos(20.0, 20.0), Pos(30.0, 30.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Everything before and including Clear should be removed,
+        // leaving only actions after Clear
+        assert_eq!(actions.len(), 2);
+        assert!(
+            matches!(actions[0], CanvasAction::StrokeSize(s) if (s - 2.0).abs() < f32::EPSILON)
+        );
+        assert!(matches!(actions[1], CanvasAction::Line(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_removes_fill_rect_before_clear_rect() {
+        // The function iterates in reverse: FillRect is checked against
+        // ClearRects that come AFTER it in array order (since we see
+        // them first when going backwards)
+        let mut actions = vec![
+            CanvasAction::FillRect(Pos(10.0, 10.0), Pos(50.0, 50.0)), // Intersects, will be removed
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // FillRect should be removed since it intersects with ClearRect
+        // (FillRect appears before ClearRect in array order)
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(actions[0], CanvasAction::ClearRect(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_keeps_fill_rect_after_clear_rect() {
+        // FillRect that appears AFTER ClearRect in array order is NOT removed
+        // because when iterating in reverse, we see FillRect before we've
+        // added ClearRect to the cleared list
+        let mut actions = vec![
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+            CanvasAction::FillRect(Pos(10.0, 10.0), Pos(50.0, 50.0)), // Not removed
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Both actions remain since FillRect is after ClearRect in array order
+        assert_eq!(actions.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_keeps_fill_rect_when_not_intersecting() {
+        let mut actions = vec![
+            CanvasAction::FillRect(Pos(100.0, 100.0), Pos(150.0, 150.0)), // Does not intersect
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(50.0, 50.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Both actions should remain since FillRect doesn't intersect ClearRect
+        assert_eq!(actions.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_empty_list() {
+        let mut actions: Vec<CanvasAction> = vec![];
+        compact_canvas_actions(&mut actions);
+        assert!(actions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_preserves_stroke_and_line_actions() {
+        let mut actions = vec![
+            CanvasAction::StrokeSize(2.0),
+            CanvasAction::StrokeColor(hyperchad_color::Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: None,
+            }),
+            CanvasAction::Line(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // No changes since there's no Clear or intersecting rects
+        assert_eq!(actions.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_clear_at_end_removes_all() {
+        let mut actions = vec![
+            CanvasAction::StrokeSize(1.0),
+            CanvasAction::Line(Pos(0.0, 0.0), Pos(10.0, 10.0)),
+            CanvasAction::FillRect(Pos(0.0, 0.0), Pos(50.0, 50.0)),
+            CanvasAction::Clear,
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Clear at the end means all actions including Clear are removed
+        assert!(actions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_multiple_fill_rects_before_clear_rect() {
+        // FillRects that appear BEFORE ClearRect in array order are removed
+        // if they intersect with the ClearRect
+        let mut actions = vec![
+            CanvasAction::FillRect(Pos(10.0, 10.0), Pos(40.0, 40.0)), // Intersects, removed
+            CanvasAction::FillRect(Pos(200.0, 200.0), Pos(250.0, 250.0)), // No intersection, kept
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(50.0, 50.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // The intersecting FillRect should be removed
+        assert_eq!(actions.len(), 2);
+        // Non-intersecting FillRect and ClearRect remain
+        assert!(
+            matches!(actions[0], CanvasAction::FillRect(Pos(x1, y1), _) if (x1 - 200.0).abs() < f32::EPSILON && (y1 - 200.0).abs() < f32::EPSILON)
+        );
+        assert!(matches!(actions[1], CanvasAction::ClearRect(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_clear_overrides_clear_rects() {
+        let mut actions = vec![
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(50.0, 50.0)),
+            CanvasAction::FillRect(Pos(10.0, 10.0), Pos(40.0, 40.0)),
+            CanvasAction::Clear,
+            CanvasAction::Line(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Clear should remove everything before it including itself
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(actions[0], CanvasAction::Line(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_compact_canvas_actions_multiple_clear_rects_cumulative() {
+        // Multiple ClearRects accumulate - FillRects are removed if they
+        // intersect with ANY of the ClearRects that come after them
+        let mut actions = vec![
+            CanvasAction::FillRect(Pos(10.0, 10.0), Pos(40.0, 40.0)), // Intersects first ClearRect
+            CanvasAction::FillRect(Pos(110.0, 110.0), Pos(140.0, 140.0)), // Intersects second ClearRect
+            CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(50.0, 50.0)),
+            CanvasAction::ClearRect(Pos(100.0, 100.0), Pos(150.0, 150.0)),
+        ];
+
+        compact_canvas_actions(&mut actions);
+
+        // Both intersecting FillRects should be removed
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(actions[0], CanvasAction::ClearRect(_, _)));
+        assert!(matches!(actions[1], CanvasAction::ClearRect(_, _)));
+    }
+}

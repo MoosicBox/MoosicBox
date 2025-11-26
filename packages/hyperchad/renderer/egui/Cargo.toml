@@ -100,3 +100,6 @@ debug = []
 
 v1 = []
 v2 = []
+
+[dev-dependencies]
+test-log = { workspace = true }
