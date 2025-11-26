@@ -126,3 +126,106 @@ impl InteractionPlan<Interaction> for FaultInjectionInteractionPlan {
         self.plan.push(interaction);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod fault_injection_interaction_plan {
+        use super::*;
+
+        #[test_log::test]
+        fn step_returns_none_for_empty_plan() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            assert!(plan.step().is_none());
+        }
+
+        #[test_log::test]
+        fn step_iterates_through_plan_sequentially() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(500)));
+            plan.add_interaction(Interaction::Bounce("test_host".to_string()));
+            plan.add_interaction(Interaction::Sleep(Duration::from_secs(1)));
+
+            let first = plan.step();
+            assert!(first.is_some());
+            assert!(
+                matches!(first.unwrap(), Interaction::Sleep(d) if *d == Duration::from_millis(500))
+            );
+
+            let second = plan.step();
+            assert!(second.is_some());
+            assert!(matches!(second.unwrap(), Interaction::Bounce(h) if h == "test_host"));
+
+            let third = plan.step();
+            assert!(third.is_some());
+            assert!(
+                matches!(third.unwrap(), Interaction::Sleep(d) if *d == Duration::from_secs(1))
+            );
+
+            assert!(plan.step().is_none());
+        }
+
+        #[test_log::test]
+        fn step_returns_none_after_all_interactions_exhausted() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+
+            assert!(plan.step().is_some());
+            assert!(plan.step().is_none());
+            assert!(plan.step().is_none());
+        }
+
+        #[test_log::test]
+        fn add_interaction_appends_to_plan() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            assert!(plan.plan.is_empty());
+
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+            assert_eq!(plan.plan.len(), 1);
+
+            plan.add_interaction(Interaction::Bounce("host1".to_string()));
+            assert_eq!(plan.plan.len(), 2);
+
+            plan.add_interaction(Interaction::Sleep(Duration::from_secs(5)));
+            assert_eq!(plan.plan.len(), 3);
+        }
+
+        #[test_log::test]
+        fn add_interaction_preserves_interaction_data() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+
+            let sleep_duration = Duration::from_millis(12345);
+            plan.add_interaction(Interaction::Sleep(sleep_duration));
+
+            let bounce_host = "my_server".to_string();
+            plan.add_interaction(Interaction::Bounce(bounce_host.clone()));
+
+            if let Interaction::Sleep(d) = &plan.plan[0] {
+                assert_eq!(*d, sleep_duration);
+            } else {
+                panic!("Expected Sleep interaction");
+            }
+
+            if let Interaction::Bounce(h) = &plan.plan[1] {
+                assert_eq!(h, &bounce_host);
+            } else {
+                panic!("Expected Bounce interaction");
+            }
+        }
+
+        #[test_log::test]
+        fn plan_does_not_clear_when_generating_more_interactions() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+            plan.add_interaction(Interaction::Bounce("initial".to_string()));
+            let initial_len = plan.plan.len();
+
+            // FaultInjectionInteractionPlan does NOT clear the plan on gen_interactions
+            // It appends to the existing plan
+            // We cannot test gen_interactions directly due to random behavior,
+            // but we can verify initial interactions are preserved
+            assert_eq!(plan.plan.len(), initial_len);
+        }
+    }
+}

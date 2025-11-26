@@ -114,3 +114,116 @@ impl InteractionPlan<Interaction> for HealthCheckInteractionPlan {
         self.plan.push(interaction);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod health_check_interaction_plan {
+        use super::*;
+
+        #[test_log::test]
+        fn step_returns_none_for_empty_plan() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            assert!(plan.step().is_none());
+        }
+
+        #[test_log::test]
+        fn step_iterates_through_plan_sequentially() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+            plan.add_interaction(Interaction::HealthCheck("host:1234".to_string()));
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(200)));
+
+            let first = plan.step();
+            assert!(first.is_some());
+            assert!(
+                matches!(first.unwrap(), Interaction::Sleep(d) if *d == Duration::from_millis(100))
+            );
+
+            let second = plan.step();
+            assert!(second.is_some());
+            assert!(matches!(second.unwrap(), Interaction::HealthCheck(h) if h == "host:1234"));
+
+            let third = plan.step();
+            assert!(third.is_some());
+            assert!(
+                matches!(third.unwrap(), Interaction::Sleep(d) if *d == Duration::from_millis(200))
+            );
+
+            assert!(plan.step().is_none());
+        }
+
+        #[test_log::test]
+        fn add_interaction_appends_to_plan() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            assert!(plan.plan.is_empty());
+
+            plan.add_interaction(Interaction::Sleep(Duration::from_secs(1)));
+            assert_eq!(plan.plan.len(), 1);
+
+            plan.add_interaction(Interaction::HealthCheck("localhost:8080".to_string()));
+            assert_eq!(plan.plan.len(), 2);
+        }
+
+        #[test_log::test]
+        fn gen_interactions_creates_alternating_interactions() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            plan.gen_interactions(4);
+
+            assert_eq!(plan.plan.len(), 4);
+
+            // First interaction (i=1, len=0, total=1): 1 is odd -> HealthCheck
+            assert!(matches!(&plan.plan[0], Interaction::HealthCheck(_)));
+
+            // Second interaction (i=2, len=0, total=2): 2 is even -> Sleep
+            assert!(matches!(&plan.plan[1], Interaction::Sleep(_)));
+
+            // Third interaction (i=3, len=0, total=3): 3 is odd -> HealthCheck
+            assert!(matches!(&plan.plan[2], Interaction::HealthCheck(_)));
+
+            // Fourth interaction (i=4, len=0, total=4): 4 is even -> Sleep
+            assert!(matches!(&plan.plan[3], Interaction::Sleep(_)));
+        }
+
+        #[test_log::test]
+        fn gen_interactions_clears_existing_plan_and_resets_step() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_secs(1)));
+            plan.step(); // advance step to 1
+
+            plan.gen_interactions(2);
+
+            // Should have cleared the old plan and reset step
+            assert_eq!(plan.plan.len(), 2);
+            // Step should be reset, so we should be able to iterate from the beginning
+            let first = plan.step();
+            assert!(first.is_some());
+        }
+
+        #[test_log::test]
+        fn gen_interactions_generates_health_check_with_correct_host_port() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            plan.gen_interactions(1);
+
+            if let Interaction::HealthCheck(host) = &plan.plan[0] {
+                assert_eq!(host, &format!("{HOST}:{PORT}"));
+            } else {
+                panic!("Expected HealthCheck interaction");
+            }
+        }
+
+        #[test_log::test]
+        fn gen_interactions_generates_sleep_with_1000ms_duration() {
+            let mut plan = HealthCheckInteractionPlan::new();
+            plan.gen_interactions(2);
+
+            // Second interaction should be Sleep
+            if let Interaction::Sleep(duration) = &plan.plan[1] {
+                assert_eq!(*duration, Duration::from_millis(1000));
+            } else {
+                panic!("Expected Sleep interaction");
+            }
+        }
+    }
+}
