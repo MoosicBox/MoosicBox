@@ -112,7 +112,7 @@ jobs:
               with:
                   command: workspace-setup
                   os: ubuntu
-                  workspace-toolchains-json: ${{ steps.toolchains.outputs.raw-output }}
+                  workspace-toolchains-json: ${{ steps.toolchains.outputs.matrix }}
 
             - name: Install cargo-audit
               run: |
