@@ -971,4 +971,322 @@ mod tests {
 
         let _handle = output.handle();
     }
+
+    #[test_log::test]
+    fn test_to_samples_stereo_interleaving() {
+        use symphonia::core::audio::Signal;
+
+        // Create a stereo audio buffer with 4 frames
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
+        // Reserve 4 frames to make the buffer usable
+        buffer.render_reserved(Some(4));
+
+        // Fill left channel with [1.0, 2.0, 3.0, 4.0]
+        // Fill right channel with [5.0, 6.0, 7.0, 8.0]
+        {
+            let left = buffer.chan_mut(0);
+            left[0] = 1.0;
+            left[1] = 2.0;
+            left[2] = 3.0;
+            left[3] = 4.0;
+
+            let right = buffer.chan_mut(1);
+            right[0] = 5.0;
+            right[1] = 6.0;
+            right[2] = 7.0;
+            right[3] = 8.0;
+        }
+
+        let samples: Vec<f32> = to_samples(&buffer);
+
+        // Expected interleaved output: [L0, R0, L1, R1, L2, R2, L3, R3]
+        // = [1.0, 5.0, 2.0, 6.0, 3.0, 7.0, 4.0, 8.0]
+        assert_eq!(samples.len(), 8);
+        assert!((samples[0] - 1.0).abs() < f32::EPSILON);
+        assert!((samples[1] - 5.0).abs() < f32::EPSILON);
+        assert!((samples[2] - 2.0).abs() < f32::EPSILON);
+        assert!((samples[3] - 6.0).abs() < f32::EPSILON);
+        assert!((samples[4] - 3.0).abs() < f32::EPSILON);
+        assert!((samples[5] - 7.0).abs() < f32::EPSILON);
+        assert!((samples[6] - 4.0).abs() < f32::EPSILON);
+        assert!((samples[7] - 8.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_to_samples_mono() {
+        use symphonia::core::audio::Signal;
+
+        // Create a mono audio buffer with 4 frames
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
+        // Reserve 4 frames to make the buffer usable
+        buffer.render_reserved(Some(4));
+
+        // Fill mono channel with [1.0, 2.0, 3.0, 4.0]
+        {
+            let mono = buffer.chan_mut(0);
+            mono[0] = 1.0;
+            mono[1] = 2.0;
+            mono[2] = 3.0;
+            mono[3] = 4.0;
+        }
+
+        let samples: Vec<f32> = to_samples(&buffer);
+
+        // For mono, output should be unchanged
+        assert_eq!(samples.len(), 4);
+        assert!((samples[0] - 1.0).abs() < f32::EPSILON);
+        assert!((samples[1] - 2.0).abs() < f32::EPSILON);
+        assert!((samples[2] - 3.0).abs() < f32::EPSILON);
+        assert!((samples[3] - 4.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_to_samples_type_conversion_to_i16() {
+        use symphonia::core::audio::Signal;
+
+        // Test that type conversion works correctly
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(2, spec);
+        // Reserve 2 frames to make the buffer usable
+        buffer.render_reserved(Some(2));
+
+        // Use normalized float values (-1.0 to 1.0)
+        {
+            let left = buffer.chan_mut(0);
+            left[0] = 0.5;
+            left[1] = -0.5;
+
+            let right = buffer.chan_mut(1);
+            right[0] = 0.25;
+            right[1] = -0.25;
+        }
+
+        let samples: Vec<i16> = to_samples(&buffer);
+
+        // Expected interleaved output converted to i16
+        assert_eq!(samples.len(), 4);
+        // 0.5 * 32767 ≈ 16383
+        assert!((samples[0] - 16383).abs() <= 1);
+        // 0.25 * 32767 ≈ 8191
+        assert!((samples[1] - 8191).abs() <= 1);
+        // -0.5 * 32768 ≈ -16384
+        assert!((samples[2] - (-16384)).abs() <= 1);
+        // -0.25 * 32768 ≈ -8192
+        assert!((samples[3] - (-8192)).abs() <= 1);
+    }
+
+    // Enhanced MockAudioWrite that tracks writes for testing AudioOutput
+    struct TrackingMockAudioWrite {
+        handle: AudioHandle,
+        written_frames: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        flush_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl TrackingMockAudioWrite {
+        fn new() -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+                written_frames: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+                flush_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            }
+        }
+    }
+
+    impl AudioWrite for TrackingMockAudioWrite {
+        fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            let frames = decoded.frames();
+            self.written_frames
+                .fetch_add(frames, std::sync::atomic::Ordering::SeqCst);
+            Ok(frames)
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            self.flush_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
+    #[test_log::test]
+    fn test_audio_output_write_same_sample_rate() {
+        use symphonia::core::audio::Signal;
+
+        // Test that when sample rates match, samples pass through without resampling
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an audio buffer with matching sample rate
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(100, spec);
+        buffer.render_reserved(Some(100));
+        // Fill with some data
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            #[allow(clippy::cast_precision_loss)]
+            for (i, sample) in chan.iter_mut().enumerate().take(100) {
+                *sample = (i as f32) / 100.0;
+            }
+        }
+
+        // Write through AudioWrite trait
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_ok());
+
+        // Verify frames were passed through to the underlying writer
+        assert_eq!(
+            written_frames.load(std::sync::atomic::Ordering::SeqCst),
+            100
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_output_write_empty_buffer() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an empty audio buffer (0 capacity means 0 frames)
+        let buffer: AudioBuffer<f32> = AudioBuffer::new(0, spec);
+
+        // Write through AudioWrite trait
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_ok());
+
+        // No frames should have been written
+        assert_eq!(written_frames.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_flush() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let flush_count = mock_writer.flush_count.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Flush should delegate to the underlying writer
+        let result = AudioWrite::flush(&mut output);
+        assert!(result.is_ok());
+        assert_eq!(flush_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+        // Multiple flushes should work
+        let result = AudioWrite::flush(&mut output);
+        assert!(result.is_ok());
+        assert_eq!(flush_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_get_playback_position() {
+        struct MockAudioWriteWithPosition {
+            handle: AudioHandle,
+            position: f64,
+        }
+
+        impl AudioWrite for MockAudioWriteWithPosition {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn get_playback_position(&self) -> Option<f64> {
+                Some(self.position)
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = MockAudioWriteWithPosition {
+            handle: AudioHandle::new(tx),
+            position: 42.5,
+        };
+
+        let output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // get_playback_position should delegate to the underlying writer
+        assert_eq!(output.get_playback_position(), Some(42.5));
+    }
+
+    #[test_log::test]
+    fn test_audio_output_get_output_spec() {
+        struct MockAudioWriteWithSpec {
+            handle: AudioHandle,
+            output_spec: SignalSpec,
+        }
+
+        impl AudioWrite for MockAudioWriteWithSpec {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn get_output_spec(&self) -> Option<SignalSpec> {
+                Some(self.output_spec)
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = MockAudioWriteWithSpec {
+            handle: AudioHandle::new(tx),
+            output_spec,
+        };
+
+        let output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            input_spec,
+            Box::new(mock_writer),
+        );
+
+        // get_output_spec should delegate to the underlying writer
+        let spec = output.get_output_spec();
+        assert!(spec.is_some());
+        assert_eq!(spec.unwrap().rate, 48000);
+    }
 }
