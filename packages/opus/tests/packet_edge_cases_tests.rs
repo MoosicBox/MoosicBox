@@ -108,3 +108,56 @@ fn test_code_2_empty_second_frame() {
     assert_eq!(result.frames[1].data, Vec::<u8>::new());
     assert!(!result.frames[1].is_dtx); // Not explicitly DTX, just empty
 }
+
+#[test_log::test]
+fn test_code_3_vbr_insufficient_data_for_frame_lengths() {
+    // Code 3 VBR with 3 frames: needs 2 frame length bytes but packet is truncated
+    // Header byte: 0x43 = VBR (0x40) + frame_count=3 (0x03)
+    // We provide one frame length but not the second
+    let packet = vec![0x03, 0x43, 5]; // Only one frame length byte, needs two
+    assert!(OpusPacket::parse(&packet).is_err());
+}
+
+#[test_log::test]
+fn test_code_3_vbr_frame_lengths_exceed_available_data() {
+    // Code 3 VBR with 2 frames where declared frame length exceeds available bytes
+    // Header: 0x42 = VBR (0x40) + frame_count=2 (0x02)
+    // Declares first frame as 100 bytes, but only 5 bytes of data follow
+    let packet = vec![0x03, 0x42, 100, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
+    assert!(OpusPacket::parse(&packet).is_err());
+}
+
+#[test_log::test]
+fn test_code_3_cbr_with_padding_but_no_frame_data() {
+    // Code 3 CBR with padding flag set but all remaining bytes are padding
+    // Header: 0x82 = padding (0x80) + frame_count=2 (0x02), CBR mode
+    // Padding byte of 10 would consume all remaining data, leaving nothing for frames
+    let packet = vec![0x03, 0x82, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    assert!(OpusPacket::parse(&packet).is_err());
+}
+
+#[test_log::test]
+fn test_code_3_vbr_with_two_byte_frame_length_truncated() {
+    // Code 3 VBR where a two-byte frame length encoding (>=252) is incomplete
+    // Header: 0x42 = VBR (0x40) + frame_count=2 (0x02)
+    // First frame length starts with 252 (requires second byte) but packet ends
+    let packet = vec![0x03, 0x42, 252];
+    assert!(OpusPacket::parse(&packet).is_err());
+}
+
+#[test_log::test]
+fn test_code_3_vbr_with_two_byte_frame_lengths() {
+    // Code 3 VBR with frame lengths using two-byte encoding
+    // Header: 0x42 = VBR (0x40) + frame_count=2 (0x02)
+    // First frame length = 252 (4*0 + 252 = 252 bytes)
+    let mut packet = vec![0x03, 0x42, 252, 0];
+    packet.extend(vec![0xAA; 252]); // First frame data (252 bytes)
+    packet.extend(vec![0xBB; 3]); // Second frame data (remaining bytes)
+
+    let result = OpusPacket::parse(&packet).unwrap();
+
+    assert_eq!(result.frames.len(), 2);
+    assert_eq!(result.frames[0].data.len(), 252);
+    assert!(result.frames[0].data.iter().all(|&b| b == 0xAA));
+    assert_eq!(result.frames[1].data, vec![0xBB, 0xBB, 0xBB]);
+}

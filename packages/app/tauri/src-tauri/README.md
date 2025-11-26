@@ -211,12 +211,7 @@ cargo tauri build --bundles rpm  # Linux RPM
             "active": true,
             "targets": "all",
             "identifier": "com.moosicbox.app",
-            "icon": [
-                "icons/32x32.png",
-                "icons/128x128.png",
-                "icons/icon.icns",
-                "icons/icon.ico"
-            ]
+            "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.icns", "icons/icon.ico"]
         },
         "security": {
             "csp": null
