@@ -1270,4 +1270,348 @@ mod tests {
         // When tables are disabled, markdown should be treated as text
         assert!(!container.children.is_empty());
     }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_object_tag() {
+        let md = "<object data=\"evil.swf\"></object>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify object tag is escaped
+            assert!(value.contains("&amp;lt;object"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_embed_tag() {
+        let md = "<embed src=\"evil.swf\">";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            assert!(value.contains("&amp;lt;embed"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_style_tag() {
+        let md = "<style>body { display: none; }</style>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            assert!(value.contains("&amp;lt;style"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_mixed_case_script() {
+        let md = "<ScRiPt>alert('xss')</ScRiPt>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Case-insensitive detection should still escape this
+            assert!(value.contains("&amp;lt;"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_mixed_case_javascript_url() {
+        let md = "[Click](JAVASCRIPT:alert('xss'))";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first()
+            && let Some(link) = paragraph.children.first()
+            && let Element::Anchor { href, .. } = &link.element
+        {
+            // Case-insensitive URL filtering
+            assert_eq!(href, &Some("#".to_string()));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_safe_url_preserved() {
+        let md = "[Click](https://example.com/page)";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first()
+            && let Some(link) = paragraph.children.first()
+            && let Element::Anchor { href, .. } = &link.element
+        {
+            // Safe URLs should pass through unchanged
+            assert_eq!(href, &Some("https://example.com/page".to_string()));
+        }
+    }
+
+    #[test_log::test]
+    fn test_code_block_language_data_attribute() {
+        let md = "```python\nprint('hello')\n```";
+        let container = markdown_to_container(md);
+        if let Some(code_block) = container.children.first() {
+            // Verify language is stored in data attribute
+            assert_eq!(code_block.data.get("language"), Some(&"python".to_string()));
+        }
+    }
+
+    #[test_log::test]
+    fn test_indented_code_block() {
+        let md = "    indented code\n    more code";
+        let container = markdown_to_container(md);
+        assert!(!container.children.is_empty());
+        if let Some(code_block) = container.children.first() {
+            assert!(
+                code_block
+                    .classes
+                    .contains(&"markdown-code-block".to_string())
+            );
+            // Indented code blocks don't have a language
+            assert!(!code_block.data.contains_key("language"));
+        }
+    }
+
+    #[test_log::test]
+    fn test_table_structure() {
+        let md = "| Header1 | Header2 |\n|---------|----------|\n| Cell1   | Cell2    |";
+        let container = markdown_to_container(md);
+        if let Some(table) = container.children.first() {
+            assert_eq!(table.element, Element::Table);
+            assert!(table.classes.contains(&"markdown-table".to_string()));
+            // Table should have styling
+            assert_eq!(table.margin_top, Some(Number::from(16)));
+            assert_eq!(table.margin_bottom, Some(Number::from(16)));
+            // Table should have THead child
+            let has_thead = table
+                .children
+                .iter()
+                .any(|child| matches!(child.element, Element::THead));
+            assert!(has_thead);
+        }
+    }
+
+    #[test_log::test]
+    fn test_strong_element_has_bold_weight() {
+        let md = "**bold text**";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let has_bold = paragraph.children.iter().any(|child| {
+                child.classes.contains(&"markdown-strong".to_string())
+                    && child.font_weight == Some(FontWeight::Bold)
+            });
+            assert!(has_bold);
+        }
+    }
+
+    #[test_log::test]
+    fn test_strikethrough_text_decoration() {
+        let md = "~~strikethrough~~";
+        let options = MarkdownOptions {
+            enable_strikethrough: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first() {
+            let has_strikethrough = paragraph.children.iter().any(|child| {
+                child
+                    .classes
+                    .contains(&"markdown-strikethrough".to_string())
+                    && child.text_decoration.as_ref().is_some_and(|td| {
+                        td.line.contains(&TextDecorationLine::LineThrough)
+                            && td.style == Some(TextDecorationStyle::Solid)
+                    })
+            });
+            assert!(has_strikethrough);
+        }
+    }
+
+    #[test_log::test]
+    fn test_soft_break_produces_space() {
+        // Soft break occurs when there's a single newline (not double newline for paragraph)
+        let md = "Line one\nLine two";
+        let container = markdown_to_container(md);
+        // Should produce a single paragraph with text separated by soft breaks (spaces)
+        assert_eq!(container.children.len(), 1);
+        if let Some(paragraph) = container.children.first() {
+            // Should have multiple children including the soft break space
+            assert!(paragraph.children.len() >= 2);
+        }
+    }
+
+    #[test_log::test]
+    fn test_task_list_checked_and_unchecked() {
+        let md = "- [x] Checked\n- [ ] Unchecked";
+        let options = MarkdownOptions {
+            enable_tasklists: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(list) = container.children.first() {
+            // Find all checkbox inputs
+            let checkboxes: Vec<_> = list
+                .children
+                .iter()
+                .flat_map(|item| &item.children)
+                .filter_map(|child| {
+                    if let Element::Input {
+                        input: hyperchad_transformer::Input::Checkbox { checked },
+                        ..
+                    } = &child.element
+                    {
+                        Some(*checked)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(checkboxes.len(), 2);
+            assert_eq!(checkboxes[0], Some(true)); // Checked
+            assert_eq!(checkboxes[1], Some(false)); // Unchecked
+        }
+    }
+
+    #[test_log::test]
+    fn test_link_text_decoration_underline() {
+        let md = "[Link text](https://example.com)";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let has_underlined_link = paragraph.children.iter().any(|child| {
+                child.classes.contains(&"markdown-link".to_string())
+                    && child.text_decoration.as_ref().is_some_and(|td| {
+                        td.line.contains(&TextDecorationLine::Underline)
+                            && td.style == Some(TextDecorationStyle::Solid)
+                    })
+            });
+            assert!(has_underlined_link);
+        }
+    }
+
+    #[test_log::test]
+    fn test_emphasis_element_created() {
+        let md = "*emphasized text*";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let has_emphasis = paragraph
+                .children
+                .iter()
+                .any(|child| child.classes.contains(&"markdown-em".to_string()));
+            assert!(has_emphasis);
+        }
+    }
+
+    #[test_log::test]
+    fn test_heading_specific_styling() {
+        // Test that different heading levels get different font sizes
+        let md = "# H1\n#### H4";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 2);
+
+        let h1 = &container.children[0];
+        let h4 = &container.children[1];
+
+        // H1 should have font_size 32, H4 should have font_size 16
+        assert_eq!(h1.font_size, Some(Number::from(32)));
+        assert_eq!(h4.font_size, Some(Number::from(16)));
+
+        // Check margin differences
+        assert_eq!(h1.margin_top, Some(Number::from(32)));
+        assert_eq!(h4.margin_top, Some(Number::from(16)));
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_base_tag() {
+        let md = "<base href=\"https://evil.com/\">";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify base tag is escaped
+            assert!(value.contains("&amp;lt;base"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_meta_tag() {
+        let md = "<meta http-equiv=\"refresh\" content=\"0;url=evil.com\">";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify meta tag is escaped
+            assert!(value.contains("&amp;lt;meta"));
+        }
+    }
+
+    #[test_log::test]
+    fn test_blockquote_styling() {
+        let md = "> Quote text";
+        let container = markdown_to_container(md);
+        if let Some(blockquote) = container.children.first() {
+            // Verify specific blockquote styling
+            assert_eq!(blockquote.padding_left, Some(Number::from(16)));
+            assert_eq!(
+                blockquote.border_left,
+                Some((Color::from_hex("#d0d7de"), Number::from(4)))
+            );
+            assert_eq!(blockquote.margin_top, Some(Number::from(16)));
+            assert_eq!(blockquote.margin_bottom, Some(Number::from(16)));
+        }
+    }
+
+    #[test_log::test]
+    fn test_inline_code_styling() {
+        let md = "`code`";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let code = paragraph
+                .children
+                .iter()
+                .find(|c| c.classes.contains(&"inline-code".to_string()));
+            assert!(code.is_some());
+            let code = code.unwrap();
+            // Verify inline code has expected styling
+            assert_eq!(code.background, Some(Color::from_hex("#f6f8fa")));
+            assert_eq!(code.padding_left, Some(Number::from(4)));
+            assert_eq!(code.padding_right, Some(Number::from(4)));
+            assert_eq!(code.border_top_left_radius, Some(Number::from(3)));
+        }
+    }
 }
