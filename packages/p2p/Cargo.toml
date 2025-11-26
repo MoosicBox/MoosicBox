@@ -39,4 +39,9 @@ simulator = ["switchy_async/simulator", "switchy_random/simulator"]
 # NOTE: test-utils feature will be added in Phase 8.1
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]

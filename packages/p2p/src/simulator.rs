@@ -1276,4 +1276,190 @@ mod tests {
         assert_eq!(short.len(), 10);
         assert_eq!(short, "ababababab");
     }
+
+    // === Network Partition and Healing Tests ===
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_network_partition_blocks_path_finding() {
+        let alice = SimulatorP2P::with_seed("alice_partition_path");
+        let bob_id = test_node_id("bob_partition_path");
+        let charlie_id = test_node_id("charlie_partition_path");
+        let alice_id = alice.local_node_id().clone();
+        let shared_graph = alice.network_graph.clone();
+
+        // Setup: alice -> bob -> charlie
+        {
+            let mut graph = shared_graph.write().await;
+            graph.add_node(alice_id.clone());
+            graph.add_node(bob_id.clone());
+            graph.add_node(charlie_id.clone());
+
+            let link = LinkInfo {
+                latency: Duration::from_millis(1),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: true,
+            };
+
+            graph.connect_nodes(alice_id.clone(), bob_id.clone(), link.clone());
+            graph.connect_nodes(bob_id.clone(), charlie_id.clone(), link);
+        }
+
+        // Verify path exists initially
+        assert!(
+            shared_graph
+                .read()
+                .await
+                .find_path(alice_id.clone(), charlie_id.clone())
+                .is_some()
+        );
+
+        // Create partition between bob and charlie
+        {
+            let mut graph = shared_graph.write().await;
+            graph.add_partition(
+                &[alice_id.clone(), bob_id.clone()],
+                std::slice::from_ref(&charlie_id),
+            );
+        }
+
+        // Path should no longer exist
+        assert!(
+            shared_graph
+                .read()
+                .await
+                .find_path(alice_id.clone(), charlie_id.clone())
+                .is_none()
+        );
+
+        // Heal the partition
+        {
+            let mut graph = shared_graph.write().await;
+            graph.heal_partition(&[bob_id], std::slice::from_ref(&charlie_id));
+        }
+
+        // Path should exist again
+        assert!(
+            shared_graph
+                .read()
+                .await
+                .find_path(alice_id, charlie_id)
+                .is_some()
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_p2p_register_peer_new_node() {
+        let sim = SimulatorP2P::with_seed("register_new");
+        let new_id = test_node_id("new_peer");
+
+        // Register a peer that doesn't exist in the graph yet
+        sim.register_peer("new_peer", new_id.clone()).await.unwrap();
+
+        // The node should now exist in the graph
+        let graph = sim.network_graph.read().await;
+        assert!(graph.get_node(&new_id).is_some());
+        drop(graph);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_p2p_connect_adds_nodes_to_graph() {
+        let alice = SimulatorP2P::with_seed("alice_auto_add");
+        let bob_id = test_node_id("bob_auto_add");
+
+        // Initially, neither node should be in the graph (graph is empty)
+        assert!(alice.network_graph.read().await.nodes.is_empty());
+
+        // Setup connection (this should auto-add both nodes)
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.connect_nodes(
+                alice.local_node_id().clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(1),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        // Connect should auto-add both nodes to the graph
+        let _conn = alice.connect(bob_id.clone()).await.unwrap();
+
+        // Verify both nodes are in the graph
+        let graph = alice.network_graph.read().await;
+        assert!(graph.get_node(alice.local_node_id()).is_some());
+        assert!(graph.get_node(&bob_id).is_some());
+        drop(graph);
+    }
+
+    // === Edge Case Tests ===
+
+    #[test_log::test]
+    fn test_network_graph_find_path_shortest() {
+        // Test that find_path returns shortest path (BFS behavior)
+        let mut graph = NetworkGraph::new();
+        let a = test_node_id("node_a");
+        let b = test_node_id("node_b");
+        let c = test_node_id("node_c");
+        let d = test_node_id("node_d");
+
+        graph.add_node(a.clone());
+        graph.add_node(b.clone());
+        graph.add_node(c.clone());
+        graph.add_node(d.clone());
+
+        let link = LinkInfo {
+            latency: Duration::from_millis(10),
+            packet_loss: 0.0,
+            bandwidth_limit: None,
+            is_active: true,
+        };
+
+        // Create two paths: a -> b -> c -> d (long) and a -> d (short)
+        graph.connect_nodes(a.clone(), b.clone(), link.clone());
+        graph.connect_nodes(b, c.clone(), link.clone());
+        graph.connect_nodes(c, d.clone(), link.clone());
+        graph.connect_nodes(a.clone(), d.clone(), link); // Direct link
+
+        let path = graph.find_path(a.clone(), d.clone()).unwrap();
+
+        // BFS should find the shortest path (a -> d)
+        assert_eq!(path.len(), 2);
+        assert_eq!(path[0], a);
+        assert_eq!(path[1], d);
+    }
+
+    #[test_log::test]
+    fn test_simulator_connection_calculate_path_latency_missing_links() {
+        // Test latency calculation when some links in path are missing from graph
+        let mut graph = NetworkGraph::new();
+        let a = test_node_id("lat_a");
+        let b = test_node_id("lat_b");
+        let c = test_node_id("lat_c");
+
+        graph.add_node(a.clone());
+        graph.add_node(b.clone());
+        graph.add_node(c.clone());
+
+        // Only add link a -> b, not b -> c
+        graph.connect_nodes(
+            a.clone(),
+            b.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(50),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: true,
+            },
+        );
+
+        let path = vec![a, b, c];
+        let latency = SimulatorConnection::calculate_path_latency(&graph, &path);
+
+        // Should only count the latency of existing links (a -> b)
+        assert_eq!(latency, Duration::from_millis(50));
+    }
 }
