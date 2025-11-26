@@ -1132,4 +1132,310 @@ mod tests {
             ]
         );
     }
+
+    #[test_log::test]
+    fn test_download_queue_state_new_is_empty() {
+        let state = DownloadQueueState::new();
+
+        assert!(state.tasks.is_empty());
+        assert!(state.results.is_empty());
+        assert!(state.current_task().is_none());
+    }
+
+    #[test_log::test]
+    fn test_download_queue_state_add_task_to_queue() {
+        let mut state = DownloadQueueState::new();
+        let task = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        state.add_task_to_queue(task);
+
+        assert_eq!(state.tasks.len(), 1);
+        assert!(state.current_task().is_some());
+        assert_eq!(state.current_task().unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn test_download_queue_state_add_tasks_to_queue() {
+        let mut state = DownloadQueueState::new();
+        let task1 = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path1".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+        let task2 = DownloadTask {
+            id: 2,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::AlbumCover {
+                album_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                title: "album".into(),
+                contains_cover: true,
+            },
+            file_path: "/test/path2".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        state.add_tasks_to_queue(vec![task1, task2]);
+
+        assert_eq!(state.tasks.len(), 2);
+        assert_eq!(state.current_task().unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn test_download_queue_state_finish_task_removes_matching_task() {
+        let mut state = DownloadQueueState::new();
+        let task = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        state.add_task_to_queue(task.clone());
+        assert_eq!(state.tasks.len(), 1);
+
+        state.finish_task(&task);
+        assert!(state.tasks.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_download_queue_state_finish_task_does_not_remove_different_path() {
+        let mut state = DownloadQueueState::new();
+        let task1 = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path1".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+        let task2 = DownloadTask {
+            id: 2,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path2".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        state.add_task_to_queue(task1.clone());
+        state.add_task_to_queue(task2);
+
+        state.finish_task(&task1);
+        assert_eq!(state.tasks.len(), 1);
+        assert_eq!(state.tasks[0].file_path, "/test/path2");
+    }
+
+    #[test_log::test]
+    fn test_download_queue_state_finish_task_does_not_remove_different_item_type() {
+        let mut state = DownloadQueueState::new();
+        let track_task = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+        let cover_task = DownloadTask {
+            id: 2,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::AlbumCover {
+                album_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                title: "album".into(),
+                contains_cover: true,
+            },
+            file_path: "/test/path".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        state.add_task_to_queue(track_task.clone());
+        state.add_task_to_queue(cover_task);
+
+        // Finishing track_task should only remove the track, not the album cover
+        state.finish_task(&track_task);
+        assert_eq!(state.tasks.len(), 1);
+        assert!(matches!(
+            state.tasks[0].item,
+            DownloadItem::AlbumCover { .. }
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_has_database_false_initially() {
+        let queue = DownloadQueue::new();
+        assert!(!queue.has_database());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_has_database_true_after_with_database() {
+        let queue = DownloadQueue::new().with_database(LibraryDatabase {
+            database: Arc::new(Box::new(TestDatabase {})),
+        });
+        assert!(queue.has_database());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_has_downloader_false_initially() {
+        let queue = DownloadQueue::new();
+        assert!(!queue.has_downloader());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_has_downloader_true_after_with_downloader() {
+        let queue = DownloadQueue::new().with_downloader(Box::new(TestDownloader {}));
+        assert!(queue.has_downloader());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_speed_returns_none_without_downloader() {
+        let queue = DownloadQueue::new();
+        assert!(queue.speed().is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_current_task_returns_none_when_empty() {
+        let queue = DownloadQueue::new();
+        assert!(queue.current_task().await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_current_task_returns_first_task() {
+        let mut queue = DownloadQueue::new();
+        let task = DownloadTask {
+            id: 42,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        queue.add_task_to_queue(task).await;
+
+        let current = queue.current_task().await;
+        assert!(current.is_some());
+        assert_eq!(current.unwrap().id, 42);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_default_creates_empty_queue() {
+        let queue = DownloadQueue::default();
+
+        assert!(!queue.has_database());
+        assert!(!queue.has_downloader());
+        assert!(queue.scan);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_with_scan_false() {
+        let queue = DownloadQueue::new().with_scan(false);
+
+        assert!(!queue.scan);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_download_queue_with_scan_true() {
+        let queue = DownloadQueue::new().with_scan(false).with_scan(true);
+
+        assert!(queue.scan);
+    }
 }
