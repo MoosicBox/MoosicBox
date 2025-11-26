@@ -709,4 +709,152 @@ mod tests {
             json.to_nested_value(&["outer", "missing"]);
         assert_eq!(result.unwrap(), None);
     }
+
+    #[test_log::test]
+    fn test_to_value_type_float_conversions() {
+        // f32 conversion
+        let value = &serde_json::json!(1.23456);
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.23456_f32).abs() < 0.001);
+
+        // f64 conversion
+        let value = &serde_json::json!(1.234_567_89);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.234_567_89).abs() < f64::EPSILON);
+
+        // Error cases
+        let value = &serde_json::json!("not a number");
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_nested_trait_direct_usage() {
+        let json = serde_json::json!({
+            "level1": {
+                "level2": {
+                    "value": "found"
+                }
+            }
+        });
+
+        let json_ref = &json;
+
+        // Use ToNested trait directly
+        let result = json_ref.to_nested(&["level1", "level2", "value"]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().as_str(), Some("found"));
+
+        // Empty path returns root
+        let result = json_ref.to_nested(&[]);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_get_nested_value_empty_path() {
+        let json = &serde_json::json!({"key": "value"});
+        let result = get_nested_value(json, &[]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), json);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_unsigned_integer_conversions() {
+        let value = &serde_json::json!(255);
+
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u8);
+
+        let result: Result<u16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u16);
+
+        let result: Result<u32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u32);
+
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_usize);
+
+        // Error cases
+        let value = &serde_json::json!("not a number");
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_option_missing_value_returns_none() {
+        let value = &serde_json::json!(42);
+        let result = <&Value as ToValueType<Option<String>>>::missing_value(
+            &value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_to_value_with_value_ref() {
+        let json = serde_json::json!({
+            "key": "value"
+        });
+
+        // Test ToValue implementation on &Value
+        let json_ref = &json;
+        let result: Result<String, ParseError> = json_ref.to_value("key");
+        assert_eq!(result.unwrap(), "value");
+    }
+
+    #[test_log::test]
+    fn test_vec_conversion_with_element_error() {
+        // Array with mixed types should fail when expecting Vec<u64>
+        let value = &serde_json::json!([1, 2, "three"]);
+        let result: Result<Vec<u64>, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_to_nested_value_type_with_parse_error() {
+        let json = &serde_json::json!({
+            "outer": {
+                "inner": "not_a_number"
+            }
+        });
+
+        // Getting a u64 from a string should fail with ConvertType
+        let result = get_nested_value_type::<u64>(json, &["outer", "inner"]);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_bool() {
+        let value = &serde_json::json!(true);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = &serde_json::json!(false);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+
+        // Error case
+        let value = &serde_json::json!("true");
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_str_reference() {
+        let value = serde_json::json!("hello world");
+        let result: Result<&str, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), "hello world");
+
+        // Error case
+        let value = &serde_json::json!(123);
+        let result: Result<&str, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
 }
