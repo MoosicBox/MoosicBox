@@ -3098,4 +3098,132 @@ mod tests {
             YtAudioQuality::HiResLossless
         );
     }
+
+    #[test_log::test]
+    fn test_yt_album_type_to_value_type_valid() {
+        use moosicbox_json_utils::ToValueType;
+        let value = serde_json::json!("LP");
+        let result: YtAlbumType = (&value).to_value_type().unwrap();
+        assert_eq!(result, YtAlbumType::Lp);
+
+        let value = serde_json::json!("EPSANDSINGLES");
+        let result: YtAlbumType = (&value).to_value_type().unwrap();
+        assert_eq!(result, YtAlbumType::EpsAndSingles);
+
+        let value = serde_json::json!("COMPILATIONS");
+        let result: YtAlbumType = (&value).to_value_type().unwrap();
+        assert_eq!(result, YtAlbumType::Compilations);
+    }
+
+    #[test_log::test]
+    fn test_yt_album_type_to_value_type_invalid_string() {
+        use moosicbox_json_utils::ToValueType;
+        let value = serde_json::json!("INVALID_TYPE");
+        let result: Result<YtAlbumType, _> = (&value).to_value_type();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_yt_album_type_to_value_type_not_string() {
+        use moosicbox_json_utils::ToValueType;
+        let value = serde_json::json!(123);
+        let result: Result<YtAlbumType, _> = (&value).to_value_type();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::MissingValue(_)));
+    }
+
+    #[test_log::test]
+    fn test_try_from_album_type_for_yt_album_type_success() {
+        use moosicbox_music_models::AlbumType as MusicAlbumType;
+        assert_eq!(
+            YtAlbumType::try_from(MusicAlbumType::Lp).unwrap(),
+            YtAlbumType::Lp
+        );
+        assert_eq!(
+            YtAlbumType::try_from(MusicAlbumType::Compilations).unwrap(),
+            YtAlbumType::Compilations
+        );
+        assert_eq!(
+            YtAlbumType::try_from(MusicAlbumType::EpsAndSingles).unwrap(),
+            YtAlbumType::EpsAndSingles
+        );
+    }
+
+    #[test_log::test]
+    fn test_try_from_album_type_for_yt_album_type_unsupported() {
+        use moosicbox_music_models::AlbumType as MusicAlbumType;
+        // Test unsupported variants (Live, Other, Download)
+        let result = YtAlbumType::try_from(MusicAlbumType::Live);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), TryFromAlbumTypeError));
+
+        let result = YtAlbumType::try_from(MusicAlbumType::Other);
+        assert!(result.is_err());
+
+        let result = YtAlbumType::try_from(MusicAlbumType::Download);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_yt_artist_order_from_artist_order() {
+        assert_eq!(
+            YtArtistOrder::from(ArtistOrder::DateAdded),
+            YtArtistOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_yt_artist_order_direction_from_artist_order_direction() {
+        assert_eq!(
+            YtArtistOrderDirection::from(ArtistOrderDirection::Ascending),
+            YtArtistOrderDirection::Asc
+        );
+        assert_eq!(
+            YtArtistOrderDirection::from(ArtistOrderDirection::Descending),
+            YtArtistOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_yt_album_order_from_album_order() {
+        assert_eq!(
+            YtAlbumOrder::from(AlbumOrder::DateAdded),
+            YtAlbumOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_yt_album_order_direction_from_album_order_direction() {
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumOrderDirection::Ascending),
+            YtAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            YtAlbumOrderDirection::from(AlbumOrderDirection::Descending),
+            YtAlbumOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_yt_track_order_from_track_order() {
+        assert_eq!(
+            YtTrackOrder::from(TrackOrder::DateAdded),
+            YtTrackOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_yt_track_order_direction_from_track_order_direction() {
+        assert_eq!(
+            YtTrackOrderDirection::from(TrackOrderDirection::Ascending),
+            YtTrackOrderDirection::Asc
+        );
+        assert_eq!(
+            YtTrackOrderDirection::from(TrackOrderDirection::Descending),
+            YtTrackOrderDirection::Desc
+        );
+    }
 }
