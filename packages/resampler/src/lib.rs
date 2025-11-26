@@ -583,11 +583,7 @@ mod tests {
                 !output.is_empty(),
                 "Cycle {cycle} output should not be empty"
             );
-            assert_eq!(
-                output.len() % 2,
-                0,
-                "Cycle {cycle} output should be stereo"
-            );
+            assert_eq!(output.len() % 2, 0, "Cycle {cycle} output should be stereo");
         }
     }
 
@@ -737,5 +733,4 @@ mod tests {
         let result = resampler.resample_to_audio_buffer(&input_buffer);
         assert!(result.is_none());
     }
-
 }
