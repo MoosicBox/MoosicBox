@@ -1798,4 +1798,124 @@ mod test {
         let message = format!("{error}");
         assert_eq!(message, "Unauthorized");
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_album_ids_removes_from_cache() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let album = Album {
+            id: 1.into(),
+            title: "test_album".into(),
+            ..Default::default()
+        };
+
+        api.cache_albums(slice::from_ref(&album)).await;
+        assert!(api.get_album_from_cache(&album.id).await.is_some());
+
+        api.remove_cache_album_ids(&[&album.id]).await;
+        assert!(api.get_album_from_cache(&album.id).await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_track_ids_removes_from_cache() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let track = Track {
+            id: 1.into(),
+            title: "test_track".into(),
+            ..Default::default()
+        };
+
+        api.cache_tracks(slice::from_ref(&track)).await;
+        assert!(api.get_track_from_cache(&track.id).await.is_some());
+
+        api.remove_cache_track_ids(&[&track.id]).await;
+        assert!(api.get_track_from_cache(&track.id).await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_from_arc_btree_map_creates_music_apis() {
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+        let mut map = BTreeMap::new();
+        map.insert((*API_SOURCE).clone(), api);
+        let arc_map = Arc::new(map);
+
+        let apis: MusicApis = arc_map.into();
+
+        assert!(apis.get(&API_SOURCE).is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_into_arc_btree_map_converts_correctly() {
+        let mut apis = MusicApis::new();
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+        apis.add_source(api);
+
+        let arc_map: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> = apis.into();
+
+        assert!(arc_map.get(&API_SOURCE).is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_ref_into_arc_btree_map_converts_correctly() {
+        let mut apis = MusicApis::new();
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+        apis.add_source(api);
+
+        let arc_map: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> = (&apis).into();
+
+        assert!(arc_map.get(&API_SOURCE).is_some());
+        // Original still usable
+        assert!(apis.get(&API_SOURCE).is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_api_default_enable_scan_returns_unsupported() {
+        let api = TestMusicApi {};
+        let result = api.enable_scan().await;
+        assert!(matches!(
+            result,
+            Err(Error::UnsupportedAction("enable_scan"))
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_api_default_scan_returns_unsupported() {
+        let api = TestMusicApi {};
+        let result = api.scan().await;
+        assert!(matches!(result, Err(Error::UnsupportedAction("scan"))));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_api_default_scan_enabled_returns_unsupported() {
+        let api = TestMusicApi {};
+        let result = api.scan_enabled().await;
+        assert!(matches!(
+            result,
+            Err(Error::UnsupportedAction("scan_enabled"))
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_api_default_search_returns_unsupported() {
+        let api = TestMusicApi {};
+        let result = api.search("query", None, None).await;
+        assert!(matches!(result, Err(Error::UnsupportedAction("search"))));
+    }
+
+    #[test_log::test]
+    fn music_api_default_supports_scan_returns_false() {
+        let api = TestMusicApi {};
+        assert!(!api.supports_scan());
+    }
+
+    #[test_log::test]
+    fn music_api_default_supports_search_returns_false() {
+        let api = TestMusicApi {};
+        assert!(!api.supports_search());
+    }
+
+    #[test_log::test]
+    fn music_api_default_auth_returns_none() {
+        let api = TestMusicApi {};
+        assert!(api.auth().is_none());
+    }
 }
