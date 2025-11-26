@@ -95,7 +95,7 @@ fn bench_insert_single(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("row", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "row"), |b| {
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
                 counter += 1;
@@ -154,7 +154,7 @@ fn bench_select_by_pk(c: &mut Criterion) {
             }
         });
 
-        group.bench_function(BenchmarkId::new("single_row", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "single_row"), |b| {
             let mut id = 0i64;
             b.to_async(rt).iter(|| {
                 id = (id % 100) + 1;
@@ -212,7 +212,7 @@ fn bench_select_all(c: &mut Criterion) {
         });
 
         group.throughput(Throughput::Elements(100));
-        group.bench_function(BenchmarkId::new("100_rows", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "100_rows"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -267,7 +267,7 @@ fn bench_update(c: &mut Criterion) {
             }
         });
 
-        group.bench_function(BenchmarkId::new("single_row", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "single_row"), |b| {
             let mut id = 0i64;
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
@@ -328,7 +328,7 @@ fn bench_delete(c: &mut Criterion) {
             }
         });
 
-        group.bench_function(BenchmarkId::new("single_row", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "single_row"), |b| {
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
                 counter += 1;
@@ -388,7 +388,7 @@ fn bench_upsert(c: &mut Criterion) {
             }
         });
 
-        group.bench_function(BenchmarkId::new("existing_row", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "existing_row"), |b| {
             let mut id = 0i64;
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
@@ -444,7 +444,7 @@ fn bench_transaction_commit(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("with_insert", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "with_insert"), |b| {
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
                 counter += 1;
@@ -494,7 +494,7 @@ fn bench_transaction_rollback(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("with_insert", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "with_insert"), |b| {
             let mut counter = 0i64;
             b.to_async(rt).iter(|| {
                 counter += 1;
@@ -533,7 +533,7 @@ fn bench_transaction_empty(c: &mut Criterion) {
     let mut group = c.benchmark_group("transactions/overhead");
 
     for BackendInfo { name, db } in backends {
-        group.bench_function(BenchmarkId::new("begin_commit", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "begin_commit"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 async move {
@@ -575,7 +575,7 @@ fn bench_table_exists(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("existing", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "existing"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -583,7 +583,7 @@ fn bench_table_exists(c: &mut Criterion) {
             });
         });
 
-        group.bench_function(BenchmarkId::new("non_existing", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "non_existing"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 async move {
@@ -627,7 +627,7 @@ fn bench_column_exists(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("existing", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "existing"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -639,7 +639,7 @@ fn bench_column_exists(c: &mut Criterion) {
             });
         });
 
-        group.bench_function(BenchmarkId::new("non_existing", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "non_existing"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -690,7 +690,7 @@ fn bench_get_table_info(c: &mut Criterion) {
             .expect("Failed to create table");
         });
 
-        group.bench_function(BenchmarkId::new("5_columns", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "5_columns"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -869,7 +869,7 @@ fn bench_filtered_select(c: &mut Criterion) {
 
         // Select ~100 rows (10% of data)
         group.throughput(Throughput::Elements(100));
-        group.bench_function(BenchmarkId::new("100_of_1000", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "100_of_1000"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -928,7 +928,7 @@ fn bench_raw_vs_builder(c: &mut Criterion) {
             }
         });
 
-        group.bench_function(BenchmarkId::new("query_builder", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "query_builder"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let table = table.clone();
@@ -943,7 +943,7 @@ fn bench_raw_vs_builder(c: &mut Criterion) {
         });
 
         let raw_query = format!("SELECT * FROM {table} WHERE id = 50");
-        group.bench_function(BenchmarkId::new("raw_sql", *name), |b| {
+        group.bench_function(BenchmarkId::new(*name, "raw_sql"), |b| {
             b.to_async(rt).iter(|| {
                 let db: Db = Arc::clone(db);
                 let query = raw_query.clone();
