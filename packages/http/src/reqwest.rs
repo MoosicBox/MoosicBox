@@ -226,6 +226,29 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_headers_to_btree_skips_non_utf8_values() {
+        use reqwest::header::HeaderValue;
+
+        let mut header_map = reqwest::header::HeaderMap::new();
+        // Add a valid UTF-8 header
+        header_map.insert("valid", "utf8-value".parse().unwrap());
+        // Add a header with non-UTF8 bytes (to_str() will return Err)
+        let non_utf8_value = HeaderValue::from_bytes(&[0x80, 0x81, 0x82]).unwrap();
+        header_map.insert("invalid", non_utf8_value);
+        // Add another valid header
+        header_map.insert("also-valid", "another-value".parse().unwrap());
+
+        let result = headers_to_btree(&header_map);
+
+        // Only the valid UTF-8 headers should be present
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get("valid"), Some(&"utf8-value".to_string()));
+        assert_eq!(result.get("also-valid"), Some(&"another-value".to_string()));
+        // The invalid header should be skipped
+        assert!(!result.contains_key("invalid"));
+    }
+
+    #[test_log::test]
     fn test_client_new() {
         let reqwest_client = reqwest::Client::new();
         let _client = Client::new(reqwest_client);
