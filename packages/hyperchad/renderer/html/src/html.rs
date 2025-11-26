@@ -1699,4 +1699,981 @@ mod tests {
             b"transform"
         );
     }
+
+    // Tests for element_to_html with various element types
+    #[test_log::test]
+    fn test_element_to_html_div() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<div"));
+        assert!(html.ends_with("</div>"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_raw() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Raw {
+                value: "Hello <b>World</b>".to_string(),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert_eq!(html, "Hello <b>World</b>");
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_image_with_source_and_alt() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::ImageFit;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Image {
+                source: Some("/images/logo.png".to_string()),
+                alt: Some("Logo".to_string()),
+                fit: Some(ImageFit::Cover),
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("src=\"/images/logo.png\""));
+        assert!(html.contains("alt=\"Logo\""));
+        assert!(html.contains("object-fit:cover"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_anchor_with_href_and_target() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LinkTarget;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Anchor {
+                href: Some("https://example.com".to_string()),
+                target: Some(LinkTarget::Blank),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<a"));
+        assert!(html.contains("href=\"https://example.com\""));
+        assert!(html.contains("target=\"_blank\""));
+        assert!(html.ends_with("</a>"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_button_with_custom_type() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Button {
+                r#type: Some("submit".to_string()),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<button"));
+        assert!(html.contains("type=\"submit\""));
+        assert!(html.ends_with("</button>"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_button_default_type() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Button { r#type: None },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Default type should be "button"
+        assert!(html.contains("type=\"button\""));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_input_text_with_placeholder() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Text {
+                    value: Some("initial".to_string()),
+                    placeholder: Some("Enter text...".to_string()),
+                },
+                name: Some("username".to_string()),
+                autofocus: Some(true),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<input"));
+        assert!(html.contains("type=\"text\""));
+        assert!(html.contains("value=\"initial\""));
+        assert!(html.contains("placeholder=\"Enter text...\""));
+        assert!(html.contains("name=\"username\""));
+        assert!(html.contains("autofocus"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_input_checkbox_checked() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Checkbox {
+                    checked: Some(true),
+                },
+                name: Some("agree".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"checkbox\""));
+        assert!(html.contains("checked=\"checked\""));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_heading_sizes() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::HeaderSize;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        for (size, expected_tag) in [
+            (HeaderSize::H1, "h1"),
+            (HeaderSize::H2, "h2"),
+            (HeaderSize::H3, "h3"),
+            (HeaderSize::H4, "h4"),
+            (HeaderSize::H5, "h5"),
+            (HeaderSize::H6, "h6"),
+        ] {
+            let container = Container {
+                element: hyperchad_transformer::Element::Heading { size },
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+            let html = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                html.starts_with(&format!("<{expected_tag}")),
+                "Expected to start with <{expected_tag}, got: {html}"
+            );
+            assert!(
+                html.ends_with(&format!("</{expected_tag}>")),
+                "Expected to end with </{expected_tag}>, got: {html}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_table_with_rowspan_colspan() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Test TH with rows/columns
+        let th_container = Container {
+            element: hyperchad_transformer::Element::TH {
+                rows: Some(Number::Integer(2)),
+                columns: Some(Number::Integer(3)),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &th_container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<th"));
+        assert!(html.contains("rowspan=\"2\""));
+        assert!(html.contains("colspan=\"3\""));
+
+        // Test TD with rows/columns
+        let td_container = Container {
+            element: hyperchad_transformer::Element::TD {
+                rows: Some(Number::Integer(4)),
+                columns: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &td_container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<td"));
+        assert!(html.contains("rowspan=\"4\""));
+        assert!(!html.contains("colspan"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_details_open() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Test open details
+        let container = Container {
+            element: hyperchad_transformer::Element::Details { open: Some(true) },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<details"));
+        assert!(html.contains(" open"));
+        assert!(html.ends_with("</details>"));
+
+        // Test closed details
+        let container_closed = Container {
+            element: hyperchad_transformer::Element::Details { open: Some(false) },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container_closed, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(!html.contains(" open"));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_textarea() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Textarea {
+                value: "Hello World".to_string(),
+                placeholder: Some("Enter message...".to_string()),
+                rows: Some(Number::Integer(5)),
+                cols: Some(Number::Integer(40)),
+                name: Some("message".to_string()),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<textarea"));
+        assert!(html.contains("name=\"message\""));
+        assert!(html.contains("placeholder=\"Enter message...\""));
+        assert!(html.contains("rows=\"5\""));
+        assert!(html.contains("cols=\"40\""));
+        assert!(html.contains("Hello World"));
+        assert!(html.ends_with("</textarea>"));
+    }
+
+    // Tests for element_style_to_html
+    #[test_log::test]
+    fn test_element_style_to_html_flex_container() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutDirection;
+
+        let container = Container {
+            direction: LayoutDirection::Column,
+            justify_content: Some(hyperchad_transformer::models::JustifyContent::Center),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("display:flex"));
+        assert!(style.contains("flex-direction:column"));
+        assert!(style.contains("justify-content:center"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_position_absolute() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        let container = Container {
+            position: Some(Position::Absolute),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("position:absolute"));
+        // Absolute position without explicit top/left should default to 0
+        assert!(style.contains("top:0"));
+        assert!(style.contains("left:0"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_position_with_explicit_values() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        let container = Container {
+            position: Some(Position::Absolute),
+            top: Some(Number::Integer(10)),
+            right: Some(Number::Integer(20)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("position:absolute"));
+        assert!(style.contains("top:10px"));
+        assert!(style.contains("right:20px"));
+        // Should NOT add left:0 since right is specified
+        assert!(!style.contains("left:0"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_margins_and_padding() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            margin_left: Some(Number::Integer(5)),
+            margin_right: Some(Number::RealPercent(10.0)),
+            padding_top: Some(Number::Integer(15)),
+            padding_bottom: Some(Number::RealVh(5.0)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("margin-left:5px"));
+        assert!(style.contains("margin-right:10%"));
+        assert!(style.contains("padding-top:15px"));
+        assert!(style.contains("padding-bottom:5vh"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_transforms() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            translate_x: Some(Number::Integer(50)),
+            translate_y: Some(Number::RealPercent(-25.0)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("transform:translateX(50px) translateY(-25%)"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_hidden() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            hidden: Some(true),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("display:none"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_overflow() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Auto,
+            overflow_y: LayoutOverflow::Hidden,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("overflow-x:auto"));
+        assert!(style.contains("overflow-y:hidden"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_flex_properties() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Flex;
+
+        let container = Container {
+            flex: Some(Flex {
+                grow: Number::Integer(1),
+                shrink: Number::Integer(0),
+                basis: Number::RealPercent(50.0),
+            }),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("flex-grow:1"));
+        assert!(style.contains("flex-shrink:0"));
+        assert!(style.contains("flex-basis:50%"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_borders() {
+        use hyperchad_router::Container;
+
+        let color = hyperchad_renderer::Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: None,
+        };
+
+        let container = Container {
+            border_top: Some((color, Number::Integer(2))),
+            border_top_left_radius: Some(Number::Integer(5)),
+            border_bottom_right_radius: Some(Number::RealPercent(50.0)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("border-top:2px solid rgb(255,0,0)"));
+        assert!(style.contains("border-top-left-radius:5px"));
+        assert!(style.contains("border-bottom-right-radius:50%"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_text_decoration() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::TextDecoration;
+        use hyperchad_transformer::models::{TextDecorationLine, TextDecorationStyle};
+
+        let color = hyperchad_renderer::Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: None,
+        };
+
+        let container = Container {
+            text_decoration: Some(TextDecoration {
+                color: Some(color),
+                line: vec![TextDecorationLine::Underline, TextDecorationLine::Overline],
+                style: Some(TextDecorationStyle::Wavy),
+                thickness: Some(Number::Integer(2)),
+            }),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("text-decoration-color:rgb(0,0,255)"));
+        assert!(style.contains("text-decoration-line:underline overline"));
+        assert!(style.contains("text-decoration-style:wavy"));
+        assert!(style.contains("text-decoration-thickness:2"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_cursor_types() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Cursor;
+
+        for (cursor, expected) in [
+            (Cursor::Pointer, "pointer"),
+            (Cursor::Text, "text"),
+            (Cursor::Move, "move"),
+            (Cursor::NotAllowed, "not-allowed"),
+            (Cursor::Grab, "grab"),
+        ] {
+            let container = Container {
+                cursor: Some(cursor),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(&format!("cursor:{expected}")),
+                "Expected cursor:{expected}, got: {style}"
+            );
+        }
+    }
+
+    // Tests for element_classes_to_html
+    #[test_log::test]
+    fn test_element_classes_to_html_button() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Button { r#type: None },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_classes_to_html(&mut buffer, &container).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("class=\""));
+        assert!(html.contains("remove-button-styles"));
+    }
+
+    #[test_log::test]
+    fn test_element_classes_to_html_table() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Table,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_classes_to_html(&mut buffer, &container).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("class=\""));
+        assert!(html.contains("remove-table-styles"));
+    }
+
+    #[test_log::test]
+    fn test_element_classes_to_html_custom_classes() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            classes: vec!["my-class".to_string(), "another-class".to_string()],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_classes_to_html(&mut buffer, &container).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("class=\""));
+        assert!(html.contains("my-class"));
+        assert!(html.contains("another-class"));
+    }
+
+    #[test_log::test]
+    fn test_element_classes_to_html_button_with_custom_classes() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Button { r#type: None },
+            classes: vec!["custom-btn".to_string()],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_classes_to_html(&mut buffer, &container).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("remove-button-styles"));
+        assert!(html.contains("custom-btn"));
+    }
+
+    #[test_log::test]
+    fn test_element_classes_to_html_no_classes() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            classes: vec![],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_classes_to_html(&mut buffer, &container).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Should not have class attribute when no classes
+        assert_eq!(html, "");
+    }
+
+    // Tests for container_element_to_html
+    #[test_log::test]
+    fn test_container_element_to_html_with_children() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            children: vec![
+                Container {
+                    element: hyperchad_transformer::Element::Span,
+                    ..Default::default()
+                },
+                Container {
+                    element: hyperchad_transformer::Element::Raw {
+                        value: "text".to_string(),
+                    },
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let html = container_element_to_html(&container, &tag_renderer).unwrap();
+
+        // container_element_to_html renders children, not the container itself
+        assert!(html.contains("<span"));
+        assert!(html.contains("text"));
+    }
+
+    // Tests for elements_to_html
+    #[test_log::test]
+    fn test_elements_to_html_multiple() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let containers = vec![
+            Container {
+                element: hyperchad_transformer::Element::Div,
+                ..Default::default()
+            },
+            Container {
+                element: hyperchad_transformer::Element::Span,
+                ..Default::default()
+            },
+        ];
+
+        let mut buffer = Vec::new();
+        elements_to_html(&mut buffer, &containers, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("<div"));
+        assert!(html.contains("</div>"));
+        assert!(html.contains("<span"));
+        assert!(html.contains("</span>"));
+    }
+
+    // Tests for data attributes
+    #[test_log::test]
+    fn test_element_to_html_with_data_attributes() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use std::collections::BTreeMap;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let mut data = BTreeMap::new();
+        data.insert("test-id".to_string(), "123".to_string());
+        data.insert("value".to_string(), "hello".to_string());
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            data,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("data-test-id=\"123\""));
+        assert!(html.contains("data-value=\"hello\""));
+    }
+
+    // Test for image with srcset and loading
+    #[test_log::test]
+    fn test_element_to_html_image_with_srcset_and_loading() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::ImageLoading;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Image {
+                source: Some("/img.jpg".to_string()),
+                alt: None,
+                fit: None,
+                source_set: Some("/img-small.jpg 300w, /img-large.jpg 600w".to_string()),
+                sizes: Some(Number::Integer(300)),
+                loading: Some(ImageLoading::Lazy),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("srcset=\"/img-small.jpg 300w, /img-large.jpg 600w\""));
+        assert!(html.contains("sizes=\"300px\""));
+        assert!(html.contains("loading=\"lazy\""));
+    }
+
+    // Test for input types
+    #[test_log::test]
+    fn test_element_to_html_input_password() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Password {
+                    value: None,
+                    placeholder: Some("Enter password".to_string()),
+                },
+                name: Some("password".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"password\""));
+        assert!(html.contains("placeholder=\"Enter password\""));
+        assert!(html.contains("name=\"password\""));
+    }
+
+    #[test_log::test]
+    fn test_element_to_html_input_hidden() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Hidden {
+                    value: Some("secret".to_string()),
+                },
+                name: Some("csrf_token".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"hidden\""));
+        assert!(html.contains("value=\"secret\""));
+        assert!(html.contains("name=\"csrf_token\""));
+    }
+
+    // Test anchor with custom target
+    #[test_log::test]
+    fn test_element_to_html_anchor_with_custom_target() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LinkTarget;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Anchor {
+                href: Some("/page".to_string()),
+                target: Some(LinkTarget::Custom("my-frame".to_string())),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("target=\"my-frame\""));
+    }
+
+    // Test grid layout
+    #[test_log::test]
+    fn test_element_style_to_html_grid_layout() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Wrap { grid: true },
+            grid_cell_size: Some(Number::Integer(200)),
+            column_gap: Some(Number::Integer(10)),
+            row_gap: Some(Number::Integer(10)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("display:grid"));
+        assert!(style.contains("grid-template-columns:repeat(auto-fill, 200px)"));
+        assert!(style.contains("grid-column-gap:10px"));
+        assert!(style.contains("grid-row-gap:10px"));
+    }
+
+    // Test visibility
+    #[test_log::test]
+    fn test_element_style_to_html_visibility_hidden() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Visibility;
+
+        let container = Container {
+            visibility: Some(Visibility::Hidden),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("visibility:hidden"));
+    }
+
+    // Test all position types
+    #[test_log::test]
+    fn test_element_style_to_html_all_position_types() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        for (position, expected) in [
+            (Position::Relative, "relative"),
+            (Position::Static, "static"),
+            (Position::Sticky, "sticky"),
+            (Position::Fixed, "fixed"),
+        ] {
+            let container = Container {
+                position: Some(position),
+                top: Some(Number::Integer(0)),
+                left: Some(Number::Integer(0)),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(&format!("position:{expected}")),
+                "Expected position:{expected}, got: {style}"
+            );
+        }
+    }
+
+    // Test semantic HTML elements
+    #[test_log::test]
+    fn test_element_to_html_semantic_elements() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        for (element, expected_tag) in [
+            (hyperchad_transformer::Element::Aside, "aside"),
+            (hyperchad_transformer::Element::Main, "main"),
+            (hyperchad_transformer::Element::Header, "header"),
+            (hyperchad_transformer::Element::Footer, "footer"),
+            (hyperchad_transformer::Element::Section, "section"),
+            (hyperchad_transformer::Element::Form, "form"),
+            (hyperchad_transformer::Element::UnorderedList, "ul"),
+            (hyperchad_transformer::Element::OrderedList, "ol"),
+            (hyperchad_transformer::Element::ListItem, "li"),
+            (hyperchad_transformer::Element::Summary, "summary"),
+        ] {
+            let container = Container {
+                element,
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+            let html = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                html.starts_with(&format!("<{expected_tag}")),
+                "Expected to start with <{expected_tag}, got: {html}"
+            );
+            assert!(
+                html.ends_with(&format!("</{expected_tag}>")),
+                "Expected to end with </{expected_tag}>, got: {html}"
+            );
+        }
+    }
 }
