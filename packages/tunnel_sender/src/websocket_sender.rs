@@ -160,3 +160,275 @@ where
         self.root_sender.ping().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::Stream;
+    use moosicbox_channel_utils::futures_channel::unbounded;
+    use std::{
+        pin::Pin,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        task::{Context, Poll},
+    };
+    use tokio_tungstenite::tungstenite::Message;
+
+    /// Tracks call counts for `MockWebsocketSender`
+    #[derive(Clone, Default)]
+    struct CallTracker {
+        send: Arc<AtomicUsize>,
+        send_all: Arc<AtomicUsize>,
+        send_all_except: Arc<AtomicUsize>,
+        ping: Arc<AtomicUsize>,
+    }
+
+    /// Mock websocket sender that tracks which methods were called
+    struct MockWebsocketSender {
+        tracker: CallTracker,
+    }
+
+    impl MockWebsocketSender {
+        fn new() -> Self {
+            Self {
+                tracker: CallTracker::default(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl WebsocketSender for MockWebsocketSender {
+        async fn send(&self, _connection_id: &str, _data: &str) -> Result<(), WebsocketSendError> {
+            self.tracker.send.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn send_all(&self, _data: &str) -> Result<(), WebsocketSendError> {
+            self.tracker.send_all.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn send_all_except(
+            &self,
+            _connection_id: &str,
+            _data: &str,
+        ) -> Result<(), WebsocketSendError> {
+            self.tracker.send_all_except.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn ping(&self) -> Result<(), WebsocketSendError> {
+            self.tracker.ping.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    type TestReceiver =
+        moosicbox_channel_utils::futures_channel::PrioritizedReceiver<TunnelResponseMessage>;
+
+    struct TestSetup {
+        sender: TunnelWebsocketSender<MockWebsocketSender>,
+        rx: TestReceiver,
+        tracker: CallTracker,
+    }
+
+    fn create_test_sender(id: u64, propagate_id: u64) -> TestSetup {
+        let (tx, rx) = unbounded();
+        let mock_sender = MockWebsocketSender::new();
+        let tracker = mock_sender.tracker.clone();
+
+        let sender = TunnelWebsocketSender {
+            id,
+            propagate_id,
+            request_id: 12345,
+            packet_id: 1,
+            root_sender: mock_sender,
+            tunnel_sender: tx,
+            profile: Some("test".to_string()),
+        };
+
+        TestSetup {
+            sender,
+            rx,
+            tracker,
+        }
+    }
+
+    /// Polls the receiver once and returns the message if ready
+    fn poll_receiver(
+        rx: &mut moosicbox_channel_utils::futures_channel::PrioritizedReceiver<
+            TunnelResponseMessage,
+        >,
+    ) -> Poll<Option<TunnelResponseMessage>> {
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+        Pin::new(rx).poll_next(&mut context)
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_send_routes_to_tunnel_when_id_matches() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let TestSetup {
+            sender,
+            mut rx,
+            tracker,
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        // Send to connection ID that matches tunnel ID - should route to tunnel
+        let result = sender
+            .send(&tunnel_id.to_string(), r#"{"test": "data"}"#)
+            .await;
+        assert!(result.is_ok());
+
+        // Root sender should NOT be called
+        assert_eq!(tracker.send.load(Ordering::SeqCst), 0);
+
+        // Tunnel should receive the message
+        let poll_result = poll_receiver(&mut rx);
+        match poll_result {
+            Poll::Ready(Some(TunnelResponseMessage::Packet(packet))) => {
+                assert_eq!(packet.request_id, 12345);
+                assert_eq!(packet.packet_id, 1);
+                assert!(!packet.broadcast);
+                assert!(packet.except_id.is_none());
+                assert_eq!(packet.only_id, Some(propagate_id));
+                match packet.message {
+                    Message::Text(text) => {
+                        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+                        assert_eq!(value["request_id"], 12345);
+                        assert_eq!(value["body"]["test"], "data");
+                    }
+                    _ => panic!("Expected text message"),
+                }
+            }
+            _ => panic!("Expected Packet message"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_send_routes_to_root_when_id_does_not_match() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let other_id = 300;
+        let TestSetup {
+            sender,
+            mut rx,
+            tracker,
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        // Send to connection ID that does NOT match tunnel ID - should route to root
+        let result = sender
+            .send(&other_id.to_string(), r#"{"test": "data"}"#)
+            .await;
+        assert!(result.is_ok());
+
+        // Root sender SHOULD be called
+        assert_eq!(tracker.send.load(Ordering::SeqCst), 1);
+
+        // Tunnel should NOT receive any message
+        let poll_result = poll_receiver(&mut rx);
+        assert!(matches!(poll_result, Poll::Pending));
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_send_all_routes_to_both_tunnel_and_root() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let TestSetup {
+            sender,
+            mut rx,
+            tracker,
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        let result = sender.send_all(r#"{"broadcast": true}"#).await;
+        assert!(result.is_ok());
+
+        // Root sender SHOULD be called
+        assert_eq!(tracker.send_all.load(Ordering::SeqCst), 1);
+
+        // Tunnel should also receive the message
+        let poll_result = poll_receiver(&mut rx);
+        match poll_result {
+            Poll::Ready(Some(TunnelResponseMessage::Packet(packet))) => {
+                assert!(packet.broadcast);
+                assert!(packet.except_id.is_none());
+                assert!(packet.only_id.is_none());
+            }
+            _ => panic!("Expected Packet message"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_send_all_except_routes_to_tunnel_when_not_propagate_id() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let other_id = 300;
+        let TestSetup {
+            sender,
+            mut rx,
+            tracker,
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        // Exclude a different ID - should send to tunnel
+        let result = sender
+            .send_all_except(&other_id.to_string(), r#"{"except": true}"#)
+            .await;
+        assert!(result.is_ok());
+
+        // Root sender SHOULD be called
+        assert_eq!(tracker.send_all_except.load(Ordering::SeqCst), 1);
+
+        // Tunnel should receive the message with propagate_id excluded
+        let poll_result = poll_receiver(&mut rx);
+        match poll_result {
+            Poll::Ready(Some(TunnelResponseMessage::Packet(packet))) => {
+                assert!(packet.broadcast);
+                assert_eq!(packet.except_id, Some(propagate_id));
+                assert!(packet.only_id.is_none());
+            }
+            _ => panic!("Expected Packet message"),
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_send_all_except_skips_tunnel_when_propagate_id() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let TestSetup {
+            sender,
+            mut rx,
+            tracker,
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        // Exclude the propagate_id - should NOT send to tunnel
+        let result = sender
+            .send_all_except(&propagate_id.to_string(), r#"{"except": true}"#)
+            .await;
+        assert!(result.is_ok());
+
+        // Root sender SHOULD still be called
+        assert_eq!(tracker.send_all_except.load(Ordering::SeqCst), 1);
+
+        // Tunnel should NOT receive any message
+        let poll_result = poll_receiver(&mut rx);
+        assert!(matches!(poll_result, Poll::Pending));
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_ping_delegates_to_root_sender() {
+        let tunnel_id = 100;
+        let propagate_id = 200;
+        let TestSetup {
+            sender, tracker, ..
+        } = create_test_sender(tunnel_id, propagate_id);
+
+        let result = sender.ping().await;
+        assert!(result.is_ok());
+
+        // Root sender SHOULD be called
+        assert_eq!(tracker.ping.load(Ordering::SeqCst), 1);
+    }
+}
