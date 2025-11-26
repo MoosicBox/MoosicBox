@@ -146,6 +146,7 @@ impl Step {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serde_yaml;
 
     #[test_log::test]
     fn test_run_script_id_present() {
@@ -395,6 +396,136 @@ mod tests {
         let json = serde_json::to_string(&step).unwrap();
         let deserialized: Step = serde_json::from_str(&json).unwrap();
         assert_eq!(step, deserialized);
+    }
+
+    #[test_log::test]
+    fn test_step_yaml_untagged_run_script() {
+        // Test that Step properly deserializes as RunScript variant based on 'run' field
+        // Expression requires tagged format since it's not #[serde(untagged)]
+        let yaml = r#"
+id: build-step
+run: cargo build --release
+env:
+  RUSTFLAGS: "-D warnings"
+if:
+  Boolean: true
+continue-on-error: true
+working-directory: ./packages/core
+"#;
+        let step: Step = serde_yaml::from_str(yaml).unwrap();
+
+        // Verify it parsed as RunScript (not UseAction)
+        match &step {
+            Step::RunScript {
+                id,
+                run,
+                env,
+                if_condition,
+                continue_on_error,
+                working_directory,
+            } => {
+                assert_eq!(id.as_deref(), Some("build-step"));
+                assert_eq!(run, "cargo build --release");
+                assert_eq!(env.get("RUSTFLAGS"), Some(&"-D warnings".to_string()));
+                assert!(if_condition.is_some());
+                assert!(*continue_on_error);
+                assert_eq!(working_directory.as_deref(), Some("./packages/core"));
+            }
+            Step::UseAction { .. } => panic!("Expected RunScript, got UseAction"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_step_yaml_untagged_use_action() {
+        // Test that Step properly deserializes as UseAction variant based on 'uses' field
+        // Expression requires tagged format since it's not #[serde(untagged)]
+        let yaml = r#"
+id: checkout-step
+uses: actions/checkout@v4
+with:
+  ref: main
+  fetch-depth: "0"
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+if:
+  Boolean: false
+continue-on-error: false
+"#;
+        let step: Step = serde_yaml::from_str(yaml).unwrap();
+
+        // Verify it parsed as UseAction (not RunScript)
+        match &step {
+            Step::UseAction {
+                id,
+                uses,
+                with,
+                env,
+                if_condition,
+                continue_on_error,
+            } => {
+                assert_eq!(id.as_deref(), Some("checkout-step"));
+                assert_eq!(uses, "actions/checkout@v4");
+                assert_eq!(with.get("ref"), Some(&"main".to_string()));
+                assert_eq!(with.get("fetch-depth"), Some(&"0".to_string()));
+                assert!(env.contains_key("GITHUB_TOKEN"));
+                assert!(if_condition.is_some());
+                assert!(!*continue_on_error);
+            }
+            Step::RunScript { .. } => panic!("Expected UseAction, got RunScript"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_step_yaml_minimal_run_script() {
+        // Test minimal RunScript with only required field
+        let yaml = "run: echo hello";
+        let step: Step = serde_yaml::from_str(yaml).unwrap();
+
+        match &step {
+            Step::RunScript {
+                id,
+                run,
+                env,
+                if_condition,
+                continue_on_error,
+                working_directory,
+            } => {
+                assert_eq!(id, &None);
+                assert_eq!(run, "echo hello");
+                assert!(env.is_empty());
+                assert_eq!(if_condition, &None);
+                // Default value for continue_on_error is false
+                assert!(!*continue_on_error);
+                assert_eq!(working_directory, &None);
+            }
+            Step::UseAction { .. } => panic!("Expected RunScript, got UseAction"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_step_yaml_minimal_use_action() {
+        // Test minimal UseAction with only required field
+        let yaml = "uses: checkout";
+        let step: Step = serde_yaml::from_str(yaml).unwrap();
+
+        match &step {
+            Step::UseAction {
+                id,
+                uses,
+                with,
+                env,
+                if_condition,
+                continue_on_error,
+            } => {
+                assert_eq!(id, &None);
+                assert_eq!(uses, "checkout");
+                assert!(with.is_empty());
+                assert!(env.is_empty());
+                assert_eq!(if_condition, &None);
+                assert!(!*continue_on_error);
+            }
+            Step::RunScript { .. } => panic!("Expected UseAction, got RunScript"),
+        }
     }
 
     #[test_log::test]
