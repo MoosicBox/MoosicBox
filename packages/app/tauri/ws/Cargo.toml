@@ -29,6 +29,9 @@ thiserror         = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "time", "tracing"] }
 tokio-tungstenite = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 
