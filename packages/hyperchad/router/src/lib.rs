@@ -2775,5 +2775,550 @@ mod tests {
                 panic!("Expected Numeric variant");
             }
         }
+
+        #[test_log::test]
+        fn test_deserialize_invalid_char_multi_character_string() {
+            let deserializer = form_deserializer::StringValueDeserializer::new("abc".to_string());
+            let result: Result<char, _> = char::deserialize(deserializer);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_bytes_with_visitor() {
+            use serde::de::Deserializer;
+
+            struct ByteBufVisitor;
+            impl serde::de::Visitor<'_> for ByteBufVisitor {
+                type Value = Vec<u8>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "byte buffer")
+                }
+
+                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+                    Ok(v)
+                }
+            }
+
+            let deserializer =
+                form_deserializer::StringValueDeserializer::new("test data".to_string());
+            let result = deserializer.deserialize_byte_buf(ByteBufVisitor);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), b"test data".to_vec());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_unit_from_string() {
+            let deserializer =
+                form_deserializer::StringValueDeserializer::new("anything".to_string());
+            let result: Result<(), _> = serde::Deserialize::deserialize(deserializer);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_null_value_as_unit() {
+            use serde::de::Deserializer;
+
+            struct UnitVisitor;
+            impl serde::de::Visitor<'_> for UnitVisitor {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "null")
+                }
+
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let deserializer = form_deserializer::StringValueDeserializer::new("null".to_string());
+            let result = deserializer.deserialize_any(UnitVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_any_case_insensitive_booleans() {
+            // The `deserialize_any` method supports case-insensitive booleans
+            // This is used when struct fields use serde's untagged or default deserialization
+            use serde::de::Deserializer;
+
+            struct BoolVisitor;
+            impl serde::de::Visitor<'_> for BoolVisitor {
+                type Value = bool;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "boolean")
+                }
+
+                fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+                    Ok(v)
+                }
+            }
+
+            let true_upper = form_deserializer::StringValueDeserializer::new("TRUE".to_string());
+            let result = true_upper.deserialize_any(BoolVisitor);
+            assert!(result.is_ok());
+            assert!(result.unwrap());
+
+            let false_mixed = form_deserializer::StringValueDeserializer::new("False".to_string());
+            let result = false_mixed.deserialize_any(BoolVisitor);
+            assert!(result.is_ok());
+            assert!(!result.unwrap());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_f32() {
+            let deserializer = form_deserializer::StringValueDeserializer::new("1.234".to_string());
+            let result: Result<f32, _> = f32::deserialize(deserializer);
+            assert!(result.is_ok());
+            assert!((result.unwrap() - 1.234).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_deserialize_i128_and_u128() {
+            let i128_deser = form_deserializer::StringValueDeserializer::new(
+                "-170141183460469231731687303715884105728".to_string(),
+            );
+            let result: Result<i128, _> = i128::deserialize(i128_deser);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), i128::MIN);
+
+            let u128_deser = form_deserializer::StringValueDeserializer::new(
+                "340282366920938463463374607431768211455".to_string(),
+            );
+            let result: Result<u128, _> = u128::deserialize(u128_deser);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), u128::MAX);
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_error_on_primitive_types() {
+            use serde::de::Deserializer;
+
+            struct BoolVisitor;
+            impl serde::de::Visitor<'_> for BoolVisitor {
+                type Value = bool;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "bool")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_bool(BoolVisitor);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_error_on_seq() {
+            use serde::de::Deserializer;
+
+            struct SeqVisitor;
+            impl serde::de::Visitor<'_> for SeqVisitor {
+                type Value = Vec<String>;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "seq")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_seq(SeqVisitor);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_error_on_tuple() {
+            use serde::de::Deserializer;
+
+            struct TupleVisitor;
+            impl serde::de::Visitor<'_> for TupleVisitor {
+                type Value = (String, i32);
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "tuple")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_tuple(2, TupleVisitor);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_error_on_enum() {
+            use serde::de::Deserializer;
+
+            struct EnumVisitor;
+            impl serde::de::Visitor<'_> for EnumVisitor {
+                type Value = String;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "enum")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_enum("Test", &["A", "B"], EnumVisitor);
+            assert!(result.is_err());
+        }
+    }
+
+    mod channel_tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_send_success() {
+            let router =
+                Router::new().with_route("/home", |_req| async { "Home Content".to_string() });
+
+            let result = router.navigate_send("/home").await;
+            assert!(result.is_ok());
+
+            // Content should be available on receiver
+            let content = router.receiver.try_recv();
+            assert!(content.is_ok());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_send_invalid_path() {
+            let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+
+            let result = router.navigate_send("/nonexistent").await;
+            assert!(matches!(result, Err(NavigateError::InvalidPath)));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_send_handler_error() {
+            let router = Router::new().with_route_result("/error", |_req| async {
+                Err::<String, _>(
+                    Box::new(std::io::Error::other("Handler failed")) as Box<dyn std::error::Error>
+                )
+            });
+
+            let result = router.navigate_send("/error").await;
+            assert!(matches!(result, Err(NavigateError::Handler(_))));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_send_no_content() {
+            let router = Router::new().with_no_content_result("/action", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>(())
+            });
+
+            let result = router.navigate_send("/action").await;
+            assert!(result.is_ok());
+
+            // No content should be sent since handler returned None
+            let content = router.receiver.try_recv();
+            assert!(content.is_err());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_wait_for_navigation() {
+            let router =
+                Router::new().with_route("/page", |_req| async { "Page Content".to_string() });
+
+            // Send content in background
+            let router_clone = router.clone();
+            switchy_async::task::spawn(async move {
+                router_clone.navigate_send("/page").await.unwrap();
+            });
+
+            // Wait for the content
+            let content = router.wait_for_navigation().await;
+            assert!(content.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_spawn_success() {
+            let router = Router::new().with_route("/spawn", |_req| async { "Spawned".to_string() });
+
+            let handle = router.navigate_spawn("/spawn");
+            let result = handle.await.unwrap();
+            assert!(result.is_ok());
+
+            // Content should be on receiver
+            let content = router.receiver.try_recv();
+            assert!(content.is_ok());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_spawn_invalid_path() {
+            let router = Router::new();
+
+            let handle = router.navigate_spawn("/nonexistent");
+            let result = handle.await.unwrap();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_spawn_on_with_handle() {
+            let router =
+                Router::new().with_route("/handle", |_req| async { "Handle Test".to_string() });
+
+            let handle = switchy_async::runtime::Handle::current();
+            let join_handle = router.navigate_spawn_on(&handle, "/handle");
+            let result = join_handle.await.unwrap();
+            assert!(result.is_ok());
+        }
+    }
+
+    mod static_route_tests {
+        use super::*;
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_static_route_result_success() {
+            let router = Router::new().with_static_route_result("/static", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>("Static Content".to_string())
+            });
+
+            let result = router.navigate("/static").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_static_route_result_error() {
+            let router = Router::new().with_static_route_result("/static_err", |_req| async {
+                Err::<String, _>(
+                    Box::new(std::io::Error::other("Static error")) as Box<dyn std::error::Error>
+                )
+            });
+
+            let result = router.navigate("/static_err").await;
+            assert!(matches!(result, Err(NavigateError::Handler(_))));
+        }
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_dynamic_route_takes_precedence() {
+            let router = Router::new()
+                .with_static_route("/page", |_req| async { "Static".to_string() })
+                .with_route("/page", |_req| async { "Dynamic".to_string() });
+
+            // Dynamic route should match since it was added after static
+            // and get_route_func checks dynamic routes first
+            let func = router.get_route_func("/page");
+            assert!(func.is_some());
+        }
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test]
+        fn test_has_static_route_with_prefix() {
+            let router = Router::new().with_static_route(
+                RoutePath::LiteralPrefix("/assets/".to_string()),
+                |req| async move { format!("Asset: {}", req.path) },
+            );
+
+            assert!(router.has_static_route("/assets/css/style.css"));
+            assert!(router.has_static_route("/assets/js/app.js"));
+            assert!(!router.has_static_route("/api/data"));
+        }
+
+        #[cfg(not(feature = "static-routes"))]
+        #[test_log::test]
+        fn test_has_static_route_returns_false_without_feature() {
+            let router = Router::new();
+            assert!(!router.has_static_route("/any/path"));
+        }
+    }
+
+    mod route_path_edge_cases {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_literals_vec() {
+            let route = RoutePath::Literals(vec![]);
+            assert!(!route.matches("/any"));
+            assert!(route.strip_match("/any").is_none());
+        }
+
+        #[test_log::test]
+        fn test_literal_prefix_empty_string() {
+            let route = RoutePath::LiteralPrefix(String::new());
+            // Empty prefix matches everything
+            assert!(route.matches("/any/path"));
+            assert!(route.matches(""));
+            assert_eq!(route.strip_match("/test"), Some("/test"));
+        }
+
+        #[test_log::test]
+        fn test_from_vec_string() {
+            let paths: Vec<String> = vec!["/a".to_string(), "/b".to_string()];
+            let route: RoutePath = paths.into();
+            assert!(route.matches("/a"));
+            assert!(route.matches("/b"));
+        }
+
+        #[test_log::test]
+        fn test_from_slice_ref_string() {
+            let path_a = "/x".to_string();
+            let path_b = "/y".to_string();
+            let paths: &[&String] = &[&path_a, &path_b];
+            let route: RoutePath = paths.into();
+            assert!(route.matches("/x"));
+            assert!(route.matches("/y"));
+        }
+
+        #[test_log::test]
+        fn test_from_array_size_variants() {
+            // Test the array-specific From impls
+            let arr3: &[&str; 3] = &["/a", "/b", "/c"];
+            let route3: RoutePath = arr3.into();
+            assert!(route3.matches("/a"));
+            assert!(route3.matches("/c"));
+
+            let arr5: &[&str; 5] = &["/1", "/2", "/3", "/4", "/5"];
+            let route5: RoutePath = arr5.into();
+            assert!(route5.matches("/1"));
+            assert!(route5.matches("/5"));
+        }
+    }
+
+    mod request_conversion_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_route_request_from_ref_str() {
+            let req: RouteRequest = "/path".into();
+            assert_eq!(req.path, "/path");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_string() {
+            let path = "/path".to_string();
+            let req: RouteRequest = (&path).into();
+            assert_eq!(req.path, "/path");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_str_with_arc_client_info() {
+            let client = Arc::new(ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            });
+            let req: RouteRequest = ("/test", client).into();
+            assert_eq!(req.path, "/test");
+            assert_eq!(req.info.client.os.name, "TestOS");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_string_with_arc_client_info() {
+            let path = "/test".to_string();
+            let client = Arc::new(ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            });
+            let req: RouteRequest = (&path, client).into();
+            assert_eq!(req.path, "/test");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_string_with_client_info() {
+            let path = "/test".to_string();
+            let client = ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            };
+            let req: RouteRequest = (&path, client).into();
+            assert_eq!(req.path, "/test");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_str_with_request_info() {
+            let info = RequestInfo::default();
+            let req: RouteRequest = ("/test", info).into();
+            assert_eq!(req.path, "/test");
+        }
+
+        #[test_log::test]
+        fn test_route_request_from_ref_string_with_request_info() {
+            let path = "/test".to_string();
+            let info = RequestInfo::default();
+            let req: RouteRequest = (&path, info).into();
+            assert_eq!(req.path, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_route_request() {
+            let req = RouteRequest::from_path("/test", RequestInfo::default());
+            let nav: Navigation = (&req).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_string() {
+            let path = "/test".to_string();
+            let nav: Navigation = (&path).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_str_with_client_info() {
+            let client = ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            };
+            let nav: Navigation = ("/test", client).into();
+            assert_eq!(nav.0, "/test");
+            assert_eq!(nav.1.os.name, "TestOS");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_string_with_client_info() {
+            let path = "/test".to_string();
+            let client = ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            };
+            let nav: Navigation = (&path, client).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_str_with_arc_client_info() {
+            let client = Arc::new(ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            });
+            let nav: Navigation = ("/test", client).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_string_with_arc_client_info() {
+            let path = "/test".to_string();
+            let client = Arc::new(ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            });
+            let nav: Navigation = (&path, client).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_str_with_request_info() {
+            let info = RequestInfo::default();
+            let nav: Navigation = ("/test", info).into();
+            assert_eq!(nav.0, "/test");
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_ref_string_with_request_info() {
+            let path = "/test".to_string();
+            let info = RequestInfo::default();
+            let nav: Navigation = (&path, info).into();
+            assert_eq!(nav.0, "/test");
+        }
     }
 }
