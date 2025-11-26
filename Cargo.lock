@@ -8303,6 +8303,7 @@ dependencies = [
  "moosicbox_assert",
  "quickcheck",
  "serde_json",
+ "test-log",
 ]
 
 [[package]]
