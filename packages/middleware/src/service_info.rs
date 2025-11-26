@@ -82,6 +82,8 @@ impl FromRequest for ServiceInfo {
 mod tests {
     use super::*;
 
+    use actix_web::{dev::Payload, test::TestRequest};
+
     #[test_log::test]
     fn test_service_info_init_success() {
         // Note: This test will fail if run after other tests that initialize SERVICE_INFO
@@ -135,5 +137,52 @@ mod tests {
         let debug_str = format!("{info:?}");
         assert!(debug_str.contains("ServiceInfo"));
         assert!(debug_str.contains("8080"));
+    }
+
+    #[test_log::test]
+    fn test_from_request_returns_initialized_service_info() {
+        // Ensure SERVICE_INFO is initialized first
+        // This may fail if already initialized by another test, which is fine
+        let _ = init(ServiceInfo { port: 8080 });
+
+        let req = TestRequest::default().to_http_request();
+        let mut payload = Payload::None;
+        let result = ServiceInfo::from_request(&req, &mut payload).into_inner();
+
+        // Since SERVICE_INFO is initialized (either by this test or a previous one),
+        // from_request should succeed
+        assert!(
+            result.is_ok(),
+            "from_request should succeed when SERVICE_INFO is initialized"
+        );
+
+        let service_info = result.unwrap();
+        // The port will be 8080 if this test initialized it, or whatever port
+        // was set by a previous test
+        assert!(
+            service_info.port > 0,
+            "ServiceInfo should have a valid port"
+        );
+    }
+
+    #[test_log::test]
+    fn test_from_request_returns_same_info_on_multiple_requests() {
+        // Ensure SERVICE_INFO is initialized
+        let _ = init(ServiceInfo { port: 8080 });
+
+        let req1 = TestRequest::default().uri("/test1").to_http_request();
+        let req2 = TestRequest::default().uri("/test2").to_http_request();
+
+        let mut payload1 = Payload::None;
+        let mut payload2 = Payload::None;
+
+        let result1 = ServiceInfo::from_request(&req1, &mut payload1).into_inner();
+        let result2 = ServiceInfo::from_request(&req2, &mut payload2).into_inner();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+
+        // Both requests should return the same ServiceInfo
+        assert_eq!(result1.unwrap().port, result2.unwrap().port);
     }
 }
