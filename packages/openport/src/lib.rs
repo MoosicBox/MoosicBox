@@ -407,4 +407,100 @@ mod tests {
         assert_eq!(ports.len(), 1);
         assert_eq!(ports[0], 15000);
     }
+
+    #[test_log::test]
+    fn test_ipv6_tcp_binding_affects_is_free() {
+        use std::net::{Ipv6Addr, SocketAddrV6};
+
+        // Try multiple times to find a port and bind to it with IPv6
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free initially
+                if is_free_tcp(port) {
+                    // Try to bind to IPv6 only
+                    let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
+                    if let Ok(_listener) = TcpListener::bind(addr) {
+                        // Port should now be occupied (at least on IPv6)
+                        assert!(!is_free_tcp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        // IPv6 might not be available on all systems, so we don't panic
+    }
+
+    #[test_log::test]
+    fn test_ipv6_udp_binding_affects_is_free() {
+        use std::net::{Ipv6Addr, SocketAddrV6};
+
+        // Try multiple times to find a port and bind to it with IPv6
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free initially
+                if is_free_udp(port) {
+                    // Try to bind to IPv6 only
+                    let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
+                    if let Ok(_socket) = UdpSocket::bind(addr) {
+                        // Port should now be occupied (at least on IPv6)
+                        assert!(!is_free_udp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        // IPv6 might not be available on all systems, so we don't panic
+    }
+
+    #[test_log::test]
+    fn test_pick_unused_port_finds_first_available() {
+        // Find a port and occupy it, then verify pick_unused_port skips it
+        for _ in 0..10 {
+            if let Some(first_port) = pick_unused_port(15000..15010)
+                && is_free(first_port)
+                && let Ok(_listener) = TcpListener::bind(("127.0.0.1", first_port))
+            {
+                // Now pick_unused_port should find a different port
+                if let Some(next_port) = pick_unused_port(first_port..15010) {
+                    assert_ne!(next_port, first_port);
+                    assert!(next_port > first_port);
+                }
+                return; // Test passed
+            }
+        }
+        panic!("Could not find ports to test with after 10 attempts");
+    }
+
+    #[test_log::test]
+    fn test_concurrent_tcp_and_udp_binding() {
+        // Test that is_free returns false when only one protocol is bound
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000)
+                && is_free(port)
+                && let Ok(tcp_listener) = TcpListener::bind(("127.0.0.1", port))
+            {
+                // is_free should return false (TCP is occupied)
+                assert!(!is_free(port));
+                // is_free_tcp should return false
+                assert!(!is_free_tcp(port));
+                // is_free_udp might still be true
+                // (depends on system, so we don't assert)
+
+                drop(tcp_listener);
+
+                // After dropping, try binding UDP only
+                if let Some(port2) = pick_unused_port(15000..16000)
+                    && is_free(port2)
+                    && let Ok(_udp_socket) = UdpSocket::bind(("127.0.0.1", port2))
+                {
+                    // is_free should return false (UDP is occupied)
+                    assert!(!is_free(port2));
+                    // is_free_udp should return false
+                    assert!(!is_free_udp(port2));
+                    return; // Test passed
+                }
+            }
+        }
+        panic!("Could not find ports to test with after 10 attempts");
+    }
 }
