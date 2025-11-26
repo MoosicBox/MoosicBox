@@ -434,4 +434,149 @@ mod tests {
         let err: CreatePlayersError = db_err.into();
         assert!(matches!(err, CreatePlayersError::Db(_)));
     }
+
+    #[test_log::test]
+    fn test_playback_target_default_from_str_audio_zone() {
+        let result = PlaybackTarget::default_from_str("AUDIO_ZONE");
+        assert!(result.is_some());
+        assert!(matches!(
+            result.unwrap(),
+            PlaybackTarget::AudioZone { audio_zone_id: 0 }
+        ));
+    }
+
+    #[test_log::test]
+    fn test_playback_target_default_from_str_connection_output() {
+        let result = PlaybackTarget::default_from_str("CONNECTION_OUTPUT");
+        assert!(result.is_some());
+        match result.unwrap() {
+            PlaybackTarget::ConnectionOutput {
+                connection_id,
+                output_id,
+            } => {
+                assert!(connection_id.is_empty());
+                assert!(output_id.is_empty());
+            }
+            PlaybackTarget::AudioZone { .. } => panic!("Expected ConnectionOutput variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_playback_target_default_from_str_unknown_returns_none() {
+        let result = PlaybackTarget::default_from_str("UNKNOWN_TYPE");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_playback_target_default_from_str_case_sensitive() {
+        // The function is case-sensitive based on SCREAMING_SNAKE_CASE strum serialization
+        assert!(PlaybackTarget::default_from_str("audio_zone").is_none());
+        assert!(PlaybackTarget::default_from_str("Audio_Zone").is_none());
+        assert!(PlaybackTarget::default_from_str("connection_output").is_none());
+    }
+
+    #[test_log::test]
+    fn test_playback_target_default_from_str_empty_string() {
+        let result = PlaybackTarget::default_from_str("");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_false_when_no_fields_set() {
+        let session = models::UpdateSession::default();
+        assert!(!session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_play_is_set() {
+        let session = models::UpdateSession {
+            play: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_stop_is_set() {
+        let session = models::UpdateSession {
+            stop: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_active_is_set() {
+        let session = models::UpdateSession {
+            active: Some(false),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_playing_is_set() {
+        let session = models::UpdateSession {
+            playing: Some(true),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_position_is_set() {
+        let session = models::UpdateSession {
+            position: Some(5),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_volume_is_set() {
+        let session = models::UpdateSession {
+            volume: Some(0.5),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_seek_is_set() {
+        let session = models::UpdateSession {
+            seek: Some(30.0),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_returns_true_when_playlist_is_set() {
+        let session = models::UpdateSession {
+            playlist: Some(models::UpdateSessionPlaylist::default()),
+            ..Default::default()
+        };
+        assert!(session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_false_when_only_name_changed() {
+        // name is not a playback field, so playback_updated should return false
+        let session = models::UpdateSession {
+            name: Some("New Session Name".to_string()),
+            ..Default::default()
+        };
+        assert!(!session.playback_updated());
+    }
+
+    #[test_log::test]
+    fn test_update_session_playback_updated_false_when_only_quality_changed() {
+        use moosicbox_music_models::PlaybackQuality;
+        // quality is not checked by playback_updated, so should return false
+        let session = models::UpdateSession {
+            quality: Some(PlaybackQuality::default()),
+            ..Default::default()
+        };
+        assert!(!session.playback_updated());
+    }
 }
