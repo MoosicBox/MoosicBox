@@ -173,6 +173,18 @@ mod tests {
             actix_web::http::StatusCode::BAD_REQUEST
         );
     }
+
+    #[test_log::test]
+    fn test_get_artist_error_conversion_music_api() {
+        let music_api_error = moosicbox_music_api::Error::Unauthorized;
+        let error = GetArtistError::MusicApi(music_api_error);
+        let actix_error: actix_web::Error = error.into();
+        // Should convert to internal server error
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
 }
 
 /// Error types that can occur during menu API operations.
