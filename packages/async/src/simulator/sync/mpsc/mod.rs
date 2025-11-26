@@ -261,3 +261,169 @@ pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
 //     let (tx, rx) = mpsc::channel(capacity);
 //     (Sender { inner: tx }, Receiver { inner: rx })
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_unbounded_channel_send_and_try_recv() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Send a value
+        tx.send(42).unwrap();
+
+        // Try to receive it
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 42);
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_empty() {
+        let (_tx, mut rx) = unbounded::<i32>();
+
+        // Should return Empty error when no messages
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(TryRecvError::Empty)));
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_disconnected() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop the sender
+        drop(tx);
+
+        // Should return Disconnected error
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(TryRecvError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_sender_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.send(42);
+        assert!(matches!(result, Err(SendError::Disconnected(42))));
+    }
+
+    #[test_log::test]
+    fn test_sender_try_send() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // try_send should work like send for unbounded
+        tx.try_send(100).unwrap();
+
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 100);
+    }
+
+    #[test_log::test]
+    fn test_sender_clone() {
+        let (tx1, mut rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.send(1).unwrap();
+        tx2.send(2).unwrap();
+
+        // Order is preserved - FIFO
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        assert_eq!(rx.try_recv().unwrap(), 2);
+    }
+
+    #[test_log::test]
+    fn test_multiple_messages() {
+        let (tx, mut rx) = unbounded::<String>();
+
+        tx.send("first".to_string()).unwrap();
+        tx.send("second".to_string()).unwrap();
+        tx.send("third".to_string()).unwrap();
+
+        assert_eq!(rx.try_recv().unwrap(), "first");
+        assert_eq!(rx.try_recv().unwrap(), "second");
+        assert_eq!(rx.try_recv().unwrap(), "third");
+        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_async_success() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.send(42).unwrap();
+
+        let result = rx.recv_async().await;
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_async_disconnected() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop sender
+        drop(tx);
+
+        let result = rx.recv_async().await;
+        assert!(matches!(result, Err(RecvError::Disconnected)));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_send_async() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.send_async(99).await.unwrap();
+
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 99);
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_timeout_async_success() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.send(123).unwrap();
+
+        let result = rx
+            .recv_timeout_async(std::time::Duration::from_millis(100))
+            .await;
+        assert_eq!(result.unwrap(), 123);
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_timeout_async_timeout() {
+        let (_tx, mut rx) = unbounded::<i32>();
+
+        let result = rx
+            .recv_timeout_async(std::time::Duration::from_millis(10))
+            .await;
+        assert!(matches!(result, Err(RecvTimeoutError::Timeout)));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_timeout_async_disconnected() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop sender
+        drop(tx);
+
+        let result = rx
+            .recv_timeout_async(std::time::Duration::from_millis(100))
+            .await;
+        assert!(matches!(result, Err(RecvTimeoutError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_try_send_disconnected() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.try_send(42);
+        assert!(matches!(result, Err(TrySendError::Disconnected(42))));
+    }
+}
