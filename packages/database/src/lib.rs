@@ -2120,3 +2120,256 @@ where
 
 // Re-export Executable trait
 pub use executable::Executable;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod validate_savepoint_name_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_name_is_rejected() {
+            let result = validate_savepoint_name("");
+            assert!(result.is_err());
+            match result {
+                Err(DatabaseError::InvalidSavepointName(msg)) => {
+                    assert!(msg.contains("empty"));
+                }
+                _ => panic!("Expected InvalidSavepointName error"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_valid_alphanumeric_name() {
+            assert!(validate_savepoint_name("sp1").is_ok());
+            assert!(validate_savepoint_name("savepoint").is_ok());
+            assert!(validate_savepoint_name("my_savepoint").is_ok());
+            assert!(validate_savepoint_name("SP_123").is_ok());
+        }
+
+        #[test_log::test]
+        fn test_invalid_characters_rejected() {
+            let result = validate_savepoint_name("save-point");
+            assert!(result.is_err());
+            match result {
+                Err(DatabaseError::InvalidSavepointName(msg)) => {
+                    assert!(msg.contains("invalid characters"));
+                }
+                _ => panic!("Expected InvalidSavepointName error"),
+            }
+
+            assert!(validate_savepoint_name("save point").is_err());
+            assert!(validate_savepoint_name("save.point").is_err());
+            assert!(validate_savepoint_name("save@point").is_err());
+        }
+
+        #[test_log::test]
+        fn test_name_starting_with_number_rejected() {
+            let result = validate_savepoint_name("1savepoint");
+            assert!(result.is_err());
+            match result {
+                Err(DatabaseError::InvalidSavepointName(msg)) => {
+                    assert!(msg.contains("cannot start with a number"));
+                }
+                _ => panic!("Expected InvalidSavepointName error"),
+            }
+
+            assert!(validate_savepoint_name("123").is_err());
+        }
+
+        #[test_log::test]
+        fn test_underscore_allowed_at_start() {
+            assert!(validate_savepoint_name("_savepoint").is_ok());
+            assert!(validate_savepoint_name("__sp").is_ok());
+        }
+    }
+
+    mod row_tests {
+        use super::*;
+
+        fn create_test_row() -> Row {
+            Row {
+                columns: vec![
+                    ("id".to_string(), DatabaseValue::Int64(42)),
+                    (
+                        "name".to_string(),
+                        DatabaseValue::String("test".to_string()),
+                    ),
+                    ("count".to_string(), DatabaseValue::Int32Opt(Some(100))),
+                ],
+            }
+        }
+
+        #[test_log::test]
+        fn test_get_existing_column() {
+            let row = create_test_row();
+            let value = row.get("name");
+            assert!(value.is_some());
+            assert_eq!(value.unwrap().as_str(), Some("test"));
+        }
+
+        #[test_log::test]
+        fn test_get_nonexistent_column() {
+            let row = create_test_row();
+            assert!(row.get("nonexistent").is_none());
+        }
+
+        #[test_log::test]
+        fn test_id_convenience_method() {
+            let row = create_test_row();
+            let id = row.id();
+            assert!(id.is_some());
+            assert_eq!(id.unwrap().as_i64(), Some(42));
+        }
+
+        #[test_log::test]
+        fn test_id_returns_none_when_no_id_column() {
+            let row = Row {
+                columns: vec![(
+                    "other".to_string(),
+                    DatabaseValue::String("value".to_string()),
+                )],
+            };
+            assert!(row.id().is_none());
+        }
+    }
+
+    mod database_value_tests {
+        use super::*;
+        use crate::query::Expression;
+
+        #[test_log::test]
+        fn test_is_null_for_null() {
+            let val = DatabaseValue::Null;
+            assert!(val.is_null());
+        }
+
+        #[test_log::test]
+        fn test_is_null_for_opt_none_variants() {
+            assert!(DatabaseValue::BoolOpt(None).is_null());
+            assert!(DatabaseValue::Real64Opt(None).is_null());
+            assert!(DatabaseValue::Real32Opt(None).is_null());
+            assert!(DatabaseValue::StringOpt(None).is_null());
+            assert!(DatabaseValue::Int64Opt(None).is_null());
+            assert!(DatabaseValue::UInt64Opt(None).is_null());
+        }
+
+        #[test_log::test]
+        fn test_is_null_for_opt_some_variants() {
+            assert!(!DatabaseValue::BoolOpt(Some(true)).is_null());
+            assert!(!DatabaseValue::Real64Opt(Some(1.0)).is_null());
+            assert!(!DatabaseValue::StringOpt(Some("test".to_string())).is_null());
+            assert!(!DatabaseValue::Int64Opt(Some(42)).is_null());
+        }
+
+        #[test_log::test]
+        fn test_is_null_for_non_null_values() {
+            assert!(!DatabaseValue::Bool(true).is_null());
+            assert!(!DatabaseValue::String("test".to_string()).is_null());
+            assert!(!DatabaseValue::Int64(42).is_null());
+            assert!(!DatabaseValue::Now.is_null());
+        }
+
+        #[test_log::test]
+        fn test_as_str_for_string_variants() {
+            assert_eq!(
+                DatabaseValue::String("hello".to_string()).as_str(),
+                Some("hello")
+            );
+            assert_eq!(
+                DatabaseValue::StringOpt(Some("world".to_string())).as_str(),
+                Some("world")
+            );
+            assert_eq!(DatabaseValue::StringOpt(None).as_str(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_str_for_non_string_values() {
+            assert_eq!(DatabaseValue::Int64(42).as_str(), None);
+            assert_eq!(DatabaseValue::Bool(true).as_str(), None);
+            assert_eq!(DatabaseValue::Null.as_str(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_i64_coercion() {
+            // Direct i64
+            assert_eq!(DatabaseValue::Int64(100).as_i64(), Some(100));
+            assert_eq!(DatabaseValue::Int64Opt(Some(200)).as_i64(), Some(200));
+
+            // Coercion from smaller types
+            assert_eq!(DatabaseValue::Int8(10).as_i64(), Some(10));
+            assert_eq!(DatabaseValue::Int16(1000).as_i64(), Some(1000));
+            assert_eq!(DatabaseValue::Int32(100_000).as_i64(), Some(100_000));
+
+            // None for non-integer types
+            assert_eq!(DatabaseValue::String("test".to_string()).as_i64(), None);
+            assert_eq!(DatabaseValue::Real64(1.5).as_i64(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_u64_coercion_from_unsigned() {
+            assert_eq!(DatabaseValue::UInt8(10).as_u64(), Some(10));
+            assert_eq!(DatabaseValue::UInt16(1000).as_u64(), Some(1000));
+            assert_eq!(DatabaseValue::UInt32(100_000).as_u64(), Some(100_000));
+            assert_eq!(DatabaseValue::UInt64(1_000_000).as_u64(), Some(1_000_000));
+        }
+
+        #[test_log::test]
+        fn test_as_u64_coercion_from_positive_signed() {
+            assert_eq!(DatabaseValue::Int8(10).as_u64(), Some(10));
+            assert_eq!(DatabaseValue::Int16(1000).as_u64(), Some(1000));
+            assert_eq!(DatabaseValue::Int32(100_000).as_u64(), Some(100_000));
+            assert_eq!(DatabaseValue::Int64(1_000_000).as_u64(), Some(1_000_000));
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "value is negative")]
+        fn test_as_u64_panics_on_negative_i8() {
+            let _ = DatabaseValue::Int8(-1).as_u64();
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "value is negative")]
+        fn test_as_u64_panics_on_negative_i64() {
+            let _ = DatabaseValue::Int64(-100).as_u64();
+        }
+
+        #[test_log::test]
+        fn test_as_f64_coercion() {
+            assert_eq!(DatabaseValue::Real64(1.5).as_f64(), Some(1.5));
+            assert_eq!(DatabaseValue::Real64Opt(Some(2.5)).as_f64(), Some(2.5));
+
+            // Coercion from f32
+            let f32_val = DatabaseValue::Real32(1.5f32);
+            assert!(f32_val.as_f64().is_some());
+            assert!((f32_val.as_f64().unwrap() - 1.5).abs() < 0.0001);
+        }
+
+        #[test_log::test]
+        fn test_as_bool() {
+            assert_eq!(DatabaseValue::Bool(true).as_bool(), Some(true));
+            assert_eq!(DatabaseValue::Bool(false).as_bool(), Some(false));
+            assert_eq!(DatabaseValue::BoolOpt(Some(true)).as_bool(), Some(true));
+            assert_eq!(DatabaseValue::BoolOpt(None).as_bool(), None);
+            assert_eq!(DatabaseValue::Int64(1).as_bool(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_datetime() {
+            use chrono::NaiveDate;
+            let dt = NaiveDate::from_ymd_opt(2024, 1, 15)
+                .unwrap()
+                .and_hms_opt(10, 30, 0)
+                .unwrap();
+            let val = DatabaseValue::DateTime(dt);
+            assert_eq!(val.as_datetime(), Some(dt));
+
+            // Non-datetime values return None
+            assert_eq!(
+                DatabaseValue::String("2024-01-15".to_string()).as_datetime(),
+                None
+            );
+        }
+    }
+}
