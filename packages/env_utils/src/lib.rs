@@ -455,7 +455,65 @@ macro_rules! default_env {
 mod test {
     use pretty_assertions::assert_eq;
 
-    use crate::parse_isize;
+    use crate::{ParseIntError, parse_isize, parse_usize};
+
+    // parse_usize tests
+
+    #[test_log::test]
+    fn parse_usize_can_parse_single_digit() {
+        assert_eq!(parse_usize("0").unwrap(), 0);
+        assert_eq!(parse_usize("5").unwrap(), 5);
+        assert_eq!(parse_usize("9").unwrap(), 9);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_multi_digit_number() {
+        assert_eq!(parse_usize("12345").unwrap(), 12345);
+        assert_eq!(parse_usize("100").unwrap(), 100);
+        assert_eq!(parse_usize("999999").unwrap(), 999_999);
+    }
+
+    #[test_log::test]
+    fn parse_usize_can_parse_large_number() {
+        assert_eq!(
+            parse_usize("18446744073709551615").unwrap(),
+            18_446_744_073_709_551_615
+        );
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_invalid_digit() {
+        assert!(matches!(
+            parse_usize("12a34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("abc"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_negative_number() {
+        assert!(matches!(
+            parse_usize("-100"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_returns_error_for_special_characters() {
+        assert!(matches!(
+            parse_usize("12.34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("12 34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    // parse_isize tests
 
     #[test_log::test]
     fn parse_isize_can_parse_positive_number() {
@@ -476,5 +534,47 @@ mod test {
         let result = parse_isize("-100").unwrap();
 
         assert_eq!(result, -100);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_zero() {
+        assert_eq!(parse_isize("0").unwrap(), 0);
+        assert_eq!(parse_isize("+0").unwrap(), 0);
+        assert_eq!(parse_isize("-0").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_single_digit() {
+        assert_eq!(parse_isize("7").unwrap(), 7);
+        assert_eq!(parse_isize("+7").unwrap(), 7);
+        assert_eq!(parse_isize("-7").unwrap(), -7);
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_invalid_digit() {
+        assert!(matches!(
+            parse_isize("12a34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("+abc"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("-xyz"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_returns_error_for_sign_in_wrong_position() {
+        assert!(matches!(
+            parse_isize("12+34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("12-34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
     }
 }
