@@ -625,6 +625,51 @@ pub async fn init_postgres_sqlx(
     ))))
 }
 
+/// Errors that can occur when initializing a `MySQL` connection via `sqlx`
+#[cfg(feature = "mysql-sqlx")]
+#[derive(Debug, Error)]
+pub enum InitMySqlSqlxError {
+    /// Sqlx `MySQL` error
+    #[error(transparent)]
+    MySqlSqlx(#[from] sqlx::Error),
+}
+
+/// Initializes a `MySQL` database connection using sqlx.
+///
+/// Creates a connection pool with 5 connections using the provided credentials.
+///
+/// # Errors
+///
+/// * If fails to initialize the `MySQL` connection via Sqlx
+#[cfg(feature = "mysql-sqlx")]
+#[allow(unused)]
+pub async fn init_mysql_sqlx(creds: Credentials) -> Result<Box<dyn Database>, InitMySqlSqlxError> {
+    use std::sync::Arc;
+
+    use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+    use switchy_database::sqlx::mysql::MySqlSqlxDatabase;
+
+    let connect_options = MySqlConnectOptions::new()
+        .host(&creds.host)
+        .database(&creds.name)
+        .username(&creds.user);
+
+    let connect_options = if let Some(db_password) = &creds.password {
+        connect_options.password(db_password)
+    } else {
+        connect_options
+    };
+
+    let pool = MySqlPoolOptions::new()
+        .max_connections(5)
+        .connect_with(connect_options)
+        .await?;
+
+    Ok(Box::new(MySqlSqlxDatabase::new(Arc::new(
+        tokio::sync::Mutex::new(pool),
+    ))))
+}
+
 /// Initializes a `PostgreSQL` database connection using tokio-postgres with native-tls.
 ///
 /// Creates a connection pool with 5 connections. For localhost connections,
