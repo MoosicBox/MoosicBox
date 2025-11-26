@@ -2,7 +2,7 @@
 //!
 //! Provides endpoints for Qobuz user authentication, settings management, and library scanning.
 
-use actix_htmx::{Htmx, TriggerType};
+use actix_htmx::{Htmx, TriggerPayload, TriggerType};
 use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},
@@ -63,8 +63,12 @@ pub async fn user_login_endpoint(
         htmx.trigger_event(
             "qobuz-login-attempt".to_string(),
             Some(
-                r#"{"level": "info", "message": "Successfully logged in to Qobuz", "success": true}"#
-                    .to_string(),
+                TriggerPayload::json(serde_json::json!({
+                    "level": "info",
+                    "message": "Successfully logged in to Qobuz",
+                    "success": true
+                }))
+                .unwrap(),
             ),
             Some(TriggerType::Standard),
         );
@@ -77,8 +81,12 @@ pub async fn user_login_endpoint(
         htmx.trigger_event(
             "qobuz-login-attempt".to_string(),
             Some(
-                r#"{"level": "info", "message": "Failed to login to Qobuz", "success": false}"#
-                    .to_string(),
+                TriggerPayload::json(serde_json::json!({
+                    "level": "info",
+                    "message": "Failed to login to Qobuz",
+                    "success": false
+                }))
+                .unwrap(),
             ),
             Some(TriggerType::Standard),
         );

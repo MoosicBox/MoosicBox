@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use actix_htmx::{Htmx, TriggerType};
+use actix_htmx::{Htmx, TriggerPayload, TriggerType};
 use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},
@@ -136,8 +136,12 @@ async fn device_authorization_token(
         htmx.trigger_event(
             "tidal-login-attempt".to_string(),
             Some(
-                r#"{"level": "info", "message": "Successfully logged in to Tidal", "success": true}"#
-                    .to_string(),
+                TriggerPayload::json(serde_json::json!({
+                    "level": "info",
+                    "message": "Successfully logged in to Tidal",
+                    "success": true
+                }))
+                .unwrap(),
             ),
             Some(TriggerType::Standard),
         );
@@ -150,8 +154,12 @@ async fn device_authorization_token(
         htmx.trigger_event(
             "tidal-login-attempt".to_string(),
             Some(
-                r#"{"level": "info", "message": "Failed to login to Tidal", "success": false}"#
-                    .to_string(),
+                TriggerPayload::json(serde_json::json!({
+                    "level": "info",
+                    "message": "Failed to login to Tidal",
+                    "success": false
+                }))
+                .unwrap(),
             ),
             Some(TriggerType::Standard),
         );

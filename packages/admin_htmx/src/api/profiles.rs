@@ -3,7 +3,7 @@
 //! Provides endpoints for creating, selecting, deleting, and listing `MoosicBox` profiles.
 //! Each profile represents a separate configuration and music library.
 
-use actix_htmx::{Htmx, TriggerType};
+use actix_htmx::{Htmx, TriggerPayload, TriggerType};
 use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},
@@ -95,23 +95,23 @@ pub async fn create_new_profile_endpoint(
             htmx.trigger_event(
                 "create-moosicbox-profile".to_string(),
                 Some(
-                    serde_json::json!({
+                    TriggerPayload::json(serde_json::json!({
                         "level": "info",
                         "message": "Successfully created profile",
                         "success": true,
                         "profile": &form.profile,
-                    })
-                    .to_string(),
+                    }))
+                    .unwrap(),
                 ),
                 Some(TriggerType::Standard),
             );
             htmx.trigger_event(
                 "create-moosicbox-profile-success".to_string(),
                 Some(
-                    serde_json::json!({
+                    TriggerPayload::json(serde_json::json!({
                         "profile": &form.profile,
-                    })
-                    .to_string(),
+                    }))
+                    .unwrap(),
                 ),
                 Some(TriggerType::Standard),
             );
@@ -122,23 +122,23 @@ pub async fn create_new_profile_endpoint(
             htmx.trigger_event(
                 "create-moosicbox-profile".to_string(),
                 Some(
-                    serde_json::json!({
+                    TriggerPayload::json(serde_json::json!({
                         "level": "info",
                         "message": "Failed to create profile",
                         "success": false,
                         "profile": &form.profile,
-                    })
-                    .to_string(),
+                    }))
+                    .unwrap(),
                 ),
                 Some(TriggerType::Standard),
             );
             htmx.trigger_event(
                 "create-moosicbox-profile-failure".to_string(),
                 Some(
-                    serde_json::json!({
+                    TriggerPayload::json(serde_json::json!({
                         "profile": &form.profile,
-                    })
-                    .to_string(),
+                    }))
+                    .unwrap(),
                 ),
                 Some(TriggerType::Standard),
             );
@@ -211,7 +211,7 @@ pub async fn delete_profile_endpoint(
         Err(e) => {
             htmx.trigger_event(
                 "delete-moosicbox-profile-failure".to_string(),
-                Some(serde_json::json!({"error": e.to_string()}).to_string()),
+                Some(TriggerPayload::json(serde_json::json!({"error": e.to_string()})).unwrap()),
                 Some(TriggerType::Standard),
             );
 
@@ -254,10 +254,10 @@ pub async fn post_select_endpoint(
     htmx.trigger_event(
         "select-moosicbox-profile".to_string(),
         Some(
-            serde_json::json!({
+            TriggerPayload::json(serde_json::json!({
                 "profile": &form.profile,
-            })
-            .to_string(),
+            }))
+            .unwrap(),
         ),
         Some(TriggerType::Standard),
     );
