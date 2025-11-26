@@ -798,30 +798,30 @@ pub fn celt_sin(x_q15: i16) -> i16 {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_q15_one() {
         assert_eq!(Q15_ONE, 32767);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sig_shift() {
         assert_eq!(SIG_SHIFT, 12);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sat16() {
         assert_eq!(sat16(100), 100);
         assert_eq!(sat16(40000), 32767);
         assert_eq!(sat16(-40000), -32768);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mult16_16() {
         assert_eq!(mult16_16(100, 200), 20000);
         assert_eq!(mult16_16(-100, 200), -20000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mult16_32_q15() {
         // Q15 format: 32767 represents ~1.0
         // So 32767 * 32768 >> 15 should give ~32768
@@ -829,14 +829,14 @@ mod tests {
         assert_eq!(result, 32767);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mult16_16_p15() {
         assert_eq!(mult16_16_p15(Q15_ONE, Q15_ONE), 32766);
         assert_eq!(mult16_16_p15(Q15_ONE / 2, Q15_ONE / 2), Q15_ONE / 4);
         assert_eq!(mult16_16_p15(-Q15_ONE, Q15_ONE), -32766);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_celt_cos_special_angles() {
         assert_eq!(celt_cos(0), 32767);
         assert_eq!(celt_cos(16384), 0);
@@ -845,7 +845,7 @@ mod tests {
         assert!(cos_32768 >= -32768 && cos_32768 <= -32766);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_celt_sin_special_angles() {
         let sin_0 = celt_sin(0);
         assert!(sin_0.abs() <= 1);
@@ -853,7 +853,7 @@ mod tests {
         assert_eq!(celt_sin(-16384), -32767);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_celt_cos_norm_special_values() {
         assert_eq!(celt_cos_norm(0), 32767);
         assert_eq!(celt_cos_norm(32768), 0);
@@ -861,7 +861,7 @@ mod tests {
         assert_eq!(celt_cos_norm(98304), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_trig_identity_sin_cos() {
         for angle in [0_i16, 8192, 16384, 24576, -8192, -16384] {
             let s = i32::from(celt_sin(angle));
@@ -876,15 +876,443 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_int16_to_sig() {
         let sig = int16_to_sig(100);
         assert_eq!(sig, 100 << SIG_SHIFT);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sig_to_int16() {
         let sig = 100 << SIG_SHIFT;
         assert_eq!(sig_to_int16(sig), 100);
+    }
+
+    // Additional tests for edge cases and complex math functions
+
+    #[test_log::test]
+    fn test_celt_sqrt_zero() {
+        assert_eq!(celt_sqrt(0), 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_sqrt_small_values() {
+        // sqrt(1) in Q14 = 16384
+        let result = celt_sqrt(1);
+        // For very small input, result should be small
+        assert!(result >= 0);
+
+        // sqrt(16384) ≈ 128, so in Q14 output format
+        let result_16k = celt_sqrt(16384);
+        assert!(result_16k > 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_sqrt_large_values() {
+        // At the boundary value 1_073_741_824 (2^30), should return max
+        let result = celt_sqrt(1_073_741_824);
+        assert_eq!(result, 32767);
+
+        // Above boundary should saturate
+        let result_above = celt_sqrt(1_073_741_825);
+        assert_eq!(result_above, 32767);
+
+        // i32::MAX should also saturate
+        let result_max = celt_sqrt(i32::MAX);
+        assert_eq!(result_max, 32767);
+    }
+
+    #[test_log::test]
+    fn test_celt_sqrt_powers_of_four() {
+        // sqrt(4) = 2, sqrt(16) = 4, sqrt(256) = 16
+        // In fixed-point Q14, output scaling depends on input magnitude
+        let sqrt_4 = celt_sqrt(4);
+        let sqrt_16 = celt_sqrt(16);
+        let sqrt_256 = celt_sqrt(256);
+
+        // sqrt should increase with input
+        assert!(sqrt_16 > sqrt_4);
+        assert!(sqrt_256 > sqrt_16);
+    }
+
+    #[test_log::test]
+    fn test_vshr32_positive_shift() {
+        // Positive shift = right shift
+        assert_eq!(vshr32(256, 4), 16);
+        assert_eq!(vshr32(1024, 2), 256);
+        assert_eq!(vshr32(-256, 4), -16);
+    }
+
+    #[test_log::test]
+    fn test_vshr32_negative_shift() {
+        // Negative shift = left shift
+        assert_eq!(vshr32(16, -4), 256);
+        assert_eq!(vshr32(1, -8), 256);
+        assert_eq!(vshr32(-1, -4), -16);
+    }
+
+    #[test_log::test]
+    fn test_vshr32_zero_shift() {
+        assert_eq!(vshr32(12345, 0), 12345);
+        assert_eq!(vshr32(-12345, 0), -12345);
+    }
+
+    #[test_log::test]
+    fn test_pshr32_rounding() {
+        // pshr32 adds 0.5 before shifting (rounding-to-nearest)
+        // (a + (1 << (shift-1))) >> shift
+
+        // 3 >> 1 without rounding = 1, with rounding = 2
+        assert_eq!(pshr32(3, 1), 2);
+
+        // 5 >> 2 without rounding = 1, with rounding = 1 (5 + 2 = 7, 7 >> 2 = 1)
+        assert_eq!(pshr32(5, 2), 1);
+
+        // 7 >> 2 without rounding = 1, with rounding = 2 (7 + 2 = 9, 9 >> 2 = 2)
+        assert_eq!(pshr32(7, 2), 2);
+
+        // -3 >> 1 should round towards zero in two's complement
+        let neg_result = pshr32(-3, 1);
+        assert!(neg_result == -1 || neg_result == -2);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_extreme_positive() {
+        // Large positive exponent should saturate
+        let result = celt_exp2(15 * 1024); // 15.0 in Q10
+        assert_eq!(result, 0x7F00_0000);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_extreme_negative() {
+        // Large negative exponent should underflow to zero
+        let result = celt_exp2(-16 * 1024); // -16.0 in Q10
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_zero() {
+        // 2^0 = 1.0 in Q16 = 65536
+        let result = celt_exp2(0);
+        // Should be close to 65536 / 4 = 16384 (due to vshr32 adjustment)
+        assert!(result > 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_one() {
+        // 2^1 = 2.0
+        let result = celt_exp2(1024); // 1.0 in Q10
+        let result_zero = celt_exp2(0);
+        // exp2(1) should be twice exp2(0)
+        assert!(result > result_zero);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_db_large_value() {
+        // When x_q8 >= 16 * 256 = 4096, should return 0
+        assert_eq!(celt_exp2_db(4096), 0);
+        assert_eq!(celt_exp2_db(5000), 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_db_small_value() {
+        // Small positive values should return non-zero
+        let result = celt_exp2_db(256); // 1.0 in Q8
+        assert!(result > 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_exp2_db_zero() {
+        // 2^(-0) = 1.0
+        let result = celt_exp2_db(0);
+        assert!(result > 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_rsqrt_norm_typical_input() {
+        // Input should be in range [16384, 65535] (Q16 normalized)
+        // Output is 1/sqrt(x) in Q14
+
+        // For x = 32768 (0.5 in Q16), 1/sqrt(0.5) ≈ 1.414
+        let result = celt_rsqrt_norm(32768);
+        // In Q14, 1.414 ≈ 23170
+        assert!(result > 20000 && result < 26000);
+    }
+
+    #[test_log::test]
+    fn test_celt_rsqrt_norm_boundary_low() {
+        // Near minimum normalized input
+        let result = celt_rsqrt_norm(16384);
+        // Should be larger since 1/sqrt(small) is larger
+        assert!(result > 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_rsqrt_norm_boundary_high() {
+        // Near maximum normalized input
+        let result = celt_rsqrt_norm(65535);
+        // Should be smaller since 1/sqrt(large) is smaller
+        assert!(result > 0);
+    }
+
+    #[test_log::test]
+    fn test_denorm_coeff_q15_q14_basic() {
+        // coeff (Q15) * gain (Q14) → output (Q12)
+        // Q15 + Q14 = Q29, then >> 17 = Q12
+
+        // coeff = 16384 (0.5 in Q15), gain = 16384 (1.0 in Q14)
+        // Result should be ~2048 in Q12 (0.5)
+        let result = denorm_coeff_q15_q14(16384, 16384);
+        assert_eq!(result, 2048);
+    }
+
+    #[test_log::test]
+    fn test_denorm_coeff_q15_q14_negative() {
+        // Negative coefficient
+        let result = denorm_coeff_q15_q14(-16384, 16384);
+        assert_eq!(result, -2048);
+    }
+
+    #[test_log::test]
+    fn test_denorm_coeff_q15_q14_zero() {
+        assert_eq!(denorm_coeff_q15_q14(0, 16384), 0);
+        assert_eq!(denorm_coeff_q15_q14(16384, 0), 0);
+    }
+
+    #[test_log::test]
+    fn test_normalize_pulses_to_q15_basic() {
+        let pulses = vec![3, 4, 0];
+        let mut output = vec![0i16; 3];
+
+        normalize_pulses_to_q15(&pulses, &mut output);
+
+        // Verify the function produces non-zero output for non-zero input
+        assert!(output[0] != 0 || output[1] != 0);
+
+        // Check proportionality is preserved: output[0]/output[1] ≈ 3/4 = 0.75
+        if output[1] != 0 {
+            let ratio = output[0] as f32 / output[1] as f32;
+            assert!(
+                (ratio - 0.75).abs() < 0.1,
+                "Expected ratio ~0.75, got {}",
+                ratio
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_normalize_pulses_to_q15_single_pulse() {
+        let pulses = vec![1, 0, 0, 0];
+        let mut output = vec![0i16; 4];
+
+        normalize_pulses_to_q15(&pulses, &mut output);
+
+        // Single pulse should result in mostly zero with one large value
+        let non_zero_count = output.iter().filter(|&&x| x.abs() > 100).count();
+        assert!(non_zero_count >= 1);
+    }
+
+    #[test_log::test]
+    fn test_renormalize_vector_i16_unit_norm() {
+        // Start with a vector that's not unit norm
+        let mut vec = vec![16384_i16, 16384, 0, 0];
+
+        // Renormalize to Q31_ONE (unit norm)
+        renormalize_vector_i16(&mut vec, Q31_ONE);
+
+        // Verify the function produces valid output (non-panicking)
+        // and preserves the direction of the vector (ratio should be ~1.0)
+        if vec[0] != 0 && vec[1] != 0 {
+            let ratio = vec[0] as f32 / vec[1] as f32;
+            assert!(
+                (ratio - 1.0).abs() < 0.1,
+                "Expected ratio ~1.0, got {}",
+                ratio
+            );
+        }
+
+        // Values should have changed from original
+        // The function modifies in place, so at least one value should differ
+        assert!(vec[0] != 16384 || vec[1] != 16384);
+    }
+
+    #[test_log::test]
+    fn test_ec_ilog_zero() {
+        assert_eq!(ec_ilog(0), 0);
+    }
+
+    #[test_log::test]
+    fn test_ec_ilog_powers_of_two() {
+        assert_eq!(ec_ilog(1), 1);
+        assert_eq!(ec_ilog(2), 2);
+        assert_eq!(ec_ilog(4), 3);
+        assert_eq!(ec_ilog(8), 4);
+        assert_eq!(ec_ilog(16), 5);
+        assert_eq!(ec_ilog(256), 9);
+        assert_eq!(ec_ilog(65536), 17);
+    }
+
+    #[test_log::test]
+    fn test_ec_ilog_non_powers() {
+        // ec_ilog returns floor(log2(x)) + 1
+        assert_eq!(ec_ilog(3), 2); // floor(log2(3)) + 1 = 1 + 1
+        assert_eq!(ec_ilog(5), 3); // floor(log2(5)) + 1 = 2 + 1
+        assert_eq!(ec_ilog(255), 8);
+        assert_eq!(ec_ilog(257), 9);
+    }
+
+    #[test_log::test]
+    fn test_celt_ilog2_basic() {
+        // celt_ilog2 returns floor(log2(x)) = ec_ilog(x) - 1
+        assert_eq!(celt_ilog2(1), 0);
+        assert_eq!(celt_ilog2(2), 1);
+        assert_eq!(celt_ilog2(4), 2);
+        assert_eq!(celt_ilog2(8), 3);
+        assert_eq!(celt_ilog2(100), 6);
+    }
+
+    #[test_log::test]
+    fn test_celt_zlog2_handles_zero() {
+        // celt_zlog2 is zero-safe version
+        assert_eq!(celt_zlog2(0), 0);
+        assert_eq!(celt_zlog2(-1), 0);
+        assert_eq!(celt_zlog2(-100), 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_zlog2_positive() {
+        assert_eq!(celt_zlog2(1), 0);
+        assert_eq!(celt_zlog2(2), 1);
+        assert_eq!(celt_zlog2(8), 3);
+    }
+
+    #[test_log::test]
+    fn test_sig_to_int16_saturation() {
+        // Test saturation behavior when signal exceeds i16 range
+        let large_sig = i32::MAX;
+        let result = sig_to_int16(large_sig);
+        assert_eq!(result, i16::MAX);
+
+        let small_sig = i32::MIN;
+        let result_neg = sig_to_int16(small_sig);
+        assert_eq!(result_neg, i16::MIN);
+    }
+
+    #[test_log::test]
+    fn test_sig_to_int16_rounding() {
+        // Test rounding behavior (pshr32 adds 0.5 before shift)
+        // sig = 2048 + 2047 = 4095, pshr32(4095, 12) = (4095 + 2048) >> 12 = 1
+        let sig = 4095;
+        let result = sig_to_int16(sig);
+        assert_eq!(result, 1);
+
+        // sig = 2048 - 1 = 2047, pshr32(2047, 12) = (2047 + 2048) >> 12 = 0
+        let sig2 = 2047;
+        let result2 = sig_to_int16(sig2);
+        assert_eq!(result2, 0);
+    }
+
+    #[test_log::test]
+    fn test_celt_inner_prod_basic() {
+        let x = [100_i16, 200, 300];
+        let y = [1_i16, 2, 3];
+        // 100*1 + 200*2 + 300*3 = 100 + 400 + 900 = 1400
+        let result = celt_inner_prod(&x, &y);
+        assert_eq!(result, 1400);
+    }
+
+    #[test_log::test]
+    fn test_celt_inner_prod_negative() {
+        let x = [100_i16, -200, 300];
+        let y = [1_i16, 2, -3];
+        // 100*1 + (-200)*2 + 300*(-3) = 100 - 400 - 900 = -1200
+        let result = celt_inner_prod(&x, &y);
+        assert_eq!(result, -1200);
+    }
+
+    #[test_log::test]
+    fn test_celt_inner_prod_empty() {
+        let x: [i16; 0] = [];
+        let y: [i16; 0] = [];
+        let result = celt_inner_prod(&x, &y);
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn test_qconst16_basic() {
+        // qconst16(0.5, 15) should give ~16384
+        let result = qconst16(0.5, 15);
+        assert_eq!(result, 16384);
+
+        // qconst16(1.0, 14) should give 16384
+        let result2 = qconst16(1.0, 14);
+        assert_eq!(result2, 16384);
+    }
+
+    #[test_log::test]
+    fn test_qconst32_basic() {
+        // qconst32(0.5, 31) should give ~1_073_741_824
+        let result = qconst32(0.5, 31);
+        assert_eq!(result, 1_073_741_824);
+    }
+
+    #[test_log::test]
+    fn test_mult16_32_q16_basic() {
+        // a=16384 (0.5 in Q15), b=65536 (1.0 in Q16)
+        // result = (16384 * 65536) >> 16 = 16384
+        let result = mult16_32_q16(16384, 65536);
+        assert_eq!(result, 16384);
+    }
+
+    #[test_log::test]
+    fn test_mult32_32_q31_basic() {
+        // Multiply two Q31 values and shift by 31
+        // Q31_ONE * Q31_ONE >> 31 should be close to Q31_ONE
+        let result = mult32_32_q31(Q31_ONE, Q31_ONE);
+        // Due to truncation, result should be close to Q31_ONE
+        assert!(result > Q31_ONE - 10 && result <= Q31_ONE);
+    }
+
+    #[test_log::test]
+    fn test_shift_operations_consistency() {
+        // shr16 and shl16 should be inverses (within truncation)
+        let original: i16 = 1000;
+        let shifted_right = shr16(original, 2);
+        let shifted_back = shl16(shifted_right, 2);
+        // Should lose low 2 bits
+        assert_eq!(shifted_back, original & !3);
+
+        // shr32 and shl32 should be inverses (within truncation)
+        let original32: i32 = 100000;
+        let shifted_right32 = shr32(original32, 4);
+        let shifted_back32 = shl32(shifted_right32, 4);
+        assert_eq!(shifted_back32, original32 & !15);
+    }
+
+    #[test_log::test]
+    fn test_add_sub_16_overflow_wrap() {
+        // add16 and sub16 use i32 intermediate but cast back to i16
+        // Test wrapping behavior at boundaries
+        let result = add16(i16::MAX, 1);
+        assert_eq!(result, i16::MIN); // Wraps around
+
+        let result_sub = sub16(i16::MIN, 1);
+        assert_eq!(result_sub, i16::MAX); // Wraps around
+    }
+
+    #[test_log::test]
+    fn test_neg16_neg32() {
+        assert_eq!(neg16(100), -100);
+        assert_eq!(neg16(-100), 100);
+        assert_eq!(neg32(100000), -100000);
+        assert_eq!(neg32(-100000), 100000);
+    }
+
+    #[test_log::test]
+    fn test_extract16_extend32_roundtrip() {
+        let original: i16 = -12345;
+        let extended = extend32(original);
+        let extracted = extract16(extended);
+        assert_eq!(extracted, original);
     }
 }
