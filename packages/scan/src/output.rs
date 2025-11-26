@@ -2187,4 +2187,331 @@ mod test {
             ]
         );
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_output_add_artist_returns_existing_for_same_name() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let mut output = ScanOutput::new();
+
+        let artist1 = output
+            .add_artist("Artist Name", &None, api_source.clone())
+            .await;
+        let artist2 = output
+            .add_artist("Artist Name", &None, api_source.clone())
+            .await;
+
+        // Should return the same Arc (pointer equality)
+        assert!(Arc::ptr_eq(&artist1, &artist2));
+
+        // Should only have one artist
+        let artists = output.artists.read().await;
+        assert_eq!(artists.len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_output_add_artist_creates_new_for_different_names() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let mut output = ScanOutput::new();
+
+        let artist1 = output
+            .add_artist("Artist One", &None, api_source.clone())
+            .await;
+        let artist2 = output
+            .add_artist("Artist Two", &None, api_source.clone())
+            .await;
+
+        // Should be different artists
+        assert!(!Arc::ptr_eq(&artist1, &artist2));
+
+        // Should have two artists
+        let artists = output.artists.read().await;
+        assert_eq!(artists.len(), 2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_artist_add_album_returns_existing_for_same_name() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let mut artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+
+        let album1 = artist
+            .add_album("Album Name", &None, None, &None, api_source.clone())
+            .await;
+        let album2 = artist
+            .add_album("Album Name", &None, None, &None, api_source.clone())
+            .await;
+
+        // Should return the same Arc (pointer equality)
+        assert!(Arc::ptr_eq(&album1, &album2));
+
+        // Should only have one album
+        let albums = artist.albums.read().await;
+        assert_eq!(albums.len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_artist_add_album_creates_new_for_different_names() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let mut artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+
+        let album1 = artist
+            .add_album("Album One", &None, None, &None, api_source.clone())
+            .await;
+        let album2 = artist
+            .add_album("Album Two", &None, None, &None, api_source.clone())
+            .await;
+
+        // Should be different albums
+        assert!(!Arc::ptr_eq(&album1, &album2));
+
+        // Should have two albums
+        let albums = artist.albums.read().await;
+        assert_eq!(albums.len(), 2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_album_add_track_returns_existing_for_same_path() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let mut album =
+            ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source.clone());
+
+        let track1 = album
+            .add_track(
+                &Some("/path/to/track.mp3"),
+                1,
+                "Track One",
+                180.0,
+                &None,
+                AudioFormat::Mp3,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                TrackApiSource::Local,
+                &None,
+                api_source.clone(),
+            )
+            .await;
+        let track2 = album
+            .add_track(
+                &Some("/path/to/track.mp3"),
+                2,
+                "Different Name",
+                200.0,
+                &None,
+                AudioFormat::Flac,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                TrackApiSource::Local,
+                &None,
+                api_source.clone(),
+            )
+            .await;
+
+        // Should return the same Arc (path match takes precedence)
+        assert!(Arc::ptr_eq(&track1, &track2));
+
+        // Should only have one track
+        let tracks = album.tracks.read().await;
+        assert_eq!(tracks.len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_album_add_track_matches_by_number_name_source_when_no_path() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let mut album =
+            ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source.clone());
+
+        // Add track without path (like API tracks)
+        let track1 = album
+            .add_track(
+                &None,
+                1,
+                "Track Name",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+        // Try to add same track (same number, name, source)
+        let track2 = album
+            .add_track(
+                &None,
+                1,
+                "Track Name",
+                200.0, // Different duration
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+
+        // Should return the same Arc
+        assert!(Arc::ptr_eq(&track1, &track2));
+
+        // Should only have one track
+        let tracks = album.tracks.read().await;
+        assert_eq!(tracks.len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_album_add_track_creates_new_for_different_number() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let mut album =
+            ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source.clone());
+
+        let track1 = album
+            .add_track(
+                &None,
+                1,
+                "Track Name",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+        let track2 = album
+            .add_track(
+                &None,
+                2,
+                "Track Name",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+
+        // Should be different tracks
+        assert!(!Arc::ptr_eq(&track1, &track2));
+
+        // Should have two tracks
+        let tracks = album.tracks.read().await;
+        assert_eq!(tracks.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_scan_track_to_api_source_sqlite_values_returns_none_for_library() {
+        let track = ScanTrack::new(
+            &Some("/path/to/track.mp3"),
+            1,
+            "Track Name",
+            180.0,
+            &None,
+            AudioFormat::Mp3,
+            &None,
+            &None,
+            &None,
+            &None,
+            &None,
+            TrackApiSource::Local,
+            &None,
+            ApiSource::library(),
+        );
+
+        assert!(track.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_track_to_api_source_sqlite_values_returns_values_for_api_source() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let id: Id = "track123".into();
+        let track = ScanTrack::new(
+            &None,
+            1,
+            "Track Name",
+            180.0,
+            &None,
+            AudioFormat::Source,
+            &None,
+            &None,
+            &None,
+            &None,
+            &None,
+            api_source.clone().into(),
+            &Some(&id),
+            api_source.clone(),
+        );
+
+        let values = track.to_api_source_sqlite_values();
+        assert!(values.is_some());
+
+        let values = values.unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], ("entity_type", "tracks".into()));
+        assert_eq!(values[1], ("source", api_source.into()));
+    }
+
+    #[test_log::test]
+    fn test_scan_album_to_api_source_sqlite_values_returns_none_for_library() {
+        let artist = ScanArtist::new("Test Artist", &None, ApiSource::library());
+        let album = ScanAlbum::new(
+            artist,
+            "Test Album",
+            &None,
+            None,
+            &None,
+            ApiSource::library(),
+        );
+
+        assert!(album.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_artist_to_api_source_sqlite_values_returns_none_for_library() {
+        let artist = ScanArtist::new("Test Artist", &None, ApiSource::library());
+
+        assert!(artist.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_artist_to_api_source_sqlite_values_returns_values_for_api_source() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let id: Id = "artist123".into();
+        let artist = ScanArtist::new("Test Artist", &Some(&id), api_source.clone());
+
+        let values = artist.to_api_source_sqlite_values();
+        assert!(values.is_some());
+
+        let values = values.unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], ("entity_type", "artists".into()));
+        assert_eq!(values[1], ("source", api_source.into()));
+    }
 }
