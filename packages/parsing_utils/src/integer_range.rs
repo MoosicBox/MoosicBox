@@ -449,5 +449,107 @@ mod tests {
             let result = parse_integer_ranges("10,1-3,5").unwrap();
             assert_eq!(result, vec![10, 1, 2, 3, 5]);
         }
+
+        #[test_log::test]
+        fn returns_error_for_empty_string() {
+            let result = parse_integer_ranges("");
+            assert!(result.is_err());
+            assert!(matches!(
+                result.unwrap_err(),
+                ParseIntegersError::ParseId(_)
+            ));
+        }
+
+        #[test_log::test]
+        fn returns_error_for_whitespace_in_values() {
+            // Spaces around values should cause parse failure
+            let result = parse_integer_ranges("1, 2, 3");
+            assert!(result.is_err());
+            assert!(matches!(
+                result.unwrap_err(),
+                ParseIntegersError::ParseId(_)
+            ));
+        }
+
+        #[test_log::test]
+        fn processes_even_hyphen_segments_as_consecutive_ranges() {
+            // "1-2-3-4" splits to ["1", "2", "3", "4"] = 4 segments (even > 2)
+            // Processed as two consecutive ranges: 1-2 and 3-4
+            let result = parse_integer_ranges("1-2-3-4").unwrap();
+            assert_eq!(result, vec![1, 2, 3, 4]);
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "attempt to subtract with overflow")]
+        fn panics_on_reverse_range() {
+            // "5-4" causes underflow when computing end_id - start_id
+            // start=[5], start_id=6, end=[4], end_id=4
+            // 4 - 6 underflows for u64
+            let _result = parse_integer_ranges("5-4");
+        }
+
+        #[test_log::test]
+        fn parses_six_segments_as_three_consecutive_ranges() {
+            // "1-2-3-4-5-6" splits to ["1", "2", "3", "4", "5", "6"] = 6 segments
+            // Processed as three consecutive ranges
+            let result = parse_integer_ranges("1-2-3-4-5-6").unwrap();
+            assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
+        }
+    }
+}
+
+#[cfg(test)]
+mod parse_integer_sequences_edge_cases {
+    use super::*;
+
+    #[test_log::test]
+    fn returns_error_for_empty_string() {
+        let result = parse_integer_sequences("");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseIntegersError::ParseId(s) => assert_eq!(s, ""),
+            _ => panic!("Expected ParseId error"),
+        }
+    }
+
+    #[test_log::test]
+    fn returns_error_for_whitespace_around_values() {
+        // Leading/trailing whitespace should cause parse failure
+        let result = parse_integer_sequences(" 1,2,3");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseIntegersError::ParseId(_)
+        ));
+    }
+
+    #[test_log::test]
+    fn returns_error_for_trailing_comma() {
+        let result = parse_integer_sequences("1,2,3,");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseIntegersError::ParseId(s) => assert_eq!(s, ""),
+            _ => panic!("Expected ParseId error"),
+        }
+    }
+
+    #[test_log::test]
+    fn returns_error_for_leading_comma() {
+        let result = parse_integer_sequences(",1,2,3");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseIntegersError::ParseId(s) => assert_eq!(s, ""),
+            _ => panic!("Expected ParseId error"),
+        }
+    }
+
+    #[test_log::test]
+    fn returns_error_for_double_comma() {
+        let result = parse_integer_sequences("1,,3");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseIntegersError::ParseId(s) => assert_eq!(s, ""),
+            _ => panic!("Expected ParseId error"),
+        }
     }
 }
