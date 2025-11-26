@@ -1269,6 +1269,7 @@ impl AppState {
     ///
     /// * If any of the required state properties are missing
     #[cfg(feature = "upnp")]
+    #[allow(clippy::too_many_lines)]
     pub async fn init_upnp_players(&self) -> Result<(), AppStateError> {
         use moosicbox_session::models::RegisterPlayer;
 
@@ -2193,5 +2194,146 @@ impl AppState {
         self.update_audio_zones().await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_session::models::{ApiSession, ApiSessionPlaylist};
+
+    fn create_test_session(session_id: u64, name: &str) -> ApiSession {
+        ApiSession {
+            session_id,
+            name: name.to_string(),
+            active: true,
+            playing: false,
+            position: None,
+            seek: None,
+            volume: Some(0.5),
+            playback_target: None,
+            playlist: ApiSessionPlaylist {
+                session_playlist_id: 1,
+                tracks: vec![],
+            },
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_returns_none_when_no_session_id_set() {
+        let state = AppState::new();
+
+        // No current_session_id is set
+        let result = state.get_current_session().await;
+
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_returns_none_when_session_id_not_found() {
+        let state = AppState::new();
+
+        // Set a session ID that doesn't exist in current_sessions
+        *state.current_session_id.write().await = Some(999);
+
+        // Add some sessions, but not one with ID 999
+        let session1 = create_test_session(1, "Session 1");
+        let session2 = create_test_session(2, "Session 2");
+        *state.current_sessions.write().await = vec![session1, session2];
+
+        let result = state.get_current_session().await;
+
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_returns_matching_session() {
+        let state = AppState::new();
+
+        let session1 = create_test_session(1, "Session 1");
+        let session2 = create_test_session(2, "Session 2");
+        let session3 = create_test_session(3, "Session 3");
+
+        *state.current_sessions.write().await = vec![session1, session2.clone(), session3];
+        *state.current_session_id.write().await = Some(2);
+
+        let result = state.get_current_session().await;
+
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.session_id, 2);
+        assert_eq!(result.name, "Session 2");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_ref_returns_none_when_no_session_id_set() {
+        let state = AppState::new();
+
+        assert!(state.get_current_session_ref().await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_ref_returns_none_when_session_id_not_found() {
+        let state = AppState::new();
+
+        *state.current_session_id.write().await = Some(999);
+
+        let session1 = create_test_session(1, "Session 1");
+        *state.current_sessions.write().await = vec![session1];
+
+        assert!(state.get_current_session_ref().await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_ref_returns_matching_session() {
+        let state = AppState::new();
+
+        let session1 = create_test_session(1, "Session 1");
+        let session2 = create_test_session(2, "Target Session");
+
+        *state.current_sessions.write().await = vec![session1, session2];
+        *state.current_session_id.write().await = Some(2);
+
+        let session_ref = state.get_current_session_ref().await.unwrap();
+        assert_eq!(session_ref.session_id, 2);
+        assert_eq!(session_ref.name, "Target Session");
+        drop(session_ref);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_first_session_in_list() {
+        let state = AppState::new();
+
+        let session1 = create_test_session(1, "First Session");
+        let session2 = create_test_session(2, "Second Session");
+
+        *state.current_sessions.write().await = vec![session1, session2];
+        *state.current_session_id.write().await = Some(1);
+
+        let result = state.get_current_session().await;
+
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.session_id, 1);
+        assert_eq!(result.name, "First Session");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_current_session_last_session_in_list() {
+        let state = AppState::new();
+
+        let session1 = create_test_session(1, "First Session");
+        let session2 = create_test_session(2, "Second Session");
+        let session3 = create_test_session(3, "Last Session");
+
+        *state.current_sessions.write().await = vec![session1, session2, session3];
+        *state.current_session_id.write().await = Some(3);
+
+        let result = state.get_current_session().await;
+
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.session_id, 3);
+        assert_eq!(result.name, "Last Session");
     }
 }
