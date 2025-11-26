@@ -627,4 +627,112 @@ mod tests {
         reservation.release_port(port);
         assert!(!reservation.is_reserved(port));
     }
+
+    #[test_log::test]
+    fn test_reserve_zero_ports() {
+        let reservation = PortReservation::new(15000..15100);
+        let ports = reservation.reserve_ports(0);
+
+        assert!(ports.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_release_empty_iterator() {
+        let reservation = PortReservation::new(15000..15100);
+        let port = reservation.reserve_port().unwrap();
+
+        // Releasing an empty iterator should not affect existing reservations
+        reservation.release_ports(std::iter::empty());
+
+        assert!(reservation.is_reserved(port));
+    }
+
+    #[test_log::test]
+    fn test_is_reserved_port_outside_range() {
+        let reservation = PortReservation::new(15000..15100);
+
+        // Port outside range should never be reserved
+        assert!(!reservation.is_reserved(14999));
+        assert!(!reservation.is_reserved(15100));
+        assert!(!reservation.is_reserved(20000));
+    }
+
+    #[test_log::test]
+    fn test_is_free_port_outside_range() {
+        let reservation = PortReservation::new(15000..15100);
+
+        // Port outside range should be considered "free" from reservation perspective
+        assert!(reservation.is_free(14999));
+        assert!(reservation.is_free(15100));
+        assert!(reservation.is_free(20000));
+    }
+
+    #[test_log::test]
+    fn test_sequential_single_port_reservations() {
+        let reservation = PortReservation::new(15000..15100);
+
+        let port1 = reservation.reserve_port();
+        let port2 = reservation.reserve_port();
+        let port3 = reservation.reserve_port();
+
+        assert!(port1.is_some());
+        assert!(port2.is_some());
+        assert!(port3.is_some());
+
+        let port1 = port1.unwrap();
+        let port2 = port2.unwrap();
+        let port3 = port3.unwrap();
+
+        // All ports should be different
+        assert_ne!(port1, port2);
+        assert_ne!(port2, port3);
+        assert_ne!(port1, port3);
+
+        // All ports should be reserved
+        assert!(reservation.is_reserved(port1));
+        assert!(reservation.is_reserved(port2));
+        assert!(reservation.is_reserved(port3));
+    }
+
+    #[test_log::test]
+    fn test_release_specific_subset_of_ports() {
+        let reservation = PortReservation::new(15000..15100);
+
+        // Reserve 5 ports
+        let ports = reservation.reserve_ports(5);
+        assert_eq!(ports.len(), 5);
+
+        // Release only the middle ports (indices 1, 2, 3)
+        let middle_ports: Vec<_> = ports[1..4].to_vec();
+        reservation.release_ports(middle_ports.iter().copied());
+
+        // First and last ports should still be reserved
+        assert!(reservation.is_reserved(ports[0]));
+        assert!(reservation.is_reserved(ports[4]));
+
+        // Middle ports should be released
+        assert!(!reservation.is_reserved(ports[1]));
+        assert!(!reservation.is_reserved(ports[2]));
+        assert!(!reservation.is_reserved(ports[3]));
+    }
+
+    #[test_log::test]
+    fn test_reservation_is_free_helper() {
+        use std::collections::BTreeSet;
+
+        let mut reserved = BTreeSet::new();
+
+        // Get a port that is actually free on the system
+        let port = crate::pick_unused_port(15000..15100);
+        if let Some(port) = port {
+            // Port not in set and free on system should return true
+            assert!(reservation_is_free(&reserved, port));
+
+            // Add to reserved set
+            reserved.insert(port);
+
+            // Port in set should return false even if free on system
+            assert!(!reservation_is_free(&reserved, port));
+        }
+    }
 }
