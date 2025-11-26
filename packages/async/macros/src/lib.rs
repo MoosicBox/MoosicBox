@@ -757,3 +757,534 @@ pub fn inject_yields_mod(input: TokenStream) -> TokenStream {
         .into()
     }
 }
+
+#[cfg(all(test, feature = "simulator"))]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    // ============================================================================
+    // TestArgs parsing tests
+    // ============================================================================
+
+    /// Tests parsing of empty `TestArgs` (no flags).
+    #[::core::prelude::v1::test]
+    fn test_args_empty() {
+        let input = quote! {};
+        let args: TestArgs = syn::parse2(input).expect("Failed to parse empty TestArgs");
+
+        assert!(!args.real_time, "real_time should be false");
+        assert!(!args.real_fs, "real_fs should be false");
+        assert!(!args.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestArgs` with single `real_time` flag.
+    #[::core::prelude::v1::test]
+    fn test_args_real_time_only() {
+        let input = quote! { real_time };
+        let args: TestArgs = syn::parse2(input).expect("Failed to parse TestArgs with real_time");
+
+        assert!(args.real_time, "real_time should be true");
+        assert!(!args.real_fs, "real_fs should be false");
+        assert!(!args.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestArgs` with single `real_fs` flag.
+    #[::core::prelude::v1::test]
+    fn test_args_real_fs_only() {
+        let input = quote! { real_fs };
+        let args: TestArgs = syn::parse2(input).expect("Failed to parse TestArgs with real_fs");
+
+        assert!(!args.real_time, "real_time should be false");
+        assert!(args.real_fs, "real_fs should be true");
+        assert!(!args.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestArgs` with single `no_simulator` flag.
+    #[::core::prelude::v1::test]
+    fn test_args_no_simulator_only() {
+        let input = quote! { no_simulator };
+        let args: TestArgs =
+            syn::parse2(input).expect("Failed to parse TestArgs with no_simulator");
+
+        assert!(!args.real_time, "real_time should be false");
+        assert!(!args.real_fs, "real_fs should be false");
+        assert!(args.no_simulator, "no_simulator should be true");
+    }
+
+    /// Tests parsing of `TestArgs` with multiple comma-separated flags.
+    #[::core::prelude::v1::test]
+    fn test_args_multiple_flags() {
+        let input = quote! { real_time, real_fs };
+        let args: TestArgs =
+            syn::parse2(input).expect("Failed to parse TestArgs with multiple flags");
+
+        assert!(args.real_time, "real_time should be true");
+        assert!(args.real_fs, "real_fs should be true");
+        assert!(!args.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestArgs` with all flags enabled.
+    #[::core::prelude::v1::test]
+    fn test_args_all_flags() {
+        let input = quote! { real_time, real_fs, no_simulator };
+        let args: TestArgs = syn::parse2(input).expect("Failed to parse TestArgs with all flags");
+
+        assert!(args.real_time, "real_time should be true");
+        assert!(args.real_fs, "real_fs should be true");
+        assert!(args.no_simulator, "no_simulator should be true");
+    }
+
+    /// Tests parsing of `TestArgs` with trailing comma.
+    #[::core::prelude::v1::test]
+    fn test_args_trailing_comma() {
+        let input = quote! { real_time, };
+        let args: TestArgs =
+            syn::parse2(input).expect("Failed to parse TestArgs with trailing comma");
+
+        assert!(args.real_time, "real_time should be true");
+    }
+
+    /// Tests that unknown attributes produce an error.
+    #[::core::prelude::v1::test]
+    fn test_args_unknown_attribute() {
+        let input = quote! { unknown_flag };
+        let result = syn::parse2::<TestArgs>(input);
+
+        assert!(result.is_err(), "Unknown attribute should produce an error");
+        // Verify error message contains expected text
+        let err = result.err().expect("Expected error");
+        assert!(
+            err.to_string().contains("Unknown test attribute"),
+            "Error message should mention unknown attribute"
+        );
+    }
+
+    // ============================================================================
+    // TestWithPathInput parsing tests
+    // ============================================================================
+
+    /// Tests parsing of `TestWithPathInput` with minimal valid input.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_basic() {
+        let input = quote! {
+            @path = crate;
+            async fn my_test() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse basic TestWithPathInput");
+
+        assert_eq!(
+            parsed.crate_path.segments.last().unwrap().ident.to_string(),
+            "crate"
+        );
+        assert!(!parsed.use_real_time, "real_time should be false");
+        assert!(!parsed.use_real_fs, "real_fs should be false");
+        assert!(!parsed.no_simulator, "no_simulator should be false");
+        assert_eq!(parsed.function.sig.ident.to_string(), "my_test");
+    }
+
+    /// Tests parsing of `TestWithPathInput` with `real_time` flag.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_real_time() {
+        let input = quote! {
+            @path = switchy_async;
+            real_time;
+            async fn test_with_real_time() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with real_time");
+
+        assert!(parsed.use_real_time, "real_time should be true");
+        assert!(!parsed.use_real_fs, "real_fs should be false");
+        assert!(!parsed.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestWithPathInput` with `real_fs` flag.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_real_fs() {
+        let input = quote! {
+            @path = switchy::unsync;
+            real_fs;
+            async fn test_with_real_fs() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with real_fs");
+
+        assert!(!parsed.use_real_time, "real_time should be false");
+        assert!(parsed.use_real_fs, "real_fs should be true");
+        assert!(!parsed.no_simulator, "no_simulator should be false");
+    }
+
+    /// Tests parsing of `TestWithPathInput` with `no_simulator` flag.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_no_simulator() {
+        let input = quote! {
+            @path = my_crate;
+            no_simulator;
+            async fn test_no_sim() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with no_simulator");
+
+        assert!(!parsed.use_real_time, "real_time should be false");
+        assert!(!parsed.use_real_fs, "real_fs should be false");
+        assert!(parsed.no_simulator, "no_simulator should be true");
+    }
+
+    /// Tests parsing of `TestWithPathInput` with multiple flags.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_multiple_flags() {
+        let input = quote! {
+            @path = switchy_async;
+            real_time;
+            real_fs;
+            no_simulator;
+            async fn test_all_flags() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with all flags");
+
+        assert!(parsed.use_real_time, "real_time should be true");
+        assert!(parsed.use_real_fs, "real_fs should be true");
+        assert!(parsed.no_simulator, "no_simulator should be true");
+    }
+
+    /// Tests parsing of `TestWithPathInput` with qualified crate path.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_qualified_path() {
+        let input = quote! {
+            @path = switchy::unsync::runtime;
+            async fn my_test() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with qualified path");
+
+        assert_eq!(parsed.crate_path.segments.len(), 3);
+        assert_eq!(parsed.crate_path.segments[0].ident.to_string(), "switchy");
+        assert_eq!(parsed.crate_path.segments[1].ident.to_string(), "unsync");
+        assert_eq!(parsed.crate_path.segments[2].ident.to_string(), "runtime");
+    }
+
+    /// Tests that invalid flag in `TestWithPathInput` produces error.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_invalid_flag() {
+        let input = quote! {
+            @path = crate;
+            invalid_flag;
+            async fn my_test() {}
+        };
+        let result = syn::parse2::<TestWithPathInput>(input);
+
+        assert!(result.is_err(), "Invalid flag should produce an error");
+    }
+
+    // ============================================================================
+    // YieldInjector tests
+    // ============================================================================
+
+    /// Tests that `YieldInjector` transforms simple await expressions.
+    #[::core::prelude::v1::test]
+    fn yield_injector_simple_await() {
+        let input: Expr = syn::parse_quote! {
+            some_future().await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Output should contain yield_now: {output}"
+        );
+        assert!(
+            output.contains("__yield_res"),
+            "Output should contain __yield_res temporary: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms nested await expressions.
+    #[::core::prelude::v1::test]
+    fn yield_injector_nested_await() {
+        let input: Expr = syn::parse_quote! {
+            async_fn(another().await).await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        // Both awaits should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(yield_count, 2, "Should have two yield_now calls: {output}");
+    }
+
+    /// Tests that `YieldInjector` preserves non-await expressions.
+    #[::core::prelude::v1::test]
+    fn yield_injector_no_await() {
+        let input: Expr = syn::parse_quote! {
+            some_function(x, y)
+        };
+
+        let original = quote!(#input).to_string();
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert_eq!(
+            output, original,
+            "Non-await expressions should not be modified"
+        );
+    }
+
+    // ============================================================================
+    // inject_item tests
+    // ============================================================================
+
+    /// Tests that `inject_item` processes async functions.
+    #[::core::prelude::v1::test]
+    fn inject_item_async_function() {
+        let mut item: Item = syn::parse_quote! {
+            async fn test_fn() {
+                some_future().await;
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Async function should have yield injected: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` preserves sync functions.
+    #[::core::prelude::v1::test]
+    fn inject_item_sync_function() {
+        let mut item: Item = syn::parse_quote! {
+            fn sync_fn() {
+                regular_function();
+            }
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(output, original, "Sync functions should not be modified");
+    }
+
+    /// Tests that `inject_item` processes impl blocks with async methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_impl_block_async_method() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyStruct {
+                async fn async_method(&self) {
+                    self.inner.await;
+                }
+
+                fn sync_method(&self) {
+                    self.do_something();
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        // Async method should be transformed
+        assert!(
+            output.contains("yield_now"),
+            "Async method in impl should have yield injected: {output}"
+        );
+        // Sync method should remain unchanged
+        assert!(
+            output.contains("do_something"),
+            "Sync method should be preserved: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` recursively processes nested modules.
+    #[::core::prelude::v1::test]
+    fn inject_item_nested_module() {
+        let mut item: Item = syn::parse_quote! {
+            mod outer {
+                async fn outer_fn() {
+                    outer_future().await;
+                }
+
+                mod inner {
+                    async fn inner_fn() {
+                        inner_future().await;
+                    }
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        // Both outer and inner module async functions should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "Both outer and inner async functions should have yields: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` handles items that don't need transformation.
+    #[::core::prelude::v1::test]
+    fn inject_item_struct_unchanged() {
+        let mut item: Item = syn::parse_quote! {
+            struct MyStruct {
+                field: i32,
+            }
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(
+            output, original,
+            "Struct definitions should not be modified"
+        );
+    }
+
+    // ============================================================================
+    // build_test_tokens tests
+    // ============================================================================
+
+    /// Tests that `build_test_tokens` generates correct tokens for "crate" path.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_crate_path() {
+        let args = TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: false,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("@ path = crate"),
+            "Should contain crate path: {output}"
+        );
+    }
+
+    /// Tests that `build_test_tokens` generates correct tokens for external crate path.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_external_path() {
+        let args = TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: false,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("switchy_async", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("switchy_async"),
+            "Should contain switchy_async path: {output}"
+        );
+    }
+
+    /// Tests that `build_test_tokens` includes `real_time` flag when set.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_with_real_time() {
+        let args = TestArgs {
+            real_time: true,
+            real_fs: false,
+            no_simulator: false,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("real_time"),
+            "Should contain real_time: {output}"
+        );
+    }
+
+    /// Tests that `build_test_tokens` includes `real_fs` flag when set.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_with_real_fs() {
+        let args = TestArgs {
+            real_time: false,
+            real_fs: true,
+            no_simulator: false,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("real_fs"),
+            "Should contain real_fs: {output}"
+        );
+    }
+
+    /// Tests that `build_test_tokens` includes `no_simulator` flag when set.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_with_no_simulator() {
+        let args = TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: true,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("no_simulator"),
+            "Should contain no_simulator: {output}"
+        );
+    }
+
+    /// Tests that `build_test_tokens` includes all flags when all are set.
+    #[::core::prelude::v1::test]
+    fn build_test_tokens_all_flags() {
+        let args = TestArgs {
+            real_time: true,
+            real_fs: true,
+            no_simulator: true,
+        };
+        let item_tokens = quote! { async fn my_test() {} };
+
+        let tokens = build_test_tokens("switchy::unsync", &args, &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("real_time"),
+            "Should contain real_time: {output}"
+        );
+        assert!(
+            output.contains("real_fs"),
+            "Should contain real_fs: {output}"
+        );
+        assert!(
+            output.contains("no_simulator"),
+            "Should contain no_simulator: {output}"
+        );
+        assert!(output.contains("switchy"), "Should contain path: {output}");
+    }
+}
