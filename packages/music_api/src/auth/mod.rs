@@ -546,4 +546,121 @@ mod test {
         let auth = Auth::None;
         assert!(auth.as_username_password().is_none());
     }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn auth_into_poll_returns_some_for_poll_variant() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let auth = Auth::Poll(poll);
+
+        assert!(auth.into_poll().is_some());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn auth_into_poll_returns_none_for_other_variants() {
+        let auth = Auth::None;
+        assert!(auth.into_poll().is_none());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn auth_into_username_password_returns_some_for_username_password_variant() {
+        use super::username_password::UsernamePasswordAuth;
+
+        let up_auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let auth = Auth::UsernamePassword(up_auth);
+
+        assert!(auth.into_username_password().is_some());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn auth_into_username_password_returns_none_for_other_variants() {
+        let auth = Auth::None;
+        assert!(auth.into_username_password().is_none());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_into_poll_returns_some_for_poll_variant() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let api_auth = ApiAuth::builder().with_auth(poll).build();
+
+        assert!(api_auth.into_poll().is_some());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_into_poll_returns_none_for_other_variants() {
+        let api_auth = ApiAuth::builder().without_auth().build();
+        assert!(api_auth.into_poll().is_none());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn api_auth_into_username_password_returns_some_for_username_password_variant() {
+        use super::username_password::UsernamePasswordAuth;
+
+        let up_auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let api_auth = ApiAuth::builder().with_auth(up_auth).build();
+
+        assert!(api_auth.into_username_password().is_some());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn api_auth_into_username_password_returns_none_for_other_variants() {
+        let api_auth = ApiAuth::builder().without_auth().build();
+        assert!(api_auth.into_username_password().is_none());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_as_poll_returns_some_for_poll_variant() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let api_auth = ApiAuth::builder().with_auth(poll).build();
+
+        assert!(api_auth.as_poll().is_some());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_as_poll_returns_none_for_other_variants() {
+        let api_auth = ApiAuth::builder().without_auth().build();
+        assert!(api_auth.as_poll().is_none());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn api_auth_as_username_password_returns_some_for_username_password_variant() {
+        use super::username_password::UsernamePasswordAuth;
+
+        let up_auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let api_auth = ApiAuth::builder().with_auth(up_auth).build();
+
+        assert!(api_auth.as_username_password().is_some());
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn api_auth_as_username_password_returns_none_for_other_variants() {
+        let api_auth = ApiAuth::builder().without_auth().build();
+        assert!(api_auth.as_username_password().is_none());
+    }
 }
