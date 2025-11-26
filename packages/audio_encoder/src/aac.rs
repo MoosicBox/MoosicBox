@@ -93,4 +93,56 @@ mod tests {
         assert!(info.output_size > 0, "Should produce output");
         assert!(info.input_consumed > 0, "Should consume input");
     }
+
+    #[test_log::test]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn test_encode_aac_varying_samples() {
+        let encoder = encoder_aac().expect("Failed to create encoder");
+
+        // Generate a stereo sine wave pattern (2048 total samples)
+        let sample_count = 2048;
+        let mut input: Vec<i16> = Vec::with_capacity(sample_count);
+
+        for i in 0..sample_count / 2 {
+            // Generate sine wave for left and right channels
+            let t = i as f32 / 44100.0;
+            let left = ((t * 440.0 * std::f32::consts::TAU).sin() * 16000.0) as i16;
+            let right = ((t * 550.0 * std::f32::consts::TAU).sin() * 16000.0) as i16;
+            input.push(left);
+            input.push(right);
+        }
+
+        let mut output = vec![0u8; 8192];
+        let result = encode_aac(&encoder, &input, &mut output);
+
+        assert!(result.is_ok(), "Encoding varying samples should succeed");
+        let info = result.unwrap();
+
+        assert!(info.output_size > 0, "Should produce output");
+        assert!(info.input_consumed > 0, "Should consume input");
+    }
+
+    #[test_log::test]
+    fn test_encode_aac_multiple_calls() {
+        let encoder = encoder_aac().expect("Failed to create encoder");
+
+        // First encode call
+        let input1: Vec<i16> = vec![1000; 2048];
+        let mut output1 = vec![0u8; 8192];
+        let result1 = encode_aac(&encoder, &input1, &mut output1);
+        assert!(result1.is_ok(), "First encode should succeed");
+
+        // Second encode call with same encoder
+        let input2: Vec<i16> = vec![-1000; 2048];
+        let mut output2 = vec![0u8; 8192];
+        let result2 = encode_aac(&encoder, &input2, &mut output2);
+        assert!(result2.is_ok(), "Second encode should succeed");
+
+        let info1 = result1.unwrap();
+        let info2 = result2.unwrap();
+
+        // Both calls should produce output
+        assert!(info1.output_size > 0, "First call should produce output");
+        assert!(info2.output_size > 0, "Second call should produce output");
+    }
 }

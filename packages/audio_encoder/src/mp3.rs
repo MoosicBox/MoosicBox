@@ -184,4 +184,43 @@ mod tests {
         let result2 = encode_mp3(&mut encoder, &input2);
         assert!(result2.is_ok(), "Multiple encodes should work");
     }
+
+    #[test_log::test]
+    fn test_encode_mp3_empty_input() {
+        let mut encoder = encoder_mp3().expect("Failed to create encoder");
+
+        let input: Vec<i16> = vec![];
+        let result = encode_mp3(&mut encoder, &input);
+
+        // Empty input should succeed (may still produce output due to buffering/flushing)
+        assert!(result.is_ok(), "Empty input should be handled");
+        let (_output, info) = result.unwrap();
+        assert_eq!(info.input_consumed, 0, "Should consume zero input");
+    }
+
+    #[test_log::test]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn test_encode_mp3_varying_samples() {
+        let mut encoder = encoder_mp3().expect("Failed to create encoder");
+
+        // Generate a more realistic audio pattern (stereo interleaved)
+        let sample_count = 4096; // Should be larger than one MP3 frame
+        let mut input: Vec<i16> = Vec::with_capacity(sample_count);
+
+        for i in 0..sample_count / 2 {
+            // Generate sine wave for left and right channels
+            let t = i as f32 / 44100.0;
+            let left = ((t * 440.0 * std::f32::consts::TAU).sin() * 16000.0) as i16;
+            let right = ((t * 550.0 * std::f32::consts::TAU).sin() * 16000.0) as i16;
+            input.push(left);
+            input.push(right);
+        }
+
+        let result = encode_mp3(&mut encoder, &input);
+        assert!(result.is_ok(), "Encoding varying samples should succeed");
+
+        let (output, info) = result.unwrap();
+        assert!(!output.is_empty(), "Should produce output");
+        assert_eq!(info.input_consumed, input.len(), "Should consume all input");
+    }
 }
