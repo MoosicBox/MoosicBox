@@ -1621,4 +1621,111 @@ mod tests {
         let results = crate::search_global_search_index("elder", 0, 10).unwrap();
         assert_eq!(results.len(), 2);
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_empty_query() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Empty query after sanitization
+        let response = crate::global_search("", None, None).unwrap();
+
+        // Empty query should return no results
+        assert!(response.results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_no_results_query() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Query that returns no results
+        let response = crate::global_search("xyzzyznonexistent12345", None, None).unwrap();
+
+        // Should return empty results
+        assert!(response.results.is_empty());
+        assert_eq!(response.position, 0);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_apostrophe_handling() {
+        before_each();
+
+        // Create test data with apostrophe
+        let track_with_apostrophe: Vec<(&str, DataValue)> = vec![
+            ("artist_title", DataValue::String("Test Artist".into())),
+            ("artist_id", DataValue::Number(1)),
+            ("album_title", DataValue::String("Test Album".into())),
+            ("album_id", DataValue::Number(1)),
+            (
+                "track_title",
+                DataValue::String("Don't Stop Believin'".into()),
+            ),
+            ("track_id", DataValue::Number(1)),
+        ];
+
+        crate::populate_global_search_index_sync(&[track_with_apostrophe], true).unwrap();
+
+        // Search without apostrophe - should still find the track due to apostrophe handling
+        let results = crate::search_global_search_index("dont stop", 0, 10).unwrap();
+
+        // The apostrophe handling in populate_global_search_index_sync should allow
+        // finding "Don't" when searching for "dont"
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_apostrophe_preserves_original() {
+        before_each();
+
+        // Create test data with apostrophe
+        let track_with_apostrophe: Vec<(&str, DataValue)> = vec![
+            ("artist_title", DataValue::String("Test Artist".into())),
+            ("artist_id", DataValue::Number(2)),
+            ("album_title", DataValue::String("Test Album".into())),
+            ("album_id", DataValue::Number(2)),
+            ("track_title", DataValue::String("Rock'n'Roll".into())),
+            ("track_id", DataValue::Number(2)),
+        ];
+
+        crate::populate_global_search_index_sync(&[track_with_apostrophe], true).unwrap();
+
+        // Search with "rocknroll" (without apostrophes) - should find due to apostrophe removal permutations
+        let results = crate::search_global_search_index("rocknroll", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_special_characters_sanitized() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with special characters that should be sanitized
+        let results = crate::search_global_search_index("elder!!!", 0, 10).unwrap();
+
+        // Should still find results after sanitization removes the exclamation marks
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_no_results() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search for something that definitely doesn't exist
+        let results = crate::search_global_search_index("xyzzyznonexistent12345", 0, 10).unwrap();
+
+        assert!(results.is_empty());
+    }
 }
