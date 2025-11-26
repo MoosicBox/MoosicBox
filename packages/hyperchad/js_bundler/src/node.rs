@@ -218,4 +218,34 @@ mod tests {
         #[cfg(not(any(feature = "pnpm", feature = "bun", feature = "npm")))]
         assert!(ENABLED_NPM_COMMANDS.is_empty());
     }
+
+    #[test_log::test]
+    fn test_npm_commands_priority_order() {
+        // NPM_COMMANDS should be in priority order: pnpm (fastest), bun, npm (most compatible)
+        // This order is significant as run_command tries them sequentially
+        assert_eq!(NPM_COMMANDS, ["pnpm", "bun", "npm"]);
+    }
+
+    #[test_log::test]
+    fn test_enabled_npm_commands_maintains_priority_order() {
+        // Verify that enabled commands maintain priority order from NPM_COMMANDS
+        let enabled: Vec<&str> = ENABLED_NPM_COMMANDS.iter().map(String::as_str).collect();
+
+        // Check that the enabled commands appear in the same relative order as NPM_COMMANDS
+        let mut last_index = None;
+        for cmd in &enabled {
+            let current_index = NPM_COMMANDS
+                .iter()
+                .position(|x| x == cmd)
+                .expect("Enabled command should be in NPM_COMMANDS");
+
+            if let Some(last) = last_index {
+                assert!(
+                    current_index > last,
+                    "ENABLED_NPM_COMMANDS should maintain priority order from NPM_COMMANDS"
+                );
+            }
+            last_index = Some(current_index);
+        }
+    }
 }
