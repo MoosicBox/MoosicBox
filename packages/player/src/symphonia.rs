@@ -211,3 +211,62 @@ pub fn play_media_source(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_audio_decoder::AudioDecodeError;
+
+    #[test_log::test]
+    fn test_playback_error_display_no_audio_outputs() {
+        let error = PlaybackError::NoAudioOutputs;
+        assert!(error.to_string().contains("No audio outputs"));
+    }
+
+    #[test_log::test]
+    fn test_playback_error_display_invalid_source() {
+        let error = PlaybackError::InvalidSource;
+        assert!(error.to_string().contains("Invalid source"));
+    }
+
+    #[test_log::test]
+    fn test_playback_error_from_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let playback_error: PlaybackError = io_error.into();
+
+        // Should be converted to Symphonia(IoError)
+        assert!(matches!(playback_error, PlaybackError::Symphonia(_)));
+        assert!(playback_error.to_string().contains("file not found"));
+    }
+
+    #[test_log::test]
+    fn test_playback_error_from_decode_error() {
+        // Use AudioDecode variant with OpenStream error type
+        let decode_error = DecodeError::AudioDecode(AudioDecodeError::OpenStream);
+        let playback_error: PlaybackError = decode_error.into();
+
+        assert!(matches!(playback_error, PlaybackError::Decode(_)));
+        // OpenStream error should have "OpenStreamError" in its display
+        assert!(!playback_error.to_string().is_empty());
+    }
+
+    #[test_log::test]
+    fn test_playback_error_decode_variants() {
+        // Test multiple AudioDecodeError variants
+        let errors = [
+            AudioDecodeError::OpenStream,
+            AudioDecodeError::PlayStream,
+            AudioDecodeError::StreamClosed,
+            AudioDecodeError::StreamEnd,
+            AudioDecodeError::Interrupt,
+        ];
+
+        for error in errors {
+            let decode_error = DecodeError::AudioDecode(error);
+            let playback_error: PlaybackError = decode_error.into();
+            assert!(matches!(playback_error, PlaybackError::Decode(_)));
+            // All variants should have non-empty display output
+            assert!(!playback_error.to_string().is_empty());
+        }
+    }
+}
