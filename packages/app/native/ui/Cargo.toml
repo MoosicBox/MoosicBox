@@ -99,3 +99,6 @@ opus = [
     "moosicbox_music_models/opus",
     "moosicbox_session_models/opus",
 ]
+
+[dev-dependencies]
+test-log = { workspace = true }

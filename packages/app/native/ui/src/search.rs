@@ -307,3 +307,50 @@ fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Containers {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod results_content_container_id_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_generates_id_with_library_source() {
+            let result = results_content_container_id(&ApiSource::library());
+            assert_eq!(result, "search-results-container-library");
+        }
+
+        #[test_log::test]
+        fn test_generates_lowercase_hyphenated_id() {
+            // The classify_name function converts to lowercase and replaces non-alphanumeric with hyphens
+            let result = results_content_container_id(&ApiSource::library());
+            assert!(result.starts_with("search-results-container-"));
+            // The id should contain only lowercase alphanumeric and hyphens
+            assert!(
+                result
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            );
+        }
+    }
+
+    mod results_content_id_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_generates_id_with_library_source() {
+            let result = results_content_id(&ApiSource::library());
+            assert_eq!(result, "search-results-library");
+        }
+
+        #[test_log::test]
+        fn test_generates_different_id_than_container() {
+            let container_id = results_content_container_id(&ApiSource::library());
+            let content_id = results_content_id(&ApiSource::library());
+            assert_ne!(container_id, content_id);
+            assert!(container_id.contains("container"));
+            assert!(!content_id.contains("container"));
+        }
+    }
+}
