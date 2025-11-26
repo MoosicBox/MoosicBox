@@ -480,6 +480,933 @@ mod test_number_deserialize {
     }
 }
 
+#[cfg(test)]
+mod test_number_calc {
+    use crate::{Calculation, Number};
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_value_unchanged() {
+        let num = Number::Real(42.5);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 42.5).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_value_unchanged() {
+        let num = Number::Integer(100);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_percent_relative_to_container() {
+        let num = Number::RealPercent(50.0);
+        let result = num.calc(200.0, 1920.0, 1080.0);
+        assert!((result - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_percent_relative_to_container() {
+        let num = Number::IntegerPercent(25);
+        let result = num.calc(400.0, 1920.0, 1080.0);
+        assert!((result - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_vw_relative_to_viewport_width() {
+        let num = Number::RealVw(50.0);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 960.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_vw_relative_to_viewport_width() {
+        let num = Number::IntegerVw(10);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 192.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_vh_relative_to_viewport_height() {
+        let num = Number::RealVh(50.0);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 540.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_vh_relative_to_viewport_height() {
+        let num = Number::IntegerVh(100);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 1080.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_dvw_same_as_vw() {
+        let num = Number::RealDvw(50.0);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 960.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_dvw_same_as_vw() {
+        let num = Number::IntegerDvw(10);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 192.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_real_dvh_same_as_vh() {
+        let num = Number::RealDvh(50.0);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 540.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_integer_dvh_same_as_vh() {
+        let num = Number::IntegerDvh(100);
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 1080.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_calc_evaluates_calculation_expression() {
+        let num = Number::Calc(Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+        ));
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 30.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn number_is_dynamic_returns_true_for_percent_types() {
+        assert!(Number::RealPercent(50.0).is_dynamic());
+        assert!(Number::IntegerPercent(50).is_dynamic());
+    }
+
+    #[test_log::test]
+    fn number_is_dynamic_returns_false_for_fixed_types() {
+        assert!(!Number::Real(50.0).is_dynamic());
+        assert!(!Number::Integer(50).is_dynamic());
+        assert!(!Number::RealVw(50.0).is_dynamic());
+        assert!(!Number::IntegerVw(50).is_dynamic());
+        assert!(!Number::RealVh(50.0).is_dynamic());
+        assert!(!Number::IntegerVh(50).is_dynamic());
+        assert!(!Number::RealDvw(50.0).is_dynamic());
+        assert!(!Number::IntegerDvw(50).is_dynamic());
+        assert!(!Number::RealDvh(50.0).is_dynamic());
+        assert!(!Number::IntegerDvh(50).is_dynamic());
+    }
+
+    #[test_log::test]
+    fn number_is_fixed_returns_true_for_non_percent_types() {
+        assert!(Number::Real(50.0).is_fixed());
+        assert!(Number::Integer(50).is_fixed());
+        assert!(Number::RealVw(50.0).is_fixed());
+        assert!(Number::IntegerVw(50).is_fixed());
+        assert!(Number::RealVh(50.0).is_fixed());
+        assert!(Number::IntegerVh(50).is_fixed());
+    }
+
+    #[test_log::test]
+    fn number_is_fixed_returns_false_for_percent_types() {
+        assert!(!Number::RealPercent(50.0).is_fixed());
+        assert!(!Number::IntegerPercent(50).is_fixed());
+    }
+
+    #[test_log::test]
+    fn number_calc_with_dynamic_percentage_in_calculation() {
+        let num = Number::Calc(Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+        ));
+        let result = num.calc(100.0, 1920.0, 1080.0);
+        // 50% of 100 = 50, plus 10 = 60
+        assert!((result - 60.0).abs() < f32::EPSILON);
+        assert!(num.is_dynamic());
+    }
+}
+
+#[cfg(test)]
+mod test_calculation_calc {
+    use crate::{Calculation, Number};
+
+    #[test_log::test]
+    fn calculation_add_computes_sum() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(5)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 15.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_subtract_computes_difference() {
+        let calc = Calculation::Subtract(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(3)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_multiply_computes_product() {
+        let calc = Calculation::Multiply(
+            Box::new(Calculation::Number(Box::new(Number::Integer(7)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(6)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 42.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_divide_computes_quotient() {
+        let calc = Calculation::Divide(
+            Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(4)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_grouping_evaluates_inner_expression() {
+        let calc = Calculation::Grouping(Box::new(Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(3)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(4)))),
+        )));
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_min_returns_smaller_value() {
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(5)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_min_handles_equal_values() {
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::Integer(7)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(7)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_max_returns_larger_value() {
+        let calc = Calculation::Max(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(5)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_max_handles_equal_values() {
+        let calc = Calculation::Max(
+            Box::new(Calculation::Number(Box::new(Number::Integer(7)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(7)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_nested_operations() {
+        // (10 + 5) * 2 = 30
+        let calc = Calculation::Multiply(
+            Box::new(Calculation::Grouping(Box::new(Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(5)))),
+            )))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(2)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 30.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_is_dynamic_with_percent_number() {
+        let calc = Calculation::Number(Box::new(Number::IntegerPercent(50)));
+        assert!(calc.is_dynamic());
+    }
+
+    #[test_log::test]
+    fn calculation_is_dynamic_with_percent_in_nested_add() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+        );
+        assert!(calc.is_dynamic());
+    }
+
+    #[test_log::test]
+    fn calculation_is_fixed_with_all_fixed_numbers() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+        );
+        assert!(calc.is_fixed());
+    }
+
+    #[test_log::test]
+    fn calculation_is_fixed_returns_false_with_dynamic_operand() {
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+        );
+        assert!(!calc.is_fixed());
+    }
+
+    #[test_log::test]
+    fn calculation_min_is_dynamic_with_one_dynamic_operand() {
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(100)))),
+        );
+        assert!(calc.is_dynamic());
+    }
+
+    #[test_log::test]
+    fn calculation_max_is_dynamic_with_one_dynamic_operand() {
+        let calc = Calculation::Max(
+            Box::new(Calculation::Number(Box::new(Number::Integer(100)))),
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+        );
+        assert!(calc.is_dynamic());
+    }
+
+    #[test_log::test]
+    fn calculation_grouping_is_dynamic_with_dynamic_inner() {
+        let calc = Calculation::Grouping(Box::new(Calculation::Number(Box::new(
+            Number::IntegerPercent(50),
+        ))));
+        assert!(calc.is_dynamic());
+    }
+
+    #[test_log::test]
+    fn calculation_grouping_is_fixed_with_fixed_inner() {
+        let calc =
+            Calculation::Grouping(Box::new(Calculation::Number(Box::new(Number::Integer(50)))));
+        assert!(calc.is_fixed());
+    }
+}
+
+#[cfg(test)]
+mod test_container_methods {
+    use crate::{Container, Element};
+    use hyperchad_transformer_models::{LayoutDirection, Position};
+
+    #[test_log::test]
+    fn container_is_fixed_returns_true_for_fixed_position() {
+        let container = Container {
+            position: Some(Position::Fixed),
+            ..Default::default()
+        };
+        assert!(container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_fixed_returns_true_for_sticky_position() {
+        let container = Container {
+            position: Some(Position::Sticky),
+            ..Default::default()
+        };
+        assert!(container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_fixed_returns_false_for_relative_position() {
+        let container = Container {
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        assert!(!container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_fixed_returns_false_for_absolute_position() {
+        let container = Container {
+            position: Some(Position::Absolute),
+            ..Default::default()
+        };
+        assert!(!container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_fixed_returns_false_for_static_position() {
+        let container = Container {
+            position: Some(Position::Static),
+            ..Default::default()
+        };
+        assert!(!container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_fixed_returns_false_for_no_position() {
+        let container = Container::default();
+        assert!(!container.is_fixed());
+    }
+
+    #[test_log::test]
+    fn container_is_raw_returns_true_for_raw_element() {
+        let container = Container {
+            element: Element::Raw {
+                value: "test".to_string(),
+            },
+            ..Default::default()
+        };
+        assert!(container.is_raw());
+    }
+
+    #[test_log::test]
+    fn container_is_raw_returns_false_for_div_element() {
+        let container = Container {
+            element: Element::Div,
+            ..Default::default()
+        };
+        assert!(!container.is_raw());
+    }
+
+    #[test_log::test]
+    fn container_is_visible_returns_true_when_not_hidden() {
+        let container = Container::default();
+        assert!(container.is_visible());
+    }
+
+    #[test_log::test]
+    fn container_is_visible_returns_true_when_hidden_is_false() {
+        let container = Container {
+            hidden: Some(false),
+            ..Default::default()
+        };
+        assert!(container.is_visible());
+    }
+
+    #[test_log::test]
+    fn container_is_visible_returns_false_when_hidden_is_true() {
+        let container = Container {
+            hidden: Some(true),
+            ..Default::default()
+        };
+        assert!(!container.is_visible());
+    }
+
+    #[test_log::test]
+    fn container_is_hidden_returns_true_only_when_hidden_is_true() {
+        assert!(
+            Container {
+                hidden: Some(true),
+                ..Default::default()
+            }
+            .is_hidden()
+        );
+        assert!(
+            !Container {
+                hidden: Some(false),
+                ..Default::default()
+            }
+            .is_hidden()
+        );
+        assert!(!Container::default().is_hidden());
+    }
+
+    #[test_log::test]
+    fn container_is_span_returns_true_for_raw_element() {
+        let container = Container {
+            element: Element::Raw {
+                value: "test".to_string(),
+            },
+            ..Default::default()
+        };
+        assert!(container.is_span());
+    }
+
+    #[test_log::test]
+    fn container_is_span_returns_true_for_span_element() {
+        let container = Container {
+            element: Element::Span,
+            ..Default::default()
+        };
+        assert!(container.is_span());
+    }
+
+    #[test_log::test]
+    fn container_is_span_returns_true_for_anchor_element() {
+        let container = Container {
+            element: Element::Anchor {
+                target: None,
+                href: None,
+            },
+            ..Default::default()
+        };
+        assert!(container.is_span());
+    }
+
+    #[test_log::test]
+    fn container_is_span_returns_false_for_div_element() {
+        let container = Container {
+            element: Element::Div,
+            ..Default::default()
+        };
+        assert!(!container.is_span());
+    }
+
+    #[test_log::test]
+    fn container_is_flex_container_returns_true_for_row_direction() {
+        let container = Container {
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        assert!(container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn container_is_flex_container_returns_false_for_column_direction_with_no_flex_props() {
+        let container = Container {
+            direction: LayoutDirection::Column,
+            ..Default::default()
+        };
+        assert!(!container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn find_element_by_id_finds_self() {
+        let container = Container {
+            id: 42,
+            ..Default::default()
+        };
+        let found = container.find_element_by_id(42);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 42);
+    }
+
+    #[test_log::test]
+    fn find_element_by_id_finds_nested_child() {
+        let child = Container {
+            id: 99,
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![child],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let found = container.find_element_by_id(99);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 99);
+    }
+
+    #[test_log::test]
+    fn find_element_by_id_returns_none_for_missing_id() {
+        let container = Container {
+            id: 1,
+            ..Default::default()
+        };
+        assert!(container.find_element_by_id(999).is_none());
+    }
+
+    #[test_log::test]
+    fn find_element_by_str_id_finds_element() {
+        let container = Container {
+            str_id: Some("target".to_string()),
+            ..Default::default()
+        };
+        let found = container.find_element_by_str_id("target");
+        assert!(found.is_some());
+    }
+
+    #[test_log::test]
+    fn find_element_by_str_id_finds_nested_element() {
+        let container = Container {
+            str_id: Some("parent".to_string()),
+            children: vec![Container {
+                str_id: Some("child".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let found = container.find_element_by_str_id("child");
+        assert!(found.is_some());
+    }
+
+    #[test_log::test]
+    fn find_element_by_class_finds_element() {
+        let container = Container {
+            classes: vec!["my-class".to_string()],
+            ..Default::default()
+        };
+        let found = container.find_element_by_class("my-class");
+        assert!(found.is_some());
+    }
+
+    #[test_log::test]
+    fn find_element_by_class_returns_none_for_missing_class() {
+        let container = Container {
+            classes: vec!["other-class".to_string()],
+            ..Default::default()
+        };
+        assert!(container.find_element_by_class("my-class").is_none());
+    }
+
+    #[test_log::test]
+    fn find_parent_by_id_returns_parent_of_child() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let parent = container.find_parent_by_id(2);
+        assert!(parent.is_some());
+        assert_eq!(parent.unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn find_parent_by_id_returns_none_for_root() {
+        let container = Container {
+            id: 1,
+            ..Default::default()
+        };
+        assert!(container.find_parent_by_id(1).is_none());
+    }
+
+    #[test_log::test]
+    fn iter_overrides_returns_empty_for_no_overrides() {
+        let container = Container::default();
+        assert_eq!(container.iter_overrides(false).count(), 0);
+    }
+
+    #[test_log::test]
+    fn visible_elements_filters_hidden() {
+        let container = Container {
+            children: vec![
+                Container {
+                    hidden: Some(true),
+                    ..Default::default()
+                },
+                Container {
+                    hidden: Some(false),
+                    ..Default::default()
+                },
+                Container::default(),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(container.visible_elements().count(), 2);
+    }
+
+    #[test_log::test]
+    fn relative_positioned_elements_filters_absolute() {
+        let container = Container {
+            children: vec![
+                Container {
+                    position: Some(Position::Absolute),
+                    ..Default::default()
+                },
+                Container {
+                    position: Some(Position::Relative),
+                    ..Default::default()
+                },
+                Container::default(),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(container.relative_positioned_elements().count(), 2);
+    }
+
+    #[test_log::test]
+    fn absolute_positioned_elements_only_returns_absolute() {
+        let container = Container {
+            children: vec![
+                Container {
+                    position: Some(Position::Absolute),
+                    ..Default::default()
+                },
+                Container {
+                    position: Some(Position::Relative),
+                    ..Default::default()
+                },
+                Container::default(),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(container.absolute_positioned_elements().count(), 1);
+    }
+
+    #[test_log::test]
+    fn fixed_positioned_elements_only_returns_fixed_and_sticky() {
+        let container = Container {
+            children: vec![
+                Container {
+                    position: Some(Position::Fixed),
+                    ..Default::default()
+                },
+                Container {
+                    position: Some(Position::Sticky),
+                    ..Default::default()
+                },
+                Container {
+                    position: Some(Position::Absolute),
+                    ..Default::default()
+                },
+                Container::default(),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(container.fixed_positioned_elements().count(), 2);
+    }
+}
+
+#[cfg(test)]
+mod test_element_methods {
+    use crate::{Element, HeaderSize};
+
+    #[test_log::test]
+    fn allows_children_returns_true_for_container_elements() {
+        assert!(Element::Div.allows_children());
+        assert!(Element::Aside.allows_children());
+        assert!(Element::Main.allows_children());
+        assert!(Element::Header.allows_children());
+        assert!(Element::Footer.allows_children());
+        assert!(Element::Section.allows_children());
+        assert!(Element::Form.allows_children());
+        assert!(Element::Span.allows_children());
+        assert!(Element::UnorderedList.allows_children());
+        assert!(Element::OrderedList.allows_children());
+        assert!(Element::ListItem.allows_children());
+        assert!(Element::Table.allows_children());
+        assert!(Element::THead.allows_children());
+        assert!(Element::TBody.allows_children());
+        assert!(Element::TR.allows_children());
+        assert!(Element::Details { open: None }.allows_children());
+        assert!(Element::Summary.allows_children());
+    }
+
+    #[test_log::test]
+    fn allows_children_returns_true_for_elements_with_fields() {
+        assert!(Element::Button { r#type: None }.allows_children());
+        assert!(
+            Element::Anchor {
+                target: None,
+                href: None
+            }
+            .allows_children()
+        );
+        assert!(
+            Element::Heading {
+                size: HeaderSize::H1
+            }
+            .allows_children()
+        );
+        assert!(
+            Element::TH {
+                rows: None,
+                columns: None
+            }
+            .allows_children()
+        );
+        assert!(
+            Element::TD {
+                rows: None,
+                columns: None
+            }
+            .allows_children()
+        );
+    }
+
+    #[test_log::test]
+    fn allows_children_returns_false_for_leaf_elements() {
+        assert!(
+            !Element::Raw {
+                value: "test".to_string()
+            }
+            .allows_children()
+        );
+        assert!(
+            !Element::Image {
+                source: None,
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None
+            }
+            .allows_children()
+        );
+        assert!(
+            !Element::Textarea {
+                value: String::new(),
+                placeholder: None,
+                name: None,
+                rows: None,
+                cols: None
+            }
+            .allows_children()
+        );
+        assert!(
+            !Element::Input {
+                input: crate::Input::Text {
+                    value: None,
+                    placeholder: None
+                },
+                name: None,
+                autofocus: None
+            }
+            .allows_children()
+        );
+    }
+
+    #[test_log::test]
+    fn tag_display_str_returns_expected_strings() {
+        assert_eq!(Element::Div.tag_display_str(), "Div");
+        assert_eq!(
+            Element::Raw {
+                value: String::new()
+            }
+            .tag_display_str(),
+            "Raw"
+        );
+        assert_eq!(Element::Span.tag_display_str(), "Span");
+        assert_eq!(
+            Element::Heading {
+                size: HeaderSize::H2
+            }
+            .tag_display_str(),
+            "Heading"
+        );
+        assert_eq!(Element::Table.tag_display_str(), "Table");
+        assert_eq!(Element::Button { r#type: None }.tag_display_str(), "Button");
+    }
+}
+
+#[cfg(test)]
+mod test_bfs_traversal {
+    use crate::Container;
+
+    #[test_log::test]
+    fn bfs_visit_visits_all_nodes() {
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut visited_ids = Vec::new();
+        let _ = container.bfs_visit(|c| visited_ids.push(c.id));
+
+        // Should visit all nodes
+        assert!(visited_ids.contains(&1));
+        assert!(visited_ids.contains(&2));
+        assert!(visited_ids.contains(&3));
+        assert!(visited_ids.contains(&4));
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_visits_nodes_with_children() {
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    children: vec![Container {
+                        id: 5,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut visited_ids = Vec::new();
+        bfs.traverse(&container, |c| visited_ids.push(c.id));
+
+        // Traverse only visits nodes that have children (the paths to them)
+        // So it visits the parents of the leaf nodes
+        assert!(visited_ids.contains(&1) || visited_ids.contains(&2) || visited_ids.contains(&3));
+    }
+
+    #[test_log::test]
+    fn bfs_paths_from_container_creates_structure() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = crate::BfsPaths::from(&container);
+        let mut count = 0;
+        bfs.traverse(&container, |_| count += 1);
+
+        // Should have visited some nodes
+        assert!(count >= 1);
+    }
+
+    #[test_log::test]
+    fn container_from_vec_creates_div_with_children() {
+        let children = vec![
+            Container {
+                id: 1,
+                ..Default::default()
+            },
+            Container {
+                id: 2,
+                ..Default::default()
+            },
+        ];
+        let container: Container = children.into();
+
+        assert!(matches!(container.element, crate::Element::Div));
+        assert_eq!(container.children.len(), 2);
+    }
+}
+
 static EPSILON: f32 = 0.00001;
 
 impl PartialEq for Number {
