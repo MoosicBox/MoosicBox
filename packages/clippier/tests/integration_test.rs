@@ -182,9 +182,7 @@ fn test_no_transitive_impact() {
         find_packages_affected_by_external_deps(&external_dep_map, &all_affected_external_deps);
 
     // Should be empty since the changed external dependency doesn't affect any workspace packages
-    insta::assert_debug_snapshot!(affected_workspace_packages, @r###"
-    []
-    "###);
+    insta::assert_debug_snapshot!(affected_workspace_packages, @"[]");
 }
 
 #[test]
