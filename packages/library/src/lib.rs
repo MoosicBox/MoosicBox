@@ -2210,4 +2210,254 @@ mod test {
         let desc = LibraryTrackOrderDirection::from(TrackOrderDirection::Descending);
         assert_eq!(desc, LibraryTrackOrderDirection::Desc);
     }
+
+    #[test_log::test]
+    fn from_search_type_to_library_search_type() {
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::Artists),
+            LibrarySearchType::Artists
+        ));
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::Albums),
+            LibrarySearchType::Albums
+        ));
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::Tracks),
+            LibrarySearchType::Tracks
+        ));
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::Videos),
+            LibrarySearchType::Videos
+        ));
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::Playlists),
+            LibrarySearchType::Playlists
+        ));
+        assert!(matches!(
+            LibrarySearchType::from(SearchType::UserProfiles),
+            LibrarySearchType::UserProfiles
+        ));
+    }
+
+    #[test_log::test]
+    fn filter_albums_filters_by_artist_id() {
+        let album1 = LibraryAlbum {
+            id: 1,
+            title: "Album 1".to_string(),
+            artist: "Artist A".to_string(),
+            artist_id: 100,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let album2 = LibraryAlbum {
+            id: 2,
+            title: "Album 2".to_string(),
+            artist: "Artist B".to_string(),
+            artist_id: 200,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let album3 = LibraryAlbum {
+            id: 3,
+            title: "Album 3".to_string(),
+            artist: "Artist A".to_string(),
+            artist_id: 100,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album1, album2, album3];
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_id: Some(Id::Number(100)),
+                ..Default::default()
+            }),
+            page: None,
+        };
+        let result = filter_albums(&albums, &request)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[1].id, 3);
+    }
+
+    #[test_log::test]
+    fn filter_albums_filters_by_album_type() {
+        use moosicbox_library_models::LibraryAlbumType;
+        use moosicbox_music_models::AlbumType;
+
+        let lp = LibraryAlbum {
+            id: 1,
+            title: "LP Album".to_string(),
+            artist: String::new(),
+            album_type: LibraryAlbumType::Lp,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let single = LibraryAlbum {
+            id: 2,
+            title: "EP Album".to_string(),
+            artist: String::new(),
+            album_type: LibraryAlbumType::EpsAndSingles,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let compilation = LibraryAlbum {
+            id: 3,
+            title: "Compilation Album".to_string(),
+            artist: String::new(),
+            album_type: LibraryAlbumType::Compilations,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![lp, single, compilation];
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                album_type: Some(AlbumType::Lp),
+                ..Default::default()
+            }),
+            page: None,
+        };
+        let result = filter_albums(&albums, &request)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "LP Album");
+    }
+
+    #[test_log::test]
+    fn filter_albums_with_multiple_filters_combined() {
+        let album1 = LibraryAlbum {
+            id: 1,
+            title: "Rock Album".to_string(),
+            artist: "Cool Band".to_string(),
+            artist_id: 100,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let album2 = LibraryAlbum {
+            id: 2,
+            title: "Jazz Album".to_string(),
+            artist: "Cool Band".to_string(),
+            artist_id: 100,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let album3 = LibraryAlbum {
+            id: 3,
+            title: "Rock Songs".to_string(),
+            artist: "Other Band".to_string(),
+            artist_id: 200,
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album1, album2, album3];
+        // Filter for artist_id=100 AND name contains "rock"
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_id: Some(Id::Number(100)),
+                name: Some("rock".to_string()),
+                ..Default::default()
+            }),
+            page: None,
+        };
+        let result = filter_albums(&albums, &request)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        // Only album1 matches both filters
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[0].title, "Rock Album");
+    }
+
+    #[test_log::test]
+    fn filter_albums_search_matches_lowercased_content() {
+        let album = LibraryAlbum {
+            id: 1,
+            title: "UPPERCASE TITLE".to_string(),
+            artist: "Lowercase Artist".to_string(),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Search with lowercase should match title (content is lowercased for comparison)
+        let result1_count = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: Some(AlbumFilters {
+                    search: Some("uppercase".to_string()),
+                    ..Default::default()
+                }),
+                page: None,
+            },
+        )
+        .count();
+        assert_eq!(result1_count, 1);
+
+        // Search with lowercase should also match artist
+        let result2_count = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: None,
+                sort: None,
+                filters: Some(AlbumFilters {
+                    search: Some("lowercase".to_string()),
+                    ..Default::default()
+                }),
+                page: None,
+            },
+        )
+        .count();
+        assert_eq!(result2_count, 1);
+    }
+
+    #[test_log::test]
+    fn sort_albums_no_sort_preserves_order() {
+        let album1 = LibraryAlbum {
+            id: 1,
+            title: "Zebra".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let album2 = LibraryAlbum {
+            id: 2,
+            title: "Apple".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let album3 = LibraryAlbum {
+            id: 3,
+            title: "Middle".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+
+        let albums = vec![&album1, &album2, &album3];
+        let request = AlbumsRequest {
+            sort: None,
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // Order should be preserved when sort is None
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[1].id, 2);
+        assert_eq!(result[2].id, 3);
+    }
 }
