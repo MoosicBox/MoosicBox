@@ -1281,4 +1281,110 @@ mod tests {
         // First value should be 0 (average of channel samples which are 0)
         assert_eq!(result[0], 0);
     }
+
+    #[test_log::test]
+    fn test_visualize_mono_audio() {
+        use symphonia::core::audio::Signal as _;
+
+        // Test with mono (single channel) audio
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(50, spec);
+
+        // Render silence first to materialize samples in the buffer
+        buffer.render_silence(None);
+
+        // Now modify the samples
+        let chan = buffer.chan_mut(0);
+        for (i, sample) in chan.iter_mut().enumerate() {
+            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+            {
+                // Values that will produce non-zero visualization after DIV scaling
+                // DIV = 257, so values >= 257 should produce at least 1
+                *sample = ((i + 1) * 300) as i16;
+            }
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 50);
+        // First sample: 300 / DIV = 300 / 257 = 1
+        assert_eq!(result[0], 1);
+        // Second sample: 600 / DIV = 600 / 257 = 2
+        assert_eq!(result[1], 2);
+    }
+
+    #[test_log::test]
+    fn test_visualize_negative_values() {
+        use symphonia::core::audio::Signal as _;
+
+        // Test that negative values are correctly converted to positive via abs()
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(10, spec);
+
+        // Render silence first to materialize samples in the buffer
+        buffer.render_silence(None);
+
+        // Fill channel 0 with negative values
+        let chan0 = buffer.chan_mut(0);
+        for sample in chan0.iter_mut() {
+            *sample = -1000; // Negative value
+        }
+
+        // Fill channel 1 with same positive values
+        let chan1 = buffer.chan_mut(1);
+        for sample in chan1.iter_mut() {
+            *sample = 1000; // Positive value
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 10);
+        // Both channels contribute 1000, after abs() both are 1000
+        // 1000 / DIV = 1000 / 257 = 3 per channel
+        // Average of 2 channels: (3 + 3) / 2 = 3
+        for value in &result {
+            assert_eq!(*value, 3);
+        }
+    }
+
+    #[test_log::test]
+    fn test_visualize_asymmetric_channels() {
+        use symphonia::core::audio::Signal as _;
+
+        // Test averaging with different values per channel
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(5, spec);
+
+        // Render silence first to materialize samples in the buffer
+        buffer.render_silence(None);
+
+        // Channel 0: high amplitude
+        let chan0 = buffer.chan_mut(0);
+        for sample in chan0.iter_mut() {
+            *sample = 2570; // 2570 / DIV = 10
+        }
+
+        // Channel 1: low amplitude
+        let chan1 = buffer.chan_mut(1);
+        for sample in chan1.iter_mut() {
+            *sample = 0;
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 5);
+        // Channel 0 contributes 10, channel 1 contributes 0
+        // Average: (10 + 0) / 2 = 5
+        for value in &result {
+            assert_eq!(*value, 5);
+        }
+    }
 }
