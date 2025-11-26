@@ -2429,4 +2429,200 @@ mod tests {
         let error_string = format!("{cli_error}");
         assert!(error_string.contains("validation") || error_string.contains("Invalid"));
     }
+
+    // Tests for internal validation logic
+    #[switchy_async::test]
+    async fn test_run_migrations_conflicting_strategies() {
+        // Test that specifying both up_to and steps is rejected
+        let result = run_migrations(
+            "sqlite://:memory:".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            Some("target_migration".to_string()), // up_to
+            Some(5),                              // steps - conflicting with up_to
+            false,                                // dry_run
+            false,                                // force
+            false,                                // require_checksum_validation
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with conflicting strategies");
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Cannot specify both --up-to and --steps"),
+                    "Error message should indicate conflicting options: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_rollback_migrations_conflicting_strategies() {
+        // Test that specifying multiple rollback strategies is rejected
+        let result = rollback_migrations(
+            "sqlite://:memory:".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            Some("target_migration".to_string()), // to
+            Some(3),                              // steps - conflicting with to
+            false,                                // all
+            true,                                 // dry_run
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail with conflicting rollback strategies"
+        );
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Cannot specify multiple rollback strategies"),
+                    "Error message should indicate conflicting strategies: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_rollback_migrations_all_with_steps_conflict() {
+        // Test that --all and --steps conflict
+        let result = rollback_migrations(
+            "sqlite://:memory:".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            None,    // to
+            Some(2), // steps
+            true,    // all - conflicting with steps
+            true,    // dry_run
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when --all and --steps are both specified"
+        );
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Cannot specify multiple rollback strategies"),
+                    "Error message should indicate conflicting strategies: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_rollback_migrations_all_with_to_conflict() {
+        // Test that --all and --to conflict
+        let result = rollback_migrations(
+            "sqlite://:memory:".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            Some("target_migration".to_string()), // to - conflicting with all
+            None,                                 // steps
+            true,                                 // all
+            true,                                 // dry_run
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when --all and --to are both specified"
+        );
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Cannot specify multiple rollback strategies"),
+                    "Error message should indicate conflicting strategies: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_validate_checksums_error_handling() {
+        // Test that validate_checksums properly handles invalid database
+        let result = validate_checksums(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            false, // strict
+            false, // verbose
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with invalid database URL");
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Unsupported database scheme: invalid"),
+                    "Error message should indicate unsupported scheme: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_show_status_error_handling() {
+        // Test that show_status properly handles invalid database
+        let result = show_status(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            false, // show_failed
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with invalid database URL");
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Unsupported database scheme: invalid"),
+                    "Error message should indicate unsupported scheme: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_mark_all_migrations_completed_error_handling() {
+        // Test that mark_all_migrations_completed properly handles invalid database
+        let result = mark_all_migrations_completed(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            false, // include_failed
+            false, // include_in_progress
+            false, // all
+            false, // drop
+            true,  // force
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with invalid database URL");
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(
+                    message.contains("Unsupported database scheme: invalid"),
+                    "Error message should indicate unsupported scheme: {message}"
+                );
+            }
+            Err(other) => panic!("Expected Config error, got: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
 }
