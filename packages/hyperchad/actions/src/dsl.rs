@@ -668,3 +668,286 @@ impl From<DslValue> for ActionEffect {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for ElementReference::parse_selector()
+    // This function has complex logic for determining selector type based on prefix
+
+    #[test_log::test]
+    fn test_parse_selector_id_with_hash_prefix() {
+        let element_ref = ElementReference {
+            selector: "#my-element".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(result, ParsedSelector::Id("my-element".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_class_with_dot_prefix() {
+        let element_ref = ElementReference {
+            selector: ".my-class".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(result, ParsedSelector::Class("my-class".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_plain_string_treated_as_id() {
+        // Backward compatibility: plain strings without prefix are treated as IDs
+        let element_ref = ElementReference {
+            selector: "my-element".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(result, ParsedSelector::Id("my-element".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_empty_string_returns_invalid() {
+        let element_ref = ElementReference {
+            selector: String::new(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(result, ParsedSelector::Invalid);
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_id_strips_hash_prefix() {
+        let element_ref = ElementReference {
+            selector: "#".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        // Should strip the hash and return empty string as ID
+        assert_eq!(result, ParsedSelector::Id(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_class_strips_dot_prefix() {
+        let element_ref = ElementReference {
+            selector: ".".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        // Should strip the dot and return empty string as Class
+        assert_eq!(result, ParsedSelector::Class(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_id_with_special_characters() {
+        let element_ref = ElementReference {
+            selector: "#my-element_123".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(result, ParsedSelector::Id("my-element_123".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_class_with_special_characters() {
+        let element_ref = ElementReference {
+            selector: ".btn-primary--active".to_string(),
+        };
+
+        let result = element_ref.parse_selector();
+
+        assert_eq!(
+            result,
+            ParsedSelector::Class("btn-primary--active".to_string())
+        );
+    }
+
+    // Tests for Literal Display implementation
+    // The Display trait has specific formatting logic for each variant
+
+    #[test_log::test]
+    fn test_literal_display_string() {
+        let literal = Literal::String("hello world".to_string());
+
+        assert_eq!(literal.to_string(), "hello world");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_integer_positive() {
+        let literal = Literal::Integer(42);
+
+        assert_eq!(literal.to_string(), "42");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_integer_negative() {
+        let literal = Literal::Integer(-100);
+
+        assert_eq!(literal.to_string(), "-100");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_integer_zero() {
+        let literal = Literal::Integer(0);
+
+        assert_eq!(literal.to_string(), "0");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_float() {
+        let literal = Literal::Float(1.234);
+
+        assert_eq!(literal.to_string(), "1.234");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_float_negative() {
+        let literal = Literal::Float(-2.5);
+
+        assert_eq!(literal.to_string(), "-2.5");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_bool_true() {
+        let literal = Literal::Bool(true);
+
+        assert_eq!(literal.to_string(), "true");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_bool_false() {
+        let literal = Literal::Bool(false);
+
+        assert_eq!(literal.to_string(), "false");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_unit_is_empty() {
+        let literal = Literal::Unit;
+
+        assert_eq!(literal.to_string(), "");
+    }
+
+    // Tests for DslValue conversions
+    // These have complex type conversion logic
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_string() {
+        let literal = Literal::String("test".to_string());
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::String("test".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_integer() {
+        let literal = Literal::Integer(42);
+        let value: DslValue = literal.into();
+
+        // Integer gets converted to f64
+        assert_eq!(value, DslValue::Number(42.0));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_float() {
+        let literal = Literal::Float(1.234);
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Number(1.234));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_bool() {
+        let literal = Literal::Bool(true);
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Bool(true));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_unit() {
+        let literal = Literal::Unit;
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Unit);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_action() {
+        let effect = ActionEffect {
+            action: ActionType::NoOp,
+            delay_off: Some(100),
+            throttle: None,
+            unique: None,
+        };
+        let value = DslValue::Action(effect);
+
+        let result: ActionEffect = value.into();
+
+        assert_eq!(result.action, ActionType::NoOp);
+        assert_eq!(result.delay_off, Some(100));
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_element_ref() {
+        let element_ref = ElementReference {
+            selector: "#my-button".to_string(),
+        };
+        let value = DslValue::ElementRef(element_ref);
+
+        let result: ActionEffect = value.into();
+
+        match result.action {
+            ActionType::Custom { action } => {
+                assert_eq!(action, "element_ref:#my-button");
+            }
+            _ => panic!("Expected Custom action type"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_other_types_returns_noop() {
+        // String value should convert to NoOp
+        let value = DslValue::String("test".to_string());
+        let result: ActionEffect = value.into();
+        assert_eq!(result.action, ActionType::NoOp);
+
+        // Number value should convert to NoOp
+        let value = DslValue::Number(42.0);
+        let result: ActionEffect = value.into();
+        assert_eq!(result.action, ActionType::NoOp);
+
+        // Bool value should convert to NoOp
+        let value = DslValue::Bool(true);
+        let result: ActionEffect = value.into();
+        assert_eq!(result.action, ActionType::NoOp);
+
+        // Unit value should convert to NoOp
+        let value = DslValue::Unit;
+        let result: ActionEffect = value.into();
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    // Tests for Expression Display (limited implementation)
+    #[test_log::test]
+    fn test_expression_display_literal() {
+        let expr = Expression::Literal(Literal::Integer(42));
+
+        assert_eq!(expr.to_string(), "42");
+    }
+
+    #[test_log::test]
+    fn test_expression_display_variable() {
+        let expr = Expression::Variable("my_var".to_string());
+
+        assert_eq!(expr.to_string(), "my_var");
+    }
+}
