@@ -687,4 +687,84 @@ mod test {
         let result = Color::try_from_hex("#ABCDE");
         assert!(result.is_ok());
     }
+
+    #[test_log::test]
+    fn leading_whitespace_before_hash_is_not_supported() {
+        // Leading whitespace before '#' prefix causes the '#' to be treated as invalid character
+        // because strip_prefix('#') runs before trim()
+        let result = Color::try_from_hex("  #FF5733");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidCharacter(idx, ch) => {
+                assert_eq!(idx, 0);
+                assert_eq!(ch, '#');
+            }
+            _ => panic!("Expected InvalidCharacter error"),
+        }
+    }
+
+    #[test_log::test]
+    fn leading_whitespace_without_hash_is_supported() {
+        // Leading whitespace without '#' IS supported because strip_prefix doesn't remove
+        // anything, and then trim() handles the whitespace
+        assert_eq!(
+            Color::from_hex("  FF5733"),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn round_trip_rgb_color_is_consistent() {
+        let original = Color {
+            r: 171,
+            g: 205,
+            b: 239,
+            a: None,
+        };
+        let hex_string = original.to_string();
+        let parsed = Color::from_hex(&hex_string);
+        assert_eq!(original, parsed);
+    }
+
+    #[test_log::test]
+    fn round_trip_rgba_color_is_consistent() {
+        let original = Color {
+            r: 171,
+            g: 205,
+            b: 239,
+            a: Some(128),
+        };
+        let hex_string = original.to_string();
+        let parsed = Color::from_hex(&hex_string);
+        assert_eq!(original, parsed);
+    }
+
+    #[test_log::test]
+    fn short_rgb_expands_correctly_then_round_trips() {
+        // Short format #ABC expands to #AABBCC
+        let from_short = Color::from_hex("#ABC");
+        let hex_string = from_short.to_string();
+        // Should output as the expanded form
+        assert_eq!(hex_string, "#AABBCC");
+        // And round-trip back correctly
+        let round_tripped = Color::from_hex(&hex_string);
+        assert_eq!(from_short, round_tripped);
+    }
+
+    #[test_log::test]
+    fn short_rgba_expands_correctly_then_round_trips() {
+        // Short format #ABCD expands to #AABBCCDD
+        let from_short = Color::from_hex("#ABCD");
+        let hex_string = from_short.to_string();
+        // Should output as the expanded form
+        assert_eq!(hex_string, "#AABBCCDD");
+        // And round-trip back correctly
+        let round_tripped = Color::from_hex(&hex_string);
+        assert_eq!(from_short, round_tripped);
+    }
 }
