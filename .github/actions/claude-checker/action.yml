@@ -19,7 +19,7 @@ inputs:
 
     # === Prompt Template (One Required) ===
     prompt_template:
-        description: "Built-in template: readme, rustdoc, examples, issue, pr, code-review"
+        description: "Built-in template: readme, rustdoc, examples, issue, pr, code-review, unit-tests, security"
         required: false
     prompt_template_file:
         description: "Path to custom template file"

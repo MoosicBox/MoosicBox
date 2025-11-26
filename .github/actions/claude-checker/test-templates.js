@@ -323,6 +323,7 @@ function main() {
         'pr',
         'readme',
         'rustdoc',
+        'security',
         'unit-tests',
     ];
     let passed = 0;
