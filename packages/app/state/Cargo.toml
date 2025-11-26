@@ -44,7 +44,12 @@ thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
 
 [features]
 default = ["all-sources", "upnp"]
