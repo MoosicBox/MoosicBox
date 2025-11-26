@@ -307,3 +307,237 @@ impl Drop for CpalStreamDaemon {
 // The daemon itself is Send+Sync because the !Send stream is owned by the daemon thread
 unsafe impl Send for CpalStreamDaemon {}
 unsafe impl Sync for CpalStreamDaemon {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_stream_command_debug() {
+        let cmd = StreamCommand::Pause;
+        assert_eq!(format!("{cmd:?}"), "Pause");
+
+        let cmd = StreamCommand::Resume;
+        assert_eq!(format!("{cmd:?}"), "Resume");
+
+        let cmd = StreamCommand::Reset;
+        assert_eq!(format!("{cmd:?}"), "Reset");
+
+        let cmd = StreamCommand::SetVolume(0.5);
+        assert_eq!(format!("{cmd:?}"), "SetVolume(0.5)");
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_stream_command_clone() {
+        let cmd = StreamCommand::Pause;
+        let cloned = cmd.clone();
+        assert!(matches!(cloned, StreamCommand::Pause));
+
+        let cmd = StreamCommand::SetVolume(0.75);
+        let cloned = cmd.clone();
+        assert!(matches!(cloned, StreamCommand::SetVolume(v) if (v - 0.75).abs() < f64::EPSILON));
+    }
+
+    #[test_log::test]
+    fn test_stream_response_debug() {
+        let resp = StreamResponse::Success;
+        assert_eq!(format!("{resp:?}"), "Success");
+
+        let resp = StreamResponse::Error("test error".to_string());
+        assert_eq!(format!("{resp:?}"), "Error(\"test error\")");
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_stream_response_clone() {
+        let resp = StreamResponse::Success;
+        let cloned = resp.clone();
+        assert!(matches!(cloned, StreamResponse::Success));
+
+        let resp = StreamResponse::Error("error message".to_string());
+        let cloned = resp.clone();
+        assert!(matches!(cloned, StreamResponse::Error(ref msg) if msg == "error message"));
+    }
+
+    #[test_log::test]
+    fn test_stream_daemon_error_debug() {
+        let err = StreamDaemonError::StreamCreationFailed("creation failed".to_string());
+        assert_eq!(
+            format!("{err:?}"),
+            "StreamCreationFailed(\"creation failed\")"
+        );
+
+        let err = StreamDaemonError::StreamOperationFailed("operation failed".to_string());
+        assert_eq!(
+            format!("{err:?}"),
+            "StreamOperationFailed(\"operation failed\")"
+        );
+
+        let err = StreamDaemonError::DaemonStopped;
+        assert_eq!(format!("{err:?}"), "DaemonStopped");
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_stream_daemon_error_clone() {
+        let err = StreamDaemonError::StreamCreationFailed("test".to_string());
+        let cloned = err.clone();
+        assert!(
+            matches!(cloned, StreamDaemonError::StreamCreationFailed(ref msg) if msg == "test")
+        );
+
+        let err = StreamDaemonError::StreamOperationFailed("op failed".to_string());
+        let cloned = err.clone();
+        assert!(
+            matches!(cloned, StreamDaemonError::StreamOperationFailed(ref msg) if msg == "op failed")
+        );
+
+        let err = StreamDaemonError::DaemonStopped;
+        let cloned = err.clone();
+        assert!(matches!(cloned, StreamDaemonError::DaemonStopped));
+    }
+
+    #[test_log::test]
+    fn test_stream_handle_debug() {
+        let (tx, _rx) = flume::unbounded();
+        let handle = StreamHandle { command_sender: tx };
+
+        let debug_str = format!("{handle:?}");
+        assert!(debug_str.contains("StreamHandle"));
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_stream_handle_clone() {
+        let (tx, _rx) = flume::unbounded();
+        let handle = StreamHandle { command_sender: tx };
+
+        let cloned = handle.clone();
+        // Just verify clone works - we can't compare directly since Sender doesn't implement PartialEq
+        let debug_original = format!("{handle:?}");
+        let debug_cloned = format!("{cloned:?}");
+        assert!(debug_original.contains("StreamHandle"));
+        assert!(debug_cloned.contains("StreamHandle"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_pause_channel_disconnected() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Drop the receiver to simulate daemon stopped
+        drop(rx);
+
+        let result = handle.pause().await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StreamDaemonError::DaemonStopped
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_resume_channel_disconnected() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        drop(rx);
+
+        let result = handle.resume().await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StreamDaemonError::DaemonStopped
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_reset_channel_disconnected() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        drop(rx);
+
+        let result = handle.reset().await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StreamDaemonError::DaemonStopped
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_set_volume_channel_disconnected() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        drop(rx);
+
+        let result = handle.set_volume(0.5).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StreamDaemonError::DaemonStopped
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_success_response() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Spawn a mock responder
+        switchy_async::task::spawn(async move {
+            if let Ok((cmd, response_tx)) = rx.recv_async().await {
+                assert!(matches!(cmd, StreamCommand::Pause));
+                let _ = response_tx.send_async(StreamResponse::Success).await;
+            }
+        });
+
+        let result = handle.pause().await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_error_response() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Spawn a mock responder that returns an error
+        switchy_async::task::spawn(async move {
+            if let Ok((_cmd, response_tx)) = rx.recv_async().await {
+                let _ = response_tx
+                    .send_async(StreamResponse::Error("mock error".to_string()))
+                    .await;
+            }
+        });
+
+        let result = handle.resume().await;
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), StreamDaemonError::StreamOperationFailed(msg) if msg == "mock error")
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_response_channel_dropped() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Spawn a mock responder that drops the response channel without sending
+        switchy_async::task::spawn(async move {
+            if let Ok((_cmd, response_tx)) = rx.recv_async().await {
+                // Don't send a response, just drop the sender
+                drop(response_tx);
+            }
+        });
+
+        let result = handle.reset().await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            StreamDaemonError::DaemonStopped
+        ));
+    }
+}
