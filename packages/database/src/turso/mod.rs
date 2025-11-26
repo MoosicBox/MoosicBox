@@ -783,7 +783,10 @@ async fn find_row(
 
     if let Some(row) = rows.next().await? {
         log::trace!("find_row: row found");
-        Ok(Some(from_turso_row(&column_names, &row)?))
+        let result = from_turso_row(&column_names, &row)?;
+        // Drain remaining rows to ensure statement executes to completion
+        while rows.next().await?.is_some() {}
+        Ok(Some(result))
     } else {
         log::trace!("find_row: no row found");
         Ok(None)
@@ -830,6 +833,9 @@ async fn insert_and_get_row(
             "INSERT RETURNING: row fetched successfully with columns: {:?}",
             result_row.columns
         );
+        // Drain remaining rows to ensure statement executes to completion
+        // This is required for turso to properly commit the transaction
+        while rows.next().await?.is_some() {}
         Ok(result_row)
     } else {
         Err(TursoDatabaseError::Query(
