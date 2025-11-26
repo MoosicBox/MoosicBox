@@ -67,3 +67,87 @@ fn test_sync_function() {
 - For packages with multiple backend implementations, create separate test modules for each
 - Use descriptive test names that explain what is being tested
 - Include setup helpers when multiple tests share setup logic
+
+### Global State Isolation
+
+**CRITICAL: Tests that access shared global state MUST be serialized to prevent race conditions and test flakiness.**
+
+**When to use `#[serial]`:**
+
+Tests MUST use `#[serial]` from `serial_test` when they:
+
+- Read or modify `static` variables with interior mutability (`LazyLock<Mutex<...>>`, `LazyLock<RwLock<...>>`, `OnceLock`, etc.)
+- Modify environment variables or process-wide state
+- Access shared filesystem paths that aren't unique per test
+- Interact with singleton resources (global search indices, connection pools, etc.)
+
+**Usage:**
+
+```rust
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    // Synchronous test with global state
+    #[test_log::test]
+    #[serial]
+    fn test_modifies_global_config() {
+        // Test that modifies a global LazyLock<Mutex<...>>
+    }
+
+    // Async test with global state
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_global_search_index() {
+        // Test that modifies a global search index
+    }
+
+    // Use named groups when only specific tests share state
+    #[test_log::test]
+    #[serial(config_state)]
+    fn test_config_setting_a() {
+        // Only serialized with other tests in "config_state" group
+    }
+}
+```
+
+**State Cleanup Patterns:**
+
+Always ensure global state is properly reset after tests to avoid polluting other tests:
+
+```rust
+struct TestSetup;
+
+impl TestSetup {
+    pub fn new() -> Self {
+        // Initialize test state
+        Self
+    }
+}
+
+impl Drop for TestSetup {
+    fn drop(&mut self) {
+        // Clean up / reset global state
+    }
+}
+
+fn before_each() {
+    // Reset state to known good configuration
+}
+
+#[test_log::test]
+#[serial]
+fn test_with_cleanup() {
+    let _setup = TestSetup::new();
+    before_each();
+    // Test runs, then TestSetup::drop() cleans up
+}
+```
+
+**Prefer Test Isolation Over Serialization:**
+
+When possible, design code to avoid global state:
+
+- Use dependency injection instead of global singletons
+- Create unique test directories using `moosicbox_config::get_tests_dir_path()`
+- Pass configuration as parameters rather than reading from global state
