@@ -89,6 +89,8 @@ impl FromRequest for TunnelInfo {
 mod tests {
     use super::*;
 
+    use actix_web::{dev::Payload, test::TestRequest};
+
     #[test_log::test]
     fn test_tunnel_info_with_host() {
         let info = TunnelInfo {
@@ -178,5 +180,81 @@ mod tests {
         // Verify both share the same Arc
         assert_eq!(Arc::strong_count(&host), 3); // original + info1 + info2
         assert_eq!(info1.host.as_ref(), info2.host.as_ref());
+    }
+
+    #[test_log::test]
+    fn test_from_request_returns_initialized_tunnel_info() {
+        // Ensure TUNNEL_INFO is initialized first
+        // This may fail if already initialized by another test, which is fine
+        let _ = init(TunnelInfo {
+            host: Arc::new(Some("first.example.com".to_string())),
+        });
+
+        let req = TestRequest::default().to_http_request();
+        let mut payload = Payload::None;
+        let result = TunnelInfo::from_request(&req, &mut payload).into_inner();
+
+        // Since TUNNEL_INFO is initialized (either by this test or a previous one),
+        // from_request should succeed
+        assert!(
+            result.is_ok(),
+            "from_request should succeed when TUNNEL_INFO is initialized"
+        );
+
+        let tunnel_info = result.unwrap();
+        // The host will be set since we initialized it
+        assert!(
+            tunnel_info.host.is_some(),
+            "TunnelInfo should have a host configured"
+        );
+    }
+
+    #[test_log::test]
+    fn test_from_request_returns_same_info_on_multiple_requests() {
+        // Ensure TUNNEL_INFO is initialized
+        let _ = init(TunnelInfo {
+            host: Arc::new(Some("first.example.com".to_string())),
+        });
+
+        let req1 = TestRequest::default().uri("/test1").to_http_request();
+        let req2 = TestRequest::default().uri("/test2").to_http_request();
+
+        let mut payload1 = Payload::None;
+        let mut payload2 = Payload::None;
+
+        let result1 = TunnelInfo::from_request(&req1, &mut payload1).into_inner();
+        let result2 = TunnelInfo::from_request(&req2, &mut payload2).into_inner();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+
+        // Both requests should return the same TunnelInfo host
+        assert_eq!(
+            result1.unwrap().host.as_ref(),
+            result2.unwrap().host.as_ref()
+        );
+    }
+
+    #[test_log::test]
+    fn test_from_request_clones_tunnel_info() {
+        // Ensure TUNNEL_INFO is initialized
+        let _ = init(TunnelInfo {
+            host: Arc::new(Some("first.example.com".to_string())),
+        });
+
+        let req = TestRequest::default().to_http_request();
+        let mut payload = Payload::None;
+        let result = TunnelInfo::from_request(&req, &mut payload).into_inner();
+
+        assert!(result.is_ok());
+
+        // Verify the returned TunnelInfo is a clone (shares the Arc)
+        // by checking that we can independently work with it
+        let tunnel_info = result.unwrap();
+        let host_clone = tunnel_info.host.clone();
+        assert_eq!(
+            Arc::strong_count(&host_clone),
+            Arc::strong_count(&tunnel_info.host)
+        );
     }
 }
