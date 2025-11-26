@@ -2612,4 +2612,321 @@ mod tests {
             _ => panic!("Expected album search result"),
         }
     }
+
+    #[test_log::test]
+    fn test_yt_artist_to_artist_model() {
+        use moosicbox_music_models::Artist;
+
+        let yt_artist = YtArtist {
+            id: "artist123".to_string(),
+            picture: Some("pic-url".to_string()),
+            contains_cover: true,
+            popularity: 95,
+            name: "Test Artist".to_string(),
+        };
+
+        let artist: Artist = yt_artist.into();
+        assert_eq!(artist.title, "Test Artist");
+        assert_eq!(artist.cover, Some("pic-url".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_yt_artist_to_api_artist() {
+        use moosicbox_music_models::api::ApiArtist;
+
+        let yt_artist = YtArtist {
+            id: "artist456".to_string(),
+            picture: None,
+            contains_cover: false,
+            popularity: 50,
+            name: "Another Artist".to_string(),
+        };
+
+        let api_artist: ApiArtist = yt_artist.into();
+        assert_eq!(api_artist.title, "Another Artist");
+        assert!(!api_artist.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_yt_track_to_track_model() {
+        use moosicbox_music_models::Track;
+
+        let yt_track = YtTrack {
+            id: "track123".to_string(),
+            track_number: 5,
+            artist_id: "artist999".to_string(),
+            artist: "Track Artist".to_string(),
+            artist_cover: Some("artist-cover".to_string()),
+            album_id: "album888".to_string(),
+            album: "Track Album".to_string(),
+            album_type: crate::YtAlbumType::Lp,
+            album_cover: Some("album-cover".to_string()),
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 180,
+            explicit: false,
+            isrc: "USABC1234567".to_string(),
+            popularity: 75,
+            title: "Great Track".to_string(),
+            media_metadata_tags: vec!["tag1".to_string()],
+        };
+
+        let track: Track = yt_track.into();
+        assert_eq!(track.title, "Great Track");
+        assert_eq!(track.number, 5);
+        assert!((track.duration - 180.0).abs() < f64::EPSILON);
+        assert_eq!(track.artist, "Track Artist");
+        assert_eq!(track.album, "Track Album");
+        assert_eq!(track.artwork, Some("album-cover".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_yt_track_to_track_model_without_album_cover() {
+        use moosicbox_music_models::Track;
+
+        let yt_track = YtTrack {
+            id: "track456".to_string(),
+            track_number: 1,
+            artist_id: "artist111".to_string(),
+            artist: "Artist Name".to_string(),
+            artist_cover: None,
+            album_id: "album222".to_string(),
+            album: "Album Name".to_string(),
+            album_type: crate::YtAlbumType::EpsAndSingles,
+            album_cover: None,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024".to_string()),
+            duration: 240,
+            explicit: true,
+            isrc: "USXYZ9876543".to_string(),
+            popularity: 90,
+            title: "Another Track".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let track: Track = yt_track.into();
+        assert_eq!(track.title, "Another Track");
+        assert_eq!(track.artwork, None);
+        assert!(!track.blur);
+    }
+
+    #[test_log::test]
+    fn test_yt_album_try_from_to_album() {
+        use moosicbox_music_models::Album;
+
+        let yt_album = YtAlbum {
+            id: "album123".to_string(),
+            artist: "Album Artist".to_string(),
+            artist_id: "artist456".to_string(),
+            album_type: crate::YtAlbumType::Lp,
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Label".to_string()),
+            cover: Some("cover-url".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 85,
+            release_date: Some("2024-06-15".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec!["tag1".to_string()],
+        };
+
+        let album: Album = yt_album.try_into().unwrap();
+        assert_eq!(album.title, "Test Album");
+        assert_eq!(album.artist, "Album Artist");
+        assert_eq!(album.artwork, Some("cover-url".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_yt_album_try_from_to_album_without_release_date() {
+        use moosicbox_music_models::Album;
+
+        let yt_album = YtAlbum {
+            id: "album789".to_string(),
+            artist: "Another Artist".to_string(),
+            artist_id: "artist789".to_string(),
+            album_type: crate::YtAlbumType::Compilations,
+            contains_cover: false,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 2400,
+            explicit: true,
+            number_of_tracks: 8,
+            popularity: 60,
+            release_date: None,
+            title: "Compilation".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let album: Album = yt_album.try_into().unwrap();
+        assert_eq!(album.title, "Compilation");
+        assert!(album.date_released.is_none());
+        assert!(album.artwork.is_none());
+    }
+
+    #[test_log::test]
+    fn test_yt_album_cover_url_none() {
+        let album = YtAlbum {
+            id: "album_no_cover".to_string(),
+            artist: "Artist".to_string(),
+            artist_id: "artist_id".to_string(),
+            album_type: crate::YtAlbumType::Lp,
+            contains_cover: false,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 1800,
+            explicit: false,
+            number_of_tracks: 5,
+            popularity: 40,
+            release_date: None,
+            title: "No Cover Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(album.cover_url(YtAlbumImageSize::Medium), None);
+    }
+
+    #[test_log::test]
+    fn test_yt_track_to_api_global_search_result_without_cover() {
+        let track = YtTrack {
+            id: "track_no_cover".to_string(),
+            track_number: 1,
+            artist_id: "artist_id".to_string(),
+            artist: "Artist".to_string(),
+            artist_cover: None,
+            album_id: "album_id".to_string(),
+            album: "Album".to_string(),
+            album_type: crate::YtAlbumType::Lp,
+            album_cover: None,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 200,
+            explicit: false,
+            isrc: "ISRC123".to_string(),
+            popularity: 50,
+            title: "Track Without Cover".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let result: ApiGlobalSearchResult = track.into();
+        match result {
+            ApiGlobalSearchResult::Track(track_result) => {
+                assert!(!track_result.contains_cover);
+            }
+            _ => panic!("Expected track search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_formatted_to_api_response_position_calculation() {
+        let formatted = YtSearchResultsFormatted {
+            albums: vec![],
+            artists: vec![],
+            videos: vec![],
+            tracks: vec![],
+            offset: 0,
+            limit: 10,
+            total: 100,
+        };
+
+        let response: ApiSearchResultsResponse = formatted.into();
+        // position = min(offset + limit, total) = min(0 + 10, 100) = 10
+        assert_eq!(response.position, 10);
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_formatted_to_api_response_position_exceeds_total() {
+        let formatted = YtSearchResultsFormatted {
+            albums: vec![],
+            artists: vec![],
+            videos: vec![],
+            tracks: vec![],
+            offset: 95,
+            limit: 10,
+            total: 100,
+        };
+
+        let response: ApiSearchResultsResponse = formatted.into();
+        // position = min(95 + 10, 100) = min(105, 100) = 100
+        assert_eq!(response.position, 100);
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_formatted_to_api_response_with_items() {
+        let formatted = YtSearchResultsFormatted {
+            albums: vec![YtAlbum {
+                id: "album1".to_string(),
+                artist: "Artist1".to_string(),
+                artist_id: "artist_id1".to_string(),
+                album_type: crate::YtAlbumType::Lp,
+                contains_cover: true,
+                audio_quality: "HIGH".to_string(),
+                copyright: None,
+                cover: None,
+                duration: 1800,
+                explicit: false,
+                number_of_tracks: 10,
+                popularity: 80,
+                release_date: None,
+                title: "Album 1".to_string(),
+                media_metadata_tags: vec![],
+            }],
+            artists: vec![YtArtist {
+                id: "artist1".to_string(),
+                picture: None,
+                contains_cover: false,
+                popularity: 70,
+                name: "Artist 1".to_string(),
+            }],
+            videos: vec![],
+            tracks: vec![YtTrack {
+                id: "track1".to_string(),
+                track_number: 1,
+                artist_id: "artist1".to_string(),
+                artist: "Artist 1".to_string(),
+                artist_cover: None,
+                album_id: "album1".to_string(),
+                album: "Album 1".to_string(),
+                album_type: crate::YtAlbumType::Lp,
+                album_cover: None,
+                audio_quality: "HIGH".to_string(),
+                copyright: None,
+                duration: 180,
+                explicit: false,
+                isrc: "ISRC1".to_string(),
+                popularity: 60,
+                title: "Track 1".to_string(),
+                media_metadata_tags: vec![],
+            }],
+            offset: 0,
+            limit: 10,
+            total: 3,
+        };
+
+        let response: ApiSearchResultsResponse = formatted.into();
+        // 1 artist + 1 album + 1 track = 3 results
+        assert_eq!(response.results.len(), 3);
+        // position = min(0 + 10, 3) = 3
+        assert_eq!(response.position, 3);
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_formatted_empty() {
+        let formatted = YtSearchResultsFormatted {
+            albums: vec![],
+            artists: vec![],
+            videos: vec![],
+            tracks: vec![],
+            offset: 0,
+            limit: 10,
+            total: 0,
+        };
+
+        let response: ApiSearchResultsResponse = formatted.into();
+        assert_eq!(response.results.len(), 0);
+        assert_eq!(response.position, 0);
+    }
 }
