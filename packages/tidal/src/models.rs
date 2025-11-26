@@ -816,6 +816,7 @@ impl AsModelResult<TidalSearchResults, ParseError> for Value {
 mod tests {
     use super::*;
     use moosicbox_music_api::models::ImageCoverSize;
+    use moosicbox_music_api::models::search::api::ApiGlobalSearchResult;
     use moosicbox_music_models::id::Id;
     use pretty_assertions::assert_eq;
 
@@ -1324,5 +1325,360 @@ mod tests {
         assert_eq!(track.artist, "Test Artist");
         assert_eq!(track.artist_id, Id::from(12345_u64));
         assert_eq!(track.api_source, *API_SOURCE);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_to_album_conversion_with_release_date() {
+        let tidal_album = TidalAlbum {
+            id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_id: 12345,
+            album_type: TidalAlbumType::Lp,
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Test".to_string()),
+            cover: Some("xyz-abc-def".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: Some("2024-01-15".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec!["LOSSLESS".to_string()],
+        };
+
+        let album: Album = tidal_album.try_into().unwrap();
+        assert_eq!(album.id, Id::from(67890_u64));
+        assert_eq!(album.title, "Test Album");
+        assert_eq!(album.artist, "Test Artist");
+        assert_eq!(album.artist_id, Id::from(12345_u64));
+        assert!(album.date_released.is_some());
+        assert_eq!(
+            album.artwork,
+            Some("https://resources.tidal.com/images/xyz/abc/def/1280x1280.jpg".to_string())
+        );
+        assert_eq!(album.api_source, *API_SOURCE);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_to_album_conversion_without_release_date() {
+        let tidal_album = TidalAlbum {
+            id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_id: 12345,
+            album_type: TidalAlbumType::EpsAndSingles,
+            contains_cover: false,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 1800,
+            explicit: true,
+            number_of_tracks: 5,
+            popularity: 50,
+            release_date: None,
+            title: "Test EP".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let album: Album = tidal_album.try_into().unwrap();
+        assert_eq!(album.id, Id::from(67890_u64));
+        assert!(album.date_released.is_none());
+        assert_eq!(album.artwork, None);
+    }
+
+    #[test_log::test]
+    fn test_album_to_tidal_album_roundtrip() {
+        let original_album = Album {
+            id: Id::from(67890_u64),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::from(12345_u64),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artwork: Some("https://example.com/cover.jpg".to_string()),
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let tidal_album: TidalAlbum = original_album.try_into().unwrap();
+        assert_eq!(tidal_album.id, 67890);
+        assert_eq!(tidal_album.title, "Test Album");
+        assert_eq!(tidal_album.artist, "Test Artist");
+        assert_eq!(tidal_album.artist_id, 12345);
+        assert_eq!(tidal_album.album_type, TidalAlbumType::Lp);
+        assert!(tidal_album.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_tidal_artist_to_search_result_conversion() {
+        let tidal_artist = TidalArtist {
+            id: 12345,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        let search_result: ApiGlobalSearchResult = tidal_artist.into();
+        match search_result {
+            ApiGlobalSearchResult::Artist(result) => {
+                assert_eq!(result.artist_id, Id::from(12345_u64));
+                assert_eq!(result.title, "Test Artist");
+                assert!(result.contains_cover);
+                assert_eq!(result.api_source, *API_SOURCE);
+            }
+            _ => panic!("Expected Artist search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_artist_to_search_result_conversion() {
+        let tidal_search_artist = TidalSearchArtist {
+            id: 12345,
+            picture: None,
+            contains_cover: false,
+            r#type: "ARTIST".to_string(),
+            name: "Test Artist".to_string(),
+        };
+
+        let search_result: ApiGlobalSearchResult = tidal_search_artist.into();
+        match search_result {
+            ApiGlobalSearchResult::Artist(result) => {
+                assert_eq!(result.artist_id, Id::from(12345_u64));
+                assert_eq!(result.title, "Test Artist");
+                assert!(!result.contains_cover);
+            }
+            _ => panic!("Expected Artist search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_album_to_search_result_conversion() {
+        let tidal_search_album = TidalSearchAlbum {
+            id: 67890,
+            artists: vec![TidalSearchArtist {
+                id: 12345,
+                picture: None,
+                contains_cover: false,
+                r#type: "ARTIST".to_string(),
+                name: "Test Artist".to_string(),
+            }],
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            cover: Some("xyz-abc-def".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: Some("2024-01-15".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let search_result: ApiGlobalSearchResult = tidal_search_album.into();
+        match search_result {
+            ApiGlobalSearchResult::Album(result) => {
+                assert_eq!(result.album_id, Id::from(67890_u64));
+                assert_eq!(result.title, "Test Album");
+                assert_eq!(result.artist_id, Id::from(12345_u64));
+                assert_eq!(result.artist, "Test Artist");
+                assert!(result.contains_cover);
+            }
+            _ => panic!("Expected Album search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_track_to_search_result_conversion() {
+        let tidal_search_track = TidalSearchTrack {
+            id: 98765,
+            track_number: 3,
+            artists: vec![TidalSearchArtist {
+                id: 12345,
+                picture: None,
+                contains_cover: false,
+                r#type: "ARTIST".to_string(),
+                name: "Test Artist".to_string(),
+            }],
+            artist_cover: None,
+            album_id: 67890,
+            album: "Test Album".to_string(),
+            album_cover: Some("xyz-abc-def".to_string()),
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            duration: 180,
+            explicit: false,
+            isrc: "USRC12345678".to_string(),
+            popularity: 85,
+            title: "Test Track".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let search_result: ApiGlobalSearchResult = tidal_search_track.into();
+        match search_result {
+            ApiGlobalSearchResult::Track(result) => {
+                assert_eq!(result.track_id, Id::from(98765_u64));
+                assert_eq!(result.title, "Test Track");
+                assert_eq!(result.artist_id, Id::from(12345_u64));
+                assert_eq!(result.artist, "Test Artist");
+                assert_eq!(result.album_id, Id::from(67890_u64));
+                assert_eq!(result.album, "Test Album");
+                assert!(result.contains_cover);
+            }
+            _ => panic!("Expected Track search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_track_without_album_cover() {
+        let tidal_search_track = TidalSearchTrack {
+            id: 98765,
+            track_number: 1,
+            artists: vec![TidalSearchArtist {
+                id: 12345,
+                picture: None,
+                contains_cover: false,
+                r#type: "ARTIST".to_string(),
+                name: "Test Artist".to_string(),
+            }],
+            artist_cover: None,
+            album_id: 67890,
+            album: "Test Album".to_string(),
+            album_cover: None,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 240,
+            explicit: true,
+            isrc: "USRC87654321".to_string(),
+            popularity: 50,
+            title: "Test Track 2".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let search_result: ApiGlobalSearchResult = tidal_search_track.into();
+        match search_result {
+            ApiGlobalSearchResult::Track(result) => {
+                assert!(!result.contains_cover);
+            }
+            _ => panic!("Expected Track search result"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_search_results_concatenates_all_types() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![TidalSearchAlbum {
+                    id: 1,
+                    artists: vec![TidalSearchArtist {
+                        id: 100,
+                        picture: None,
+                        contains_cover: false,
+                        r#type: "ARTIST".to_string(),
+                        name: "Artist 1".to_string(),
+                    }],
+                    contains_cover: true,
+                    audio_quality: "LOSSLESS".to_string(),
+                    copyright: None,
+                    cover: None,
+                    duration: 3600,
+                    explicit: false,
+                    number_of_tracks: 10,
+                    popularity: 80,
+                    release_date: None,
+                    title: "Album 1".to_string(),
+                    media_metadata_tags: vec![],
+                }],
+                offset: 0,
+                limit: 10,
+                total: 1,
+            },
+            artists: TidalSearchResultList {
+                items: vec![TidalArtist {
+                    id: 200,
+                    picture: None,
+                    contains_cover: false,
+                    popularity: 70,
+                    name: "Artist 2".to_string(),
+                }],
+                offset: 0,
+                limit: 10,
+                total: 1,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![TidalSearchTrack {
+                    id: 300,
+                    track_number: 1,
+                    artists: vec![TidalSearchArtist {
+                        id: 100,
+                        picture: None,
+                        contains_cover: false,
+                        r#type: "ARTIST".to_string(),
+                        name: "Artist 1".to_string(),
+                    }],
+                    artist_cover: None,
+                    album_id: 1,
+                    album: "Album 1".to_string(),
+                    album_cover: None,
+                    audio_quality: "LOSSLESS".to_string(),
+                    copyright: None,
+                    duration: 180,
+                    explicit: false,
+                    isrc: "TEST12345".to_string(),
+                    popularity: 90,
+                    title: "Track 1".to_string(),
+                    media_metadata_tags: vec![],
+                }],
+                offset: 0,
+                limit: 10,
+                total: 1,
+            },
+            offset: 0,
+            limit: 10,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        assert_eq!(api_response.results.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_album_cover_url_none_when_no_cover() {
+        let album = TidalSearchAlbum {
+            id: 67890,
+            artists: vec![],
+            contains_cover: false,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: None,
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(album.cover_url(TidalAlbumImageSize::Max), None);
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_artist_picture_url_none_when_no_picture() {
+        let artist = TidalSearchArtist {
+            id: 12345,
+            picture: None,
+            contains_cover: false,
+            r#type: "ARTIST".to_string(),
+            name: "Test Artist".to_string(),
+        };
+
+        assert_eq!(artist.picture_url(TidalArtistImageSize::Max), None);
     }
 }
