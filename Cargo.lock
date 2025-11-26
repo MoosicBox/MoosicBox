@@ -8413,8 +8413,10 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_paging",
  "serde",
+ "serial_test",
  "switchy_async",
  "switchy_database",
+ "test-log",
  "tokio",
  "utoipa",
 ]
