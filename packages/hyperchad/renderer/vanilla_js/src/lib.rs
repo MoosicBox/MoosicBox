@@ -1259,6 +1259,37 @@ mod tests {
                 Arithmetic::Multiply(Value::Arithmetic(Box::new(inner)), Value::Real(3.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "1+2*3");
         }
+
+        #[test_log::test]
+        fn test_arithmetic_deeply_nested_grouping() {
+            // ((1 + 2) * 3)
+            let plus = Arithmetic::Plus(Value::Real(1.0), Value::Real(2.0));
+            let grouped_plus = Arithmetic::Grouping(Box::new(plus));
+            let mult =
+                Arithmetic::Multiply(Value::Arithmetic(Box::new(grouped_plus)), Value::Real(3.0));
+            let outer_group = Arithmetic::Grouping(Box::new(mult));
+            assert_eq!(arithmetic_to_js(&outer_group), "((1+2)*3)");
+        }
+
+        #[test_log::test]
+        fn test_arithmetic_with_calc_value() {
+            let calc = CalcValue::WidthPx {
+                target: ElementTarget::SelfTarget,
+            };
+            let arithmetic = Arithmetic::Plus(Value::Calc(calc), Value::Real(10.0));
+            let result = arithmetic_to_js(&arithmetic);
+            assert!(result.contains("clientWidth"));
+            assert!(result.contains("+10"));
+        }
+
+        #[test_log::test]
+        fn test_arithmetic_min_max_nested() {
+            // Math.min(Math.max(1, 2), 3)
+            let inner_max = Arithmetic::Max(Value::Real(1.0), Value::Real(2.0));
+            let outer_min =
+                Arithmetic::Min(Value::Arithmetic(Box::new(inner_max)), Value::Real(3.0));
+            assert_eq!(arithmetic_to_js(&outer_min), "Math.min(Math.max(1,2),3)");
+        }
     }
 
     #[cfg(test)]
@@ -1859,6 +1890,77 @@ mod tests {
             let expr = Expression::RawRust("alert('custom');".to_string());
             assert_eq!(expression_to_js(&expr), "alert('custom');");
         }
+
+        #[test_log::test]
+        fn test_expression_range_no_end() {
+            let expr = Expression::Range {
+                start: Some(Box::new(Expression::Literal(Literal::Integer(5)))),
+                end: None,
+                inclusive: false,
+            };
+            assert_eq!(expression_to_js(&expr), "ctx.range(5,0,false)");
+        }
+
+        #[test_log::test]
+        fn test_expression_call_no_args() {
+            let expr = Expression::Call {
+                function: "alert".to_string(),
+                args: vec![],
+            };
+            assert_eq!(expression_to_js(&expr), "alert()");
+        }
+
+        #[test_log::test]
+        fn test_expression_method_call_no_args() {
+            let expr = Expression::MethodCall {
+                receiver: Box::new(Expression::Variable("document".to_string())),
+                method: "close".to_string(),
+                args: vec![],
+            };
+            assert_eq!(expression_to_js(&expr), "document.close()");
+        }
+
+        #[test_log::test]
+        fn test_expression_nested_field_access() {
+            let expr = Expression::Field {
+                object: Box::new(Expression::Field {
+                    object: Box::new(Expression::Variable("a".to_string())),
+                    field: "b".to_string(),
+                }),
+                field: "c".to_string(),
+            };
+            assert_eq!(expression_to_js(&expr), "a.b.c");
+        }
+
+        #[test_log::test]
+        fn test_expression_complex_binary_chain() {
+            // Test (1 + 2) * (3 - 4)
+            let left = Expression::Binary {
+                left: Box::new(Expression::Literal(Literal::Integer(1))),
+                op: BinaryOp::Add,
+                right: Box::new(Expression::Literal(Literal::Integer(2))),
+            };
+            let right = Expression::Binary {
+                left: Box::new(Expression::Literal(Literal::Integer(3))),
+                op: BinaryOp::Subtract,
+                right: Box::new(Expression::Literal(Literal::Integer(4))),
+            };
+            let expr = Expression::Binary {
+                left: Box::new(left),
+                op: BinaryOp::Multiply,
+                right: Box::new(right),
+            };
+            assert_eq!(expression_to_js(&expr), "((1 + 2) * (3 - 4))");
+        }
+
+        #[test_log::test]
+        fn test_expression_unary_minus() {
+            let expr = Expression::Unary {
+                op: UnaryOp::Minus,
+                expr: Box::new(Expression::Literal(Literal::Integer(42))),
+            };
+            assert_eq!(expression_to_js(&expr), "(- 42)");
+        }
     }
 
     #[cfg(test)]
@@ -2191,6 +2293,154 @@ mod tests {
             let (result, reset) = action_to_js(&action, true);
             assert_eq!(result, "triggerAction({action:customAction()});");
             assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_custom_trigger_false() {
+            let action = ActionType::Custom {
+                action: "customAction()".to_string(),
+            };
+            let (result, reset) = action_to_js(&action, false);
+            assert_eq!(result, "{action:customAction()}");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_event_wraps_inner_action() {
+            let inner_action = ActionType::Log {
+                message: "event triggered".to_string(),
+                level: LogLevel::Info,
+            };
+            let action = ActionType::Event {
+                name: "myEvent".to_string(),
+                action: Box::new(inner_action),
+            };
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "console.log(`event triggered`);");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_multi_effect_empty() {
+            let action = ActionType::MultiEffect(vec![]);
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_multi_effect_single() {
+            let action = ActionType::MultiEffect(vec![ActionEffect {
+                action: ActionType::Log {
+                    message: "test".to_string(),
+                    level: LogLevel::Info,
+                },
+                throttle: None,
+                delay_off: None,
+                unique: None,
+            }]);
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "console.log(`test`);");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_multi_effect_with_reset() {
+            let action = ActionType::MultiEffect(vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::SelfTarget,
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                throttle: None,
+                delay_off: None,
+                unique: None,
+            }]);
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "ctx.ss([ctx.element],'visibility','hidden');");
+            assert!(reset.is_some());
+            assert!(
+                reset
+                    .unwrap()
+                    .contains("ctx.rs([ctx.element],'visibility');")
+            );
+        }
+
+        #[test_log::test]
+        fn test_action_multi_with_reset() {
+            let action = ActionType::Multi(vec![
+                ActionType::Style {
+                    target: ElementTarget::SelfTarget,
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                ActionType::Style {
+                    target: ElementTarget::SelfTarget,
+                    action: StyleAction::SetDisplay(false),
+                },
+            ]);
+            let (result, reset) = action_to_js(&action, true);
+            assert!(result.contains("visibility"));
+            assert!(result.contains("display"));
+            assert!(reset.is_some());
+            let reset_str = reset.unwrap();
+            assert!(reset_str.contains("visibility"));
+            assert!(reset_str.contains("display"));
+        }
+
+        #[test_log::test]
+        fn test_action_parameterized_trigger_false() {
+            let action = ActionType::Parameterized {
+                action: Box::new(ActionType::Custom {
+                    action: "someAction".to_string(),
+                }),
+                value: Value::Real(42.0),
+            };
+            let (result, reset) = action_to_js(&action, false);
+            // When trigger_action is false, it should not wrap with triggerAction()
+            assert!(!result.starts_with("triggerAction("));
+            assert!(result.contains("someAction"));
+            assert!(result.contains("42"));
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_logic_eq_mixed_equality_flags() {
+            // Test the case where equality flags differ, producing !== instead of ===
+            // Display(true) returns eq=false, Display(false) returns eq=true
+            let action = ActionType::Logic(If {
+                condition: Condition::Eq(Value::Display(true), Value::Display(false)),
+                actions: vec![ActionEffect {
+                    action: ActionType::NoOp,
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                }],
+                else_actions: vec![],
+            });
+            let (result, _) = action_to_js(&action, true);
+            // a_eq=false, b_eq=true, so a_eq != b_eq produces !==
+            assert!(result.contains("!=="), "Expected !== but got: {result}");
+        }
+
+        #[test_log::test]
+        fn test_action_logic_with_reset_produces_empty_reset_string() {
+            // Test that when any branch has actions with reset, we get Some("")
+            let action = ActionType::Logic(If {
+                condition: Condition::Bool(true),
+                actions: vec![ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::SelfTarget,
+                        action: StyleAction::SetVisibility(Visibility::Visible),
+                    },
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                }],
+                else_actions: vec![],
+            });
+            let (result, reset) = action_to_js(&action, true);
+            assert!(result.contains("if(true)"));
+            // Logic actions return Some("") when there are resets
+            assert_eq!(reset, Some(String::new()));
         }
     }
 
