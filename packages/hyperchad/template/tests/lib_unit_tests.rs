@@ -874,3 +874,648 @@ fn alpha_value_from_various_integer_types() {
     assert_eq!(AlphaValue::from(200_i64).to_u8(), 200);
     assert_eq!(AlphaValue::from(300_i64).to_u8(), 255);
 }
+
+// ============================================================================
+// RenderContainer additional type tests
+// ============================================================================
+
+#[test_log::test]
+fn render_container_cow_borrowed() {
+    use std::borrow::Cow;
+
+    let text: Cow<'_, str> = Cow::Borrowed("Borrowed text");
+    let mut containers = Vec::new();
+    text.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Borrowed text"
+    );
+}
+
+#[test_log::test]
+fn render_container_cow_owned() {
+    use std::borrow::Cow;
+
+    let text: Cow<'_, str> = Cow::Owned(String::from("Owned text"));
+    let mut containers = Vec::new();
+    text.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Owned text"
+    );
+}
+
+#[test_log::test]
+fn render_container_cow_empty() {
+    use std::borrow::Cow;
+
+    let text: Cow<'_, str> = Cow::Borrowed("");
+    let mut containers = Vec::new();
+    text.render_to(&mut containers).unwrap();
+
+    // Empty Cow strings should not add a container
+    assert_eq!(containers.len(), 0);
+}
+
+#[test_log::test]
+fn render_container_arguments() {
+    let value = 42;
+    let args = format_args!("Value is {}", value);
+    let mut containers = Vec::new();
+    args.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Value is 42"
+    );
+}
+
+#[test_log::test]
+fn render_container_render_method() {
+    // Test the render() method which creates a new Vec
+    let text = "Test render method";
+    let containers = text.render().unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Test render method"
+    );
+}
+
+#[test_log::test]
+fn render_container_render_to_string_method() {
+    // Test the render_to_string() method
+    let number = 12345_i32;
+    let result = number.render_to_string().unwrap();
+
+    assert_eq!(result, "12345");
+}
+
+// ============================================================================
+// ContainerList additional tests
+// ============================================================================
+
+#[test_log::test]
+fn container_list_into_iterator_owned() {
+    use hyperchad_template::container;
+
+    let containers = container! {
+        div { "Item 1" }
+        div { "Item 2" }
+    };
+
+    let list = ContainerList::new(containers);
+
+    // Test owned into_iter
+    let collected: Vec<_> = list.into_iter().collect();
+    assert_eq!(collected.len(), 2);
+}
+
+#[test_log::test]
+fn container_list_as_inner() {
+    use hyperchad_template::container;
+
+    let containers = container! {
+        div { "Content" }
+    };
+
+    let list = ContainerList::new(containers.clone());
+
+    // Test as_inner
+    let inner = list.as_inner();
+    assert_eq!(inner.len(), 1);
+    assert_eq!(inner, &containers);
+}
+
+#[test_log::test]
+fn container_list_into_string() {
+    use hyperchad_template::container;
+
+    let containers = container! {
+        div { "Inline" }
+    };
+
+    let list = ContainerList::new(containers);
+    let html = list.into_string();
+
+    assert!(html.contains("Inline"));
+}
+
+#[test_log::test]
+fn container_list_from_vec() {
+    use hyperchad_template::container;
+
+    let containers = container! {
+        div { "Test" }
+    };
+
+    let list: ContainerList = containers.clone().into();
+    let back: Vec<hyperchad_transformer::Container> = list.into();
+
+    assert_eq!(back, containers);
+}
+
+#[test_log::test]
+fn container_list_deref_mut() {
+    use hyperchad_template::container;
+
+    let containers = container! {
+        div { "Original" }
+    };
+
+    let mut list = ContainerList::new(containers);
+
+    // Test DerefMut - modify through deref
+    list.push(hyperchad_transformer::Container {
+        element: hyperchad_transformer::Element::Raw {
+            value: "Added".to_string(),
+        },
+        ..Default::default()
+    });
+
+    assert_eq!(list.len(), 2);
+}
+
+// ============================================================================
+// calc module - viewport unit preservation tests
+// ============================================================================
+
+#[test_log::test]
+fn calc_to_vw_number_already_vw() {
+    // Passing an IntegerVw should return it unchanged
+    let result = calc::to_vw_number(Number::IntegerVw(50));
+    assert_eq!(result, Number::IntegerVw(50));
+
+    // Passing a RealVw should return it unchanged
+    let result = calc::to_vw_number(Number::RealVw(75.5));
+    assert_eq!(result, Number::RealVw(75.5));
+}
+
+#[test_log::test]
+fn calc_to_vh_number_already_vh() {
+    // Passing an IntegerVh should return it unchanged
+    let result = calc::to_vh_number(Number::IntegerVh(100));
+    assert_eq!(result, Number::IntegerVh(100));
+
+    // Passing a RealVh should return it unchanged
+    let result = calc::to_vh_number(Number::RealVh(90.0));
+    assert_eq!(result, Number::RealVh(90.0));
+}
+
+#[test_log::test]
+fn calc_to_dvw_number_already_dvw() {
+    // Passing an IntegerDvw should return it unchanged
+    let result = calc::to_dvw_number(Number::IntegerDvw(80));
+    assert_eq!(result, Number::IntegerDvw(80));
+
+    // Passing a RealDvw should return it unchanged
+    let result = calc::to_dvw_number(Number::RealDvw(65.5));
+    assert_eq!(result, Number::RealDvw(65.5));
+}
+
+#[test_log::test]
+fn calc_to_dvh_number_already_dvh() {
+    // Passing an IntegerDvh should return it unchanged
+    let result = calc::to_dvh_number(Number::IntegerDvh(70));
+    assert_eq!(result, Number::IntegerDvh(70));
+
+    // Passing a RealDvh should return it unchanged
+    let result = calc::to_dvh_number(Number::RealDvh(55.5));
+    assert_eq!(result, Number::RealDvh(55.5));
+}
+
+#[test_log::test]
+fn calc_to_percent_number_already_percent() {
+    // Passing a RealPercent should return it unchanged
+    let result = calc::to_percent_number(Number::RealPercent(50.5));
+    assert_eq!(result, Number::RealPercent(50.5));
+}
+
+#[test_log::test]
+fn calc_to_vw_number_from_percent() {
+    // Converting a percentage to vw should use calc fallback
+    let result = calc::to_vw_number(Number::IntegerPercent(50));
+    // The result depends on the calc implementation
+    assert!(matches!(result, Number::RealVw(_)));
+}
+
+#[test_log::test]
+fn calc_add_numbers_dvw_units() {
+    // Test dvw addition
+    let result = calc::add_numbers(&Number::IntegerDvw(50), &Number::IntegerDvw(30));
+    assert_eq!(result, Number::IntegerDvw(80));
+
+    let result = calc::add_numbers(&Number::RealDvw(25.5), &Number::RealDvw(14.5));
+    assert_eq!(result, Number::RealDvw(40.0));
+
+    // Mixed integer/real dvw
+    let result = calc::add_numbers(&Number::IntegerDvw(50), &Number::RealDvw(25.5));
+    assert_eq!(result, Number::RealDvw(75.5));
+}
+
+#[test_log::test]
+fn calc_add_numbers_dvh_units() {
+    // Test dvh addition
+    let result = calc::add_numbers(&Number::IntegerDvh(60), &Number::IntegerDvh(20));
+    assert_eq!(result, Number::IntegerDvh(80));
+
+    let result = calc::add_numbers(&Number::RealDvh(35.5), &Number::RealDvh(24.5));
+    assert_eq!(result, Number::RealDvh(60.0));
+
+    // Mixed integer/real dvh
+    let result = calc::add_numbers(&Number::IntegerDvh(40), &Number::RealDvh(15.5));
+    assert_eq!(result, Number::RealDvh(55.5));
+}
+
+#[test_log::test]
+fn calc_subtract_numbers_dvw_units() {
+    let result = calc::subtract_numbers(&Number::IntegerDvw(100), &Number::IntegerDvw(30));
+    assert_eq!(result, Number::IntegerDvw(70));
+
+    let result = calc::subtract_numbers(&Number::RealDvw(80.5), &Number::RealDvw(30.5));
+    assert_eq!(result, Number::RealDvw(50.0));
+}
+
+#[test_log::test]
+fn calc_subtract_numbers_dvh_units() {
+    let result = calc::subtract_numbers(&Number::IntegerDvh(90), &Number::IntegerDvh(40));
+    assert_eq!(result, Number::IntegerDvh(50));
+
+    let result = calc::subtract_numbers(&Number::RealDvh(75.5), &Number::RealDvh(25.5));
+    assert_eq!(result, Number::RealDvh(50.0));
+}
+
+#[test_log::test]
+fn calc_divide_by_zero_integer_percent() {
+    // Test division by zero with percentage types
+    let result = calc::divide_numbers(&Number::IntegerPercent(100), &Number::Integer(0));
+    assert_eq!(result, Number::RealPercent(0.0));
+}
+
+#[test_log::test]
+fn calc_operations_different_units_fallback() {
+    // Test operations between incompatible units fall back to pixel calculation
+    let result = calc::add_numbers(&Number::IntegerVw(50), &Number::IntegerVh(50));
+    // Result should be Real (pixels) after conversion
+    assert!(matches!(result, Number::Real(_)));
+
+    let result = calc::subtract_numbers(&Number::IntegerPercent(100), &Number::IntegerVw(50));
+    assert!(matches!(result, Number::Real(_)));
+}
+
+// ============================================================================
+// unit_functions module - additional tests
+// ============================================================================
+
+#[test_log::test]
+fn unit_functions_vw_with_percent_input() {
+    // vw with a percent Number should convert via fallback
+    let result = unit_functions::vw(Number::IntegerPercent(50));
+    assert!(matches!(result, Number::RealVw(_)));
+}
+
+#[test_log::test]
+fn unit_functions_vh_with_vw_input() {
+    // vh with a vw Number should convert via fallback
+    let result = unit_functions::vh(Number::IntegerVw(50));
+    assert!(matches!(result, Number::RealVh(_)));
+}
+
+#[test_log::test]
+fn unit_functions_dvw_with_vh_input() {
+    // dvw with a vh Number should convert via fallback
+    let result = unit_functions::dvw(Number::IntegerVh(50));
+    assert!(matches!(result, Number::RealDvw(_)));
+}
+
+#[test_log::test]
+fn unit_functions_dvh_with_dvw_input() {
+    // dvh with a dvw Number should convert via fallback
+    let result = unit_functions::dvh(Number::IntegerDvw(50));
+    assert!(matches!(result, Number::RealDvh(_)));
+}
+
+// ============================================================================
+// ToBool trait tests
+// ============================================================================
+
+#[test_log::test]
+fn to_bool_for_bool() {
+    use hyperchad_template::ToBool;
+
+    assert!(true.to_bool());
+    assert!(!false.to_bool());
+}
+
+// ============================================================================
+// IntoActionEffect trait tests
+// ============================================================================
+
+#[test_log::test]
+fn into_action_effect_from_action_type() {
+    use hyperchad_actions::ActionType;
+    use hyperchad_template::IntoActionEffect;
+
+    let action_type = ActionType::NoOp;
+    let effect = IntoActionEffect::into_action_effect(action_type);
+
+    assert!(matches!(effect.action, ActionType::NoOp));
+}
+
+#[test_log::test]
+fn into_action_effect_from_action_effect() {
+    use hyperchad_actions::{ActionEffect, ActionType};
+    use hyperchad_template::IntoActionEffect;
+
+    let effect = ActionEffect {
+        action: ActionType::NoOp,
+        ..Default::default()
+    };
+    let converted = IntoActionEffect::into_action_effect(effect);
+
+    assert!(matches!(converted.action, ActionType::NoOp));
+}
+
+#[test_log::test]
+fn into_action_effect_from_vec_action_type() {
+    use hyperchad_actions::ActionType;
+    use hyperchad_template::IntoActionEffect;
+
+    let actions = vec![ActionType::NoOp, ActionType::NoOp];
+    let effect = actions.into_action_effect();
+
+    // Should create a MultiEffect wrapping the actions
+    match effect.action {
+        ActionType::MultiEffect(effects) => assert_eq!(effects.len(), 2),
+        _ => panic!("Expected MultiEffect"),
+    }
+}
+
+#[test_log::test]
+fn into_action_effect_from_vec_action_effect() {
+    use hyperchad_actions::{ActionEffect, ActionType};
+    use hyperchad_template::IntoActionEffect;
+
+    let effects = vec![
+        ActionEffect {
+            action: ActionType::NoOp,
+            ..Default::default()
+        },
+        ActionEffect {
+            action: ActionType::NoOp,
+            ..Default::default()
+        },
+    ];
+    let converted = effects.into_action_effect();
+
+    // Should create a MultiEffect
+    assert!(matches!(converted.action, ActionType::MultiEffect(_)));
+}
+
+#[test_log::test]
+fn into_action_effect_from_action() {
+    use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+    use hyperchad_template::IntoActionEffect;
+
+    let action = Action {
+        trigger: ActionTrigger::Click,
+        effect: ActionEffect {
+            action: ActionType::NoOp,
+            ..Default::default()
+        },
+    };
+    let effect = action.into_action_effect();
+
+    assert!(matches!(effect.action, ActionType::NoOp));
+}
+
+// ============================================================================
+// RenderContainer for Vec<Container> test
+// ============================================================================
+
+#[test_log::test]
+fn render_container_vec_container() {
+    use hyperchad_template::container;
+
+    let first = container! { div { "First" } };
+    let mut containers = Vec::new();
+    first.render_to(&mut containers).unwrap();
+
+    let second = container! { div { "Second" } };
+    second.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 2);
+}
+
+// ============================================================================
+// IntoBorder with u16 type tests
+// ============================================================================
+
+#[test_log::test]
+fn into_border_u16_color() {
+    let border = (Color::from_hex("#AABBCC"), 3_u16).into_border();
+    assert_eq!(border.0, Color::from_hex("#AABBCC"));
+    assert_eq!(border.1, Number::Integer(3));
+}
+
+#[test_log::test]
+fn into_border_color_u16_reversed() {
+    let border = (5_u16, Color::from_hex("#112233")).into_border();
+    assert_eq!(border.0, Color::from_hex("#112233"));
+    assert_eq!(border.1, Number::Integer(5));
+}
+
+#[test_log::test]
+fn into_border_u16_str() {
+    let border = (2_u16, "#DDEEFF").into_border();
+    assert_eq!(border.0, Color::from_hex("#DDEEFF"));
+    assert_eq!(border.1, Number::Integer(2));
+}
+
+#[test_log::test]
+fn into_border_str_u16() {
+    let border = ("#445566", 4_u16).into_border();
+    assert_eq!(border.0, Color::from_hex("#445566"));
+    assert_eq!(border.1, Number::Integer(4));
+}
+
+#[test_log::test]
+fn into_border_u16_string() {
+    let border = (3_u16, String::from("#778899")).into_border();
+    assert_eq!(border.0, Color::from_hex("#778899"));
+    assert_eq!(border.1, Number::Integer(3));
+}
+
+#[test_log::test]
+fn into_border_string_u16() {
+    let border = (String::from("#AABBCC"), 2_u16).into_border();
+    assert_eq!(border.0, Color::from_hex("#AABBCC"));
+    assert_eq!(border.1, Number::Integer(2));
+}
+
+// ============================================================================
+// IntoBorder with f64 type tests (cast truncation path)
+// ============================================================================
+
+#[test_log::test]
+fn into_border_f64_color() {
+    let border = (Color::from_hex("#123456"), 2.5_f64).into_border();
+    assert_eq!(border.0, Color::from_hex("#123456"));
+    assert_eq!(border.1, Number::Real(2.5_f32));
+}
+
+#[test_log::test]
+fn into_border_color_f64_reversed() {
+    let border = (3.5_f64, Color::from_hex("#654321")).into_border();
+    assert_eq!(border.0, Color::from_hex("#654321"));
+    assert_eq!(border.1, Number::Real(3.5_f32));
+}
+
+#[test_log::test]
+fn into_border_f64_str() {
+    let border = (1.5_f64, "#ABCDEF").into_border();
+    assert_eq!(border.0, Color::from_hex("#ABCDEF"));
+    assert_eq!(border.1, Number::Real(1.5_f32));
+}
+
+#[test_log::test]
+fn into_border_str_f64() {
+    let border = ("#FEDCBA", 2.5_f64).into_border();
+    assert_eq!(border.0, Color::from_hex("#FEDCBA"));
+    assert_eq!(border.1, Number::Real(2.5_f32));
+}
+
+#[test_log::test]
+fn into_border_f64_string() {
+    let border = (4.5_f64, String::from("#999999")).into_border();
+    assert_eq!(border.0, Color::from_hex("#999999"));
+    assert_eq!(border.1, Number::Real(4.5_f32));
+}
+
+#[test_log::test]
+fn into_border_string_f64() {
+    let border = (String::from("#888888"), 5.5_f64).into_border();
+    assert_eq!(border.0, Color::from_hex("#888888"));
+    assert_eq!(border.1, Number::Real(5.5_f32));
+}
+
+// ============================================================================
+// color_functions module - additional tests
+// ============================================================================
+
+#[test_log::test]
+fn color_alpha_value_from_owned_string() {
+    use color_functions::AlphaValue;
+
+    // Test From<String> implementation
+    let alpha = AlphaValue::from(String::from("75%"));
+    assert_eq!(alpha.to_u8(), 191);
+
+    let alpha = AlphaValue::from(String::from("0.5"));
+    assert_eq!(alpha.to_u8(), 128);
+}
+
+#[test_log::test]
+fn color_alpha_value_from_f64() {
+    use color_functions::AlphaValue;
+
+    // Test From<f64> implementation (cast truncation)
+    let alpha = AlphaValue::from(0.5_f64);
+    assert_eq!(alpha.to_u8(), 128);
+
+    let alpha = AlphaValue::from(1.0_f64);
+    assert_eq!(alpha.to_u8(), 255);
+}
+
+#[test_log::test]
+fn color_rgb_with_u16() {
+    // Test ToRgbValue for u16
+    let color = color_functions::rgb(200_u16, 150_u16, 100_u16);
+    assert_eq!(
+        color,
+        Color {
+            r: 200,
+            g: 150,
+            b: 100,
+            a: None
+        }
+    );
+}
+
+#[test_log::test]
+fn color_rgb_with_u32() {
+    // Test ToRgbValue for u32
+    let color = color_functions::rgb(255_u32, 128_u32, 64_u32);
+    assert_eq!(
+        color,
+        Color {
+            r: 255,
+            g: 128,
+            b: 64,
+            a: None
+        }
+    );
+}
+
+#[test_log::test]
+fn color_rgb_with_i64() {
+    // Test ToRgbValue for i64
+    let color = color_functions::rgb(100_i64, 200_i64, 50_i64);
+    assert_eq!(
+        color,
+        Color {
+            r: 100,
+            g: 200,
+            b: 50,
+            a: None
+        }
+    );
+
+    // Test clamping for i64
+    let color = color_functions::rgb(-50_i64, 300_i64, 128_i64);
+    assert_eq!(
+        color,
+        Color {
+            r: 0,
+            g: 255,
+            b: 128,
+            a: None
+        }
+    );
+}
+
+#[test_log::test]
+fn color_rgb_with_u16_clamping() {
+    // Test clamping for u16 values over 255
+    let color = color_functions::rgb(500_u16, 1000_u16, 100_u16);
+    assert_eq!(
+        color,
+        Color {
+            r: 255,
+            g: 255,
+            b: 100,
+            a: None
+        }
+    );
+}
+
+#[test_log::test]
+fn color_rgb_with_u32_clamping() {
+    // Test clamping for u32 values over 255
+    let color = color_functions::rgb(1000_u32, 500_u32, 100_u32);
+    assert_eq!(
+        color,
+        Color {
+            r: 255,
+            g: 255,
+            b: 100,
+            a: None
+        }
+    );
+}
