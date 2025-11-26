@@ -3192,4 +3192,765 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown method"));
     }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_toggle_visibility_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "toggle_visibility", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_visibility_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_toggle_visibility_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "toggle_visibility", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_set_visibility_with_correct_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Variable("Visibility::Hidden".to_string())];
+        let result = generate_action_for_id(&mut context, &id, "set_visibility", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("set_visibility_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_set_visibility_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "set_visibility", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_focus_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "focus", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("focus_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_focus_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "focus", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_get_visibility_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "get_visibility", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("get_visibility_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_select_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "select", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("select_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_display_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("display_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_no_display_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "no_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("no_display_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_toggle_display_no_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "toggle_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_display_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_set_display_with_correct_args() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Bool(true))];
+        let result = generate_action_for_id(&mut context, &id, "set_display", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("set_display_str_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_set_display_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let result = generate_action_for_id(&mut context, &id, "set_display", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_toggle_visibility_no_args() {
+        let mut context = Context::default();
+        let result =
+            generate_action_for_class(&mut context, "test-class", "toggle_visibility", &[])
+                .unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_visibility_str_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_set_visibility_with_correct_args() {
+        let mut context = Context::default();
+        let args = vec![Expression::Variable("Visibility::Hidden".to_string())];
+        let result =
+            generate_action_for_class(&mut context, "test-class", "set_visibility", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("set_visibility_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_focus_no_args() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "focus", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("focus_str_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_get_visibility_no_args() {
+        let mut context = Context::default();
+        let result =
+            generate_action_for_class(&mut context, "test-class", "get_visibility", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("get_visibility_str_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_select_no_args() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "select", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("select_str_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_display_no_args() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("display_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_no_display_no_args() {
+        let mut context = Context::default();
+        let result =
+            generate_action_for_class(&mut context, "test-class", "no_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("no_display_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_toggle_display_no_args() {
+        let mut context = Context::default();
+        let result =
+            generate_action_for_class(&mut context, "test-class", "toggle_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_display_str_class"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_set_display_with_correct_args() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Bool(true))];
+        let result =
+            generate_action_for_class(&mut context, "test-class", "set_display", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("set_display_class"));
+    }
+
+    #[test_log::test]
+    fn test_context_scope_push_and_pop_isolates_variables() {
+        let mut context = Context::default();
+        context.add_variable("outer");
+
+        // Manually push a new scope
+        context.scopes.push_front(Scope::default());
+        context.add_variable("inner");
+
+        // Inner scope should see both variables
+        assert!(context.is_variable_defined("outer"));
+        assert!(context.is_variable_defined("inner"));
+
+        // Pop the inner scope
+        context.scopes.pop_front();
+
+        // Should only see outer variable now
+        assert!(context.is_variable_defined("outer"));
+        assert!(!context.is_variable_defined("inner"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_range_with_start_and_end() {
+        let mut context = Context::default();
+        let expr = Expression::Range {
+            start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+            end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+            inclusive: false,
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains(".."));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_range_inclusive() {
+        let mut context = Context::default();
+        let expr = Expression::Range {
+            start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+            end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+            inclusive: true,
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("..="));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_range_without_start() {
+        let mut context = Context::default();
+        let expr = Expression::Range {
+            start: None,
+            end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+            inclusive: false,
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        // Should default to 0 for the start
+        assert!(result_str.contains('0'));
+        assert!(result_str.contains(".."));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_range_without_end_returns_error() {
+        let mut context = Context::default();
+        let expr = Expression::Range {
+            start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+            end: None,
+            inclusive: false,
+        };
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Range without end is not supported")
+        );
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_field_access() {
+        let mut context = Context::default();
+        let expr = Expression::Field {
+            object: Box::new(Expression::Variable("obj".to_string())),
+            field: "my_field".to_string(),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("obj"));
+        assert!(result_str.contains("my_field"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_if_with_else() {
+        let mut context = Context::default();
+        let expr = Expression::If {
+            condition: Box::new(Expression::Literal(Literal::Bool(true))),
+            then_branch: Box::new(Expression::Literal(Literal::Integer(1))),
+            else_branch: Some(Box::new(Expression::Literal(Literal::Integer(2)))),
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("if"));
+        assert!(result_str.contains("else"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_if_without_else() {
+        let mut context = Context::default();
+        let expr = Expression::If {
+            condition: Box::new(Expression::Literal(Literal::Bool(true))),
+            then_branch: Box::new(Expression::Literal(Literal::Integer(1))),
+            else_branch: None,
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("if"));
+        // Should have default else
+        assert!(result_str.contains("else { () }"));
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_equal() {
+        let result = generate_binary_op_code(&BinaryOp::Equal);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "==");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_not_equal() {
+        let result = generate_binary_op_code(&BinaryOp::NotEqual);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "!=");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_less() {
+        let result = generate_binary_op_code(&BinaryOp::Less);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "<");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_less_equal() {
+        let result = generate_binary_op_code(&BinaryOp::LessEqual);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "<=");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_greater() {
+        let result = generate_binary_op_code(&BinaryOp::Greater);
+        let result_str = result.to_string();
+        assert_eq!(result_str, ">");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_greater_equal() {
+        let result = generate_binary_op_code(&BinaryOp::GreaterEqual);
+        let result_str = result.to_string();
+        assert_eq!(result_str, ">=");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_bit_and() {
+        let result = generate_binary_op_code(&BinaryOp::BitAnd);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "&");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_bit_or() {
+        let result = generate_binary_op_code(&BinaryOp::BitOr);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "|");
+    }
+
+    #[test_log::test]
+    fn test_generate_binary_op_code_bit_xor() {
+        let result = generate_binary_op_code(&BinaryOp::BitXor);
+        let result_str = result.to_string();
+        assert_eq!(result_str, "^");
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_replaces_variable() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("value".to_string());
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::Call { function, args } => {
+                assert_eq!(function, "get_event_value");
+                assert!(args.is_empty());
+            }
+            _ => panic!("Expected Call expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_preserves_other_variables() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("other".to_string());
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::Variable(name) => {
+                assert_eq!(name, "other");
+            }
+            _ => panic!("Expected Variable expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_in_binary_expression() {
+        let mut context = Context::default();
+        let expr = Expression::Binary {
+            left: Box::new(Expression::Variable("value".to_string())),
+            op: BinaryOp::Equal,
+            right: Box::new(Expression::Literal(Literal::String("test".to_string()))),
+        };
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::Binary {
+                left,
+                op: _,
+                right: _,
+            } => match *left {
+                Expression::Call { function, args } => {
+                    assert_eq!(function, "get_event_value");
+                    assert!(args.is_empty());
+                }
+                _ => panic!("Expected Call expression in left"),
+            },
+            _ => panic!("Expected Binary expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_in_call_args() {
+        let mut context = Context::default();
+        let expr = Expression::Call {
+            function: "show".to_string(),
+            args: vec![Expression::Variable("value".to_string())],
+        };
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::Call { function, args } => {
+                assert_eq!(function, "show");
+                assert_eq!(args.len(), 1);
+                match &args[0] {
+                    Expression::Call {
+                        function: inner_fn, ..
+                    } => {
+                        assert_eq!(inner_fn, "get_event_value");
+                    }
+                    _ => panic!("Expected Call expression in args"),
+                }
+            }
+            _ => panic!("Expected Call expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_in_raw_rust() {
+        let mut context = Context::default();
+        let expr = Expression::RawRust("value + 1".to_string());
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::RawRust(code) => {
+                assert!(code.contains("get_event_value()"));
+            }
+            _ => panic!("Expected RawRust expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_preserves_literals() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::Integer(42));
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::Literal(Literal::Integer(n)) => {
+                assert_eq!(n, 42);
+            }
+            _ => panic!("Expected Integer literal"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_transform_closure_for_event_with_multiple_params_returns_error() {
+        let mut context = Context::default();
+        let params = vec!["x".to_string(), "y".to_string()];
+        let body = Expression::Variable("x".to_string());
+        let result = transform_closure_for_event(&mut context, &params, &body);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("exactly one parameter"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_ref_with_string_literal() {
+        let mut context = Context::default();
+        let expr = Expression::ElementRef(Box::new(Expression::Literal(Literal::String(
+            "#my-element".to_string(),
+        ))));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementRef"));
+        assert!(result_str.contains("my-element"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_ref_with_variable() {
+        let mut context = Context::default();
+        let expr = Expression::ElementRef(Box::new(Expression::Variable("element_id".to_string())));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementRef"));
+        assert!(result_str.contains("element_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_ref_with_invalid_expr_returns_error() {
+        let mut context = Context::default();
+        let expr = Expression::ElementRef(Box::new(Expression::Literal(Literal::Integer(42))));
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid element selector"));
+    }
+
+    #[test_log::test]
+    fn test_literal_or_stmt_with_integer() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::Integer(42));
+        let result = literal_or_stmt(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert_eq!(result_str, "42i64");
+    }
+
+    #[test_log::test]
+    fn test_literal_or_stmt_with_float() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::Float(2.5));
+        let result = literal_or_stmt(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("2.5"));
+    }
+
+    #[test_log::test]
+    fn test_literal_or_stmt_with_bool() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::Bool(true));
+        let result = literal_or_stmt(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert_eq!(result_str, "true");
+    }
+
+    #[test_log::test]
+    fn test_literal_or_stmt_with_string() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::String("hello".to_string()));
+        let result = literal_or_stmt(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("hello"));
+    }
+
+    #[test_log::test]
+    fn test_literal_or_stmt_with_complex_expr_uses_generate_expression_code() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("my_var".to_string());
+        let result = literal_or_stmt(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert_eq!(result_str, "my_var");
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_match_returns_noop() {
+        let mut context = Context::default();
+        let expr = Expression::Match {
+            expr: Box::new(Expression::Variable("x".to_string())),
+            arms: vec![],
+        };
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ActionType :: NoOp"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_binary_not_equal_returns_error() {
+        let mut context = Context::default();
+        let expr = Expression::Binary {
+            left: Box::new(Expression::Variable("x".to_string())),
+            op: BinaryOp::NotEqual,
+            right: Box::new(Expression::Variable("y".to_string())),
+        };
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("NotEqual operation is not yet supported")
+        );
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_binary_greater_returns_error() {
+        let mut context = Context::default();
+        let expr = Expression::Binary {
+            left: Box::new(Expression::Variable("x".to_string())),
+            op: BinaryOp::Greater,
+            right: Box::new(Expression::Variable("y".to_string())),
+        };
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Greater than operation is not yet supported")
+        );
+    }
+
+    #[test_log::test]
+    fn test_generate_statement_code_for_if_with_empty_then_block_and_true_condition() {
+        let mut context = Context::default();
+        let stmt = Statement::If {
+            condition: Expression::Literal(Literal::Bool(true)),
+            then_block: Block { statements: vec![] },
+            else_block: None,
+        };
+        let result = generate_statement_code(&mut context, &stmt).unwrap();
+        let result_str = result.to_string();
+        // Empty then block with true condition should return NoOp
+        assert!(result_str.contains("ActionEffect :: NoOp"));
+    }
+
+    #[test_log::test]
+    fn test_generate_statement_code_for_if_with_empty_else_block_and_false_condition() {
+        let mut context = Context::default();
+        let stmt = Statement::If {
+            condition: Expression::Literal(Literal::Bool(false)),
+            then_block: Block {
+                statements: vec![Statement::Expression(Expression::Call {
+                    function: "show".to_string(),
+                    args: vec![Expression::Literal(Literal::String("test".to_string()))],
+                })],
+            },
+            else_block: Some(Block { statements: vec![] }),
+        };
+        let result = generate_statement_code(&mut context, &stmt).unwrap();
+        let result_str = result.to_string();
+        // With false condition, should execute else block which is empty -> NoOp
+        assert!(result_str.contains("ActionEffect :: NoOp"));
+    }
+
+    #[test_log::test]
+    fn test_target_to_expr_with_defined_variable() {
+        let mut context = Context::default();
+        context.add_variable("my_target");
+        let expr = Expression::Variable("my_target".to_string());
+        let result = target_to_expr(&mut context, &expr, false).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Target :: reference"));
+    }
+
+    #[test_log::test]
+    fn test_target_to_expr_with_string_literal() {
+        let mut context = Context::default();
+        let expr = Expression::Literal(Literal::String("element-id".to_string()));
+        let result = target_to_expr(&mut context, &expr, false).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Target :: literal"));
+        assert!(result_str.contains("element-id"));
+    }
+
+    #[test_log::test]
+    fn test_target_to_expr_with_into_true() {
+        let mut context = Context::default();
+        let expr = Expression::Variable("some_var".to_string());
+        let result = target_to_expr(&mut context, &expr, true).unwrap();
+        let result_str = result.to_string();
+        // Test that the result contains `.into()` call
+        assert!(
+            result_str.contains("into"),
+            "Expected 'into' in: {result_str}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_divide_with_correct_args() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { value };
+        let args = vec![Expression::Literal(Literal::Integer(2))];
+        let result = generate_method_call_code(&mut context, &receiver, "divide", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("divide"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_divide_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { value };
+        let result = generate_method_call_code(&mut context, &receiver, "divide", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_clamp_with_correct_args() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { value };
+        let args = vec![
+            Expression::Literal(Literal::Integer(0)),
+            Expression::Literal(Literal::Integer(100)),
+        ];
+        let result = generate_method_call_code(&mut context, &receiver, "clamp", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("clamp"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_clamp_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { value };
+        let args = vec![Expression::Literal(Literal::Integer(0))];
+        let result = generate_method_call_code(&mut context, &receiver, "clamp", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 2 arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_delay_off_with_correct_args() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { action };
+        let args = vec![Expression::Literal(Literal::Integer(1000))];
+        let result =
+            generate_method_call_code(&mut context, &receiver, "delay_off", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("delay_off"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_throttle_with_correct_args() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { action };
+        let args = vec![Expression::Literal(Literal::Integer(30))];
+        let result = generate_method_call_code(&mut context, &receiver, "throttle", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("throttle"));
+    }
+
+    #[test_log::test]
+    fn test_generate_method_call_code_unknown_method_passes_through() {
+        let mut context = Context::default();
+        let receiver = quote::quote! { obj };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result =
+            generate_method_call_code(&mut context, &receiver, "custom_method", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("custom_method"));
+    }
 }
