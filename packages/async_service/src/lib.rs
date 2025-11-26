@@ -934,4 +934,259 @@ mod test {
         handle1.shutdown().unwrap();
         join.await.unwrap().unwrap();
     }
+
+    // Test async_service_sequential! with custom error type (3-argument form)
+    mod sequential_with_custom_error {
+        #[derive(Debug, thiserror::Error)]
+        pub enum ProcessError {
+            #[error("Custom processing error: {0}")]
+            Custom(String),
+        }
+
+        async_service_sequential!(
+            crate::test::ExampleCommand,
+            crate::test::ExampleContext,
+            ProcessError
+        );
+    }
+
+    #[async_trait]
+    impl sequential_with_custom_error::Processor for sequential_with_custom_error::Service {
+        type Error = sequential_with_custom_error::Error;
+
+        async fn process_command(
+            ctx: Arc<RwLock<ExampleContext>>,
+            command: ExampleCommand,
+        ) -> Result<(), Self::Error> {
+            match command {
+                ExampleCommand::TestCommand { value } => {
+                    if value == "fail" {
+                        return Err(sequential_with_custom_error::ProcessError::Custom(
+                            "intentional failure".to_string(),
+                        )
+                        .into());
+                    }
+                    ctx.write().await.value.clone_from(&value);
+                }
+                ExampleCommand::TestCommand2 => {
+                    assert_eq!(ctx.read().await.value, "hey".to_string());
+                }
+            }
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn sequential_service_with_custom_error_processes_commands() {
+        use sequential_with_custom_error::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = sequential_with_custom_error::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.with_name("sequential_custom_error_test").start();
+
+        // Send successful command
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "hey".into(),
+            })
+            .await
+            .unwrap();
+
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand2)
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn sequential_service_handles_process_error_gracefully() {
+        use sequential_with_custom_error::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = sequential_with_custom_error::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.start();
+
+        // Send command that will fail - service should continue running
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "fail".into(),
+            })
+            .await
+            .unwrap();
+
+        // Service should still be able to process commands after an error
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "recovery".into(),
+            })
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
+
+    // Test async_service! with custom error type (3-argument form)
+    mod concurrent_with_custom_error {
+        #[derive(Debug, thiserror::Error)]
+        pub enum ProcessError {
+            #[error("Concurrent processing error: {0}")]
+            Concurrent(String),
+        }
+
+        async_service!(
+            crate::test::ExampleCommand,
+            crate::test::ExampleContext,
+            ProcessError
+        );
+    }
+
+    #[async_trait]
+    impl concurrent_with_custom_error::Processor for concurrent_with_custom_error::Service {
+        type Error = concurrent_with_custom_error::Error;
+
+        async fn process_command(
+            ctx: Arc<RwLock<ExampleContext>>,
+            command: ExampleCommand,
+        ) -> Result<(), Self::Error> {
+            match command {
+                ExampleCommand::TestCommand { value } => {
+                    if value == "fail" {
+                        return Err(concurrent_with_custom_error::ProcessError::Concurrent(
+                            "intentional failure".to_string(),
+                        )
+                        .into());
+                    }
+                    ctx.write().await.value.clone_from(&value);
+                }
+                ExampleCommand::TestCommand2 => {}
+            }
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn concurrent_service_with_custom_error_processes_commands() {
+        use concurrent_with_custom_error::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = concurrent_with_custom_error::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.with_name("concurrent_custom_error_test").start();
+
+        // Send successful commands
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "test".into(),
+            })
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn concurrent_service_handles_process_error_gracefully() {
+        use concurrent_with_custom_error::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = concurrent_with_custom_error::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.start();
+
+        // Send command that will fail - service should continue running
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "fail".into(),
+            })
+            .await
+            .unwrap();
+
+        // Service should still be able to process commands after an error
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "recovery".into(),
+            })
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn send_command_and_wait_async_on_works() {
+        use example::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = example::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.start();
+
+        // Use send_command_and_wait_async_on with explicit runtime handle
+        let runtime_handle = switchy_async::runtime::Handle::current();
+        handle
+            .send_command_and_wait_async_on(
+                ExampleCommand::TestCommand {
+                    value: "hey".into(),
+                },
+                &runtime_handle,
+            )
+            .await
+            .unwrap();
+
+        handle
+            .send_command_and_wait_async_on(ExampleCommand::TestCommand2, &runtime_handle)
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn start_on_with_explicit_handle_works() {
+        use sequential_example::Commander;
+
+        let ctx = ExampleContext {
+            value: "start".into(),
+        };
+        let service = sequential_example::Service::new(ctx);
+        let handle = service.handle();
+
+        // Use start_on with explicit runtime handle
+        let runtime_handle = switchy_async::runtime::Handle::current();
+        let join = service.with_name("start_on_test").start_on(&runtime_handle);
+
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "hey".into(),
+            })
+            .await
+            .unwrap();
+
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand2)
+            .await
+            .unwrap();
+
+        handle.shutdown().unwrap();
+        join.await.unwrap().unwrap();
+    }
 }
