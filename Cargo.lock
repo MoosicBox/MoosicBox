@@ -8295,6 +8295,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "switchy_env",
+ "test-log",
 ]
 
 [[package]]
