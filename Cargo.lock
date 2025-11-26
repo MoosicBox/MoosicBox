@@ -6010,6 +6010,7 @@ dependencies = [
  "switchy_async",
  "switchy_env",
  "switchy_http",
+ "test-log",
  "tracing-subscriber",
  "tracy-client",
 ]
