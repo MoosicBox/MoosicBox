@@ -420,4 +420,168 @@ mod tests {
 
         assert!(!visible);
     }
+
+    #[test_log::test]
+    fn test_viewport_listener_distance_change_threshold() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        };
+
+        // Widget outside viewport - will have distance > 0
+        let mut listener = ViewportListener::new(Some(viewport), 200.0, 200.0, 50.0, 50.0);
+
+        // Initial check
+        let ((visible, _), (initial_dist, _)) = listener.check();
+        assert!(!visible);
+        assert!(initial_dist > 0.0);
+
+        // Second check with same position - distance should not be reported as changed
+        // because the change threshold is 0.01
+        let ((_, _), (_, prev_dist)) = listener.check();
+        assert!(
+            prev_dist.is_none(),
+            "Distance change below threshold should not report previous distance"
+        );
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_distance_change_above_threshold() {
+        // Widget outside viewport - will have distance > 0
+        let mut listener = ViewportListener::new(
+            Some(Viewport {
+                parent: None,
+                pos: Pos {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+                viewport: Pos {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+            }),
+            200.0,
+            200.0,
+            50.0,
+            50.0,
+        );
+
+        // Initial check
+        let ((_, _), (initial_dist, _)) = listener.check();
+        assert!(initial_dist > 0.0);
+
+        // Move viewport significantly to change distance
+        listener.viewport = Some(Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 150.0,
+                y: 150.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        });
+
+        // Check again - distance should have changed significantly
+        let ((_, _), (new_dist, prev_dist)) = listener.check();
+        assert!(
+            prev_dist.is_some(),
+            "Significant distance change should report previous distance"
+        );
+        assert!(
+            (new_dist - initial_dist).abs() > 0.01,
+            "Distance should have changed significantly"
+        );
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_visibility_toggle_back_and_forth() {
+        let mut listener = ViewportListener::new(
+            Some(Viewport {
+                parent: None,
+                pos: Pos {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+                viewport: Pos {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+            }),
+            10.0,
+            10.0,
+            50.0,
+            50.0,
+        );
+
+        // Initial check - should be visible
+        let ((visible, _), _) = listener.check();
+        assert!(visible);
+
+        // Move to not visible
+        listener.viewport = Some(Viewport {
+            parent: None,
+            pos: Pos {
+                x: 500.0,
+                y: 500.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 500.0,
+                y: 500.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        });
+
+        let ((visible, prev_visible), _) = listener.check();
+        assert!(!visible);
+        assert_eq!(prev_visible, Some(true));
+
+        // Move back to visible
+        listener.viewport = Some(Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        });
+
+        let ((visible, prev_visible), _) = listener.check();
+        assert!(visible);
+        assert_eq!(prev_visible, Some(false));
+    }
 }
