@@ -668,3 +668,196 @@ impl From<DslValue> for ActionEffect {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============================================
+    // ElementReference::parse_selector tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_parse_selector_id_with_hash() {
+        let element_ref = ElementReference {
+            selector: "#my-element".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        assert_eq!(parsed, ParsedSelector::Id("my-element".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_class_with_dot() {
+        let element_ref = ElementReference {
+            selector: ".my-class".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        assert_eq!(parsed, ParsedSelector::Class("my-class".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_bare_string_as_id() {
+        // Bare string without prefix should be treated as ID for backward compatibility
+        let element_ref = ElementReference {
+            selector: "my-element-id".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        assert_eq!(parsed, ParsedSelector::Id("my-element-id".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_empty_string() {
+        let element_ref = ElementReference {
+            selector: String::new(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        assert_eq!(parsed, ParsedSelector::Invalid);
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_hash_only() {
+        let element_ref = ElementReference {
+            selector: "#".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        // "#" parses as ID with empty string
+        assert_eq!(parsed, ParsedSelector::Id(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_dot_only() {
+        let element_ref = ElementReference {
+            selector: ".".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        // "." parses as Class with empty string
+        assert_eq!(parsed, ParsedSelector::Class(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_parse_selector_special_characters() {
+        let element_ref = ElementReference {
+            selector: "#element-with-dash_and_underscore".to_string(),
+        };
+
+        let parsed = element_ref.parse_selector();
+
+        assert_eq!(
+            parsed,
+            ParsedSelector::Id("element-with-dash_and_underscore".to_string())
+        );
+    }
+
+    // ============================================
+    // ActionEffect From<DslValue> tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_action() {
+        let action_effect = ActionEffect {
+            action: ActionType::NoOp,
+            delay_off: Some(100),
+            throttle: Some(200),
+            unique: Some(true),
+        };
+        let dsl_value = DslValue::Action(action_effect);
+
+        let result: ActionEffect = dsl_value.into();
+
+        assert_eq!(result.action, ActionType::NoOp);
+        assert_eq!(result.delay_off, Some(100));
+        assert_eq!(result.throttle, Some(200));
+        assert_eq!(result.unique, Some(true));
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_element_ref() {
+        let element_ref = ElementReference {
+            selector: "#my-element".to_string(),
+        };
+        let dsl_value = DslValue::ElementRef(element_ref);
+
+        let result: ActionEffect = dsl_value.into();
+
+        match result.action {
+            ActionType::Custom { action } => {
+                assert_eq!(action, "element_ref:#my-element");
+            }
+            _ => panic!("Expected Custom action type"),
+        }
+        assert_eq!(result.delay_off, None);
+        assert_eq!(result.throttle, None);
+        assert_eq!(result.unique, None);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_non_action() {
+        // Non-action DslValues should convert to NoOp
+        let dsl_value = DslValue::String("test".to_string());
+
+        let result: ActionEffect = dsl_value.into();
+
+        assert_eq!(result.action, ActionType::NoOp);
+        assert_eq!(result.delay_off, None);
+        assert_eq!(result.throttle, None);
+        assert_eq!(result.unique, None);
+    }
+
+    // ============================================
+    // ElementVariable tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_element_variable_creates_target_ref_not_literal() {
+        // The key behavior of ElementVariable is that it creates Target::Ref
+        // rather than Target::Literal, enabling runtime resolution of element names
+        let element_var = ElementVariable {
+            name: "my-element".to_string(),
+        };
+
+        // Test style action uses Ref target
+        let style_action = element_var.clone().show();
+        match style_action {
+            ActionType::Style { target, .. } => {
+                match target {
+                    ElementTarget::StrId(target_ref) => {
+                        // Verify it's a Ref (not Literal) and contains the variable name
+                        assert!(
+                            matches!(&target_ref, Target::Ref(name) if name == "my-element"),
+                            "Expected Target::Ref with variable name, got {target_ref:?}",
+                        );
+                    }
+                    _ => panic!("Expected ElementTarget::StrId"),
+                }
+            }
+            _ => panic!("Expected Style action"),
+        }
+
+        // Test input action also uses Ref target
+        let input_action = element_var.select();
+        match input_action {
+            ActionType::Input(crate::InputActionType::Select { target }) => match target {
+                ElementTarget::StrId(target_ref) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "my-element"),
+                        "Expected Target::Ref with variable name, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected ElementTarget::StrId"),
+            },
+            _ => panic!("Expected Input Select action"),
+        }
+    }
+}
