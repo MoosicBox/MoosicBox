@@ -322,4 +322,50 @@ mod tests {
         let dt = parse_date_time("9999-12-31").unwrap();
         assert_eq!(dt.to_string(), "9999-12-31 00:00:00");
     }
+
+    // Additional edge case tests for year-only parsing
+    #[test_log::test]
+    fn test_parse_year_only_two_digit() {
+        // Two-digit years should work since they parse as valid u16
+        let dt = parse_date_time("99").unwrap();
+        assert_eq!(dt.year(), 99);
+    }
+
+    #[test_log::test]
+    fn test_parse_year_only_three_digit() {
+        // Three-digit years should work
+        let dt = parse_date_time("123").unwrap();
+        assert_eq!(dt.year(), 123);
+    }
+
+    #[test_log::test]
+    fn test_parse_year_zero() {
+        // Chrono uses the proleptic Gregorian calendar which includes year 0
+        // (equivalent to 1 BCE in historical notation)
+        let dt = parse_date_time("0").unwrap();
+        assert_eq!(dt.year(), 0);
+    }
+
+    // Tests for timezone edge cases
+    #[test_log::test]
+    fn test_parse_iso_datetime_lowercase_z() {
+        // Only uppercase 'Z' is supported, lowercase 'z' should fail
+        let result = parse_date_time("2024-10-24T12:30:45z");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_parse_iso_datetime_non_utc_timezone() {
+        // Only +00:00 timezone is explicitly supported
+        // Other timezones like -05:00 should fail
+        let result = parse_date_time("2024-10-24T12:30:45.123-05:00");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_parse_iso_datetime_positive_non_utc_timezone() {
+        // Positive non-UTC offset like +05:30 should also fail
+        let result = parse_date_time("2024-10-24T12:30:45.123+05:30");
+        assert!(result.is_err());
+    }
 }
