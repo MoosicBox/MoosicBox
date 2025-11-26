@@ -1325,4 +1325,53 @@ mod tests {
         assert_eq!(builder.width, cloned.width);
         assert_eq!(builder.height, cloned.height);
     }
+
+    #[test_log::test]
+    fn test_app_builder_build_default_stub() {
+        use crate::renderer::stub::StubRenderer;
+
+        let router = Router::new();
+        let result = AppBuilder::new().with_router(router).build_default_stub();
+        assert!(result.is_ok());
+
+        let app = result.unwrap();
+        assert!(matches!(app.renderer, StubRenderer));
+    }
+
+    #[test_log::test]
+    fn test_app_builder_build_stub() {
+        use crate::renderer::stub::StubRenderer;
+
+        let router = Router::new();
+        let result = AppBuilder::new()
+            .with_router(router)
+            .build_stub(StubRenderer);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_stub_runner_run() {
+        use crate::renderer::stub::StubRunner;
+        use hyperchad_renderer::RenderRunner;
+
+        let mut runner = StubRunner;
+        let result = runner.run();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_app_builder_with_runtime_handle() {
+        let router = Router::new();
+        let runtime = switchy::unsync::runtime::Builder::new()
+            .max_blocking_threads(1)
+            .build()
+            .expect("Failed to build runtime");
+        let handle = runtime.handle();
+
+        let builder = AppBuilder::new()
+            .with_router(router)
+            .with_runtime_handle(handle);
+
+        assert!(builder.runtime_handle.is_some());
+    }
 }
