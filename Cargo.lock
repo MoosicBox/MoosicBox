@@ -15531,6 +15531,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "flume",
+ "futures",
  "log 0.4.28",
  "paste",
  "pretty_assertions",
