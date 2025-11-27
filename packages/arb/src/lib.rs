@@ -1,6 +1,6 @@
 //! Arbitrary value generators for property-based testing.
 //!
-//! This crate provides [`quickcheck::Arbitrary`] implementations for various
+//! This crate provides [`proptest::arbitrary::Arbitrary`] implementations for various
 //! domain-specific types used in testing, including CSS identifiers, XML strings,
 //! and JSON-compatible values.
 

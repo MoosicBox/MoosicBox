@@ -17,30 +17,24 @@ tests    = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
+[package.metadata.cargo-machete]
+ignored = ["proptest"]
+
 [dependencies]
-moosicbox_arb = { workspace = true, optional = true, features = [
-    "serde",
-    "xml",
-] }
 moosicbox_assert = { workspace = true }
 
-log        = { workspace = true }
-quickcheck = { workspace = true, optional = true }
-serde      = { workspace = true, optional = true }
-thiserror  = { workspace = true }
-
-[dev-dependencies]
-moosicbox_arb = { workspace = true, features = ["serde", "xml"] }
+log           = { workspace = true }
+proptest      = { workspace = true, optional = true }
+serde         = { workspace = true, optional = true }
+test-strategy = { workspace = true, optional = true }
+thiserror     = { workspace = true }
 
 [features]
 default = ["arb", "layout", "serde"]
 
-fail-on-warnings = [
-    "moosicbox_arb?/fail-on-warnings",
-    "moosicbox_assert/fail-on-warnings",
-]
+fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
-arb    = ["dep:moosicbox_arb", "dep:quickcheck"]
+arb    = ["dep:proptest", "dep:test-strategy"]
 layout = []
 
-serde = ["dep:serde", "moosicbox_arb?/serde"]
+serde = ["dep:serde"]

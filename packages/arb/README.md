@@ -9,7 +9,7 @@ The MoosicBox ARB package provides:
 - **XML Generation**: Arbitrary XML string and attribute generation
 - **CSS Generation**: CSS-safe string generation for testing
 - **Serde Integration**: Serialization testing utilities
-- **QuickCheck Integration**: Property-based testing support
+- **Proptest Integration**: Property-based testing support
 
 ## Features
 
@@ -52,17 +52,19 @@ moosicbox_arb = {
 
 ```rust
 use moosicbox_arb::xml::{XmlString, XmlAttrNameString, is_valid_xml_char};
-use quickcheck::{quickcheck, TestResult};
+use proptest::prelude::*;
 
-quickcheck! {
-    fn valid_xml_strings(xml_str: XmlString) -> TestResult {
+proptest! {
+    #[test]
+    fn valid_xml_strings(xml_str: XmlString) {
         // All characters in XmlString are valid XML characters
-        TestResult::from_bool(xml_str.0.chars().all(is_valid_xml_char))
+        prop_assert!(xml_str.0.chars().all(is_valid_xml_char));
     }
 
-    fn valid_xml_attributes(attr: XmlAttrNameString) -> TestResult {
+    #[test]
+    fn valid_xml_attributes(attr: XmlAttrNameString) {
         // XML attribute names are alphanumeric with dashes/underscores
-        TestResult::from_bool(!attr.0.is_empty())
+        prop_assert!(!attr.0.is_empty());
     }
 }
 ```
@@ -71,12 +73,13 @@ quickcheck! {
 
 ```rust
 use moosicbox_arb::css::CssIdentifierString;
-use quickcheck::{quickcheck, TestResult};
+use proptest::prelude::*;
 
-quickcheck! {
-    fn valid_css_identifiers(css_id: CssIdentifierString) -> TestResult {
+proptest! {
+    #[test]
+    fn valid_css_identifiers(css_id: CssIdentifierString) {
         // CSS identifiers are non-empty alphanumeric strings
-        TestResult::from_bool(!css_id.0.is_empty())
+        prop_assert!(!css_id.0.is_empty());
     }
 }
 ```
@@ -85,15 +88,17 @@ quickcheck! {
 
 ```rust
 use moosicbox_arb::serde::{JsonValue, JsonF64, JsonF32};
-use quickcheck::quickcheck;
+use proptest::prelude::*;
 
-quickcheck! {
-    fn json_f64_is_finite(num: JsonF64) -> bool {
-        num.0.is_finite()
+proptest! {
+    #[test]
+    fn json_f64_is_finite(num: JsonF64) {
+        prop_assert!(num.0.is_finite());
     }
 
-    fn json_f32_is_finite(num: JsonF32) -> bool {
-        num.0.is_finite()
+    #[test]
+    fn json_f32_is_finite(num: JsonF32) {
+        prop_assert!(num.0.is_finite());
     }
 }
 ```
@@ -107,7 +112,7 @@ quickcheck! {
 
 ## Dependencies
 
-- **quickcheck**: Property-based testing framework (required)
+- **proptest**: Property-based testing framework (required)
 - **log**: Logging framework (required)
 - **serde_json**: JSON serialization support (optional, enabled with `serde` feature)
 - **moosicbox_assert**: Internal assertion utilities (required)

@@ -1933,13 +1933,205 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
 #[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 mod test {
     use pretty_assertions::assert_eq;
-    use quickcheck_macros::quickcheck;
+    use proptest::prelude::*;
 
     use crate::Container;
     use hyperchad_transformer_models::FontWeight;
 
+    /// Module for diff generation between Container values.
+    ///
+    /// Uses the existing `PartialEq` implementations which already handle semantic
+    /// equality for `Number` types (e.g., `Real(0.0)` == `Integer(0)`).
+    mod semantic_diff {
+        use crate::Container;
+
+        /// A difference found between two Containers.
+        #[derive(Debug)]
+        pub struct Diff {
+            pub path: String,
+            pub left: String,
+            pub right: String,
+        }
+
+        impl std::fmt::Display for Diff {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}: {} vs {}", self.path, self.left, self.right)
+            }
+        }
+
+        /// Collect all differences between two Containers.
+        pub fn diff_containers(left: &Container, right: &Container) -> Vec<Diff> {
+            diff_containers_inner(left, right, String::new())
+        }
+
+        fn diff_containers_inner(left: &Container, right: &Container, prefix: String) -> Vec<Diff> {
+            let mut diffs = Vec::new();
+
+            macro_rules! check_field {
+                ($field:ident) => {
+                    if left.$field != right.$field {
+                        diffs.push(Diff {
+                            path: if prefix.is_empty() {
+                                stringify!($field).to_string()
+                            } else {
+                                format!("{}.{}", prefix, stringify!($field))
+                            },
+                            left: format!("{:?}", left.$field),
+                            right: format!("{:?}", right.$field),
+                        });
+                    }
+                };
+            }
+
+            // All fields use the same check - PartialEq handles semantic equality
+            check_field!(id);
+            check_field!(str_id);
+            check_field!(classes);
+            check_field!(data);
+            check_field!(element);
+            check_field!(direction);
+            check_field!(overflow_x);
+            check_field!(overflow_y);
+            check_field!(grid_cell_size);
+            check_field!(justify_content);
+            check_field!(align_items);
+            check_field!(text_align);
+            check_field!(white_space);
+            check_field!(text_decoration);
+            check_field!(font_family);
+            check_field!(font_weight);
+            check_field!(width);
+            check_field!(min_width);
+            check_field!(max_width);
+            check_field!(height);
+            check_field!(min_height);
+            check_field!(max_height);
+            check_field!(flex);
+            check_field!(column_gap);
+            check_field!(row_gap);
+            check_field!(opacity);
+            check_field!(left);
+            check_field!(right);
+            check_field!(top);
+            check_field!(bottom);
+            check_field!(translate_x);
+            check_field!(translate_y);
+            check_field!(cursor);
+            check_field!(user_select);
+            check_field!(overflow_wrap);
+            check_field!(text_overflow);
+            check_field!(position);
+            check_field!(background);
+            check_field!(border_top);
+            check_field!(border_right);
+            check_field!(border_bottom);
+            check_field!(border_left);
+            check_field!(border_top_left_radius);
+            check_field!(border_top_right_radius);
+            check_field!(border_bottom_left_radius);
+            check_field!(border_bottom_right_radius);
+            check_field!(margin_left);
+            check_field!(margin_right);
+            check_field!(margin_top);
+            check_field!(margin_bottom);
+            check_field!(padding_left);
+            check_field!(padding_right);
+            check_field!(padding_top);
+            check_field!(padding_bottom);
+            check_field!(font_size);
+            check_field!(color);
+            check_field!(state);
+            check_field!(route);
+            check_field!(hidden);
+            check_field!(debug);
+            check_field!(visibility);
+
+            // Actions - compare element by element for better diff reporting
+            if left.actions.len() == right.actions.len() {
+                for (i, (la, ra)) in left.actions.iter().zip(&right.actions).enumerate() {
+                    if la != ra {
+                        diffs.push(Diff {
+                            path: if prefix.is_empty() {
+                                format!("actions[{i}]")
+                            } else {
+                                format!("{prefix}.actions[{i}]")
+                            },
+                            left: format!("{la:?}"),
+                            right: format!("{ra:?}"),
+                        });
+                    }
+                }
+            } else {
+                diffs.push(Diff {
+                    path: if prefix.is_empty() {
+                        "actions.len".to_string()
+                    } else {
+                        format!("{prefix}.actions.len")
+                    },
+                    left: format!("{}", left.actions.len()),
+                    right: format!("{}", right.actions.len()),
+                });
+            }
+
+            // Overrides - compare element by element for better diff reporting
+            if left.overrides.len() == right.overrides.len() {
+                for (i, (lo, ro)) in left.overrides.iter().zip(&right.overrides).enumerate() {
+                    if lo != ro {
+                        diffs.push(Diff {
+                            path: if prefix.is_empty() {
+                                format!("overrides[{i}]")
+                            } else {
+                                format!("{prefix}.overrides[{i}]")
+                            },
+                            left: format!("{lo:?}"),
+                            right: format!("{ro:?}"),
+                        });
+                    }
+                }
+            } else {
+                diffs.push(Diff {
+                    path: if prefix.is_empty() {
+                        "overrides.len".to_string()
+                    } else {
+                        format!("{prefix}.overrides.len")
+                    },
+                    left: format!("{}", left.overrides.len()),
+                    right: format!("{}", right.overrides.len()),
+                });
+            }
+
+            // Children - recurse for detailed diff reporting
+            if left.children.len() == right.children.len() {
+                for (i, (lc, rc)) in left.children.iter().zip(&right.children).enumerate() {
+                    let child_prefix = if prefix.is_empty() {
+                        format!("children[{i}]")
+                    } else {
+                        format!("{prefix}.children[{i}]")
+                    };
+                    diffs.extend(diff_containers_inner(lc, rc, child_prefix));
+                }
+            } else {
+                diffs.push(Diff {
+                    path: if prefix.is_empty() {
+                        "children.len".to_string()
+                    } else {
+                        format!("{prefix}.children.len")
+                    },
+                    left: format!("{}", left.children.len()),
+                    right: format!("{}", right.children.len()),
+                });
+            }
+
+            diffs
+        }
+    }
+
     fn clean_up_container(container: &mut Container) {
         container.id = 0;
+
+        // Overrides are only serialized when logic feature is enabled
+        #[cfg(not(feature = "logic"))]
+        container.overrides.clear();
 
         let mut i = 0;
         let actions = container.actions.clone();
@@ -1967,6 +2159,26 @@ mod test {
             .overrides
             .sort_by(|a, b| format!("{:?}", a.condition).cmp(&format!("{:?}", b.condition)));
 
+        // Normalize override defaults to match base values.
+        // During serialization, if config.default is None, the base value is used.
+        // This ensures round-trip consistency.
+        // We collect the updates first to avoid borrow conflicts.
+        let default_updates: Vec<_> = container
+            .overrides
+            .iter()
+            .enumerate()
+            .filter_map(|(i, config)| {
+                config.overrides.first().map(|first| {
+                    let base_value = container.get_base_value_for_override(first);
+                    (i, base_value)
+                })
+            })
+            .collect();
+
+        for (i, default) in default_updates {
+            container.overrides[i].default = default;
+        }
+
         // Clear children for elements that don't allow them
         if !container.element.allows_children() {
             container.children.clear();
@@ -1977,66 +2189,58 @@ mod test {
         }
     }
 
-    #[quickcheck]
-    fn display_can_display_and_be_parsed_back_to_original_container(
-        mut container: Container,
-    ) -> bool {
-        log::trace!("container:\n{container:?}");
-        clean_up_container(&mut container);
+    proptest! {
+        #[test_log::test]
+        fn display_can_display_and_be_parsed_back_to_original_container(
+            mut container: Container,
+        ) {
+            log::trace!("container:\n{container}");
+            clean_up_container(&mut container);
 
-        let markup = container
-            .display_to_string(
-                true,
-                false,
-                #[cfg(feature = "format")]
-                false,
-                #[cfg(feature = "syntax-highlighting")]
-                false,
-            )
-            .unwrap();
-        log::trace!("markup:\n{markup}");
+            let markup = container
+                .display_to_string(
+                    true,
+                    false,
+                    #[cfg(feature = "format")]
+                    false,
+                    #[cfg(feature = "syntax-highlighting")]
+                    false,
+                )
+                .unwrap();
+            log::trace!("markup:\n{markup}");
 
-        let re_parsed: Container = markup.clone().try_into().unwrap();
-        log::trace!("re_parsed: {re_parsed} ({re_parsed:?})");
+            let re_parsed: Container = markup.clone().try_into().unwrap();
+            log::trace!("re_parsed:\n{re_parsed}");
 
-        let Some(mut re_parsed) = re_parsed.children.first().cloned() else {
-            panic!("failed to get child from markup: {markup} ({container:?})");
-        };
+            let Some(mut re_parsed) = re_parsed.children.first().cloned() else {
+                panic!("failed to get child from markup: {markup} ({container:?})");
+            };
 
-        clean_up_container(&mut re_parsed);
+            clean_up_container(&mut re_parsed);
 
-        if re_parsed != container {
-            log::trace!("container:\n{container:?}");
-            log::trace!("before:\n{container}");
-            log::trace!("after:\n{re_parsed}");
+            // Use semantic diff to find actual differences
+            // (ignores equivalent Number variants like Integer(0) vs Real(0.0))
+            let diffs = semantic_diff::diff_containers(&re_parsed, &container);
 
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            assert_eq!(
-                re_parsed
-                    .display_to_string(
-                        true,
-                        true,
-                        #[cfg(feature = "format")]
-                        true,
-                        #[cfg(feature = "syntax-highlighting")]
-                        false
-                    )
-                    .unwrap(),
-                container
-                    .display_to_string(
-                        true,
-                        true,
-                        #[cfg(feature = "format")]
-                        true,
-                        #[cfg(feature = "syntax-highlighting")]
-                        false
-                    )
-                    .unwrap()
-            );
-            assert_eq!(re_parsed, container);
+            if !diffs.is_empty() {
+                // Print a clean summary of semantic differences
+                log::debug!("\n=== SEMANTIC DIFFERENCES FOUND ===");
+                log::debug!("Markup:\n{markup}");
+                let diff_count = diffs.len();
+                log::debug!("\n--- Differences ({diff_count} total) ---");
+                for diff in &diffs {
+                    log::debug!("  {diff}");
+                }
+                log::debug!("=================================\n");
+
+                // Fail the test with the first difference
+                prop_assert!(
+                    false,
+                    "Container round-trip failed with {diff_count} semantic difference(s). First: {}",
+                    diffs[0]
+                );
+            }
         }
-
-        true
     }
 
     #[test]

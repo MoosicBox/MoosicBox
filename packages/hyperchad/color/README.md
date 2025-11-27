@@ -223,7 +223,7 @@ pub enum ParseHexError {
 
 - **serde**: Serialization/deserialization support (feature: `serde`)
 - **egui**: egui Color32 conversion support (feature: `egui`)
-- **quickcheck**: Arbitrary data generation for testing (feature: `arb`)
+- **proptest**: Arbitrary data generation for testing (feature: `arb`)
 
 ## Integration
 

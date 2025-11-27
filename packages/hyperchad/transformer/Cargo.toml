@@ -45,8 +45,7 @@ hyperchad_transformer_models = { workspace = true, features = ["arb"] }
 maud                         = { workspace = true }
 moosicbox_arb                = { workspace = true, features = ["css", "serde", "xml"] }
 pretty_assertions            = { workspace = true }
-quickcheck                   = { workspace = true }
-quickcheck_macros            = { workspace = true }
+proptest                     = { workspace = true }
 test-log                     = { workspace = true }
 tl                           = { workspace = true }
 

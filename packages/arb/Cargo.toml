@@ -17,7 +17,7 @@ examples = false
 moosicbox_assert = { workspace = true }
 
 log        = { workspace = true }
-quickcheck = { workspace = true }
+proptest   = { workspace = true }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]

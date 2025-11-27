@@ -27,7 +27,7 @@ moosicbox_assert = { workspace = true }
 switchy_time = { workspace = true, features = ["std"] }
 
 log        = { workspace = true }
-quickcheck = { workspace = true, optional = true }
+proptest   = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
@@ -50,7 +50,7 @@ fail-on-warnings = [
 
 arb = [
     "dep:moosicbox_arb",
-    "dep:quickcheck",
+    "dep:proptest",
     "hyperchad_color?/arb",
     "hyperchad_transformer_models/arb",
 ]

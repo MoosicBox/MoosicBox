@@ -73,7 +73,7 @@ pub use hyperchad_transformer_models as models;
 use strum::{EnumDiscriminants, EnumIter};
 
 #[cfg(test)]
-/// Arbitrary value generation for property-based testing with quickcheck.
+/// Arbitrary value generation for property-based testing with proptest.
 pub mod arb;
 #[cfg(any(test, feature = "html"))]
 /// HTML parsing and generation utilities (requires `html` feature).
@@ -463,20 +463,21 @@ impl Number {
 #[cfg(test)]
 mod test_number_deserialize {
     use pretty_assertions::assert_eq;
-    use quickcheck_macros::quickcheck;
+    use proptest::prelude::*;
 
     use crate::Number;
 
-    #[quickcheck]
-    #[allow(clippy::needless_pass_by_value)]
-    fn can_serialize_then_deserialize(number: Number) {
-        log::trace!("number={number:?}");
-        let serialized = serde_json::to_string(&number).unwrap();
-        log::trace!("serialized={serialized}");
-        let deserialized = serde_json::from_str(&serialized).unwrap();
-        log::trace!("deserialized={deserialized:?}");
+    proptest! {
+        #[test]
+        fn can_serialize_then_deserialize(number: Number) {
+            log::trace!("number={number:?}");
+            let serialized = serde_json::to_string(&number).unwrap();
+            log::trace!("serialized={serialized}");
+            let deserialized = serde_json::from_str(&serialized).unwrap();
+            log::trace!("deserialized={deserialized:?}");
 
-        assert_eq!(number, deserialized);
+            assert_eq!(number, deserialized);
+        }
     }
 }
 
@@ -3073,8 +3074,8 @@ impl Container {
     ///
     /// This is used during serialization to preserve the container's base value
     /// as the default when an override is present.
-    #[cfg(feature = "logic")]
     #[must_use]
+    #[cfg(any(test, feature = "logic"))]
     fn get_base_value_for_override(&self, item: &OverrideItem) -> Option<OverrideItem> {
         match item {
             OverrideItem::StrId(_) => self.str_id.clone().map(OverrideItem::StrId),

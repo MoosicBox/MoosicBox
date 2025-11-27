@@ -19,12 +19,12 @@ group = "hyperchad"
 [dependencies]
 moosicbox_assert = { workspace = true }
 
-color-hex  = { workspace = true }
-egui       = { workspace = true, optional = true }
-log        = { workspace = true }
-quickcheck = { workspace = true, optional = true }
-serde      = { workspace = true, optional = true }
-thiserror  = { workspace = true }
+color-hex = { workspace = true }
+egui      = { workspace = true, optional = true }
+log       = { workspace = true }
+proptest  = { workspace = true, optional = true }
+serde     = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
@@ -37,6 +37,6 @@ fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
 egui = ["dep:egui"]
 
-arb = ["dep:quickcheck"]
+arb = ["dep:proptest"]
 
 serde = ["dep:serde"]

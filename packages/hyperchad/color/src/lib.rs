@@ -50,13 +50,13 @@
 pub use color_hex::color_from_hex;
 use thiserror::Error;
 
-/// Property testing support via QuickCheck.
+/// Property testing support via proptest.
 ///
 /// This module provides an [`Arbitrary`] implementation for [`Color`],
-/// enabling property-based testing with the [`quickcheck`] crate.
+/// enabling property-based testing with the [`proptest`] crate.
 ///
-/// [`Arbitrary`]: quickcheck::Arbitrary
-/// [`quickcheck`]: https://docs.rs/quickcheck/latest/quickcheck/
+/// [`Arbitrary`]: proptest::arbitrary::Arbitrary
+/// [`proptest`]: https://docs.rs/proptest/latest/proptest/
 #[cfg(feature = "arb")]
 pub mod arb;
 

@@ -25,7 +25,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Property-based testing support via `quickcheck::Arbitrary` implementations.
+/// Property-based testing support via `proptest::arbitrary::Arbitrary` implementations.
 ///
 /// This module is only available when the `arb` feature is enabled.
 #[cfg(feature = "arb")]
@@ -37,6 +37,7 @@ pub mod arb;
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum LayoutDirection {
     /// Horizontal layout (left-to-right or right-to-left).
     Row,
@@ -60,6 +61,7 @@ impl std::fmt::Display for LayoutDirection {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum LayoutOverflow {
     /// Automatically determine overflow behavior.
     Auto,
@@ -98,6 +100,7 @@ impl std::fmt::Display for LayoutOverflow {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum JustifyContent {
     /// Align items to the start of the container. This is the default.
     #[default]
@@ -130,6 +133,7 @@ impl std::fmt::Display for JustifyContent {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum AlignItems {
     /// Align items to the start of the cross axis. This is the default.
     #[default]
@@ -156,6 +160,7 @@ impl std::fmt::Display for AlignItems {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum TextAlign {
     /// Align text to the start edge. This is the default.
     #[default]
@@ -186,6 +191,7 @@ impl std::fmt::Display for TextAlign {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum LayoutPosition {
     /// Explicit grid position with row and column indices.
     Wrap {
@@ -225,6 +231,7 @@ impl LayoutPosition {
 /// Used to specify targets in routes and other contexts where values might be literals or references.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Target {
     /// A literal string value.
     Literal(String),
@@ -238,6 +245,7 @@ pub enum Target {
 /// Can be parsed from strings like `#id`, `.class`, `> .child-class`, or `self`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Selector {
     /// Select by element ID (e.g., `#my-id`).
     Id(String),
@@ -403,6 +411,7 @@ impl Target {
 /// internal numeric ID, self-reference, or last child.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum ElementTarget {
     /// Target by string ID.
     StrId(Target),
@@ -476,6 +485,7 @@ impl std::fmt::Display for ElementTarget {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum SwapStrategy {
     /// Replace the target element itself. This is the default.
     #[default]
@@ -518,6 +528,7 @@ impl std::fmt::Display for SwapStrategy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Route {
     /// HTTP GET request.
     Get {
@@ -582,6 +593,7 @@ pub enum Route {
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Cursor {
     /// Default cursor (usually an arrow). This is the default.
     #[default]
@@ -674,6 +686,7 @@ impl std::fmt::Display for Cursor {
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Position {
     /// Default positioning in the normal document flow. This is the default.
     #[default]
@@ -721,6 +734,7 @@ impl std::fmt::Display for Position {
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum Visibility {
     /// Element is visible. This is the default.
     #[default]
@@ -744,6 +758,7 @@ impl std::fmt::Display for Visibility {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum ImageLoading {
     /// Load image immediately. This is the default.
     #[default]
@@ -767,6 +782,7 @@ impl std::fmt::Display for ImageLoading {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum ImageFit {
     /// Use default sizing behavior. This is the default.
     #[default]
@@ -799,6 +815,7 @@ impl std::fmt::Display for ImageFit {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum TextDecorationLine {
     /// Inherit from parent element. This is the default.
     #[default]
@@ -831,6 +848,7 @@ impl std::fmt::Display for TextDecorationLine {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum TextDecorationStyle {
     /// Inherit from parent element. This is the default.
     #[default]
@@ -866,6 +884,7 @@ impl std::fmt::Display for TextDecorationStyle {
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum LinkTarget {
     /// Open in the same frame/tab. This is the default.
     #[default]
@@ -898,6 +917,7 @@ impl std::fmt::Display for LinkTarget {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum FontWeight {
     /// Thin weight (typically 100).
     Thin,
@@ -977,6 +997,7 @@ impl std::fmt::Display for FontWeight {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum WhiteSpace {
     /// Collapse white space and wrap text normally. This is the default.
     #[default]
@@ -1003,6 +1024,7 @@ impl std::fmt::Display for WhiteSpace {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum UserSelect {
     /// Default selection behavior. This is the default.
     #[default]
@@ -1032,6 +1054,7 @@ impl std::fmt::Display for UserSelect {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum OverflowWrap {
     /// Break only at normal break points (spaces, hyphens). This is the default.
     #[default]
@@ -1058,6 +1081,7 @@ impl std::fmt::Display for OverflowWrap {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum TextOverflow {
     /// Clip the overflowing text. This is the default.
     #[default]

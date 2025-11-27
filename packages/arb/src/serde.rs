@@ -3,7 +3,7 @@
 //! Provides [`Arbitrary`] implementations for generating JSON values and JSON-safe
 //! floating-point numbers (finite `f32` and `f64` values).
 
-use quickcheck::{Arbitrary, Gen};
+use proptest::prelude::*;
 use serde_json::Value;
 
 use crate::xml::XmlString;
@@ -16,9 +16,21 @@ use crate::xml::XmlString;
 pub struct JsonValue(pub Value);
 
 impl Arbitrary for JsonValue {
-    fn arbitrary(g: &mut Gen) -> Self {
-        Self(Value::String(XmlString::arbitrary(g).0))
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        any::<XmlString>()
+            .prop_map(|s| Self(Value::String(s.0)))
+            .boxed()
     }
+}
+
+/// Strategy that generates finite f64 values directly.
+fn finite_f64_strategy() -> impl Strategy<Value = f64> {
+    // Generate f64 values and filter for finite ones
+    // The filter rate for f64 is very low (NaN/Inf are rare in random generation)
+    any::<f64>().prop_filter("must be finite", |x| x.is_finite())
 }
 
 /// Arbitrary finite `f64` for JSON serialization in property-based testing.
@@ -29,17 +41,19 @@ impl Arbitrary for JsonValue {
 pub struct JsonF64(pub f64);
 
 impl Arbitrary for JsonF64 {
-    fn arbitrary(g: &mut Gen) -> Self {
-        loop {
-            let num = f64::arbitrary(g);
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
 
-            if !num.is_finite() {
-                continue;
-            }
-
-            return Self(num);
-        }
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        finite_f64_strategy().prop_map(Self).boxed()
     }
+}
+
+/// Strategy that generates finite f32 values directly.
+fn finite_f32_strategy() -> impl Strategy<Value = f32> {
+    // Generate f32 values and filter for finite ones
+    // The filter rate for f32 is very low (NaN/Inf are rare in random generation)
+    any::<f32>().prop_filter("must be finite", |x| x.is_finite())
 }
 
 /// Arbitrary finite `f32` for JSON serialization in property-based testing.
@@ -50,15 +64,10 @@ impl Arbitrary for JsonF64 {
 pub struct JsonF32(pub f32);
 
 impl Arbitrary for JsonF32 {
-    fn arbitrary(g: &mut Gen) -> Self {
-        loop {
-            let num = f32::arbitrary(g);
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
 
-            if !num.is_finite() {
-                continue;
-            }
-
-            return Self(num);
-        }
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        finite_f32_strategy().prop_map(Self).boxed()
     }
 }

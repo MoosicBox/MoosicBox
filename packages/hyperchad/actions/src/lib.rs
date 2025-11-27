@@ -16,7 +16,7 @@
 //!
 //! * `logic` - Enables conditional logic and dynamic value evaluation in actions
 //! * `handler` - Provides action handler implementation for processing actions
-//! * `arb` - Adds property-based testing support via `quickcheck`
+//! * `arb` - Adds property-based testing support via `proptest`
 //! * `serde` - Enables serialization/deserialization support
 //!
 //! # Example
