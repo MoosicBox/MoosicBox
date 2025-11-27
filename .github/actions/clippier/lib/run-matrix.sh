@@ -184,10 +184,11 @@ accumulate_summary_to_state() {
         }')
 
     # Append to state file (create array if doesn't exist)
+    # Use pipe approach to avoid "Argument list too long" errors with large run_data
     if [[ -f "$state_file" ]]; then
         local temp_file
         temp_file=$(mktemp)
-        jq ". += [$run_data]" "$state_file" > "$temp_file"
+        echo "$run_data" | jq -s --slurpfile existing "$state_file" '$existing[0] + .' > "$temp_file"
         mv "$temp_file" "$state_file"
     else
         echo "[$run_data]" > "$state_file"
