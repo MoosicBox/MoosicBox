@@ -3069,6 +3069,105 @@ impl Attrs {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
+    /// Gets the base value for an override item type from the container's fields.
+    ///
+    /// This is used during serialization to preserve the container's base value
+    /// as the default when an override is present.
+    #[cfg(feature = "logic")]
+    #[must_use]
+    fn get_base_value_for_override(&self, item: &OverrideItem) -> Option<OverrideItem> {
+        match item {
+            OverrideItem::StrId(_) => self.str_id.clone().map(OverrideItem::StrId),
+            OverrideItem::Classes(_) => Some(OverrideItem::Classes(self.classes.clone())),
+            OverrideItem::Direction(_) => Some(OverrideItem::Direction(self.direction)),
+            OverrideItem::OverflowX(_) => Some(OverrideItem::OverflowX(self.overflow_x)),
+            OverrideItem::OverflowY(_) => Some(OverrideItem::OverflowY(self.overflow_y)),
+            OverrideItem::GridCellSize(_) => {
+                self.grid_cell_size.clone().map(OverrideItem::GridCellSize)
+            }
+            OverrideItem::JustifyContent(_) => {
+                self.justify_content.map(OverrideItem::JustifyContent)
+            }
+            OverrideItem::AlignItems(_) => self.align_items.map(OverrideItem::AlignItems),
+            OverrideItem::TextAlign(_) => self.text_align.map(OverrideItem::TextAlign),
+            OverrideItem::WhiteSpace(_) => self.white_space.map(OverrideItem::WhiteSpace),
+            OverrideItem::TextDecoration(_) => self
+                .text_decoration
+                .clone()
+                .map(OverrideItem::TextDecoration),
+            OverrideItem::FontFamily(_) => self.font_family.clone().map(OverrideItem::FontFamily),
+            OverrideItem::FontWeight(_) => self.font_weight.map(OverrideItem::FontWeight),
+            OverrideItem::Width(_) => self.width.clone().map(OverrideItem::Width),
+            OverrideItem::MinWidth(_) => self.min_width.clone().map(OverrideItem::MinWidth),
+            OverrideItem::MaxWidth(_) => self.max_width.clone().map(OverrideItem::MaxWidth),
+            OverrideItem::Height(_) => self.height.clone().map(OverrideItem::Height),
+            OverrideItem::MinHeight(_) => self.min_height.clone().map(OverrideItem::MinHeight),
+            OverrideItem::MaxHeight(_) => self.max_height.clone().map(OverrideItem::MaxHeight),
+            OverrideItem::Flex(_) => self.flex.clone().map(OverrideItem::Flex),
+            OverrideItem::ColumnGap(_) => self.column_gap.clone().map(OverrideItem::ColumnGap),
+            OverrideItem::RowGap(_) => self.row_gap.clone().map(OverrideItem::RowGap),
+            OverrideItem::Opacity(_) => self.opacity.clone().map(OverrideItem::Opacity),
+            OverrideItem::Left(_) => self.left.clone().map(OverrideItem::Left),
+            OverrideItem::Right(_) => self.right.clone().map(OverrideItem::Right),
+            OverrideItem::Top(_) => self.top.clone().map(OverrideItem::Top),
+            OverrideItem::Bottom(_) => self.bottom.clone().map(OverrideItem::Bottom),
+            OverrideItem::TranslateX(_) => self.translate_x.clone().map(OverrideItem::TranslateX),
+            OverrideItem::TranslateY(_) => self.translate_y.clone().map(OverrideItem::TranslateY),
+            OverrideItem::Cursor(_) => self.cursor.map(OverrideItem::Cursor),
+            OverrideItem::UserSelect(_) => self.user_select.map(OverrideItem::UserSelect),
+            OverrideItem::OverflowWrap(_) => self.overflow_wrap.map(OverrideItem::OverflowWrap),
+            OverrideItem::TextOverflow(_) => self.text_overflow.map(OverrideItem::TextOverflow),
+            OverrideItem::Position(_) => self.position.map(OverrideItem::Position),
+            OverrideItem::Background(_) => self.background.map(OverrideItem::Background),
+            OverrideItem::BorderTop(_) => self.border_top.clone().map(OverrideItem::BorderTop),
+            OverrideItem::BorderRight(_) => {
+                self.border_right.clone().map(OverrideItem::BorderRight)
+            }
+            OverrideItem::BorderBottom(_) => {
+                self.border_bottom.clone().map(OverrideItem::BorderBottom)
+            }
+            OverrideItem::BorderLeft(_) => self.border_left.clone().map(OverrideItem::BorderLeft),
+            OverrideItem::BorderTopLeftRadius(_) => self
+                .border_top_left_radius
+                .clone()
+                .map(OverrideItem::BorderTopLeftRadius),
+            OverrideItem::BorderTopRightRadius(_) => self
+                .border_top_right_radius
+                .clone()
+                .map(OverrideItem::BorderTopRightRadius),
+            OverrideItem::BorderBottomLeftRadius(_) => self
+                .border_bottom_left_radius
+                .clone()
+                .map(OverrideItem::BorderBottomLeftRadius),
+            OverrideItem::BorderBottomRightRadius(_) => self
+                .border_bottom_right_radius
+                .clone()
+                .map(OverrideItem::BorderBottomRightRadius),
+            OverrideItem::MarginLeft(_) => self.margin_left.clone().map(OverrideItem::MarginLeft),
+            OverrideItem::MarginRight(_) => {
+                self.margin_right.clone().map(OverrideItem::MarginRight)
+            }
+            OverrideItem::MarginTop(_) => self.margin_top.clone().map(OverrideItem::MarginTop),
+            OverrideItem::MarginBottom(_) => {
+                self.margin_bottom.clone().map(OverrideItem::MarginBottom)
+            }
+            OverrideItem::PaddingLeft(_) => {
+                self.padding_left.clone().map(OverrideItem::PaddingLeft)
+            }
+            OverrideItem::PaddingRight(_) => {
+                self.padding_right.clone().map(OverrideItem::PaddingRight)
+            }
+            OverrideItem::PaddingTop(_) => self.padding_top.clone().map(OverrideItem::PaddingTop),
+            OverrideItem::PaddingBottom(_) => {
+                self.padding_bottom.clone().map(OverrideItem::PaddingBottom)
+            }
+            OverrideItem::FontSize(_) => self.font_size.clone().map(OverrideItem::FontSize),
+            OverrideItem::Color(_) => self.color.map(OverrideItem::Color),
+            OverrideItem::Hidden(_) => self.hidden.map(OverrideItem::Hidden),
+            OverrideItem::Visibility(_) => self.visibility.map(OverrideItem::Visibility),
+        }
+    }
+
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn attrs(&self, #[allow(unused)] with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
@@ -3624,11 +3723,19 @@ impl Container {
                             _ => {}
                         }
 
+                        // Use config.default if set, otherwise fall back to the
+                        // container's base value for this field. This preserves
+                        // the base value during round-trip serialization.
+                        let default_value = config
+                            .default
+                            .clone()
+                            .or_else(|| self.get_base_value_for_override(item));
+
                         attrs.replace_or_add(
                             name,
                             item.as_json_if_expression_string(
                                 hyperchad_actions::logic::Responsive::Target(target.clone()),
-                                config.default.as_ref(),
+                                default_value.as_ref(),
                             )
                             .unwrap(),
                         );
