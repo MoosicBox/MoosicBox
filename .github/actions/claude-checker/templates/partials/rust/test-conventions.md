@@ -153,3 +153,5 @@ When possible, design code to avoid global state:
 - Use dependency injection instead of global singletons
 - Create unique test directories using `moosicbox_config::get_tests_dir_path()`
 - Pass configuration as parameters rather than reading from global state
+
+${include('rust/property-based-testing')}
