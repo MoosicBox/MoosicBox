@@ -3,7 +3,7 @@ source: packages/switchy/schema/cli/tests/validate_simple_test.rs
 expression: clean_output
 ---
 Validating migration checksums
-==============================
+------------------------------
 Migrations directory: [MIGRATIONS_DIR]
 Migration table: __switchy_migrations
 

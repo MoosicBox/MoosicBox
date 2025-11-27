@@ -3,7 +3,7 @@ source: packages/switchy/schema/cli/tests/validate_code_migrations_test.rs
 expression: filtered
 ---
 Validating migration checksums
-==============================
+------------------------------
 Migrations directory: [MIGRATIONS_DIR]
 Migration table: __switchy_migrations
 

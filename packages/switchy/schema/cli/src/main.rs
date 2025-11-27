@@ -1471,7 +1471,7 @@ async fn validate_checksums(
     println!(
         "\
         Validating migration checksums\n\
-        ==============================\n\
+        ------------------------------\n\
         Migrations directory: {}\n\
         Migration table: {migration_table}\n",
         migrations_dir.display()
