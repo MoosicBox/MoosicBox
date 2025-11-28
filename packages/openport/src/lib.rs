@@ -278,7 +278,7 @@ mod tests {
                 // Port should be free initially
                 if is_free_tcp(port) {
                     // Bind to the port
-                    if let Ok(_listener) = TcpListener::bind(("127.0.0.1", port)) {
+                    if let Ok(_listener) = TcpListener::bind(("0.0.0.0", port)) {
                         // Port should now be occupied
                         assert!(!is_free_tcp(port));
                         return; // Test passed
@@ -297,7 +297,7 @@ mod tests {
                 // Port should be free initially
                 if is_free_udp(port) {
                     // Bind to the port
-                    if let Ok(_socket) = UdpSocket::bind(("127.0.0.1", port)) {
+                    if let Ok(_socket) = UdpSocket::bind(("0.0.0.0", port)) {
                         // Port should now be occupied
                         assert!(!is_free_udp(port));
                         return; // Test passed
@@ -316,8 +316,14 @@ mod tests {
                 // Port should be free on both TCP and UDP initially
                 if is_free(port) {
                     // Bind to the port with TCP
-                    if let Ok(_listener) = TcpListener::bind(("127.0.0.1", port)) {
-                        // Port should now be occupied
+                    if let Ok(_listener) = TcpListener::bind(("0.0.0.0", port)) {
+                        // Wait for the port to be occupied
+                        for _ in 0..10 {
+                            if !is_free(port) {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                        }
                         assert!(!is_free(port));
                         return; // Test passed
                     }
@@ -335,7 +341,7 @@ mod tests {
                 // Port should be free on both TCP and UDP initially
                 if is_free(port) {
                     // Bind to the port with UDP
-                    if let Ok(_socket) = UdpSocket::bind(("127.0.0.1", port)) {
+                    if let Ok(_socket) = UdpSocket::bind(("0.0.0.0", port)) {
                         // Port should now be occupied
                         assert!(!is_free(port));
                         return; // Test passed
