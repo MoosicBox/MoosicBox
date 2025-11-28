@@ -14,9 +14,8 @@ mod sqlx_sqlite {
 
     impl IntegrationTestSuite for SqlxSqliteIntegrationTests {
         async fn get_database(&self) -> Option<Arc<Box<dyn Database>>> {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
+            let timestamp = switchy_time::now()
+                .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
             let thread_id = std::thread::current().id();
@@ -1065,7 +1064,7 @@ mod rusqlite_introspection_tests {
 
         async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
             let test_id = std::thread::current().id();
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
@@ -1446,7 +1445,7 @@ mod simulator_introspection_tests {
 
         async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
             let test_id = std::thread::current().id();
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
@@ -1767,7 +1766,7 @@ mod rusqlite_returning_tests {
     impl ReturningTestSuite for RusqliteReturningTests {
         async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
             let test_id = std::thread::current().id();
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
@@ -2117,7 +2116,7 @@ mod rusqlite_cascade_tests {
     impl CascadeTestSuite for RusqliteCascadeTests {
         async fn setup_db(&self) -> Option<Arc<Box<dyn Database>>> {
             let test_id = std::thread::current().id();
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();

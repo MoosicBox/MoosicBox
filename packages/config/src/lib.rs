@@ -219,10 +219,8 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
 /// to prevent test interference. The directory is created in the system's temp directory.
 #[must_use]
 pub fn get_tests_dir_path() -> PathBuf {
-    use std::time::SystemTime;
-
-    let timestamp = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
+    let timestamp = switchy_time::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
     let pid = std::process::id();
 

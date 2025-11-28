@@ -171,7 +171,7 @@ impl<T, QuitReason: Clone + Send + 'static> Drop for ResourceDaemon<T, QuitReaso
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     /// Wait for a daemon state to satisfy a predicate condition with timeout.
     ///
@@ -187,7 +187,7 @@ mod tests {
         predicate: impl Fn(&DaemonState<QuitReason>) -> bool,
         timeout: Duration,
     ) -> Result<DaemonState<QuitReason>, String> {
-        let start = Instant::now();
+        let start = switchy_time::instant_now();
         let poll_interval = Duration::from_millis(1);
 
         loop {
@@ -216,7 +216,7 @@ mod tests {
         timeout: Duration,
         description: &str,
     ) -> Result<(), String> {
-        let start = Instant::now();
+        let start = switchy_time::instant_now();
         let poll_interval = Duration::from_millis(1);
 
         loop {

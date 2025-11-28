@@ -2240,7 +2240,7 @@ fn rusqlite_exec_modify_column_workaround(
     let temp_column = format!(
         "{}_temp_{}",
         column_name,
-        std::time::SystemTime::now()
+        switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
@@ -2688,7 +2688,7 @@ fn rusqlite_exec_table_recreation_workaround(
         let temp_table = format!(
             "{}_temp_{}",
             table_name,
-            std::time::SystemTime::now()
+            switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
@@ -4158,7 +4158,7 @@ mod tests {
     fn create_test_db() -> RusqliteDatabase {
         // Use unique in-memory database name for each test to avoid conflicts
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
@@ -4286,7 +4286,7 @@ mod tests {
         let db1 = Arc::clone(&db);
         let db2 = Arc::clone(&db);
 
-        let start_time = std::time::Instant::now();
+        let start_time = switchy_time::instant_now();
 
         // Start two transactions concurrently
         let tx1_task = switchy_async::task::spawn(async move {
@@ -4308,7 +4308,7 @@ mod tests {
             switchy_async::time::sleep(Duration::from_millis(100)).await;
 
             tx.commit().await.expect("Failed to commit transaction 1");
-            std::time::Instant::now()
+            switchy_time::instant_now()
         });
 
         let tx2_task = switchy_async::task::spawn(async move {
@@ -4335,7 +4335,7 @@ mod tests {
                     let _ = tx.rollback().await;
                 }
             }
-            std::time::Instant::now()
+            switchy_time::instant_now()
         });
 
         let (tx1_end, tx2_end) = tokio::join!(tx1_task, tx2_task);
@@ -4423,7 +4423,7 @@ mod tests {
         use tokio::sync::Mutex;
 
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
@@ -4828,7 +4828,7 @@ mod tests {
         use tokio::sync::Mutex;
 
         let test_id = std::thread::current().id();
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
