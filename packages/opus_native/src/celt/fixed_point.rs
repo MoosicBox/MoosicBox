@@ -1091,11 +1091,10 @@ mod tests {
 
         // Check proportionality is preserved: output[0]/output[1] ≈ 3/4 = 0.75
         if output[1] != 0 {
-            let ratio = output[0] as f32 / output[1] as f32;
+            let ratio = f32::from(output[0]) / f32::from(output[1]);
             assert!(
                 (ratio - 0.75).abs() < 0.1,
-                "Expected ratio ~0.75, got {}",
-                ratio
+                "Expected ratio ~0.75, got {ratio}"
             );
         }
     }
@@ -1123,11 +1122,10 @@ mod tests {
         // Verify the function produces valid output (non-panicking)
         // and preserves the direction of the vector (ratio should be ~1.0)
         if vec[0] != 0 && vec[1] != 0 {
-            let ratio = vec[0] as f32 / vec[1] as f32;
+            let ratio = f32::from(vec[0]) / f32::from(vec[1]);
             assert!(
                 (ratio - 1.0).abs() < 0.1,
-                "Expected ratio ~1.0, got {}",
-                ratio
+                "Expected ratio ~1.0, got {ratio}"
             );
         }
 
@@ -1270,7 +1268,8 @@ mod tests {
         // Q31_ONE * Q31_ONE >> 31 should be close to Q31_ONE
         let result = mult32_32_q31(Q31_ONE, Q31_ONE);
         // Due to truncation, result should be close to Q31_ONE
-        assert!(result > Q31_ONE - 10 && result <= Q31_ONE);
+        // Note: Q31_ONE is i32::MAX, so result <= Q31_ONE is always true
+        assert!(result > Q31_ONE - 10);
     }
 
     #[test_log::test]
@@ -1283,7 +1282,7 @@ mod tests {
         assert_eq!(shifted_back, original & !3);
 
         // shr32 and shl32 should be inverses (within truncation)
-        let original32: i32 = 100000;
+        let original32: i32 = 100_000;
         let shifted_right32 = shr32(original32, 4);
         let shifted_back32 = shl32(shifted_right32, 4);
         assert_eq!(shifted_back32, original32 & !15);
@@ -1304,8 +1303,8 @@ mod tests {
     fn test_neg16_neg32() {
         assert_eq!(neg16(100), -100);
         assert_eq!(neg16(-100), 100);
-        assert_eq!(neg32(100000), -100000);
-        assert_eq!(neg32(-100000), 100000);
+        assert_eq!(neg32(100_000), -100_000);
+        assert_eq!(neg32(-100_000), 100_000);
     }
 
     #[test_log::test]
