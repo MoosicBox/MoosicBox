@@ -2268,6 +2268,7 @@ mod test {
         assert_eq!(albums.len(), 2);
     }
 
+    #[cfg(all(feature = "mp3", feature = "flac"))]
     #[test_log::test(switchy_async::test)]
     async fn test_scan_album_add_track_returns_existing_for_same_path() {
         let api_source = ApiSource::register("TestApi", "TestApi");
@@ -2426,6 +2427,7 @@ mod test {
         assert_eq!(tracks.len(), 2);
     }
 
+    #[cfg(feature = "mp3")]
     #[test_log::test]
     fn test_scan_track_to_api_source_sqlite_values_returns_none_for_library() {
         let track = ScanTrack::new(
