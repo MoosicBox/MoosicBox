@@ -1866,7 +1866,7 @@ async fn handle_retry<
 
     loop {
         if retry_count > 0 {
-            tokio::time::sleep(retry_options.unwrap().retry_delay).await;
+            switchy_async::time::sleep(retry_options.unwrap().retry_delay).await;
         }
 
         match func().await {
@@ -2468,7 +2468,7 @@ mod tests {
         assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_handle_retry_success_after_retries() {
         let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
         let call_count_clone = call_count.clone();
@@ -2500,7 +2500,7 @@ mod tests {
         assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_handle_retry_exhausts_max_attempts() {
         let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
         let call_count_clone = call_count.clone();
