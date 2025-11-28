@@ -38,6 +38,7 @@ scoped-tls = { workspace = true, optional = true }
 
 [dev-dependencies]
 flume             = { workspace = true, features = ["async"] }
+futures           = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }
 test-log          = { workspace = true }

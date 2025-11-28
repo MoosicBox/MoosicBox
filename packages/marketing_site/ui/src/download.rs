@@ -185,3 +185,111 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod format_class_name_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn converts_spaces_to_hyphens() {
+            assert_eq!(format_class_name("hello world"), "hello-world");
+        }
+
+        #[test_log::test]
+        fn handles_multiple_spaces_between_words() {
+            assert_eq!(
+                format_class_name("hello   world   test"),
+                "hello-world-test"
+            );
+        }
+
+        #[test_log::test]
+        fn replaces_special_characters_with_underscores() {
+            assert_eq!(format_class_name("v1.2.3"), "v1_2_3");
+            assert_eq!(format_class_name("name@domain"), "name_domain");
+            assert_eq!(format_class_name("test/path"), "test_path");
+        }
+
+        #[test_log::test]
+        fn preserves_hyphens_in_input() {
+            assert_eq!(
+                format_class_name("already-hyphenated"),
+                "already-hyphenated"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_to_lowercase() {
+            assert_eq!(format_class_name("UPPERCASE"), "uppercase");
+            assert_eq!(format_class_name("MixedCase"), "mixedcase");
+        }
+
+        #[test_log::test]
+        fn handles_combined_transformations() {
+            assert_eq!(
+                format_class_name("Version 1.2.3 BETA"),
+                "version-1_2_3-beta"
+            );
+        }
+
+        #[test_log::test]
+        fn handles_empty_string() {
+            assert_eq!(format_class_name(""), "");
+        }
+
+        #[test_log::test]
+        fn handles_whitespace_only() {
+            assert_eq!(format_class_name("   "), "");
+        }
+
+        #[test_log::test]
+        fn preserves_underscores() {
+            assert_eq!(format_class_name("with_underscore"), "with_underscore");
+        }
+
+        #[test_log::test]
+        fn handles_leading_and_trailing_whitespace() {
+            assert_eq!(format_class_name("  trimmed  "), "trimmed");
+        }
+    }
+
+    mod get_os_header_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn returns_windows_for_windows() {
+            assert_eq!(get_os_header("windows"), "Windows");
+        }
+
+        #[test_log::test]
+        fn returns_macos_for_mac_intel() {
+            assert_eq!(get_os_header("mac_intel"), "macOS");
+        }
+
+        #[test_log::test]
+        fn returns_linux_for_linux() {
+            assert_eq!(get_os_header("linux"), "Linux");
+        }
+
+        #[test_log::test]
+        fn returns_android_for_android() {
+            assert_eq!(get_os_header("android"), "Android");
+        }
+
+        #[test_log::test]
+        fn returns_input_unchanged_for_unknown_os() {
+            assert_eq!(get_os_header("freebsd"), "freebsd");
+            assert_eq!(get_os_header("custom_os"), "custom_os");
+        }
+
+        #[test_log::test]
+        fn is_case_sensitive() {
+            // Uppercase does not match - returns input unchanged
+            assert_eq!(get_os_header("Windows"), "Windows");
+            assert_eq!(get_os_header("LINUX"), "LINUX");
+        }
+    }
+}

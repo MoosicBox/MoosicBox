@@ -664,4 +664,216 @@ mod tests {
         let paths = get_scan_paths(&db).await.unwrap();
         assert_eq!(paths.len(), 0);
     }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_origins_or_default_returns_enabled_origins_when_none_requested() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let tidal_origin = ScanOrigin::Api(tidal);
+
+        // Enable an origin
+        db::enable_scan_origin(&db, &tidal_origin).await.unwrap();
+
+        // With None origins, should return enabled origins
+        let result = get_origins_or_default(&db, None).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], tidal_origin);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_origins_or_default_filters_requested_origins_to_enabled_only() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
+        let tidal_origin = ScanOrigin::Api(tidal);
+        let qobuz_origin = ScanOrigin::Api(qobuz);
+
+        // Only enable Tidal
+        db::enable_scan_origin(&db, &tidal_origin).await.unwrap();
+
+        // Request both Tidal and Qobuz
+        let result = get_origins_or_default(&db, Some(vec![tidal_origin.clone(), qobuz_origin]))
+            .await
+            .unwrap();
+
+        // Should only return Tidal (the only enabled one)
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], tidal_origin);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_origins_or_default_returns_empty_when_none_enabled() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // No origins enabled, request None
+        let result = get_origins_or_default(&db, None).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_scan_origin_enabled_returns_true_for_enabled_origin() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let tidal_origin = ScanOrigin::Api(tidal);
+
+        // Enable the origin
+        db::enable_scan_origin(&db, &tidal_origin).await.unwrap();
+
+        let result = is_scan_origin_enabled(&db, &tidal_origin).await.unwrap();
+        assert!(result);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_scan_origin_enabled_returns_false_for_disabled_origin() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
+        let qobuz_origin = ScanOrigin::Api(qobuz);
+
+        // Don't enable the origin
+        let result = is_scan_origin_enabled(&db, &qobuz_origin).await.unwrap();
+        assert!(!result);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_disable_scan_origin_removes_enabled_origin() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let tidal_origin = ScanOrigin::Api(tidal);
+
+        // Enable then disable
+        db::enable_scan_origin(&db, &tidal_origin).await.unwrap();
+        assert!(is_scan_origin_enabled(&db, &tidal_origin).await.unwrap());
+
+        disable_scan_origin(&db, &tidal_origin).await.unwrap();
+        assert!(!is_scan_origin_enabled(&db, &tidal_origin).await.unwrap());
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_disable_scan_origin_is_noop_when_not_enabled() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
+        let qobuz_origin = ScanOrigin::Api(qobuz);
+
+        // Try to disable an origin that was never enabled
+        let result = disable_scan_origin(&db, &qobuz_origin).await;
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_enable_scan_origin_skips_existing_origin() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let tidal_origin = ScanOrigin::Api(tidal);
+
+        // Enable twice
+        enable_scan_origin(&db, &tidal_origin).await.unwrap();
+        enable_scan_origin(&db, &tidal_origin).await.unwrap();
+
+        // Should still only have one location
+        let locations = db::get_scan_locations(&db).await.unwrap();
+        assert_eq!(locations.len(), 1);
+    }
 }

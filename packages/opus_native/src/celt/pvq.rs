@@ -1271,7 +1271,7 @@ pub fn decode_pvq_vector_split(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pvq_size_base_cases() {
         // V(N,0) = 1 for any N
         assert_eq!(compute_pvq_size(0, 0), 1);
@@ -1283,7 +1283,7 @@ mod tests {
         assert_eq!(compute_pvq_size(0, 5), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pvq_size_k1() {
         // V(N,1) = 2*N (each position can be +1 or -1)
         assert_eq!(compute_pvq_size(1, 1), 2);
@@ -1292,7 +1292,7 @@ mod tests {
         assert_eq!(compute_pvq_size(10, 1), 20);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pvq_size_small_values() {
         // V(2,2) = V(1,2) + V(2,1) + V(1,1)
         //   V(1,2) = V(0,2) + V(1,1) + V(0,1) = 0 + 2 + 0 = 2
@@ -1310,7 +1310,7 @@ mod tests {
         assert_eq!(compute_pvq_size(4, 2), 32);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pvq_size_symmetry() {
         // The function should be well-defined for various inputs
         let v1 = compute_pvq_size(10, 3);
@@ -1318,7 +1318,7 @@ mod tests {
         assert_eq!(v1, v2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_normalize_vector_unit() {
         let mut vec = vec![3.0, 4.0];
         normalize_vector(&mut vec).unwrap();
@@ -1332,7 +1332,7 @@ mod tests {
         assert!((norm - 1.0).abs() < 1e-6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_normalize_vector_already_normalized() {
         let mut vec = vec![1.0, 0.0, 0.0];
         normalize_vector(&mut vec).unwrap();
@@ -1342,21 +1342,21 @@ mod tests {
         assert!((vec[2] - 0.0).abs() < 1e-6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_normalize_vector_empty() {
         let mut vec: Vec<f32> = vec![];
         let result = normalize_vector(&mut vec);
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_normalize_vector_zero() {
         let mut vec = vec![0.0, 0.0, 0.0];
         let result = normalize_vector(&mut vec);
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_zero_pulses() {
         let data = vec![0xFF; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1369,7 +1369,7 @@ mod tests {
         assert!(vec.iter().all(|&x| x == 0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_one_pulse() {
         let data = vec![0x00; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1386,7 +1386,7 @@ mod tests {
         assert_eq!(total, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_invalid_n() {
         let data = vec![0xFF; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1395,7 +1395,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bits_to_pulses_zero_bits() {
         let mut balance = 0;
         let k = bits_to_pulses(4, 0, &mut balance);
@@ -1403,7 +1403,7 @@ mod tests {
         assert_eq!(balance, 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bits_to_pulses_basic() {
         let mut balance = 0;
 
@@ -1417,7 +1417,7 @@ mod tests {
         assert_eq!(balance, 30); // All bits unused for low allocation
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bits_to_pulses_with_balance() {
         let mut balance = -16; // 2 bits deficit
 
@@ -1431,7 +1431,7 @@ mod tests {
         // No strict check since exact value depends on quantization
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_spread() {
         let data = vec![0x00; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1443,7 +1443,7 @@ mod tests {
         assert!(s <= 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_no_rotation() {
         let mut vec = vec![1.0, 0.0, 0.0, 0.0];
 
@@ -1454,7 +1454,7 @@ mod tests {
         assert!((vec[1] - 0.0).abs() < 1e-6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_with_rotation() {
         let mut vec = vec![1.0, 0.0, 0.0, 0.0];
 
@@ -1469,7 +1469,7 @@ mod tests {
         assert!((vec[0] - 1.0).abs() > 1e-6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_zero_pulses() {
         let mut vec = vec![1.0, 0.0, 0.0, 0.0];
 
@@ -1479,7 +1479,7 @@ mod tests {
         assert!((vec[0] - 1.0).abs() < 1e-6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_invalid_spread() {
         let mut vec = vec![1.0, 0.0];
 
@@ -1487,7 +1487,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_multi_block_no_pre_rotation() {
         // nb_blocks=2, block_size=4 (< 8, no pre-rotation)
         let mut vec = vec![
@@ -1509,7 +1509,7 @@ mod tests {
         assert!((norm - 1.0).abs() < 1e-5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_multi_block_with_pre_rotation() {
         // nb_blocks=2, block_size=8 (≥8, has pre-rotation)
         let mut vec = vec![1.0f32; 16];
@@ -1529,7 +1529,7 @@ mod tests {
         assert!(vec.iter().any(|&x| (x - 1.0 / norm).abs() > 1e-6));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_transient_frame_example() {
         // 20ms transient frame: LM=3, tf_adjust=0 → nb_blocks=8
         // Band with 64 samples → block_size=8
@@ -1549,14 +1549,14 @@ mod tests {
         assert!((final_norm - 1.0).abs() < 1e-5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_invalid_block_division() {
         let mut vec = vec![1.0; 10]; // 10 samples
         let result = apply_spreading(&mut vec, 2, 5, 3); // nb_blocks=3
         assert!(result.is_err()); // 10 not divisible by 3
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_zero_spread_multi_block() {
         // spread=0 (no rotation) with multiple blocks
         let mut vec = vec![1.0, 2.0, 3.0, 4.0];
@@ -1565,14 +1565,14 @@ mod tests {
         assert_eq!(vec, expected); // No change
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_zero_nb_blocks() {
         let mut vec = vec![1.0, 2.0];
         let result = apply_spreading(&mut vec, 2, 2, 0);
         assert!(result.is_err()); // nb_blocks must be >= 1
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_large_nb_blocks() {
         // Many small blocks
         let mut vec = vec![1.0f32; 32];
@@ -1589,7 +1589,7 @@ mod tests {
         assert!((final_norm - 1.0).abs() < 1e-5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_apply_spreading_stride_calculation() {
         // Verify pre-rotation with specific stride values
         // N=64, nb_blocks=4 → block_size=16, stride=round(sqrt(64/4))=4
@@ -1606,7 +1606,7 @@ mod tests {
         assert!((final_norm - 1.0).abs() < 1e-5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_split_small_codebook() {
         let data = vec![0x00; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1624,7 +1624,7 @@ mod tests {
         assert_eq!(total, 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_split_zero_pulses() {
         let data = vec![0x00; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1638,7 +1638,7 @@ mod tests {
         assert!(vec.iter().all(|&x| x == 0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_pvq_vector_split_invalid_n() {
         let data = vec![0x00; 16];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -1648,7 +1648,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_isqrt() {
         assert_eq!(isqrt(0), 0);
         assert_eq!(isqrt(1), 1);
@@ -1660,7 +1660,7 @@ mod tests {
         assert_eq!(isqrt(101), 10);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ec_ilog_reference_values() {
         // Reference values from libopus ec_ilog()
         assert_eq!(ec_ilog(0), 0);
@@ -1676,7 +1676,7 @@ mod tests {
         assert_eq!(ec_ilog(32768), 16);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_frac_mul16_reference_values() {
         // Reference values from libopus FRAC_MUL16 macro
         // FRAC_MUL16(16384, 16384) = (16384 + 268435456) >> 15 = 8192
@@ -1692,13 +1692,13 @@ mod tests {
         assert_eq!(frac_mul16(-16384, 16384), -8192);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_qn_basic() {
         let qn = compute_qn(4, 80, false);
         assert!((1..=256).contains(&qn));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_qn_stereo() {
         let qn_mono = compute_qn(2, 80, false);
         let qn_stereo = compute_qn(2, 80, true);
@@ -1706,13 +1706,13 @@ mod tests {
         assert!(qn_mono > 0 && qn_stereo > 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_qn_zero_bits() {
         let qn = compute_qn(4, 0, false);
         assert_eq!(qn, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bitexact_cos_reference_values() {
         // Exact reference values from libopus bitexact_cos()
         // Note: bitexact_cos(0) returns -32768 (overflow in i16 arithmetic: 1 + 32767 wraps)
@@ -1725,7 +1725,7 @@ mod tests {
         assert_eq!(bitexact_cos(16384), 16554);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bitexact_log2tan_reference_values() {
         // Exact reference values from libopus bitexact_log2tan()
 
@@ -1743,7 +1743,7 @@ mod tests {
         assert_eq!(bitexact_log2tan(16384, 0), 32767);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_split_gain_uniform() {
         let data = vec![0x80; 32];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1754,7 +1754,7 @@ mod tests {
         assert!(itheta.unwrap() <= 16384);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_split_gain_zero_qn() {
         let data = vec![0x00; 16];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1764,7 +1764,7 @@ mod tests {
         assert_eq!(itheta.unwrap(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pulse_split_balanced() {
         // itheta ≈ 8192 (π/4) should give roughly balanced split
         let (k1, k2) = compute_pulse_split(8, 100, 8192);
@@ -1772,7 +1772,7 @@ mod tests {
         // Both sides should get some allocation
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pulse_split_unbalanced_mid() {
         // itheta = 0 should favor mid (first half)
         let (k1, k2) = compute_pulse_split(8, 100, 0);
@@ -1781,7 +1781,7 @@ mod tests {
         // Due to bit-exact trigonometry, exact distribution may vary
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pulse_split_unbalanced_side() {
         // itheta = 16384 should favor side (second half)
         let (k1, k2) = compute_pulse_split(8, 100, 16384);
@@ -1789,14 +1789,14 @@ mod tests {
         assert!(k1 <= 100 && k2 <= 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_pulse_split_zero_bits() {
         let (k1, k2) = compute_pulse_split(8, 0, 8192);
         assert_eq!(k1, 0);
         assert_eq!(k2, 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_transient_b_parameter_non_transient() {
         let data = vec![0x00; 16];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1811,7 +1811,7 @@ mod tests {
         assert!(result2.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_transient_b_parameter_transient() {
         let data = vec![0x00; 16];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1831,7 +1831,7 @@ mod tests {
         assert!(result3.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_transient_b_halving() {
         let data = vec![0x00; 32];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1841,7 +1841,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_avoid_split_noise_activation() {
         let data = vec![0x80; 32];
         let mut decoder = RangeDecoder::new(&data).unwrap();
@@ -1859,7 +1859,7 @@ mod tests {
         // when avoid_split_noise forces endpoints
     }
 
-    #[test]
+    #[test_log::test]
     fn test_avoid_split_noise_endpoint_forcing() {
         // This test verifies the endpoint forcing logic
         // When avoid_split_noise is true and itheta is in (0, qn),
@@ -1877,7 +1877,7 @@ mod tests {
         assert!(theta_value <= 16384);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lm_split_limit_enforcement() {
         // Test that splitting stops when LM reaches -1
         // RFC 6716 line 6618: "up to a limit of LM+1 splits"
@@ -1891,7 +1891,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lm_countdown_mechanism() {
         // Test that LM decrements on each split: 3 -> 2 -> 1 -> 0 -> -1
         // This enforces the "LM+1" maximum splits from RFC
@@ -1904,7 +1904,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_n_greater_than_2_requirement() {
         // Test that n <= 2 prevents splitting (libopus bands.c:983)
         let data = vec![0xFF; 32];
@@ -1916,7 +1916,7 @@ mod tests {
         // Should decode directly without splitting
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lm_negative_stops_recursion() {
         // Test that LM=-1 immediately stops splitting
         // This is the terminal condition for recursion
@@ -1929,7 +1929,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_pulses() {
         // Reference values from libopus rate.h:48-51
         assert_eq!(get_pulses(0), 0);
@@ -1942,7 +1942,7 @@ mod tests {
         assert_eq!(get_pulses(17), 18); // (8 + 1) << 1 = 18
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fits_in_32() {
         // Small values should always fit
         assert!(fits_in_32(4, 2));
@@ -1955,7 +1955,7 @@ mod tests {
         assert!(fits_in_32(10, 5));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_compute_split_threshold() {
         // Test that threshold computation doesn't crash and returns reasonable values
         let threshold_4 = compute_split_threshold(4);
@@ -1973,7 +1973,7 @@ mod tests {
         assert!(threshold_32 < 10000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_split_threshold_reasonable() {
         // Thresholds should be in reasonable range
         for n in &[4, 8, 16, 32, 64, 128] {
@@ -1983,7 +1983,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_split_requires_sufficient_bits() {
         // Test that splitting doesn't happen with insufficient bits
         // Even if codebook is large and LM allows, low bits should prevent split
@@ -1997,7 +1997,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_split_with_sufficient_bits() {
         // Test that splitting happens when bits are above threshold
         // Use data that produces valid range decoder state after RFC fix
@@ -2009,7 +2009,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bit_threshold_prevents_unnecessary_split() {
         // Verify that threshold actually prevents splitting
         // Use data that produces valid range decoder state after RFC fix
@@ -2022,7 +2022,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bit_threshold_allows_split_above_limit() {
         // Verify that above threshold allows splitting
         // Use data that produces valid range decoder state after RFC fix

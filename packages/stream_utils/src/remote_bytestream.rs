@@ -1252,4 +1252,152 @@ mod tests {
             "Stream should be finished after consuming all buffer data"
         );
     }
+
+    // ==== Seek Boundary Tests ====
+
+    /// Test seeking exactly to the end of downloaded data
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_to_exact_buffer_boundary() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate downloaded data from position 0 to 499 (500 bytes)
+        stream.fetcher.start = 0;
+        stream.fetcher.buffer = vec![0u8; 500];
+
+        // Seek to position 499 (last byte in buffer) - should stay within buffer
+        let pos = stream.seek(SeekFrom::Start(499)).unwrap();
+        assert_eq!(pos, 499);
+        assert_eq!(stream.fetcher.start, 0); // Fetcher should not change
+        assert_eq!(stream.fetcher.buffer.len(), 500); // Buffer should be preserved
+
+        // Seek to position 500 (first byte after buffer) - should create new fetcher
+        let pos = stream.seek(SeekFrom::Start(500)).unwrap();
+        assert_eq!(pos, 500);
+        assert_eq!(stream.fetcher.start, 500); // New fetcher starts at seek position
+        assert_eq!(stream.fetcher.buffer.len(), 0); // New fetcher has empty buffer
+    }
+
+    /// Test seek from current with negative offset
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_current_negative_within_buffer() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate downloaded data and read position
+        stream.fetcher.start = 0;
+        stream.fetcher.buffer = vec![0u8; 500];
+        stream.read_position = 300;
+
+        // Seek backwards within buffer
+        let pos = stream.seek(SeekFrom::Current(-100)).unwrap();
+        assert_eq!(pos, 200);
+        assert_eq!(stream.read_position, 200);
+
+        // Fetcher should still have same buffer (seeking within downloaded data)
+        assert_eq!(stream.fetcher.start, 0);
+        assert_eq!(stream.fetcher.buffer.len(), 500);
+    }
+
+    /// Test seeking forward outside downloaded data creates new fetcher
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_forward_past_buffer() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate downloaded data from 0 to 499
+        stream.fetcher.start = 0;
+        stream.fetcher.buffer = vec![0u8; 500];
+        stream.read_position = 200;
+
+        // Seek far forward (past downloaded data)
+        let pos = stream.seek(SeekFrom::Start(800)).unwrap();
+        assert_eq!(pos, 800);
+        assert_eq!(stream.read_position, 800);
+
+        // New fetcher should be created
+        assert_eq!(stream.fetcher.start, 800);
+        assert_eq!(stream.fetcher.buffer.len(), 0);
+    }
+
+    /// Test seeking backward before downloaded data creates new fetcher
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_backward_before_buffer() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate downloaded data from 500 to 999 (after seeking before)
+        stream.fetcher.start = 500;
+        stream.fetcher.buffer = vec![0u8; 500];
+        stream.read_position = 700;
+
+        // Seek backward before the buffer start
+        let pos = stream.seek(SeekFrom::Start(200)).unwrap();
+        assert_eq!(pos, 200);
+        assert_eq!(stream.read_position, 200);
+
+        // New fetcher should be created starting at seek position
+        assert_eq!(stream.fetcher.start, 200);
+        assert_eq!(stream.fetcher.buffer.len(), 0);
+    }
+
+    // ==== Abort Token Tests ====
+
+    /// Test that aborting the token during read returns gracefully
+    #[test_log::test(switchy_async::test)]
+    async fn test_abort_during_read() {
+        let abort_token = CancellationToken::new();
+        let abort_token_clone = abort_token.clone();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("hello world")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(11),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // First read to get initial data
+        let mut buf = [0u8; 5];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 5);
+
+        // Cancel the token
+        abort_token_clone.cancel();
+
+        // Subsequent read should handle the abort gracefully
+        // The behavior depends on whether the read is waiting for new data
+        // If buffer has data, it should still return that data
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        // Should return remaining data from buffer
+        assert!(bytes_read2 <= 6);
+    }
 }

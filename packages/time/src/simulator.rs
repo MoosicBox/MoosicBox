@@ -318,6 +318,42 @@ mod tests {
 
     #[test_log::test]
     #[serial]
+    fn test_reset_epoch_offset_with_env_var() {
+        // Save original value
+        let original = std::env::var("SIMULATOR_EPOCH_OFFSET").ok();
+
+        // Set a known value and reset to it
+        unsafe {
+            std::env::set_var("SIMULATOR_EPOCH_OFFSET", "5000000000");
+        }
+        reset_epoch_offset();
+        let first = epoch_offset();
+        assert_eq!(first, 5_000_000_000, "Should use env var value");
+
+        // Change to a different value and reset again
+        unsafe {
+            std::env::set_var("SIMULATOR_EPOCH_OFFSET", "9000000000");
+        }
+        reset_epoch_offset();
+        let second = epoch_offset();
+        assert_eq!(second, 9_000_000_000, "Should use new env var value");
+
+        // Verify they're different
+        assert_ne!(first, second);
+
+        // Restore original value
+        match original {
+            Some(val) => unsafe {
+                std::env::set_var("SIMULATOR_EPOCH_OFFSET", val);
+            },
+            None => unsafe {
+                std::env::remove_var("SIMULATOR_EPOCH_OFFSET");
+            },
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
     fn test_step_multiplier_initialization() {
         reset_step_multiplier();
         let multiplier = step_multiplier();

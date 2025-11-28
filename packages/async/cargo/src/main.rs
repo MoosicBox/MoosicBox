@@ -505,4 +505,228 @@ mod tests {
         assert_eq!(checker.warnings.len(), 1);
         assert!(checker.warnings[0].starts_with("path/to/file.rs:"));
     }
+
+    #[test_log::test]
+    fn test_has_inject_attr_empty_attrs() {
+        let attrs: Vec<Attribute> = vec![];
+        assert!(!has_inject_attr(&attrs));
+    }
+
+    #[test_log::test]
+    fn test_has_inject_attr_similar_names_not_matched() {
+        // Test that similar attribute names are NOT matched
+        let code = r"
+            #[inject_yield]
+            async fn test_inject_yield() {}
+
+            #[yields]
+            async fn test_yields() {}
+
+            #[inject]
+            async fn test_inject() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // All three should be flagged - none of these are "inject_yields"
+        assert_eq!(checker.warnings.len(), 3);
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("test_inject_yield"))
+        );
+        assert!(checker.warnings.iter().any(|w| w.contains("test_yields")));
+        assert!(checker.warnings.iter().any(|w| w.contains("test_inject")));
+    }
+
+    #[test_log::test]
+    fn test_checker_async_fn_with_multiple_attributes() {
+        // Test that inject_yields is found among multiple attributes
+        let code = r#"
+            #[cfg(test)]
+            #[inject_yields]
+            #[allow(unused)]
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should NOT be flagged since it has inject_yields
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_async_fn_with_multiple_attributes_without_inject_yields() {
+        // Test async function with multiple OTHER attributes (but not inject_yields)
+        let code = r#"
+            #[cfg(test)]
+            #[allow(unused)]
+            #[inline]
+            async fn test_function() {
+                println!("test");
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should be flagged - no inject_yields among the attributes
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("test_function"));
+    }
+
+    #[test_log::test]
+    fn test_checker_generic_async_function() {
+        // Test that generic async functions are still detected
+        let code = r"
+            async fn generic_fn<T, U>() where T: std::fmt::Debug {
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("generic_fn"));
+    }
+
+    #[test_log::test]
+    fn test_checker_generic_async_function_with_attribute() {
+        // Test that generic async functions with inject_yields are exempt
+        let code = r"
+            #[inject_yields]
+            async fn generic_fn<T, U>() where T: std::fmt::Debug {
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_async_associated_function_without_self() {
+        // Test async associated functions (no self parameter)
+        let code = r"
+            struct MyStruct;
+            impl MyStruct {
+                async fn new() -> Self {
+                    MyStruct
+                }
+
+                async fn create(value: i32) -> Self {
+                    MyStruct
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Both associated functions should be flagged
+        assert_eq!(checker.warnings.len(), 2);
+        assert!(checker.warnings.iter().any(|w| w.contains("new")));
+        assert!(checker.warnings.iter().any(|w| w.contains("create")));
+    }
+
+    #[test_log::test]
+    fn test_checker_impl_with_only_constants_and_types() {
+        // Test impl block with only associated constants and types (no methods)
+        let code = r"
+            struct MyStruct;
+            impl MyStruct {
+                const VALUE: i32 = 42;
+                type Alias = i32;
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // No warnings since there are no async methods
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_empty_file() {
+        // Test empty file produces no warnings
+        let code = "";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "empty.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_file_with_only_imports() {
+        // Test file with only imports produces no warnings
+        let code = r"
+            use std::collections::HashMap;
+            use std::fmt::Debug;
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "imports.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_impl_method_with_multiple_attributes() {
+        // Test impl method with multiple attributes including inject_yields
+        let code = r#"
+            struct MyStruct;
+            impl MyStruct {
+                #[cfg(test)]
+                #[inject_yields]
+                #[allow(unused)]
+                async fn my_method(&self) {
+                    println!("test");
+                }
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should NOT be flagged since method has inject_yields
+        assert_eq!(checker.warnings.len(), 0);
+    }
 }

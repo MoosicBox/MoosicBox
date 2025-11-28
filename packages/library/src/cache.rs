@@ -209,4 +209,72 @@ mod tests {
         let time = current_time_nanos();
         assert!(time > 0);
     }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn get_or_set_to_cache_returns_cached_value_on_subsequent_calls() {
+        clear_cache();
+
+        let call_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+        // First call - should compute the value
+        let call_count_clone = Arc::clone(&call_count);
+        let result1 = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_cache_hit",
+                expiration: Duration::from_secs(60),
+            },
+            || {
+                let count = Arc::clone(&call_count_clone);
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                        crate::models::LibraryArtist {
+                            id: 456,
+                            title: "Cached Artist".to_string(),
+                            cover: None,
+                            ..Default::default()
+                        },
+                    )))
+                }
+            },
+        )
+        .await;
+
+        assert!(result1.is_ok());
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+        // Second call - should return cached value without computing
+        let call_count_clone = Arc::clone(&call_count);
+        let result2 = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_cache_hit",
+                expiration: Duration::from_secs(60),
+            },
+            || {
+                let count = Arc::clone(&call_count_clone);
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                        crate::models::LibraryArtist {
+                            id: 789, // Different ID to prove cache was used
+                            title: "Different Artist".to_string(),
+                            cover: None,
+                            ..Default::default()
+                        },
+                    )))
+                }
+            },
+        )
+        .await;
+
+        assert!(result2.is_ok());
+        // Compute function should only have been called once
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+        // Verify the cached value is returned (id should be 456, not 789)
+        let artist = result2.unwrap().into_artist().unwrap();
+        assert_eq!(artist.id, 456);
+        assert_eq!(artist.title, "Cached Artist");
+    }
 }

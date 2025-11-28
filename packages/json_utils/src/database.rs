@@ -1239,4 +1239,304 @@ mod tests {
         let result: Result<&DatabaseValue, ParseError> = (&value).to_value_type();
         assert!(result.is_ok());
     }
+
+    #[test_log::test]
+    fn test_to_value_type_str_reference() {
+        let value = DatabaseValue::String("hello".to_string());
+        let result: Result<&str, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), "hello");
+
+        // Error case: wrong type
+        let value = &DatabaseValue::Int64(42);
+        let result: Result<&str, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_option_with_various_null_types() {
+        // Test BoolOpt(None)
+        let value = &DatabaseValue::BoolOpt(None);
+        let result: Result<Option<bool>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test StringOpt(None)
+        let value = &DatabaseValue::StringOpt(None);
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test Int64Opt(None)
+        let value = &DatabaseValue::Int64Opt(None);
+        let result: Result<Option<i64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test UInt64Opt(None)
+        let value = &DatabaseValue::UInt64Opt(None);
+        let result: Result<Option<u64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test Real64Opt(None)
+        let value = &DatabaseValue::Real64Opt(None);
+        let result: Result<Option<f64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test Real32Opt(None)
+        let value = &DatabaseValue::Real32Opt(None);
+        let result: Result<Option<f32>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_owned_to_value_type_option_with_various_null_types() {
+        // Test owned BoolOpt(None)
+        let value = DatabaseValue::BoolOpt(None);
+        let result: Result<Option<bool>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test owned StringOpt(None)
+        let value = DatabaseValue::StringOpt(None);
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test owned Int64Opt(None)
+        let value = DatabaseValue::Int64Opt(None);
+        let result: Result<Option<i64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test owned UInt64Opt(None)
+        let value = DatabaseValue::UInt64Opt(None);
+        let result: Result<Option<u64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test owned Real64Opt(None)
+        let value = DatabaseValue::Real64Opt(None);
+        let result: Result<Option<f64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test owned Real32Opt(None)
+        let value = DatabaseValue::Real32Opt(None);
+        let result: Result<Option<f32>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_datetime_utc_from_naive_datetime() {
+        use chrono::{DateTime, Datelike, NaiveDate, Timelike, Utc};
+
+        let datetime = NaiveDate::from_ymd_opt(2025, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 30, 45)
+            .unwrap();
+        let value = &DatabaseValue::DateTime(datetime);
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+
+        let dt = result.unwrap();
+        assert_eq!(dt.year(), 2025);
+        assert_eq!(dt.month(), 6);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 12);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_datetime_utc_invalid_type() {
+        use chrono::{DateTime, Utc};
+
+        // Error case: wrong type
+        let value = &DatabaseValue::Int64(12345);
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_datetime_utc_conversion() {
+        use chrono::{DateTime, NaiveDate, Utc};
+
+        let datetime = NaiveDate::from_ymd_opt(2025, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let value = DatabaseValue::DateTime(datetime);
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_signed_integer_from_uint64() {
+        // Test conversion from UInt64 to signed types
+        let value = &DatabaseValue::UInt64(100);
+
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i8);
+
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i16);
+
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i32);
+
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i64);
+
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_isize);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_unsigned_integer_from_int64() {
+        // Test conversion from Int64 to unsigned types (positive values)
+        let value = &DatabaseValue::Int64(100);
+
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_u8);
+
+        let result: Result<u16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_u16);
+
+        let result: Result<u32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_u32);
+
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_u64);
+
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_usize);
+    }
+
+    #[test_log::test]
+    fn test_owned_numeric_type_conversions() {
+        // Test owned Int64 conversions
+        let value = DatabaseValue::Int64(42);
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_i8);
+
+        let value = DatabaseValue::Int64(42);
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_i16);
+
+        let value = DatabaseValue::Int64(42);
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_i32);
+
+        let value = DatabaseValue::Int64(42);
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_i64);
+
+        let value = DatabaseValue::Int64(42);
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_isize);
+
+        // Test owned UInt64 conversions
+        let value = DatabaseValue::UInt64(200);
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 200_u8);
+
+        let value = DatabaseValue::UInt64(60000);
+        let result: Result<u16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 60000_u16);
+
+        let value = DatabaseValue::UInt64(4_000_000);
+        let result: Result<u32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 4_000_000_u32);
+
+        let value = DatabaseValue::UInt64(9_000_000_000);
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 9_000_000_000_u64);
+
+        let value = DatabaseValue::UInt64(12345);
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 12345_usize);
+    }
+
+    #[test_log::test]
+    fn test_owned_float_conversions() {
+        // Test owned Real32 conversions
+        let value = DatabaseValue::Real32(2.5_f32);
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 2.5_f32).abs() < f32::EPSILON);
+
+        let value = DatabaseValue::Real32(2.5_f32);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 2.5_f64).abs() < 0.001);
+
+        // Test owned Real64 conversions
+        let value = DatabaseValue::Real64(1.234);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.234).abs() < f64::EPSILON);
+
+        let value = DatabaseValue::Real64(1.234);
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.234_f32).abs() < 0.001);
+
+        // Error case
+        let value = DatabaseValue::String("1.5".to_string());
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_string_conversion_error() {
+        // Error case: wrong type for String
+        let value = DatabaseValue::Int64(42);
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_option_missing_value_returns_none() {
+        // Test that missing_value for Option types returns Ok(None)
+        let value = &DatabaseValue::Int64(42);
+        let result = <&DatabaseValue as ToValueType<Option<String>>>::missing_value(
+            &value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
+
+        // Owned value version
+        let value = DatabaseValue::Int64(42);
+        let result = <DatabaseValue as ToValueType<Option<String>>>::missing_value(
+            &value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_integer_conversion_errors() {
+        // Error cases for integer conversions - wrong types
+        let value = &DatabaseValue::String("not a number".to_string());
+
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_naive_datetime_conversion_invalid_format() {
+        use chrono::NaiveDateTime;
+
+        // Invalid datetime string format
+        let value = DatabaseValue::String("01-08-2025 20:06:35".to_string());
+        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::ConvertType(_)));
+        assert!(err.to_string().contains("Invalid datetime format"));
+    }
+
+    #[test_log::test]
+    fn test_naive_datetime_conversion_wrong_type() {
+        use chrono::NaiveDateTime;
+
+        // Wrong type entirely
+        let value = DatabaseValue::Int64(12345);
+        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
 }

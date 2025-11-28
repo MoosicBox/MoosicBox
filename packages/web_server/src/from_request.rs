@@ -763,4 +763,211 @@ mod tests {
             }
         }
     }
+
+    // ==================== RequestData.content_length() Tests ====================
+    // Note: content-length header is not extracted by from_request_sync, so these tests
+    // verify that content_length() correctly parses from headers when present in the map
+
+    #[test_log::test]
+    fn test_request_data_content_length_when_header_present() {
+        // Manually construct RequestData with content-length header to test parsing
+        let mut headers = HashMap::new();
+        headers.insert("content-length".to_string(), "1024".to_string());
+
+        let data = RequestData {
+            method: Method::Post,
+            path: "/api/data".to_string(),
+            query: String::new(),
+            headers,
+            remote_addr: None,
+            user_agent: None,
+            content_type: None,
+        };
+
+        assert_eq!(data.content_length(), Some(1024));
+    }
+
+    #[test_log::test]
+    fn test_request_data_content_length_zero() {
+        let mut headers = HashMap::new();
+        headers.insert("content-length".to_string(), "0".to_string());
+
+        let data = RequestData {
+            method: Method::Post,
+            path: "/api/data".to_string(),
+            query: String::new(),
+            headers,
+            remote_addr: None,
+            user_agent: None,
+            content_type: None,
+        };
+
+        assert_eq!(data.content_length(), Some(0));
+    }
+
+    #[test_log::test]
+    fn test_request_data_content_length_missing() {
+        let data = RequestData {
+            method: Method::Get,
+            path: "/api/data".to_string(),
+            query: String::new(),
+            headers: HashMap::new(),
+            remote_addr: None,
+            user_agent: None,
+            content_type: None,
+        };
+
+        assert_eq!(data.content_length(), None);
+    }
+
+    #[test_log::test]
+    fn test_request_data_content_length_invalid_not_number() {
+        let mut headers = HashMap::new();
+        headers.insert("content-length".to_string(), "not-a-number".to_string());
+
+        let data = RequestData {
+            method: Method::Post,
+            path: "/api/data".to_string(),
+            query: String::new(),
+            headers,
+            remote_addr: None,
+            user_agent: None,
+            content_type: None,
+        };
+
+        // Invalid content-length should return None
+        assert_eq!(data.content_length(), None);
+    }
+
+    #[test_log::test]
+    fn test_request_data_content_length_large_value() {
+        let mut headers = HashMap::new();
+        headers.insert("content-length".to_string(), "999999999".to_string());
+
+        let data = RequestData {
+            method: Method::Post,
+            path: "/api/data".to_string(),
+            query: String::new(),
+            headers,
+            remote_addr: None,
+            user_agent: None,
+            content_type: None,
+        };
+
+        assert_eq!(data.content_length(), Some(999_999_999));
+    }
+
+    // ==================== RequestData with remote_addr Tests ====================
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_data_remote_addr_present() {
+        let sim_req =
+            SimulationRequest::new(Method::Get, "/test").with_remote_addr("192.168.1.50:43210");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let data = RequestData::from_request_sync(&req).unwrap();
+
+        assert_eq!(data.remote_addr, Some("192.168.1.50:43210".to_string()));
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_data_remote_addr_absent() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let data = RequestData::from_request_sync(&req).unwrap();
+
+        assert_eq!(data.remote_addr, None);
+    }
+
+    // ==================== RequestInfo with remote_addr Tests ====================
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_request_info_remote_addr_present() {
+        let sim_req =
+            SimulationRequest::new(Method::Get, "/api/info").with_remote_addr("10.0.0.1:8080");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let info = RequestInfo::from_request_sync(&req).unwrap();
+
+        assert_eq!(info.remote_addr, Some("10.0.0.1:8080".to_string()));
+    }
+
+    // ==================== Headers Additional Tests ====================
+    // Note: Headers::from_request_sync only extracts specific common headers
+    // (authorization, content-type, user-agent, accept, host), not custom headers
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_extracts_common_headers() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test")
+            .with_header("authorization", "Bearer token123")
+            .with_header("content-type", "application/json")
+            .with_header("user-agent", "TestAgent/1.0")
+            .with_header("accept", "text/html")
+            .with_header("host", "example.com");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let headers = Headers::from_request_sync(&req).unwrap();
+
+        assert_eq!(
+            headers.authorization(),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(
+            headers.content_type(),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(headers.user_agent(), Some(&"TestAgent/1.0".to_string()));
+        assert_eq!(headers.get("accept"), Some(&"text/html".to_string()));
+        assert_eq!(headers.get("host"), Some(&"example.com".to_string()));
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_custom_headers_not_extracted() {
+        // Custom headers are not extracted by from_request_sync
+        let sim_req = SimulationRequest::new(Method::Get, "/test")
+            .with_header("x-custom-header", "custom-value")
+            .with_header("x-request-id", "req-12345");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let headers = Headers::from_request_sync(&req).unwrap();
+
+        // Custom headers are not in the extracted Headers
+        assert_eq!(headers.get("x-custom-header"), None);
+        assert_eq!(headers.get("x-request-id"), None);
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_accept_via_get() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test")
+            .with_header("accept", "text/html,application/xhtml+xml");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let headers = Headers::from_request_sync(&req).unwrap();
+
+        assert_eq!(
+            headers.get("accept"),
+            Some(&"text/html,application/xhtml+xml".to_string())
+        );
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_headers_empty_request() {
+        let sim_req = SimulationRequest::new(Method::Get, "/test");
+        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+
+        let headers = Headers::from_request_sync(&req).unwrap();
+
+        assert!(headers.authorization().is_none());
+        assert!(headers.content_type().is_none());
+        assert!(headers.user_agent().is_none());
+        assert!(headers.get("accept").is_none());
+    }
 }

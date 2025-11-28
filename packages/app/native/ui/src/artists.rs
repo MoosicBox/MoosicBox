@@ -245,3 +245,83 @@ pub fn albums_list(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod artist_page_url_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_builds_url_with_numeric_id() {
+            let result = artist_page_url("123");
+            assert_eq!(result, "/artists?artistId=123");
+        }
+
+        #[test_log::test]
+        fn test_builds_url_with_string_id() {
+            let result = artist_page_url("abc-def");
+            assert_eq!(result, "/artists?artistId=abc-def");
+        }
+    }
+
+    mod artist_cover_url_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_returns_placeholder_when_no_cover() {
+            let result = artist_cover_url(
+                "http://api.example.com",
+                &Id::Number(123),
+                &ApiSource::library(),
+                false,
+                200,
+                200,
+            );
+            assert_eq!(result, "/public/img/album.svg");
+        }
+
+        #[test_log::test]
+        fn test_returns_api_url_when_has_cover() {
+            let result = artist_cover_url(
+                "http://api.example.com",
+                &Id::Number(123),
+                &ApiSource::library(),
+                true,
+                200,
+                200,
+            );
+            assert_eq!(
+                result,
+                "http://api.example.com/files/artists/123/200x200?moosicboxProfile=master&source=Library"
+            );
+        }
+
+        #[test_log::test]
+        fn test_uses_correct_dimensions() {
+            let result = artist_cover_url(
+                "http://api.example.com",
+                &Id::Number(456),
+                &ApiSource::library(),
+                true,
+                150,
+                250,
+            );
+            assert!(result.contains("/150x250?"));
+        }
+
+        #[test_log::test]
+        fn test_includes_source_in_query() {
+            let result = artist_cover_url(
+                "http://api.example.com",
+                &Id::Number(123),
+                &ApiSource::library(),
+                true,
+                100,
+                100,
+            );
+            assert!(result.contains("source=Library"));
+        }
+    }
+}

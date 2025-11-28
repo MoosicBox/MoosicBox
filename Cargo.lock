@@ -6084,6 +6084,7 @@ dependencies = [
  "switchy_async",
  "switchy_env",
  "switchy_http",
+ "test-log",
  "tracing-subscriber",
  "tracy-client",
 ]
@@ -6182,6 +6183,7 @@ dependencies = [
 name = "hyperchad_renderer_html_http"
 version = "0.1.4"
 dependencies = [
+ "bytes",
  "flume",
  "http 1.4.0",
  "hyperchad_color",
@@ -6194,6 +6196,7 @@ dependencies = [
  "moosicbox_env_utils",
  "serde",
  "serde_json",
+ "switchy",
  "switchy_async",
  "switchy_fs",
  "test-log",
@@ -8292,6 +8295,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "switchy_env",
+ "test-log",
 ]
 
 [[package]]
@@ -8359,6 +8363,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "switchy_async",
+ "test-log",
  "thiserror 2.0.17",
  "tokio",
  "tokio-tungstenite",
@@ -8372,6 +8377,7 @@ dependencies = [
  "moosicbox_assert",
  "proptest",
  "serde_json",
+ "test-log",
 ]
 
 [[package]]
@@ -8480,8 +8486,10 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_paging",
  "serde",
+ "serial_test",
  "switchy_async",
  "switchy_database",
+ "test-log",
  "tokio",
  "utoipa",
 ]
@@ -8860,6 +8868,7 @@ dependencies = [
  "hyperchad",
  "log 0.4.28",
  "regex",
+ "test-log",
 ]
 
 [[package]]
@@ -9393,6 +9402,7 @@ dependencies = [
  "switchy_async",
  "switchy_env",
  "switchy_telemetry",
+ "test-log",
  "tokio",
 ]
 
@@ -15434,6 +15444,7 @@ dependencies = [
  "switchy_random",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -15521,6 +15532,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "flume",
+ "futures",
  "log 0.4.28",
  "paste",
  "pretty_assertions",
@@ -18314,6 +18326,7 @@ dependencies = [
  "switchy",
  "switchy_async",
  "switchy_http_models",
+ "test-log",
  "thiserror 2.0.17",
  "tokio",
 ]

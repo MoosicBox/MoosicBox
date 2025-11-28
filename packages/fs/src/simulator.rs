@@ -410,6 +410,61 @@ impl FileType {
     }
 }
 
+#[cfg(test)]
+mod file_type_tests {
+    use super::FileType;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_file_type_for_directory() {
+        let file_type = FileType {
+            is_dir: true,
+            is_file: false,
+            is_symlink: false,
+        };
+        assert_eq!(file_type.is_dir(), true);
+        assert_eq!(file_type.is_file(), false);
+        assert_eq!(file_type.is_symlink(), false);
+    }
+
+    #[test_log::test]
+    fn test_file_type_for_regular_file() {
+        let file_type = FileType {
+            is_dir: false,
+            is_file: true,
+            is_symlink: false,
+        };
+        assert_eq!(file_type.is_dir(), false);
+        assert_eq!(file_type.is_file(), true);
+        assert_eq!(file_type.is_symlink(), false);
+    }
+
+    #[test_log::test]
+    fn test_file_type_for_symlink() {
+        let file_type = FileType {
+            is_dir: false,
+            is_file: false,
+            is_symlink: true,
+        };
+        assert_eq!(file_type.is_dir(), false);
+        assert_eq!(file_type.is_file(), false);
+        assert_eq!(file_type.is_symlink(), true);
+    }
+
+    #[test_log::test]
+    fn test_file_type_clone() {
+        let original = FileType {
+            is_dir: true,
+            is_file: false,
+            is_symlink: false,
+        };
+        let cloned = original.clone();
+        assert_eq!(cloned.is_dir(), original.is_dir());
+        assert_eq!(cloned.is_file(), original.is_file());
+        assert_eq!(cloned.is_symlink(), original.is_symlink());
+    }
+}
+
 /// Synchronous filesystem operations for the simulator
 ///
 /// This module provides blocking filesystem operations that work with the in-memory
@@ -1869,6 +1924,356 @@ mod real_fs_tests {
     }
 }
 
+#[cfg(test)]
+mod exists_tests {
+    use super::{exists, reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_exists_returns_false_for_nonexistent_path() {
+        reset_fs();
+        assert_eq!(exists("/nonexistent/path"), false);
+    }
+
+    #[test_log::test]
+    fn test_exists_returns_true_for_directory() {
+        reset_fs();
+        sync::create_dir_all("/existing/directory").unwrap();
+        assert_eq!(exists("/existing/directory"), true);
+    }
+
+    #[test_log::test]
+    fn test_exists_returns_true_for_file() {
+        reset_fs();
+        sync::create_dir_all("/existing").unwrap();
+        sync::write("/existing/file.txt", b"content").unwrap();
+        assert_eq!(exists("/existing/file.txt"), true);
+    }
+
+    #[test_log::test]
+    fn test_exists_with_root_path() {
+        reset_fs();
+        sync::create_dir_all("/").unwrap();
+        assert_eq!(exists("/"), true);
+    }
+}
+
+#[cfg(test)]
+mod get_parent_directories_tests {
+    use super::get_parent_directories;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_parent_directories_for_deeply_nested_path() {
+        let parents = get_parent_directories("/a/b/c/d/e");
+        assert_eq!(parents, vec!["/", "/a", "/a/b", "/a/b/c", "/a/b/c/d"]);
+    }
+
+    #[test_log::test]
+    fn test_parent_directories_for_single_level() {
+        let parents = get_parent_directories("/single");
+        assert_eq!(parents, vec!["/"]);
+    }
+
+    #[test_log::test]
+    fn test_parent_directories_for_root() {
+        let parents = get_parent_directories("/");
+        // Root has no parents
+        assert!(parents.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_parent_directories_preserves_order() {
+        // Parents should be returned from root to immediate parent
+        let parents = get_parent_directories("/usr/local/bin");
+        assert_eq!(parents, vec!["/", "/usr", "/usr/local"]);
+    }
+}
+
+#[cfg(test)]
+mod get_directory_children_tests {
+    use super::{get_directory_children, reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_children_of_empty_directory() {
+        reset_fs();
+        sync::create_dir_all("/empty").unwrap();
+
+        let (files, subdirs) = get_directory_children("/empty");
+        assert!(files.is_empty());
+        assert!(subdirs.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_children_with_files_only() {
+        reset_fs();
+        sync::create_dir_all("/files_only").unwrap();
+        sync::write("/files_only/a.txt", b"a").unwrap();
+        sync::write("/files_only/b.txt", b"b").unwrap();
+
+        let (mut files, subdirs) = get_directory_children("/files_only");
+        files.sort();
+        assert_eq!(files, vec!["a.txt", "b.txt"]);
+        assert!(subdirs.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_children_with_subdirs_only() {
+        reset_fs();
+        sync::create_dir_all("/dirs_only/subdir1").unwrap();
+        sync::create_dir_all("/dirs_only/subdir2").unwrap();
+
+        let (files, mut subdirs) = get_directory_children("/dirs_only");
+        subdirs.sort();
+        assert!(files.is_empty());
+        assert_eq!(subdirs, vec!["subdir1", "subdir2"]);
+    }
+
+    #[test_log::test]
+    fn test_children_mixed_content() {
+        reset_fs();
+        sync::create_dir_all("/mixed/sub").unwrap();
+        sync::write("/mixed/file.txt", b"data").unwrap();
+
+        let (files, subdirs) = get_directory_children("/mixed");
+        assert_eq!(files, vec!["file.txt"]);
+        assert_eq!(subdirs, vec!["sub"]);
+    }
+
+    #[test_log::test]
+    fn test_children_of_root_directory() {
+        reset_fs();
+        sync::create_dir_all("/root_test").unwrap();
+        sync::create_dir_all("/another").unwrap();
+
+        let (files, mut subdirs) = get_directory_children("/");
+        subdirs.sort();
+        assert!(files.is_empty());
+        assert!(subdirs.contains(&"root_test".to_string()));
+        assert!(subdirs.contains(&"another".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_children_excludes_nested_items() {
+        // Files/dirs in subdirectories should not appear in parent's children
+        reset_fs();
+        sync::create_dir_all("/parent/child").unwrap();
+        sync::write("/parent/child/nested.txt", b"nested").unwrap();
+        sync::write("/parent/direct.txt", b"direct").unwrap();
+
+        let (files, subdirs) = get_directory_children("/parent");
+        assert_eq!(files, vec!["direct.txt"]);
+        assert_eq!(subdirs, vec!["child"]);
+        // nested.txt should NOT appear
+        assert!(!files.contains(&"nested.txt".to_string()));
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_file_conversion_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+    use std::io::{Seek as _, SeekFrom, Write as _};
+
+    #[test_log::test]
+    fn test_async_file_into_sync_preserves_state() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        // Create async file with specific state
+        let mut sync_file = crate::sync::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open("/tmp/async_to_sync.txt")
+            .unwrap();
+
+        sync_file.write_all(b"test data here").unwrap();
+        sync_file.seek(SeekFrom::Start(5)).unwrap();
+
+        let async_file = sync_file.into_async();
+
+        // Position and path should be preserved
+        assert_eq!(async_file.position, 5);
+        assert_eq!(async_file.path.to_string_lossy(), "/tmp/async_to_sync.txt");
+        assert!(async_file.write);
+
+        // Convert back to sync
+        let sync_file_again = async_file.into_sync();
+        assert_eq!(sync_file_again.position, 5);
+        assert_eq!(
+            sync_file_again.path.to_string_lossy(),
+            "/tmp/async_to_sync.txt"
+        );
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_operations_tests {
+    use super::{reset_fs, sync, unsync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_write_and_read() {
+        reset_fs();
+        sync::create_dir_all("/async_test").unwrap();
+
+        // Write using async API
+        unsync::write("/async_test/file.txt", b"async content")
+            .await
+            .unwrap();
+
+        // Read back using async API
+        let content = unsync::read_to_string("/async_test/file.txt")
+            .await
+            .unwrap();
+        assert_eq!(content, "async content");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_create_dir_all() {
+        reset_fs();
+
+        // Create nested directories asynchronously
+        unsync::create_dir_all("/async_dirs/nested/deep")
+            .await
+            .unwrap();
+
+        // Verify using sync API
+        assert!(super::exists("/async_dirs/nested/deep"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_remove_dir_all() {
+        reset_fs();
+        sync::create_dir_all("/to_remove/sub").unwrap();
+        sync::write("/to_remove/file.txt", b"data").unwrap();
+
+        // Remove using async API
+        unsync::remove_dir_all("/to_remove").await.unwrap();
+
+        // Should no longer exist
+        assert!(!super::exists("/to_remove"));
+        assert!(!super::exists("/to_remove/sub"));
+        assert!(!super::exists("/to_remove/file.txt"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_remove_nonexistent_dir_fails() {
+        reset_fs();
+
+        let result = unsync::remove_dir_all("/does_not_exist").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_open_options() {
+        reset_fs();
+        sync::create_dir_all("/async_open").unwrap();
+
+        // Open with create
+        let file = crate::unsync::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open("/async_open/new_file.txt")
+            .await
+            .unwrap();
+
+        assert!(file.write);
+        assert_eq!(file.path.to_string_lossy(), "/async_open/new_file.txt");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_nonexistent_file() {
+        reset_fs();
+
+        let result = unsync::read_to_string("/nonexistent.txt").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_write_without_parent_fails() {
+        reset_fs();
+
+        let result = unsync::write("/no/parent/file.txt", b"data").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_file_io_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+    use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_trait() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/async_read.txt", b"Hello, async world!").unwrap();
+
+        let mut file = crate::unsync::OpenOptions::new()
+            .read(true)
+            .open("/tmp/async_read.txt")
+            .await
+            .unwrap();
+
+        let mut buf = [0u8; 5];
+        file.read_exact(&mut buf).await.unwrap();
+        assert_eq!(&buf, b"Hello");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_write_trait() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        let mut file = crate::unsync::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open("/tmp/async_write.txt")
+            .await
+            .unwrap();
+
+        file.write_all(b"async write test").await.unwrap();
+        file.flush().await.unwrap();
+        drop(file);
+
+        // Verify content
+        let content = sync::read_to_string("/tmp/async_write.txt").unwrap();
+        assert_eq!(content, "async write test");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_seek_trait() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/async_seek.txt", b"0123456789").unwrap();
+
+        let mut file = crate::unsync::OpenOptions::new()
+            .read(true)
+            .open("/tmp/async_seek.txt")
+            .await
+            .unwrap();
+
+        // Seek to position 5
+        let pos = file.seek(std::io::SeekFrom::Start(5)).await.unwrap();
+        assert_eq!(pos, 5);
+
+        // Read remaining
+        let mut buf = [0u8; 5];
+        file.read_exact(&mut buf).await.unwrap();
+        assert_eq!(&buf, b"56789");
+    }
+}
+
 /// Temporary directory functionality for the simulator
 pub mod temp_dir {
     use std::{
@@ -2463,5 +2868,295 @@ pub mod temp_dir {
         }
 
         name
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::simulator::{exists, reset_fs};
+        use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        fn test_generate_temp_name_without_prefix_or_suffix() {
+            let name = generate_temp_name(None, None, 6);
+            assert_eq!(name.to_str().unwrap(), "abcdef");
+        }
+
+        #[test_log::test]
+        fn test_generate_temp_name_with_prefix() {
+            let name = generate_temp_name(Some(std::ffi::OsStr::new("test-")), None, 4);
+            assert_eq!(name.to_str().unwrap(), "test-abcd");
+        }
+
+        #[test_log::test]
+        fn test_generate_temp_name_with_suffix() {
+            let name = generate_temp_name(None, Some(std::ffi::OsStr::new("-end")), 4);
+            assert_eq!(name.to_str().unwrap(), "abcd-end");
+        }
+
+        #[test_log::test]
+        fn test_generate_temp_name_with_both() {
+            let name = generate_temp_name(
+                Some(std::ffi::OsStr::new("pre-")),
+                Some(std::ffi::OsStr::new("-suf")),
+                3,
+            );
+            assert_eq!(name.to_str().unwrap(), "pre-abc-suf");
+        }
+
+        #[test_log::test]
+        fn test_generate_temp_name_wraps_alphabet() {
+            // With 30 rand_bytes, it should wrap around the alphabet
+            let name = generate_temp_name(None, None, 30);
+            let s = name.to_str().unwrap();
+            // First 26 chars are a-z, then wraps: 0%26=a, 1%26=b, etc.
+            assert!(s.starts_with("abcdefghijklmnopqrstuvwxyzabcd"));
+        }
+
+        #[test_log::test]
+        fn test_builder_default_values() {
+            reset_fs();
+
+            let builder = Builder::new();
+            let temp = builder.tempdir().unwrap();
+
+            // Should be created in /tmp with deterministic name
+            assert!(temp.path().starts_with("/tmp"));
+            assert!(exists(temp.path()));
+        }
+
+        #[test_log::test]
+        fn test_builder_with_prefix() {
+            reset_fs();
+
+            let mut builder = Builder::new();
+            builder.prefix("myprefix-");
+            let temp = builder.tempdir().unwrap();
+
+            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
+            assert!(file_name.starts_with("myprefix-"));
+        }
+
+        #[test_log::test]
+        fn test_builder_with_suffix() {
+            reset_fs();
+
+            let mut builder = Builder::new();
+            builder.suffix("-mysuffix");
+            let temp = builder.tempdir().unwrap();
+
+            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
+            assert!(file_name.ends_with("-mysuffix"));
+        }
+
+        #[test_log::test]
+        fn test_builder_with_custom_rand_bytes() {
+            reset_fs();
+
+            let mut builder = Builder::new();
+            builder.rand_bytes(10);
+            let temp = builder.tempdir().unwrap();
+
+            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
+            // 10 rand bytes = "abcdefghij"
+            assert!(file_name.contains("abcdefghij"));
+        }
+
+        #[test_log::test]
+        fn test_builder_tempdir_in() {
+            reset_fs();
+            crate::simulator::sync::create_dir_all("/custom").unwrap();
+
+            let mut builder = Builder::new();
+            builder.prefix("test-");
+            let temp = builder.tempdir_in("/custom").unwrap();
+
+            assert!(temp.path().starts_with("/custom"));
+            assert!(
+                temp.path()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .starts_with("test-")
+            );
+        }
+
+        #[test_log::test]
+        fn test_builder_chaining() {
+            reset_fs();
+
+            let temp = Builder::new()
+                .prefix("start-")
+                .suffix("-end")
+                .rand_bytes(3)
+                .tempdir()
+                .unwrap();
+
+            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
+            assert_eq!(file_name, "start-abc-end");
+        }
+
+        #[test_log::test]
+        fn test_disable_cleanup_prevents_deletion() {
+            reset_fs();
+
+            let path = {
+                let mut temp = TempDir::new().unwrap();
+                temp.disable_cleanup(true);
+                temp.path().to_path_buf()
+            };
+
+            // After drop, directory should still exist
+            assert!(
+                exists(&path),
+                "Directory should exist after drop with cleanup disabled"
+            );
+        }
+
+        #[test_log::test]
+        fn test_disable_cleanup_can_be_reenabled() {
+            reset_fs();
+
+            let path = {
+                let mut temp = TempDir::new().unwrap();
+                temp.disable_cleanup(true);
+                temp.disable_cleanup(false); // Re-enable cleanup
+                temp.path().to_path_buf()
+            };
+
+            // Directory should be removed after drop
+            assert!(
+                !exists(&path),
+                "Directory should be removed when cleanup is re-enabled"
+            );
+        }
+
+        #[test_log::test]
+        fn test_tempdir_with_prefix_in() {
+            reset_fs();
+            crate::simulator::sync::create_dir_all("/base").unwrap();
+
+            let temp = TempDir::with_prefix_in("pfx-", "/base").unwrap();
+            assert!(temp.path().starts_with("/base"));
+            assert!(
+                temp.path()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .starts_with("pfx-")
+            );
+        }
+
+        #[test_log::test]
+        fn test_tempdir_with_suffix_in() {
+            reset_fs();
+            crate::simulator::sync::create_dir_all("/base").unwrap();
+
+            let temp = TempDir::with_suffix_in("-sfx", "/base").unwrap();
+            assert!(temp.path().starts_with("/base"));
+            assert!(
+                temp.path()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .ends_with("-sfx")
+            );
+        }
+
+        #[test_log::test]
+        fn test_tempdir_drop_removes_directory() {
+            reset_fs();
+
+            let path = {
+                let temp = TempDir::new().unwrap();
+                let p = temp.path().to_path_buf();
+                assert!(exists(&p), "Directory should exist before drop");
+                p
+            };
+
+            assert!(!exists(&path), "Directory should be removed after drop");
+        }
+
+        #[test_log::test]
+        fn test_tempdir_close_removes_directory() {
+            reset_fs();
+
+            let temp = TempDir::new().unwrap();
+            let path = temp.path().to_path_buf();
+            assert!(exists(&path));
+
+            temp.close().unwrap();
+            assert!(!exists(&path), "Directory should be removed after close()");
+        }
+
+        #[test_log::test]
+        fn test_tempdir_close_with_cleanup_disabled() {
+            reset_fs();
+
+            let mut temp = TempDir::new().unwrap();
+            let path = temp.path().to_path_buf();
+            temp.disable_cleanup(true);
+
+            // close() should be a no-op when cleanup is disabled
+            temp.close().unwrap();
+            assert!(
+                exists(&path),
+                "Directory should exist after close() with cleanup disabled"
+            );
+        }
+
+        #[test_log::test]
+        fn test_tempdir_as_ref() {
+            reset_fs();
+
+            let temp = TempDir::new().unwrap();
+            let path_ref: &Path = temp.as_ref();
+            assert_eq!(path_ref, temp.path());
+        }
+
+        #[test_log::test]
+        fn test_tempdir_debug_format() {
+            reset_fs();
+
+            let temp = TempDir::new().unwrap();
+            let debug_str = format!("{temp:?}");
+
+            // Debug output should contain "TempDir", path, and cleanup_enabled
+            assert!(debug_str.contains("TempDir"));
+            assert!(debug_str.contains("path"));
+            assert!(debug_str.contains("cleanup_enabled"));
+        }
+
+        #[test_log::test]
+        fn test_builder_default_impl() {
+            // Builder::default() should be equivalent to Builder::new()
+            let builder1 = Builder::new();
+            let builder2 = Builder::default();
+
+            // Both should have same default behavior
+            assert!(builder1.prefix.is_none());
+            assert!(builder2.prefix.is_none());
+            assert!(builder1.suffix.is_none());
+            assert!(builder2.suffix.is_none());
+            assert_eq!(builder1.rand_bytes, builder2.rand_bytes);
+        }
+
+        #[test_log::test]
+        fn test_reset_temp_dirs_clears_state() {
+            reset_fs();
+
+            // Create some temp directories
+            let _temp1 = TempDir::new().unwrap();
+            let _temp2 = TempDir::new().unwrap();
+
+            // Reset should clear tracking state
+            reset_temp_dirs();
+
+            // This just verifies the function doesn't panic
+            // The actual cleanup is handled by drop
+        }
     }
 }

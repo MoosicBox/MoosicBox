@@ -2647,6 +2647,9 @@ impl MusicApi for QobuzMusicApi {
 mod tests {
     use std::collections::BTreeMap;
 
+    use moosicbox_music_api::models::TrackAudioQuality;
+    use moosicbox_music_models::AlbumType;
+
     use crate::*;
 
     static TEST_LOGIN_SOURCE: &str = r#"</script>
@@ -2709,5 +2712,250 @@ mod tests {
         let version = "";
         let result = format_title(title, Some(version));
         assert_eq!(result, "My Album - ");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_try_from_str_all_variants() {
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("album").unwrap(),
+            QobuzAlbumReleaseType::Album
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("live").unwrap(),
+            QobuzAlbumReleaseType::Live
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("compilation").unwrap(),
+            QobuzAlbumReleaseType::Compilation
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("ep").unwrap(),
+            QobuzAlbumReleaseType::Ep
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("single").unwrap(),
+            QobuzAlbumReleaseType::Single
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("epmini").unwrap(),
+            QobuzAlbumReleaseType::EpSingle
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("epSingle").unwrap(),
+            QobuzAlbumReleaseType::EpSingle
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("other").unwrap(),
+            QobuzAlbumReleaseType::Other
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::try_from("download").unwrap(),
+            QobuzAlbumReleaseType::Download
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_try_from_str_invalid() {
+        let result = QobuzAlbumReleaseType::try_from("invalid_type");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_from_album_type() {
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::Lp),
+            QobuzAlbumReleaseType::Album
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::Live),
+            QobuzAlbumReleaseType::Live
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::Compilations),
+            QobuzAlbumReleaseType::Compilation
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::EpsAndSingles),
+            QobuzAlbumReleaseType::EpSingle
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::Other),
+            QobuzAlbumReleaseType::Other
+        );
+        assert_eq!(
+            QobuzAlbumReleaseType::from(AlbumType::Download),
+            QobuzAlbumReleaseType::Download
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_type_from_qobuz_album_release_type() {
+        assert_eq!(AlbumType::from(QobuzAlbumReleaseType::Album), AlbumType::Lp);
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Live),
+            AlbumType::Live
+        );
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Compilation),
+            AlbumType::Compilations
+        );
+        // Ep, Single, and EpSingle all map to EpsAndSingles
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Ep),
+            AlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Single),
+            AlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::EpSingle),
+            AlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Other),
+            AlbumType::Other
+        );
+        assert_eq!(
+            AlbumType::from(QobuzAlbumReleaseType::Download),
+            AlbumType::Download
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_audio_quality_format_id_mappings() {
+        // These format IDs are used in Qobuz API requests and must be correct
+        assert_eq!(QobuzAudioQuality::Low.as_format_id(), 5);
+        assert_eq!(QobuzAudioQuality::FlacLossless.as_format_id(), 6);
+        assert_eq!(QobuzAudioQuality::FlacHiRes.as_format_id(), 7);
+        assert_eq!(QobuzAudioQuality::FlacHighestRes.as_format_id(), 27);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_audio_quality_from_track_audio_quality() {
+        assert_eq!(
+            QobuzAudioQuality::from(TrackAudioQuality::Low),
+            QobuzAudioQuality::Low
+        );
+        assert_eq!(
+            QobuzAudioQuality::from(TrackAudioQuality::FlacLossless),
+            QobuzAudioQuality::FlacLossless
+        );
+        assert_eq!(
+            QobuzAudioQuality::from(TrackAudioQuality::FlacHiRes),
+            QobuzAudioQuality::FlacHiRes
+        );
+        assert_eq!(
+            QobuzAudioQuality::from(TrackAudioQuality::FlacHighestRes),
+            QobuzAudioQuality::FlacHighestRes
+        );
+    }
+
+    #[test_log::test]
+    fn test_replace_all_single_replacement() {
+        let result = replace_all("/path/:id/resource", &[(":id", "123")]);
+        assert_eq!(result, "/path/123/resource");
+    }
+
+    #[test_log::test]
+    fn test_replace_all_multiple_replacements() {
+        let result = replace_all(
+            "/users/:userId/albums/:albumId",
+            &[(":userId", "42"), (":albumId", "99")],
+        );
+        assert_eq!(result, "/users/42/albums/99");
+    }
+
+    #[test_log::test]
+    fn test_replace_all_no_match() {
+        let result = replace_all("/path/to/resource", &[(":id", "123")]);
+        assert_eq!(result, "/path/to/resource");
+    }
+
+    #[test_log::test]
+    fn test_replace_all_empty_params() {
+        let result = replace_all("/path/to/resource", &[]);
+        assert_eq!(result, "/path/to/resource");
+    }
+
+    #[test_log::test]
+    fn test_attach_query_string_single_param() {
+        let result = attach_query_string("https://api.example.com/endpoint", &[("key", "value")]);
+        assert_eq!(result, "https://api.example.com/endpoint?key=value");
+    }
+
+    #[test_log::test]
+    fn test_attach_query_string_multiple_params() {
+        let result = attach_query_string(
+            "https://api.example.com/endpoint",
+            &[("offset", "0"), ("limit", "100"), ("type", "albums")],
+        );
+        assert_eq!(
+            result,
+            "https://api.example.com/endpoint?offset=0&limit=100&type=albums"
+        );
+    }
+
+    #[test_log::test]
+    fn test_attach_query_string_special_characters() {
+        let result = attach_query_string(
+            "https://api.example.com/search",
+            &[("query", "hello world"), ("filter", "name=test")],
+        );
+        // URL encoding should be applied
+        assert_eq!(
+            result,
+            "https://api.example.com/search?query=hello+world&filter=name%3Dtest"
+        );
+    }
+
+    #[test_log::test]
+    fn test_attach_query_string_empty_params() {
+        let result = attach_query_string("https://api.example.com/endpoint", &[]);
+        assert_eq!(result, "https://api.example.com/endpoint?");
+    }
+
+    #[test_log::test]
+    fn test_capitalize_lowercase() {
+        assert_eq!(capitalize("berlin"), "Berlin");
+    }
+
+    #[test_log::test]
+    fn test_capitalize_already_capitalized() {
+        assert_eq!(capitalize("Berlin"), "Berlin");
+    }
+
+    #[test_log::test]
+    fn test_capitalize_all_caps() {
+        assert_eq!(capitalize("BERLIN"), "BERLIN");
+    }
+
+    #[test_log::test]
+    fn test_search_bundle_version_no_match() {
+        let html = "<html><body>No bundle here</body></html>";
+        let result = search_bundle_version(html);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_search_app_config_no_app_id() {
+        let bundle = r"some bundle content without app id";
+        let result = search_app_config(bundle);
+        assert!(matches!(result, Err(Error::NoAppId)));
+    }
+
+    #[test_log::test]
+    fn test_search_app_config_no_seed_timezone() {
+        let bundle = r#"production:{api:{appId:"123456789""#;
+        let result = search_app_config(bundle);
+        assert!(matches!(result, Err(Error::NoSeedAndTimezone)));
+    }
+
+    #[test_log::test]
+    fn test_search_app_config_no_info_extras() {
+        let bundle = r#"production:{api:{appId:"123456789"
+        d.initialSeed("YjBiMGIwYmQzYWRiMzNmY2Q2YTc0MD",window.utimezone.london)"#;
+        let result = search_app_config(bundle);
+        assert!(matches!(result, Err(Error::NoInfoAndExtras)));
     }
 }

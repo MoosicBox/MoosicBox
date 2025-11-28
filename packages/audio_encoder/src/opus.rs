@@ -471,6 +471,64 @@ mod tests {
     }
 
     #[test_log::test]
+    #[allow(clippy::cast_precision_loss)]
+    fn test_encode_audiopus_varying_amplitudes() {
+        // Test encoding samples with different amplitude patterns
+        let samples: Vec<f32> = (0..1920)
+            .map(|i| {
+                // Generate a sine-like wave pattern
+                let t = i as f32 / 48000.0;
+                (t * 440.0 * std::f32::consts::TAU).sin() * 0.5
+            })
+            .collect();
+
+        let result = encode_audiopus(&samples);
+        assert!(result.is_ok(), "Encoding varying amplitudes should succeed");
+
+        let (sample_rate, output) = result.unwrap();
+        assert_eq!(sample_rate, 48000);
+
+        // Verify sample count header is correct
+        let sample_count = u32::from_be_bytes([output[0], output[1], output[2], output[3]]);
+        #[allow(clippy::cast_possible_truncation)]
+        let expected = samples.len() as u32;
+        assert_eq!(sample_count, expected);
+    }
+
+    #[test_log::test]
+    #[allow(clippy::cast_precision_loss)]
+    fn test_encode_opus_float_consecutive_calls() {
+        let mut encoder = encoder_opus().expect("Failed to create encoder");
+
+        // Encode multiple consecutive frames (960 samples = 10ms at 48kHz stereo)
+        let frame_size = 960;
+        let mut total_output = 0;
+
+        for i in 0..5 {
+            let input: Vec<f32> = (0..frame_size)
+                .map(|j| {
+                    let t = (i * frame_size + j) as f32 / 48000.0;
+                    (t * 440.0 * std::f32::consts::TAU).sin() * 0.3
+                })
+                .collect();
+            let mut output = vec![0u8; 4000];
+
+            let result = encode_opus_float(&mut encoder, &input, &mut output);
+            assert!(
+                result.is_ok(),
+                "Consecutive encoding call {} should succeed",
+                i + 1
+            );
+
+            let info = result.unwrap();
+            assert!(info.output_size > 0, "Each frame should produce output");
+            total_output += info.output_size;
+        }
+
+        assert!(total_output > 0, "Total output should be non-zero");
+    }
+
+    #[test_log::test]
     #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
     fn test_opus_write_creation() {
         let temp_file = "/tmp/test_opus_write.ogg";

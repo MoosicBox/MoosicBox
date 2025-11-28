@@ -644,14 +644,14 @@ impl ToValueType<usize> for Value {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u64() {
         let value = &Value::Integer(123);
 
         assert_eq!(ToValueType::<u64>::to_value_type(value).unwrap(), 123_u64);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_option_u64() {
         let value = &Value::Integer(123);
         assert_eq!(
@@ -670,5 +670,250 @@ mod tests {
             ToValueType::<Option<u64>>::to_value_type(value).err(),
             Some(ParseError::ConvertType("u64".into())),
         );
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_str_reference() {
+        let value = Value::Text("hello".to_string());
+        let result: Result<&str, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), "hello");
+
+        // Error case: wrong type
+        let value = &Value::Integer(42);
+        let result: Result<&str, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_string() {
+        let value = &Value::Text("world".to_string());
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), "world");
+
+        // Error case: wrong type
+        let value = &Value::Integer(42);
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_bool() {
+        // SQLite stores booleans as integers: 1 = true, 0 = false
+        let value = &Value::Integer(1);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = &Value::Integer(0);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+
+        // Error case: wrong type
+        let value = &Value::Text("true".to_string());
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_float_conversions() {
+        // f64 from Real
+        let value = &Value::Real(1.23456);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.23456).abs() < f64::EPSILON);
+
+        // f32 from Real (with truncation)
+        let value = &Value::Real(2.5);
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 2.5_f32).abs() < 0.001);
+
+        // Error cases
+        let value = &Value::Integer(42);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_signed_integer_conversions() {
+        let value = &Value::Integer(-42);
+
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), -42_i8);
+
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), -42_i16);
+
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), -42_i32);
+
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), -42_i64);
+
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), -42_isize);
+
+        // Error case: wrong type
+        let value = &Value::Text("42".to_string());
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_unsigned_integer_conversions() {
+        let value = &Value::Integer(255);
+
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u8);
+
+        let result: Result<u16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u16);
+
+        let result: Result<u32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u32);
+
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_u64);
+
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 255_usize);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_value_identity() {
+        // Test that Value can be converted to itself
+        let value = Value::Integer(123);
+        let result: Result<&Value, ParseError> = (&value).to_value_type();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_owned_value_string_conversion() {
+        let value = Value::Text("owned".to_string());
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), "owned");
+
+        let value = Value::Integer(42);
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_value_bool_conversion() {
+        let value = Value::Integer(1);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = Value::Integer(0);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+
+        let value = Value::Real(1.0);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_value_float_conversions() {
+        let value = Value::Real(1.5);
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 1.5).abs() < f64::EPSILON);
+
+        let value = Value::Real(2.5);
+        let result: Result<f32, ParseError> = value.to_value_type();
+        assert!((result.unwrap() - 2.5_f32).abs() < 0.001);
+
+        let value = Value::Text("1.5".to_string());
+        let result: Result<f64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_value_integer_conversions() {
+        let value = Value::Integer(100);
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i8);
+
+        let value = Value::Integer(1000);
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 1000_i16);
+
+        let value = Value::Integer(100_000);
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_000_i32);
+
+        let value = Value::Integer(1_000_000_000);
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 1_000_000_000_i64);
+
+        let value = Value::Integer(12345);
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 12345_isize);
+
+        // Unsigned conversions
+        let value = Value::Integer(200);
+        let result: Result<u8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 200_u8);
+
+        let value = Value::Integer(60000);
+        let result: Result<u16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 60000_u16);
+
+        let value = Value::Integer(4_000_000_000);
+        let result: Result<u32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 4_000_000_000_u32);
+
+        let value = Value::Integer(9_000_000_000_000);
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 9_000_000_000_000_u64);
+
+        let value = Value::Integer(98765);
+        let result: Result<usize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 98765_usize);
+
+        // Error case
+        let value = Value::Text("123".to_string());
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_value_option_null() {
+        let value = Value::Null;
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        let value = Value::Null;
+        let result: Result<Option<i64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_owned_value_option_some() {
+        let value = Value::Text("test".to_string());
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), Some("test".to_string()));
+
+        let value = Value::Integer(42);
+        let result: Result<Option<i64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), Some(42_i64));
+    }
+
+    #[test_log::test]
+    fn test_option_missing_value_returns_none() {
+        // Test that missing_value for Option types returns Ok(None)
+        let value = Value::Integer(42);
+        let result = <&Value as ToValueType<Option<String>>>::missing_value(
+            &&value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
+
+        // Owned value version
+        let result = <Value as ToValueType<Option<String>>>::missing_value(
+            &value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
     }
 }

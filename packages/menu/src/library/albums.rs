@@ -627,3 +627,192 @@ pub async fn refavorite_album(
 
     Ok(album)
 }
+
+#[cfg(test)]
+mod tests {
+    use moosicbox_library::models::LibraryAlbumType;
+    use moosicbox_music_models::{AlbumSource, AlbumType, ApiSource, ApiSources, id::Id};
+
+    use super::*;
+
+    fn create_test_album(id: Id) -> Album {
+        Album {
+            id,
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::Number(1),
+            album_type: AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        }
+    }
+
+    fn create_test_library_album(id: u64, album_sources: ApiSources) -> LibraryAlbum {
+        LibraryAlbum {
+            id,
+            title: "Library Album".to_string(),
+            artist: "Library Artist".to_string(),
+            artist_id: 1,
+            album_type: LibraryAlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            source: AlbumSource::Local,
+            blur: false,
+            versions: vec![],
+            album_sources,
+            artist_sources: ApiSources::default()
+                .with_source(ApiSource::library(), Id::Number(1))
+                .with_source(
+                    ApiSource::register("Tidal", "Tidal"),
+                    Id::String("artist123".to_string()),
+                ),
+        }
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_when_library_album_matches() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let album_id = Id::String("tidal_album_123".to_string());
+
+        let mut album = create_test_album(album_id.clone());
+
+        // Library album has album_sources that include the tidal source + matching ID
+        let library_album_sources = ApiSources::default()
+            .with_source(ApiSource::library(), Id::Number(100))
+            .with_source(tidal_source.clone(), album_id);
+        let library_album = create_test_library_album(100, library_album_sources.clone());
+
+        let library_albums = vec![library_album];
+
+        // Before propagation, album has empty sources
+        assert!(album.album_sources.iter().count() == 0);
+        assert!(album.artist_sources.iter().count() == 0);
+
+        propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
+
+        // After propagation, album_sources and artist_sources should be copied from library album
+        assert_eq!(album.album_sources, library_album_sources);
+        assert!(album.artist_sources.get(&ApiSource::library()).is_some());
+        assert!(album.artist_sources.get(&tidal_source).is_some());
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_no_match_when_different_source() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let qobuz_source = ApiSource::register("Qobuz", "Qobuz");
+        let album_id = Id::String("album_123".to_string());
+
+        let mut album = create_test_album(album_id.clone());
+
+        // Library album has album_sources for Qobuz, not Tidal
+        let library_album_sources = ApiSources::default()
+            .with_source(ApiSource::library(), Id::Number(100))
+            .with_source(qobuz_source, album_id);
+        let library_album = create_test_library_album(100, library_album_sources);
+
+        let library_albums = vec![library_album];
+
+        propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
+
+        // Sources should remain empty since there's no match for Tidal source
+        assert!(album.album_sources.iter().count() == 0);
+        assert!(album.artist_sources.iter().count() == 0);
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_no_match_when_different_id() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let album_id = Id::String("album_123".to_string());
+        let different_id = Id::String("album_456".to_string());
+
+        let mut album = create_test_album(album_id);
+
+        // Library album has album_sources with same source but different ID
+        let library_album_sources = ApiSources::default()
+            .with_source(ApiSource::library(), Id::Number(100))
+            .with_source(tidal_source.clone(), different_id);
+        let library_album = create_test_library_album(100, library_album_sources);
+
+        let library_albums = vec![library_album];
+
+        propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
+
+        // Sources should remain empty since IDs don't match
+        assert!(album.album_sources.iter().count() == 0);
+        assert!(album.artist_sources.iter().count() == 0);
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_empty_library_albums() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let album_id = Id::String("tidal_album_123".to_string());
+
+        let mut album = create_test_album(album_id);
+        let library_albums: Vec<LibraryAlbum> = vec![];
+
+        propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
+
+        // Sources should remain empty since there are no library albums
+        assert!(album.album_sources.iter().count() == 0);
+        assert!(album.artist_sources.iter().count() == 0);
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_finds_first_match_among_multiple_albums() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let album_id = Id::String("tidal_album_123".to_string());
+
+        let mut album = create_test_album(album_id.clone());
+
+        // Create multiple library albums, only one matches
+        let non_matching_sources = ApiSources::default()
+            .with_source(ApiSource::library(), Id::Number(200))
+            .with_source(tidal_source.clone(), Id::String("different_id".to_string()));
+        let non_matching_album = create_test_library_album(200, non_matching_sources);
+
+        let matching_sources = ApiSources::default()
+            .with_source(ApiSource::library(), Id::Number(100))
+            .with_source(tidal_source.clone(), album_id);
+        let matching_album = create_test_library_album(100, matching_sources.clone());
+
+        let library_albums = vec![non_matching_album, matching_album];
+
+        propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
+
+        // Should match the second album and copy its sources
+        assert_eq!(album.album_sources, matching_sources);
+    }
+
+    #[test_log::test]
+    fn test_propagate_api_sources_with_numeric_id() {
+        let library_source = ApiSource::library();
+        let album_id = Id::Number(42);
+
+        let mut album = create_test_album(album_id.clone());
+
+        let library_album_sources = ApiSources::default()
+            .with_source(ApiSource::library(), album_id)
+            .with_source(
+                ApiSource::register("Tidal", "Tidal"),
+                Id::String("tidal_id".to_string()),
+            );
+        let library_album = create_test_library_album(42, library_album_sources.clone());
+
+        let library_albums = vec![library_album];
+
+        propagate_api_sources_from_library_album(&library_source, &mut album, &library_albums);
+
+        // Should match using numeric ID
+        assert_eq!(album.album_sources, library_album_sources);
+    }
+}

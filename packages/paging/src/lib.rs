@@ -2079,4 +2079,761 @@ mod tests {
         assert_eq!(req1, req2);
         assert_ne!(req1, req3);
     }
+
+    // ===== Additional Page Tests =====
+
+    #[test_log::test]
+    fn test_page_try_into_with_has_more_success() {
+        #[derive(Debug, Clone)]
+        struct Value(i32);
+
+        impl TryInto<i32> for Value {
+            type Error = String;
+
+            fn try_into(self) -> Result<i32, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(self.0)
+                } else {
+                    Err("negative".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithHasMore {
+            items: vec![Value(1), Value(2)],
+            offset: 5,
+            limit: 2,
+            has_more: true,
+        };
+
+        let result: Result<Page<i32>, String> = page.try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[1, 2]);
+        assert_eq!(converted.offset(), 5);
+        assert_eq!(converted.limit(), 2);
+        assert!(converted.has_more());
+    }
+
+    #[test_log::test]
+    fn test_page_try_into_with_has_more_failure() {
+        #[derive(Debug, Clone)]
+        struct Value(i32);
+
+        impl TryInto<i32> for Value {
+            type Error = String;
+
+            fn try_into(self) -> Result<i32, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(self.0)
+                } else {
+                    Err("negative".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithHasMore {
+            items: vec![Value(1), Value(-5)],
+            offset: 0,
+            limit: 2,
+            has_more: false,
+        };
+
+        let result: Result<Page<i32>, String> = page.try_into();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "negative");
+    }
+
+    #[test_log::test]
+    fn test_page_into_with_has_more() {
+        #[derive(Debug, PartialEq)]
+        struct From(i32);
+        #[derive(Debug, PartialEq)]
+        struct To(i32);
+
+        impl std::convert::From<From> for To {
+            fn from(f: From) -> Self {
+                Self(f.0 * 10)
+            }
+        }
+
+        let page = Page::WithHasMore {
+            items: vec![From(1), From(2)],
+            offset: 3,
+            limit: 2,
+            has_more: true,
+        };
+
+        let converted: Page<To> = page.into();
+        assert_eq!(converted.items(), &[To(10), To(20)]);
+        assert_eq!(converted.offset(), 3);
+        assert_eq!(converted.limit(), 2);
+        assert!(converted.has_more());
+        assert_eq!(converted.total(), None);
+    }
+
+    #[test_log::test]
+    fn test_page_transpose_with_has_more_failure() {
+        let page = Page::WithHasMore {
+            items: vec![Ok(1), Err("error in has_more page")],
+            offset: 2,
+            limit: 2,
+            has_more: false,
+        };
+
+        let result: Result<Page<i32>, &str> = page.transpose();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "error in has_more page");
+    }
+
+    // ===== Additional PagingResponse Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_items_in_batches() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    4 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![5, 6],
+                            offset: 4,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let items = response.rest_of_items_in_batches().await.unwrap();
+        // Should contain items from remaining pages (3,4,5,6) but not initial (1,2)
+        assert_eq!(items.len(), 4);
+        assert!(items.contains(&3));
+        assert!(items.contains(&4));
+        assert!(items.contains(&5));
+        assert!(items.contains(&6));
+        assert!(!items.contains(&1));
+        assert!(!items.contains(&2));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_with_rest_of_pages_in_batches() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    4 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![5, 6],
+                            offset: 4,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let pages = response.with_rest_of_pages_in_batches().await.unwrap();
+        assert_eq!(pages.len(), 3);
+        // First page should be the initial page
+        assert_eq!(pages[0].items(), &[1, 2]);
+        // Remaining pages should include all items (order may vary for concurrent fetch)
+        let all_items: Vec<i32> = pages
+            .into_iter()
+            .flat_map(super::Page::into_items)
+            .collect();
+        assert_eq!(all_items.len(), 6);
+        for i in 1..=6 {
+            assert!(all_items.contains(&i));
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_into() {
+        #[derive(Debug, PartialEq, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl From<ItemFrom> for ItemTo {
+            fn from(f: ItemFrom) -> Self {
+                Self(f.0 * 10)
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(format!("converted: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let converted: PagingResponse<ItemTo, ErrorTo> = response.inner_into();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        // Verify the fetch function is also transformed
+        let all_items = converted.with_rest_of_items().await.unwrap();
+        assert_eq!(
+            all_items,
+            vec![ItemTo(10), ItemTo(20), ItemTo(30), ItemTo(40)]
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_into_error_conversion() {
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(format!("converted: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, ErrorFrom> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async { Err(ErrorFrom("original error".to_string())) })
+            });
+
+        let converted: PagingResponse<i32, ErrorTo> = response.inner_into();
+
+        let result = converted.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ErrorTo("converted: original error".to_string())
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_success() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        impl From<String> for ErrorTo {
+            fn from(s: String) -> Self {
+                Self(s)
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(e.0)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let result: Result<PagingResponse<ItemTo, ErrorTo>, String> = response.inner_try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        let all_items = converted.with_rest_of_items().await.unwrap();
+        assert_eq!(
+            all_items,
+            vec![ItemTo(10), ItemTo(20), ItemTo(30), ItemTo(40)]
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_failure() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(-2)], // Second item will fail
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_, _| Box::pin(async { Ok(PagingResponse::empty()) }));
+
+        let result: Result<PagingResponse<ItemTo, String>, String> = response.inner_try_into();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "negative value");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_map_err_success() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(e.0)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_, _| Box::pin(async { Ok(PagingResponse::empty()) }));
+
+        let result: Result<PagingResponse<ItemTo, ErrorTo>, ErrorTo> =
+            response.inner_try_into_map_err(|e| ErrorTo(format!("mapped: {e}")));
+
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_map_err_failure() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(e.0)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(-2)],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_, _| Box::pin(async { Ok(PagingResponse::empty()) }));
+
+        let result: Result<PagingResponse<ItemTo, ErrorTo>, ErrorTo> =
+            response.inner_try_into_map_err(|e| ErrorTo(format!("mapped: {e}")));
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ErrorTo("mapped: negative value".to_string())
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_success() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let result: Result<PagingResponse<ItemTo, String>, String> = response.ok_try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        let all_items = converted.with_rest_of_items().await.unwrap();
+        assert_eq!(
+            all_items,
+            vec![ItemTo(10), ItemTo(20), ItemTo(30), ItemTo(40)]
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_failure() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(-2)],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_, _| Box::pin(async { Ok(PagingResponse::empty()) }));
+
+        let result: Result<PagingResponse<ItemTo, String>, String> = response.ok_try_into();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "negative value");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_map_err_success() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = &'static str;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value")
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let result: Result<PagingResponse<ItemTo, String>, String> =
+            response.ok_try_into_map_err(|e| format!("mapped: {e}"));
+
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        let all_items = converted.with_rest_of_items().await.unwrap();
+        assert_eq!(
+            all_items,
+            vec![ItemTo(10), ItemTo(20), ItemTo(30), ItemTo(40)]
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_map_err_failure() {
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = &'static str;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value")
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(-2)],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_, _| Box::pin(async { Ok(PagingResponse::empty()) }));
+
+        let result: Result<PagingResponse<ItemTo, String>, String> =
+            response.ok_try_into_map_err(|e| format!("mapped: {e}"));
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "mapped: negative value");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_batches_falls_back_to_sequential_for_has_more() {
+        // When total is not known (WithHasMore), batch methods should fall back to sequential
+        let page = Page::WithHasMore {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            has_more: true,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 2 {
+                    Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            has_more: false,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                } else {
+                    Ok(PagingResponse::empty())
+                }
+            })
+        });
+
+        // Even though we call "in_batches", it should fall back to sequential since total is unknown
+        let pages = response.rest_of_pages_in_batches().await.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].items(), &[3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_batches_no_more_pages() {
+        // Test batch fetching when there are no more pages to fetch
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 3,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_, _| {
+            Box::pin(async { panic!("Should not be called when no more pages in batch mode") })
+        });
+
+        // Using batch mode, which correctly skips fetching when offset >= total
+        let pages = response.rest_of_pages_in_batches().await.unwrap();
+        assert!(pages.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_batches_error_propagation() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 4 {
+                    Err("batch fetch failed".to_string())
+                } else {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                }
+            })
+        });
+
+        let result = response.rest_of_pages_in_batches().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "batch fetch failed");
+    }
 }

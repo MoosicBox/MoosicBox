@@ -3141,4 +3141,200 @@ mod tests {
             TidalSearchType::UserProfiles
         );
     }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_epsandsingles() {
+        assert_eq!(
+            TidalAlbumType::from("EPSANDSINGLES"),
+            TidalAlbumType::EpsAndSingles
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_ep() {
+        assert_eq!(TidalAlbumType::from("EP"), TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_single() {
+        assert_eq!(
+            TidalAlbumType::from("SINGLE"),
+            TidalAlbumType::EpsAndSingles
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_compilations() {
+        assert_eq!(
+            TidalAlbumType::from("COMPILATIONS"),
+            TidalAlbumType::Compilations
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_lp() {
+        assert_eq!(TidalAlbumType::from("LP"), TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_from_str_unknown_defaults_to_lp() {
+        assert_eq!(TidalAlbumType::from("UNKNOWN"), TidalAlbumType::Lp);
+        assert_eq!(TidalAlbumType::from("ALBUM"), TidalAlbumType::Lp);
+        assert_eq!(TidalAlbumType::from(""), TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_order_direction_from_album_sort_ascending() {
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::ArtistAsc),
+            TidalAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::NameAsc),
+            TidalAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::ReleaseDateAsc),
+            TidalAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::DateAddedAsc),
+            TidalAlbumOrderDirection::Asc
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_order_direction_from_album_sort_descending() {
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::NameDesc),
+            TidalAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::ArtistDesc),
+            TidalAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::ReleaseDateDesc),
+            TidalAlbumOrderDirection::Desc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumSort::DateAddedDesc),
+            TidalAlbumOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_artist_order_from_artist_order() {
+        assert_eq!(
+            TidalArtistOrder::from(ArtistOrder::DateAdded),
+            TidalArtistOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_artist_order_direction_from_artist_order_direction() {
+        assert_eq!(
+            TidalArtistOrderDirection::from(ArtistOrderDirection::Ascending),
+            TidalArtistOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalArtistOrderDirection::from(ArtistOrderDirection::Descending),
+            TidalArtistOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_order_from_album_sort() {
+        assert_eq!(
+            TidalAlbumOrder::from(AlbumSort::NameAsc),
+            TidalAlbumOrder::Date
+        );
+        assert_eq!(
+            TidalAlbumOrder::from(AlbumSort::DateAddedDesc),
+            TidalAlbumOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_order_from_album_order() {
+        assert_eq!(
+            TidalAlbumOrder::from(AlbumOrder::DateAdded),
+            TidalAlbumOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_order_direction_from_album_order_direction() {
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumOrderDirection::Ascending),
+            TidalAlbumOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalAlbumOrderDirection::from(AlbumOrderDirection::Descending),
+            TidalAlbumOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_order_from_track_order() {
+        assert_eq!(
+            TidalTrackOrder::from(TrackOrder::DateAdded),
+            TidalTrackOrder::Date
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_order_direction_from_track_order_direction() {
+        assert_eq!(
+            TidalTrackOrderDirection::from(TrackOrderDirection::Ascending),
+            TidalTrackOrderDirection::Asc
+        );
+        assert_eq!(
+            TidalTrackOrderDirection::from(TrackOrderDirection::Descending),
+            TidalTrackOrderDirection::Desc
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_audio_quality_from_track_audio_quality() {
+        assert_eq!(
+            TidalAudioQuality::from(TrackAudioQuality::Low),
+            TidalAudioQuality::High
+        );
+        assert_eq!(
+            TidalAudioQuality::from(TrackAudioQuality::FlacLossless),
+            TidalAudioQuality::Lossless
+        );
+        assert_eq!(
+            TidalAudioQuality::from(TrackAudioQuality::FlacHiRes),
+            TidalAudioQuality::HiResLossless
+        );
+        assert_eq!(
+            TidalAudioQuality::from(TrackAudioQuality::FlacHighestRes),
+            TidalAudioQuality::HiResLossless
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_try_from_album_type_success() {
+        assert_eq!(
+            TidalAlbumType::try_from(AlbumType::Lp).unwrap(),
+            TidalAlbumType::Lp
+        );
+        assert_eq!(
+            TidalAlbumType::try_from(AlbumType::Compilations).unwrap(),
+            TidalAlbumType::Compilations
+        );
+        assert_eq!(
+            TidalAlbumType::try_from(AlbumType::EpsAndSingles).unwrap(),
+            TidalAlbumType::EpsAndSingles
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_try_from_album_type_unsupported() {
+        assert!(TidalAlbumType::try_from(AlbumType::Live).is_err());
+        assert!(TidalAlbumType::try_from(AlbumType::Other).is_err());
+        assert!(TidalAlbumType::try_from(AlbumType::Download).is_err());
+    }
 }

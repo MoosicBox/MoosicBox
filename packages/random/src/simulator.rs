@@ -366,4 +366,100 @@ mod tests {
             "Different threads should produce different sequences"
         );
     }
+
+    #[test_log::test]
+    fn test_simulator_rng_mutable_rng_core_interface() {
+        use ::rand::RngCore;
+
+        let mut sim_rng = SimulatorRng::new(42_u64);
+
+        // Test the mutable RngCore trait interface (lines 170-186 in simulator.rs)
+        let val1 = RngCore::next_u32(&mut sim_rng);
+        let val2 = RngCore::next_u64(&mut sim_rng);
+        assert!(val1 > 0 || val2 > 0, "Should produce values");
+
+        let mut buffer = [0_u8; 16];
+        RngCore::fill_bytes(&mut sim_rng, &mut buffer);
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Should fill with non-zero bytes"
+        );
+
+        let mut buffer2 = [0_u8; 16];
+        let result = RngCore::try_fill_bytes(&mut sim_rng, &mut buffer2);
+        assert!(result.is_ok(), "try_fill_bytes should succeed");
+        assert!(
+            buffer2.iter().any(|&x| x != 0),
+            "Should fill with non-zero bytes"
+        );
+    }
+
+    #[test_log::test]
+    fn test_simulator_rng_next_i32_produces_valid_range() {
+        let sim_rng = SimulatorRng::new(42_u64);
+
+        // This test simply verifies that next_i32() executes without panicking
+        for _ in 0..100 {
+            let _value = sim_rng.next_i32();
+            // Any i32 value is valid
+        }
+    }
+
+    #[test_log::test]
+    fn test_simulator_rng_next_u64_produces_different_values() {
+        let sim_rng = SimulatorRng::new(42_u64);
+
+        let val1 = sim_rng.next_u64();
+        let val2 = sim_rng.next_u64();
+        let val3 = sim_rng.next_u64();
+
+        // At least two of the three values should be different
+        assert!(
+            val1 != val2 || val2 != val3,
+            "next_u64 should produce varying values"
+        );
+    }
+
+    #[test_log::test]
+    fn test_simulator_rng_fill_bytes() {
+        let sim_rng = SimulatorRng::new(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        sim_rng.fill_bytes(&mut buffer);
+
+        // Verify that not all bytes are zero (extremely unlikely with proper RNG)
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test_log::test]
+    fn test_simulator_rng_try_fill_bytes_success() {
+        let sim_rng = SimulatorRng::new(42_u64);
+        let mut buffer = [0_u8; 32];
+
+        let result = sim_rng.try_fill_bytes(&mut buffer);
+        assert!(result.is_ok(), "try_fill_bytes should succeed");
+
+        // Verify that not all bytes are zero
+        assert!(
+            buffer.iter().any(|&x| x != 0),
+            "Fill should produce non-zero bytes"
+        );
+    }
+
+    #[test_log::test]
+    fn test_simulator_rng_different_seeds_produce_different_values() {
+        let rng1 = SimulatorRng::new(12345_u64);
+        let rng2 = SimulatorRng::new(54321_u64);
+
+        let value1 = rng1.next_u32();
+        let value2 = rng2.next_u32();
+
+        assert_ne!(
+            value1, value2,
+            "Different seeds should produce different values"
+        );
+    }
 }

@@ -714,6 +714,124 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_workflow_yaml_deserialization_from_string() {
+        // Test parsing a workflow directly from a YAML string
+        // This verifies serde's rename attributes and flattening work correctly
+        let yaml = r#"
+version: "1.0"
+name: "Test CI"
+triggers:
+  - type: push
+    branches:
+      - main
+      - develop
+  - type: pull_request
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+actions: {}
+jobs:
+  build:
+    needs: []
+    env:
+      RUST_BACKTRACE: "1"
+    steps:
+      - run: cargo build
+"#;
+        let workflow: Workflow = serde_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(workflow.version, "1.0");
+        assert_eq!(workflow.name, "Test CI");
+        assert_eq!(workflow.triggers.len(), 2);
+
+        // Verify push trigger
+        assert_eq!(workflow.triggers[0].trigger_type, TriggerType::Push);
+        assert_eq!(
+            workflow.triggers[0].config.branches,
+            Some(vec!["main".to_string(), "develop".to_string()])
+        );
+
+        // Verify pull_request trigger (tests snake_case deserialization)
+        assert_eq!(workflow.triggers[1].trigger_type, TriggerType::PullRequest);
+        assert_eq!(
+            workflow.triggers[1].config.types,
+            Some(vec!["opened".to_string(), "synchronize".to_string()])
+        );
+
+        // Verify job
+        let build_job = workflow.jobs.get("build").unwrap();
+        assert_eq!(build_job.env.get("RUST_BACKTRACE"), Some(&"1".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_workflow_yaml_with_schedule_cron() {
+        // Test schedule trigger with cron expression
+        let yaml = r#"
+version: "1.0"
+name: "Nightly Build"
+triggers:
+  - type: schedule
+    cron: "0 0 * * *"
+actions: {}
+jobs: {}
+"#;
+        let workflow: Workflow = serde_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(workflow.triggers.len(), 1);
+        assert_eq!(workflow.triggers[0].trigger_type, TriggerType::Schedule);
+        assert_eq!(
+            workflow.triggers[0].config.cron,
+            Some("0 0 * * *".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_workflow_yaml_with_inline_action() {
+        // Test inline action with inputs and outputs
+        let yaml = r#"
+version: "1.0"
+name: "Inline Action Test"
+triggers: []
+actions:
+  my-action:
+    type: inline
+    name: "My Custom Action"
+    description: "Does something useful"
+    inputs:
+      input1:
+        description: "First input"
+        required: true
+      input2:
+        description: "Optional input"
+        default: "default-value"
+    outputs:
+      result:
+        description: "The result"
+    runs:
+      steps:
+        - run: echo "Running action"
+jobs: {}
+"#;
+        let workflow: Workflow = serde_yaml::from_str(yaml).unwrap();
+
+        let action = workflow.actions.get("my-action").unwrap();
+        assert_eq!(action.action_type, ActionType::Inline);
+        assert_eq!(action.config.name, Some("My Custom Action".to_string()));
+
+        let inputs = action.config.inputs.as_ref().unwrap();
+        let input1 = inputs.get("input1").unwrap();
+        assert!(input1.required);
+        assert_eq!(input1.default, None);
+
+        let input2 = inputs.get("input2").unwrap();
+        // Verify that required defaults to false when not specified
+        assert!(!input2.required);
+        assert_eq!(input2.default, Some("default-value".to_string()));
+    }
+
+    #[test_log::test]
     fn test_complete_workflow() {
         let mut actions = BTreeMap::new();
         actions.insert(

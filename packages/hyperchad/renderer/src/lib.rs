@@ -803,4 +803,312 @@ mod tests {
             assert_eq!(primary.children.len(), 2);
         }
     }
+
+    #[test_log::test]
+    fn test_view_builder_with_fragments_batch() {
+        let fragments = vec![
+            Container {
+                str_id: Some("frag1".to_string()),
+                ..Default::default()
+            },
+            Container {
+                str_id: Some("frag2".to_string()),
+                ..Default::default()
+            },
+            Container {
+                str_id: Some("frag3".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let view = View::builder().with_fragments(fragments).build();
+
+        assert_eq!(view.fragments.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_view_builder_fragments_mutable_batch() {
+        let fragments = vec![
+            Container {
+                str_id: Some("a".to_string()),
+                ..Default::default()
+            },
+            Container {
+                str_id: Some("b".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let mut builder = View::builder();
+        builder.fragments(fragments);
+        let view = builder.build();
+
+        assert_eq!(view.fragments.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_view_builder_with_delete_selectors_batch() {
+        let selectors = vec![
+            Selector::Id("del1".to_string()),
+            Selector::Class("del2".to_string()),
+            Selector::SelfTarget,
+        ];
+
+        let view = View::builder().with_delete_selectors(selectors).build();
+
+        assert_eq!(view.delete_selectors.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_view_builder_delete_selectors_mutable_batch() {
+        let selectors = vec![Selector::Id("x".to_string()), Selector::Id("y".to_string())];
+
+        let mut builder = View::builder();
+        builder.delete_selectors(selectors);
+        let view = builder.build();
+
+        assert_eq!(view.delete_selectors.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_content_builder_mutable_fragment() {
+        let mut builder = Content::builder();
+        builder.fragment(Container {
+            str_id: Some("frag".to_string()),
+            ..Default::default()
+        });
+        let content = builder.build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.fragments.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_builder_mutable_delete_selector() {
+        let mut builder = Content::builder();
+        builder.delete_selector(Selector::Id("remove".to_string()));
+        let content = builder.build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.delete_selectors.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_builder_with_fragments_batch() {
+        let fragments = vec![
+            Container {
+                str_id: Some("f1".to_string()),
+                ..Default::default()
+            },
+            Container {
+                str_id: Some("f2".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let content = Content::builder().with_fragments(fragments).build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.fragments.len(), 2);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_builder_fragments_mutable_batch() {
+        let fragments = vec![Container {
+            str_id: Some("test".to_string()),
+            ..Default::default()
+        }];
+
+        let mut builder = Content::builder();
+        builder.fragments(fragments);
+        let content = builder.build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.fragments.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_builder_with_delete_selectors_batch() {
+        let selectors = vec![
+            Selector::Id("a".to_string()),
+            Selector::Class("b".to_string()),
+        ];
+
+        let content = Content::builder().with_delete_selectors(selectors).build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.delete_selectors.len(), 2);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_builder_delete_selectors_mutable_batch() {
+        let selectors = vec![Selector::SelfTarget];
+
+        let mut builder = Content::builder();
+        builder.delete_selectors(selectors);
+        let content = builder.build();
+
+        match content {
+            Content::View(view) => {
+                assert_eq!(view.delete_selectors.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_try_view_with_container() {
+        let container = Container::default();
+        let content = Content::try_view(container);
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::View(view) => {
+                assert!(view.primary.is_some());
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_try_view_with_view() {
+        let view = View::builder()
+            .with_primary(Container::default())
+            .with_fragment(Container {
+                str_id: Some("frag".to_string()),
+                ..Default::default()
+            })
+            .build();
+
+        let content = Content::try_view(view);
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::View(boxed_view) => {
+                assert!(boxed_view.primary.is_some());
+                assert_eq!(boxed_view.fragments.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_view_try_from_valid_html_str() {
+        let html = "<div>Hello</div>";
+        let view = View::try_from(html);
+
+        assert!(view.is_ok());
+        let view = view.unwrap();
+        assert!(view.primary.is_some());
+        assert!(view.fragments.is_empty());
+        assert!(view.delete_selectors.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_view_try_from_valid_html_string() {
+        let html = String::from("<span>World</span>");
+        let view = View::try_from(html);
+
+        assert!(view.is_ok());
+        let view = view.unwrap();
+        assert!(view.primary.is_some());
+    }
+
+    #[test_log::test]
+    fn test_view_builder_combined_operations() {
+        let view = View::builder()
+            .with_primary(Container::default())
+            .with_fragment(Container {
+                str_id: Some("frag1".to_string()),
+                ..Default::default()
+            })
+            .with_fragments(vec![Container {
+                str_id: Some("frag2".to_string()),
+                ..Default::default()
+            }])
+            .with_delete_selector(Selector::Id("del1".to_string()))
+            .with_delete_selectors(vec![Selector::Class("del2".to_string())])
+            .build();
+
+        assert!(view.primary.is_some());
+        assert_eq!(view.fragments.len(), 2);
+        assert_eq!(view.delete_selectors.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_content_builder_combined_operations() {
+        let content = Content::builder()
+            .with_primary(Container::default())
+            .with_fragment(Container {
+                str_id: Some("f1".to_string()),
+                ..Default::default()
+            })
+            .with_delete_selector(Selector::Id("d1".to_string()))
+            .build();
+
+        match content {
+            Content::View(view) => {
+                assert!(view.primary.is_some());
+                assert_eq!(view.fragments.len(), 1);
+                assert_eq!(view.delete_selectors.len(), 1);
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_replace_container_selector_types() {
+        // Test with various selector types via ReplaceContainer
+        let container_with_id = Container {
+            str_id: Some("my-id".to_string()),
+            ..Default::default()
+        };
+        let replace = ReplaceContainer::from(container_with_id);
+        assert!(matches!(replace.selector, Selector::Id(_)));
+
+        let container_no_id = Container {
+            str_id: None,
+            ..Default::default()
+        };
+        let replace = ReplaceContainer::from(container_no_id);
+        assert!(matches!(replace.selector, Selector::SelfTarget));
+    }
 }

@@ -462,3 +462,201 @@ fn render(state: &DisplayState, frame: &mut Frame) {
 
     log::trace!("render: end");
 }
+
+#[cfg(test)]
+#[allow(clippy::significant_drop_tightening)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn default_config() -> SimConfig {
+        SimConfig::new()
+    }
+
+    #[test_log::test]
+    fn test_display_state_new_initializes_with_empty_simulations() {
+        let state = DisplayState::new();
+
+        assert!(state.simulations.read().unwrap().is_empty());
+        assert!(state.running.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(*state.runs_completed.read().unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn test_run_completed_increments_counter() {
+        let state = DisplayState::new();
+
+        assert_eq!(state.runs_completed(), 0);
+
+        state.run_completed();
+        assert_eq!(state.runs_completed(), 1);
+
+        state.run_completed();
+        state.run_completed();
+        assert_eq!(state.runs_completed(), 3);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_adds_new_simulation() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        state.update_sim_state(1, 1, config, 0.5, false);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 1);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[0].run_number, 1);
+        assert!((simulations[0].progress - 0.5).abs() < f64::EPSILON);
+        assert!(!simulations[0].failed);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_updates_existing_simulation() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        // Add initial state
+        state.update_sim_state(1, 1, config, 0.25, false);
+
+        // Update state
+        state.update_sim_state(1, 2, config, 0.75, true);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 1);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[0].run_number, 2);
+        assert!((simulations[0].progress - 0.75).abs() < f64::EPSILON);
+        assert!(simulations[0].failed);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_maintains_sorted_order_ascending() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        // Add simulations in ascending order
+        state.update_sim_state(1, 1, config, 0.1, false);
+        state.update_sim_state(2, 1, config, 0.2, false);
+        state.update_sim_state(3, 1, config, 0.3, false);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 3);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[1].thread_id, 2);
+        assert_eq!(simulations[2].thread_id, 3);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_maintains_sorted_order_descending() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        // Add simulations in descending order
+        state.update_sim_state(3, 1, config, 0.3, false);
+        state.update_sim_state(2, 1, config, 0.2, false);
+        state.update_sim_state(1, 1, config, 0.1, false);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 3);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[1].thread_id, 2);
+        assert_eq!(simulations[2].thread_id, 3);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_maintains_sorted_order_random() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        // Add simulations in random order
+        state.update_sim_state(5, 1, config, 0.5, false);
+        state.update_sim_state(2, 1, config, 0.2, false);
+        state.update_sim_state(8, 1, config, 0.8, false);
+        state.update_sim_state(1, 1, config, 0.1, false);
+        state.update_sim_state(4, 1, config, 0.4, false);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 5);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[1].thread_id, 2);
+        assert_eq!(simulations[2].thread_id, 4);
+        assert_eq!(simulations[3].thread_id, 5);
+        assert_eq!(simulations[4].thread_id, 8);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_step_updates_existing_simulation() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        state.update_sim_state(1, 1, config, 0.0, false);
+
+        // Initial step should be 0
+        assert_eq!(state.simulations.read().unwrap()[0].step, 0);
+
+        // Update step
+        state.update_sim_step(1, 500);
+        assert_eq!(state.simulations.read().unwrap()[0].step, 500);
+
+        // Update step again
+        state.update_sim_step(1, 1000);
+        assert_eq!(state.simulations.read().unwrap()[0].step, 1000);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_step_does_nothing_for_nonexistent_thread() {
+        let state = DisplayState::new();
+        let config = default_config();
+
+        state.update_sim_state(1, 1, config, 0.0, false);
+
+        // Update step for non-existent thread
+        state.update_sim_step(999, 500);
+
+        // Original simulation should be unchanged
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 1);
+        assert_eq!(simulations[0].thread_id, 1);
+        assert_eq!(simulations[0].step, 0);
+    }
+
+    #[test_log::test]
+    fn test_exit_sets_running_to_false() {
+        let state = DisplayState::new();
+
+        assert!(state.running.load(std::sync::atomic::Ordering::SeqCst));
+
+        state.exit();
+
+        assert!(!state.running.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test_log::test]
+    fn test_display_state_clone_shares_state() {
+        let state1 = DisplayState::new();
+        let state2 = state1.clone();
+
+        let config = default_config();
+        state1.update_sim_state(1, 1, config, 0.5, false);
+
+        // Clone should see the same simulation
+        let simulations = state2.simulations.read().unwrap();
+        assert_eq!(simulations.len(), 1);
+        assert_eq!(simulations[0].thread_id, 1);
+    }
+
+    #[test_log::test]
+    fn test_update_sim_state_preserves_config_values() {
+        let state = DisplayState::new();
+        let mut config = SimConfig::new();
+        let _ = config.tcp_capacity(128).duration(Duration::from_secs(60));
+
+        state.update_sim_state(1, 1, config, 0.0, false);
+
+        let simulations = state.simulations.read().unwrap();
+        assert_eq!(simulations[0].config.tcp_capacity, 128);
+        assert_eq!(simulations[0].config.duration, Duration::from_secs(60));
+    }
+}

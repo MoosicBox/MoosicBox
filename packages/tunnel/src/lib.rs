@@ -562,6 +562,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::StreamExt as _;
     use std::collections::BTreeMap;
 
     /// Helper function to create test binary bytes for `TunnelResponse`
@@ -924,5 +925,214 @@ mod tests {
         let abort_request = TunnelRequest::Abort(TunnelAbortRequest { request_id: 3 });
         let json = serde_json::to_string(&abort_request).unwrap();
         assert!(json.contains("\"type\":\"ABORT\""));
+    }
+
+    /// Helper to create a `TunnelResponse` directly for stream tests
+    fn create_tunnel_response(
+        request_id: u64,
+        packet_id: u32,
+        last: bool,
+        body: &[u8],
+    ) -> TunnelResponse {
+        TunnelResponse {
+            request_id,
+            packet_id,
+            last,
+            bytes: Bytes::from(body.to_vec()),
+            status: if packet_id == 1 { Some(200) } else { None },
+            headers: if packet_id == 1 {
+                Some(BTreeMap::new())
+            } else {
+                None
+            },
+        }
+    }
+
+    /// Dummy `on_end` callback for tests
+    async fn noop_on_end(_request_id: u64) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_single_packet_first_and_last() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(123, rx, abort_token, &noop_on_end);
+
+        // Send single packet that is both first and last
+        tx.send(create_tunnel_response(123, 1, true, b"complete response"))
+            .unwrap();
+
+        // Should receive the bytes
+        let result = stream.next().await;
+        assert!(result.is_some());
+        let bytes = result.unwrap().unwrap();
+        assert_eq!(bytes.as_ref(), b"complete response");
+
+        // Stream should end after the final packet
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_in_order_packets() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(456, rx, abort_token, &noop_on_end);
+
+        // Send packets in order
+        tx.send(create_tunnel_response(456, 1, false, b"packet1"))
+            .unwrap();
+        tx.send(create_tunnel_response(456, 2, false, b"packet2"))
+            .unwrap();
+        tx.send(create_tunnel_response(456, 3, true, b"packet3"))
+            .unwrap();
+
+        // Receive all packets
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.as_ref(), b"packet1");
+
+        let bytes2 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes2.as_ref(), b"packet2");
+
+        let bytes3 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes3.as_ref(), b"packet3");
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_out_of_order_packets() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(789, rx, abort_token, &noop_on_end);
+
+        // Send packet 2 and 3 first (out of order), then packet 1
+        tx.send(create_tunnel_response(789, 2, false, b"packet2"))
+            .unwrap();
+        tx.send(create_tunnel_response(789, 3, true, b"packet3"))
+            .unwrap();
+        tx.send(create_tunnel_response(789, 1, false, b"packet1"))
+            .unwrap();
+
+        // Should receive in correct order: 1, 2, 3
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.as_ref(), b"packet1");
+
+        let bytes2 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes2.as_ref(), b"packet2");
+
+        let bytes3 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes3.as_ref(), b"packet3");
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_abort_cancellation() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(111, rx, abort_token.clone(), &noop_on_end);
+
+        // Send first packet
+        tx.send(create_tunnel_response(111, 1, false, b"packet1"))
+            .unwrap();
+
+        // Receive first packet
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.as_ref(), b"packet1");
+
+        // Cancel the stream
+        abort_token.cancel();
+
+        // Next poll should return Aborted error
+        let result = stream.next().await;
+        assert!(result.is_some());
+        let err = result.unwrap().unwrap_err();
+        assert!(matches!(err, TunnelStreamError::Aborted));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_end_of_stream_before_completion() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(222, rx, abort_token, &noop_on_end);
+
+        // Send first packet (not last)
+        tx.send(create_tunnel_response(222, 1, false, b"packet1"))
+            .unwrap();
+
+        // Receive first packet
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.as_ref(), b"packet1");
+
+        // Close the channel without sending last packet
+        drop(tx);
+
+        // Next poll should return EndOfStream error (no queued packets)
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_queue_insertion_maintains_order() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(333, rx, abort_token, &noop_on_end);
+
+        // Send packets in reverse order: 5, 4, 3, 2, 1
+        // This tests that the queue maintains sorted order for packet IDs
+        tx.send(create_tunnel_response(333, 5, true, b"packet5"))
+            .unwrap();
+        tx.send(create_tunnel_response(333, 4, false, b"packet4"))
+            .unwrap();
+        tx.send(create_tunnel_response(333, 3, false, b"packet3"))
+            .unwrap();
+        tx.send(create_tunnel_response(333, 2, false, b"packet2"))
+            .unwrap();
+        tx.send(create_tunnel_response(333, 1, false, b"packet1"))
+            .unwrap();
+
+        // Should receive in correct order: 1, 2, 3, 4, 5
+        for i in 1..=5 {
+            let bytes = stream.next().await.unwrap().unwrap();
+            assert_eq!(bytes.as_ref(), format!("packet{i}").as_bytes());
+        }
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_empty_body_packets() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(444, rx, abort_token, &noop_on_end);
+
+        // Send packets with empty bodies
+        tx.send(create_tunnel_response(444, 1, false, b"")).unwrap();
+        tx.send(create_tunnel_response(444, 2, true, b"")).unwrap();
+
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert!(bytes1.is_empty());
+
+        let bytes2 = stream.next().await.unwrap().unwrap();
+        assert!(bytes2.is_empty());
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
     }
 }

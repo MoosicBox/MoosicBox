@@ -126,4 +126,66 @@ mod tests {
             "Parsed UUID should have RFC 4122 variant"
         );
     }
+
+    #[test_log::test]
+    fn test_version_variant_bits_consistently_set_across_many_uuids() {
+        // Verify that the bit masking logic correctly sets version/variant bits
+        // across many UUIDs, not just one. This tests that the masking operations
+        // are consistently applied regardless of the random input.
+        for i in 0..100 {
+            let uuid = new_v4();
+            let bytes = uuid.as_bytes();
+
+            // Version 4: upper nibble of byte[6] must be 0100
+            assert_eq!(
+                bytes[6] & 0xf0,
+                0x40,
+                "UUID #{i} version bits incorrect: got {:02x}, expected 0x4x",
+                bytes[6]
+            );
+
+            // RFC 4122 variant: upper 2 bits of byte[8] must be 10
+            assert_eq!(
+                bytes[8] & 0xc0,
+                0x80,
+                "UUID #{i} variant bits incorrect: got {:02x}, expected 0x8x-0xbx",
+                bytes[8]
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_random_bits_preserved_in_version_variant_bytes() {
+        // Verify that the masking operations preserve the random bits
+        // in bytes[6] and bytes[8]. The lower nibble of bytes[6] (4 bits)
+        // and lower 6 bits of bytes[8] should vary across generated UUIDs.
+        let mut byte6_lower_nibbles = std::collections::BTreeSet::new();
+        let mut byte8_lower_bits = std::collections::BTreeSet::new();
+
+        // Generate enough UUIDs to see variation in the preserved bits
+        for _ in 0..50 {
+            let uuid = new_v4();
+            let bytes = uuid.as_bytes();
+
+            byte6_lower_nibbles.insert(bytes[6] & 0x0f);
+            byte8_lower_bits.insert(bytes[8] & 0x3f);
+        }
+
+        // With 50 UUIDs, we should see significant variation in the preserved bits.
+        // Lower nibble of byte[6] has 4 bits (16 possible values)
+        // Lower 6 bits of byte[8] has 6 bits (64 possible values)
+        // Even with a deterministic RNG, we expect good distribution.
+        assert!(
+            byte6_lower_nibbles.len() >= 4,
+            "Expected variation in byte[6] lower nibble, but only saw {} unique values: {:?}",
+            byte6_lower_nibbles.len(),
+            byte6_lower_nibbles
+        );
+        assert!(
+            byte8_lower_bits.len() >= 8,
+            "Expected variation in byte[8] lower bits, but only saw {} unique values: {:?}",
+            byte8_lower_bits.len(),
+            byte8_lower_bits
+        );
+    }
 }

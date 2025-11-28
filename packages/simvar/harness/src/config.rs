@@ -641,4 +641,189 @@ mod tests {
         let args = get_cargoified_args();
         assert!(!args.is_empty());
     }
+
+    #[test_log::test]
+    fn test_simresult_props_for_fail_variant() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 10,
+            thread_id: Some(5),
+            extra: vec![("debug".to_string(), "true".to_string())],
+        };
+
+        let run = SimRunProperties {
+            steps: 500,
+            real_time_millis: 2000,
+            sim_time_millis: 10000,
+        };
+
+        let fail = SimResult::Fail {
+            props,
+            run,
+            error: Some("test error".to_string()),
+            panic: Some("test panic".to_string()),
+        };
+
+        let result_props = fail.props();
+        assert_eq!(result_props.run_number, 10);
+        assert_eq!(result_props.thread_id, Some(5));
+        assert_eq!(result_props.extra.len(), 1);
+    }
+
+    #[test_log::test]
+    fn test_simresult_run_for_fail_variant() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 999,
+            real_time_millis: 5555,
+            sim_time_millis: 8888,
+        };
+
+        let fail = SimResult::Fail {
+            props,
+            run,
+            error: Some("error".to_string()),
+            panic: None,
+        };
+
+        let result_run = fail.run();
+        assert_eq!(result_run.steps, 999);
+        assert_eq!(result_run.real_time_millis, 5555);
+        assert_eq!(result_run.sim_time_millis, 8888);
+    }
+
+    #[test_log::test]
+    fn test_simresult_config_for_fail_variant() {
+        let mut config = SimConfig::new();
+        let _ = config.udp_capacity(512);
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let fail = SimResult::Fail {
+            props,
+            run,
+            error: None,
+            panic: Some("panic message".to_string()),
+        };
+
+        assert_eq!(fail.config().udp_capacity, 512);
+    }
+
+    #[test_log::test]
+    fn test_run_info_contains_config_values() {
+        let mut config = SimConfig::new();
+        let _ = config
+            .fail_rate(0.5)
+            .tcp_capacity(128)
+            .enable_random_order(true);
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("seed=0"));
+        assert!(info.contains("fail_rate=0.5"));
+        assert!(info.contains("tcp_capacity=128"));
+        assert!(info.contains("enable_random_order=true"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_includes_thread_id_when_present() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: Some(42),
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("thread_id=42"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_excludes_thread_id_when_none() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(!info.contains("thread_id="));
+    }
+
+    #[test_log::test]
+    fn test_run_info_includes_extra_properties() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![
+                ("custom_key".to_string(), "custom_value".to_string()),
+                ("another_key".to_string(), "another_value".to_string()),
+            ],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("custom_key=custom_value"));
+        assert!(info.contains("another_key=another_value"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_duration_forever_when_max() {
+        let props = SimProperties {
+            config: SimConfig::new(), // duration defaults to Duration::MAX
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        assert!(info.contains("duration=forever"));
+    }
+
+    #[test_log::test]
+    fn test_run_info_duration_value_when_finite() {
+        let mut config = SimConfig::new();
+        let _ = config.duration(Duration::from_secs(120));
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let info = run_info(&props);
+
+        // 120 seconds = 120000 milliseconds
+        assert!(info.contains("duration=120000"));
+    }
 }

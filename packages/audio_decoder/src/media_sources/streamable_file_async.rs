@@ -298,3 +298,211 @@ impl MediaSource for StreamableFileAsync {
         Some(self.buffer.len() as u64)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Creates a test instance with a pre-populated buffer
+    fn create_test_instance(buffer_size: usize) -> StreamableFileAsync {
+        StreamableFileAsync {
+            url: "http://example.com/test.mp3".to_string(),
+            buffer: vec![0u8; buffer_size],
+            read_position: 0,
+            downloaded: RangeSet::new(),
+            requested: RangeSet::new(),
+            receivers: Vec::new(),
+        }
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_no_downloaded_ranges() {
+        // When nothing is downloaded, should return true with read_position as start
+        let instance = create_test_instance(CHUNK_SIZE * 4);
+        let (should_get, start_pos) = instance.should_get_chunk(1024);
+
+        assert!(should_get);
+        assert_eq!(start_pos, 0);
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_read_position_not_in_downloaded_range() {
+        // When read_position is not in any downloaded range, should return true
+        let mut instance = create_test_instance(CHUNK_SIZE * 4);
+        instance.read_position = CHUNK_SIZE * 2;
+
+        let (should_get, start_pos) = instance.should_get_chunk(1024);
+
+        assert!(should_get);
+        assert_eq!(start_pos, CHUNK_SIZE * 2);
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_within_range_far_from_end() {
+        // When read_position is within a downloaded range and far from its end,
+        // should not fetch a new chunk
+        let mut instance = create_test_instance(CHUNK_SIZE * 4);
+        // Downloaded range from 0 to CHUNK_SIZE * 2
+        instance.downloaded.insert(0..CHUNK_SIZE * 2);
+        instance.read_position = 0;
+
+        let (should_get, _) = instance.should_get_chunk(1024);
+
+        // Should not get chunk because read_position + buf_len is far from range end
+        assert!(!should_get);
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_approaching_end_of_range() {
+        // When approaching the end of a downloaded range, should fetch next chunk
+        let mut instance = create_test_instance(CHUNK_SIZE * 4);
+        instance.downloaded.insert(0..CHUNK_SIZE);
+        // Position near end of range (within FETCH_OFFSET)
+        instance.read_position = CHUNK_SIZE - FETCH_OFFSET - 100;
+
+        let (should_get, start_pos) = instance.should_get_chunk(1024);
+
+        assert!(should_get);
+        assert_eq!(start_pos, CHUNK_SIZE);
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_already_downloading() {
+        // When the next chunk is already being downloaded, should not request again
+        let mut instance = create_test_instance(CHUNK_SIZE * 4);
+        instance.downloaded.insert(0..CHUNK_SIZE);
+        // Mark the next chunk as already requested
+        instance.requested.insert(CHUNK_SIZE..CHUNK_SIZE * 2);
+        // Position near end of range
+        instance.read_position = CHUNK_SIZE - FETCH_OFFSET - 100;
+
+        let (should_get, _) = instance.should_get_chunk(1024);
+
+        // Should not get chunk because it's already being downloaded
+        assert!(!should_get);
+    }
+
+    #[test_log::test]
+    fn test_should_get_chunk_at_end_of_buffer() {
+        // When the downloaded range reaches the end of the buffer, don't fetch more
+        let buffer_size = CHUNK_SIZE * 2;
+        let mut instance = create_test_instance(buffer_size);
+        // Entire file is downloaded
+        instance.downloaded.insert(0..buffer_size);
+        instance.read_position = buffer_size - FETCH_OFFSET - 100;
+
+        let (should_get, _) = instance.should_get_chunk(1024);
+
+        // Should not get chunk because we're at the end of the buffer
+        assert!(!should_get);
+    }
+
+    #[test_log::test]
+    fn test_seek_start() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 5000;
+
+        let result = instance.seek(std::io::SeekFrom::Start(1000));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1000);
+        assert_eq!(instance.read_position, 1000);
+    }
+
+    #[test_log::test]
+    fn test_seek_current_positive() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 2000;
+
+        let result = instance.seek(std::io::SeekFrom::Current(500));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 2500);
+        assert_eq!(instance.read_position, 2500);
+    }
+
+    #[test_log::test]
+    fn test_seek_current_negative() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 2000;
+
+        let result = instance.seek(std::io::SeekFrom::Current(-500));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1500);
+        assert_eq!(instance.read_position, 1500);
+    }
+
+    #[test_log::test]
+    fn test_seek_end_negative() {
+        let mut instance = create_test_instance(10000);
+
+        let result = instance.seek(std::io::SeekFrom::End(-1000));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 9000);
+        assert_eq!(instance.read_position, 9000);
+    }
+
+    #[test_log::test]
+    fn test_seek_end_zero() {
+        let mut instance = create_test_instance(10000);
+
+        let result = instance.seek(std::io::SeekFrom::End(0));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10000);
+        assert_eq!(instance.read_position, 10000);
+    }
+
+    #[test_log::test]
+    fn test_seek_beyond_buffer_does_not_move() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 5000;
+
+        // Seeking beyond the buffer should return current position without moving
+        let result = instance.seek(std::io::SeekFrom::Start(15000));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5000);
+        assert_eq!(instance.read_position, 5000);
+    }
+
+    #[test_log::test]
+    fn test_seek_current_negative_beyond_start() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 1000;
+
+        // Seeking to a negative position should error
+        let result = instance.seek(std::io::SeekFrom::Current(-2000));
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test_log::test]
+    fn test_media_source_is_seekable() {
+        let instance = create_test_instance(10000);
+        assert!(instance.is_seekable());
+    }
+
+    #[test_log::test]
+    fn test_media_source_byte_len() {
+        let instance = create_test_instance(12345);
+        assert_eq!(instance.byte_len(), Some(12345));
+    }
+
+    #[test_log::test]
+    fn test_read_past_end_of_buffer() {
+        let mut instance = create_test_instance(1000);
+        instance.read_position = 1000; // At end of buffer
+
+        let mut buf = [0u8; 100];
+        let result = instance.read(&mut buf);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+}

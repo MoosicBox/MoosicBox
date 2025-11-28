@@ -1927,4 +1927,299 @@ mod tests {
         let route = Route::head("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Head);
     }
+
+    // ==================== HttpRequest Stub Tests ====================
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_cookies_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/test")
+            .with_cookie("session_id", "abc123")
+            .with_cookie("user_pref", "dark_mode");
+
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let cookies = req.cookies();
+
+        assert_eq!(cookies.len(), 2);
+        assert_eq!(cookies.get("session_id"), Some(&"abc123".to_string()));
+        assert_eq!(cookies.get("user_pref"), Some(&"dark_mode".to_string()));
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_cookies_empty_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/test");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let cookies = req.cookies();
+
+        assert!(cookies.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_http_request_cookies_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+        let cookies = req.cookies();
+
+        assert!(cookies.is_empty());
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_remote_addr_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req =
+            SimulationRequest::new(Method::Get, "/test").with_remote_addr("192.168.1.100:54321");
+
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let remote_addr = req.remote_addr();
+
+        assert_eq!(remote_addr, Some("192.168.1.100:54321".to_string()));
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_remote_addr_none_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/test");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let remote_addr = req.remote_addr();
+
+        assert_eq!(remote_addr, None);
+    }
+
+    #[test_log::test]
+    fn test_http_request_remote_addr_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+        let remote_addr = req.remote_addr();
+
+        assert_eq!(remote_addr, None);
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_header_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/test")
+            .with_header("X-Custom-Header", "custom-value")
+            .with_header("Authorization", "Bearer token");
+
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        assert_eq!(req.header("X-Custom-Header"), Some("custom-value"));
+        assert_eq!(req.header("Authorization"), Some("Bearer token"));
+        assert_eq!(req.header("Non-Existent"), None);
+    }
+
+    #[test_log::test]
+    fn test_http_request_header_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+
+        assert_eq!(req.header("Any-Header"), None);
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_method_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        for method in [
+            Method::Get,
+            Method::Post,
+            Method::Put,
+            Method::Delete,
+            Method::Patch,
+        ] {
+            let sim_req = SimulationRequest::new(method, "/test");
+            let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+            assert_eq!(req.method(), method);
+        }
+    }
+
+    #[test_log::test]
+    fn test_http_request_method_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+
+        // Empty stub defaults to GET
+        assert_eq!(req.method(), Method::Get);
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_path_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/api/v1/users/123");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        assert_eq!(req.path(), "/api/v1/users/123");
+    }
+
+    #[test_log::test]
+    fn test_http_request_path_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+
+        assert_eq!(req.path(), "");
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_query_string_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let sim_req = SimulationRequest::new(Method::Get, "/search")
+            .with_query_string("q=rust&limit=10&sort=desc");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        assert_eq!(req.query_string(), "q=rust&limit=10&sort=desc");
+    }
+
+    #[test_log::test]
+    fn test_http_request_query_string_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+
+        assert_eq!(req.query_string(), "");
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "simulator")]
+    fn test_http_request_body_from_simulator_stub() {
+        use simulator::{SimulationRequest, SimulationStub};
+
+        let body_content = r#"{"name": "test", "value": 42}"#;
+        let sim_req = SimulationRequest::new(Method::Post, "/api/data").with_body(body_content);
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        let body = req.body();
+        assert!(body.is_some());
+        assert_eq!(body.unwrap().as_ref(), body_content.as_bytes());
+    }
+
+    #[test_log::test]
+    fn test_http_request_body_empty_stub() {
+        let req = HttpRequest::Stub(Stub::Empty);
+
+        assert!(req.body().is_none());
+    }
+
+    #[test_log::test]
+    #[cfg(all(feature = "simulator", feature = "serde"))]
+    fn test_http_request_parse_query() {
+        use serde::Deserialize;
+        use simulator::{SimulationRequest, SimulationStub};
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct QueryParams {
+            page: u32,
+            limit: Option<u32>,
+            sort: Option<String>,
+        }
+
+        let sim_req = SimulationRequest::new(Method::Get, "/items")
+            .with_query_string("page=5&limit=20&sort=name");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        let params: QueryParams = req.parse_query().unwrap();
+
+        assert_eq!(params.page, 5);
+        assert_eq!(params.limit, Some(20));
+        assert_eq!(params.sort, Some("name".to_string()));
+    }
+
+    #[test_log::test]
+    #[cfg(all(feature = "simulator", feature = "serde"))]
+    fn test_http_request_parse_query_optional_fields() {
+        use serde::Deserialize;
+        use simulator::{SimulationRequest, SimulationStub};
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct QueryParams {
+            page: Option<u32>,
+            limit: Option<u32>,
+        }
+
+        let sim_req = SimulationRequest::new(Method::Get, "/items").with_query_string("");
+        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+
+        let params: QueryParams = req.parse_query().unwrap();
+
+        assert_eq!(params.page, None);
+        assert_eq!(params.limit, None);
+    }
+
+    // ==================== HttpResponseBody Cow Conversion Tests ====================
+
+    #[test_log::test]
+    fn test_http_response_body_from_cow_borrowed() {
+        use std::borrow::Cow;
+
+        let borrowed_data: &[u8] = b"borrowed data";
+        let cow: Cow<'_, [u8]> = Cow::Borrowed(borrowed_data);
+        let body = HttpResponseBody::from(cow);
+
+        match body {
+            HttpResponseBody::Bytes(bytes) => {
+                assert_eq!(bytes.as_ref(), b"borrowed data");
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_http_response_body_from_cow_owned() {
+        use std::borrow::Cow;
+
+        let owned_data = b"owned data".to_vec();
+        let cow: Cow<'_, [u8]> = Cow::Owned(owned_data);
+        let body = HttpResponseBody::from(cow);
+
+        match body {
+            HttpResponseBody::Bytes(bytes) => {
+                assert_eq!(bytes.as_ref(), b"owned data");
+            }
+        }
+    }
+
+    // ==================== Error Status Code Tests ====================
+
+    #[test_log::test]
+    fn test_error_from_http_status_code_u16_various_codes() {
+        #[derive(Debug)]
+        struct TestError;
+        impl std::fmt::Display for TestError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "Test error")
+            }
+        }
+        impl std::error::Error for TestError {}
+
+        // Test various HTTP status codes
+        let test_cases = [
+            (200, StatusCode::Ok),
+            (201, StatusCode::Created),
+            (204, StatusCode::NoContent),
+            (400, StatusCode::BadRequest),
+            (401, StatusCode::Unauthorized),
+            (403, StatusCode::Forbidden),
+            (404, StatusCode::NotFound),
+            (500, StatusCode::InternalServerError),
+            (502, StatusCode::BadGateway),
+            (503, StatusCode::ServiceUnavailable),
+        ];
+
+        for (code, expected_status) in test_cases {
+            let err = Error::from_http_status_code_u16(code, TestError);
+            match err {
+                Error::Http { status_code, .. } => {
+                    assert_eq!(status_code, expected_status, "Failed for code {code}");
+                }
+            }
+        }
+    }
 }

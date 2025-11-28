@@ -199,6 +199,33 @@ mod tests {
 
     #[test_log::test]
     #[serial]
+    fn test_local_cancellation_isolated_between_threads() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
+
+        // Cancel local simulation on this thread
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+
+        // Spawn a new thread and check its local state is NOT cancelled
+        let handle = std::thread::spawn(|| {
+            // This thread has its own thread-local token which should NOT be cancelled
+            reset_simulator_cancellation_token();
+            is_simulator_cancelled()
+        });
+
+        let other_thread_cancelled = handle.join().unwrap();
+        // The other thread's local cancellation state should be false
+        // (since we reset it and only cancelled on the main thread)
+        assert!(
+            !other_thread_cancelled,
+            "Local cancellation should not affect other threads"
+        );
+    }
+
+    #[test_log::test]
+    #[serial]
     fn test_reset_simulator_cancellation_token() {
         // Reset all states
         reset_global_simulator_cancellation_token();

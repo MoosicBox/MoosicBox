@@ -3018,5 +3018,323 @@ mod tests {
                 "Default should have validation disabled"
             );
         }
+
+        #[test_log::test]
+        fn test_mark_completed_scope_should_mark_none_status() {
+            // All scopes should mark migrations with no current status (pending)
+            assert!(MarkCompletedScope::PendingOnly.should_mark(None));
+            assert!(MarkCompletedScope::IncludeFailed.should_mark(None));
+            assert!(MarkCompletedScope::IncludeInProgress.should_mark(None));
+            assert!(MarkCompletedScope::All.should_mark(None));
+        }
+
+        #[test_log::test]
+        fn test_mark_completed_scope_should_mark_completed_status() {
+            // No scope should mark already completed migrations
+            assert!(
+                !MarkCompletedScope::PendingOnly.should_mark(Some(&MigrationStatus::Completed))
+            );
+            assert!(
+                !MarkCompletedScope::IncludeFailed.should_mark(Some(&MigrationStatus::Completed))
+            );
+            assert!(
+                !MarkCompletedScope::IncludeInProgress
+                    .should_mark(Some(&MigrationStatus::Completed))
+            );
+            assert!(!MarkCompletedScope::All.should_mark(Some(&MigrationStatus::Completed)));
+        }
+
+        #[test_log::test]
+        fn test_mark_completed_scope_should_mark_failed_status() {
+            // Only IncludeFailed and All should mark failed migrations
+            assert!(!MarkCompletedScope::PendingOnly.should_mark(Some(&MigrationStatus::Failed)));
+            assert!(MarkCompletedScope::IncludeFailed.should_mark(Some(&MigrationStatus::Failed)));
+            assert!(
+                !MarkCompletedScope::IncludeInProgress.should_mark(Some(&MigrationStatus::Failed))
+            );
+            assert!(MarkCompletedScope::All.should_mark(Some(&MigrationStatus::Failed)));
+        }
+
+        #[test_log::test]
+        fn test_mark_completed_scope_should_mark_in_progress_status() {
+            // Only IncludeInProgress and All should mark in-progress migrations
+            assert!(
+                !MarkCompletedScope::PendingOnly.should_mark(Some(&MigrationStatus::InProgress))
+            );
+            assert!(
+                !MarkCompletedScope::IncludeFailed.should_mark(Some(&MigrationStatus::InProgress))
+            );
+            assert!(
+                MarkCompletedScope::IncludeInProgress
+                    .should_mark(Some(&MigrationStatus::InProgress))
+            );
+            assert!(MarkCompletedScope::All.should_mark(Some(&MigrationStatus::InProgress)));
+        }
+
+        #[switchy_async::test]
+        async fn test_hooks_before_migration_called() {
+            use std::sync::Arc;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let before_count = Arc::new(AtomicUsize::new(0));
+            let before_count_clone = before_count.clone();
+            let captured_ids = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let captured_ids_clone = captured_ids.clone();
+
+            let hooks = MigrationHooks {
+                before_migration: Some(Box::new(move |id: &str| {
+                    before_count_clone.fetch_add(1, Ordering::SeqCst);
+                    captured_ids_clone.lock().unwrap().push(id.to_string());
+                })),
+                after_migration: None,
+                on_error: None,
+            };
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source)).with_hooks(hooks);
+
+            runner.run(&*db).await.expect("Migrations should succeed");
+
+            // Verify before_migration was called twice (once per migration)
+            assert_eq!(before_count.load(Ordering::SeqCst), 2);
+
+            // Verify the correct IDs were passed
+            let ids = captured_ids.lock().unwrap();
+            assert_eq!(ids.len(), 2);
+            assert!(ids.contains(&"001_first".to_string()));
+            assert!(ids.contains(&"002_second".to_string()));
+            drop(ids);
+        }
+
+        #[switchy_async::test]
+        async fn test_hooks_after_migration_called() {
+            use std::sync::Arc;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let after_count = Arc::new(AtomicUsize::new(0));
+            let after_count_clone = after_count.clone();
+            let captured_ids = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let captured_ids_clone = captured_ids.clone();
+
+            let hooks = MigrationHooks {
+                before_migration: None,
+                after_migration: Some(Box::new(move |id: &str| {
+                    after_count_clone.fetch_add(1, Ordering::SeqCst);
+                    captured_ids_clone.lock().unwrap().push(id.to_string());
+                })),
+                on_error: None,
+            };
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE test (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source)).with_hooks(hooks);
+
+            runner.run(&*db).await.expect("Migration should succeed");
+
+            // Verify after_migration was called once
+            assert_eq!(after_count.load(Ordering::SeqCst), 1);
+
+            // Verify the correct ID was passed
+            let ids = captured_ids.lock().unwrap();
+            assert_eq!(ids.len(), 1);
+            assert_eq!(ids[0], "001_test");
+            drop(ids);
+        }
+
+        #[switchy_async::test]
+        async fn test_hooks_on_error_called() {
+            use std::sync::Arc;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let error_count = Arc::new(AtomicUsize::new(0));
+            let error_count_clone = error_count.clone();
+            let captured_id = Arc::new(std::sync::Mutex::new(String::new()));
+            let captured_id_clone = captured_id.clone();
+
+            let hooks = MigrationHooks {
+                before_migration: None,
+                after_migration: None,
+                on_error: Some(Box::new(move |id: &str, _err: &crate::MigrationError| {
+                    error_count_clone.fetch_add(1, Ordering::SeqCst);
+                    *captured_id_clone.lock().unwrap() = id.to_string();
+                })),
+            };
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_failing".to_string(),
+                Box::new("INVALID SQL SYNTAX;".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source)).with_hooks(hooks);
+
+            // Migration should fail
+            let result = runner.run(&*db).await;
+            assert!(result.is_err(), "Migration should fail");
+
+            // Verify on_error was called
+            assert_eq!(error_count.load(Ordering::SeqCst), 1);
+
+            // Verify the correct ID was passed
+            let id = captured_id.lock().unwrap();
+            assert_eq!(*id, "001_failing");
+            drop(id);
+        }
+
+        #[switchy_async::test]
+        async fn test_hooks_all_combined() {
+            use std::sync::Arc;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let before_count = Arc::new(AtomicUsize::new(0));
+            let before_count_clone = before_count.clone();
+            let after_count = Arc::new(AtomicUsize::new(0));
+            let after_count_clone = after_count.clone();
+            let error_count = Arc::new(AtomicUsize::new(0));
+            let error_count_clone = error_count.clone();
+
+            let hooks = MigrationHooks {
+                before_migration: Some(Box::new(move |_id: &str| {
+                    before_count_clone.fetch_add(1, Ordering::SeqCst);
+                })),
+                after_migration: Some(Box::new(move |_id: &str| {
+                    after_count_clone.fetch_add(1, Ordering::SeqCst);
+                })),
+                on_error: Some(Box::new(move |_id: &str, _err: &crate::MigrationError| {
+                    error_count_clone.fetch_add(1, Ordering::SeqCst);
+                })),
+            };
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_success".to_string(),
+                Box::new("CREATE TABLE success (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_fail".to_string(),
+                Box::new("INVALID SQL;".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source)).with_hooks(hooks);
+
+            // Should fail on second migration
+            let result = runner.run(&*db).await;
+            assert!(result.is_err(), "Should fail on second migration");
+
+            // before_migration should be called twice (once for each migration attempt)
+            assert_eq!(before_count.load(Ordering::SeqCst), 2);
+
+            // after_migration should be called once (only for the successful first migration)
+            assert_eq!(after_count.load(Ordering::SeqCst), 1);
+
+            // on_error should be called once (for the failed second migration)
+            assert_eq!(error_count.load(Ordering::SeqCst), 1);
+        }
+
+        #[switchy_async::test]
+        async fn test_hooks_on_rollback() {
+            use std::sync::Arc;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // First, run a successful migration
+            let mut setup_source = CodeMigrationSource::new();
+            setup_source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE test (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE test;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let setup_runner = MigrationRunner::new(Box::new(setup_source));
+            setup_runner
+                .run(&*db)
+                .await
+                .expect("Setup migration should succeed");
+
+            // Now test rollback with hooks
+            let before_count = Arc::new(AtomicUsize::new(0));
+            let before_count_clone = before_count.clone();
+            let after_count = Arc::new(AtomicUsize::new(0));
+            let after_count_clone = after_count.clone();
+
+            let hooks = MigrationHooks {
+                before_migration: Some(Box::new(move |_id: &str| {
+                    before_count_clone.fetch_add(1, Ordering::SeqCst);
+                })),
+                after_migration: Some(Box::new(move |_id: &str| {
+                    after_count_clone.fetch_add(1, Ordering::SeqCst);
+                })),
+                on_error: None,
+            };
+
+            let mut rollback_source = CodeMigrationSource::new();
+            rollback_source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE test (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE test;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let rollback_runner = MigrationRunner::new(Box::new(rollback_source)).with_hooks(hooks);
+
+            rollback_runner
+                .rollback(&*db, RollbackStrategy::Last)
+                .await
+                .expect("Rollback should succeed");
+
+            // Verify hooks were called during rollback
+            assert_eq!(
+                before_count.load(Ordering::SeqCst),
+                1,
+                "before_migration should be called once during rollback"
+            );
+            assert_eq!(
+                after_count.load(Ordering::SeqCst),
+                1,
+                "after_migration should be called once during rollback"
+            );
+        }
     }
 }
