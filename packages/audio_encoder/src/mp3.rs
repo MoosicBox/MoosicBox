@@ -178,11 +178,23 @@ mod tests {
         let input1: Vec<i16> = vec![100; 2048];
         let result1 = encode_mp3(&mut encoder, &input1);
         assert!(result1.is_ok());
+        let (_output1, info1) = result1.unwrap();
+        assert_eq!(
+            info1.input_consumed,
+            input1.len(),
+            "First encode should consume all input"
+        );
 
         // Second encode
         let input2: Vec<i16> = vec![200; 2048];
         let result2 = encode_mp3(&mut encoder, &input2);
         assert!(result2.is_ok(), "Multiple encodes should work");
+        let (_output2, info2) = result2.unwrap();
+        assert_eq!(
+            info2.input_consumed,
+            input2.len(),
+            "Second encode should consume all input"
+        );
     }
 
     #[test_log::test]
