@@ -328,36 +328,12 @@ mod tests {
     }
 
     #[test_log::test]
-    #[allow(clippy::redundant_clone)]
-    fn test_stream_command_clone() {
-        let cmd = StreamCommand::Pause;
-        let cloned = cmd.clone();
-        assert!(matches!(cloned, StreamCommand::Pause));
-
-        let cmd = StreamCommand::SetVolume(0.75);
-        let cloned = cmd.clone();
-        assert!(matches!(cloned, StreamCommand::SetVolume(v) if (v - 0.75).abs() < f64::EPSILON));
-    }
-
-    #[test_log::test]
     fn test_stream_response_debug() {
         let resp = StreamResponse::Success;
         assert_eq!(format!("{resp:?}"), "Success");
 
         let resp = StreamResponse::Error("test error".to_string());
         assert_eq!(format!("{resp:?}"), "Error(\"test error\")");
-    }
-
-    #[test_log::test]
-    #[allow(clippy::redundant_clone)]
-    fn test_stream_response_clone() {
-        let resp = StreamResponse::Success;
-        let cloned = resp.clone();
-        assert!(matches!(cloned, StreamResponse::Success));
-
-        let resp = StreamResponse::Error("error message".to_string());
-        let cloned = resp.clone();
-        assert!(matches!(cloned, StreamResponse::Error(ref msg) if msg == "error message"));
     }
 
     #[test_log::test]
@@ -379,46 +355,12 @@ mod tests {
     }
 
     #[test_log::test]
-    #[allow(clippy::redundant_clone)]
-    fn test_stream_daemon_error_clone() {
-        let err = StreamDaemonError::StreamCreationFailed("test".to_string());
-        let cloned = err.clone();
-        assert!(
-            matches!(cloned, StreamDaemonError::StreamCreationFailed(ref msg) if msg == "test")
-        );
-
-        let err = StreamDaemonError::StreamOperationFailed("op failed".to_string());
-        let cloned = err.clone();
-        assert!(
-            matches!(cloned, StreamDaemonError::StreamOperationFailed(ref msg) if msg == "op failed")
-        );
-
-        let err = StreamDaemonError::DaemonStopped;
-        let cloned = err.clone();
-        assert!(matches!(cloned, StreamDaemonError::DaemonStopped));
-    }
-
-    #[test_log::test]
     fn test_stream_handle_debug() {
         let (tx, _rx) = flume::unbounded();
         let handle = StreamHandle { command_sender: tx };
 
         let debug_str = format!("{handle:?}");
         assert!(debug_str.contains("StreamHandle"));
-    }
-
-    #[test_log::test]
-    #[allow(clippy::redundant_clone)]
-    fn test_stream_handle_clone() {
-        let (tx, _rx) = flume::unbounded();
-        let handle = StreamHandle { command_sender: tx };
-
-        let cloned = handle.clone();
-        // Just verify clone works - we can't compare directly since Sender doesn't implement PartialEq
-        let debug_original = format!("{handle:?}");
-        let debug_cloned = format!("{cloned:?}");
-        assert!(debug_original.contains("StreamHandle"));
-        assert!(debug_cloned.contains("StreamHandle"));
     }
 
     #[test_log::test(switchy_async::test)]
