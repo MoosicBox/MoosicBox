@@ -409,7 +409,7 @@ pub fn init_sqlite_rusqlite(
             static ID: AtomicU64 = AtomicU64::new(0);
 
             let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
@@ -510,7 +510,7 @@ pub async fn init_sqlite_sqlx(
         static ID: AtomicU64 = AtomicU64::new(0);
 
         let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let timestamp = std::time::SystemTime::now()
+        let timestamp = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();

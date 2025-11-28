@@ -1,7 +1,6 @@
 #![cfg(feature = "schema")]
 
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use switchy_async::sync::{Barrier, mpsc};
 use switchy_database::{
     Database, DatabaseValue,
@@ -21,8 +20,8 @@ pub struct TransactionResult {
 
 /// Get current timestamp for debugging concurrent operations
 pub fn current_timestamp() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+    switchy_time::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
 }
