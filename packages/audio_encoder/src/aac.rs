@@ -91,7 +91,10 @@ mod tests {
         let info = result.unwrap();
 
         assert!(info.output_size > 0, "Should produce output");
-        assert!(info.input_consumed > 0, "Should consume input");
+        assert_eq!(
+            info.input_consumed, 2048,
+            "Should consume all input samples"
+        );
     }
 
     #[test_log::test]
@@ -119,7 +122,10 @@ mod tests {
         let info = result.unwrap();
 
         assert!(info.output_size > 0, "Should produce output");
-        assert!(info.input_consumed > 0, "Should consume input");
+        assert_eq!(
+            info.input_consumed, sample_count,
+            "Should consume all input samples"
+        );
     }
 
     #[test_log::test]
@@ -141,8 +147,16 @@ mod tests {
         let info1 = result1.unwrap();
         let info2 = result2.unwrap();
 
-        // Both calls should produce output
+        // Both calls should produce output and consume all input
         assert!(info1.output_size > 0, "First call should produce output");
         assert!(info2.output_size > 0, "Second call should produce output");
+        assert_eq!(
+            info1.input_consumed, 2048,
+            "First call should consume all input samples"
+        );
+        assert_eq!(
+            info2.input_consumed, 2048,
+            "Second call should consume all input samples"
+        );
     }
 }

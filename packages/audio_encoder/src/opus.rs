@@ -522,6 +522,10 @@ mod tests {
 
             let info = result.unwrap();
             assert!(info.output_size > 0, "Each frame should produce output");
+            assert_eq!(
+                info.input_consumed, frame_size,
+                "Each frame should consume all input"
+            );
             total_output += info.output_size;
         }
 
