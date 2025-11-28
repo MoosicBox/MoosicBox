@@ -458,10 +458,10 @@ mod tests {
         for _ in 0..10 {
             if let Some(first_port) = pick_unused_port(15000..15010)
                 && is_free(first_port)
-                && let Ok(_listener) = TcpListener::bind(("127.0.0.1", first_port))
+                && let Ok(_listener) = TcpListener::bind(("0.0.0.0", first_port))
             {
                 // Now pick_unused_port should find a different port
-                if let Some(next_port) = pick_unused_port(first_port..15010) {
+                if let Some(next_port) = pick_unused_port((first_port + 1)..15010) {
                     assert_ne!(next_port, first_port);
                     assert!(next_port > first_port);
                 }
@@ -477,7 +477,7 @@ mod tests {
         for _ in 0..10 {
             if let Some(port) = pick_unused_port(15000..16000)
                 && is_free(port)
-                && let Ok(tcp_listener) = TcpListener::bind(("127.0.0.1", port))
+                && let Ok(tcp_listener) = TcpListener::bind(("0.0.0.0", port))
             {
                 // is_free should return false (TCP is occupied)
                 assert!(!is_free(port));
@@ -491,7 +491,7 @@ mod tests {
                 // After dropping, try binding UDP only
                 if let Some(port2) = pick_unused_port(15000..16000)
                     && is_free(port2)
-                    && let Ok(_udp_socket) = UdpSocket::bind(("127.0.0.1", port2))
+                    && let Ok(_udp_socket) = UdpSocket::bind(("0.0.0.0", port2))
                 {
                     // is_free should return false (UDP is occupied)
                     assert!(!is_free(port2));
