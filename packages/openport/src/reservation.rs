@@ -329,6 +329,10 @@ mod tests {
 
     use super::*;
 
+    // Note: These tests are not deterministic and may fail on different systems.
+    // They are marked as serial to ensure that the ports that are reserved in one test
+    // do not conflict with the ports reserved in another test.
+
     #[test_log::test]
     #[serial]
     fn test_reserve_port() {
