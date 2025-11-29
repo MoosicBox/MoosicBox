@@ -2398,7 +2398,7 @@ mod tests {
         trigger_playback_event(&playback2, &playback1);
     }
 
-    #[cfg(feature = "flac")]
+    #[cfg(feature = "format-flac")]
     #[test_log::test]
     fn test_trigger_playback_event_with_quality_change() {
         let tracks = vec![create_test_track(1)];
