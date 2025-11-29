@@ -15,7 +15,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -169,7 +169,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -291,7 +291,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -451,7 +451,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -557,7 +557,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -717,7 +717,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names for this test
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -828,7 +828,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table name
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -907,7 +907,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table name
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -980,7 +980,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table names
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
@@ -1075,7 +1075,7 @@ pub trait CascadeTestSuite {
         let db = &**db;
 
         // Generate unique table name
-        let suffix = std::time::SystemTime::now()
+        let suffix = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()

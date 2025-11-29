@@ -47,16 +47,12 @@ async fn search_for_cover(
     url: &str,
     headers: Option<&[(String, String)]>,
 ) -> Result<Option<PathBuf>, FetchAndSaveBytesFromRemoteUrlError> {
-    std::fs::create_dir_all(path)
+    switchy_fs::sync::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create config directory at {}", path.display()));
 
     log::debug!("Searching for existing cover in {}...", path.display());
 
-    let mut entries: Vec<_> = std::fs::read_dir(path)
-        .unwrap()
-        .filter_map(Result::ok)
-        .collect();
-    entries.sort_by_key(std::fs::DirEntry::file_name);
+    let entries = switchy_fs::sync::read_dir_sorted(path).unwrap();
 
     if let Some(cover_file) = entries
         .into_iter()

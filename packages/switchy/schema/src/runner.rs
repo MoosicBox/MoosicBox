@@ -670,7 +670,7 @@ impl<'a> MigrationRunner<'a> {
             .version_tracker
             .get_applied_migration_ids(db, MigrationStatus::Completed)
             .await?;
-        let applied_set: std::collections::HashSet<String> =
+        let applied_set: std::collections::BTreeSet<String> =
             applied_migrations.into_iter().collect();
 
         // Update applied status for each migration

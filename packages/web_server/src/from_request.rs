@@ -36,7 +36,7 @@
 //! }
 //! ```
 
-use std::{collections::HashMap, future::Future};
+use std::{collections::BTreeMap, future::Future};
 
 use crate::{Error, HttpRequest, Method};
 #[cfg(feature = "serde")]
@@ -165,7 +165,7 @@ pub struct RequestData {
     /// Query string (e.g., "name=john&age=30")
     pub query: String,
     /// Request headers as key-value pairs
-    pub headers: HashMap<String, String>,
+    pub headers: BTreeMap<String, String>,
     /// Remote client address if available
     pub remote_addr: Option<String>,
     /// User-Agent header if present
@@ -206,7 +206,7 @@ impl FromRequest for RequestData {
         let remote_addr = req.remote_addr();
 
         // Extract headers
-        let mut headers = HashMap::new();
+        let mut headers = BTreeMap::new();
         let cookies = req.cookies();
         for (name, value) in &cookies {
             headers.insert(format!("cookie-{name}"), value.clone());
@@ -435,7 +435,7 @@ where
 /// ```
 #[derive(Debug, Clone)]
 pub struct Headers {
-    headers: HashMap<String, String>,
+    headers: BTreeMap<String, String>,
 }
 
 impl Headers {
@@ -453,7 +453,7 @@ impl Headers {
 
     /// Get all headers
     #[must_use]
-    pub const fn all(&self) -> &HashMap<String, String> {
+    pub const fn all(&self) -> &BTreeMap<String, String> {
         &self.headers
     }
 
@@ -481,7 +481,7 @@ impl FromRequest for Headers {
     type Future = std::future::Ready<Result<Self, Self::Error>>;
 
     fn from_request_sync(req: &HttpRequest) -> Result<Self, Self::Error> {
-        let mut headers = HashMap::new();
+        let mut headers = BTreeMap::new();
 
         // Extract common headers
         if let Some(auth) = req.header("authorization") {
