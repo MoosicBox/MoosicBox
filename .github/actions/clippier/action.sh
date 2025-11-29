@@ -1105,7 +1105,7 @@ setup_workspace_ci_environment() {
     echo "$toolchain_info" | jq . || echo "$toolchain_info"
 
     local dependencies=$(echo "$toolchain_info" | jq -r '.dependencies // []')
-    local toolchains=$(echo "$toolchain_info" | jq -r '.toolchains // []')
+    local toolchains=$(echo "$toolchain_info" | jq -r '(.toolchains // []) + (.ci_toolchains // []) | unique')
     local ci_steps=$(echo "$toolchain_info" | jq -r '.ci_steps // []')
     local env_vars=$(echo "$toolchain_info" | jq -r '.env // {}')
     local nightly_packages=$(echo "$toolchain_info" | jq -r '.nightly_packages // []')
