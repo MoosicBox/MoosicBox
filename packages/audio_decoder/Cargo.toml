@@ -20,6 +20,7 @@ moosicbox_stream_utils = { workspace = true, features = [
 ] }
 
 switchy_async = { workspace = true, features = ["tokio"] }
+switchy_fs    = { workspace = true, features = ["sync"] }
 switchy_http  = { workspace = true, features = ["reqwest"] }
 switchy_time  = { workspace = true, features = ["std"] }
 
@@ -45,11 +46,13 @@ fail-on-warnings = [
     "moosicbox_opus?/fail-on-warnings",
     "moosicbox_stream_utils/fail-on-warnings",
     "switchy_async/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
     "switchy_http/fail-on-warnings",
     "switchy_time/fail-on-warnings",
 ]
 
 profiling = ["dep:profiling"]
+simulator = ["switchy_fs/simulator"]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]

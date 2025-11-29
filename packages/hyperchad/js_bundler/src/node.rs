@@ -140,7 +140,7 @@ pub(crate) fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use switchy_fs::sync as fs;
 
     #[test_log::test]
     fn test_fixup_binary_filename_non_windows() {
@@ -160,7 +160,7 @@ mod tests {
     fn test_fixup_binary_filename_windows_no_cmd_exists() {
         // On Windows, if no .CMD file exists, should return original path
         if cfg!(windows) {
-            let temp_dir = tempfile::tempdir().unwrap();
+            let temp_dir = switchy_fs::tempdir().unwrap();
             let binary = temp_dir.path().join("nonexistent");
             let result = fixup_binary_filename(binary.clone());
             assert_eq!(result, binary);
@@ -171,7 +171,7 @@ mod tests {
     fn test_fixup_binary_filename_windows_cmd_exists() {
         // On Windows, if .CMD file exists, should return the .CMD path
         if cfg!(windows) {
-            let temp_dir = tempfile::tempdir().unwrap();
+            let temp_dir = switchy_fs::tempdir().unwrap();
             let binary = temp_dir.path().join("testbin");
             let cmd_file = temp_dir.path().join("testbin.CMD");
 

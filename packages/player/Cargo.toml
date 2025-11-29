@@ -28,6 +28,7 @@ moosicbox_stream_utils  = { workspace = true }
 
 switchy_async    = { workspace = true, features = ["tokio"] }
 switchy_database = { workspace = true }
+switchy_fs       = { workspace = true, features = ["async"] }
 switchy_http     = { workspace = true, features = ["json", "reqwest"] }
 switchy_random   = { workspace = true, features = ["rand"] }
 
@@ -82,9 +83,12 @@ fail-on-warnings = [
     "moosicbox_stream_utils/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
     "switchy_http/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
+
+simulator = ["switchy_fs/simulator"]
 
 profiling = [
     "dep:profiling",

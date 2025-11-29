@@ -5,7 +5,7 @@
 //! to version 1.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, LazyLock, RwLock},
 };
 
@@ -225,11 +225,11 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     event_receiver: flume::Receiver<AppEvent>,
 
     /// State of checkbox elements by ID.
-    checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
+    checkboxes: Arc<RwLock<BTreeMap<egui::Id, bool>>>,
     /// State of text input elements by ID.
-    text_inputs: Arc<RwLock<HashMap<egui::Id, String>>>,
+    text_inputs: Arc<RwLock<BTreeMap<egui::Id, String>>>,
     /// Cache of loaded images.
-    images: Arc<RwLock<HashMap<String, AppImage>>>,
+    images: Arc<RwLock<BTreeMap<String, AppImage>>>,
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
@@ -257,9 +257,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             on_resize,
             event: event_tx,
             event_receiver: event_rx,
-            checkboxes: Arc::new(RwLock::new(HashMap::new())),
-            text_inputs: Arc::new(RwLock::new(HashMap::new())),
-            images: Arc::new(RwLock::new(HashMap::new())),
+            checkboxes: Arc::new(RwLock::new(BTreeMap::new())),
+            text_inputs: Arc::new(RwLock::new(BTreeMap::new())),
+            images: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -603,7 +603,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     ///
     /// Will panic if container dimensions are not set.
     fn render_image(
-        images: &mut HashMap<String, AppImage>,
+        images: &mut BTreeMap<String, AppImage>,
         ui: &mut Ui,
         source: &str,
         container: &Container,

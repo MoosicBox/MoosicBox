@@ -6,7 +6,7 @@
 
 #![allow(clippy::option_if_let_else)]
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
@@ -45,14 +45,14 @@ struct ChildPositionTracker {
     /// Current child index (0-based)
     index: usize,
     /// Elements seen so far by name
-    seen_elements: HashMap<String, usize>,
+    seen_elements: BTreeMap<String, usize>,
 }
 
 impl ChildPositionTracker {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             index: 0,
-            seen_elements: HashMap::new(),
+            seen_elements: BTreeMap::new(),
         }
     }
 

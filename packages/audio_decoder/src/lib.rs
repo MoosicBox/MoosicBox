@@ -31,8 +31,9 @@
 #![warn(rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
-use std::fs::File;
 use std::path::Path;
+
+use switchy_fs::sync::File;
 
 use switchy_async::task::JoinError;
 use switchy_async::util::CancellationToken;

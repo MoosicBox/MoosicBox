@@ -1717,7 +1717,7 @@ async fn track_to_playable_file(
             "track_to_playable_file: getting file at path={}",
             path.display()
         );
-        let file = tokio::fs::File::open(path.to_path_buf()).await?;
+        let file = switchy_fs::unsync::File::open(path.to_path_buf()).await?;
 
         log::trace!("track_to_playable_file: Creating ByteStreamSource");
         let ms = Box::new(ByteStreamSource::new(

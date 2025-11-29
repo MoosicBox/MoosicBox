@@ -493,6 +493,18 @@ pub mod sync {
     }
 
     impl File {
+        /// Opens a file in read-only mode
+        ///
+        /// This is equivalent to `OpenOptions::new().read(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the file does not exist
+        /// * If an I/O error occurs
+        pub fn open(path: impl AsRef<::std::path::Path>) -> ::std::io::Result<Self> {
+            OpenOptions::new().read(true).open(path)
+        }
+
         /// Retrieves metadata about the file
         ///
         /// # Errors
@@ -1452,6 +1464,18 @@ pub mod unsync {
     }
 
     impl File {
+        /// Opens a file in read-only mode asynchronously
+        ///
+        /// This is equivalent to `OpenOptions::new().read(true).open(path).await`.
+        ///
+        /// # Errors
+        ///
+        /// * If the file does not exist
+        /// * If an I/O error occurs
+        pub async fn open(path: impl AsRef<::std::path::Path>) -> ::std::io::Result<Self> {
+            OpenOptions::new().read(true).open(path).await
+        }
+
         /// Retrieves metadata about the file asynchronously
         ///
         /// # Errors
