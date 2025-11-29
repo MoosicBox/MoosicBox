@@ -635,7 +635,7 @@ mod tests {
     fn test_signal_chain_add_encoder_step_creates_step_with_encoder() {
         use moosicbox_audio_output::AudioOutputError;
 
-        /// Mock encoder for testing add_encoder_step
+        /// Mock encoder for testing `add_encoder_step`
         struct MockEncoder;
 
         impl moosicbox_audio_output::encoder::AudioEncoder for MockEncoder {
