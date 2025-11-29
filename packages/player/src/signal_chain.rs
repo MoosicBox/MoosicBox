@@ -598,32 +598,6 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_signal_chain_step_processor_design() {
-        // SignalChainStepProcessor should always report as non-seekable
-        // We verify this property through the type's behavior documentation and design
-        // The processor should not support seeking according to its MediaSource implementation
-
-        // Create a mock to verify the expected behavior pattern
-        struct MockProcessor {
-            _overflow: Vec<u8>,
-        }
-
-        impl MockProcessor {
-            fn is_seekable(&self) -> bool {
-                false
-            }
-
-            fn byte_len(&self) -> Option<u64> {
-                None
-            }
-        }
-
-        let mock = MockProcessor { _overflow: vec![] };
-        assert!(!mock.is_seekable());
-        assert!(mock.byte_len().is_none());
-    }
-
-    #[test_log::test]
     fn test_signal_chain_with_encoder_on_empty_chain_does_nothing() {
         // Test that calling with_encoder on an empty chain doesn't panic
         let chain = SignalChain::new().with_encoder(|| {
