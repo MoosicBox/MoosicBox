@@ -244,6 +244,8 @@ macro_rules! impl_async {
 
         #[cfg(feature = "io")]
         pub use $module::io;
+        #[cfg(feature = "process")]
+        pub use $module::process;
         #[cfg(feature = "sync")]
         pub use $module::sync;
         #[cfg(feature = "time")]

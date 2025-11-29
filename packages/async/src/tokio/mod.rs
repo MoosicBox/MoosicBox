@@ -8,6 +8,8 @@ pub mod task;
 
 #[cfg(feature = "io")]
 pub mod io;
+#[cfg(feature = "process")]
+pub mod process;
 #[cfg(feature = "sync")]
 pub mod sync;
 #[cfg(feature = "time")]

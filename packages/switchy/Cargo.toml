@@ -95,6 +95,7 @@ all-async = [
     "async-fs",
     "async-io",
     "async-net",
+    "async-process",
     "async-rt-multi-thread",
     "async-sync",
     "async-time",
@@ -106,6 +107,7 @@ async                 = ["dep:switchy_async", "switchy_fs?/async"]
 async-fs              = ["async", "switchy_async?/fs", "switchy_fs?/async"]
 async-io              = ["async", "switchy_async?/io"]
 async-net             = ["async", "switchy_async?/net"]
+async-process         = ["async", "switchy_async?/process"]
 async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
 
 async-sync  = ["async", "switchy_async?/sync"]
