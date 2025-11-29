@@ -164,7 +164,7 @@ async fn setup_initial_data(db: &dyn Database) -> std::result::Result<(), Databa
     Ok(())
 }
 
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("State Migration Test Example");
     println!("============================");

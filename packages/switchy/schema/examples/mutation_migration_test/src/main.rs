@@ -465,7 +465,7 @@ impl Executable for InsertAnalyticsData {
 /// * Database creation fails
 /// * Any migration or mutation operation fails
 /// * Verification or rollback fails
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Mutation Migration Test Example");
     println!("===============================");

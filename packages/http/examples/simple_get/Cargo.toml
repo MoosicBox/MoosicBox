@@ -12,7 +12,8 @@ version     = "0.1.0"
 tests = false
 
 [dependencies]
-switchy_http = { workspace = true, features = ["reqwest"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_http  = { workspace = true, features = ["reqwest"] }
 
 log               = { workspace = true }
 pretty_env_logger = { workspace = true }
@@ -22,4 +23,7 @@ tokio             = { workspace = true, features = ["macros", "rt-multi-thread"]
 [features]
 default = []
 
-fail-on-warnings = ["switchy_http/fail-on-warnings"]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+]

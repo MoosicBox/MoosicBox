@@ -25,6 +25,7 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 colored = { workspace = true }
 dialoguer = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_database = { workspace = true, features = ["schema"] }
 switchy_database_connection = { workspace = true, features = [
     "postgres-sqlx",
@@ -36,22 +37,22 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [dev-dependencies]
-assert_cmd    = { workspace = true }
-async-trait   = { workspace = true }
-bytes         = { workspace = true }
-chrono        = { workspace = true }
-insta         = { workspace = true, features = ["redactions"] }
-predicates    = { workspace = true }
-regex         = { workspace = true }
-sha2          = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
-tempfile      = { workspace = true }
-test-log      = { workspace = true }
+assert_cmd  = { workspace = true }
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+chrono      = { workspace = true }
+insta       = { workspace = true, features = ["redactions"] }
+predicates  = { workspace = true }
+regex       = { workspace = true }
+sha2        = { workspace = true }
+tempfile    = { workspace = true }
+test-log    = { workspace = true }
 
 [features]
 default = []
 
 fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_database_connection/fail-on-warnings",
     "switchy_fs/fail-on-warnings",

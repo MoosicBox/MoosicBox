@@ -15,6 +15,7 @@ version     = "0.1.0"
 tests = false
 
 [dependencies]
+switchy_async    = { workspace = true, features = ["macros", "rt-multi-thread"] }
 switchy_database = { workspace = true, features = ["turso"] }
 tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

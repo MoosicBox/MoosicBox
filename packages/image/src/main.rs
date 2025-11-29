@@ -41,7 +41,7 @@ struct Args {
     quality: u8,
 }
 
-#[tokio::main]
+#[switchy_async::main]
 async fn main() {
     let args = Args::parse();
 

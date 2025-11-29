@@ -1827,6 +1827,7 @@ name = "basic_migration_test"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "switchy_async",
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
@@ -1839,6 +1840,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "env_logger 0.11.8",
+ "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
@@ -5736,6 +5738,7 @@ version = "0.1.0"
 dependencies = [
  "log 0.4.28",
  "pretty_env_logger",
+ "switchy_async",
  "switchy_http",
  "thiserror 2.0.17",
  "tokio",
@@ -17403,6 +17406,7 @@ dependencies = [
 name = "turso_basic_example"
 version = "0.1.0"
 dependencies = [
+ "switchy_async",
  "switchy_database",
  "tokio",
 ]
@@ -17496,6 +17500,7 @@ dependencies = [
 name = "turso_transactions_example"
 version = "0.1.0"
 dependencies = [
+ "switchy_async",
  "switchy_database",
  "tokio",
 ]

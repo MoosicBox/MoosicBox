@@ -31,7 +31,7 @@ log = { workspace = true }
 profiling = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_fs = { workspace = true, features = ["std"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = [

@@ -221,7 +221,7 @@ impl Migration<'static> for CreatePostsTable {
 ///
 /// * Returns an error if database creation fails
 /// * Returns an error if any migration fails during the full cycle test
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Basic Migration Test Example");
     println!("============================");

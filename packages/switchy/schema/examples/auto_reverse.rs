@@ -1,7 +1,7 @@
 //! Example demonstrating automatic migration reversal
 
 #[cfg(all(feature = "auto-reverse", feature = "code"))]
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use switchy_database::schema::auto_reversible::add_column;
     use switchy_database::schema::{Column, DataType, create_index, create_table};

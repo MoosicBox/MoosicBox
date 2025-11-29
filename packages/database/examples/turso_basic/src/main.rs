@@ -17,7 +17,7 @@
 
 use switchy_database::{Database, turso::TursoDatabase};
 
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Turso Database - Basic Usage Example");
     println!("=====================================\n");

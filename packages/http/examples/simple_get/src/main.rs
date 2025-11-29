@@ -41,7 +41,7 @@ pub enum Error {
 ///
 /// * `Error::MissingUrlArgument` - No URL argument was provided
 /// * `Error::Http` - HTTP request failed or response could not be read
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 

@@ -321,7 +321,7 @@ fn create_blog_schema_migrations<'a>() -> Vec<CodeMigration<'a>> {
 /// # Errors
 ///
 /// * Returns error if migration source fails to generate migrations
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<()> {
     println!("Borrowed Migrations Example");
     println!("===========================");

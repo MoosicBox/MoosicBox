@@ -236,7 +236,7 @@ impl MigrationSource<'static> for BasicUsageMigrations {
 /// # Panics
 ///
 /// * When retrieving database values if the expected column types don't match
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging to see migration progress
     env_logger::init();

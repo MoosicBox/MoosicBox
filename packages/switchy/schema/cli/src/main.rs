@@ -315,7 +315,7 @@ enum Commands {
 }
 
 #[allow(clippy::too_many_lines)]
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 

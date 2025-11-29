@@ -143,7 +143,7 @@ impl MigrationSource<'static> for CustomMigrationSource {
 /// # Errors
 ///
 /// * Returns an error if migration discovery or execution fails
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<()> {
     println!("Static Migrations Example");
     println!("=========================");

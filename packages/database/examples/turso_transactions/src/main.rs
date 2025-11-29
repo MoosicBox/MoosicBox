@@ -37,7 +37,7 @@ use switchy_database::{Database, DatabaseValue, turso::TursoDatabase};
 /// * Database value retrieval returns `None` when a value is expected
 /// * Type conversion of database values fails (e.g., value is not a string or i64)
 #[allow(clippy::too_many_lines)]
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Turso Database - Transaction Example");
     println!("====================================\n");
