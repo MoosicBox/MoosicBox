@@ -716,6 +716,303 @@ pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
     result.into()
 }
 
+// ============================================================================
+// main macro implementation
+// ============================================================================
+
+/// Represents the parsed input to a main macro with crate path.
+///
+/// This struct captures the complete configuration for a runtime main function,
+/// including the runtime path and optional configuration parameters.
+#[cfg(feature = "simulator")]
+struct MainWithPathInput {
+    crate_path: syn::Path,
+    function: syn::ItemFn,
+}
+
+#[cfg(feature = "simulator")]
+impl syn::parse::Parse for MainWithPathInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        use syn::Token;
+
+        // Parse: @path = ::some::path; async fn main() { ... }
+        let _: Token![@] = input.parse()?;
+        let _path_ident: syn::Ident = input.parse()?; // Should be "path"
+        let _: Token![=] = input.parse()?;
+        let crate_path: syn::Path = input.parse()?;
+        let _: Token![;] = input.parse()?;
+
+        let function: syn::ItemFn = input.parse()?;
+
+        Ok(Self {
+            crate_path,
+            function,
+        })
+    }
+}
+
+/// Represents the parsed arguments for main attributes.
+///
+/// Currently empty as we don't support any configuration parameters,
+/// but this structure allows for future extensibility.
+#[cfg(feature = "simulator")]
+struct MainArgs;
+
+#[cfg(feature = "simulator")]
+impl syn::parse::Parse for MainArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Currently we don't support any parameters for main
+        // Just consume and ignore any tokens for forward compatibility
+        while !input.is_empty() {
+            let _: proc_macro2::TokenTree = input.parse()?;
+        }
+        Ok(Self)
+    }
+}
+
+/// Helper function to convert `MainArgs` to the internal token format.
+///
+/// Constructs the token stream that will be passed to `main_internal`,
+/// combining the crate path and function tokens.
+#[cfg(feature = "simulator")]
+#[must_use]
+fn build_main_tokens(crate_path: &str, item_tokens: &TokenStream2) -> TokenStream2 {
+    let tokens = if crate_path == "crate" {
+        quote! { @path = crate; }
+    } else {
+        let path: syn::Path = syn::parse_str(crate_path).expect("Invalid crate path");
+        quote! { @path = #path; }
+    };
+
+    let mut result = tokens;
+    result.extend(quote! { #item_tokens });
+    result
+}
+
+/// Internal main attribute macro that accepts a crate path parameter.
+///
+/// This macro provides runtime setup for async main functions. It is used internally
+/// by the public main macros (`main`, `unsync_main`, `internal_main`) to generate the
+/// appropriate runtime wrapper with the correct crate path.
+///
+/// The macro accepts a special syntax with configuration parameters:
+///
+/// ```ignore
+/// main_internal! {
+///     @path = crate_path;
+///     async fn main() {
+///         // main body
+///     }
+/// }
+/// ```
+///
+/// Most users should use the public main attribute macros (`#[main]`, `#[unsync_main]`, etc.)
+/// rather than calling this internal macro directly.
+#[cfg(feature = "simulator")]
+#[proc_macro]
+pub fn main_internal(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as MainWithPathInput);
+    let crate_path = input.crate_path;
+    let input_fn = input.function;
+
+    let fn_name = &input_fn.sig.ident;
+    let fn_block = &input_fn.block;
+    let fn_vis = &input_fn.vis;
+    let fn_attrs = &input_fn.attrs;
+    let fn_output = &input_fn.sig.output;
+
+    // Extract any existing attributes except #[main]
+    let filtered_attrs: Vec<_> = fn_attrs
+        .iter()
+        .filter(|attr| !attr.path().is_ident("main"))
+        .collect();
+
+    // Determine if the return type is a Result type
+    let is_result_type = matches!(fn_output, syn::ReturnType::Type(_, ty) if {
+        if let syn::Type::Path(type_path) = ty.as_ref() {
+            type_path.path.segments.last().is_some_and(|seg| seg.ident == "Result")
+        } else {
+            false
+        }
+    });
+
+    let result = if is_result_type {
+        // For Result return types, propagate the result properly
+        quote! {
+            #(#filtered_attrs)*
+            #fn_vis fn #fn_name() #fn_output {
+                let rt = #crate_path::Builder::new().build().expect("Failed to build runtime");
+                let result = rt.block_on(async move #fn_block);
+                rt.wait().expect("Runtime wait failed");
+                result
+            }
+        }
+    } else {
+        // For non-Result return types (including unit)
+        quote! {
+            #(#filtered_attrs)*
+            #fn_vis fn #fn_name() #fn_output {
+                let rt = #crate_path::Builder::new().build().expect("Failed to build runtime");
+                let result = rt.block_on(async move #fn_block);
+                rt.wait().expect("Runtime wait failed");
+                result
+            }
+        }
+    };
+
+    result.into()
+}
+
+/// Internal main attribute macro for `switchy_async` - uses crate path for internal usage.
+///
+/// This macro is used within the `switchy_async` crate itself for internal main functions.
+/// It sets up a simulator runtime and runs the main function within it, using `crate` as the path.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::internal_main;
+///
+/// #[internal_main]
+/// async fn main() {
+///     // Main code here
+/// }
+/// ```
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn internal_main(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse and ignore args for forward compatibility
+    if !args.is_empty() {
+        let _ = syn::parse::<MainArgs>(args);
+    }
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = build_main_tokens("crate", &item_tokens);
+
+    main_internal(input_tokens.into())
+}
+
+/// Main attribute macro for `switchy_async` runtime (simulator feature only).
+///
+/// This macro sets up a simulator runtime and runs the main function within it. It's designed
+/// for async main functions that use the `switchy_async` runtime. Only available when the
+/// `simulator` feature is enabled.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::main;
+///
+/// #[main]
+/// async fn main() {
+///     // Async main code using switchy_async runtime
+///     println!("Hello from async main!");
+/// }
+///
+/// #[main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // With Result return type
+///     Ok(())
+/// }
+/// ```
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse and ignore args for forward compatibility
+    if !args.is_empty() {
+        let _ = syn::parse::<MainArgs>(args);
+    }
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = build_main_tokens("switchy_async", &item_tokens);
+
+    main_internal(input_tokens.into())
+}
+
+/// Main attribute macro for `switchy::unsync` runtime (simulator feature only).
+///
+/// This macro sets up a `switchy::unsync` runtime and runs the main function within it. It's
+/// designed for async main functions that use the `switchy::unsync` runtime. Only available
+/// when the `simulator` feature is enabled.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::unsync_main;
+///
+/// #[unsync_main]
+/// async fn main() {
+///     // Async main code using switchy::unsync runtime
+///     println!("Hello from async main!");
+/// }
+///
+/// #[unsync_main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // With Result return type
+///     Ok(())
+/// }
+/// ```
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse and ignore args for forward compatibility
+    if !args.is_empty() {
+        let _ = syn::parse::<MainArgs>(args);
+    }
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = build_main_tokens("switchy::unsync", &item_tokens);
+
+    main_internal(input_tokens.into())
+}
+
+/// Tokio-compatible main attribute macro (always available).
+///
+/// This macro provides a Tokio-compatible main wrapper that simply delegates to `#[tokio::main]`.
+/// Unlike the other main macros in this crate, this macro is always available regardless of
+/// feature flags, making it suitable for main functions that need to work with or without
+/// the simulator.
+///
+/// Any arguments passed to this macro are forwarded to `tokio::main`.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::tokio_main_wrapper;
+///
+/// #[tokio_main_wrapper]
+/// async fn main() {
+///     // Async main code using tokio runtime
+///     println!("Hello from async main!");
+/// }
+///
+/// #[tokio_main_wrapper]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // With Result return type
+///     Ok(())
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn tokio_main_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Forward any arguments to tokio::main
+    let item_tokens: TokenStream2 = item.into();
+
+    let result = if args.is_empty() {
+        quote! {
+            #[::tokio::main]
+            #item_tokens
+        }
+    } else {
+        let args_tokens: TokenStream2 = args.into();
+        quote! {
+            #[::tokio::main(#args_tokens)]
+            #item_tokens
+        }
+    };
+
+    result.into()
+}
+
 /// Injects yield points into an entire module by reading and transforming the module's source file.
 ///
 /// This macro reads the module file from disk, parses it, and applies yield injection to all async
@@ -1286,5 +1583,120 @@ mod tests {
             "Should contain no_simulator: {output}"
         );
         assert!(output.contains("switchy"), "Should contain path: {output}");
+    }
+
+    // ============================================================================
+    // MainWithPathInput parsing tests
+    // ============================================================================
+
+    /// Tests parsing of `MainWithPathInput` with minimal valid input.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_basic() {
+        let input = quote! {
+            @path = crate;
+            async fn main() {}
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Failed to parse basic MainWithPathInput");
+
+        assert_eq!(
+            parsed.crate_path.segments.last().unwrap().ident.to_string(),
+            "crate"
+        );
+        assert_eq!(parsed.function.sig.ident.to_string(), "main");
+    }
+
+    /// Tests parsing of `MainWithPathInput` with external crate path.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_external_path() {
+        let input = quote! {
+            @path = switchy_async;
+            async fn main() {}
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Failed to parse MainWithPathInput with external path");
+
+        assert_eq!(
+            parsed.crate_path.segments.last().unwrap().ident.to_string(),
+            "switchy_async"
+        );
+    }
+
+    /// Tests parsing of `MainWithPathInput` with qualified crate path.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_qualified_path() {
+        let input = quote! {
+            @path = switchy::unsync;
+            async fn main() {}
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Failed to parse MainWithPathInput with qualified path");
+
+        assert_eq!(parsed.crate_path.segments.len(), 2);
+        assert_eq!(parsed.crate_path.segments[0].ident.to_string(), "switchy");
+        assert_eq!(parsed.crate_path.segments[1].ident.to_string(), "unsync");
+    }
+
+    /// Tests parsing of `MainWithPathInput` with return type.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_with_return_type() {
+        let input = quote! {
+            @path = crate;
+            async fn main() -> Result<(), Box<dyn std::error::Error>> {}
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Failed to parse MainWithPathInput with return type");
+
+        assert!(
+            matches!(parsed.function.sig.output, syn::ReturnType::Type(_, _)),
+            "Should have a return type"
+        );
+    }
+
+    // ============================================================================
+    // build_main_tokens tests
+    // ============================================================================
+
+    /// Tests that `build_main_tokens` generates correct tokens for "crate" path.
+    #[::core::prelude::v1::test]
+    fn build_main_tokens_crate_path() {
+        let item_tokens = quote! { async fn main() {} };
+
+        let tokens = build_main_tokens("crate", &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("@ path = crate"),
+            "Should contain crate path: {output}"
+        );
+    }
+
+    /// Tests that `build_main_tokens` generates correct tokens for external crate path.
+    #[::core::prelude::v1::test]
+    fn build_main_tokens_external_path() {
+        let item_tokens = quote! { async fn main() {} };
+
+        let tokens = build_main_tokens("switchy_async", &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("switchy_async"),
+            "Should contain switchy_async path: {output}"
+        );
+    }
+
+    /// Tests that `build_main_tokens` generates correct tokens for qualified path.
+    #[::core::prelude::v1::test]
+    fn build_main_tokens_qualified_path() {
+        let item_tokens = quote! { async fn main() {} };
+
+        let tokens = build_main_tokens("switchy::unsync", &item_tokens);
+        let output = tokens.to_string();
+
+        assert!(
+            output.contains("switchy"),
+            "Should contain switchy: {output}"
+        );
+        assert!(output.contains("unsync"), "Should contain unsync: {output}");
     }
 }

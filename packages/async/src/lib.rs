@@ -102,6 +102,21 @@ pub use switchy_async_macros::test;
 #[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
 pub use switchy_async_macros::tokio_test_wrapper as test;
 
+// Main macro re-exports
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::main_internal;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::internal_main;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+pub use switchy_async_macros::main;
+
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+pub use switchy_async_macros::tokio_main_wrapper as main;
+
 /// For tokio runtime - re-export tokio::select! as select_internal
 #[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
 #[macro_export]
@@ -135,6 +150,10 @@ macro_rules! try_join_internal {
 /// For tokio runtime - re-export `tokio::test` as `test_internal`
 #[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
 pub use crate::tokio::test as test_internal;
+
+/// For tokio runtime - re-export `tokio::main` as `main_internal`
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+pub use crate::tokio::main as main_internal;
 
 /// Tokio runtime implementation.
 ///

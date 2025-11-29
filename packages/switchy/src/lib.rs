@@ -154,6 +154,30 @@ pub mod unsync {
     #[cfg(feature = "async-macros")]
     pub use try_join;
 
+    // Override the main! attribute macro to use the correct path for switchy::unsync
+    /// Attribute macro for async main functions.
+    ///
+    /// This macro provides a runtime-agnostic way to define async main functions.
+    /// When using the Tokio runtime, this delegates to `#[tokio::main]`. When using the
+    /// simulator runtime, this uses the simulator's implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// #[switchy::unsync::main]
+    /// async fn main() {
+    ///     println!("Hello from async main!");
+    /// }
+    ///
+    /// #[switchy::unsync::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     // With Result return type
+    ///     Ok(())
+    /// }
+    /// ```
+    #[cfg(feature = "async-macros")]
+    pub use crate::unsync_macros::unsync_main as main;
+
     // Re-export test attribute macro
     #[cfg(all(test, feature = "async-macros"))]
     pub use crate::unsync_macros::unsync_test as test;
@@ -273,6 +297,48 @@ pub mod unsync_macros {
         not(feature = "simulator")
     ))]
     pub use switchy_async_macros::test_internal;
+
+    // For tokio runtime - re-export tokio::main as main_internal
+    /// Internal implementation macro for `main` using Tokio runtime.
+    ///
+    /// This macro is an implementation detail and should not be used directly.
+    /// Use [`switchy::unsync::main`](crate::unsync::main) instead.
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    #[macro_export]
+    macro_rules! main_internal {
+        // Handle the @path parameter and ignore it for tokio
+        (@path = $path:path; #[$($attr:tt)*] $($rest:tt)*) => {
+            #[::tokio::main]
+            #[$($attr)*]
+            $($rest)*
+        };
+        // Handle case without additional attributes
+        (@path = $path:path; $($rest:tt)*) => {
+            #[::tokio::main]
+            $($rest)*
+        };
+        // Fallback for direct calls without @path
+        ($($tokens:tt)*) => {
+            #[::tokio::main]
+            $($tokens)*
+        };
+    }
+
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    pub use main_internal;
+
+    // For simulator runtime - re-export the procedural macro
+    #[cfg(feature = "simulator")]
+    pub use switchy_async_macros::main_internal;
+
+    // Default fallback - use simulator when no specific runtime is chosen
+    // but async-macros is enabled (which brings in the dependency)
+    #[cfg(all(
+        feature = "async-macros",
+        not(feature = "async-tokio"),
+        not(feature = "simulator")
+    ))]
+    pub use switchy_async_macros::main_internal;
 }
 
 /// Database abstraction layer.
