@@ -29,21 +29,31 @@ fn create_test_db_url() -> String {
     url
 }
 
-#[test]
-fn test_validate_command_help() {
+#[switchy_async::test(no_simulator)]
+async fn test_validate_command_help() {
     let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["validate", "--help"]);
 
     let output = cmd.output().expect("Failed to run command");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let clean_output = strip_ansi_codes(&stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
+    let clean_output = strip_ansi_codes(&output);
 
     assert_snapshot!("validate_command_help", clean_output);
-    assert!(output.status.success());
+    assert!(status.success());
 }
 
-#[test]
-fn test_validate_empty_migrations_directory() {
+#[switchy_async::test(no_simulator)]
+async fn test_validate_empty_migrations_directory() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
@@ -59,9 +69,18 @@ fn test_validate_empty_migrations_directory() {
     let output = cmd.output().expect("Failed to run command");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
 
     // Filter out paths and URLs for consistent snapshots
-    let filtered = stdout
+    let filtered = output
         .replace(
             &migrations_dir.to_string_lossy().to_string(),
             "[MIGRATIONS_DIR]",
@@ -70,17 +89,17 @@ fn test_validate_empty_migrations_directory() {
     let clean_output = strip_ansi_codes(&filtered);
 
     // Print stderr for debugging
-    if !output.status.success() {
+    if !status.success() {
         panic!("Command failed with stderr: {stderr}");
     }
 
     assert_snapshot!("validate_empty_migrations", clean_output);
     // Should handle case when migration table doesn't exist
-    assert!(output.status.success());
+    assert!(status.success());
 }
 
-#[test]
-fn test_validate_with_verbose_flag() {
+#[switchy_async::test(no_simulator)]
+async fn test_validate_with_verbose_flag() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
@@ -96,9 +115,19 @@ fn test_validate_with_verbose_flag() {
 
     let output = cmd.output().expect("Failed to run command");
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
 
     // Filter out paths and URLs for consistent snapshots
-    let filtered = stdout
+    let filtered = output
         .replace(
             &migrations_dir.to_string_lossy().to_string(),
             "[MIGRATIONS_DIR]",
@@ -108,11 +137,11 @@ fn test_validate_with_verbose_flag() {
 
     assert_snapshot!("validate_empty_migrations_verbose", clean_output);
     // Should handle case when migration table doesn't exist
-    assert!(output.status.success());
+    assert!(status.success());
 }
 
-#[test]
-fn test_validate_with_strict_flag() {
+#[switchy_async::test(no_simulator)]
+async fn test_validate_with_strict_flag() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
@@ -128,9 +157,19 @@ fn test_validate_with_strict_flag() {
 
     let output = cmd.output().expect("Failed to run command");
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
 
     // Filter out paths and URLs for consistent snapshots
-    let filtered = stdout
+    let filtered = output
         .replace(
             &migrations_dir.to_string_lossy().to_string(),
             "[MIGRATIONS_DIR]",
@@ -140,7 +179,7 @@ fn test_validate_with_strict_flag() {
 
     assert_snapshot!("validate_empty_migrations_strict", clean_output);
     // Should handle case when migration table doesn't exist
-    assert!(output.status.success());
+    assert!(status.success());
 }
 
 #[switchy_async::test(no_simulator)]
@@ -157,17 +196,27 @@ async fn test_validate_nonexistent_database() {
     ]);
 
     let output = cmd.output().expect("Failed to run command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
 
     // Filter out the specific path for consistent snapshots
-    let filtered = stderr.replace(
+    let filtered = output.replace(
         &migrations_dir.to_string_lossy().to_string(),
         "[MIGRATIONS_DIR]",
     );
     let clean_output = strip_ansi_codes(&filtered);
 
     assert_snapshot!("validate_nonexistent_database", clean_output);
-    assert!(!output.status.success()); // Should fail
+    assert!(!status.success()); // Should fail
 }
 
 #[switchy_async::test(no_simulator)]
@@ -178,12 +227,22 @@ async fn test_validate_nonexistent_migrations_directory() {
     cmd.args(["validate", "-d", &db_url, "-m", "/nonexistent/migrations"]);
 
     let output = cmd.output().expect("Failed to run command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = output.status;
+    let output = format!(
+        "\
+        stdout:\n\
+        {stdout}\n\
+        stderr:\n\
+        {stderr}\n\
+        status: {status:?}",
+    );
 
     // Filter out the database URL for consistent snapshots
-    let filtered = stderr.replace(&db_url, "[DATABASE_URL]");
+    let filtered = output.replace(&db_url, "[DATABASE_URL]");
     let clean_output = strip_ansi_codes(&filtered);
 
     assert_snapshot!("validate_nonexistent_migrations_dir", clean_output);
-    assert!(!output.status.success()); // Should fail
+    assert!(!status.success()); // Should fail
 }

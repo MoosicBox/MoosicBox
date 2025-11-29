@@ -25,7 +25,7 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 colored = { workspace = true }
 dialoguer = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
 switchy_database = { workspace = true, features = ["schema"] }
 switchy_database_connection = { workspace = true, features = [
     "postgres-sqlx",
@@ -44,6 +44,7 @@ insta       = { workspace = true, features = ["redactions"] }
 predicates  = { workspace = true }
 regex       = { workspace = true }
 sha2        = { workspace = true }
+switchy_fs  = { workspace = true, features = ["simulator-real-fs"] }
 tempfile    = { workspace = true }
 test-log    = { workspace = true }
 

@@ -2,4 +2,14 @@
 source: packages/switchy/schema/cli/tests/validate_simple_test.rs
 expression: clean_output
 ---
+stdout:
+Validating migration checksums
+------------------------------
+Migrations directory: /nonexistent/migrations
+Migration table: __switchy_migrations
+
+
+stderr:
 Error: Migration(Io(Os { code: 2, kind: NotFound, message: "No such file or directory" }))
+
+status: ExitStatus(unix_wait_status(256))
