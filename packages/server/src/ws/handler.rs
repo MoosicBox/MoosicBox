@@ -10,7 +10,8 @@ use futures_util::{
     StreamExt as _,
     future::{Either, select},
 };
-use tokio::{pin, sync::mpsc, time::interval};
+use switchy_async::sync::mpsc;
+use tokio::{pin, time::interval};
 
 use crate::ws::{ConnId, server::WsServerHandle};
 
@@ -48,7 +49,7 @@ pub async fn handle_ws(
     let mut last_heartbeat = switchy_time::instant_now();
     let mut interval = interval(HEARTBEAT_INTERVAL);
 
-    let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
+    let (conn_tx, mut conn_rx) = mpsc::unbounded();
 
     let conn_id = ws_server.connect(profile, conn_tx).await;
 
@@ -61,7 +62,7 @@ pub async fn handle_ws(
         let tick = interval.tick();
         pin!(tick);
 
-        let msg_rx = conn_rx.recv();
+        let msg_rx = conn_rx.recv_async();
         pin!(msg_rx);
 
         // TODO: nested select is pretty gross for readability on the match
@@ -110,14 +111,14 @@ pub async fn handle_ws(
             Either::Left((Either::Left((None, _)), _)) => break None,
 
             // ws messages received from other room participants
-            Either::Left((Either::Right((Some(ws_msg), _)), _)) => {
+            Either::Left((Either::Right((Ok(ws_msg), _)), _)) => {
                 if let Err(err) = session.text(ws_msg).await {
                     log::error!("Failed to send text message: {err:?}");
                 }
             }
 
             // all connection's message senders were dropped
-            Either::Left((Either::Right((None, _)), _)) => unreachable!(
+            Either::Left((Either::Right((Err(_), _)), _)) => unreachable!(
                 "all connection message senders were dropped; ws server may have panicked"
             ),
 

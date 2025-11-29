@@ -51,7 +51,7 @@ moosicbox_session = { workspace = true, features = ["events"] }
 switchy_time = { workspace = true, features = ["std"] }
 
 moosicbox_ws                = { workspace = true, features = ["ws"] }
-switchy_async               = { workspace = true, features = ["tokio"] }
+switchy_async               = { workspace = true, features = ["macros", "sync", "tokio"] }
 switchy_database            = { workspace = true, features = ["api"] }
 switchy_database_connection = { workspace = true, features = [] }
 switchy_env                 = { workspace = true, features = ["std"] }

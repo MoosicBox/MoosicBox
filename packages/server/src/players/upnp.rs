@@ -14,17 +14,17 @@ use thiserror::Error;
 use crate::{CONFIG_DB, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
 
 pub static UPNP_PLAYERS: LazyLock<
-    tokio::sync::RwLock<
+    switchy_async::sync::RwLock<
         Vec<(
             moosicbox_audio_output::AudioOutputFactory,
             switchy_upnp::player::UpnpPlayer,
             moosicbox_player::PlaybackHandler,
         )>,
     >,
-> = LazyLock::new(|| tokio::sync::RwLock::new(vec![]));
+> = LazyLock::new(|| switchy_async::sync::RwLock::new(vec![]));
 
 static SESSION_UPNP_PLAYERS: LazyLock<
-    tokio::sync::RwLock<
+    switchy_async::sync::RwLock<
         BTreeMap<
             u64,
             (
@@ -33,7 +33,7 @@ static SESSION_UPNP_PLAYERS: LazyLock<
             ),
         >,
     >,
-> = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
+> = LazyLock::new(|| switchy_async::sync::RwLock::new(BTreeMap::new()));
 
 /// Errors that can occur during `UPnP` player initialization.
 #[derive(Debug, Error)]

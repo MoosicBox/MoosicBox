@@ -29,7 +29,7 @@ moosicbox_paging       = { workspace = true }
 moosicbox_scan_models  = { workspace = true }
 moosicbox_search       = { workspace = true }
 
-switchy_async    = { workspace = true, features = ["tokio"] }
+switchy_async    = { workspace = true, features = ["sync", "tokio"] }
 switchy_database = { workspace = true }
 switchy_http     = { workspace = true, features = ["reqwest"] }
 switchy_time     = { workspace = true, features = ["std"] }

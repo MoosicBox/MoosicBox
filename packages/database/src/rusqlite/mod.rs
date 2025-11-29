@@ -4151,7 +4151,7 @@ mod tests {
     use rusqlite::Connection;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::sync::Mutex;
+    use switchy_async::sync::Mutex;
 
     const CONNECTION_POOL_SIZE: u8 = 5;
 
@@ -4420,7 +4420,7 @@ mod tests {
     fn create_introspection_test_db() -> RusqliteDatabase {
         use rusqlite::Connection;
         use std::sync::Arc;
-        use tokio::sync::Mutex;
+        use switchy_async::sync::Mutex;
 
         let test_id = std::thread::current().id();
         let timestamp = std::time::SystemTime::now()
@@ -4825,7 +4825,7 @@ mod tests {
     async fn test_unsupported_data_types() {
         use rusqlite::Connection;
         use std::sync::Arc;
-        use tokio::sync::Mutex;
+        use switchy_async::sync::Mutex;
 
         let test_id = std::thread::current().id();
         let timestamp = std::time::SystemTime::now()

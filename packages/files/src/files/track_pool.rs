@@ -22,9 +22,9 @@ use moosicbox_music_api::models::TrackSource;
 use moosicbox_music_models::AudioFormat;
 use moosicbox_stream_utils::{ByteWriter, stalled_monitor::StalledReadMonitor};
 use strum_macros::AsRefStr;
+use switchy_async::sync::{Mutex, RwLock, Semaphore};
 use switchy_async::util::CancellationToken;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock, Semaphore};
 
 use crate::{
     BytesStream,

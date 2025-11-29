@@ -26,4 +26,7 @@ name = "test_async_extraction"
 path = "src/test_async_extraction.rs"
 
 [features]
-fail-on-warnings = ["moosicbox_web_server/fail-on-warnings"]
+fail-on-warnings = [
+    "moosicbox_web_server/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]

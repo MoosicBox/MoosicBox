@@ -20,17 +20,13 @@ moosicbox_json_utils     = { workspace = true }
 moosicbox_library        = { workspace = true }
 moosicbox_music_models   = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
-switchy_async            = { workspace = true, features = ["tokio"] }
+switchy_async            = { workspace = true, features = ["sync", "tokio"] }
 switchy_database         = { workspace = true }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }
 moosicbox_paging = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
-
-# Events Dependencies
-
-tokio = { workspace = true, optional = true }
 
 log        = { workspace = true }
 serde      = { workspace = true, features = ["derive"] }
@@ -41,7 +37,6 @@ thiserror  = { workspace = true }
 serial_test   = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
-tokio         = { workspace = true }
 
 [features]
 default = ["all-formats", "api", "events", "openapi"]
@@ -76,7 +71,7 @@ openapi = [
     "moosicbox_session_models/openapi",
 ]
 
-events = ["dep:tokio", "moosicbox_audio_zone/events"]
+events = ["moosicbox_audio_zone/events"]
 
 all-formats = [
     "all-os-formats",

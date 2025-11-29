@@ -72,7 +72,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use switchy::http::models::{Method, StatusCode};
-use tokio::sync::Mutex;
+use switchy_async::sync::Mutex;
 use url::form_urlencoded;
 
 use crate::models::QobuzImage;

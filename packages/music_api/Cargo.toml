@@ -22,7 +22,7 @@ moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models     = { workspace = true }
 moosicbox_paging           = { workspace = true }
 moosicbox_profiles         = { workspace = true }
-switchy_async              = { workspace = true, optional = true }
+switchy_async              = { workspace = true, features = ["sync"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -31,13 +31,11 @@ async-trait = { workspace = true }
 futures     = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 switchy_async     = { workspace = true, features = ["macros"] }
 test-log          = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["all-auth", "api", "openapi"]
@@ -48,7 +46,7 @@ fail-on-warnings = [
     "moosicbox_music_models/fail-on-warnings",
     "moosicbox_paging/fail-on-warnings",
     "moosicbox_profiles/fail-on-warnings",
-    "switchy_async?/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
 ]
 
 openapi = [
@@ -70,7 +68,6 @@ _auth = []
 all-auth = ["auth-poll", "auth-username-password"]
 auth-poll = [
     "_auth",
-    "dep:switchy_async",
     "switchy_async/macros",
     "switchy_async/time",
     "switchy_async/tokio",

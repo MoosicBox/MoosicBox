@@ -27,9 +27,9 @@ use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
+use switchy_async::sync::RwLock;
 use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 use super::{GetAlbumError, get_albums};
 

@@ -62,7 +62,7 @@ use std::{ops::Deref, pin::Pin, sync::Arc};
 
 use futures::Future;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use switchy_async::sync::Mutex;
 
 /// A page of items from a paginated result.
 ///

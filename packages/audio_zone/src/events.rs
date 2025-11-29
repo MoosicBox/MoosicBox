@@ -28,7 +28,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use tokio::sync::RwLock;
+use switchy_async::sync::RwLock;
 
 /// A boxed error type that implements `Send` for thread-safe error handling.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;

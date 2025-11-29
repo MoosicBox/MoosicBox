@@ -27,6 +27,7 @@ moosicbox_profiles          = { workspace = true, optional = true, features = ["
 moosicbox_scan              = { workspace = true }
 moosicbox_search            = { workspace = true }
 moosicbox_session           = { workspace = true }
+switchy_async               = { workspace = true, features = ["sync", "tokio"] }
 switchy_database            = { workspace = true }
 switchy_time                = { workspace = true, features = ["std"] }
 
@@ -37,7 +38,6 @@ actix-web = { workspace = true, optional = true }
 log       = { workspace = true }
 serde     = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio     = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
@@ -59,6 +59,7 @@ fail-on-warnings = [
     "moosicbox_scan/fail-on-warnings",
     "moosicbox_search/fail-on-warnings",
     "moosicbox_session/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_time/fail-on-warnings",
 ]

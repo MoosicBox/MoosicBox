@@ -28,4 +28,5 @@ default = []
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
     "moosicbox_web_server/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
 ]

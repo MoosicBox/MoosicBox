@@ -15,10 +15,10 @@
 //!
 //! ```rust,no_run
 //! # use moosicbox_app_ws::{WsClient, WsMessage};
-//! # use tokio::sync::mpsc;
+//! # use switchy_async::sync::mpsc;
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let (client, handle) = WsClient::new("ws://localhost:8080".to_string());
-//! let (tx, mut rx) = mpsc::channel(100);
+//! let (tx, mut rx) = mpsc::unbounded();
 //!
 //! // Start the websocket connection
 //! tokio::spawn(async move {
@@ -26,7 +26,7 @@
 //! });
 //!
 //! // Receive messages
-//! while let Some(msg) = rx.recv().await {
+//! while let Ok(msg) = rx.recv_async().await {
 //!     match msg {
 //!         WsMessage::TextMessage(text) => println!("Received: {}", text),
 //!         WsMessage::Message(bytes) => println!("Received {} bytes", bytes.len()),
@@ -49,12 +49,13 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures_channel::mpsc::UnboundedSender;
 use futures_util::{StreamExt as _, future, pin_mut};
-use switchy_async::util::CancellationToken;
+use switchy_async::{
+    select,
+    sync::mpsc::{SendError, Sender},
+    time::sleep,
+    util::CancellationToken,
+};
 use thiserror::Error;
-use tokio::select;
-use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::SendError;
-use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::http::StatusCode;
 use tokio_tungstenite::{
     connect_async,
@@ -241,7 +242,7 @@ impl WsClient {
         m: Message,
     ) -> Result<(), SendError<WsMessage>> {
         log::trace!("Message from ws server: {m:?}");
-        tx.send(match m {
+        tx.send_async(match m {
             Message::Text(m) => WsMessage::TextMessage(m.to_string()),
             Message::Binary(m) => WsMessage::Message(m),
             Message::Ping(_m) => WsMessage::Ping,
@@ -470,55 +471,55 @@ impl WsClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::mpsc;
+    use switchy_async::sync::mpsc;
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_message_handler_text_message() {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded();
         let text = "hello world".to_string();
         let message = Message::Text(text.clone().into());
 
         let result = WsClient::message_handler(tx, message).await;
 
         assert!(result.is_ok());
-        let received = rx.recv().await.unwrap();
+        let received = rx.recv_async().await.unwrap();
         match received {
             WsMessage::TextMessage(s) => assert_eq!(s, text),
             _ => panic!("Expected TextMessage"),
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_message_handler_binary_message() {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded();
         let data = vec![1u8, 2, 3, 4, 5];
         let message = Message::Binary(data.clone().into());
 
         let result = WsClient::message_handler(tx, message).await;
 
         assert!(result.is_ok());
-        let received = rx.recv().await.unwrap();
+        let received = rx.recv_async().await.unwrap();
         match received {
             WsMessage::Message(bytes) => assert_eq!(bytes.as_ref(), &data[..]),
             _ => panic!("Expected Message with bytes"),
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_message_handler_ping() {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded();
         let message = Message::Ping(vec![].into());
 
         let result = WsClient::message_handler(tx, message).await;
 
         assert!(result.is_ok());
-        let received = rx.recv().await.unwrap();
+        let received = rx.recv_async().await.unwrap();
         assert!(matches!(received, WsMessage::Ping));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_message_handler_pong_returns_ok_without_sending() {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded();
         let message = Message::Pong(vec![].into());
 
         let result = WsClient::message_handler(tx, message).await;
@@ -528,7 +529,7 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_send_with_no_sender() {
         let handle = WsHandle {
             sender: Arc::new(RwLock::new(None)),
@@ -540,7 +541,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_send_with_active_sender() {
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
         let handle = WsHandle {
@@ -558,7 +559,7 @@ mod tests {
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_send_with_closed_channel() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         // Close the receiver to simulate channel being closed
@@ -580,7 +581,7 @@ mod tests {
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_ping_with_no_sender() {
         let handle = WsHandle {
             sender: Arc::new(RwLock::new(None)),
@@ -592,7 +593,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_ping_with_active_sender() {
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
         let handle = WsHandle {
@@ -607,7 +608,7 @@ mod tests {
         assert!(matches!(received, WsMessage::Ping));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_ws_handle_ping_with_closed_channel() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         // Close the receiver to simulate channel being closed

@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::WS_SERVER_HANDLE;
 
 pub static SERVER_PLAYERS: LazyLock<
-    tokio::sync::RwLock<
+    switchy_async::sync::RwLock<
         BTreeMap<
             u64,
             (
@@ -24,7 +24,7 @@ pub static SERVER_PLAYERS: LazyLock<
             ),
         >,
     >,
-> = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
+> = LazyLock::new(|| switchy_async::sync::RwLock::new(BTreeMap::new()));
 
 /// Errors that can occur during local player initialization.
 #[derive(Debug, Error)]

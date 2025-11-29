@@ -369,10 +369,14 @@ impl FltkRenderer {
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
         type ImageCache = LazyLock<
-            Arc<tokio::sync::RwLock<BTreeMap<String, (Arc<Bytes>, u32, u32, enums::ColorDepth)>>>,
+            Arc<
+                switchy_async::sync::RwLock<
+                    BTreeMap<String, (Arc<Bytes>, u32, u32, enums::ColorDepth)>,
+                >,
+            >,
         >;
         static IMAGE_CACHE: ImageCache =
-            LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(BTreeMap::new())));
+            LazyLock::new(|| Arc::new(switchy_async::sync::RwLock::new(BTreeMap::new())));
 
         let uri = match &source {
             ImageSource::Bytes { source, .. } | ImageSource::Url(source) => source,

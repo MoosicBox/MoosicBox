@@ -18,11 +18,11 @@ moosicbox_menu_models  = { workspace = true, features = ["api"] }
 moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
+switchy_async          = { workspace = true, features = ["sync", "tokio"] }
 switchy_http           = { workspace = true, features = ["json", "reqwest"] }
 
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true }
 urlencoding = { workspace = true }
 
 [dev-dependencies]
@@ -37,6 +37,7 @@ fail-on-warnings = [
     "moosicbox_music_api/fail-on-warnings",
     "moosicbox_music_models/fail-on-warnings",
     "moosicbox_paging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
     "switchy_http/fail-on-warnings",
 ]
 

@@ -26,7 +26,7 @@ moosicbox_resampler     = { workspace = true }
 moosicbox_session       = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 
-switchy_async    = { workspace = true, features = ["tokio"] }
+switchy_async    = { workspace = true, features = ["macros", "sync", "tokio"] }
 switchy_database = { workspace = true }
 switchy_http     = { workspace = true, features = ["json", "reqwest"] }
 switchy_random   = { workspace = true, features = ["rand"] }

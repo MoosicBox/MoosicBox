@@ -227,16 +227,15 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
     on_speed: OnSpeed,
     on_progress: Option<OnProgress>,
 ) -> Result<(), SaveBytesStreamToFileError> {
-    let last_instant = Arc::new(tokio::sync::Mutex::new(switchy_time::instant_now()));
+    let last_instant = Arc::new(switchy_async::sync::Mutex::new(switchy_time::instant_now()));
     let bytes_since_last_interval = Arc::new(AtomicUsize::new(0));
     let speed = Arc::new(AtomicF64::new(0.0));
 
     let has_on_progress = on_progress.is_some();
-    let on_progress =
-        Arc::new(tokio::sync::Mutex::new(on_progress.unwrap_or_else(|| {
-            Box::new(|_, _| Box::pin(async move {}) as OnProgressFut)
-        })));
-    let on_speed = Arc::new(tokio::sync::Mutex::new(on_speed));
+    let on_progress = Arc::new(switchy_async::sync::Mutex::new(
+        on_progress.unwrap_or_else(|| Box::new(|_, _| Box::pin(async move {}) as OnProgressFut)),
+    ));
+    let on_speed = Arc::new(switchy_async::sync::Mutex::new(on_speed));
 
     save_bytes_stream_to_file_with_progress_listener(
         stream,

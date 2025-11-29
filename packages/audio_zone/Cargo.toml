@@ -20,7 +20,7 @@ ignored = ["tokio"]
 moosicbox_assert            = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_json_utils        = { workspace = true, features = ["database"] }
-switchy_async               = { workspace = true, features = ["tokio"] }
+switchy_async               = { workspace = true, features = ["sync", "tokio"] }
 switchy_database            = { workspace = true }
 
 # API Dependencies
@@ -28,12 +28,8 @@ actix-web        = { workspace = true, optional = true }
 moosicbox_paging = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
-# Events Dependencies
-
-
 log   = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [features]
 default = ["api", "events", "openapi"]

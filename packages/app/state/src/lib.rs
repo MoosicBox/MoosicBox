@@ -61,10 +61,10 @@ use moosicbox_session::models::{
 };
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use serde::{Deserialize, Serialize};
+use switchy_async::sync::{RwLock, RwLockReadGuard};
 use switchy_async::util::CancellationToken;
 use switchy_http::RequestBuilder;
 use thiserror::Error;
-use tokio::sync::{RwLock, RwLockReadGuard};
 
 mod persistence;
 
@@ -229,7 +229,7 @@ pub enum AppStateError {
     ConnectWs(#[from] ConnectWsError),
     /// Async task join error
     #[error(transparent)]
-    Join(#[from] tokio::task::JoinError),
+    Join(#[from] switchy_async::task::JoinError),
     /// Persistence layer error
     #[error(transparent)]
     Persistence(#[from] hyperchad::state::Error),

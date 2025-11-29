@@ -84,8 +84,8 @@ static UPNP_LISTENER_HANDLE: LazyLock<
     Arc<std::sync::RwLock<Option<switchy_upnp::listener::Handle>>>,
 > = LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
-static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
-    LazyLock::new(|| tokio::sync::RwLock::new(None));
+static WS_SERVER_HANDLE: LazyLock<switchy_async::sync::RwLock<Option<ws::server::WsServerHandle>>> =
+    LazyLock::new(|| switchy_async::sync::RwLock::new(None));
 
 #[allow(clippy::type_complexity)]
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =

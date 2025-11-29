@@ -20,7 +20,7 @@ group = "switchy"
 moosicbox_assert   = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api"] }
 
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_time  = { workspace = true, features = ["chrono", "std"] }
 
 # DB Dependencies
@@ -46,7 +46,7 @@ chrono      = { workspace = true }
 futures     = { workspace = true, optional = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["sync"] }
+tokio       = { workspace = true }
 tokio-util  = { workspace = true, optional = true }
 turso       = { workspace = true, optional = true }
 

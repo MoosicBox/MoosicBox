@@ -196,7 +196,7 @@ impl SimulationDatabase {
                 .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
             conn.busy_timeout(std::time::Duration::from_millis(10))
                 .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
-            connections.push(Arc::new(tokio::sync::Mutex::new(conn)));
+            connections.push(Arc::new(switchy_async::sync::Mutex::new(conn)));
         }
 
         Ok(Self {

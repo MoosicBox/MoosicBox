@@ -141,9 +141,11 @@ impl From<PlayerError> for actix_web::Error {
 
 #[cfg(feature = "local")]
 static PLAYER_CACHE: std::sync::LazyLock<
-    std::sync::Arc<tokio::sync::Mutex<std::collections::BTreeMap<String, PlaybackHandler>>>,
+    std::sync::Arc<switchy_async::sync::Mutex<std::collections::BTreeMap<String, PlaybackHandler>>>,
 > = std::sync::LazyLock::new(|| {
-    std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::BTreeMap::new()))
+    std::sync::Arc::new(switchy_async::sync::Mutex::new(
+        std::collections::BTreeMap::new(),
+    ))
 });
 
 #[allow(clippy::unused_async)]

@@ -23,7 +23,7 @@ hex                  = { workspace = true }
 log                  = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 sha2                 = { workspace = true }
-switchy_async        = { workspace = true, features = ["sync"] }
+switchy_async        = { workspace = true, features = ["sync", "time"] }
 switchy_database     = { workspace = true, features = ["cascade", "schema"] }
 thiserror            = { workspace = true }
 

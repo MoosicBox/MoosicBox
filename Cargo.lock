@@ -6111,7 +6111,6 @@ dependencies = [
  "switchy_http",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8180,7 +8179,6 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-notification",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8328,7 +8326,6 @@ dependencies = [
  "switchy_upnp",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8425,7 +8422,6 @@ dependencies = [
  "symphonia",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8472,7 +8468,6 @@ dependencies = [
  "symphonia",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "utoipa",
 ]
 
@@ -8737,7 +8732,6 @@ dependencies = [
  "switchy_time",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "utoipa",
 ]
 
@@ -8891,11 +8885,11 @@ dependencies = [
  "moosicbox_search",
  "moosicbox_session",
  "serde",
+ "switchy_async",
  "switchy_database",
  "switchy_time",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "utoipa",
 ]
 
@@ -8952,7 +8946,6 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -9074,7 +9067,6 @@ dependencies = [
  "serde_json",
  "switchy_async",
  "test-log",
- "tokio",
  "utoipa",
 ]
 
@@ -9138,7 +9130,6 @@ dependencies = [
  "serial_test",
  "switchy_async",
  "test-log",
- "tokio",
 ]
 
 [[package]]
@@ -9172,7 +9163,6 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "url 2.5.7",
  "utoipa",
 ]
@@ -9190,7 +9180,6 @@ dependencies = [
  "switchy_http",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "urlencoding",
 ]
 
@@ -9302,7 +9291,6 @@ dependencies = [
  "tantivy",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -9426,7 +9414,6 @@ dependencies = [
  "switchy_database",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "utoipa",
 ]
 
@@ -9489,9 +9476,9 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy",
+ "switchy_async",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "url 2.5.7",
  "utoipa",
 ]
@@ -9694,12 +9681,12 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "switchy_http",
  "switchy_time",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "url 2.5.7",
  "utoipa",
 ]
@@ -15352,11 +15339,11 @@ dependencies = [
  "postgres-openssl",
  "rusqlite",
  "sqlx",
+ "switchy_async",
  "switchy_database",
  "switchy_env",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "tokio-postgres",
 ]
 

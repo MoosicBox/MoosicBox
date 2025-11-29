@@ -110,7 +110,7 @@ impl ByteStreamSourceFetcher {
             async move {
                 log::debug!("Fetching byte stream with range start={start} end={end:?}");
 
-                while let Some(item) = tokio::select! {
+                while let Some(item) = switchy_async::select! {
                     resp = stream.next() => resp,
                     () = abort.cancelled() => {
                         log::debug!("Aborted");

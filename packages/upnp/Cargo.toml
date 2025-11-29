@@ -24,9 +24,14 @@ moosicbox_assert       = { workspace = true }
 moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
 
-switchy_async = { workspace = true, features = ["tokio"] }
-switchy_env   = { workspace = true, features = ["std"] }
-switchy_http  = { workspace = true, optional = true, features = ["reqwest"] }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+switchy_env = { workspace = true, features = ["std"] }
+switchy_http = { workspace = true, optional = true, features = ["reqwest"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

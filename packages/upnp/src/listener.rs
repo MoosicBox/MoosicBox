@@ -10,9 +10,9 @@ use std::{collections::BTreeMap, fmt::Display, pin::Pin, sync::Arc, time::Durati
 
 use futures::Future;
 use strum_macros::AsRefStr;
+use switchy_async::sync::RwLock;
 use switchy_async::{task::JoinError, util::CancellationToken};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 use crate::{MediaInfo, PositionInfo, TransportInfo};
 
@@ -426,9 +426,9 @@ async fn subscribe(
         switchy_async::runtime::Handle::current().spawn_with_name(
             &format!("upnp: subscribe {command}"),
             async move {
-                let mut interval = tokio::time::interval(interval);
+                let mut interval = switchy_async::time::interval(interval);
 
-                while tokio::select!(
+                while switchy_async::select!(
                 () = token.cancelled() => {
                     log::debug!("UpnpListener was cancelled");
                     Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))

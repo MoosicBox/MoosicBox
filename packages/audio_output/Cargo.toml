@@ -21,7 +21,7 @@ moosicbox_env_utils     = { workspace = true }
 moosicbox_resampler     = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_time  = { workspace = true, features = ["std"] }
 
 # API Dependencies
@@ -46,7 +46,6 @@ flume     = { workspace = true }
 log       = { workspace = true }
 symphonia = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }

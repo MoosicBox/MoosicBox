@@ -45,7 +45,7 @@ use models::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track, id::Id};
 use moosicbox_paging::PagingResult;
-use tokio::sync::{Mutex, RwLock};
+use switchy_async::sync::{Mutex, RwLock};
 
 pub use moosicbox_music_api_models as models;
 

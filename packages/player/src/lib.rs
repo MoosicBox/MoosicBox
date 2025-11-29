@@ -166,7 +166,7 @@ pub enum PlayerError {
     #[error(transparent)]
     Join(#[from] switchy_async::task::JoinError),
     #[error(transparent)]
-    Acquire(#[from] tokio::sync::AcquireError),
+    Acquire(#[from] switchy_async::sync::AcquireError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error("Format not supported: {0:?}")]
@@ -869,7 +869,7 @@ impl PlaybackHandler {
                     let seek = if seek.is_some() { seek.take() } else { None };
 
                     log::debug!("player cancelled={}", playback.abort.is_cancelled());
-                    tokio::select! {
+                    switchy_async::select! {
                         () = playback.abort.cancelled() => {
                             log::debug!("play_playback: Playback cancelled");
                             return Err(PlayerError::Cancelled);

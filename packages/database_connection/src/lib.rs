@@ -424,7 +424,7 @@ pub fn init_sqlite_rusqlite(
         let conn = ::rusqlite::Connection::open(&db_url)?;
         conn.busy_timeout(std::time::Duration::from_millis(10))?;
 
-        connections.push(std::sync::Arc::new(tokio::sync::Mutex::new(conn)));
+        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(conn)));
     }
 
     Ok(Box::new(switchy_database::rusqlite::RusqliteDatabase::new(
@@ -525,7 +525,7 @@ pub async fn init_sqlite_sqlx(
         .await?;
 
     Ok(Box::new(SqliteSqlxDatabase::new(Arc::new(
-        tokio::sync::Mutex::new(pool),
+        switchy_async::sync::Mutex::new(pool),
     ))))
 }
 
@@ -621,7 +621,7 @@ pub async fn init_postgres_sqlx(
         .await?;
 
     Ok(Box::new(PostgresSqlxDatabase::new(Arc::new(
-        tokio::sync::Mutex::new(pool),
+        switchy_async::sync::Mutex::new(pool),
     ))))
 }
 
@@ -666,7 +666,7 @@ pub async fn init_mysql_sqlx(creds: Credentials) -> Result<Box<dyn Database>, In
         .await?;
 
     Ok(Box::new(MySqlSqlxDatabase::new(Arc::new(
-        tokio::sync::Mutex::new(pool),
+        switchy_async::sync::Mutex::new(pool),
     ))))
 }
 

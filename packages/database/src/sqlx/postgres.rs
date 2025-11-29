@@ -16,8 +16,8 @@ use sqlx::{
     query::Query,
 };
 use sqlx_postgres::PgConnection;
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 #[cfg(feature = "schema")]
 use super::postgres_introspection::{

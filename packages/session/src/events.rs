@@ -29,7 +29,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use tokio::sync::RwLock;
+use switchy_async::sync::RwLock;
 
 /// Type alias for boxed errors that can be sent across threads.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;

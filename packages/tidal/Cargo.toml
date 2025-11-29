@@ -50,8 +50,8 @@ serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
 strum           = { workspace = true }
 strum_macros    = { workspace = true }
+switchy_async   = { workspace = true, features = ["sync", "tokio"] }
 thiserror       = { workspace = true }
-tokio           = { workspace = true, features = ["macros", "tracing"] }
 url             = { workspace = true }
 
 [dev-dependencies]
@@ -72,6 +72,7 @@ fail-on-warnings = [
     "moosicbox_music_models/fail-on-warnings",
     "moosicbox_paging/fail-on-warnings",
     "switchy/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
 ]
 
 api = [

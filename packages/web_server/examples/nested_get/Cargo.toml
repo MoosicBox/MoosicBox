@@ -20,4 +20,7 @@ switchy_async = { workspace = true, features = ["macros", "tokio"] }
 [features]
 default = []
 
-fail-on-warnings = ["moosicbox_web_server/fail-on-warnings"]
+fail-on-warnings = [
+    "moosicbox_web_server/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]

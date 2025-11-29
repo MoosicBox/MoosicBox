@@ -16,8 +16,8 @@ use sqlx::{
     query::Query,
     sqlite::{SqliteArguments, SqliteRow, SqliteValueRef},
 };
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
@@ -4586,7 +4586,7 @@ mod introspection_tests {
             .await
             .expect("Failed to create SQLite pool");
 
-        let db = SqliteSqlxDatabase::new(Arc::new(tokio::sync::Mutex::new(pool)));
+        let db = SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)));
 
         let tables = db.list_tables().await.expect("Failed to list tables");
 
@@ -4601,7 +4601,7 @@ mod introspection_tests {
             .await
             .expect("Failed to create SQLite pool");
 
-        let db = SqliteSqlxDatabase::new(Arc::new(tokio::sync::Mutex::new(pool)));
+        let db = SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)));
 
         // Initially should be empty
         let tables = db.list_tables().await.expect("Failed to list tables");

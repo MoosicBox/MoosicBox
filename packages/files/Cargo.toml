@@ -30,11 +30,16 @@ moosicbox_music_models = { workspace = true, optional = true, features = [
 moosicbox_parsing_utils = { workspace = true, optional = true }
 moosicbox_stream_utils = { workspace = true }
 
-switchy_async    = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
 switchy_database = { workspace = true, optional = true }
-switchy_fs       = { workspace = true, features = ["std", "tokio"] }
-switchy_http     = { workspace = true, features = ["reqwest", "stream"] }
-switchy_time     = { workspace = true, features = ["std"] }
+switchy_fs = { workspace = true, features = ["std", "tokio"] }
+switchy_http = { workspace = true, features = ["reqwest", "stream"] }
+switchy_time = { workspace = true, features = ["std"] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

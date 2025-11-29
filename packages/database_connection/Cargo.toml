@@ -40,9 +40,9 @@ postgres-openssl    = { workspace = true, optional = true }
 aws-config  = { workspace = true, optional = true }
 aws-sdk-ssm = { workspace = true, optional = true }
 
-log       = { workspace = true }
-thiserror = { workspace = true }
-tokio     = { workspace = true, optional = true, features = ["sync"] }
+log           = { workspace = true }
+switchy_async = { workspace = true, optional = true }
+thiserror     = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
@@ -57,8 +57,15 @@ default = [
 ]
 
 fail-on-warnings = [
+    "switchy_async?/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_env/fail-on-warnings",
+]
+
+simulator = [
+    "switchy_async?/simulator",
+    "switchy_database/simulator",
+    "switchy_env/simulator",
 ]
 
 tls = ["sqlx/tls-rustls", "switchy_database/tls"]
@@ -67,9 +74,9 @@ creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 
-mysql = ["dep:tokio", "switchy_database/mysql"]
+mysql = ["dep:switchy_async", "switchy_database/mysql"]
 mysql-sqlx = ["mysql", "sqlx", "sqlx/mysql", "switchy_database/mysql-sqlx"]
-postgres = ["dep:tokio", "switchy_database/postgres"]
+postgres = ["dep:switchy_async", "switchy_database/postgres"]
 postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
 postgres-openssl = ["dep:openssl", "dep:postgres-openssl"]
 postgres-raw = [
@@ -85,11 +92,9 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
     "switchy_database/postgres-sqlx",
 ]
-sqlite = ["dep:tokio", "switchy_database/sqlite"]
+sqlite = ["dep:switchy_async", "switchy_database/sqlite"]
 sqlite-rusqlite = ["dep:rusqlite", "sqlite", "switchy_database/sqlite-rusqlite"]
 sqlite-sqlx = ["sqlite", "sqlx", "sqlx/sqlite", "switchy_database/sqlite-sqlx"]
 turso = ["sqlite", "switchy_database/turso"]
 
 database-connection-turso = ["turso"]
-
-simulator = ["switchy_database/simulator", "switchy_env/simulator"]

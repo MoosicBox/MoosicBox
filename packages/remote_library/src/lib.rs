@@ -49,9 +49,9 @@ use moosicbox_music_models::{
     id::Id,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
+use switchy_async::sync::Mutex;
 use switchy_http::models::StatusCode;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use urlencoding::encode;
 
 static CLIENT: LazyLock<switchy_http::Client> =
@@ -739,7 +739,7 @@ impl MusicApi for RemoteLibraryMusicApi {
                 offset,
                 limit,
             },
-            fetch: Arc::new(tokio::sync::Mutex::new(Box::new({
+            fetch: Arc::new(Mutex::new(Box::new({
                 let api = self.clone();
                 let track_ids = track_ids.to_vec();
 

@@ -9,6 +9,7 @@ use std::sync::{LazyLock, RwLock};
 
 use itertools::Itertools;
 use moosicbox_music_api_models::search::api::{ApiGlobalSearchResult, ApiSearchResultsResponse};
+use switchy_async::sync::Semaphore;
 use switchy_async::task::JoinError;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
@@ -23,7 +24,6 @@ use tantivy::{
 };
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
-use tokio::sync::Semaphore;
 
 /// API endpoints for search functionality.
 ///

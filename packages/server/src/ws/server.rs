@@ -20,8 +20,8 @@ use moosicbox_ws::{
 };
 use serde_json::Value;
 use strum_macros::AsRefStr;
+use switchy_async::sync::{RwLock, mpsc, oneshot};
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
-use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::ws::{ConnId, Msg, RoomId};
@@ -88,9 +88,9 @@ pub enum Command {
         /// Profile name for this connection.
         profile: String,
         /// Channel sender for messages to this connection.
-        conn_tx: mpsc::UnboundedSender<Msg>,
+        conn_tx: mpsc::Sender<Msg>,
         /// Channel to send back the assigned connection ID.
-        res_tx: tokio::sync::oneshot::Sender<ConnId>,
+        res_tx: oneshot::Sender<ConnId>,
     },
 
     /// Removes a WebSocket connection.
@@ -106,7 +106,7 @@ pub enum Command {
         /// Target connection ID.
         conn: ConnId,
         /// Channel to signal completion.
-        res_tx: tokio::sync::oneshot::Sender<()>,
+        res_tx: oneshot::Sender<()>,
     },
 
     /// Broadcasts a message to all connections.
@@ -114,7 +114,7 @@ pub enum Command {
         /// Message to broadcast.
         msg: Msg,
         /// Channel to signal completion.
-        res_tx: tokio::sync::oneshot::Sender<()>,
+        res_tx: oneshot::Sender<()>,
     },
 
     /// Broadcasts a message to all connections except one.
@@ -124,7 +124,7 @@ pub enum Command {
         /// Connection ID to exclude from the broadcast.
         conn: ConnId,
         /// Channel to signal completion.
-        res_tx: tokio::sync::oneshot::Sender<()>,
+        res_tx: oneshot::Sender<()>,
     },
 
     /// Processes an incoming message from a connection.
@@ -134,7 +134,7 @@ pub enum Command {
         /// Connection ID that sent the message.
         conn: ConnId,
         /// Channel to signal completion.
-        res_tx: tokio::sync::oneshot::Sender<()>,
+        res_tx: oneshot::Sender<()>,
     },
 }
 
@@ -152,7 +152,7 @@ struct Connection {
     /// The profile name this connection is using.
     profile: String,
     /// Channel for sending messages to this connection.
-    sender: mpsc::UnboundedSender<Msg>,
+    sender: mpsc::Sender<Msg>,
 }
 
 /// A multi-room ws server.
@@ -312,7 +312,7 @@ impl WsServer {
     }
 
     /// Register new session and assign unique ID to this session
-    fn connect(&mut self, profile: String, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
+    fn connect(&mut self, profile: String, tx: mpsc::Sender<Msg>) -> ConnId {
         log::debug!("Someone joined");
 
         // register session with random connection ID
@@ -480,7 +480,7 @@ impl WsServer {
         let token = self.token.clone();
         let cmd_rx = self.cmd_rx.clone();
         let ctx = Arc::new(RwLock::new(self));
-        while let Ok(Ok(cmd)) = tokio::select!(
+        while let Ok(Ok(cmd)) = switchy_async::select!(
             () = token.cancelled() => {
                 log::debug!("WsServer was cancelled");
                 Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
@@ -572,10 +572,10 @@ impl WsServerHandle {
     }
 
     /// Register client message sender and obtain connection ID.
-    pub async fn connect(&self, profile: String, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
+    pub async fn connect(&self, profile: String, conn_tx: mpsc::Sender<String>) -> ConnId {
         log::trace!("Sending Connect command");
 
-        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = oneshot::channel();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws server connect", {
             let cmd_tx = self.cmd_tx.clone();
@@ -604,7 +604,7 @@ impl WsServerHandle {
     /// awaits confirmation of delivery to the WebSocket server's internal queue.
     pub async fn send(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Send command");
-        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = oneshot::channel();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws server send", {
             let cmd_tx = self.cmd_tx.clone();
@@ -627,7 +627,7 @@ impl WsServerHandle {
     /// all active connections in the main room.
     pub async fn broadcast(&self, msg: impl Into<String> + Send) {
         log::trace!("Sending Broadcast command");
-        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = oneshot::channel();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws server broadcast", {
             let cmd_tx = self.cmd_tx.clone();
@@ -650,7 +650,7 @@ impl WsServerHandle {
     /// its own broadcast message.
     pub async fn broadcast_except(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending BroadcastExcept command");
-        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = oneshot::channel();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws server broadcast_except", {
             let cmd_tx = self.cmd_tx.clone();
@@ -673,7 +673,7 @@ impl WsServerHandle {
     /// Broadcast message to current room.
     pub async fn send_message(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Message command");
-        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = oneshot::channel();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws server send_message", {
             let cmd_tx = self.cmd_tx.clone();

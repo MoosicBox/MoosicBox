@@ -165,12 +165,12 @@ impl AppState {
         let client = client.with_cancellation_token(token.clone());
         let state = self.clone();
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+        let (tx, mut rx) = switchy_async::sync::mpsc::unbounded();
 
         switchy_async::runtime::Handle::current().spawn_with_name("ws message loop", async move {
-            while let Some(m) = tokio::select! {
-                resp = rx.recv() => {
-                    resp
+            while let Some(m) = switchy_async::select! {
+                resp = rx.recv_async() => {
+                    resp.ok()
                 }
                 () = token.cancelled() => {
                     log::debug!("message loop cancelled");

@@ -19,7 +19,10 @@ switchy_async    = { workspace = true, features = ["macros", "rt-multi-thread"] 
 switchy_database = { workspace = true, features = ["turso"] }
 
 [features]
-fail-on-warnings = ["switchy_database/fail-on-warnings"]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 [[bin]]
 name = "turso_transactions"

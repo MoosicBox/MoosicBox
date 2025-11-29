@@ -27,7 +27,7 @@ moosicbox_app_native_image = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true }
 
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_env   = { workspace = true, features = ["std"] }
 switchy_http  = { workspace = true, features = ["reqwest"] }
 
@@ -38,7 +38,6 @@ flume       = { workspace = true }
 image       = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 test-log = { workspace = true }

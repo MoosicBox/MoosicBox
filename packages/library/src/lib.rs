@@ -61,9 +61,9 @@ use moosicbox_search::{
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use switchy_async::sync::Mutex;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 #[cfg(feature = "api")]
 /// HTTP API endpoints for library operations.

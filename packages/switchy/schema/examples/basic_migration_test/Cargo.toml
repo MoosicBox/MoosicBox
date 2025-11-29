@@ -27,6 +27,7 @@ switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 
 [features]
 fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
     "switchy_schema_test_utils/fail-on-warnings",

@@ -26,12 +26,12 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::str::FromStr as _;
+use switchy_async::sync::mpsc::{Receiver, unbounded};
+use switchy_async::sync::oneshot;
 use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
 use switchy_uuid::new_v4_string;
 use thiserror::Error;
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-use tokio::sync::oneshot;
 
 use crate::WS_SERVER_HANDLE;
 use crate::auth::{
@@ -451,12 +451,9 @@ fn request(
     headers: Option<Value>,
     profile: Option<String>,
     abort_token: &CancellationToken,
-) -> (
-    oneshot::Receiver<RequestHeaders>,
-    UnboundedReceiver<TunnelResponse>,
-) {
+) -> (oneshot::Receiver<RequestHeaders>, Receiver<TunnelResponse>) {
     let (headers_tx, headers_rx) = oneshot::channel();
-    let (tx, rx) = unbounded_channel();
+    let (tx, rx) = unbounded();
 
     let client_id = client_id.to_string();
     let path = path.to_string();

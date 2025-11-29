@@ -13,7 +13,7 @@ use std::{
 use futures::Future;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
-use tokio::sync::RwLock;
+use switchy_async::sync::RwLock;
 
 use crate::ScanOrigin;
 

@@ -82,8 +82,8 @@ use std::{
     sync::{Arc, LazyLock},
     time::Duration,
 };
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 mod cache {
     //! Internal cache for storing discovered `UPnP` devices and their services.

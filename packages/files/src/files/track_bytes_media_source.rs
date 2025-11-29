@@ -10,8 +10,8 @@ use std::{
 };
 
 use bytes::Bytes;
+use switchy_async::sync::Mutex;
 use symphonia::core::io::MediaSource;
-use tokio::sync::Mutex;
 use tokio_stream::StreamExt as _;
 
 use super::track::TrackBytes;
@@ -61,8 +61,8 @@ impl TrackBytesMediaSource {
                     let mut bytes = bytes.lock().await;
                     log::trace!("Acquired lock for inner bytes for writer id={id}");
 
-                    tokio::select!(
-                        () = tokio::time::sleep(Duration::from_millis(15000)) => {
+                    switchy_async::select!(
+                        () = switchy_async::time::sleep(Duration::from_millis(15000)) => {
                             moosicbox_assert::die_or_error!(
                                 "Timed out waiting for bytes from stream for writer id={id}"
                             );

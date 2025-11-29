@@ -69,7 +69,7 @@ use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use tokio::sync::Mutex;
+use switchy_async::sync::Mutex;
 use url::form_urlencoded;
 
 #[cfg(feature = "db")]

@@ -7,7 +7,7 @@
 use std::sync::{Arc, LazyLock};
 
 use serde::Serialize;
-use tokio::sync::RwLock;
+use switchy::unsync::sync::RwLock;
 
 use crate::TauriPlayerError;
 

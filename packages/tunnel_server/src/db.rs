@@ -14,13 +14,13 @@ use chrono::NaiveDateTime;
 use futures_util::Future;
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
 use serde::{Deserialize, Serialize};
+use switchy_async::sync::Mutex;
 use switchy_database::{
     Database, DatabaseValue, Row, boxed,
     query::{FilterableQuery, where_eq, where_gte},
 };
 use switchy_database_connection::InitDbError;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 impl From<DatabaseError> for actix_web::Error {
     fn from(value: DatabaseError) -> Self {

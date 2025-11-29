@@ -6,8 +6,8 @@ use moosicbox_session::models::UpdateSession;
 use moosicbox_ws::{WebsocketSender, update_session};
 use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
+use switchy_async::sync::RwLock;
 use switchy_database::profiles::PROFILES;
-use tokio::sync::RwLock;
 
 use crate::{CONFIG_DB, ws::server::WsServerHandle};
 

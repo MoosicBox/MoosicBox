@@ -31,7 +31,7 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_session        = { workspace = true }
 
 moosicbox_ws  = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
 switchy_http  = { workspace = true, features = ["json", "reqwest"] }
 switchy_upnp  = { workspace = true, optional = true, features = ["player"] }
 
@@ -41,15 +41,13 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 strum      = { workspace = true }
 thiserror  = { workspace = true }
-tokio      = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
-tokio         = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["tokio"]
+ignored = []
 
 [features]
 default = ["all-sources", "upnp"]

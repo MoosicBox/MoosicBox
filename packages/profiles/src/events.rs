@@ -30,7 +30,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use tokio::sync::RwLock;
+use switchy_async::sync::RwLock;
 
 /// Type alias for boxed errors that can be sent across threads.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;
@@ -115,7 +115,7 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_on_profiles_updated_event_registers_listener() {
-        let call_count = Arc::new(tokio::sync::RwLock::new(0u32));
+        let call_count = Arc::new(RwLock::new(0u32));
         let call_count_clone = Arc::clone(&call_count);
 
         on_profiles_updated_event(move |_added, _removed| {
@@ -141,7 +141,7 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_added_profiles() {
-        let added_profiles = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+        let added_profiles = Arc::new(RwLock::new(Vec::new()));
         let added_clone = Arc::clone(&added_profiles);
 
         on_profiles_updated_event(move |added, _removed| {
@@ -166,7 +166,7 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_removed_profiles() {
-        let removed_profiles = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+        let removed_profiles = Arc::new(RwLock::new(Vec::new()));
         let removed_clone = Arc::clone(&removed_profiles);
 
         on_profiles_updated_event(move |_added, removed| {
@@ -189,8 +189,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_both_added_and_removed() {
-        let added_profiles = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-        let removed_profiles = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+        let added_profiles = Arc::new(RwLock::new(Vec::new()));
+        let removed_profiles = Arc::new(RwLock::new(Vec::new()));
         let added_clone = Arc::clone(&added_profiles);
         let removed_clone = Arc::clone(&removed_profiles);
 
@@ -219,8 +219,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_multiple_listeners_receive_events() {
-        let call_count1 = Arc::new(tokio::sync::RwLock::new(0u32));
-        let call_count2 = Arc::new(tokio::sync::RwLock::new(0u32));
+        let call_count1 = Arc::new(RwLock::new(0u32));
+        let call_count2 = Arc::new(RwLock::new(0u32));
         let count1_clone = Arc::clone(&call_count1);
         let count2_clone = Arc::clone(&call_count2);
 
@@ -258,7 +258,7 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_send_profiles_updated_event_is_equivalent_to_trigger() {
-        let call_count = Arc::new(tokio::sync::RwLock::new(0u32));
+        let call_count = Arc::new(RwLock::new(0u32));
         let count_clone = Arc::clone(&call_count);
 
         on_profiles_updated_event(move |_added, _removed| {
@@ -283,9 +283,9 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_empty_added_and_removed_lists() {
-        let call_count = Arc::new(tokio::sync::RwLock::new(0u32));
-        let added_received = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-        let removed_received = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+        let call_count = Arc::new(RwLock::new(0u32));
+        let added_received = Arc::new(RwLock::new(Vec::new()));
+        let removed_received = Arc::new(RwLock::new(Vec::new()));
 
         let count_clone = Arc::clone(&call_count);
         let added_clone = Arc::clone(&added_received);

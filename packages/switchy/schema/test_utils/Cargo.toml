@@ -34,7 +34,7 @@ serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 moosicbox_schema = { workspace = true, features = ["sqlite"] }
-switchy_async    = { workspace = true, features = ["macros", "tokio"] }
+switchy_async    = { workspace = true, features = ["macros", "time", "tokio"] }
 switchy_fs       = { workspace = true, features = ["simulator-real-fs"] }
 test-log         = { workspace = true }
 tokio            = { workspace = true, features = ["macros", "rt"] }

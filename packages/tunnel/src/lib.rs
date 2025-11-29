@@ -28,10 +28,10 @@ use futures_util::{Future, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
+use switchy_async::sync::mpsc::Receiver;
 use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedReceiver;
 
 /// Prefix used to identify base64-encoded tunnel response strings.
 #[cfg(feature = "base64")]
@@ -332,7 +332,7 @@ pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Er
     byte_count: usize,
     done: bool,
     end_of_stream: bool,
-    rx: UnboundedReceiver<TunnelResponse>,
+    rx: Receiver<TunnelResponse>,
     on_end: &'a dyn Fn(u64) -> F,
     packet_queue: Vec<TunnelResponse>,
     abort_token: CancellationToken,
@@ -350,7 +350,7 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
     #[must_use]
     pub fn new(
         request_id: u64,
-        rx: UnboundedReceiver<TunnelResponse>,
+        rx: Receiver<TunnelResponse>,
         abort_token: CancellationToken,
         on_end: &'a impl Fn(u64) -> F,
     ) -> Self {
@@ -955,7 +955,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_single_packet_first_and_last() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(123, rx, abort_token, &noop_on_end);
@@ -977,7 +977,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_in_order_packets() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(456, rx, abort_token, &noop_on_end);
@@ -1007,7 +1007,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_out_of_order_packets() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(789, rx, abort_token, &noop_on_end);
@@ -1037,7 +1037,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_abort_cancellation() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(111, rx, abort_token.clone(), &noop_on_end);
@@ -1062,7 +1062,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_end_of_stream_before_completion() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(222, rx, abort_token, &noop_on_end);
@@ -1085,7 +1085,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_queue_insertion_maintains_order() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(333, rx, abort_token, &noop_on_end);
@@ -1116,7 +1116,7 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_tunnel_stream_empty_body_packets() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
         let abort_token = CancellationToken::new();
 
         let mut stream = TunnelStream::new(444, rx, abort_token, &noop_on_end);

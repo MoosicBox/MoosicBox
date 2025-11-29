@@ -28,6 +28,7 @@ moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api", "db"] }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_database = { workspace = true }
 switchy_time = { workspace = true, features = ["std"] }
 
@@ -44,7 +45,6 @@ serde_json      = { workspace = true }
 strum           = { workspace = true }
 strum_macros    = { workspace = true }
 thiserror       = { workspace = true }
-tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [dev-dependencies]
 serial_test   = { workspace = true }
@@ -63,6 +63,7 @@ fail-on-warnings = [
     "moosicbox_music_models/fail-on-warnings",
     "moosicbox_paging/fail-on-warnings",
     "moosicbox_search/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_time/fail-on-warnings",
 ]

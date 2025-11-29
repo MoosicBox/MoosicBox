@@ -34,4 +34,7 @@ path              = "src/debug_actix.rs"
 required-features = ["moosicbox_web_server/actix"]
 
 [features]
-fail-on-warnings = ["moosicbox_web_server/fail-on-warnings"]
+fail-on-warnings = [
+    "moosicbox_web_server/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]

@@ -24,6 +24,7 @@ use moosicbox_audio_output::{
 use moosicbox_music_api::{SourceToMusicApi, models::TrackAudioQuality};
 use moosicbox_session::models::UpdateSession;
 use rupnp::{Device, Service};
+use switchy_async::sync::RwLock as AsyncRwLock;
 
 use moosicbox_player::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackRetryOptions, Player, PlayerError,
@@ -47,19 +48,19 @@ pub struct UpnpPlayer {
     /// Unique identifier for this player instance.
     pub id: u64,
     source: PlayerSource,
-    transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
+    transport_uri: Arc<AsyncRwLock<Option<String>>>,
     /// Current playback state and information.
     pub playback: Arc<RwLock<Option<Playback>>>,
     /// Handler for managing playback operations.
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
     /// Receiver for playback completion notifications.
-    pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
+    pub receiver: Arc<AsyncRwLock<Option<Receiver<()>>>>,
     handle: Handle,
     /// The `UPnP` device being controlled.
     pub device: Device,
     service: Service,
     instance_id: u32,
-    position_info_subscription_id: Arc<tokio::sync::RwLock<usize>>,
+    position_info_subscription_id: Arc<AsyncRwLock<usize>>,
     expected_state: Arc<RwLock<Option<String>>>,
 }
 
@@ -146,7 +147,7 @@ impl Player for UpnpPlayer {
             )
             .await?;
 
-        tokio::select! {
+        switchy_async::select! {
             () = playback.abort.cancelled() => {
                 log::debug!("playback cancelled");
                 self.unsubscribe(sub_id);
@@ -198,7 +199,7 @@ impl Player for UpnpPlayer {
         log::trace!("Waiting for playback completion response");
         let receiver = self.receiver.write().await.take();
         if let Some(receiver) = receiver {
-            tokio::select! {
+            switchy_async::select! {
                 resp = receiver.recv_async() => {
                     match resp {
                         Ok(()) => {
@@ -209,7 +210,7 @@ impl Player for UpnpPlayer {
                         }
                     }
                 }
-                () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                () = switchy_async::time::sleep(std::time::Duration::from_millis(5000)) => {
                     log::error!("Playback timed out waiting for abort completion");
                 }
             }
@@ -341,16 +342,16 @@ impl UpnpPlayer {
             id: switchy_random::rng().next_u64(),
             source_to_music_api,
             source,
-            transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
+            transport_uri: Arc::new(AsyncRwLock::new(None)),
             playback: Arc::new(RwLock::new(None)),
             playback_handler: Arc::new(RwLock::new(None)),
-            receiver: Arc::new(tokio::sync::RwLock::new(None)),
+            receiver: Arc::new(AsyncRwLock::new(None)),
             handle,
             device,
             service,
             instance_id: 1,
             expected_state: Arc::new(RwLock::new(None)),
-            position_info_subscription_id: Arc::new(tokio::sync::RwLock::new(0)),
+            position_info_subscription_id: Arc::new(AsyncRwLock::new(0)),
         }
     }
 

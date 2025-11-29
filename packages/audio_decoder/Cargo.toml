@@ -19,7 +19,7 @@ moosicbox_stream_utils = { workspace = true, features = [
     "stalled-monitor",
 ] }
 
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_http  = { workspace = true, features = ["reqwest"] }
 switchy_time  = { workspace = true, features = ["std"] }
 
@@ -32,7 +32,6 @@ profiling      = { workspace = true, optional = true }
 rangemap       = { workspace = true }
 symphonia      = { workspace = true }
 thiserror      = { workspace = true }
-tokio          = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

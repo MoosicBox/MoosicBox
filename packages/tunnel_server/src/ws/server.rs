@@ -21,13 +21,13 @@ use moosicbox_tunnel::{
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use serde_json::Value;
 use strum_macros::AsRefStr;
-use switchy_async::util::CancellationToken;
-use thiserror::Error;
-use tokio::sync::{
+use switchy_async::sync::{
     RwLock,
-    mpsc::{self, UnboundedSender, error::SendError},
+    mpsc::{SendError, Sender as UnboundedSender},
     oneshot,
 };
+use switchy_async::util::CancellationToken;
+use thiserror::Error;
 
 use crate::db::{DatabaseError, delete_connection, select_connection, upsert_connection};
 use crate::ws::{ConnId, Msg};
@@ -43,7 +43,7 @@ pub enum Command {
     /// Establish a new WebSocket connection.
     Connect {
         /// Channel sender for messages to this connection.
-        conn_tx: mpsc::UnboundedSender<Msg>,
+        conn_tx: UnboundedSender<Msg>,
         /// Response channel to send back the connection ID.
         res_tx: oneshot::Sender<ConnId>,
         /// The unique identifier for the client.
@@ -385,9 +385,9 @@ pub struct RequestHeaders {
 #[derive(Debug)]
 pub struct WsServer {
     /// Map of all connection IDs to their message senders (both senders and clients).
-    sessions: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    sessions: BTreeMap<ConnId, UnboundedSender<Msg>>,
     /// Map of client connection IDs to their message senders.
-    clients: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    clients: BTreeMap<ConnId, UnboundedSender<Msg>>,
     /// Map of request IDs to their response data senders.
     senders: BTreeMap<u64, UnboundedSender<TunnelResponse>>,
     /// Map of request IDs to their response headers senders.
@@ -494,7 +494,7 @@ impl WsServer {
         &mut self,
         client_id: String,
         sender: bool,
-        tx: mpsc::UnboundedSender<Msg>,
+        tx: UnboundedSender<Msg>,
     ) -> Result<ConnId, DatabaseError> {
         // register session with random connection ID
         let id = switchy_random::rng().next_u64();
@@ -599,7 +599,7 @@ impl service::Handle {
         &self,
         client_id: &str,
         sender: bool,
-        conn_tx: mpsc::UnboundedSender<String>,
+        conn_tx: UnboundedSender<String>,
     ) -> Result<ConnId, CommanderError> {
         let (res_tx, res_rx) = oneshot::channel();
         // unwrap: ws server should not have been dropped

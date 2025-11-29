@@ -15,8 +15,8 @@ use sqlx::{
     mysql::{MySqlArguments, MySqlRow, MySqlValueRef},
     query::Query,
 };
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
@@ -3497,7 +3497,7 @@ mod tests {
         use crate::schema::DataType;
         use sqlx::MySqlPool;
         use std::sync::Arc;
-        use tokio::sync::Mutex;
+        use switchy_async::sync::Mutex;
 
         fn get_mysql_test_url() -> Option<String> {
             std::env::var("MYSQL_TEST_URL").ok()

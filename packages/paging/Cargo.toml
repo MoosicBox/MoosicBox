@@ -17,10 +17,10 @@ examples = true
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-futures = { workspace = true }
-log     = { workspace = true }
-serde   = { workspace = true, features = ["derive"] }
-tokio   = { workspace = true, features = ["macros", "sync"] }
+futures       = { workspace = true }
+log           = { workspace = true }
+serde         = { workspace = true, features = ["derive"] }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
@@ -36,6 +36,6 @@ test-log = { workspace = true }
 [features]
 default = ["openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_async/fail-on-warnings"]
 
 openapi = ["dep:utoipa"]

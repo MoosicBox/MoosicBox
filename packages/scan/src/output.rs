@@ -31,10 +31,10 @@ use moosicbox_music_models::{
 use moosicbox_search::{
     PopulateIndexError, RecreateIndexError, data::AsDataValues as _, populate_global_search_index,
 };
+use switchy_async::sync::RwLock;
 use switchy_async::task::JoinError;
 use switchy_database::{DatabaseError, DatabaseValue, TryFromError, profiles::LibraryDatabase};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 use crate::CACHE_DIR;
 

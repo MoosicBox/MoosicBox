@@ -46,12 +46,12 @@ use std::sync::{Arc, LazyLock};
 
 use moosicbox_audio_decoder::{AudioDecode, AudioDecodeError};
 use moosicbox_resampler::{Resampler, to_audio_buffer};
+use switchy_async::sync::Mutex;
 use switchy_async::task::JoinError;
 use symphonia::core::audio::{AudioBuffer, Signal as _};
 use symphonia::core::conv::FromSample;
 use symphonia::core::formats::{Packet, Track};
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 // Reexport commonly used Symphonia types for centralized imports
 pub use symphonia::core::audio::{Channels, SignalSpec};

@@ -197,7 +197,7 @@ pub enum GetTrackBytesError {
     Join(#[from] tokio::task::JoinError),
     /// Semaphore acquire error
     #[error(transparent)]
-    Acquire(#[from] tokio::sync::AcquireError),
+    Acquire(#[from] switchy_async::sync::AcquireError),
     /// Channel receive error
     #[error(transparent)]
     Recv(#[from] RecvError),

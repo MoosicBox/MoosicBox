@@ -42,6 +42,7 @@ fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
     "moosicbox_music_api/fail-on-warnings",
     "moosicbox_music_models/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
 ]
 
 aac  = ["moosicbox_files/encoder-aac", "moosicbox_music_models/aac"]

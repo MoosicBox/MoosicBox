@@ -18,7 +18,13 @@ moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging   = { workspace = true, features = ["macros"] }
 
-switchy_async = { workspace = true, features = ["tokio", "util"] }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+    "util",
+] }
 
 async-trait       = { workspace = true }
 bytes             = { workspace = true }

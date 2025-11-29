@@ -7,8 +7,8 @@ use std::path::Path;
 
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_models::{Album, Artist, Track};
+use switchy_async::task::JoinError;
 use thiserror::Error;
-use tokio::task::JoinError;
 
 use crate::{
     DataValue, GLOBAL_SEARCH_INDEX_PATH, PopulateIndexError, RecreateIndexError, SEMAPHORE,

@@ -18,7 +18,7 @@ ignored = ["strum", "tokio"]
 
 [dependencies]
 moosicbox_assert = { workspace = true }
-switchy_async    = { workspace = true, features = ["tokio", "util"] }
+switchy_async    = { workspace = true, features = ["sync", "tokio", "util"] }
 switchy_http     = { workspace = true, features = ["serde"] }
 switchy_time     = { workspace = true, features = ["std"] }
 

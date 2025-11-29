@@ -52,9 +52,10 @@ use queue::{DownloadQueue, ProgressListener};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumDiscriminants, EnumIter, EnumString};
+use switchy_async::sync::RwLock;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio::{select, sync::RwLock};
+use tokio::select;
 
 pub use db::{
     create_download_location, delete_download_location, get_download_location,
@@ -742,7 +743,7 @@ pub async fn download_track_id(
     track_id: &Id,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<Track, DownloadTrackError> {
@@ -794,7 +795,7 @@ async fn download_track(
     track: &Track,
     quality: TrackAudioQuality,
     start: Option<u64>,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackError> {
@@ -910,7 +911,7 @@ async fn download_track_inner(
     track: &Track,
     quality: TrackAudioQuality,
     mut start: Option<u64>,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
@@ -1172,7 +1173,7 @@ pub async fn download_album_id(
     try_download_artist_cover: bool,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
@@ -1239,7 +1240,7 @@ pub async fn download_album_cover(
     db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<Album, DownloadAlbumError> {
     log::debug!("Downloading album cover path={path}");
@@ -1324,7 +1325,7 @@ pub async fn download_artist_cover(
     db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<Artist, DownloadAlbumError> {
     log::debug!("Downloading artist cover path={path}");
@@ -1497,7 +1498,7 @@ impl Downloader for MoosicboxDownloader {
             track_id,
             quality,
             source,
-            Arc::new(tokio::sync::Mutex::new(on_progress)),
+            Arc::new(switchy_async::sync::Mutex::new(on_progress)),
             self.speed.clone(),
             timeout_duration,
         )
@@ -1516,7 +1517,7 @@ impl Downloader for MoosicboxDownloader {
             &self.db,
             path,
             album_id,
-            Arc::new(tokio::sync::Mutex::new(on_progress)),
+            Arc::new(switchy_async::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await
@@ -1534,7 +1535,7 @@ impl Downloader for MoosicboxDownloader {
             &self.db,
             path,
             album_id,
-            Arc::new(tokio::sync::Mutex::new(on_progress)),
+            Arc::new(switchy_async::sync::Mutex::new(on_progress)),
             self.speed.clone(),
         )
         .await

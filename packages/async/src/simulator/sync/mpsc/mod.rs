@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 ///
 /// This wraps the underlying runtime's unbounded receiver and provides a consistent
 /// API for receiving values from multiple senders. Values are received in FIFO order.
+#[derive(Debug)]
 pub struct Receiver<T> {
     inner: mpsc::UnboundedReceiver<T>,
 }
@@ -19,6 +20,7 @@ pub struct Receiver<T> {
 /// This wraps the underlying runtime's unbounded sender and can be cloned to create
 /// multiple producers for a single consumer. The channel remains open as long as at
 /// least one sender exists.
+#[derive(Debug)]
 pub struct Sender<T> {
     inner: mpsc::UnboundedSender<T>,
 }
@@ -160,11 +162,21 @@ impl<T> Receiver<T> {
 // }
 
 /// Error returned when sending to a channel fails.
-#[derive(Debug, thiserror::Error)]
+#[derive(thiserror::Error)]
 pub enum SendError<T> {
     /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
+}
+
+impl<T> std::fmt::Debug for SendError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Disconnected(_t) => f
+                .debug_tuple("SendError::Disconnected")
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 impl<T> From<mpsc::error::SendError<T>> for SendError<T> {
@@ -174,7 +186,7 @@ impl<T> From<mpsc::error::SendError<T>> for SendError<T> {
 }
 
 /// Error returned when trying to send to a channel without blocking.
-#[derive(Debug, thiserror::Error)]
+#[derive(thiserror::Error)]
 pub enum TrySendError<T> {
     /// The channel is full.
     #[error("Full")]
@@ -182,6 +194,17 @@ pub enum TrySendError<T> {
     /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
+}
+
+impl<T> std::fmt::Debug for TrySendError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full(_t) => f.debug_tuple("TrySendError::Full").finish_non_exhaustive(),
+            Self::Disconnected(_t) => f
+                .debug_tuple("TrySendError::Disconnected")
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 impl<T> From<mpsc::error::TrySendError<T>> for TrySendError<T> {

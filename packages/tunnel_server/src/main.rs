@@ -22,8 +22,9 @@ use std::{env, sync::LazyLock};
 use switchy_env::{var_or, var_parse_opt, var_parse_or};
 use tokio::try_join;
 
-static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::service::Handle>>> =
-    LazyLock::new(|| tokio::sync::RwLock::new(None));
+static WS_SERVER_HANDLE: LazyLock<
+    switchy_async::sync::RwLock<Option<ws::server::service::Handle>>,
+> = LazyLock::new(|| switchy_async::sync::RwLock::new(None));
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {

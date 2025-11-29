@@ -11,8 +11,9 @@ use postgres_protocol::types::{
     bool_from_sql, float4_from_sql, float8_from_sql, int2_from_sql, int4_from_sql, int8_from_sql,
     text_from_sql,
 };
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::{pin, sync::Mutex};
+use tokio::pin;
 use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 
 #[cfg(feature = "schema")]
