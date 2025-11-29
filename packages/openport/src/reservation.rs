@@ -328,6 +328,7 @@ mod tests {
     use super::*;
 
     #[test_log::test]
+    #[serial]
     fn test_reserve_port() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port();
@@ -339,6 +340,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reserve_ports() {
         let reservation = PortReservation::new(15000..15100);
         let ports = reservation.reserve_ports(5);
@@ -357,6 +359,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_release_port() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port().unwrap();
@@ -367,6 +370,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_release_ports() {
         let reservation = PortReservation::new(15000..15100);
         let ports = reservation.reserve_ports(10);
@@ -384,6 +388,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_default_implementation() {
         let reservation: PortReservation<std::ops::Range<u16>> = PortReservation::default();
         let port = reservation.reserve_port();
@@ -392,6 +397,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_default_implementation_inclusive() {
         let reservation: PortReservation<std::ops::RangeInclusive<u16>> =
             PortReservation::default();
@@ -401,6 +407,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reserve_more_than_available() {
         // Use a very small range to test this edge case
         let mut i = 15000;
@@ -426,6 +433,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_no_free_ports() {
         // Use a range that's likely to have no free ports (very high numbers)
         // Note: This test might be flaky on different systems, but it's worth testing
@@ -440,6 +448,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_inclusive_range() {
         let reservation = PortReservation::new(15000..=15010);
         let ports = reservation.reserve_ports(5);
@@ -452,6 +461,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reserve_after_release() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -474,6 +484,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_concurrent_reservations() {
         use std::sync::Arc;
         use std::thread;
@@ -515,6 +526,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_concurrent_reserve_and_release() {
         use std::sync::Arc;
         use std::thread;
@@ -583,6 +595,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reserve_port_returns_none_when_all_occupied() {
         // Create a reservation with a very limited range
         let reservation = PortReservation::new(15000..15002);
@@ -613,6 +626,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_double_release() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port().unwrap();
@@ -637,6 +651,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_release_empty_iterator() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port().unwrap();
@@ -648,6 +663,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_is_reserved_port_outside_range() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -658,6 +674,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_is_free_port_outside_range() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -668,6 +685,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_sequential_single_port_reservations() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -695,6 +713,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_release_specific_subset_of_ports() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -717,6 +736,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial]
     fn test_reservation_is_free_helper() {
         use std::collections::BTreeSet;
 

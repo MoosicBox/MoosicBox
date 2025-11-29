@@ -10768,6 +10768,7 @@ name = "openport"
 version = "0.1.2"
 dependencies = [
  "clap 4.5.53",
+ "serial_test",
  "switchy_random",
  "test-log",
 ]
