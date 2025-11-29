@@ -19,6 +19,13 @@ use clippier::{
     handle_workspace_toolchains_command, print_human_output,
 };
 
+#[cfg(feature = "check")]
+use clippier::handle_check_command;
+#[cfg(feature = "format")]
+use clippier::handle_fmt_command;
+#[cfg(feature = "_tools")]
+use clippier::tools::ToolsConfig;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -383,6 +390,64 @@ enum Commands {
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
+    /// Run linters and format checkers
+    #[cfg(feature = "check")]
+    Check {
+        /// Working directory to run in
+        #[arg(short, long)]
+        working_dir: Option<PathBuf>,
+
+        /// Specific tools to run (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        tools: Option<Vec<String>>,
+
+        /// List available tools instead of running them
+        #[arg(long)]
+        list: bool,
+
+        /// Tools that MUST be installed (error if missing)
+        #[arg(long, value_delimiter = ',')]
+        required: Option<Vec<String>>,
+
+        /// Tools to skip even if detected
+        #[arg(long, value_delimiter = ',')]
+        skip: Option<Vec<String>>,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+        output: OutputType,
+    },
+    /// Run formatters
+    #[cfg(feature = "format")]
+    Fmt {
+        /// Working directory to run in
+        #[arg(short, long)]
+        working_dir: Option<PathBuf>,
+
+        /// Only check formatting without modifying files
+        #[arg(long)]
+        check: bool,
+
+        /// Specific tools to run (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        tools: Option<Vec<String>>,
+
+        /// List available tools instead of running them
+        #[arg(long)]
+        list: bool,
+
+        /// Tools that MUST be installed (error if missing)
+        #[arg(long, value_delimiter = ',')]
+        required: Option<Vec<String>>,
+
+        /// Tools to skip even if detected
+        #[arg(long, value_delimiter = ',')]
+        skip: Option<Vec<String>>,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+        output: OutputType,
+    },
 }
 
 #[allow(clippy::too_many_lines)]
@@ -632,6 +697,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             os,
             output,
         } => handle_workspace_toolchains_command(&workspace_root, &os, output)?,
+        #[cfg(feature = "check")]
+        Commands::Check {
+            working_dir,
+            tools,
+            list,
+            required,
+            skip,
+            output,
+        } => {
+            let mut config = ToolsConfig::default();
+            if let Some(req) = required {
+                config.required = req;
+            }
+            if let Some(s) = skip {
+                config.skip = s;
+            }
+            handle_check_command(
+                working_dir.as_deref(),
+                tools.as_deref(),
+                list,
+                config,
+                output,
+            )?
+        }
+        #[cfg(feature = "format")]
+        Commands::Fmt {
+            working_dir,
+            check,
+            tools,
+            list,
+            required,
+            skip,
+            output,
+        } => {
+            let mut config = ToolsConfig::default();
+            if let Some(req) = required {
+                config.required = req;
+            }
+            if let Some(s) = skip {
+                config.skip = s;
+            }
+            handle_fmt_command(
+                working_dir.as_deref(),
+                tools.as_deref(),
+                check,
+                list,
+                config,
+                output,
+            )?
+        }
     };
 
     if !result.is_empty() {

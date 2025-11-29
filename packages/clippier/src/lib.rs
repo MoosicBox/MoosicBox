@@ -55,6 +55,17 @@
 /// and Unicode support.
 pub mod package_filter;
 
+/// Tool detection and execution infrastructure for linting and formatting.
+///
+/// This module provides the common infrastructure for detecting installed tools,
+/// configuring them, and running them with unified output aggregation.
+/// It acts as an orchestrator, delegating to native tools while providing
+/// a consistent interface.
+///
+/// This is an internal module enabled by either `check` or `format` features.
+#[cfg(feature = "_tools")]
+pub mod tools;
+
 #[cfg(feature = "_transforms")]
 pub mod transforms;
 
@@ -266,6 +277,9 @@ pub struct ClippierConf {
     pub nightly: Option<bool>,
     /// Whether git submodules are needed globally
     pub git_submodules: Option<bool>,
+    /// Tool configuration for check/format commands
+    #[cfg(feature = "_tools")]
+    pub tools: Option<tools::ToolsConfig>,
 }
 
 /// Workspace-level configuration (root clippier.toml)
@@ -4894,6 +4908,190 @@ pub fn handle_workspace_toolchains_command(
             }
             writeln!(output, "\nGit Submodules: {}", result.git_submodules)?;
             Ok(output)
+        }
+    }
+}
+
+/// Handles the check command (run linters and format checkers)
+///
+/// Requires the `check` feature.
+///
+/// # Errors
+///
+/// * If tool detection fails
+/// * If a required tool is not found
+/// * If tool execution fails
+#[cfg(feature = "check")]
+pub fn handle_check_command(
+    working_dir: Option<&Path>,
+    tool_names: Option<&[String]>,
+    list_tools: bool,
+    config: tools::ToolsConfig,
+    output: OutputType,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use tools::{ToolRegistry, ToolRunner};
+
+    let registry = ToolRegistry::new(config)?;
+
+    if list_tools {
+        let tool_info = registry.list_tools();
+        return match output {
+            OutputType::Json => Ok(serde_json::to_string_pretty(
+                &tool_info
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "name": t.name,
+                            "display_name": t.display_name,
+                            "available": t.available,
+                            "required": t.required,
+                            "skipped": t.skipped,
+                            "path": t.path,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )?),
+            OutputType::Raw => {
+                use std::fmt::Write;
+                let mut output = String::new();
+                for tool in tool_info {
+                    let status = if tool.skipped {
+                        "SKIPPED"
+                    } else if tool.available {
+                        "AVAILABLE"
+                    } else if tool.required {
+                        "REQUIRED (missing)"
+                    } else {
+                        "not found"
+                    };
+                    let _ = writeln!(output, "{}: {}", tool.display_name, status);
+                }
+                Ok(output)
+            }
+        };
+    }
+
+    let runner = working_dir.map_or_else(
+        || ToolRunner::new(&registry),
+        |dir| ToolRunner::new(&registry).with_working_dir(dir),
+    );
+
+    let results = if let Some(names) = tool_names {
+        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        runner.run_specific(&name_refs, &[], true)?
+    } else {
+        // Run both linters and format checkers
+        let linter_results = runner.run_linters(&[])?;
+        let format_check_results = runner.run_format_check(&[])?;
+
+        // Combine results
+        let mut combined_results = linter_results.results;
+        combined_results.extend(format_check_results.results);
+
+        let success_count = combined_results.iter().filter(|r| r.success).count();
+        let failure_count = combined_results.len() - success_count;
+
+        tools::AggregatedResults {
+            results: combined_results,
+            total_duration: linter_results.total_duration + format_check_results.total_duration,
+            success_count,
+            failure_count,
+        }
+    };
+
+    match output {
+        OutputType::Json => Ok(tools::results_to_json(&results)?),
+        OutputType::Raw => {
+            tools::print_summary(&results);
+            Ok(String::new())
+        }
+    }
+}
+
+/// Handles the fmt command (run formatters)
+///
+/// Requires the `format` feature.
+///
+/// # Errors
+///
+/// * If tool detection fails
+/// * If a required tool is not found
+/// * If tool execution fails
+#[cfg(feature = "format")]
+pub fn handle_fmt_command(
+    working_dir: Option<&Path>,
+    tool_names: Option<&[String]>,
+    check_only: bool,
+    list_tools: bool,
+    config: tools::ToolsConfig,
+    output: OutputType,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use tools::{ToolRegistry, ToolRunner};
+
+    let registry = ToolRegistry::new(config)?;
+
+    if list_tools {
+        let tool_info: Vec<_> = registry
+            .list_tools()
+            .into_iter()
+            .filter(|t| t.capabilities.contains(&tools::ToolCapability::Format))
+            .collect();
+
+        return match output {
+            OutputType::Json => Ok(serde_json::to_string_pretty(
+                &tool_info
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "name": t.name,
+                            "display_name": t.display_name,
+                            "available": t.available,
+                            "required": t.required,
+                            "skipped": t.skipped,
+                            "path": t.path,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )?),
+            OutputType::Raw => {
+                use std::fmt::Write;
+                let mut output = String::new();
+                for tool in tool_info {
+                    let status = if tool.skipped {
+                        "SKIPPED"
+                    } else if tool.available {
+                        "AVAILABLE"
+                    } else if tool.required {
+                        "REQUIRED (missing)"
+                    } else {
+                        "not found"
+                    };
+                    let _ = writeln!(output, "{}: {}", tool.display_name, status);
+                }
+                Ok(output)
+            }
+        };
+    }
+
+    let runner = working_dir.map_or_else(
+        || ToolRunner::new(&registry),
+        |dir| ToolRunner::new(&registry).with_working_dir(dir),
+    );
+
+    let results = if let Some(names) = tool_names {
+        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        runner.run_specific(&name_refs, &[], check_only)?
+    } else if check_only {
+        runner.run_format_check(&[])?
+    } else {
+        runner.run_formatters(&[])?
+    };
+
+    match output {
+        OutputType::Json => Ok(tools::results_to_json(&results)?),
+        OutputType::Raw => {
+            tools::print_summary(&results);
+            Ok(String::new())
         }
     }
 }

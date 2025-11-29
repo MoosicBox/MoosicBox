@@ -493,6 +493,7 @@ quote = "1.0.42"
 rand = "0.9.2"
 rangemap = "1.7.0"
 ratatui = "0.30.0-beta.0"
+rayon = { version = "1.11.0", default-features = false }
 rb = "0.4.1"
 rcgen = "0.14.5"
 regex = "1.12.2"
@@ -591,6 +592,7 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
 uuid = { version = "1.18.1", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
+which = { version = "8.0.0", default-features = false }
 whoami = "1.6.1"
 xml = "1.2.0"
 

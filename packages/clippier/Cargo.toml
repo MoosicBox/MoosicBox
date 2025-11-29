@@ -42,9 +42,11 @@ tempfile   = { workspace = true }
 thiserror  = { workspace = true }
 toml       = { workspace = true }
 walkdir    = { workspace = true }
+which      = { workspace = true, optional = true, features = ["real-sys"] }
 
-git2 = { workspace = true, optional = true }
-mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
+git2  = { workspace = true, optional = true }
+mlua  = { workspace = true, optional = true, features = ["lua54", "serialize"] }
+rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
@@ -52,14 +54,17 @@ insta                   = { workspace = true, features = ["json", "redactions", 
 test-log                = { workspace = true }
 
 [features]
-default = ["git-diff", "transforms-vendored"]
+default = ["check", "format", "git-diff", "transforms-vendored"]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
 
+_tools              = ["dep:rayon", "dep:which"]
 _transforms         = []
+check               = ["_tools"]
+format              = ["_tools"]
 git-diff            = ["dep:git2"]
 test-utils          = []
 transforms-system   = ["_transforms", "dep:mlua"]
