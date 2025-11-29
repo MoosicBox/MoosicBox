@@ -24,21 +24,17 @@ required-features = ["build-binary"]
 [dependencies]
 
 
-bytes = { workspace = true }
-clap = { workspace = true, optional = true }
-image = { workspace = true, optional = true }
-log = { workspace = true }
-profiling = { workspace = true, optional = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
+bytes         = { workspace = true }
+clap          = { workspace = true, optional = true }
+image         = { workspace = true, optional = true }
+log           = { workspace = true }
+profiling     = { workspace = true, optional = true }
+strum         = { workspace = true }
+strum_macros  = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
-switchy_fs = { workspace = true, features = ["std"] }
-thiserror = { workspace = true }
-tokio = { workspace = true, optional = true, features = [
-    "macros",
-    "rt-multi-thread",
-] }
-webp = { workspace = true, optional = true }
+switchy_fs    = { workspace = true, features = ["std"] }
+thiserror     = { workspace = true }
+webp          = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 
@@ -53,8 +49,8 @@ fail-on-warnings = [
     "switchy_fs/fail-on-warnings",
 ]
 
-build-binary = ["dep:clap", "dep:tokio", "image"]
-image        = ["dep:image", "dep:tokio", "dep:webp"]
+build-binary = ["dep:clap", "image"]
+image        = ["dep:image", "dep:webp"]
 libvips      = ["dep:libvips"]
 
 profiling = ["dep:profiling"]

@@ -17,7 +17,6 @@ tests = false
 [dependencies]
 switchy_async    = { workspace = true, features = ["macros", "rt-multi-thread"] }
 switchy_database = { workspace = true, features = ["schema", "turso"] }
-tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[bin]]
 name = "turso_basic"

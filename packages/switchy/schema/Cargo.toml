@@ -16,9 +16,6 @@ examples = true
 [package.metadata.workspaces]
 group = "switchy"
 
-[package.metadata.cargo-machete]
-ignored = ["tokio"]
-
 [dependencies]
 async-trait          = { workspace = true }
 chrono               = { workspace = true }
@@ -49,7 +46,6 @@ switchy_schema_test_utils = { workspace = true, features = [
 ] }
 tempfile = { workspace = true }
 test-log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["all-discovery", "auto-reverse", "decimal", "uuid"]

@@ -23,7 +23,6 @@ switchy_schema = { workspace = true, features = [
     "directory",
     "embedded",
 ] }
-tokio = { workspace = true, features = ["full"] }
 
 [features]
 fail-on-warnings = [

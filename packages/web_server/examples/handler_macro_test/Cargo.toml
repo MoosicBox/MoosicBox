@@ -14,9 +14,9 @@ version     = "0.1.0"
 tests = false
 
 [dependencies]
-moosicbox_web_server = { workspace = true }
+moosicbox_web_server = { workspace = true, features = ["serde"] }
 serde                = { workspace = true, features = ["derive"] }
-tokio                = { workspace = true, features = ["full"] }
+switchy_async        = { workspace = true, features = ["macros", "tokio"] }
 
 [[bin]]
 name              = "test_actix"

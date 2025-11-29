@@ -18,7 +18,6 @@ switchy_http  = { workspace = true, features = ["reqwest"] }
 log               = { workspace = true }
 pretty_env_logger = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []

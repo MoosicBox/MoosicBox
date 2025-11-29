@@ -19,8 +19,8 @@ moosicbox_web_server = { workspace = true, features = [
     "openapi-all",
 ] }
 
-log   = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+log           = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 
 [features]
 default = []

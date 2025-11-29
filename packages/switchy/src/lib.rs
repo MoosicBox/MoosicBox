@@ -203,11 +203,11 @@ pub mod unsync_macros {
     macro_rules! select_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            switchy::unsync::tokio::select! { $($tokens)* }
+            ::switchy::unsync::tokio::select! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            switchy::unsync::tokio::select! { $($tokens)* }
+            ::switchy::unsync::tokio::select! { $($tokens)* }
         };
     }
 
@@ -224,11 +224,11 @@ pub mod unsync_macros {
     macro_rules! join_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            switchy::unsync::tokio::join! { $($tokens)* }
+            ::switchy::unsync::tokio::join! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            switchy::unsync::tokio::join! { $($tokens)* }
+            ::switchy::unsync::tokio::join! { $($tokens)* }
         };
     }
 
@@ -245,11 +245,11 @@ pub mod unsync_macros {
     macro_rules! try_join_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            switchy::unsync::tokio::try_join! { $($tokens)* }
+            ::switchy::unsync::tokio::try_join! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            switchy::unsync::tokio::try_join! { $($tokens)* }
+            ::switchy::unsync::tokio::try_join! { $($tokens)* }
         };
     }
 
@@ -283,7 +283,7 @@ pub mod unsync_macros {
 
     // For tokio runtime - re-export tokio::test as test_internal
     #[cfg(all(test, feature = "async-tokio", not(feature = "simulator")))]
-    pub use tokio::test as test_internal;
+    pub use crate::unsync::tokio::test as test_internal;
 
     // For simulator runtime - re-export the procedural macro
     #[cfg(feature = "simulator")]
@@ -308,18 +308,18 @@ pub mod unsync_macros {
     macro_rules! main_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; #[$($attr:tt)*] $($rest:tt)*) => {
-            #[::tokio::main]
+            #[::switchy::unsync::tokio::main]
             #[$($attr)*]
             $($rest)*
         };
         // Handle case without additional attributes
         (@path = $path:path; $($rest:tt)*) => {
-            #[::tokio::main]
+            #[::switchy::unsync::tokio::main]
             $($rest)*
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            #[::tokio::main]
+            #[::switchy::unsync::tokio::main]
             $($tokens)*
         };
     }

@@ -247,7 +247,7 @@ async fn test_future_types() -> Result<(), Box<dyn std::error::Error>> {
 /// # Errors
 ///
 /// Returns an error if any test fails.
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Testing asynchronous extraction with FromRequest trait...");
     println!();

@@ -34,7 +34,6 @@ switchy_database_connection = { workspace = true, features = [
 switchy_fs = { workspace = true, features = ["std"] }
 switchy_schema = { workspace = true, features = ["all-discovery"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
 
 [dev-dependencies]
 assert_cmd  = { workspace = true }

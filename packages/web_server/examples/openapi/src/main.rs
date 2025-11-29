@@ -22,7 +22,7 @@ use utoipa::{OpenApi as _, openapi::OpenApi};
 ///
 /// * Logging initialization fails
 /// * Server startup encounters an error
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None)?;
 

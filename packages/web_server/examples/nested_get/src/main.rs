@@ -9,7 +9,7 @@
 
 use moosicbox_web_server::{HttpResponse, Scope};
 
-#[tokio::main]
+#[switchy_async::main]
 async fn main() {
     env_logger::init();
 

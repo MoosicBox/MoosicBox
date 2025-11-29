@@ -28,9 +28,9 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
-env_logger = { workspace = true }
-test-log   = { workspace = true }
-tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+env_logger    = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
 
 [features]
 default = []

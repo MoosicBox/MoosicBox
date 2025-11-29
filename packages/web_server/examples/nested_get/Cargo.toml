@@ -14,8 +14,8 @@ tests = false
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
-env_logger = { workspace = true }
-tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+env_logger    = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 
 [features]
 default = []

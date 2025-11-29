@@ -95,7 +95,7 @@ struct Args {
 /// * If the logging system fails to initialize
 /// * If the source or output paths lack a valid file extension
 /// * If the file extension cannot be converted to a UTF-8 string
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(Some("moosicbox_aconverter.log"), None)
         .expect("Failed to initialize FreeLog");

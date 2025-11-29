@@ -82,7 +82,7 @@ async fn multi_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing handler macro system with Simulator backend...");
 

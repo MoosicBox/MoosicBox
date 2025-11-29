@@ -15,7 +15,7 @@ tests = false
 
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["simulator"] }
-tokio                = { workspace = true, features = ["full"] }
+switchy_async        = { workspace = true, features = ["macros", "tokio"] }
 
 [[bin]]
 name = "test_sync_extraction"

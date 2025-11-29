@@ -19,7 +19,6 @@ async-trait      = { workspace = true }
 switchy_async    = { workspace = true, features = ["macros", "tokio"] }
 switchy_database = { workspace = true }
 switchy_schema   = { workspace = true, features = ["code"] }
-tokio            = { workspace = true, features = ["full"] }
 
 [features]
 fail-on-warnings = [

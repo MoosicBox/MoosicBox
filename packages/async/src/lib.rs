@@ -123,7 +123,7 @@ pub use switchy_async_macros::tokio_main_wrapper as main;
 #[doc(hidden)]
 macro_rules! select_internal {
     ($($tokens:tt)*) => {
-        ::tokio::select! { $($tokens)* }
+        ::switchy_async::__private::tokio::select! { $($tokens)* }
     };
 }
 
@@ -133,7 +133,7 @@ macro_rules! select_internal {
 #[doc(hidden)]
 macro_rules! join_internal {
     ($($tokens:tt)*) => {
-        ::tokio::join! { $($tokens)* }
+        ::switchy_async::__private::tokio::join! { $($tokens)* }
     };
 }
 
@@ -143,7 +143,7 @@ macro_rules! join_internal {
 #[doc(hidden)]
 macro_rules! try_join_internal {
     ($($tokens:tt)*) => {
-        ::tokio::try_join! { $($tokens)* }
+        ::switchy_async::__private::tokio::try_join! { $($tokens)* }
     };
 }
 
@@ -161,6 +161,16 @@ pub use crate::tokio::main as main_internal;
 /// task spawning, runtime management, and I/O utilities.
 #[cfg(feature = "tokio")]
 pub mod tokio;
+
+/// Private module for internal re-exports.
+///
+/// This module is not part of the public API and may change at any time.
+/// It exists to allow macros to reference tokio through a stable path.
+#[cfg(feature = "tokio")]
+#[doc(hidden)]
+pub mod __private {
+    pub use tokio;
+}
 
 /// Simulator runtime implementation.
 ///

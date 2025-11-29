@@ -44,6 +44,7 @@ use std::str::FromStr as _;
 
 use proc_macro::TokenStream;
 
+#[cfg(feature = "simulator")]
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::visit_mut::{VisitMut, visit_expr_mut};
@@ -698,19 +699,29 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
-    // Parse and ignore the real_time parameter - tokio doesn't support it
-    let _args_str = if args.is_empty() {
-        String::new()
-    } else {
-        args.to_string() // Parse but ignore
-    };
+pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream {
+    let input_fn = parse_macro_input!(item as syn::ItemFn);
 
-    // Always generate a standard tokio::test regardless of parameters
-    let item_tokens: TokenStream2 = item.into();
+    let fn_name = &input_fn.sig.ident;
+    let fn_block = &input_fn.block;
+    let fn_vis = &input_fn.vis;
+    let fn_attrs = &input_fn.attrs;
+    let fn_output = &input_fn.sig.output;
+
+    // Extract any existing attributes except #[test]
+    let filtered_attrs: Vec<_> = fn_attrs
+        .iter()
+        .filter(|attr| !attr.path().is_ident("test"))
+        .collect();
+
     let result = quote! {
-        #[::tokio::test]
-        #item_tokens
+        #(#filtered_attrs)*
+        #[::core::prelude::v1::test]
+        #fn_vis fn #fn_name() #fn_output {
+            let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+            rt.block_on(async move #fn_block)
+            // Don't call rt.wait() as it can hang in tests
+        }
     };
 
     result.into()
@@ -968,12 +979,9 @@ pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Tokio-compatible main attribute macro (always available).
 ///
-/// This macro provides a Tokio-compatible main wrapper that simply delegates to `#[tokio::main]`.
-/// Unlike the other main macros in this crate, this macro is always available regardless of
-/// feature flags, making it suitable for main functions that need to work with or without
-/// the simulator.
-///
-/// Any arguments passed to this macro are forwarded to `tokio::main`.
+/// This macro provides a Tokio-compatible main wrapper that generates runtime setup code
+/// using `switchy_async::Builder`. Unlike delegating to `#[tokio::main]`, this approach
+/// doesn't require `tokio` as a direct dependency of the using crate.
 ///
 /// # Examples
 ///
@@ -993,20 +1001,51 @@ pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn tokio_main_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
-    // Forward any arguments to tokio::main
-    let item_tokens: TokenStream2 = item.into();
+pub fn tokio_main_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream {
+    let input_fn = parse_macro_input!(item as syn::ItemFn);
 
-    let result = if args.is_empty() {
+    let fn_name = &input_fn.sig.ident;
+    let fn_block = &input_fn.block;
+    let fn_vis = &input_fn.vis;
+    let fn_attrs = &input_fn.attrs;
+    let fn_output = &input_fn.sig.output;
+
+    // Extract any existing attributes except #[main]
+    let filtered_attrs: Vec<_> = fn_attrs
+        .iter()
+        .filter(|attr| !attr.path().is_ident("main"))
+        .collect();
+
+    // Determine if the return type is a Result type
+    let is_result_type = matches!(fn_output, syn::ReturnType::Type(_, ty) if {
+        if let syn::Type::Path(type_path) = ty.as_ref() {
+            type_path.path.segments.last().is_some_and(|seg| seg.ident == "Result")
+        } else {
+            false
+        }
+    });
+
+    let result = if is_result_type {
+        // For Result return types, propagate the result properly
         quote! {
-            #[::tokio::main]
-            #item_tokens
+            #(#filtered_attrs)*
+            #fn_vis fn #fn_name() #fn_output {
+                let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+                let result = rt.block_on(async move #fn_block);
+                rt.wait().expect("Runtime wait failed");
+                result
+            }
         }
     } else {
-        let args_tokens: TokenStream2 = args.into();
+        // For non-Result return types (including unit)
         quote! {
-            #[::tokio::main(#args_tokens)]
-            #item_tokens
+            #(#filtered_attrs)*
+            #fn_vis fn #fn_name() #fn_output {
+                let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+                let result = rt.block_on(async move #fn_block);
+                rt.wait().expect("Runtime wait failed");
+                result
+            }
         }
     };
 

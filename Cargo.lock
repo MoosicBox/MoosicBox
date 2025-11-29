@@ -1831,7 +1831,6 @@ dependencies = [
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
- "tokio",
 ]
 
 [[package]]
@@ -1844,7 +1843,6 @@ dependencies = [
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
- "tokio",
 ]
 
 [[package]]
@@ -2073,7 +2071,6 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "switchy_schema",
- "tokio",
 ]
 
 [[package]]
@@ -4670,7 +4667,7 @@ name = "from_request_test"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
- "tokio",
+ "switchy_async",
 ]
 
 [[package]]
@@ -5448,7 +5445,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
  "serde",
- "tokio",
+ "switchy_async",
 ]
 
 [[package]]
@@ -5741,7 +5738,6 @@ dependencies = [
  "switchy_async",
  "switchy_http",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -6309,9 +6305,9 @@ dependencies = [
  "serde",
  "serde_json",
  "simvar",
+ "switchy_async",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
  "web_server_simulator",
 ]
 
@@ -8116,8 +8112,8 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
+ "switchy_async",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8695,7 +8691,6 @@ dependencies = [
  "switchy_async",
  "switchy_fs",
  "thiserror 2.0.17",
- "tokio",
  "webp",
 ]
 
@@ -9801,7 +9796,6 @@ dependencies = [
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
- "tokio",
 ]
 
 [[package]]
@@ -14577,7 +14571,6 @@ dependencies = [
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
- "tokio",
 ]
 
 [[package]]
@@ -14622,7 +14615,6 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "switchy_schema",
- "tokio",
 ]
 
 [[package]]
@@ -15482,7 +15474,6 @@ dependencies = [
  "tempfile",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -15508,7 +15499,6 @@ dependencies = [
  "tempfile",
  "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -17408,7 +17398,6 @@ version = "0.1.0"
 dependencies = [
  "switchy_async",
  "switchy_database",
- "tokio",
 ]
 
 [[package]]
@@ -17502,7 +17491,6 @@ version = "0.1.0"
 dependencies = [
  "switchy_async",
  "switchy_database",
- "tokio",
 ]
 
 [[package]]
@@ -18299,7 +18287,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "moosicbox_web_server",
- "tokio",
+ "switchy_async",
 ]
 
 [[package]]
@@ -18309,7 +18297,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_logging",
  "moosicbox_web_server",
- "tokio",
+ "switchy_async",
 ]
 
 [[package]]

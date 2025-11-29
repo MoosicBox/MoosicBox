@@ -26,16 +26,12 @@ moosicbox_logging      = { workspace = true, features = ["free_log"] }
 moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
 
-clap = { workspace = true }
-futures = { workspace = true }
-log = { workspace = true }
+clap                = { workspace = true }
+futures             = { workspace = true }
+log                 = { workspace = true }
 moosicbox_audiotags = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = [
-    "macros",
-    "rt-multi-thread",
-    "tracing",
-] }
+switchy_async       = { workspace = true, features = ["macros", "tokio"] }
+thiserror           = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]

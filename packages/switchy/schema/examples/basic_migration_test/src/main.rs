@@ -286,7 +286,7 @@ mod tests {
     use super::*;
     use switchy_schema_test_utils::TestError;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_individual_migrations() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -306,7 +306,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_migration_descriptions() {
         let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = vec![
             Arc::new(CreateUsersTable),
@@ -323,7 +323,7 @@ mod tests {
         assert!(migrations[2].description().is_some());
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_full_cycle_with_test_utils() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 

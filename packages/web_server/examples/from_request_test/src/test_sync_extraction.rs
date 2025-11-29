@@ -217,7 +217,7 @@ fn test_bool_extraction() -> Result<(), Box<dyn std::error::Error>> {
 /// # Errors
 ///
 /// Returns an error if any test fails.
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Testing synchronous extraction with FromRequest trait...");
     println!();

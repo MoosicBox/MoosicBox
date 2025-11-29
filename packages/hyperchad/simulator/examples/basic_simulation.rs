@@ -2,7 +2,7 @@
 use hyperchad_test_utils::{FormData, TestPlan};
 
 #[cfg(feature = "test-utils")]
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use hyperchad_simulator::{AppConfig, HyperChadSimulator, RendererType, SimulationData};
 
