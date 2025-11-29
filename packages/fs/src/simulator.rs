@@ -410,6 +410,60 @@ impl FileType {
     }
 }
 
+/// Metadata information about a file in the simulated filesystem
+///
+/// Provides information about file size and type (file, directory, symlink).
+#[derive(Debug, Clone)]
+pub struct Metadata {
+    pub(crate) len: u64,
+    pub(crate) is_file: bool,
+    pub(crate) is_dir: bool,
+    pub(crate) is_symlink: bool,
+}
+
+impl Metadata {
+    /// Returns the size of the file in bytes
+    #[must_use]
+    pub const fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Returns `true` if the file has zero length
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Returns `true` if this metadata is for a regular file
+    #[must_use]
+    pub const fn is_file(&self) -> bool {
+        self.is_file
+    }
+
+    /// Returns `true` if this metadata is for a directory
+    #[must_use]
+    pub const fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+
+    /// Returns `true` if this metadata is for a symbolic link
+    #[must_use]
+    pub const fn is_symlink(&self) -> bool {
+        self.is_symlink
+    }
+}
+
+impl From<std::fs::Metadata> for Metadata {
+    fn from(meta: std::fs::Metadata) -> Self {
+        Self {
+            len: meta.len(),
+            is_file: meta.is_file(),
+            is_dir: meta.is_dir(),
+            is_symlink: meta.is_symlink(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod file_type_tests {
     use super::FileType;
@@ -486,6 +540,7 @@ pub mod sync {
     ///
     /// Provides read, write, and seek operations on files stored in the in-memory filesystem.
     pub struct File {
+        #[cfg_attr(not(feature = "simulator-real-fs"), allow(dead_code))]
         pub(crate) path: PathBuf,
         pub(crate) data: Arc<Mutex<BytesMut>>,
         pub(crate) position: u64,
@@ -493,13 +548,62 @@ pub mod sync {
     }
 
     impl File {
+        /// Opens a file in read-only mode
+        ///
+        /// This is a convenience method equivalent to `OpenOptions::new().read(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the file does not exist
+        /// * If the path cannot be converted to a string
+        pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            OpenOptions::new().read(true).open(path)
+        }
+
+        /// Creates a new file for writing, truncating any existing file
+        ///
+        /// This is a convenience method equivalent to
+        /// `OpenOptions::new().create(true).write(true).truncate(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the parent directory does not exist
+        /// * If the path cannot be converted to a string
+        pub fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+        }
+
+        /// Returns a new `OpenOptions` builder for configuring how a file is opened
+        #[must_use]
+        pub const fn options() -> OpenOptions {
+            OpenOptions::new()
+        }
+
         /// Retrieves metadata about the file
         ///
         /// # Errors
         ///
-        /// * If underlying `std::fs::metadata` fails
-        pub fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
-            std::fs::metadata(&self.path)
+        /// * If the file metadata cannot be retrieved (when using real filesystem)
+        ///
+        /// # Panics
+        ///
+        /// * If the internal data mutex is poisoned (when using simulator)
+        pub fn metadata(&self) -> std::io::Result<Metadata> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Ok(std::fs::metadata(&self.path)?.into());
+            }
+
+            Ok(Metadata {
+                len: u64::try_from(self.data.lock().unwrap().len()).unwrap_or(0),
+                is_file: true,
+                is_dir: false,
+                is_symlink: false,
+            })
         }
 
         /// Converts this synchronous file handle into an asynchronous file handle
@@ -514,6 +618,8 @@ pub mod sync {
             }
         }
     }
+
+    pub use super::Metadata;
 
     impl_file_sync!(File);
 
@@ -1452,14 +1558,72 @@ pub mod unsync {
     }
 
     impl File {
+        /// Opens a file in read-only mode asynchronously
+        ///
+        /// This is a convenience method equivalent to `OpenOptions::new().read(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the file does not exist
+        /// * If the path cannot be converted to a string
+        #[allow(clippy::future_not_send)]
+        pub async fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            OpenOptions::new().read(true).open(path).await
+        }
+
+        /// Creates a new file for writing, truncating any existing file
+        ///
+        /// This is a convenience method equivalent to
+        /// `OpenOptions::new().create(true).write(true).truncate(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the parent directory does not exist
+        /// * If the path cannot be converted to a string
+        #[allow(clippy::future_not_send)]
+        pub async fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .await
+        }
+
+        /// Returns a new `OpenOptions` builder for configuring how a file is opened
+        #[must_use]
+        pub const fn options() -> OpenOptions {
+            OpenOptions::new()
+        }
+
         /// Retrieves metadata about the file asynchronously
         ///
         /// # Errors
         ///
-        /// * If underlying `std::fs::metadata` fails
+        /// * If the file metadata cannot be retrieved (when using real filesystem)
+        ///
+        /// # Panics
+        ///
+        /// * If the internal data mutex is poisoned (when using simulator)
+        /// * If the `spawn_blocking` task panics (when using real filesystem)
         #[allow(clippy::unused_async)]
-        pub async fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
-            std::fs::metadata(&self.path)
+        pub async fn metadata(&self) -> std::io::Result<Metadata> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+            if super::real_fs_support::is_real_fs() {
+                let path = self.path.clone();
+                return switchy_async::task::spawn_blocking(move || {
+                    Ok(std::fs::metadata(&path)?.into())
+                })
+                .await
+                .unwrap();
+            }
+
+            Ok(Metadata {
+                len: u64::try_from(self.data.lock().unwrap().len()).unwrap_or(0),
+                is_file: true,
+                is_dir: false,
+                is_symlink: false,
+            })
         }
 
         /// Converts this asynchronous file handle into a synchronous file handle
@@ -1474,6 +1638,8 @@ pub mod unsync {
             }
         }
     }
+
+    pub use super::Metadata;
 
     impl_file_sync!(File);
 
@@ -1756,30 +1922,151 @@ pub mod unsync {
         pub async fn file_type(&self) -> std::io::Result<super::FileType> {
             Ok(self.file_type_info.clone())
         }
+
+        /// Returns metadata for this entry
+        ///
+        /// # Errors
+        ///
+        /// * If the file/directory no longer exists
+        ///
+        /// # Panics
+        ///
+        /// * If the FILES or data mutex is poisoned (when using simulator)
+        /// * If the `spawn_blocking` task panics (when using real filesystem)
+        #[allow(clippy::unused_async)]
+        pub async fn metadata(&self) -> std::io::Result<Metadata> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+            if super::real_fs_support::is_real_fs() {
+                let path = self.path.clone();
+                return switchy_async::task::spawn_blocking(move || {
+                    Ok(std::fs::metadata(&path)?.into())
+                })
+                .await
+                .unwrap();
+            }
+
+            if self.file_type_info.is_dir() {
+                Ok(Metadata {
+                    len: 0,
+                    is_file: false,
+                    is_dir: true,
+                    is_symlink: false,
+                })
+            } else if self.file_type_info.is_file() {
+                // For files, get the actual size from the simulator storage
+                let path_str = self.path.to_str().ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, "path is invalid str")
+                })?;
+                let len = super::FILES
+                    .with_borrow(|files| {
+                        files
+                            .read()
+                            .unwrap()
+                            .get(path_str)
+                            .map(|data| u64::try_from(data.lock().unwrap().len()).unwrap_or(0))
+                    })
+                    .unwrap_or(0);
+                Ok(Metadata {
+                    len,
+                    is_file: true,
+                    is_dir: false,
+                    is_symlink: false,
+                })
+            } else {
+                Ok(Metadata {
+                    len: 0,
+                    is_file: false,
+                    is_dir: false,
+                    is_symlink: self.file_type_info.is_symlink(),
+                })
+            }
+        }
+    }
+
+    /// Async directory reader that yields directory entries
+    ///
+    /// This struct is returned by [`read_dir`] and provides an async iterator
+    /// over the entries in a directory.
+    pub struct ReadDir {
+        entries: std::vec::IntoIter<DirEntry>,
+    }
+
+    impl ReadDir {
+        /// Returns the next entry in the directory
+        ///
+        /// Returns `Ok(None)` when there are no more entries.
+        ///
+        /// # Errors
+        ///
+        /// * Infallible in simulator mode
+        #[allow(clippy::unused_async)]
+        pub async fn next_entry(&mut self) -> std::io::Result<Option<DirEntry>> {
+            Ok(self.entries.next())
+        }
+    }
+
+    /// Returns an async iterator over the entries in a directory
+    ///
+    /// # Errors
+    ///
+    /// * If the directory does not exist
+    /// * If the path cannot be converted to a string
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails (when using real filesystem)
+    #[allow(clippy::unused_async, clippy::needless_collect)]
+    pub async fn read_dir<P: AsRef<Path>>(path: P) -> std::io::Result<ReadDir> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            let entries = switchy_async::task::spawn_blocking(move || {
+                let std_entries = crate::standard::sync::read_dir_sorted(path)?;
+                std_entries
+                    .into_iter()
+                    .map(|x| DirEntry::from_std(&x))
+                    .collect::<std::io::Result<Vec<_>>>()
+            })
+            .await
+            .unwrap()?;
+            return Ok(ReadDir {
+                entries: entries.into_iter(),
+            });
+        }
+
+        // Use sync implementation which properly handles simulator filesystem
+        let sync_entries = super::sync::read_dir_sorted(&path)?;
+        let entries: Vec<DirEntry> = sync_entries
+            .into_iter()
+            .map(|e| DirEntry {
+                path: e.path(),
+                file_name: e.file_name(),
+                file_type_info: e.file_type().clone(),
+            })
+            .collect();
+
+        Ok(ReadDir {
+            entries: entries.into_iter(),
+        })
     }
 
     /// Read directory entries and return them sorted by filename for deterministic iteration
     ///
-    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
-    ///
     /// # Errors
     ///
-    /// * If underlying `tokio::fs::read_dir` fails (when using real filesystem)
-    /// * If any directory entry cannot be read (when using real filesystem)
-    /// * If using `real_fs` with simulator runtime (type incompatibility)
+    /// * If the directory does not exist
+    /// * If the path cannot be converted to a string
     ///
     /// # Panics
     ///
-    /// * If the `spawn_blocking` task fails
-    #[allow(unused_variables)]
+    /// * If the `spawn_blocking` task fails (when using real filesystem)
+    #[allow(clippy::unused_async)]
     pub async fn read_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
         #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
         if super::real_fs_support::is_real_fs() {
             let path = path.as_ref().to_path_buf();
             return switchy_async::task::spawn_blocking(move || {
-                // Reuse existing logic from standard::sync
                 let std_entries = crate::standard::sync::read_dir_sorted(path)?;
-                // Convert to simulator DirEntry
                 std_entries
                     .into_iter()
                     .map(|x| DirEntry::from_std(&x))
@@ -1789,31 +2076,35 @@ pub mod unsync {
             .unwrap();
         }
 
-        Ok(Vec::new())
+        // Use sync implementation which properly handles simulator filesystem
+        let sync_entries = super::sync::read_dir_sorted(&path)?;
+        Ok(sync_entries
+            .into_iter()
+            .map(|e| DirEntry {
+                path: e.path(),
+                file_name: e.file_name(),
+                file_type_info: e.file_type().clone(),
+            })
+            .collect())
     }
 
     /// Recursively walk directory tree and return all entries sorted by path for deterministic iteration
     ///
-    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
-    ///
     /// # Errors
     ///
-    /// * If any directory cannot be read (when using real filesystem)
-    /// * If any directory entry cannot be accessed (when using real filesystem)
-    /// * If using `real_fs` with simulator runtime (type incompatibility)
+    /// * If the directory does not exist
+    /// * If the path cannot be converted to a string
     ///
     /// # Panics
     ///
-    /// * If the `spawn_blocking` task fails
-    #[allow(unused_variables)]
+    /// * If the `spawn_blocking` task fails (when using real filesystem)
+    #[allow(clippy::unused_async)]
     pub async fn walk_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
         #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
         if super::real_fs_support::is_real_fs() {
             let path = path.as_ref().to_path_buf();
             return switchy_async::task::spawn_blocking(move || {
-                // Reuse existing logic from standard::sync
                 let std_entries = crate::standard::sync::walk_dir_sorted(path)?;
-                // Convert to simulator DirEntry
                 std_entries
                     .into_iter()
                     .map(|x| DirEntry::from_std(&x))
@@ -1823,7 +2114,16 @@ pub mod unsync {
             .unwrap();
         }
 
-        Ok(Vec::new())
+        // Use sync implementation which properly handles simulator filesystem
+        let sync_entries = super::sync::walk_dir_sorted(&path)?;
+        Ok(sync_entries
+            .into_iter()
+            .map(|e| DirEntry {
+                path: e.path(),
+                file_name: e.file_name(),
+                file_type_info: e.file_type().clone(),
+            })
+            .collect())
     }
 
     #[cfg(test)]

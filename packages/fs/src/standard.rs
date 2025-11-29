@@ -14,7 +14,148 @@ pub mod sync {
 
     use crate::sync::OpenOptions;
 
-    pub use std::fs::File;
+    /// File handle wrapping `std::fs::File`
+    ///
+    /// Provides convenience methods for opening files that match the simulator API.
+    pub struct File(std::fs::File);
+
+    impl File {
+        /// Opens a file in read-only mode
+        ///
+        /// This is a convenience method equivalent to `OpenOptions::new().read(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the file does not exist
+        /// * If permission is denied
+        pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            Ok(Self(std::fs::File::open(path)?))
+        }
+
+        /// Creates a new file for writing, truncating any existing file
+        ///
+        /// This is a convenience method equivalent to
+        /// `OpenOptions::new().create(true).write(true).truncate(true).open(path)`.
+        ///
+        /// # Errors
+        ///
+        /// * If the parent directory does not exist
+        /// * If permission is denied
+        pub fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            Ok(Self(std::fs::File::create(path)?))
+        }
+
+        /// Returns a new `OpenOptions` builder for configuring how a file is opened
+        #[must_use]
+        pub const fn options() -> OpenOptions {
+            OpenOptions::new()
+        }
+
+        /// Retrieves metadata about the file
+        ///
+        /// # Errors
+        ///
+        /// * If the file metadata cannot be retrieved
+        pub fn metadata(&self) -> std::io::Result<Metadata> {
+            Ok(Metadata(self.0.metadata()?))
+        }
+
+        /// Returns a reference to the inner `std::fs::File`
+        #[must_use]
+        pub const fn inner(&self) -> &std::fs::File {
+            &self.0
+        }
+
+        /// Returns the inner `std::fs::File`, consuming this wrapper
+        #[must_use]
+        pub fn into_inner(self) -> std::fs::File {
+            self.0
+        }
+    }
+
+    impl From<std::fs::File> for File {
+        fn from(file: std::fs::File) -> Self {
+            Self(file)
+        }
+    }
+
+    impl From<File> for std::fs::File {
+        fn from(file: File) -> Self {
+            file.0
+        }
+    }
+
+    impl std::io::Read for File {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl std::io::Write for File {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.write(buf)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.0.flush()
+        }
+    }
+
+    impl std::io::Seek for File {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.0.seek(pos)
+        }
+    }
+
+    /// Metadata information about a file
+    ///
+    /// Wrapper around `std::fs::Metadata` providing information about file size and type.
+    #[derive(Debug, Clone)]
+    pub struct Metadata(std::fs::Metadata);
+
+    impl Metadata {
+        /// Returns the size of the file in bytes
+        #[must_use]
+        pub fn len(&self) -> u64 {
+            self.0.len()
+        }
+
+        /// Returns `true` if the file has zero length
+        #[must_use]
+        pub fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        /// Returns `true` if this metadata is for a regular file
+        #[must_use]
+        pub fn is_file(&self) -> bool {
+            self.0.is_file()
+        }
+
+        /// Returns `true` if this metadata is for a directory
+        #[must_use]
+        pub fn is_dir(&self) -> bool {
+            self.0.is_dir()
+        }
+
+        /// Returns `true` if this metadata is for a symbolic link
+        #[must_use]
+        pub fn is_symlink(&self) -> bool {
+            self.0.is_symlink()
+        }
+
+        /// Returns a reference to the inner `std::fs::Metadata`
+        #[must_use]
+        pub const fn inner(&self) -> &std::fs::Metadata {
+            &self.0
+        }
+    }
+
+    impl From<std::fs::Metadata> for Metadata {
+        fn from(metadata: std::fs::Metadata) -> Self {
+            Self(metadata)
+        }
+    }
 
     /// Reads the entire contents of a file into a string
     ///
@@ -123,7 +264,7 @@ pub mod sync {
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let options: std::fs::OpenOptions = self.into();
 
-            options.open(path)
+            Ok(File(options.open(path)?))
         }
     }
 }
