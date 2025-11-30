@@ -1143,10 +1143,14 @@ mod tests {
 
         // Starting from users, should collect posts and comments
         let all_deps = graph.collect_all_dependents("users");
-        assert_eq!(all_deps.len(), 3); // users itself + posts + comments
-        assert!(all_deps.contains("users"));
-        assert!(all_deps.contains("posts"));
-        assert!(all_deps.contains("comments"));
+        assert_eq!(
+            all_deps,
+            BTreeSet::from([
+                "users".to_string(),
+                "posts".to_string(),
+                "comments".to_string()
+            ])
+        );
     }
 
     #[test_log::test]
@@ -1160,11 +1164,15 @@ mod tests {
 
         // Starting from users, should collect all tables
         let all_deps = graph.collect_all_dependents("users");
-        assert_eq!(all_deps.len(), 4);
-        assert!(all_deps.contains("users"));
-        assert!(all_deps.contains("posts"));
-        assert!(all_deps.contains("comments"));
-        assert!(all_deps.contains("post_tags"));
+        assert_eq!(
+            all_deps,
+            BTreeSet::from([
+                "users".to_string(),
+                "posts".to_string(),
+                "comments".to_string(),
+                "post_tags".to_string()
+            ])
+        );
     }
 
     #[test_log::test]
@@ -1175,8 +1183,7 @@ mod tests {
 
         // Starting from leaf table (comments) - should only include itself
         let all_deps = graph.collect_all_dependents("comments");
-        assert_eq!(all_deps.len(), 1);
-        assert!(all_deps.contains("comments"));
+        assert_eq!(all_deps, BTreeSet::from(["comments".to_string()]));
     }
 
     #[test_log::test]
@@ -1185,8 +1192,7 @@ mod tests {
 
         // Nonexistent table - should still include itself
         let all_deps = graph.collect_all_dependents("nonexistent");
-        assert_eq!(all_deps.len(), 1);
-        assert!(all_deps.contains("nonexistent"));
+        assert_eq!(all_deps, BTreeSet::from(["nonexistent".to_string()]));
     }
 
     #[test_log::test]
