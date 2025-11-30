@@ -409,4 +409,61 @@ mod tests {
         let err_result: Result<String> = Err(EnvError::NotFound("VAR".to_string()));
         assert!(err_result.is_err());
     }
+
+    /// Provider that returns `InvalidValue` errors for specific variables
+    struct InvalidValueProvider {
+        invalid_vars: std::collections::BTreeSet<String>,
+    }
+
+    impl EnvProvider for InvalidValueProvider {
+        fn var(&self, name: &str) -> Result<String> {
+            if self.invalid_vars.contains(name) {
+                Err(EnvError::InvalidValue(
+                    name.to_string(),
+                    "contains null byte".to_string(),
+                ))
+            } else {
+                Err(EnvError::NotFound(name.to_string()))
+            }
+        }
+
+        fn vars(&self) -> BTreeMap<String, String> {
+            BTreeMap::new()
+        }
+    }
+
+    #[test_log::test]
+    fn test_env_provider_var_parse_opt_propagates_invalid_value_error() {
+        // This tests the `Err(e) => Err(e)` branch in var_parse_opt that propagates
+        // non-NotFound errors (like InvalidValue) from the underlying var() call.
+        let mut invalid_vars = std::collections::BTreeSet::new();
+        invalid_vars.insert("INVALID_VAR".to_string());
+
+        let provider = InvalidValueProvider { invalid_vars };
+
+        let result: Result<Option<i32>> = provider.var_parse_opt("INVALID_VAR");
+
+        // Should propagate the InvalidValue error, not return Ok(None)
+        assert!(matches!(
+            result,
+            Err(EnvError::InvalidValue(ref name, _)) if name == "INVALID_VAR"
+        ));
+    }
+
+    #[test_log::test]
+    fn test_env_provider_var_parse_propagates_invalid_value_error() {
+        // Test that var_parse also handles InvalidValue errors correctly
+        let mut invalid_vars = std::collections::BTreeSet::new();
+        invalid_vars.insert("INVALID_VAR".to_string());
+
+        let provider = InvalidValueProvider { invalid_vars };
+
+        let result: Result<i32> = provider.var_parse("INVALID_VAR");
+
+        // Should propagate the InvalidValue error
+        assert!(matches!(
+            result,
+            Err(EnvError::InvalidValue(ref name, _)) if name == "INVALID_VAR"
+        ));
+    }
 }
