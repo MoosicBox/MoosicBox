@@ -1629,7 +1629,8 @@ mod tests {
             if let Element::Image { source, alt, .. } = &image.element {
                 assert_eq!(source, &Some("https://example.com/image.png".to_string()));
                 // Note: pulldown-cmark puts title in alt, not the alt text from markdown
-                assert!(alt.is_some());
+                // Since there's no title in the markdown, alt will be an empty string
+                assert_eq!(alt, &Some(String::new()));
             } else {
                 panic!("Expected Image element");
             }
