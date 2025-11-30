@@ -720,4 +720,68 @@ mod tests {
         // Pure numbers should return None
         assert_eq!(extract_track_name("12345"), None);
     }
+
+    #[test_log::test]
+    fn test_music_file_pattern_matches_valid_extensions() {
+        assert!(MUSIC_FILE_PATTERN.is_match("song.flac"));
+        assert!(MUSIC_FILE_PATTERN.is_match("track.m4a"));
+        assert!(MUSIC_FILE_PATTERN.is_match("music.mp3"));
+        assert!(MUSIC_FILE_PATTERN.is_match("audio.opus"));
+    }
+
+    #[test_log::test]
+    fn test_music_file_pattern_rejects_invalid_extensions() {
+        assert!(!MUSIC_FILE_PATTERN.is_match("image.jpg"));
+        assert!(!MUSIC_FILE_PATTERN.is_match("document.pdf"));
+        assert!(!MUSIC_FILE_PATTERN.is_match("video.mp4"));
+        assert!(!MUSIC_FILE_PATTERN.is_match("cover.png"));
+    }
+
+    #[test_log::test]
+    fn test_music_file_pattern_requires_filename_before_extension() {
+        // Pattern is ".+\." so requires at least one char before extension
+        assert!(!MUSIC_FILE_PATTERN.is_match(".flac"));
+        assert!(MUSIC_FILE_PATTERN.is_match("a.flac"));
+    }
+
+    #[test_log::test]
+    fn test_multi_artist_pattern_matches_comma_between_non_whitespace() {
+        // Pattern is "\S,\S" - non-whitespace, comma, non-whitespace
+        assert!(MULTI_ARTIST_PATTERN.is_match("Artist1,Artist2"));
+        assert!(MULTI_ARTIST_PATTERN.is_match("a,b"));
+    }
+
+    #[test_log::test]
+    fn test_multi_artist_pattern_no_match_with_spaces_around_comma() {
+        // Pattern doesn't match when there are spaces around the comma
+        assert!(!MULTI_ARTIST_PATTERN.is_match("Artist1, Artist2"));
+        assert!(!MULTI_ARTIST_PATTERN.is_match("Artist1 ,Artist2"));
+        assert!(!MULTI_ARTIST_PATTERN.is_match("Artist1 , Artist2"));
+    }
+
+    #[test_log::test]
+    fn test_multi_artist_pattern_truncation_logic() {
+        // Test the actual truncation logic used in scan_track
+        // Pattern "\S,\S" matches char + comma + char, so for "Artist1,Artist2"
+        // it matches "1,A" starting at position 6 (the '1' char).
+        // The slice [..=comma.start()] gives up to and including position 6, which is "Artist1"
+        let test_cases = [
+            // (input, expected output after truncation)
+            ("Artist1,Artist2", "Artist1"),
+            ("John Doe,Jane Doe", "John Doe"),
+            ("Band1,Band2,Band3", "Band1"),
+            // No match cases - should return unchanged
+            ("Single Artist", "Single Artist"),
+            ("Artist1, Artist2", "Artist1, Artist2"), // Space after comma
+            ("Artist1 & Artist2", "Artist1 & Artist2"),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = MULTI_ARTIST_PATTERN.find(input).map_or_else(
+                || input.to_string(),
+                |comma| input[..=comma.start()].to_string(),
+            );
+            assert_eq!(result, expected, "Failed for input: {input}");
+        }
+    }
 }
