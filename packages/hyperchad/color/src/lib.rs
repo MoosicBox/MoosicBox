@@ -768,3 +768,23 @@ mod test {
         assert_eq!(from_short, round_tripped);
     }
 }
+
+#[cfg(all(test, feature = "arb"))]
+mod prop_tests {
+    use proptest::prelude::*;
+
+    use crate::Color;
+
+    proptest! {
+        /// Verifies that any Color can be converted to a hex string and parsed back
+        /// to produce an identical Color. This property must hold for all possible
+        /// Color values, including edge cases with boundary values (0, 255) and
+        /// both Some and None alpha channels.
+        #[test]
+        fn roundtrip_to_string_then_from_hex_preserves_color(color: Color) {
+            let hex_string = color.to_string();
+            let parsed = Color::from_hex(&hex_string);
+            prop_assert_eq!(color, parsed);
+        }
+    }
+}
