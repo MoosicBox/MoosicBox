@@ -339,13 +339,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use crate::{HttpRequest, Stub};
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
-    use serde::Deserialize;
+    use bytes::Bytes;
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
-    use {super::*, bytes::Bytes};
+    use serde::Deserialize;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use crate::simulator::{SimulationRequest, SimulationStub};
@@ -585,5 +587,126 @@ mod tests {
         // Test into_inner
         let inner = json_wrapper.into_inner();
         assert_eq!(inner.name, "Test User");
+    }
+
+    #[test_log::test]
+    fn test_extract_field_path_with_missing_field_pattern() {
+        // Test the pattern: "missing field `fieldname`"
+        let message = "missing field `username` at line 1 column 20";
+        let result = extract_field_path(message);
+        assert_eq!(result, Some("username".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_extract_field_path_with_at_dot_pattern() {
+        // Test the pattern: "at `.field.subfield`"
+        let message = "invalid type: expected integer, found string at `.user.age`";
+        let result = extract_field_path(message);
+        assert_eq!(result, Some(".user.age".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_extract_field_path_no_match() {
+        // Test message with no matching pattern
+        let message = "generic error without field information";
+        let result = extract_field_path(message);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_extract_field_path_nested_field() {
+        // Test nested field extraction
+        let message = "missing field `nested_object` in the input";
+        let result = extract_field_path(message);
+        assert_eq!(result, Some("nested_object".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_extract_field_path_with_multiple_patterns() {
+        // If both patterns exist, the first one (field`) should match
+        let message = "missing field `first` at `.second`";
+        let result = extract_field_path(message);
+        // The function checks "field `" pattern first
+        assert_eq!(result, Some("first".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_json_error_parse_error_from_serde() {
+        // Test creating ParseError from a real serde_json error
+        let invalid_json = r#"{"name": invalid}"#;
+        let err = serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+
+        let json_error = JsonError::parse_error(&err);
+
+        match json_error {
+            JsonError::ParseError {
+                message,
+                line,
+                column,
+            } => {
+                assert!(message.contains("expected value"));
+                assert!(line.is_some());
+                assert!(column.is_some());
+            }
+            _ => panic!("Expected ParseError variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_json_error_deserialization_error_with_field_path() {
+        // Test creating DeserializationError that extracts field path
+        #[derive(Debug, serde::Deserialize)]
+        struct TestStruct {
+            #[allow(dead_code)]
+            required_field: String,
+        }
+
+        let json_missing_field = r"{}";
+        let err = serde_json::from_str::<TestStruct>(json_missing_field).unwrap_err();
+
+        let json_error = JsonError::deserialization_error(&err);
+
+        match json_error {
+            JsonError::DeserializationError {
+                message,
+                field_path,
+            } => {
+                assert!(message.contains("required_field"));
+                // The field_path should be extracted from the error message
+                assert_eq!(field_path, Some("required_field".to_string()));
+            }
+            _ => panic!("Expected DeserializationError variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_json_error_body_read_error() {
+        let error = JsonError::body_read_error("connection reset");
+
+        match error {
+            JsonError::BodyReadError { message } => {
+                assert_eq!(message, "connection reset");
+            }
+            _ => panic!("Expected BodyReadError variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_json_error_into_error_conversion() {
+        // Test that different JsonError variants convert to appropriate Error types
+        let invalid_ct = JsonError::invalid_content_type(Some("text/plain".to_string()));
+        let error: Error = invalid_ct.into();
+        // InvalidContentType should convert to bad_request
+        assert!(error.to_string().contains("Invalid"));
+
+        let empty_body = JsonError::empty_body();
+        let error: Error = empty_body.into();
+        // EmptyBody should convert to bad_request
+        assert!(error.to_string().contains("empty"));
+
+        let body_read = JsonError::body_read_error("network error");
+        let error: Error = body_read.into();
+        // BodyReadError should convert to internal_server_error
+        assert!(error.to_string().contains("network error"));
     }
 }

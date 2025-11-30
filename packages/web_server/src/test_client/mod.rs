@@ -231,3 +231,133 @@ impl_test_client!(
 // Export the concrete types for public use
 pub use ConcreteTestClient as TestClientImpl;
 pub use ConcreteTestServer as TestServerImpl;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_http_method_as_str() {
+        assert_eq!(HttpMethod::Get.as_str(), "GET");
+        assert_eq!(HttpMethod::Post.as_str(), "POST");
+        assert_eq!(HttpMethod::Put.as_str(), "PUT");
+        assert_eq!(HttpMethod::Delete.as_str(), "DELETE");
+        assert_eq!(HttpMethod::Patch.as_str(), "PATCH");
+        assert_eq!(HttpMethod::Head.as_str(), "HEAD");
+        assert_eq!(HttpMethod::Options.as_str(), "OPTIONS");
+    }
+
+    #[test_log::test]
+    fn test_request_body_bytes_to_bytes_and_content_type() {
+        let body = RequestBody::Bytes(vec![1, 2, 3, 4]);
+        let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
+        assert_eq!(bytes, vec![1, 2, 3, 4]);
+        assert_eq!(content_type, "application/octet-stream");
+    }
+
+    #[test_log::test]
+    fn test_request_body_text_to_bytes_and_content_type() {
+        let body = RequestBody::Text("Hello, World!".to_string());
+        let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
+        assert_eq!(bytes, b"Hello, World!");
+        assert_eq!(content_type, "text/plain");
+    }
+
+    #[test_log::test]
+    fn test_request_body_form_to_bytes_and_content_type() {
+        let body = RequestBody::form([("key1", "value1"), ("key2", "value2")]);
+        let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
+
+        let body_str = String::from_utf8(bytes).unwrap();
+        // Form encoding should produce key=value pairs
+        assert!(body_str.contains("key1=value1"));
+        assert!(body_str.contains("key2=value2"));
+        assert_eq!(content_type, "application/x-www-form-urlencoded");
+    }
+
+    #[test_log::test]
+    fn test_request_body_form_with_special_characters() {
+        // Test URL encoding of special characters
+        let body = RequestBody::form([("name", "John Doe"), ("email", "test@example.com")]);
+        let (bytes, _) = body.to_bytes_and_content_type().unwrap();
+
+        let body_str = String::from_utf8(bytes).unwrap();
+        // Space should be encoded as %20 or +
+        assert!(body_str.contains("name=John%20Doe") || body_str.contains("name=John+Doe"));
+        // @ should be encoded
+        assert!(body_str.contains("test%40example.com"));
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "serde")]
+    fn test_request_body_json_to_bytes_and_content_type() {
+        let body = RequestBody::Json(serde_json::json!({"key": "value", "number": 42}));
+        let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed["key"], "value");
+        assert_eq!(parsed["number"], 42);
+        assert_eq!(content_type, "application/json");
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "serde")]
+    fn test_request_body_json_from_serialize() {
+        #[derive(serde::Serialize)]
+        struct TestData {
+            name: String,
+            value: i32,
+        }
+
+        let data = TestData {
+            name: "test".to_string(),
+            value: 123,
+        };
+        let body = RequestBody::json(&data).unwrap();
+
+        match body {
+            RequestBody::Json(value) => {
+                assert_eq!(value["name"], "test");
+                assert_eq!(value["value"], 123);
+            }
+            _ => panic!("Expected Json variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_request_body_form_from_iterator() {
+        // Test form creation from various iterator types
+        let vec_data: Vec<(String, String)> = vec![
+            ("a".to_string(), "1".to_string()),
+            ("b".to_string(), "2".to_string()),
+        ];
+        let body = RequestBody::form(vec_data);
+
+        match body {
+            RequestBody::Form(form) => {
+                assert_eq!(form.get("a"), Some(&"1".to_string()));
+                assert_eq!(form.get("b"), Some(&"2".to_string()));
+            }
+            _ => panic!("Expected Form variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_request_body_form_empty() {
+        let empty: Vec<(String, String)> = vec![];
+        let body = RequestBody::form(empty);
+        let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
+
+        assert!(bytes.is_empty());
+        assert_eq!(content_type, "application/x-www-form-urlencoded");
+    }
+
+    #[test_log::test]
+    fn test_http_method_clone_and_eq() {
+        let method1 = HttpMethod::Get;
+        let method2 = method1.clone();
+        assert_eq!(method1, method2);
+
+        assert_ne!(HttpMethod::Get, HttpMethod::Post);
+    }
+}
