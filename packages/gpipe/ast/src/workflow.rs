@@ -916,4 +916,462 @@ jobs: {}
         let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(workflow, deserialized);
     }
+
+    #[test_log::test]
+    fn test_matrix_with_single_variable_single_value() {
+        // Edge case: matrix with only one variable and one value (still valid)
+        let matrix = Matrix {
+            variables: BTreeMap::from([("os".to_string(), vec!["ubuntu-latest".to_string()])]),
+            exclude: vec![],
+        };
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "build".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: Some(MatrixStrategy { matrix }),
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Single Matrix Value".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test_log::test]
+    fn test_matrix_with_many_variables() {
+        // Test matrix with multiple variables creating many combinations
+        let matrix = Matrix {
+            variables: BTreeMap::from([
+                (
+                    "os".to_string(),
+                    vec![
+                        "ubuntu-latest".to_string(),
+                        "windows-latest".to_string(),
+                        "macos-latest".to_string(),
+                    ],
+                ),
+                (
+                    "rust".to_string(),
+                    vec![
+                        "stable".to_string(),
+                        "beta".to_string(),
+                        "nightly".to_string(),
+                    ],
+                ),
+                (
+                    "feature".to_string(),
+                    vec!["default".to_string(), "full".to_string()],
+                ),
+            ]),
+            exclude: vec![
+                // Exclude nightly on Windows
+                BTreeMap::from([
+                    ("os".to_string(), "windows-latest".to_string()),
+                    ("rust".to_string(), "nightly".to_string()),
+                ]),
+                // Exclude full features on beta
+                BTreeMap::from([
+                    ("rust".to_string(), "beta".to_string()),
+                    ("feature".to_string(), "full".to_string()),
+                ]),
+            ],
+        };
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: Some(MatrixStrategy { matrix }),
+                steps: vec![],
+                if_condition: None,
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Complex Matrix".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+    }
+
+    #[test_log::test]
+    fn test_job_with_multiple_needs() {
+        // Test job that depends on multiple other jobs
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "lint".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "cargo clippy".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: None,
+            },
+        );
+        jobs.insert(
+            "test".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "cargo test".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: None,
+            },
+        );
+        jobs.insert(
+            "build".to_string(),
+            Job {
+                needs: vec![],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "cargo build --release".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: None,
+            },
+        );
+        jobs.insert(
+            "deploy".to_string(),
+            Job {
+                needs: vec!["lint".to_string(), "test".to_string(), "build".to_string()],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "deploy.sh".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: Some(Expression::binary_op(
+                    Expression::variable(["github", "ref"]),
+                    crate::BinaryOperator::Equal,
+                    Expression::string("refs/heads/main"),
+                )),
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Full CI/CD Pipeline".to_string(),
+            triggers: vec![Trigger {
+                trigger_type: TriggerType::Push,
+                config: TriggerConfig {
+                    branches: Some(vec!["main".to_string()]),
+                    types: None,
+                    cron: None,
+                },
+            }],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+
+        // Verify the deploy job has correct dependencies
+        let deploy = deserialized.jobs.get("deploy").unwrap();
+        assert_eq!(deploy.needs.len(), 3);
+        assert!(deploy.needs.contains(&"lint".to_string()));
+        assert!(deploy.needs.contains(&"test".to_string()));
+        assert!(deploy.needs.contains(&"build".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_workflow_with_all_trigger_types() {
+        // Test workflow with all trigger types at once
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "All Triggers".to_string(),
+            triggers: vec![
+                Trigger {
+                    trigger_type: TriggerType::Push,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string(), "develop".to_string()]),
+                        types: None,
+                        cron: None,
+                    },
+                },
+                Trigger {
+                    trigger_type: TriggerType::PullRequest,
+                    config: TriggerConfig {
+                        branches: Some(vec!["main".to_string()]),
+                        types: Some(vec![
+                            "opened".to_string(),
+                            "synchronize".to_string(),
+                            "reopened".to_string(),
+                        ]),
+                        cron: None,
+                    },
+                },
+                Trigger {
+                    trigger_type: TriggerType::Schedule,
+                    config: TriggerConfig {
+                        branches: None,
+                        types: None,
+                        cron: Some("0 2 * * *".to_string()),
+                    },
+                },
+                Trigger {
+                    trigger_type: TriggerType::Manual,
+                    config: TriggerConfig {
+                        branches: None,
+                        types: None,
+                        cron: None,
+                    },
+                },
+            ],
+            actions: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+        assert_eq!(deserialized.triggers.len(), 4);
+    }
+
+    #[test_log::test]
+    fn test_inline_action_with_multiple_steps() {
+        // Test inline action with multiple steps
+        let mut actions = BTreeMap::new();
+        actions.insert(
+            "setup-and-test".to_string(),
+            ActionDef {
+                action_type: ActionType::Inline,
+                config: ActionConfig {
+                    repo: None,
+                    path: None,
+                    name: Some("Setup and Test".to_string()),
+                    description: Some("Sets up the environment and runs tests".to_string()),
+                    inputs: Some(BTreeMap::from([
+                        (
+                            "rust-version".to_string(),
+                            ActionInput {
+                                description: "Rust version to use".to_string(),
+                                required: false,
+                                default: Some("stable".to_string()),
+                            },
+                        ),
+                        (
+                            "features".to_string(),
+                            ActionInput {
+                                description: "Features to enable".to_string(),
+                                required: false,
+                                default: None,
+                            },
+                        ),
+                    ])),
+                    outputs: Some(BTreeMap::from([
+                        (
+                            "test-result".to_string(),
+                            ActionOutput {
+                                description: "Test execution result".to_string(),
+                            },
+                        ),
+                        (
+                            "coverage".to_string(),
+                            ActionOutput {
+                                description: "Code coverage percentage".to_string(),
+                            },
+                        ),
+                    ])),
+                    runs: Some(ActionRuns {
+                        steps: vec![
+                            crate::Step::RunScript {
+                                id: Some("install-deps".to_string()),
+                                run: "apt-get update && apt-get install -y build-essential"
+                                    .to_string(),
+                                env: BTreeMap::new(),
+                                if_condition: None,
+                                continue_on_error: false,
+                                working_directory: None,
+                            },
+                            crate::Step::RunScript {
+                                id: Some("setup-rust".to_string()),
+                                run: "rustup default ${{ inputs.rust-version }}".to_string(),
+                                env: BTreeMap::new(),
+                                if_condition: None,
+                                continue_on_error: false,
+                                working_directory: None,
+                            },
+                            crate::Step::RunScript {
+                                id: Some("run-tests".to_string()),
+                                run: "cargo test --all-features".to_string(),
+                                env: BTreeMap::from([(
+                                    "RUST_BACKTRACE".to_string(),
+                                    "1".to_string(),
+                                )]),
+                                if_condition: None,
+                                continue_on_error: false,
+                                working_directory: None,
+                            },
+                        ],
+                    }),
+                },
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Workflow with Complex Inline Action".to_string(),
+            triggers: vec![],
+            actions,
+            jobs: BTreeMap::new(),
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+
+        // Verify the inline action structure
+        let action = deserialized.actions.get("setup-and-test").unwrap();
+        let runs = action.config.runs.as_ref().unwrap();
+        assert_eq!(runs.steps.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_job_with_complex_condition() {
+        // Test job with complex nested condition expression
+        let complex_condition = Expression::binary_op(
+            Expression::binary_op(
+                Expression::variable(["github", "event_name"]),
+                crate::BinaryOperator::Equal,
+                Expression::string("push"),
+            ),
+            crate::BinaryOperator::And,
+            Expression::binary_op(
+                Expression::unary_op(
+                    crate::UnaryOperator::Not,
+                    Expression::function_call(
+                        "contains",
+                        vec![
+                            Expression::variable(["github", "event", "head_commit", "message"]),
+                            Expression::string("[skip ci]"),
+                        ],
+                    ),
+                ),
+                crate::BinaryOperator::Or,
+                Expression::binary_op(
+                    Expression::variable(["github", "ref"]),
+                    crate::BinaryOperator::Equal,
+                    Expression::string("refs/heads/main"),
+                ),
+            ),
+        );
+
+        let mut jobs = BTreeMap::new();
+        jobs.insert(
+            "conditional-deploy".to_string(),
+            Job {
+                needs: vec!["build".to_string()],
+                env: BTreeMap::new(),
+                strategy: None,
+                steps: vec![crate::Step::RunScript {
+                    id: None,
+                    run: "deploy.sh".to_string(),
+                    env: BTreeMap::new(),
+                    if_condition: None,
+                    continue_on_error: false,
+                    working_directory: None,
+                }],
+                if_condition: Some(complex_condition.clone()),
+            },
+        );
+
+        let workflow = Workflow {
+            version: "1.0".to_string(),
+            name: "Complex Condition Workflow".to_string(),
+            triggers: vec![],
+            actions: BTreeMap::new(),
+            jobs,
+        };
+
+        let yaml = serde_yaml::to_string(&workflow).unwrap();
+        let deserialized: Workflow = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(workflow, deserialized);
+
+        // Verify the condition was preserved
+        let job = deserialized.jobs.get("conditional-deploy").unwrap();
+        assert_eq!(job.if_condition, Some(complex_condition));
+    }
+
+    #[test_log::test]
+    fn test_workflow_yaml_with_multiple_actions_types() {
+        // Test workflow with all action types combined
+        let yaml = r#"
+version: "1.0"
+name: "Mixed Actions Test"
+triggers: []
+actions:
+  checkout:
+    type: github
+    repo: "actions/checkout@v4"
+  local-script:
+    type: file
+    path: ".github/actions/local/action.yml"
+  inline-echo:
+    type: inline
+    name: "Echo Action"
+    description: "Simple echo action"
+    runs:
+      steps:
+        - run: echo "Hello"
+jobs: {}
+"#;
+        let workflow: Workflow = serde_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(workflow.actions.len(), 3);
+
+        let checkout = workflow.actions.get("checkout").unwrap();
+        assert_eq!(checkout.action_type, ActionType::Github);
+
+        let local = workflow.actions.get("local-script").unwrap();
+        assert_eq!(local.action_type, ActionType::File);
+
+        let inline = workflow.actions.get("inline-echo").unwrap();
+        assert_eq!(inline.action_type, ActionType::Inline);
+    }
 }
