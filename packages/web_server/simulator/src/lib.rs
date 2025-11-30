@@ -1030,4 +1030,71 @@ mod tests {
             Some(br#"{"key": "value"}"# as &[u8])
         );
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_request_not_logged_when_server_not_started() {
+        let server = SimulationWebServer::new();
+        // Server intentionally not started
+
+        let request = SimulatedRequest::new(HttpMethod::Get, "/test");
+        let result = server.handle_request(request).await;
+
+        // Request should fail
+        assert!(matches!(result, Err(Error::ServerNotStarted)));
+
+        // Request should NOT be logged because server wasn't running
+        assert!(
+            server.get_request_log().is_empty(),
+            "Requests should not be logged when server is not started"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_request_is_logged_even_when_route_not_found() {
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+        // No routes or mocks added
+
+        let request = SimulatedRequest::new(HttpMethod::Get, "/nonexistent");
+        let result = server.handle_request(request).await;
+
+        // Request should fail with RouteNotFound
+        assert!(matches!(result, Err(Error::RouteNotFound { .. })));
+
+        // Request SHOULD still be logged for debugging/auditing
+        let log = server.get_request_log();
+        assert_eq!(
+            log.len(),
+            1,
+            "Failed requests should still be logged for auditing"
+        );
+        assert_eq!(log[0].path, "/nonexistent");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_request_is_logged_even_when_handler_fails() {
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+
+        // Add a handler that always fails
+        let handler = RouteHandler::new(HttpMethod::Get, "/failing", |_req| async {
+            Err(Error::HandlerFailed("intentional failure".to_string()))
+        });
+        server.add_route(handler).await;
+
+        let request = SimulatedRequest::new(HttpMethod::Get, "/failing");
+        let result = server.handle_request(request).await;
+
+        // Request should fail
+        assert!(matches!(result, Err(Error::HandlerFailed(_))));
+
+        // Request SHOULD still be logged
+        let log = server.get_request_log();
+        assert_eq!(
+            log.len(),
+            1,
+            "Requests with handler failures should still be logged"
+        );
+        assert_eq!(log[0].path, "/failing");
+    }
 }
