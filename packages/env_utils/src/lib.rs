@@ -577,4 +577,58 @@ mod test {
             Err(ParseIntError::InvalidDigit)
         ));
     }
+
+    // Edge case tests
+
+    #[test_log::test]
+    fn parse_usize_handles_empty_string() {
+        // Empty string should return 0 (no digits to parse)
+        assert_eq!(parse_usize("").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_handles_empty_string() {
+        // Empty string should return 0 (no digits to parse)
+        assert_eq!(parse_isize("").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_usize_handles_leading_zeros() {
+        assert_eq!(parse_usize("007").unwrap(), 7);
+        assert_eq!(parse_usize("0123").unwrap(), 123);
+        assert_eq!(parse_usize("00000").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_handles_leading_zeros() {
+        assert_eq!(parse_isize("007").unwrap(), 7);
+        assert_eq!(parse_isize("+007").unwrap(), 7);
+        assert_eq!(parse_isize("-007").unwrap(), -7);
+        assert_eq!(parse_isize("00000").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_handles_sign_only_as_zero() {
+        // A string with only a sign and no digits is treated as signed zero
+        assert_eq!(parse_isize("+").unwrap(), 0);
+        assert_eq!(parse_isize("-").unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_large_positive_number() {
+        // Test a large positive number close to isize max
+        assert_eq!(
+            parse_isize("9223372036854775807").unwrap(),
+            9_223_372_036_854_775_807
+        );
+    }
+
+    #[test_log::test]
+    fn parse_isize_can_parse_large_negative_number() {
+        // Test a large negative number
+        assert_eq!(
+            parse_isize("-9223372036854775807").unwrap(),
+            -9_223_372_036_854_775_807
+        );
+    }
 }
