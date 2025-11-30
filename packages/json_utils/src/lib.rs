@@ -112,4 +112,49 @@ mod tests {
             ParseError::ConvertType("test".to_string())
         );
     }
+
+    /// A test type that implements `ToValueType` to verify the default `missing_value` behavior.
+    struct TestValue(i32);
+
+    impl ToValueType<i32> for TestValue {
+        fn to_value_type(self) -> Result<i32, ParseError> {
+            Ok(self.0)
+        }
+        // Uses default missing_value implementation
+    }
+
+    /// A test type that implements `MissingValue` to verify the default behavior.
+    struct TestRow;
+
+    impl MissingValue<i32> for TestRow {
+        // Uses default missing_value implementation
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_default_missing_value_returns_error() {
+        // Test that the default missing_value implementation returns the error
+        let value = TestValue(42);
+        let error = ParseError::MissingValue("test_field".to_string());
+        let result = value.missing_value(error);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ParseError::MissingValue("test_field".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_missing_value_trait_default_implementation() {
+        // Test that the default MissingValue implementation returns the error
+        let row = TestRow;
+        let error = ParseError::MissingValue("column_name".to_string());
+        let result: Result<i32, ParseError> = row.missing_value(error);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ParseError::MissingValue("column_name".to_string())
+        );
+    }
 }

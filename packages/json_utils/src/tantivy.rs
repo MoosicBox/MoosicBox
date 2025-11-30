@@ -473,4 +473,121 @@ mod tests {
         let result: Result<u64, ParseError> = doc.to_value("num");
         assert_eq!(result.unwrap(), 42);
     }
+
+    #[test_log::test]
+    fn test_option_missing_value_returns_none() {
+        // Test that missing_value for Option types returns Ok(None)
+        let value = OwnedValue::U64(42);
+        let result = <&OwnedValue as ToValueType<Option<String>>>::missing_value(
+            &&value,
+            ParseError::Parse("test".to_string()),
+        );
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_str_error_on_wrong_type() {
+        // Test error case when expecting string but getting number
+        let value = OwnedValue::U64(42);
+        let result: Result<&str, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_string_error_on_wrong_type() {
+        // Test error case when expecting String but getting number
+        let value = OwnedValue::U64(42);
+        let result: Result<String, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_bool_error_on_wrong_type() {
+        // Test error case when expecting bool but getting string
+        let value = OwnedValue::Str("true".to_string());
+        let result: Result<bool, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_u64_error_on_wrong_type() {
+        // Test error case when expecting u64 but getting string
+        let value = OwnedValue::Str("123".to_string());
+        let result: Result<u64, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_f64_error_on_wrong_type() {
+        // Test error case when expecting f64 but getting string
+        let value = OwnedValue::Str("2.5".to_string());
+        let result: Result<f64, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_get_doc_value_types_missing_field() {
+        use std::collections::BTreeMap;
+
+        let fields = BTreeMap::new();
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "missing");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+    }
+
+    #[test_log::test]
+    fn test_vec_conversion_with_element_error() {
+        // Test Vec conversion where one element fails to convert
+        let values = vec![
+            OwnedValue::U64(1),
+            OwnedValue::Str("not a number".to_string()),
+            OwnedValue::U64(3),
+        ];
+        let result: Result<Vec<u64>, ParseError> = (&values).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_to_value_missing_field_error() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert("existing".to_string(), vec![OwnedValue::U64(42)]);
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<Vec<u64>, ParseError> = doc.to_value("nonexistent");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::Parse(_)));
+        assert!(err.to_string().contains("nonexistent"));
+    }
+
+    #[test_log::test]
+    fn test_to_value_with_doc_ref() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert("field".to_string(), vec![OwnedValue::U64(99)]);
+        let doc = NamedFieldDocument(fields);
+
+        // Test using &NamedFieldDocument
+        let doc_ref = &doc;
+        let result: Result<u64, ParseError> = doc_ref.to_value("field");
+        assert_eq!(result.unwrap(), 99);
+    }
+
+    #[test_log::test]
+    fn test_get_value_type_empty_field() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert("empty_field".to_string(), vec![]);
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<String, ParseError> = get_value_type(&doc, "empty_field");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+    }
 }
