@@ -39,7 +39,7 @@
         "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
-        "prettier": "^3.7.2",
+        "prettier": "^3.7.3",
         "sst": "^3.17.24",
         "typescript": "^5.9.3"
     }
