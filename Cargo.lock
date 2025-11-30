@@ -9289,6 +9289,7 @@ name = "moosicbox_search"
 version = "0.1.4"
 dependencies = [
  "actix-web",
+ "chrono",
  "itertools 0.14.0",
  "log 0.4.28",
  "moosicbox_config",

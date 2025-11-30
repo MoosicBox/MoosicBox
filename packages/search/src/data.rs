@@ -498,4 +498,228 @@ mod tests {
         assert_eq!(term.0, "track_id_string");
         assert!(matches!(term.1, DataValue::String(ref s) if s == "777"));
     }
+
+    #[test_log::test]
+    fn test_album_as_data_values_with_dates() {
+        use chrono::NaiveDateTime;
+
+        let date_released =
+            NaiveDateTime::parse_from_str("2023-06-15 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let date_added =
+            NaiveDateTime::parse_from_str("2024-01-20 12:30:45", "%Y-%m-%d %H:%M:%S").unwrap();
+
+        let album = Album {
+            id: Id::Number(333),
+            title: "Album With Dates".to_string(),
+            artist: "Artist".to_string(),
+            artist_id: Id::Number(444),
+            album_type: AlbumType::Lp,
+            date_released: Some(date_released),
+            date_added: Some(date_added),
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        };
+
+        let data = album.as_data_values();
+
+        // Find the date_released field and verify it's in RFC3339 format
+        let date_released_value = data
+            .iter()
+            .find(|(k, _)| *k == "date_released")
+            .map(|(_, v)| v);
+        assert!(matches!(
+            date_released_value,
+            Some(DataValue::String(s)) if s.contains("2023-06-15")
+        ));
+
+        // Find the date_added field and verify it's in RFC3339 format
+        let date_added_value = data
+            .iter()
+            .find(|(k, _)| *k == "date_added")
+            .map(|(_, v)| v);
+        assert!(matches!(
+            date_added_value,
+            Some(DataValue::String(s)) if s.contains("2024-01-20")
+        ));
+    }
+
+    #[test_log::test]
+    fn test_album_as_data_values_multiple_versions() {
+        let album = Album {
+            id: Id::Number(555),
+            title: "Multi-Version Album".to_string(),
+            artist: "Artist".to_string(),
+            artist_id: Id::Number(666),
+            album_type: AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![
+                AlbumVersionQuality {
+                    format: None,
+                    bit_depth: Some(24),
+                    sample_rate: Some(96000),
+                    channels: Some(2),
+                    source: TrackApiSource::Local,
+                },
+                AlbumVersionQuality {
+                    format: None,
+                    bit_depth: Some(16),
+                    sample_rate: Some(44100),
+                    channels: Some(2),
+                    source: TrackApiSource::Local,
+                },
+            ],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        };
+
+        let data = album.as_data_values();
+
+        // Count version_bit_depths entries - should have 2 (one per version)
+        let bit_depth_entries: Vec<_> = data
+            .iter()
+            .filter(|(k, _)| *k == "version_bit_depths")
+            .collect();
+        assert_eq!(bit_depth_entries.len(), 2);
+
+        // Verify both bit depths are present
+        assert!(
+            bit_depth_entries
+                .iter()
+                .any(|(_, v)| matches!(v, DataValue::Number(24)))
+        );
+        assert!(
+            bit_depth_entries
+                .iter()
+                .any(|(_, v)| matches!(v, DataValue::Number(16)))
+        );
+
+        // Count version_sample_rates entries - should have 2
+        let sample_rate_entries: Vec<_> = data
+            .iter()
+            .filter(|(k, _)| *k == "version_sample_rates")
+            .collect();
+        assert_eq!(sample_rate_entries.len(), 2);
+
+        // Verify both sample rates are present
+        assert!(
+            sample_rate_entries
+                .iter()
+                .any(|(_, v)| matches!(v, DataValue::Number(96000)))
+        );
+        assert!(
+            sample_rate_entries
+                .iter()
+                .any(|(_, v)| matches!(v, DataValue::Number(44100)))
+        );
+    }
+
+    #[test_log::test]
+    fn test_artist_with_string_id() {
+        let artist = Artist {
+            id: Id::String("spotify:artist:abc123".to_string()),
+            title: "Spotify Artist".to_string(),
+            cover: None,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let data = artist.as_data_values();
+
+        assert!(data.contains(&(
+            "artist_id",
+            DataValue::String("spotify:artist:abc123".into())
+        )));
+
+        let term = artist.as_delete_term();
+        assert_eq!(term.0, "artist_id_string");
+        assert!(matches!(term.1, DataValue::String(ref s) if s == "spotify:artist:abc123"));
+    }
+
+    #[test_log::test]
+    fn test_album_with_string_ids() {
+        let album = Album {
+            id: Id::String("spotify:album:xyz789".to_string()),
+            title: "Spotify Album".to_string(),
+            artist: "Artist".to_string(),
+            artist_id: Id::String("spotify:artist:abc123".to_string()),
+            album_type: AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: AlbumSource::Local,
+            api_source: ApiSource::library(),
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        };
+
+        let data = album.as_data_values();
+
+        assert!(data.contains(&("album_id", DataValue::String("spotify:album:xyz789".into()))));
+        assert!(data.contains(&(
+            "artist_id",
+            DataValue::String("spotify:artist:abc123".into())
+        )));
+
+        let term = album.as_delete_term();
+        assert_eq!(term.0, "album_id_string");
+        assert!(matches!(term.1, DataValue::String(ref s) if s == "spotify:album:xyz789"));
+    }
+
+    #[test_log::test]
+    fn test_track_with_string_ids() {
+        let track = Track {
+            id: Id::String("spotify:track:def456".to_string()),
+            number: 5,
+            title: "Spotify Track".to_string(),
+            duration: 240.0,
+            album: "Album".to_string(),
+            album_id: Id::String("spotify:album:xyz789".to_string()),
+            album_type: AlbumType::Lp,
+            date_released: None,
+            date_added: None,
+            artist: "Artist".to_string(),
+            artist_id: Id::String("spotify:artist:abc123".to_string()),
+            file: None,
+            artwork: None,
+            blur: false,
+            bytes: 0,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            sources: ApiSources::default(),
+        };
+
+        let data = track.as_data_values();
+
+        assert!(data.contains(&("track_id", DataValue::String("spotify:track:def456".into()))));
+        assert!(data.contains(&("album_id", DataValue::String("spotify:album:xyz789".into()))));
+        assert!(data.contains(&(
+            "artist_id",
+            DataValue::String("spotify:artist:abc123".into())
+        )));
+
+        let term = track.as_delete_term();
+        assert_eq!(term.0, "track_id_string");
+        assert!(matches!(term.1, DataValue::String(ref s) if s == "spotify:track:def456"));
+    }
 }
