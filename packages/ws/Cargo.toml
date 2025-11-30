@@ -14,7 +14,7 @@ version     = "0.1.4"
 examples = true
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "tokio"]
 
 [dependencies]
 moosicbox_assert     = { workspace = true }
@@ -35,7 +35,9 @@ strum_macros = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+switchy_async     = { workspace = true, features = ["macros", "tokio"] }
 test-log          = { workspace = true }
+tokio             = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus", "ws"]
