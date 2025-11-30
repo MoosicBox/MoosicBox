@@ -641,4 +641,47 @@ mod tests {
         assert!(debug_str.contains(&25.to_string()));
         assert!(debug_str.contains(&35.to_string()));
     }
+
+    #[test_log::test]
+    fn test_viewport_with_parent_not_visible_propagates_invisibility() {
+        // Grandparent viewport at origin with small size (100x100)
+        let grandparent = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 100,
+                h: 100,
+            },
+        );
+
+        // Parent viewport positioned OUTSIDE grandparent bounds (at 500,500)
+        // This makes parent NOT visible within grandparent
+        let parent = Viewport::new(
+            Some(grandparent),
+            TestViewportPosition {
+                x: 500,
+                y: 500,
+                w: 200,
+                h: 200,
+            },
+        );
+
+        // Widget positioned within parent's bounds
+        // Even though widget is within parent, the parent itself is not visible
+        // in grandparent, so the widget should also be not visible
+        let widget = TestWidget {
+            x: 550,
+            y: 550,
+            w: 50,
+            h: 50,
+        };
+
+        let (visible, dist) = parent.is_widget_visible(&widget);
+
+        // Widget should NOT be visible because parent is outside grandparent's bounds
+        assert!(!visible);
+        // Distance should be > 0 indicating how far outside the visible area
+        assert!(dist > 0);
+    }
 }

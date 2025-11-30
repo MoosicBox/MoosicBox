@@ -422,6 +422,73 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_viewport_with_parent_not_visible_propagates_invisibility() {
+        // Grandparent viewport at origin with 100x100 size
+        let grandparent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        };
+
+        // Parent viewport positioned OUTSIDE grandparent (at 500,500)
+        // This makes parent NOT visible within grandparent
+        let parent = Viewport {
+            parent: Some(Box::new(grandparent)),
+            pos: Pos {
+                x: 500.0,
+                y: 500.0,
+                w: 200.0,
+                h: 200.0,
+            },
+            viewport: Pos {
+                x: 500.0,
+                y: 500.0,
+                w: 200.0,
+                h: 200.0,
+            },
+        };
+
+        // Child viewport positioned within parent's bounds
+        let child = Viewport {
+            parent: Some(Box::new(parent)),
+            pos: Pos {
+                x: 550.0,
+                y: 550.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 550.0,
+                y: 550.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        };
+
+        // Widget positioned within child's bounds
+        // Even though widget is within child, the parent is not visible in grandparent
+        // so visibility should propagate as not visible
+        let mut listener = ViewportListener::new(Some(child), 560.0, 560.0, 20.0, 20.0);
+
+        let ((visible, _), (dist, _)) = listener.check();
+
+        // Widget should NOT be visible because parent is outside grandparent's bounds
+        assert!(!visible);
+        // Distance should be > 0 since parent is outside grandparent
+        assert!(dist > 0.0);
+    }
+
+    #[test_log::test]
     fn test_viewport_listener_distance_change_threshold() {
         let viewport = Viewport {
             parent: None,
