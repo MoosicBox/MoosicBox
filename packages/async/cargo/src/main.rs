@@ -729,4 +729,232 @@ mod tests {
         // Should NOT be flagged since method has inject_yields
         assert_eq!(checker.warnings.len(), 0);
     }
+
+    #[test_log::test]
+    fn test_checker_trait_definition_with_async_method() {
+        // Trait definitions with async methods should NOT be flagged
+        // (only implementations need inject_yields, not trait declarations)
+        let code = r"
+            trait MyTrait {
+                async fn trait_method(&self);
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Trait definitions are not checked - only impl blocks are
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_async_block_not_flagged() {
+        // Async blocks within functions are NOT async fn declarations
+        // and should NOT be flagged
+        let code = r#"
+            fn sync_function() {
+                let _future = async {
+                    println!("async block");
+                };
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // No async fn declarations, so no warnings
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_qualified_attribute_path_not_matched() {
+        // Qualified paths like crate::inject_yields are NOT matched
+        // because is_ident() only matches simple identifiers
+        let code = r"
+            #[other::inject_yields]
+            async fn test_function() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should be flagged because qualified path is not recognized
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("test_function"));
+    }
+
+    #[test_log::test]
+    fn test_checker_generic_impl_block() {
+        // Generic impl blocks should still have their async methods checked
+        let code = r"
+            struct Container<T>(T);
+
+            impl<T> Container<T> {
+                async fn async_method(&self) {}
+
+                fn sync_method(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // The async method should be flagged
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("async_method"));
+    }
+
+    #[test_log::test]
+    fn test_checker_generic_impl_block_with_inject_yields() {
+        // Generic impl blocks with inject_yields attribute should be exempt
+        let code = r"
+            struct Container<T>(T);
+
+            #[inject_yields]
+            impl<T> Container<T> {
+                async fn async_method(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_file_module_declaration() {
+        // External module declarations (mod foo;) should not cause issues
+        let code = r"
+            mod external_module;
+
+            async fn local_async_fn() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Only the local async fn should be flagged, not the module declaration
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("local_async_fn"));
+    }
+
+    #[test_log::test]
+    fn test_checker_async_closure_not_flagged() {
+        // Async closures (async || {}) are NOT async fn declarations
+        let code = r#"
+            fn wrapper() {
+                let _closure = async || {
+                    println!("async closure");
+                };
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // No async fn declarations, so no warnings
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_lifetime_impl_block() {
+        // Impl blocks with lifetime parameters should be checked correctly
+        let code = r"
+            struct Borrowed<'a>(&'a str);
+
+            impl<'a> Borrowed<'a> {
+                async fn process(&self) -> &str {
+                    self.0
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("process"));
+    }
+
+    #[test_log::test]
+    fn test_checker_where_clause_impl_block() {
+        // Impl blocks with where clauses should be checked correctly
+        let code = r"
+            struct Generic<T>(T);
+
+            impl<T> Generic<T>
+            where
+                T: std::fmt::Debug + Send,
+            {
+                async fn debug_value(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("debug_value"));
+    }
+
+    #[test_log::test]
+    fn test_checker_multiple_impl_blocks_for_same_type() {
+        // Multiple impl blocks for the same type
+        let code = r"
+            struct MyStruct;
+
+            impl MyStruct {
+                async fn method_a(&self) {}
+            }
+
+            #[inject_yields]
+            impl MyStruct {
+                async fn method_b(&self) {}
+            }
+
+            impl MyStruct {
+                async fn method_c(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // method_a and method_c should be flagged, method_b exempt due to impl attribute
+        assert_eq!(checker.warnings.len(), 2);
+        assert!(checker.warnings.iter().any(|w| w.contains("method_a")));
+        assert!(checker.warnings.iter().any(|w| w.contains("method_c")));
+        assert!(!checker.warnings.iter().any(|w| w.contains("method_b")));
+    }
 }
