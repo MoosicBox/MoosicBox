@@ -1,0 +1,185 @@
+---
+source: packages/clippier/tests/parent_validation_tests.rs
+expression: json
+---
+[
+  {
+    "package": "parent",
+    "missing_exposures": [
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "api",
+        "expected_parent_feature": "child-a-api",
+        "expected_propagation": "parent_child_a?/api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "internal-debug",
+        "expected_parent_feature": "child-a-internal-debug",
+        "expected_propagation": "parent_child_a?/internal-debug",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "json",
+        "expected_parent_feature": "child-a-json",
+        "expected_propagation": "parent_child_a?/json",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "serde",
+        "expected_parent_feature": "child-a-serde",
+        "expected_propagation": "parent_child_a?/serde",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_b",
+        "dependency_feature": "api",
+        "expected_parent_feature": "child-b-api",
+        "expected_propagation": "parent_child_b?/api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_b"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_b",
+        "dependency_feature": "serde",
+        "expected_parent_feature": "child-b-serde",
+        "expected_propagation": "parent_child_b?/serde",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_b"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "api",
+        "expected_parent_feature": "nested-level1-api",
+        "expected_propagation": "parent_nested_level1?/api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2",
+        "expected_parent_feature": "nested-level1-level2",
+        "expected_propagation": "parent_nested_level1?/level2",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2-api",
+        "expected_parent_feature": "nested-level1-level2-api",
+        "expected_propagation": "parent_nested_level1?/level2-api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2-extra",
+        "expected_parent_feature": "nested-level1-level2-extra",
+        "expected_propagation": "parent_nested_level1?/level2-extra",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level2",
+        "dependency_feature": "api",
+        "expected_parent_feature": "nested-level2-api",
+        "expected_propagation": "parent_nested_level2?/api",
+        "depth": 2,
+        "chain": [
+          "parent",
+          "parent_nested_level1",
+          "parent_nested_level2"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level2",
+        "dependency_feature": "extra",
+        "expected_parent_feature": "nested-level2-extra",
+        "expected_propagation": "parent_nested_level2?/extra",
+        "depth": 2,
+        "chain": [
+          "parent",
+          "parent_nested_level1",
+          "parent_nested_level2"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level2",
+        "dependency_feature": "level3",
+        "expected_parent_feature": "nested-level2-level3",
+        "expected_propagation": "parent_nested_level2?/level3",
+        "depth": 2,
+        "chain": [
+          "parent",
+          "parent_nested_level1",
+          "parent_nested_level2"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level2",
+        "dependency_feature": "level3-api",
+        "expected_parent_feature": "nested-level2-level3-api",
+        "expected_propagation": "parent_nested_level2?/level3-api",
+        "depth": 2,
+        "chain": [
+          "parent",
+          "parent_nested_level1",
+          "parent_nested_level2"
+        ]
+      }
+    ],
+    "features_checked": 14,
+    "features_exposed": 0
+  }
+]

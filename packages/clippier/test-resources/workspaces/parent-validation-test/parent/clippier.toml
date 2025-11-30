@@ -1,0 +1,11 @@
+# Package-level parent validation configuration
+# This overrides the workspace-level config
+
+[feature-validation.parent]
+depth         = 2
+enabled       = true
+skip-features = ["internal-*"]
+
+[[feature-validation.parent.prefix]]
+dependency = "parent_child_b"
+prefix     = "b"

@@ -1,0 +1,11 @@
+[package]
+edition = "2021"
+name    = "parent_child_b"
+version = "0.1.0"
+
+[features]
+default = []
+
+# Features that should be exposed by parent with "b-" prefix
+api   = []
+serde = []

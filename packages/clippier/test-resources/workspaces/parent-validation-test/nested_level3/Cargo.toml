@@ -1,0 +1,11 @@
+[package]
+edition = "2021"
+name    = "parent_nested_level3"
+version = "0.1.0"
+
+[features]
+default = []
+
+# Deepest level features
+advanced = []
+api      = []

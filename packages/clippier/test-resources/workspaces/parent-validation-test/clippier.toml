@@ -1,0 +1,9 @@
+# Workspace-level parent validation configuration
+
+[[feature-validation.parent-packages]]
+depth   = 1
+package = "parent"
+
+[[feature-validation.parent-prefix]]
+dependency = "parent_child_a"
+prefix     = "a"

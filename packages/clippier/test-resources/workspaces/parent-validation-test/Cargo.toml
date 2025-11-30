@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "child_a",
+    "child_b",
+    "nested_level1",
+    "nested_level2",
+    "nested_level3",
+    "parent",
+]

@@ -1,0 +1,18 @@
+[package]
+edition = "2021"
+name    = "parent_nested_level2"
+version = "0.1.0"
+
+[dependencies]
+parent_nested_level3 = { path = "../nested_level3", optional = true }
+
+[features]
+default = []
+
+# Direct features
+api   = []
+extra = []
+
+# Features from level3 (depth 3)
+level3     = ["dep:parent_nested_level3"]
+level3-api = ["level3", "parent_nested_level3?/api"]

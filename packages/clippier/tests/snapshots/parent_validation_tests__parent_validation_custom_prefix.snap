@@ -1,0 +1,97 @@
+---
+source: packages/clippier/tests/parent_validation_tests.rs
+expression: json
+---
+[
+  {
+    "package": "parent",
+    "missing_exposures": [
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "internal-debug",
+        "expected_parent_feature": "a-internal-debug",
+        "expected_propagation": "parent_child_a?/internal-debug",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "json",
+        "expected_parent_feature": "a-json",
+        "expected_propagation": "parent_child_a?/json",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_child_a",
+        "dependency_feature": "serde",
+        "expected_parent_feature": "a-serde",
+        "expected_propagation": "parent_child_a?/serde",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_child_a"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "api",
+        "expected_parent_feature": "nested-level1-api",
+        "expected_propagation": "parent_nested_level1?/api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2",
+        "expected_parent_feature": "nested-level1-level2",
+        "expected_propagation": "parent_nested_level1?/level2",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2-api",
+        "expected_parent_feature": "nested-level1-level2-api",
+        "expected_propagation": "parent_nested_level1?/level2-api",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      },
+      {
+        "parent_package": "parent",
+        "dependency": "parent_nested_level1",
+        "dependency_feature": "level2-extra",
+        "expected_parent_feature": "nested-level1-level2-extra",
+        "expected_propagation": "parent_nested_level1?/level2-extra",
+        "depth": 1,
+        "chain": [
+          "parent",
+          "parent_nested_level1"
+        ]
+      }
+    ],
+    "features_checked": 10,
+    "features_exposed": 3
+  }
+]

@@ -1,0 +1,26 @@
+[package]
+edition = "2021"
+name    = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child_a       = { path = "../child_a", optional = true }
+parent_child_b       = { path = "../child_b", optional = true }
+parent_nested_level1 = { path = "../nested_level1", optional = true }
+
+[features]
+default = []
+
+# child_a features - some exposed, some missing
+a-api   = ["child-a", "parent_child_a?/api"]
+child-a = ["dep:parent_child_a"]
+# Missing: a-serde, a-json
+
+# child_b features - all correctly exposed
+b-api   = ["child-b", "parent_child_b?/api"]
+b-serde = ["child-b", "parent_child_b?/serde"]
+child-b = ["dep:parent_child_b"]
+
+# nested features - for depth testing
+level1-api = ["nested", "parent_nested_level1?/api"]
+nested     = ["dep:parent_nested_level1"]

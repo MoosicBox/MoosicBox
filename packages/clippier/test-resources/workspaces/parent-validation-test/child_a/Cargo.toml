@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name    = "parent_child_a"
+version = "0.1.0"
+
+[features]
+default = []
+
+# Features that should be exposed by parent with "a-" prefix
+api   = []
+json  = ["serde"]
+serde = []
+
+# Internal feature that should be skipped (matches skip-features pattern)
+internal-debug = []
