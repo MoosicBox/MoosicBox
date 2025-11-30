@@ -17,7 +17,7 @@ examples = true
 group = "switchy"
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "tokio"]
 
 [dependencies]
 moosicbox_assert       = { workspace = true }
@@ -65,7 +65,9 @@ tokio           = { workspace = true, features = ["macros", "tracing"] }
 xml             = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
 
 [features]
 default = ["api", "listener", "openapi", "player", "simulator"]
