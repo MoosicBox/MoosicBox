@@ -383,4 +383,133 @@ mod tests {
         let Event::Data(event_data) = event;
         assert_eq!(event_data.data, "test");
     }
+
+    #[test_log::test]
+    fn test_line_split_with_prefix_consecutive_newlines() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "line1\n\n\nline4");
+        // Each newline creates a new line, including empty lines between
+        assert_eq!(buf.as_ref(), b"data: line1\ndata: \ndata: \ndata: line4\n");
+    }
+
+    #[test_log::test]
+    fn test_line_split_with_prefix_only_newlines() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "\n\n");
+        assert_eq!(buf.as_ref(), b"data: \ndata: \ndata: \n");
+    }
+
+    #[test_log::test]
+    fn test_line_split_with_prefix_leading_newline() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "\nline2");
+        assert_eq!(buf.as_ref(), b"data: \ndata: line2\n");
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_with_unicode_data() {
+        let event = Event::Data(EventData::new("Hello 世界 🌍"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), "data: Hello 世界 🌍\n\n".as_bytes());
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_with_unicode_in_id_and_event() {
+        let event = Event::Data(EventData::new("message").id("id-世界-123").event("событие"));
+        let bytes = event.into_bytes();
+        assert_eq!(
+            bytes.as_ref(),
+            "id: id-世界-123\nevent: событие\ndata: message\n\n".as_bytes()
+        );
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_data_with_colon() {
+        // Colons in data should be preserved as-is (per SSE spec)
+        let event = Event::Data(EventData::new("key: value: nested"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"data: key: value: nested\n\n");
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_id_with_newline_behavior() {
+        // Documents current behavior: newlines in ID field are NOT escaped
+        // This could produce invalid SSE, but tests document the current behavior
+        let event = Event::Data(EventData::new("data").id("id\nwith\nnewlines"));
+        let bytes = event.into_bytes();
+        // The newlines in the ID break the SSE format - each line is separate
+        assert_eq!(bytes.as_ref(), b"id: id\nwith\nnewlines\ndata: data\n\n");
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_event_with_newline_behavior() {
+        // Documents current behavior: newlines in event field are NOT escaped
+        let event = Event::Data(EventData::new("payload").event("event\nname"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"event: event\nname\ndata: payload\n\n");
+    }
+
+    #[test_log::test]
+    fn test_line_split_preserves_carriage_returns() {
+        // Carriage returns are preserved (not treated as line separators)
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "line1\r\nline2");
+        // \r is preserved, \n triggers line split
+        assert_eq!(buf.as_ref(), b"data: line1\r\ndata: line2\n");
+    }
+
+    #[test_log::test]
+    fn test_event_data_chaining_order_independence() {
+        // Test that id() and event() can be called in any order
+        let data1 = EventData::new("test").id("123").event("evt");
+        let data2 = EventData::new("test").event("evt").id("123");
+
+        let bytes1 = Event::Data(data1).into_bytes();
+        let bytes2 = Event::Data(data2).into_bytes();
+
+        // Both should produce the same output
+        assert_eq!(bytes1, bytes2);
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_with_empty_id() {
+        let event = Event::Data(EventData::new("data").id(""));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"id: \ndata: data\n\n");
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_with_empty_event_type() {
+        let event = Event::Data(EventData::new("data").event(""));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"event: \ndata: data\n\n");
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_large_data() {
+        // Test with larger data to ensure buffer handling works correctly
+        let large_data = "x".repeat(10000);
+        let event = Event::Data(EventData::new(&large_data));
+        let bytes = event.into_bytes();
+
+        let expected = format!("data: {large_data}\n\n");
+        assert_eq!(bytes.as_ref(), expected.as_bytes());
+    }
+
+    #[test_log::test]
+    fn test_event_into_bytes_many_lines() {
+        // Test with many lines to stress the line splitting logic
+        let many_lines: String = (0..100)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let event = Event::Data(EventData::new(&many_lines));
+        let bytes = event.into_bytes();
+
+        // Verify structure: should have 100 "data: lineN\n" entries plus final "\n"
+        let output = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(output.starts_with("data: line0\n"));
+        assert!(output.ends_with("data: line99\n\n"));
+        assert_eq!(output.matches("data: ").count(), 100);
+    }
 }
