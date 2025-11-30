@@ -860,4 +860,279 @@ mod tests {
             _ => panic!("Expected Input Select action"),
         }
     }
+
+    #[test_log::test]
+    fn test_element_variable_hide_uses_target_ref() {
+        let element_var = ElementVariable {
+            name: "target-element".to_string(),
+        };
+
+        let action = element_var.hide();
+        match action {
+            ActionType::Style { target, action } => {
+                match target {
+                    ElementTarget::StrId(target_ref) => {
+                        assert!(
+                            matches!(&target_ref, Target::Ref(name) if name == "target-element"),
+                            "Expected Target::Ref, got {target_ref:?}",
+                        );
+                    }
+                    _ => panic!("Expected ElementTarget::StrId"),
+                }
+                assert_eq!(
+                    action,
+                    crate::StyleAction::SetVisibility(Visibility::Hidden)
+                );
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_variable_focus_uses_target_ref() {
+        let element_var = ElementVariable {
+            name: "focus-target".to_string(),
+        };
+
+        let action = element_var.focus();
+        match action {
+            ActionType::Style { target, action } => {
+                match target {
+                    ElementTarget::StrId(target_ref) => {
+                        assert!(
+                            matches!(&target_ref, Target::Ref(name) if name == "focus-target"),
+                            "Expected Target::Ref, got {target_ref:?}",
+                        );
+                    }
+                    _ => panic!("Expected ElementTarget::StrId"),
+                }
+                assert_eq!(action, crate::StyleAction::SetFocus(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_variable_display_methods() {
+        let element_var = ElementVariable {
+            name: "display-element".to_string(),
+        };
+
+        // Test display()
+        let action = element_var.clone().display();
+        match action {
+            ActionType::Style { target, action } => {
+                match target {
+                    ElementTarget::StrId(target_ref) => {
+                        assert!(
+                            matches!(&target_ref, Target::Ref(name) if name == "display-element")
+                        );
+                    }
+                    _ => panic!("Expected ElementTarget::StrId"),
+                }
+                assert_eq!(action, crate::StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+
+        // Test no_display()
+        let action = element_var.clone().no_display();
+        match action {
+            ActionType::Style { action, .. } => {
+                assert_eq!(action, crate::StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+
+        // Test set_display(false)
+        let action = element_var.set_display(false);
+        match action {
+            ActionType::Style { action, .. } => {
+                assert_eq!(action, crate::StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_variable_set_visibility() {
+        let element_var = ElementVariable {
+            name: "visibility-element".to_string(),
+        };
+
+        let action = element_var.set_visibility(Visibility::Hidden);
+        match action {
+            ActionType::Style { target, action } => {
+                match target {
+                    ElementTarget::StrId(target_ref) => {
+                        assert!(
+                            matches!(&target_ref, Target::Ref(name) if name == "visibility-element")
+                        );
+                    }
+                    _ => panic!("Expected ElementTarget::StrId"),
+                }
+                assert_eq!(
+                    action,
+                    crate::StyleAction::SetVisibility(Visibility::Hidden)
+                );
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // DslValue to ActionEffect conversion tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_number() {
+        let dsl_value = DslValue::Number(42.5);
+
+        let result: ActionEffect = dsl_value.into();
+
+        // Non-action DslValues convert to NoOp
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_bool() {
+        let dsl_value = DslValue::Bool(true);
+
+        let result: ActionEffect = dsl_value.into();
+
+        // Non-action DslValues convert to NoOp
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_visibility() {
+        let dsl_value = DslValue::Visibility(Visibility::Hidden);
+
+        let result: ActionEffect = dsl_value.into();
+
+        // Non-action DslValues convert to NoOp
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_unit() {
+        let dsl_value = DslValue::Unit;
+
+        let result: ActionEffect = dsl_value.into();
+
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_list() {
+        let dsl_value = DslValue::List(vec![DslValue::Number(1.0), DslValue::Number(2.0)]);
+
+        let result: ActionEffect = dsl_value.into();
+
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    // ============================================
+    // Literal conversion tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_string() {
+        let literal = Literal::String("test".to_string());
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::String("test".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_integer() {
+        let literal = Literal::Integer(42);
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Number(42.0));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_float() {
+        let literal = Literal::Float(4.567);
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Number(4.567));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_bool() {
+        let literal = Literal::Bool(true);
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Bool(true));
+    }
+
+    #[test_log::test]
+    fn test_dsl_value_from_literal_unit() {
+        let literal = Literal::Unit;
+        let value: DslValue = literal.into();
+
+        assert_eq!(value, DslValue::Unit);
+    }
+
+    // ============================================
+    // Literal Display tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_literal_display_string() {
+        let literal = Literal::String("hello".to_string());
+        assert_eq!(format!("{literal}"), "hello");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_integer() {
+        let literal = Literal::Integer(42);
+        assert_eq!(format!("{literal}"), "42");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_float() {
+        let literal = Literal::Float(4.567);
+        assert_eq!(format!("{literal}"), "4.567");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_bool() {
+        let literal = Literal::Bool(true);
+        assert_eq!(format!("{literal}"), "true");
+
+        let literal_false = Literal::Bool(false);
+        assert_eq!(format!("{literal_false}"), "false");
+    }
+
+    #[test_log::test]
+    fn test_literal_display_unit() {
+        let literal = Literal::Unit;
+        assert_eq!(format!("{literal}"), "");
+    }
+
+    // ============================================
+    // Literal constructor tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_literal_constructors() {
+        let string_lit = Literal::string("test");
+        assert_eq!(string_lit, Literal::String("test".to_string()));
+
+        let int_lit = Literal::integer(42i32);
+        assert_eq!(int_lit, Literal::Integer(42));
+
+        let float_lit = Literal::float(4.567f32);
+        // Approximate equality due to float conversion
+        match float_lit {
+            Literal::Float(f) => assert!((f - 4.567).abs() < 0.001),
+            _ => panic!("Expected Float literal"),
+        }
+
+        let bool_lit = Literal::bool(true);
+        assert_eq!(bool_lit, Literal::Bool(true));
+    }
 }
