@@ -431,7 +431,7 @@ include_dir = "0.7.4"
 insta = "1.44.3"
 itertools = "0.14.0"
 itoa = "1.0.15"
-json5 = { version = "0.4.1", default-features = false }
+json5 = { version = "1.0.0", default-features = false }
 kanal = "0.1.1"
 lambda_http = "1.0.1"
 lambda_runtime = "1.0.1"
@@ -597,7 +597,7 @@ whoami = "1.6.1"
 xml = "1.2.0"
 
 # Benchmarking
-criterion = { version = "0.7.0", default-features = false, features = [
+criterion = { version = "0.8.0", default-features = false, features = [
     "async_tokio",
     "html_reports",
     "plotters",
