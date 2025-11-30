@@ -2118,3 +2118,330 @@ impl DiagonsticParseExt for ParseStream<'_> {
         T::diagnostic_parse(self, diagnostics)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod numeric_lit_try_parse {
+        use super::*;
+
+        #[test_log::test]
+        fn parses_integer_percentage() {
+            let result = NumericLit::try_parse("100%").unwrap();
+            assert_eq!(result.value, "100%");
+            assert!(matches!(result.number_type, NumericType::IntegerPercent));
+        }
+
+        #[test_log::test]
+        fn parses_real_percentage() {
+            let result = NumericLit::try_parse("33.5%").unwrap();
+            assert_eq!(result.value, "33.5%");
+            assert!(matches!(result.number_type, NumericType::RealPercent));
+        }
+
+        #[test_log::test]
+        fn parses_integer_vw() {
+            let result = NumericLit::try_parse("50vw").unwrap();
+            assert_eq!(result.value, "50vw");
+            assert!(matches!(result.number_type, NumericType::IntegerVw));
+        }
+
+        #[test_log::test]
+        fn parses_real_vw() {
+            let result = NumericLit::try_parse("33.3vw").unwrap();
+            assert_eq!(result.value, "33.3vw");
+            assert!(matches!(result.number_type, NumericType::RealVw));
+        }
+
+        #[test_log::test]
+        fn parses_integer_vh() {
+            let result = NumericLit::try_parse("100vh").unwrap();
+            assert_eq!(result.value, "100vh");
+            assert!(matches!(result.number_type, NumericType::IntegerVh));
+        }
+
+        #[test_log::test]
+        fn parses_real_vh() {
+            let result = NumericLit::try_parse("80.5vh").unwrap();
+            assert_eq!(result.value, "80.5vh");
+            assert!(matches!(result.number_type, NumericType::RealVh));
+        }
+
+        #[test_log::test]
+        fn parses_integer_dvw() {
+            let result = NumericLit::try_parse("90dvw").unwrap();
+            assert_eq!(result.value, "90dvw");
+            assert!(matches!(result.number_type, NumericType::IntegerDvw));
+        }
+
+        #[test_log::test]
+        fn parses_real_dvw() {
+            let result = NumericLit::try_parse("33.3dvw").unwrap();
+            assert_eq!(result.value, "33.3dvw");
+            assert!(matches!(result.number_type, NumericType::RealDvw));
+        }
+
+        #[test_log::test]
+        fn parses_integer_dvh() {
+            let result = NumericLit::try_parse("75dvh").unwrap();
+            assert_eq!(result.value, "75dvh");
+            assert!(matches!(result.number_type, NumericType::IntegerDvh));
+        }
+
+        #[test_log::test]
+        fn parses_real_dvh() {
+            let result = NumericLit::try_parse("80.5dvh").unwrap();
+            assert_eq!(result.value, "80.5dvh");
+            assert!(matches!(result.number_type, NumericType::RealDvh));
+        }
+
+        #[test_log::test]
+        fn parses_plain_integer() {
+            let result = NumericLit::try_parse("42").unwrap();
+            assert_eq!(result.value, "42");
+            assert!(matches!(result.number_type, NumericType::Integer));
+        }
+
+        #[test_log::test]
+        fn parses_negative_integer() {
+            let result = NumericLit::try_parse("-42").unwrap();
+            assert_eq!(result.value, "-42");
+            assert!(matches!(result.number_type, NumericType::Integer));
+        }
+
+        #[test_log::test]
+        fn parses_plain_real() {
+            let result = NumericLit::try_parse("3.14").unwrap();
+            assert_eq!(result.value, "3.14");
+            assert!(matches!(result.number_type, NumericType::Real));
+        }
+
+        #[test_log::test]
+        fn parses_negative_real() {
+            let result = NumericLit::try_parse("-3.14").unwrap();
+            assert_eq!(result.value, "-3.14");
+            assert!(matches!(result.number_type, NumericType::Real));
+        }
+
+        #[test_log::test]
+        fn returns_none_for_invalid_percentage() {
+            assert!(NumericLit::try_parse("abc%").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_invalid_vw() {
+            assert!(NumericLit::try_parse("abcvw").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_invalid_vh() {
+            assert!(NumericLit::try_parse("abcvh").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_invalid_dvw() {
+            assert!(NumericLit::try_parse("abcdvw").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_invalid_dvh() {
+            assert!(NumericLit::try_parse("abcdvh").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_empty_string() {
+            assert!(NumericLit::try_parse("").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_pure_text() {
+            assert!(NumericLit::try_parse("hello").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_unsupported_units() {
+            assert!(NumericLit::try_parse("10px").is_none());
+            assert!(NumericLit::try_parse("10em").is_none());
+            assert!(NumericLit::try_parse("10rem").is_none());
+        }
+
+        #[test_log::test]
+        fn parses_zero_percentage() {
+            let result = NumericLit::try_parse("0%").unwrap();
+            assert_eq!(result.value, "0%");
+            assert!(matches!(result.number_type, NumericType::IntegerPercent));
+        }
+
+        #[test_log::test]
+        fn parses_zero_integer() {
+            let result = NumericLit::try_parse("0").unwrap();
+            assert_eq!(result.value, "0");
+            assert!(matches!(result.number_type, NumericType::Integer));
+        }
+
+        #[test_log::test]
+        fn parses_real_starting_with_zero() {
+            let result = NumericLit::try_parse("0.5").unwrap();
+            assert_eq!(result.value, "0.5");
+            assert!(matches!(result.number_type, NumericType::Real));
+        }
+    }
+
+    mod numeric_lit_try_parse_identifier_unit {
+        use super::*;
+
+        #[test_log::test]
+        fn parses_vw_prefix_integer() {
+            let result = NumericLit::try_parse_identifier_unit("vw50").unwrap();
+            assert_eq!(result.value, "50vw");
+            assert!(matches!(result.number_type, NumericType::IntegerVw));
+        }
+
+        #[test_log::test]
+        fn parses_vw_prefix_real() {
+            let result = NumericLit::try_parse_identifier_unit("vw33.3").unwrap();
+            assert_eq!(result.value, "33.3vw");
+            assert!(matches!(result.number_type, NumericType::RealVw));
+        }
+
+        #[test_log::test]
+        fn parses_vh_prefix_integer() {
+            let result = NumericLit::try_parse_identifier_unit("vh100").unwrap();
+            assert_eq!(result.value, "100vh");
+            assert!(matches!(result.number_type, NumericType::IntegerVh));
+        }
+
+        #[test_log::test]
+        fn parses_vh_prefix_real() {
+            let result = NumericLit::try_parse_identifier_unit("vh80.5").unwrap();
+            assert_eq!(result.value, "80.5vh");
+            assert!(matches!(result.number_type, NumericType::RealVh));
+        }
+
+        #[test_log::test]
+        fn parses_dvw_prefix_integer() {
+            let result = NumericLit::try_parse_identifier_unit("dvw90").unwrap();
+            assert_eq!(result.value, "90dvw");
+            assert!(matches!(result.number_type, NumericType::IntegerDvw));
+        }
+
+        #[test_log::test]
+        fn parses_dvw_prefix_real() {
+            let result = NumericLit::try_parse_identifier_unit("dvw33.3").unwrap();
+            assert_eq!(result.value, "33.3dvw");
+            assert!(matches!(result.number_type, NumericType::RealDvw));
+        }
+
+        #[test_log::test]
+        fn parses_dvh_prefix_integer() {
+            let result = NumericLit::try_parse_identifier_unit("dvh60").unwrap();
+            assert_eq!(result.value, "60dvh");
+            assert!(matches!(result.number_type, NumericType::IntegerDvh));
+        }
+
+        #[test_log::test]
+        fn parses_dvh_prefix_real() {
+            let result = NumericLit::try_parse_identifier_unit("dvh80.5").unwrap();
+            assert_eq!(result.value, "80.5dvh");
+            assert!(matches!(result.number_type, NumericType::RealDvh));
+        }
+
+        #[test_log::test]
+        fn returns_none_for_unit_only() {
+            assert!(NumericLit::try_parse_identifier_unit("vw").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("vh").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("dvw").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("dvh").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_unsupported_units() {
+            assert!(NumericLit::try_parse_identifier_unit("px50").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("em1").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("rem2").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_non_numeric_suffix() {
+            assert!(NumericLit::try_parse_identifier_unit("vwabc").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("vw50abc").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_empty_string() {
+            assert!(NumericLit::try_parse_identifier_unit("").is_none());
+        }
+
+        #[test_log::test]
+        fn returns_none_for_plain_number() {
+            assert!(NumericLit::try_parse_identifier_unit("50").is_none());
+            assert!(NumericLit::try_parse_identifier_unit("3.14").is_none());
+        }
+    }
+
+    mod numeric_lit_is_unit_identifier {
+        use super::*;
+
+        #[test_log::test]
+        fn recognizes_viewport_units() {
+            assert!(NumericLit::is_unit_identifier("vw"));
+            assert!(NumericLit::is_unit_identifier("vh"));
+            assert!(NumericLit::is_unit_identifier("dvw"));
+            assert!(NumericLit::is_unit_identifier("dvh"));
+        }
+
+        #[test_log::test]
+        fn recognizes_calc_function() {
+            assert!(NumericLit::is_unit_identifier("calc"));
+        }
+
+        #[test_log::test]
+        fn recognizes_css_math_functions() {
+            assert!(NumericLit::is_unit_identifier("min"));
+            assert!(NumericLit::is_unit_identifier("max"));
+            assert!(NumericLit::is_unit_identifier("clamp"));
+        }
+
+        #[test_log::test]
+        fn recognizes_helper_functions() {
+            assert!(NumericLit::is_unit_identifier("percent"));
+        }
+
+        #[test_log::test]
+        fn recognizes_color_functions() {
+            assert!(NumericLit::is_unit_identifier("rgb"));
+            assert!(NumericLit::is_unit_identifier("rgba"));
+        }
+
+        #[test_log::test]
+        fn rejects_unsupported_units() {
+            assert!(!NumericLit::is_unit_identifier("px"));
+            assert!(!NumericLit::is_unit_identifier("em"));
+            assert!(!NumericLit::is_unit_identifier("rem"));
+            assert!(!NumericLit::is_unit_identifier("pt"));
+            assert!(!NumericLit::is_unit_identifier("cm"));
+            assert!(!NumericLit::is_unit_identifier("mm"));
+        }
+
+        #[test_log::test]
+        fn rejects_unknown_identifiers() {
+            assert!(!NumericLit::is_unit_identifier("foo"));
+            assert!(!NumericLit::is_unit_identifier("bar"));
+            assert!(!NumericLit::is_unit_identifier("test"));
+        }
+
+        #[test_log::test]
+        fn rejects_empty_string() {
+            assert!(!NumericLit::is_unit_identifier(""));
+        }
+
+        #[test_log::test]
+        fn case_sensitive() {
+            assert!(!NumericLit::is_unit_identifier("VW"));
+            assert!(!NumericLit::is_unit_identifier("Vh"));
+            assert!(!NumericLit::is_unit_identifier("CALC"));
+            assert!(!NumericLit::is_unit_identifier("RGB"));
+        }
+    }
+}
