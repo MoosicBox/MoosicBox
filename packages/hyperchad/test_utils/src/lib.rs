@@ -567,7 +567,7 @@ impl BranchBuilder {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_test_plan_creation() {
         let plan = TestPlan::new()
             .navigate_to("/login")
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(plan.steps.len(), 5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_loop_builder() {
         let plan = TestPlan::new()
             .repeat(3)
@@ -597,14 +597,216 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_test_result() {
-        let mut result = TestResult::success();
+    #[test_log::test]
+    fn test_test_result_success() {
+        let result = TestResult::success();
         assert!(result.success);
         assert_eq!(result.errors.len(), 0);
+        assert_eq!(result.warnings.len(), 0);
+        assert_eq!(result.steps_executed, 0);
+        assert_eq!(result.execution_time, Duration::ZERO);
+    }
+
+    #[test_log::test]
+    fn test_test_result_failure() {
+        let result = TestResult::failure("Something went wrong");
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0], "Something went wrong");
+    }
+
+    #[test_log::test]
+    fn test_test_result_add_error_marks_as_failed() {
+        let mut result = TestResult::success();
+        assert!(result.success);
 
         result.add_error("Test error");
         assert!(!result.success);
         assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0], "Test error");
+
+        // Adding another error should keep it failed
+        result.add_error("Another error");
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_test_result_add_warning_does_not_affect_success() {
+        let mut result = TestResult::success();
+        assert!(result.success);
+
+        result.add_warning("This is a warning");
+        assert!(result.success);
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0], "This is a warning");
+    }
+
+    #[test_log::test]
+    fn test_test_result_with_step_count() {
+        let result = TestResult::success().with_step_count(42);
+        assert_eq!(result.steps_executed, 42);
+    }
+
+    #[test_log::test]
+    fn test_test_result_with_execution_time() {
+        let result = TestResult::success().with_execution_time(Duration::from_secs(5));
+        assert_eq!(result.execution_time, Duration::from_secs(5));
+    }
+
+    #[test_log::test]
+    fn test_test_plan_with_setup_and_teardown() {
+        let setup = SetupStep {
+            description: "Initialize test".to_string(),
+            steps: vec![TestStep::Navigation(NavigationStep::GoTo {
+                url: "/setup".to_string(),
+            })],
+        };
+        let teardown = TeardownStep {
+            description: "Cleanup".to_string(),
+            steps: vec![TestStep::Navigation(NavigationStep::GoTo {
+                url: "/logout".to_string(),
+            })],
+        };
+
+        let plan = TestPlan::new()
+            .with_setup(setup)
+            .with_teardown(teardown)
+            .navigate_to("/home");
+
+        assert!(plan.setup.is_some());
+        assert!(plan.teardown.is_some());
+        assert_eq!(plan.setup.as_ref().unwrap().description, "Initialize test");
+        assert_eq!(plan.teardown.as_ref().unwrap().description, "Cleanup");
+    }
+
+    #[test_log::test]
+    fn test_test_plan_with_timeout_and_retry() {
+        let plan = TestPlan::new()
+            .with_timeout(Duration::from_secs(30))
+            .with_retry_count(3);
+
+        assert_eq!(plan.timeout, Some(Duration::from_secs(30)));
+        assert_eq!(plan.retry_count, 3);
+    }
+
+    #[test_log::test]
+    fn test_parallel_builder_single_branch() {
+        let plan = TestPlan::new()
+            .parallel()
+            .branch("branch1")
+            .step(TestStep::Interaction(InteractionStep::Click {
+                selector: "#button1".to_string(),
+            }))
+            .join_all();
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Control(ControlStep::Parallel { branches }) = &plan.steps[0] {
+            assert_eq!(branches.len(), 1);
+            assert!(branches.contains_key("branch1"));
+            assert_eq!(branches.get("branch1").unwrap().len(), 1);
+        } else {
+            panic!("Expected parallel step");
+        }
+    }
+
+    #[test_log::test]
+    fn test_parallel_builder_multiple_branches() {
+        let plan = TestPlan::new()
+            .parallel()
+            .branch("branch1")
+            .step(TestStep::Interaction(InteractionStep::Click {
+                selector: "#button1".to_string(),
+            }))
+            .branch("branch2")
+            .step(TestStep::Interaction(InteractionStep::Click {
+                selector: "#button2".to_string(),
+            }))
+            .step(TestStep::Interaction(InteractionStep::Hover {
+                selector: "#link".to_string(),
+            }))
+            .join_all();
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Control(ControlStep::Parallel { branches }) = &plan.steps[0] {
+            assert_eq!(branches.len(), 2);
+            assert_eq!(branches.get("branch1").unwrap().len(), 1);
+            assert_eq!(branches.get("branch2").unwrap().len(), 2);
+        } else {
+            panic!("Expected parallel step");
+        }
+    }
+
+    #[test_log::test]
+    fn test_test_plan_include_combines_steps() {
+        let plan1 = TestPlan::new().navigate_to("/page1").click("#button1");
+
+        let plan2 = TestPlan::new().navigate_to("/page2").click("#button2");
+
+        let combined = plan1.include(plan2);
+        assert_eq!(combined.steps.len(), 4);
+    }
+
+    #[test_log::test]
+    fn test_test_plan_interaction_methods() {
+        let plan = TestPlan::new()
+            .double_click("#element")
+            .right_click("#menu")
+            .hover("#tooltip")
+            .focus("#input")
+            .blur("#input")
+            .key_press(Key::Enter)
+            .key_sequence(vec![Key::Control, Key::C])
+            .scroll(ScrollDirection::Down, 100);
+
+        assert_eq!(plan.steps.len(), 8);
+    }
+
+    #[test_log::test]
+    fn test_test_plan_form_methods() {
+        let plan = TestPlan::new()
+            .fill_field("#name", "John")
+            .select_option("#country", "US")
+            .upload_file("#avatar", "/path/to/file.png");
+
+        assert_eq!(plan.steps.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_test_plan_navigation_methods() {
+        let plan = TestPlan::new()
+            .navigate_to("/page")
+            .go_back()
+            .go_forward()
+            .reload()
+            .set_hash("section1");
+
+        assert_eq!(plan.steps.len(), 5);
+    }
+
+    #[test_log::test]
+    fn test_test_plan_sleep() {
+        let plan = TestPlan::new().sleep(Duration::from_millis(500));
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Wait(WaitStep::Duration { duration }) = &plan.steps[0] {
+            assert_eq!(*duration, Duration::from_millis(500));
+        } else {
+            panic!("Expected Duration wait step");
+        }
+    }
+
+    #[test_log::test]
+    fn test_test_plan_send_request() {
+        let request = HttpRequestStep::get("/api/data").expect_status(200);
+        let plan = TestPlan::new().send_request(request);
+
+        assert_eq!(plan.steps.len(), 1);
+        if let TestStep::Http(req) = &plan.steps[0] {
+            assert_eq!(req.url, "/api/data");
+            assert_eq!(req.expected_status, Some(200));
+        } else {
+            panic!("Expected HTTP step");
+        }
     }
 }

@@ -530,3 +530,352 @@ pub mod fragments {
             .wait_for_element(":focus")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    // InteractionStep description tests
+    #[test_log::test]
+    fn interaction_step_description_click() {
+        let step = InteractionStep::Click {
+            selector: "#submit-btn".to_string(),
+        };
+        assert_eq!(step.description(), "Click #submit-btn");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_double_click() {
+        let step = InteractionStep::DoubleClick {
+            selector: ".item".to_string(),
+        };
+        assert_eq!(step.description(), "Double-click .item");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_right_click() {
+        let step = InteractionStep::RightClick {
+            selector: "#context-menu-target".to_string(),
+        };
+        assert_eq!(step.description(), "Right-click #context-menu-target");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_hover() {
+        let step = InteractionStep::Hover {
+            selector: ".tooltip-trigger".to_string(),
+        };
+        assert_eq!(step.description(), "Hover over .tooltip-trigger");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_focus() {
+        let step = InteractionStep::Focus {
+            selector: "#email-input".to_string(),
+        };
+        assert_eq!(step.description(), "Focus #email-input");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_blur() {
+        let step = InteractionStep::Blur {
+            selector: "#email-input".to_string(),
+        };
+        assert_eq!(step.description(), "Blur #email-input");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_key_press() {
+        let step = InteractionStep::KeyPress { key: Key::Enter };
+        assert_eq!(step.description(), "Press key Enter");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_key_sequence() {
+        let step = InteractionStep::KeySequence {
+            keys: vec![Key::Control, Key::C],
+        };
+        assert_eq!(step.description(), "Press key sequence: [Control, C]");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_scroll() {
+        let step = InteractionStep::Scroll {
+            direction: ScrollDirection::Down,
+            amount: 100,
+        };
+        assert_eq!(step.description(), "Scroll Down by 100");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_drag_and_drop() {
+        let step = InteractionStep::DragAndDrop {
+            from_selector: "#source".to_string(),
+            to_selector: "#target".to_string(),
+        };
+        assert_eq!(step.description(), "Drag from #source to #target");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_mouse_move() {
+        let step = InteractionStep::MouseMove { x: 100, y: 200 };
+        assert_eq!(step.description(), "Move mouse to (100, 200)");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_mouse_down() {
+        let step = InteractionStep::MouseDown {
+            button: MouseButton::Left,
+        };
+        assert_eq!(step.description(), "Mouse down Left");
+    }
+
+    #[test_log::test]
+    fn interaction_step_description_mouse_up() {
+        let step = InteractionStep::MouseUp {
+            button: MouseButton::Right,
+        };
+        assert_eq!(step.description(), "Mouse up Right");
+    }
+
+    // ControlStep description tests
+    #[test_log::test]
+    fn control_step_description_loop() {
+        let step = ControlStep::Loop {
+            count: 5,
+            steps: vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+        };
+        assert_eq!(step.description(), "Loop 5 times with 1 steps");
+    }
+
+    #[test_log::test]
+    fn control_step_description_for_each() {
+        let step = ControlStep::ForEach {
+            data: vec![
+                serde_json::json!({"id": 1}),
+                serde_json::json!({"id": 2}),
+                serde_json::json!({"id": 3}),
+            ],
+            steps: vec![
+                crate::TestStep::Navigation(crate::NavigationStep::GoBack),
+                crate::TestStep::Navigation(crate::NavigationStep::GoForward),
+            ],
+        };
+        assert_eq!(step.description(), "For each of 3 items with 2 steps");
+    }
+
+    #[test_log::test]
+    fn control_step_description_parallel() {
+        let mut branches = BTreeMap::new();
+        branches.insert(
+            "branch1".to_string(),
+            vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+        );
+        branches.insert(
+            "branch2".to_string(),
+            vec![crate::TestStep::Navigation(
+                crate::NavigationStep::GoForward,
+            )],
+        );
+        let step = ControlStep::Parallel { branches };
+        assert_eq!(step.description(), "Parallel execution with 2 branches");
+    }
+
+    #[test_log::test]
+    fn control_step_description_try_without_catch_or_finally() {
+        let step = ControlStep::Try {
+            steps: vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            catch_steps: None,
+            finally_steps: None,
+        };
+        assert_eq!(step.description(), "Try 1 steps");
+    }
+
+    #[test_log::test]
+    fn control_step_description_try_with_catch() {
+        let step = ControlStep::Try {
+            steps: vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            catch_steps: Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::Reload,
+            )]),
+            finally_steps: None,
+        };
+        assert_eq!(step.description(), "Try 1 steps with catch");
+    }
+
+    #[test_log::test]
+    fn control_step_description_try_with_finally() {
+        let step = ControlStep::Try {
+            steps: vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            catch_steps: None,
+            finally_steps: Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::Reload,
+            )]),
+        };
+        assert_eq!(step.description(), "Try 1 steps with finally");
+    }
+
+    #[test_log::test]
+    fn control_step_description_try_with_catch_and_finally() {
+        let step = ControlStep::Try {
+            steps: vec![
+                crate::TestStep::Navigation(crate::NavigationStep::GoBack),
+                crate::TestStep::Navigation(crate::NavigationStep::GoForward),
+            ],
+            catch_steps: Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::Reload,
+            )]),
+            finally_steps: Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::GoBack,
+            )]),
+        };
+        assert_eq!(step.description(), "Try 2 steps with catch with finally");
+    }
+
+    #[test_log::test]
+    fn control_step_description_retry_without_delay() {
+        let step = ControlStep::Retry {
+            steps: vec![
+                crate::TestStep::Navigation(crate::NavigationStep::GoBack),
+                crate::TestStep::Navigation(crate::NavigationStep::GoForward),
+                crate::TestStep::Navigation(crate::NavigationStep::Reload),
+            ],
+            max_attempts: 3,
+            delay: None,
+        };
+        assert_eq!(step.description(), "Retry 3 steps up to 3 times");
+    }
+
+    #[test_log::test]
+    fn control_step_description_retry_with_delay() {
+        let step = ControlStep::Retry {
+            steps: vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            max_attempts: 5,
+            delay: Some(Duration::from_secs(2)),
+        };
+        assert_eq!(
+            step.description(),
+            "Retry 1 steps up to 5 times with 2s delay"
+        );
+    }
+
+    // ControlStep constructor tests
+    #[test_log::test]
+    fn control_step_loop_count_constructor() {
+        let step = ControlStep::loop_count(
+            10,
+            vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+        );
+        if let ControlStep::Loop { count, steps } = step {
+            assert_eq!(count, 10);
+            assert_eq!(steps.len(), 1);
+        } else {
+            panic!("Expected Loop variant");
+        }
+    }
+
+    #[test_log::test]
+    fn control_step_for_each_constructor() {
+        let step = ControlStep::for_each(
+            vec![serde_json::json!(1), serde_json::json!(2)],
+            vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+        );
+        if let ControlStep::ForEach { data, steps } = step {
+            assert_eq!(data.len(), 2);
+            assert_eq!(steps.len(), 1);
+        } else {
+            panic!("Expected ForEach variant");
+        }
+    }
+
+    #[test_log::test]
+    fn control_step_parallel_constructor() {
+        let mut branches = BTreeMap::new();
+        branches.insert("b1".to_string(), vec![]);
+        let step = ControlStep::parallel(branches);
+        if let ControlStep::Parallel { branches } = step {
+            assert_eq!(branches.len(), 1);
+        } else {
+            panic!("Expected Parallel variant");
+        }
+    }
+
+    #[test_log::test]
+    fn control_step_try_catch_constructor() {
+        let step = ControlStep::try_catch(
+            vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::Reload,
+            )]),
+            Some(vec![crate::TestStep::Navigation(
+                crate::NavigationStep::GoForward,
+            )]),
+        );
+        if let ControlStep::Try {
+            steps,
+            catch_steps,
+            finally_steps,
+        } = step
+        {
+            assert_eq!(steps.len(), 1);
+            assert!(catch_steps.is_some());
+            assert!(finally_steps.is_some());
+        } else {
+            panic!("Expected Try variant");
+        }
+    }
+
+    #[test_log::test]
+    fn control_step_retry_constructor() {
+        let step = ControlStep::retry(
+            vec![crate::TestStep::Navigation(crate::NavigationStep::GoBack)],
+            3,
+            Some(Duration::from_millis(500)),
+        );
+        if let ControlStep::Retry {
+            steps,
+            max_attempts,
+            delay,
+        } = step
+        {
+            assert_eq!(steps.len(), 1);
+            assert_eq!(max_attempts, 3);
+            assert_eq!(delay, Some(Duration::from_millis(500)));
+        } else {
+            panic!("Expected Retry variant");
+        }
+    }
+
+    // Fragment tests
+    #[test_log::test]
+    fn fragments_login_flow_creates_correct_steps() {
+        let plan = fragments::login_flow("testuser", "testpass");
+        assert_eq!(plan.steps.len(), 5);
+    }
+
+    #[test_log::test]
+    fn fragments_logout_flow_creates_correct_steps() {
+        let plan = fragments::logout_flow();
+        assert_eq!(plan.steps.len(), 4);
+    }
+
+    #[test_log::test]
+    fn fragments_navigation_test_creates_correct_steps() {
+        let plan = fragments::navigation_test();
+        assert_eq!(plan.steps.len(), 8);
+    }
+
+    #[test_log::test]
+    fn fragments_form_validation_test_creates_correct_steps() {
+        let plan = fragments::form_validation_test("#my-form");
+        assert_eq!(plan.steps.len(), 7);
+    }
+
+    #[test_log::test]
+    fn fragments_accessibility_test_creates_correct_steps() {
+        let plan = fragments::accessibility_test();
+        assert_eq!(plan.steps.len(), 6);
+    }
+}
