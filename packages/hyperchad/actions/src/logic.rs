@@ -1567,4 +1567,339 @@ mod tests {
             _ => panic!("Expected Parameterized action"),
         }
     }
+
+    // ============================================
+    // CalcValue arithmetic method tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_calc_value_minus() {
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::Id(1),
+        };
+        let arith = calc.minus(10.0);
+
+        assert!(matches!(arith, Arithmetic::Minus(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_calc_value_multiply() {
+        let calc = CalcValue::HeightPx {
+            target: ElementTarget::Id(2),
+        };
+        let arith = calc.multiply(2.0);
+
+        assert!(matches!(arith, Arithmetic::Multiply(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_calc_value_divide() {
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::SelfTarget,
+        };
+        let arith = calc.divide(4.0);
+
+        assert!(matches!(arith, Arithmetic::Divide(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_calc_value_min() {
+        let calc = CalcValue::MouseX { target: None };
+        let arith = calc.min(500.0);
+
+        assert!(matches!(arith, Arithmetic::Min(_, _)));
+    }
+
+    #[test_log::test]
+    fn test_calc_value_max() {
+        let calc = CalcValue::MouseY { target: None };
+        let arith = calc.max(100.0);
+
+        assert!(matches!(arith, Arithmetic::Max(_, _)));
+    }
+
+    // ============================================
+    // Arithmetic chaining with multiply/divide/min/max tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_arithmetic_chaining_multiply() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let chained = arith.multiply(2.0);
+
+        // (10 + 5) * 2 = 30
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(30.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_chaining_divide() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let chained = arith.divide(3.0);
+
+        // (10 + 5) / 3 = 5
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_chaining_min() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(10.0));
+        let chained = arith.min(15.0);
+
+        // min(20, 15) = 15
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(15.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_chaining_max() {
+        let arith = Arithmetic::Plus(Value::Real(3.0), Value::Real(2.0));
+        let chained = arith.max(10.0);
+
+        // max(5, 10) = 10
+        let result = chained.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(10.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_eq_creates_condition() {
+        let arith = Arithmetic::Plus(Value::Real(5.0), Value::Real(5.0));
+        let condition = arith.eq(10.0);
+
+        match condition {
+            Condition::Eq(left, right) => {
+                assert!(matches!(left, Value::Arithmetic(_)));
+                assert_eq!(right, Value::Real(10.0));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    // ============================================
+    // Value::eq method test
+    // ============================================
+
+    #[test_log::test]
+    fn test_value_eq_creates_condition() {
+        let value = Value::Real(42.0);
+        let condition = value.eq(42.0);
+
+        match condition {
+            Condition::Eq(left, right) => {
+                assert_eq!(left, Value::Real(42.0));
+                assert_eq!(right, Value::Real(42.0));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    // ============================================
+    // Value::as_f32 with Arithmetic and Calc tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_value_as_f32_with_arithmetic() {
+        let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let value = Value::Arithmetic(Box::new(arith));
+
+        let result = value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(15.0));
+    }
+
+    #[test_log::test]
+    fn test_value_as_f32_non_numeric_returns_none() {
+        let value = Value::String("not a number".to_string());
+        let result = value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, None);
+
+        let visibility_value = Value::Visibility(Visibility::Hidden);
+        let result = visibility_value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, None);
+
+        let display_value = Value::Display(true);
+        let result = display_value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_value_as_f32_with_calc_func() {
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::Id(1),
+        };
+        let value = Value::Calc(calc);
+
+        // Without calc_func, Calc returns None
+        let result_without = value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result_without, None);
+
+        // With calc_func that returns a Real value
+        let calc_func = |_: &CalcValue| Some(Value::Real(100.0));
+        let result_with = value.as_f32(Some(&calc_func));
+        assert_eq!(result_with, Some(100.0));
+    }
+
+    // ============================================
+    // Additional helper function tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_visibility_self() {
+        let calc = get_visibility_self();
+
+        match calc {
+            CalcValue::Visibility { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected Visibility CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_visibility_class() {
+        let calc = get_visibility_class("my-class");
+
+        match calc {
+            CalcValue::Visibility { target } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("my-class")));
+            }
+            _ => panic!("Expected Visibility CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_display_self() {
+        let calc = get_display_self();
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_display_class() {
+        let calc = get_display_class("display-class");
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("display-class")));
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_display_last_child() {
+        let calc = get_display_last_child();
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(target, ElementTarget::LastChild);
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_width_px_self() {
+        let calc = get_width_px_self();
+
+        match calc {
+            CalcValue::WidthPx { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected WidthPx CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_height_px_self() {
+        let calc = get_height_px_self();
+
+        match calc {
+            CalcValue::HeightPx { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected HeightPx CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_position_x_str_id() {
+        let calc = get_position_x_str_id("positioned-element");
+
+        match calc {
+            CalcValue::PositionX { target } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::StrId(Target::from("positioned-element"))
+                );
+            }
+            _ => panic!("Expected PositionX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_position_y_str_id() {
+        let calc = get_position_y_str_id("y-element");
+
+        match calc {
+            CalcValue::PositionY { target } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("y-element")));
+            }
+            _ => panic!("Expected PositionY CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_mouse_x_id() {
+        let calc = get_mouse_x_id(42);
+
+        match calc {
+            CalcValue::MouseX { target } => {
+                assert_eq!(target, Some(ElementTarget::Id(42)));
+            }
+            _ => panic!("Expected MouseX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_mouse_y_id() {
+        let calc = get_mouse_y_id(99);
+
+        match calc {
+            CalcValue::MouseY { target } => {
+                assert_eq!(target, Some(ElementTarget::Id(99)));
+            }
+            _ => panic!("Expected MouseY CalcValue"),
+        }
+    }
+
+    // ============================================
+    // LayoutDirection conversion test
+    // ============================================
+
+    #[test_log::test]
+    fn test_value_from_layout_direction() {
+        let direction = LayoutDirection::Row;
+        let value: Value = direction.into();
+
+        assert_eq!(value, Value::LayoutDirection(LayoutDirection::Row));
+    }
+
+    // ============================================
+    // Arithmetic::group test
+    // ============================================
+
+    #[test_log::test]
+    fn test_arithmetic_group() {
+        let inner = Arithmetic::Plus(Value::Real(3.0), Value::Real(2.0));
+        let grouped = Arithmetic::group(inner);
+
+        let result = grouped.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+    }
 }

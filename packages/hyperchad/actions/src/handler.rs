@@ -1403,4 +1403,111 @@ mod tests {
             Some("ignored")
         ));
     }
+
+    // ============================================
+    // ActionTimingManager tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_timing_manager_is_delay_off_expired_when_no_timer() {
+        let manager = ActionTimingManager::default();
+
+        // When no delay_off timer exists, should return true (expired)
+        assert!(manager.is_delay_off_expired(1));
+        assert!(manager.is_delay_off_expired(999));
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_start_delay_off() {
+        let mut manager = ActionTimingManager::default();
+
+        // Start a delay_off timer
+        manager.start_delay_off(1, 1000);
+
+        // Timer just started, should not be expired yet
+        assert!(!manager.is_delay_off_expired(1));
+        // Other elements should still be "expired" (no timer)
+        assert!(manager.is_delay_off_expired(2));
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_clear_delay_off() {
+        let mut manager = ActionTimingManager::default();
+
+        // Start a delay_off timer
+        manager.start_delay_off(1, 10000);
+        assert!(!manager.is_delay_off_expired(1));
+
+        // Clear the timer
+        manager.clear_delay_off(1);
+
+        // Now should be "expired" (no timer)
+        assert!(manager.is_delay_off_expired(1));
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_clear_throttle() {
+        let mut manager = ActionTimingManager::default();
+
+        // First call should not throttle
+        assert!(!manager.should_throttle(1, 1000));
+
+        // Clear the throttle
+        manager.clear_throttle(1);
+
+        // After clearing, should not throttle again (timer was removed)
+        assert!(!manager.should_throttle(1, 1000));
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_should_throttle_first_call() {
+        let mut manager = ActionTimingManager::default();
+
+        // First call should not be throttled - it sets up the throttle
+        let throttled = manager.should_throttle(1, 1000);
+        assert!(!throttled);
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_should_throttle_immediate_second_call() {
+        let mut manager = ActionTimingManager::default();
+
+        // First call sets up throttle
+        assert!(!manager.should_throttle(1, 10000));
+
+        // Immediate second call should be throttled (within throttle period)
+        let throttled = manager.should_throttle(1, 10000);
+        assert!(throttled);
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_independent_elements() {
+        let mut manager = ActionTimingManager::default();
+
+        // Set up throttle for element 1
+        assert!(!manager.should_throttle(1, 10000));
+
+        // Element 2 should not be affected
+        assert!(!manager.should_throttle(2, 10000));
+
+        // Element 1 should still be throttled
+        assert!(manager.should_throttle(1, 10000));
+    }
+
+    #[test_log::test]
+    fn test_action_timing_manager_delay_off_independent_of_throttle() {
+        let mut manager = ActionTimingManager::default();
+
+        // Set up both timers for element 1
+        manager.start_delay_off(1, 10000);
+        assert!(!manager.should_throttle(1, 10000));
+
+        // Clear only throttle
+        manager.clear_throttle(1);
+
+        // Delay off should still be active
+        assert!(!manager.is_delay_off_expired(1));
+        // Throttle should be cleared
+        assert!(!manager.should_throttle(1, 10000));
+    }
 }
