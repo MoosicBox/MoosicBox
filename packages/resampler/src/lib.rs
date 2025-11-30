@@ -250,7 +250,13 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_precision_loss, clippy::float_cmp, clippy::doc_markdown)]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::float_cmp,
+    clippy::doc_markdown,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 mod tests {
     use super::*;
     use symphonia::core::audio::Channels;
@@ -732,5 +738,119 @@ mod tests {
 
         let result = resampler.resample_to_audio_buffer(&input_buffer);
         assert!(result.is_none());
+    }
+
+    /// Test flush when buffer contains exactly duration samples (not consumed by resample)
+    ///
+    /// This tests the case in flush() where len % duration == 0 but len > 0,
+    /// meaning no padding is needed but samples still need processing.
+    #[test_log::test]
+    fn test_flush_exact_duration_not_consumed() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let duration = 256;
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, duration);
+
+        // Add exactly duration samples via two smaller buffers
+        // but don't call resample() enough times to consume them
+        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(128, spec);
+        input_buffer1.render_reserved(Some(128));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer1.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = (i as f32) / 128.0;
+            }
+        }
+        // Returns None - only 128 samples buffered
+        assert!(resampler.resample(&input_buffer1).is_none());
+
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(128, spec);
+        input_buffer2.render_reserved(Some(128));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer2.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = 0.5 + (i as f32) / 256.0;
+            }
+        }
+        // Returns None - 256 samples buffered but we want to test flush instead
+        // Note: resample would return Some here, but we skip it to test flush directly
+        // by NOT calling resample again
+
+        // Actually, let's add just under duration to test the exact boundary
+        // Reset and try again with exact buffer
+        let mut resampler2: Resampler<f32> = Resampler::new(spec, 48000, duration);
+
+        // Add exactly 256 samples at once
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(256, spec);
+        input_buffer.render_reserved(Some(256));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = ((i as f32) * std::f32::consts::PI / 32.0).sin() * 0.8;
+            }
+        }
+
+        // This returns Some and consumes the samples
+        let result = resampler2.resample(&input_buffer);
+        assert!(result.is_some());
+
+        // Now test with 2x duration samples where we only consume once
+        let mut resampler3: Resampler<f32> = Resampler::new(spec, 48000, duration);
+
+        // Add 2x duration samples
+        let mut large_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        large_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = large_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.7;
+            }
+        }
+
+        // First resample consumes 256 samples, leaving 256 in buffer
+        let result = resampler3.resample(&large_buffer);
+        assert!(result.is_some());
+
+        // Now flush should process the remaining exactly 256 samples
+        // partial_len = 256 % 256 = 0, so no padding needed
+        let flush_result = resampler3.flush();
+        assert!(
+            flush_result.is_some(),
+            "Flush should return Some when exactly duration samples remain"
+        );
+        let output = flush_result.unwrap();
+        assert!(!output.is_empty());
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+    }
+
+    /// Test resampling with i16 sample type to verify generic type conversion works
+    ///
+    /// The resampler internally works with f32 and converts to the output type T.
+    /// This test verifies the conversion path for integer sample types works correctly.
+    #[test_log::test]
+    fn test_resample_i16_output() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<i16> = Resampler::new(spec, 48000, 512);
+
+        // Create input buffer with a simple pattern
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                // Use a sine wave pattern with values in [-1, 1] range
+                *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.9;
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some(), "Should produce output");
+
+        let output = result.unwrap();
+        assert!(!output.is_empty(), "Output should not be empty");
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+
+        // Verify output contains non-zero samples (signal is present after conversion)
+        let has_non_zero = output.iter().any(|&sample| sample != 0);
+        assert!(has_non_zero, "Output should contain non-zero samples");
     }
 }
