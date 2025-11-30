@@ -2460,4 +2460,248 @@ mod test {
         assert_eq!(result[1].id, 2);
         assert_eq!(result[2].id, 3);
     }
+
+    #[test_log::test]
+    fn filter_albums_filters_by_artist_api_id_matching_source() {
+        use moosicbox_music_models::{ApiSources, id::ApiId};
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let qobuz_source = ApiSource::register("Qobuz", "Qobuz");
+
+        // Album with artist that has a Tidal source ID
+        let album_with_tidal_artist = LibraryAlbum {
+            id: 1,
+            title: "Tidal Album".to_string(),
+            artist: "Artist A".to_string(),
+            artist_id: 100,
+            artist_sources: ApiSources::default()
+                .with_source(tidal_source, Id::String("tidal-artist-123".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        // Album with artist that has a Qobuz source ID
+        let album_with_qobuz_artist = LibraryAlbum {
+            id: 2,
+            title: "Qobuz Album".to_string(),
+            artist: "Artist B".to_string(),
+            artist_id: 200,
+            artist_sources: ApiSources::default()
+                .with_source(qobuz_source, Id::String("qobuz-artist-456".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        // Album with no artist sources
+        let album_no_sources = LibraryAlbum {
+            id: 3,
+            title: "Local Album".to_string(),
+            artist: "Artist C".to_string(),
+            artist_id: 300,
+            artist_sources: ApiSources::default(),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![
+            album_with_tidal_artist,
+            album_with_qobuz_artist,
+            album_no_sources,
+        ];
+
+        // Filter for the specific Tidal artist API ID
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: Some(ApiId::new(
+                    ApiSource::register("Tidal", "Tidal"),
+                    Id::String("tidal-artist-123".to_string()),
+                )),
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        let result: Vec<_> = filter_albums(&albums, &request).collect();
+
+        // Should only match the album with the matching Tidal artist source
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[0].title, "Tidal Album");
+    }
+
+    #[test_log::test]
+    fn filter_albums_filters_by_artist_api_id_no_match_when_source_differs() {
+        use moosicbox_music_models::{ApiSources, id::ApiId};
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let qobuz_source = ApiSource::register("Qobuz", "Qobuz");
+
+        // Album with artist that has a Tidal source ID
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Test Album".to_string(),
+            artist: "Artist A".to_string(),
+            artist_id: 100,
+            artist_sources: ApiSources::default()
+                .with_source(tidal_source, Id::String("tidal-artist-123".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Filter for a Qobuz source with the same ID string - should NOT match
+        // because the source is different
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: Some(ApiId::new(
+                    qobuz_source,
+                    Id::String("tidal-artist-123".to_string()),
+                )),
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        // Should not match because the source differs
+        assert_eq!(filter_albums(&albums, &request).count(), 0);
+    }
+
+    #[test_log::test]
+    fn filter_albums_filters_by_artist_api_id_no_match_when_id_differs() {
+        use moosicbox_music_models::{ApiSources, id::ApiId};
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+
+        // Album with artist that has a Tidal source ID
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Test Album".to_string(),
+            artist: "Artist A".to_string(),
+            artist_id: 100,
+            artist_sources: ApiSources::default()
+                .with_source(tidal_source, Id::String("tidal-artist-123".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Filter for the correct source but wrong ID - should NOT match
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: Some(ApiId::new(
+                    ApiSource::register("Tidal", "Tidal"),
+                    Id::String("wrong-id".to_string()),
+                )),
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        // Should not match because the ID differs
+        assert_eq!(filter_albums(&albums, &request).count(), 0);
+    }
+
+    #[test_log::test]
+    fn filter_albums_artist_api_id_none_returns_all_albums() {
+        use moosicbox_music_models::ApiSources;
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+
+        let album1 = LibraryAlbum {
+            id: 1,
+            title: "Album 1".to_string(),
+            artist: "Artist A".to_string(),
+            artist_sources: ApiSources::default()
+                .with_source(tidal_source, Id::String("id-1".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+        let album2 = LibraryAlbum {
+            id: 2,
+            title: "Album 2".to_string(),
+            artist: "Artist B".to_string(),
+            artist_sources: ApiSources::default(),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album1, album2];
+
+        // No artist_api_id filter - should return all
+        let request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: None,
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        // Should return all albums when artist_api_id is None
+        assert_eq!(filter_albums(&albums, &request).count(), 2);
+    }
+
+    #[test_log::test]
+    fn filter_albums_artist_api_id_with_multiple_artist_sources() {
+        use moosicbox_music_models::{ApiSources, id::ApiId};
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let qobuz_source = ApiSource::register("Qobuz", "Qobuz");
+
+        // Album with artist that has both Tidal and Qobuz source IDs
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Multi-Source Album".to_string(),
+            artist: "Popular Artist".to_string(),
+            artist_id: 100,
+            artist_sources: ApiSources::default()
+                .with_source(tidal_source, Id::String("tidal-id".to_string()))
+                .with_source(qobuz_source, Id::String("qobuz-id".to_string())),
+            source: AlbumSource::Local,
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Filter for Tidal source should match
+        let tidal_request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: Some(ApiId::new(
+                    ApiSource::register("Tidal", "Tidal"),
+                    Id::String("tidal-id".to_string()),
+                )),
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        assert_eq!(filter_albums(&albums, &tidal_request).count(), 1);
+
+        // Filter for Qobuz source should also match
+        let qobuz_request = AlbumsRequest {
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                artist_api_id: Some(ApiId::new(
+                    ApiSource::register("Qobuz", "Qobuz"),
+                    Id::String("qobuz-id".to_string()),
+                )),
+                ..Default::default()
+            }),
+            page: None,
+        };
+
+        assert_eq!(filter_albums(&albums, &qobuz_request).count(), 1);
+    }
 }
