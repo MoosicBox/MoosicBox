@@ -237,8 +237,29 @@ pub fn pick_unused_port(range: impl PortRange) -> Option<Port> {
 }
 
 #[cfg(test)]
+pub(crate) mod test_utils {
+    use std::sync::atomic::{AtomicU16, Ordering};
+
+    static NEXT_RANGE_START: AtomicU16 = AtomicU16::new(40000);
+
+    /// Returns a unique exclusive port range of the specified size for testing.
+    /// Each call returns a non-overlapping range.
+    pub fn next_port_range(size: u16) -> std::ops::Range<u16> {
+        let start = NEXT_RANGE_START.fetch_add(size, Ordering::Relaxed);
+        start..start + size
+    }
+
+    /// Returns a unique inclusive port range of the specified size for testing.
+    /// Each call returns a non-overlapping range.
+    pub fn next_port_range_inclusive(size: u16) -> std::ops::RangeInclusive<u16> {
+        let start = NEXT_RANGE_START.fetch_add(size, Ordering::Relaxed);
+        start..=start + size - 1
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::{PortRange, is_free, is_free_tcp, is_free_udp, pick_unused_port};
+    use super::{PortRange, is_free, is_free_tcp, is_free_udp, pick_unused_port, test_utils};
     use std::net::{TcpListener, UdpSocket};
 
     #[cfg(feature = "rand")]
@@ -252,29 +273,34 @@ mod tests {
 
     #[test_log::test]
     fn port_range_test() {
-        if let Some(p) = pick_unused_port(15000..16000) {
-            assert!((15000..16000).contains(&p));
+        let range1 = test_utils::next_port_range(1000);
+        if let Some(p) = pick_unused_port(range1.clone()) {
+            assert!(range1.contains(&p));
         }
-        if let Some(p) = pick_unused_port(20000..21000) {
-            assert!((20000..21000).contains(&p));
+        let range2 = test_utils::next_port_range(1000);
+        if let Some(p) = pick_unused_port(range2.clone()) {
+            assert!(range2.contains(&p));
         }
     }
 
     #[test_log::test]
     fn port_range_inclusize_test() {
-        if let Some(p) = pick_unused_port(15000..=16000) {
-            assert!((15000..=16000).contains(&p));
+        let range1 = test_utils::next_port_range_inclusive(1001);
+        if let Some(p) = pick_unused_port(range1.clone()) {
+            assert!(range1.contains(&p));
         }
-        if let Some(p) = pick_unused_port(20000..=21000) {
-            assert!((20000..=21000).contains(&p));
+        let range2 = test_utils::next_port_range_inclusive(1001);
+        if let Some(p) = pick_unused_port(range2.clone()) {
+            assert!(range2.contains(&p));
         }
     }
 
     #[test_log::test]
     fn test_is_free_tcp() {
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free initially
                 if is_free_tcp(port) {
                     // Bind to the port
@@ -291,9 +317,10 @@ mod tests {
 
     #[test_log::test]
     fn test_is_free_udp() {
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free initially
                 if is_free_udp(port) {
                     // Bind to the port
@@ -310,9 +337,10 @@ mod tests {
 
     #[test_log::test]
     fn test_is_free() {
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free on both TCP and UDP initially
                 if is_free(port) {
                     // Bind to the port with TCP
@@ -335,9 +363,10 @@ mod tests {
 
     #[test_log::test]
     fn test_is_free_udp_binding() {
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free on both TCP and UDP initially
                 if is_free(port) {
                     // Bind to the port with UDP
@@ -412,9 +441,10 @@ mod tests {
     fn test_ipv6_tcp_binding_affects_is_free() {
         use std::net::{Ipv6Addr, SocketAddrV6};
 
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it with IPv6
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free initially
                 if is_free_tcp(port) {
                     // Try to bind to IPv6 only
@@ -434,9 +464,10 @@ mod tests {
     fn test_ipv6_udp_binding_affects_is_free() {
         use std::net::{Ipv6Addr, SocketAddrV6};
 
+        let range = test_utils::next_port_range(1000);
         // Try multiple times to find a port and bind to it with IPv6
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000) {
+            if let Some(port) = pick_unused_port(range.clone()) {
                 // Port should be free initially
                 if is_free_udp(port) {
                     // Try to bind to IPv6 only
@@ -454,14 +485,15 @@ mod tests {
 
     #[test_log::test]
     fn test_pick_unused_port_finds_first_available() {
+        let range = test_utils::next_port_range(10);
         // Find a port and occupy it, then verify pick_unused_port skips it
         for _ in 0..10 {
-            if let Some(first_port) = pick_unused_port(15000..15010)
+            if let Some(first_port) = pick_unused_port(range.clone())
                 && is_free(first_port)
                 && let Ok(_listener) = TcpListener::bind(("0.0.0.0", first_port))
             {
                 // Now pick_unused_port should find a different port
-                if let Some(next_port) = pick_unused_port((first_port + 1)..15010) {
+                if let Some(next_port) = pick_unused_port((first_port + 1)..range.end) {
                     assert_ne!(next_port, first_port);
                     assert!(next_port > first_port);
                 }
@@ -473,9 +505,10 @@ mod tests {
 
     #[test_log::test]
     fn test_concurrent_tcp_and_udp_binding() {
+        let range = test_utils::next_port_range(1000);
         // Test that is_free returns false when only one protocol is bound
         for _ in 0..10 {
-            if let Some(port) = pick_unused_port(15000..16000)
+            if let Some(port) = pick_unused_port(range.clone())
                 && is_free(port)
                 && let Ok(tcp_listener) = TcpListener::bind(("0.0.0.0", port))
             {
@@ -489,7 +522,7 @@ mod tests {
                 drop(tcp_listener);
 
                 // After dropping, try binding UDP only
-                if let Some(port2) = pick_unused_port(15000..16000)
+                if let Some(port2) = pick_unused_port(range.clone())
                     && is_free(port2)
                     && let Ok(_udp_socket) = UdpSocket::bind(("0.0.0.0", port2))
                 {

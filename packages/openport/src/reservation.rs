@@ -328,32 +328,29 @@ mod tests {
     use serial_test::serial;
 
     use super::*;
-
-    // Note: These tests are not deterministic and may fail on different systems.
-    // They are marked as serial to ensure that the ports that are reserved in one test
-    // do not conflict with the ports reserved in another test.
+    use crate::test_utils::{next_port_range, next_port_range_inclusive};
 
     #[test_log::test]
-    #[serial]
     fn test_reserve_port() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
         let port = reservation.reserve_port();
 
         assert!(port.is_some());
         let port = port.unwrap();
-        assert!((15000..15100).contains(&port));
+        assert!(range.contains(&port));
         assert!(reservation.is_reserved(port));
     }
 
     #[test_log::test]
-    #[serial]
     fn test_reserve_ports() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
         let ports = reservation.reserve_ports(5);
 
         assert_eq!(ports.len(), 5);
         for port in &ports {
-            assert!((15000..15100).contains(port));
+            assert!(range.contains(port));
             assert!(reservation.is_reserved(*port));
         }
 
@@ -365,9 +362,9 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_release_port() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
         let port = reservation.reserve_port().unwrap();
 
         assert!(reservation.is_reserved(port));
@@ -376,9 +373,9 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_release_ports() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
         let ports = reservation.reserve_ports(10);
 
         assert_eq!(ports.len(), 10);
@@ -413,19 +410,10 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_reserve_more_than_available() {
         // Use a very small range to test this edge case
-        let mut i = 15000;
-        let reservation = loop {
-            let reservation = PortReservation::new(i..i + 2);
-            if reservation.is_free(i) {
-                break reservation;
-            } else if i >= 16000 {
-                panic!("Too many ports reserved");
-            }
-            i += 1;
-        };
+        let range = next_port_range(2);
+        let reservation = PortReservation::new(range.clone());
         let ports = reservation.reserve_ports(10); // Try to reserve 10 from a range of 2
 
         // Should get at most 2 ports (the number available in the range)
@@ -433,43 +421,43 @@ mod tests {
         assert!(!ports.is_empty()); // Should still get some ports if available
 
         for port in ports {
-            assert!((i..i + 2).contains(&port));
+            assert!(range.contains(&port));
             assert!(reservation.is_reserved(port));
         }
     }
 
     #[test_log::test]
-    #[serial]
     fn test_no_free_ports() {
         // Use a range that's likely to have no free ports (very high numbers)
         // Note: This test might be flaky on different systems, but it's worth testing
-        let reservation = PortReservation::new(65530..65535);
+        let range = 65530..65535;
+        let reservation = PortReservation::new(range.clone());
         let ports = reservation.reserve_ports(5);
 
         // We might get some ports or none, depending on system state
         // The important thing is that the function doesn't panic
         for port in ports {
-            assert!((65530..65535).contains(&port));
+            assert!(range.contains(&port));
         }
     }
 
     #[test_log::test]
-    #[serial]
     fn test_inclusive_range() {
-        let reservation = PortReservation::new(15000..=15010);
+        let range = next_port_range_inclusive(11);
+        let reservation = PortReservation::new(range.clone());
         let ports = reservation.reserve_ports(5);
 
         assert_eq!(ports.len(), 5);
         for port in ports {
-            assert!((15000..=15010).contains(&port));
+            assert!(range.contains(&port));
             assert!(reservation.is_reserved(port));
         }
     }
 
     #[test_log::test]
-    #[serial]
     fn test_reserve_after_release() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
 
         // Reserve some ports
         let ports = reservation.reserve_ports(3);
@@ -484,18 +472,18 @@ mod tests {
 
         // The new ports might be the same or different, but all should be reserved
         for port in new_ports {
-            assert!((15000..15100).contains(&port));
+            assert!(range.contains(&port));
             assert!(reservation.is_reserved(port));
         }
     }
 
     #[test_log::test]
-    #[serial]
     fn test_concurrent_reservations() {
         use std::sync::Arc;
         use std::thread;
 
-        let reservation = Arc::new(PortReservation::new(15000..15100));
+        let range = next_port_range(100);
+        let reservation = Arc::new(PortReservation::new(range));
         let mut handles = vec![];
 
         // Spawn 10 threads that each try to reserve 5 ports
@@ -532,12 +520,12 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_concurrent_reserve_and_release() {
         use std::sync::Arc;
         use std::thread;
 
-        let reservation = Arc::new(PortReservation::new(15000..15100));
+        let range = next_port_range(100);
+        let reservation = Arc::new(PortReservation::new(range));
         let mut handles = vec![];
 
         // Spawn threads that reserve and release ports concurrently
@@ -585,26 +573,29 @@ mod tests {
 
     #[test_log::test]
     fn test_is_reserved_non_reserved_port() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
 
         // Check a port that was never reserved
-        assert!(!reservation.is_reserved(15050));
+        assert!(!reservation.is_reserved(range.start + 50));
     }
 
     #[test_log::test]
     fn test_release_non_reserved_port() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
 
         // Releasing a port that was never reserved should not panic
-        reservation.release_port(15050);
-        assert!(!reservation.is_reserved(15050));
+        let port = range.start + 50;
+        reservation.release_port(port);
+        assert!(!reservation.is_reserved(port));
     }
 
     #[test_log::test]
-    #[serial]
     fn test_reserve_port_returns_none_when_all_occupied() {
         // Create a reservation with a very limited range
-        let reservation = PortReservation::new(15000..15002);
+        let range = next_port_range(2);
+        let reservation = PortReservation::new(range);
 
         // Reserve all available ports
         let port1 = reservation.reserve_port();
@@ -632,9 +623,9 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_double_release() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
         let port = reservation.reserve_port().unwrap();
 
         assert!(reservation.is_reserved(port));
@@ -650,16 +641,17 @@ mod tests {
 
     #[test_log::test]
     fn test_reserve_zero_ports() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
         let ports = reservation.reserve_ports(0);
 
         assert!(ports.is_empty());
     }
 
     #[test_log::test]
-    #[serial]
     fn test_release_empty_iterator() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
         let port = reservation.reserve_port().unwrap();
 
         // Releasing an empty iterator should not affect existing reservations
@@ -669,31 +661,31 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_is_reserved_port_outside_range() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
 
         // Port outside range should never be reserved
-        assert!(!reservation.is_reserved(14999));
-        assert!(!reservation.is_reserved(15100));
-        assert!(!reservation.is_reserved(20000));
+        assert!(!reservation.is_reserved(range.start.saturating_sub(1)));
+        assert!(!reservation.is_reserved(range.end));
+        assert!(!reservation.is_reserved(range.end + 1000));
     }
 
     #[test_log::test]
-    #[serial]
     fn test_is_free_port_outside_range() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range.clone());
 
         // Port outside range should be considered "free" from reservation perspective
-        assert!(reservation.is_free(14999));
-        assert!(reservation.is_free(15100));
-        assert!(reservation.is_free(20000));
+        assert!(reservation.is_free(range.start.saturating_sub(1)));
+        assert!(reservation.is_free(range.end));
+        assert!(reservation.is_free(range.end + 1000));
     }
 
     #[test_log::test]
-    #[serial]
     fn test_sequential_single_port_reservations() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
 
         let port1 = reservation.reserve_port();
         let port2 = reservation.reserve_port();
@@ -719,9 +711,9 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_release_specific_subset_of_ports() {
-        let reservation = PortReservation::new(15000..15100);
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
 
         // Reserve 5 ports
         let ports = reservation.reserve_ports(5);
@@ -742,14 +734,14 @@ mod tests {
     }
 
     #[test_log::test]
-    #[serial]
     fn test_reservation_is_free_helper() {
         use std::collections::BTreeSet;
 
         let mut reserved = BTreeSet::new();
 
         // Get a port that is actually free on the system
-        let port = crate::pick_unused_port(15000..15100);
+        let range = next_port_range(100);
+        let port = crate::pick_unused_port(range);
         if let Some(port) = port {
             // Port not in set and free on system should return true
             assert!(reservation_is_free(&reserved, port));
