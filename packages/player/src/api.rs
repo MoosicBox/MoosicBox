@@ -904,3 +904,208 @@ pub async fn player_status_endpoint(
             .player_status()?,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_track_not_found() {
+        let error = PlayerError::TrackNotFound(42.into());
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 404 Not Found error
+        assert_eq!(actix_error.as_response_error().status_code(), 404);
+        assert!(actix_error.to_string().contains("Track not found"));
+        assert!(actix_error.to_string().contains("42"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_track_not_local() {
+        let error = PlayerError::TrackNotLocal(123.into());
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("not stored locally"));
+        assert!(actix_error.to_string().contains("123"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_track_fetch_failed() {
+        let error = PlayerError::TrackFetchFailed("remote-track-456".to_string());
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+        assert!(actix_error.to_string().contains("Failed to fetch track"));
+        assert!(actix_error.to_string().contains("remote-track-456"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_album_fetch_failed() {
+        let error = PlayerError::AlbumFetchFailed(789.into());
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+        assert!(actix_error.to_string().contains("Failed to fetch album"));
+        assert!(actix_error.to_string().contains("789"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_no_players_playing() {
+        let error = PlayerError::NoPlayersPlaying;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_position_out_of_bounds() {
+        let error = PlayerError::PositionOutOfBounds(99);
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("Position out of bounds"));
+        assert!(actix_error.to_string().contains("99"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_playback_not_playing() {
+        let error = PlayerError::PlaybackNotPlaying(12345);
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("Playback not playing"));
+        assert!(actix_error.to_string().contains("12345"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_playback_already_playing() {
+        let error = PlayerError::PlaybackAlreadyPlaying(67890);
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("Playback already playing"));
+        assert!(actix_error.to_string().contains("67890"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_invalid_playback_type() {
+        let error = PlayerError::InvalidPlaybackType;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("Invalid Playback Type"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_unsupported_format() {
+        let error = PlayerError::UnsupportedFormat(moosicbox_music_models::AudioFormat::Source);
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 400 Bad Request error
+        assert_eq!(actix_error.as_response_error().status_code(), 400);
+        assert!(actix_error.to_string().contains("Unsupported format"));
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let error = PlayerError::IO(io_error);
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_invalid_session() {
+        let error = PlayerError::InvalidSession {
+            session_id: 999,
+            message: "test message".to_string(),
+        };
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_seek_error() {
+        let error = PlayerError::Seek("seek position invalid".to_string());
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_missing_session_id() {
+        let error = PlayerError::MissingSessionId;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_missing_profile() {
+        let error = PlayerError::MissingProfile;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_invalid_state() {
+        let error = PlayerError::InvalidState;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_invalid_source() {
+        let error = PlayerError::InvalidSource;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_cancelled() {
+        let error = PlayerError::Cancelled;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_retry_requested() {
+        let error = PlayerError::RetryRequested;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+
+    #[test_log::test]
+    fn test_player_error_to_actix_error_no_audio_outputs() {
+        let error = PlayerError::NoAudioOutputs;
+        let actix_error: actix_web::Error = error.into();
+
+        // Should be a 500 Internal Server Error
+        assert_eq!(actix_error.as_response_error().status_code(), 500);
+    }
+}

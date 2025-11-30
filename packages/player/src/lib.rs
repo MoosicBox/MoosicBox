@@ -2770,4 +2770,237 @@ mod tests {
         let handler = handler.with_output(output);
         assert!(handler.output.is_none());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_remote_source() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 42.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://example.com:8080".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should construct a URL with the remote host
+        assert!(url.starts_with("http://example.com:8080/files/track"));
+        assert!(url.contains("trackId=42"));
+        assert!(url.contains("quality=LOW"));
+        // Headers should be None when not provided
+        assert!(headers.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_remote_source_and_query_params() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 123.into();
+        let api_source = ApiSource::library();
+
+        let mut query = std::collections::BTreeMap::new();
+        query.insert("customParam".to_string(), "customValue".to_string());
+
+        let player_source = PlayerSource::Remote {
+            host: "http://music.local:9000".to_string(),
+            query: Some(query),
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::FlacHighestRes;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should include custom query params
+        assert!(url.contains("customParam=customValue"));
+        assert!(url.contains("trackId=123"));
+        assert!(url.contains("quality=FLAC_HIGHEST_RES"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_remote_source_and_headers() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 456.into();
+        let api_source = ApiSource::library();
+
+        let mut headers = std::collections::BTreeMap::new();
+        headers.insert("moosicbox-profile".to_string(), "test-profile".to_string());
+
+        let player_source = PlayerSource::Remote {
+            host: "http://remote.server".to_string(),
+            query: None,
+            headers: Some(headers),
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, returned_headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Headers should be returned
+        assert!(returned_headers.is_some());
+        let headers = returned_headers.unwrap();
+        assert_eq!(
+            headers.get("moosicbox-profile"),
+            Some(&"test-profile".to_string())
+        );
+
+        // Profile should be included in URL when header is present
+        assert!(url.contains("moosicboxProfile=test-profile"));
+    }
+
+    #[cfg(feature = "format-flac")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_non_source_format() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 789.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://test.host".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality {
+            format: moosicbox_music_models::AudioFormat::Flac,
+        };
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should include format when not Source
+        assert!(url.contains("format=FLAC"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_source_format_omits_format_param() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 111.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://test.host".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality {
+            format: moosicbox_music_models::AudioFormat::Source,
+        };
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should NOT include format when it's Source
+        assert!(!url.contains("format="));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_library_source_omits_source_param() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 222.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://test.host".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should NOT include source when it's library
+        assert!(!url.contains("source="));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_local_source() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        // Set up SERVICE_PORT for local source
+        set_service_port(8765);
+
+        let track_id = 333.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Local;
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::FlacLossless;
+
+        let (url, headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            false,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should use local IP and configured port
+        assert!(url.starts_with("http://127.0.0.1:8765/files/track"));
+        assert!(url.contains("trackId=333"));
+        assert!(url.contains("quality=FLAC_LOSSLESS"));
+        // Headers should be None for local source
+        assert!(headers.is_none());
+    }
 }
