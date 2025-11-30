@@ -324,6 +324,33 @@ enum Commands {
         /// Show verbose override information
         #[arg(long, default_value_t = false)]
         verbose_overrides: bool,
+
+        /// Packages to validate as parent packages (comma-separated)
+        /// For these packages, validates that ALL features from their workspace
+        /// dependencies are exposed with a prefix pattern.
+        /// Can also be configured in clippier.toml files.
+        #[arg(long, value_delimiter = ',')]
+        parent_packages: Option<Vec<String>>,
+
+        /// Maximum depth for nested dependency feature checking
+        /// If not specified, follows full dependency chain (no limit)
+        #[arg(long)]
+        parent_depth: Option<u8>,
+
+        /// Additional features to skip when validating parent packages (comma-separated)
+        /// Added to the default skip list `["default", "_*"]`
+        #[arg(long, value_delimiter = ',')]
+        parent_skip_features: Option<Vec<String>>,
+
+        /// Feature prefix pattern for parent packages
+        /// Format: `dep_name:prefix` (e.g., `switchy_database:database`)
+        /// If not specified, prefix is inferred from dependency name
+        #[arg(long, action = clap::ArgAction::Append)]
+        parent_prefix: Vec<String>,
+
+        /// Disable loading parent config from clippier.toml files
+        #[arg(long, default_value_t = false)]
+        no_parent_config: bool,
     },
     Packages {
         #[arg(index = 1)]
@@ -624,6 +651,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             warn_expired,
             fail_on_expired,
             verbose_overrides,
+            parent_packages,
+            parent_depth,
+            parent_skip_features,
+            parent_prefix,
+            no_parent_config,
         } => {
             let result = handle_validate_feature_propagation_command(
                 features,
@@ -641,6 +673,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 warn_expired,
                 fail_on_expired,
                 verbose_overrides,
+                parent_packages,
+                parent_depth,
+                parent_skip_features,
+                &parent_prefix,
+                no_parent_config,
             )?;
 
             match output {
@@ -650,6 +687,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if fail_on_error
                 && (!result.errors.is_empty()
+                    || !result
+                        .parent_results
+                        .iter()
+                        .all(|r| r.missing_exposures.is_empty())
                     || (fail_on_expired
                         && result
                             .override_summary

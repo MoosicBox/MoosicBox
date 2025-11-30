@@ -698,6 +698,7 @@ fn test_validation_result_json_serialization() {
         warnings: vec![],
         overridden_errors: vec![],
         override_summary: None,
+        parent_results: vec![],
     };
 
     // Should serialize to valid JSON
@@ -727,6 +728,7 @@ fn test_validation_summary_pluralization() {
         warnings: vec![],
         overridden_errors: vec![],
         override_summary: None,
+        parent_results: vec![],
     };
 
     assert_eq!(result_singular.errors.len(), 1);
@@ -749,6 +751,7 @@ fn test_validation_summary_pluralization() {
         warnings: vec![],
         overridden_errors: vec![],
         override_summary: None,
+        parent_results: vec![],
     };
 
     assert_eq!(result_plural.errors.len(), 2);

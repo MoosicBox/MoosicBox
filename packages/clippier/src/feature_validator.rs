@@ -60,6 +60,31 @@ type PackagePaths = BTreeMap<String, String>;
 type PackageCargoValues = BTreeMap<String, Value>;
 type WorkspaceData = (WorkspacePackages, PackagePaths, PackageCargoValues);
 
+/// Default features to skip during validation.
+///
+/// These patterns are used when no explicit skip-features are configured:
+/// - `"default"` - The default feature is typically a convenience aggregate
+/// - `"_*"` - Features starting with underscore are conventionally internal/private
+pub const DEFAULT_SKIP_FEATURES: &[&str] = &["default", "_*"];
+
+/// Resolve skip features from optional configuration.
+///
+/// - `None` → use [`DEFAULT_SKIP_FEATURES`]
+/// - `Some(empty vec)` → skip nothing (validate all features)
+/// - `Some(vec with patterns)` → use the provided patterns
+#[must_use]
+pub fn resolve_skip_features(configured: &Option<Vec<String>>) -> Vec<String> {
+    configured.as_ref().map_or_else(
+        || {
+            DEFAULT_SKIP_FEATURES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        },
+        Clone::clone,
+    )
+}
+
 /// Source of an override (for precedence tracking)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -157,6 +182,105 @@ pub struct FeatureValidationConfig {
     /// List of validation overrides
     #[serde(default, rename = "override")]
     pub overrides: Vec<OverrideConfigEntry>,
+
+    /// Parent package config (package-level: declares this package as a parent)
+    #[serde(default)]
+    pub parent: Option<ParentPackageConfig>,
+
+    /// Parent packages list (workspace-level: declares which packages are parents)
+    #[serde(default)]
+    pub parent_packages: Vec<WorkspaceParentPackage>,
+
+    /// Global prefix overrides (workspace-level)
+    #[serde(default)]
+    pub parent_prefix: Vec<PrefixOverride>,
+}
+
+/// Package-level parent config (from package clippier.toml)
+///
+/// Declares this package as a "parent" package that re-exports features
+/// from its workspace dependencies.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ParentPackageConfig {
+    /// Enable parent validation for this package
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Maximum depth for nested dependency checking
+    /// None = unlimited (follow full dependency chain)
+    /// Some(n) = limit to n levels
+    #[serde(default)]
+    pub depth: Option<u8>,
+
+    /// Features to skip when checking if they're exposed
+    /// If None, defaults to `["default", "_*"]`
+    #[serde(default)]
+    pub skip_features: Option<Vec<String>>,
+
+    /// Prefix overrides for specific dependencies
+    #[serde(default)]
+    pub prefix: Vec<PrefixOverride>,
+}
+
+/// Workspace-level parent package entry
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WorkspaceParentPackage {
+    /// Package name
+    pub package: String,
+
+    /// Maximum depth for nested dependency checking
+    /// None = unlimited (follow full dependency chain)
+    #[serde(default)]
+    pub depth: Option<u8>,
+
+    /// Features to skip when checking if they're exposed
+    /// If None, defaults to `["default", "_*"]`
+    #[serde(default)]
+    pub skip_features: Option<Vec<String>>,
+}
+
+/// Prefix override entry for parent package validation
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PrefixOverride {
+    /// Dependency package name
+    pub dependency: String,
+    /// Prefix to use for features from this dependency
+    pub prefix: String,
+}
+
+/// Result of parent package validation
+#[derive(Debug, Serialize)]
+pub struct ParentValidationResult {
+    /// Parent package name
+    pub package: String,
+    /// Missing feature exposures
+    pub missing_exposures: Vec<MissingFeatureExposure>,
+    /// Total features checked across all dependencies
+    pub features_checked: usize,
+    /// Features correctly exposed
+    pub features_exposed: usize,
+}
+
+/// Error for missing feature exposure in parent package
+#[derive(Debug, Serialize)]
+pub struct MissingFeatureExposure {
+    /// The parent package
+    pub parent_package: String,
+    /// The dependency whose feature isn't exposed
+    pub dependency: String,
+    /// The feature in the dependency that isn't exposed
+    pub dependency_feature: String,
+    /// Expected feature name in parent (e.g., `database-api`)
+    pub expected_parent_feature: String,
+    /// Expected propagation entry (e.g., `switchy_database?/api`)
+    pub expected_propagation: String,
+    /// Depth in dependency chain (1 = direct dep, 2 = dep of dep, etc.)
+    pub depth: u8,
+    /// Chain from parent to dependency (for depth > 1)
+    pub chain: Vec<String>,
 }
 
 /// Validation results for feature propagation
@@ -176,6 +300,9 @@ pub struct ValidationResult {
     /// Summary of applied overrides
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_summary: Option<OverrideSummary>,
+    /// Parent package validation results
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub parent_results: Vec<ParentValidationResult>,
 }
 
 /// An error that was overridden by configuration
@@ -325,6 +452,23 @@ pub struct ValidatorConfig {
     pub ignore_packages: Vec<String>,
     /// Features to ignore globally (supports wildcards)
     pub ignore_features: Vec<String>,
+    /// Parent package validation configuration
+    pub parent_config: ParentValidationConfig,
+}
+
+/// Runtime configuration for parent package validation
+#[derive(Debug, Clone)]
+pub struct ParentValidationConfig {
+    /// Packages to validate as parent packages (from CLI)
+    pub cli_packages: Vec<String>,
+    /// CLI-specified depth override
+    pub cli_depth: Option<u8>,
+    /// CLI-specified skip features (added to defaults)
+    pub cli_skip_features: Vec<String>,
+    /// CLI-specified prefix overrides
+    pub cli_prefix_overrides: Vec<PrefixOverride>,
+    /// Whether to load parent config from clippier.toml files
+    pub use_config: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -339,6 +483,19 @@ impl Default for ValidatorConfig {
             override_options: OverrideOptions::enabled(),
             ignore_packages: Vec::new(),
             ignore_features: Vec::new(),
+            parent_config: ParentValidationConfig::default(),
+        }
+    }
+}
+
+impl Default for ParentValidationConfig {
+    fn default() -> Self {
+        Self {
+            cli_packages: Vec::new(),
+            cli_depth: None,
+            cli_skip_features: Vec::new(),
+            cli_prefix_overrides: Vec::new(),
+            use_config: true,
         }
     }
 }
@@ -359,6 +516,10 @@ impl ValidatorConfig {
             override_options: OverrideOptions::default(),
             ignore_packages: Vec::new(),
             ignore_features: Vec::new(),
+            parent_config: ParentValidationConfig {
+                use_config: false,
+                ..ParentValidationConfig::default()
+            },
         }
     }
 }
@@ -489,6 +650,9 @@ impl FeatureValidator {
             None
         };
 
+        // Parent package validation
+        let parent_results = self.validate_parent_packages(&mut warnings);
+
         Ok(ValidationResult {
             total_packages: valid_count + errors.len(),
             valid_packages: valid_count,
@@ -496,6 +660,7 @@ impl FeatureValidator {
             warnings,
             overridden_errors,
             override_summary,
+            parent_results,
         })
     }
 
@@ -573,13 +738,8 @@ impl FeatureValidator {
             return Vec::new();
         };
 
-        // Build skip list: use provided skip_features, or default to ["default", "_*"]
-        // Keep as Vec<String> for glob pattern matching
-        let skip_features_vec: Vec<String> = self
-            .config
-            .skip_features
-            .clone()
-            .unwrap_or_else(|| vec!["default".to_string(), "_*".to_string()]);
+        // Build skip list using centralized resolver
+        let skip_features_vec = resolve_skip_features(&self.config.skip_features);
 
         self.config.features.as_ref().map_or_else(
             || {
@@ -1108,6 +1268,446 @@ impl FeatureValidator {
 
         expected
     }
+
+    // ==================== Parent Package Validation ====================
+
+    /// Validate parent packages and return results
+    fn validate_parent_packages(
+        &self,
+        warnings: &mut Vec<PackageValidationWarning>,
+    ) -> Vec<ParentValidationResult> {
+        let parent_configs = self.collect_parent_configs(warnings);
+
+        if parent_configs.is_empty() {
+            return Vec::new();
+        }
+
+        let mut results = Vec::new();
+
+        for (package_name, config) in parent_configs {
+            if let Some(cargo_value) = self.package_cargo_values.get(&package_name) {
+                let result = self.validate_single_parent_package(
+                    &package_name,
+                    cargo_value,
+                    &config,
+                    warnings,
+                );
+                results.push(result);
+            } else {
+                warnings.push(PackageValidationWarning {
+                    package: package_name.clone(),
+                    message: format!("Parent package '{package_name}' not found in workspace"),
+                });
+            }
+        }
+
+        results
+    }
+
+    /// Collect parent package configurations from all sources
+    fn collect_parent_configs(
+        &self,
+        warnings: &mut Vec<PackageValidationWarning>,
+    ) -> BTreeMap<String, ResolvedParentConfig> {
+        let mut configs: BTreeMap<String, ResolvedParentConfig> = BTreeMap::new();
+
+        // 1. Load from workspace-level clippier.toml (lowest priority)
+        if self.config.parent_config.use_config
+            && let Ok(workspace_configs) = self.load_workspace_parent_configs()
+        {
+            for (pkg_name, pkg_config) in workspace_configs {
+                configs.insert(pkg_name, pkg_config);
+            }
+        }
+
+        // 2. Load from package-level clippier.toml (overrides workspace)
+        if self.config.parent_config.use_config {
+            for package_name in &self.workspace_packages {
+                if let Ok(Some(pkg_config)) = self.load_package_parent_config(package_name) {
+                    configs.insert(package_name.clone(), pkg_config);
+                }
+            }
+        }
+
+        // 3. Apply CLI overrides (highest priority)
+        for pkg_name in &self.config.parent_config.cli_packages {
+            let existing = configs.get(pkg_name);
+            let resolved = ResolvedParentConfig {
+                depth: self
+                    .config
+                    .parent_config
+                    .cli_depth
+                    .or_else(|| existing.and_then(|e| e.depth)),
+                skip_features: if self.config.parent_config.cli_skip_features.is_empty() {
+                    // No CLI skip features - use existing config or None (defaults)
+                    existing.and_then(|e| e.skip_features.clone())
+                } else {
+                    // CLI skip features provided - merge with existing (resolved to defaults if None)
+                    let mut merged = existing
+                        .and_then(|e| e.skip_features.clone())
+                        .unwrap_or_else(|| {
+                            DEFAULT_SKIP_FEATURES
+                                .iter()
+                                .map(|s| (*s).to_string())
+                                .collect()
+                        });
+                    merged.extend(self.config.parent_config.cli_skip_features.clone());
+                    Some(merged)
+                },
+                prefix_overrides: {
+                    let mut merged =
+                        existing.map_or_else(BTreeMap::new, |e| e.prefix_overrides.clone());
+                    for po in &self.config.parent_config.cli_prefix_overrides {
+                        merged.insert(po.dependency.clone(), po.prefix.clone());
+                    }
+                    merged
+                },
+            };
+            configs.insert(pkg_name.clone(), resolved);
+        }
+
+        // Validate that all configured packages exist
+        for pkg_name in configs.keys() {
+            if !self.workspace_packages.contains(pkg_name) {
+                warnings.push(PackageValidationWarning {
+                    package: pkg_name.clone(),
+                    message: format!("Parent package '{pkg_name}' not found in workspace"),
+                });
+            }
+        }
+
+        configs
+    }
+
+    /// Load parent package configs from workspace-level clippier.toml
+    fn load_workspace_parent_configs(&self) -> Result<BTreeMap<String, ResolvedParentConfig>> {
+        let config_path = self.workspace_root.join("clippier.toml");
+        if !config_path.exists() {
+            return Ok(BTreeMap::new());
+        }
+
+        let content = fs::read_to_string(&config_path)?;
+        let value: Value = toml::from_str(&content)?;
+
+        let mut configs = BTreeMap::new();
+
+        // Parse parent-packages array
+        if let Some(feature_validation) = value.get("feature-validation") {
+            // Global prefix overrides
+            let global_prefixes: BTreeMap<String, String> = feature_validation
+                .get("parent-prefix")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|entry| {
+                            let dep = entry.get("dependency")?.as_str()?;
+                            let prefix = entry.get("prefix")?.as_str()?;
+                            Some((dep.to_string(), prefix.to_string()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            // Parent packages
+            if let Some(parent_packages) = feature_validation
+                .get("parent-packages")
+                .and_then(|v| v.as_array())
+            {
+                for entry in parent_packages {
+                    if let Some(pkg_name) = entry.get("package").and_then(|v| v.as_str()) {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let depth = entry
+                            .get("depth")
+                            .and_then(toml::Value::as_integer)
+                            .map(|d| d as u8);
+
+                        let skip_features = entry
+                            .get("skip-features")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect()
+                            });
+
+                        configs.insert(
+                            pkg_name.to_string(),
+                            ResolvedParentConfig {
+                                depth,
+                                skip_features,
+                                prefix_overrides: global_prefixes.clone(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(configs)
+    }
+
+    /// Load parent config from package-level clippier.toml
+    fn load_package_parent_config(
+        &self,
+        package_name: &str,
+    ) -> Result<Option<ResolvedParentConfig>> {
+        let package_path = self
+            .package_paths
+            .get(package_name)
+            .ok_or_else(|| anyhow!("Package path not found for {package_name}"))?;
+
+        let config_path = self.workspace_root.join(package_path).join("clippier.toml");
+        if !config_path.exists() {
+            return Ok(None);
+        }
+
+        let content = fs::read_to_string(&config_path)?;
+        let value: Value = toml::from_str(&content)?;
+
+        if let Some(feature_validation) = value.get("feature-validation")
+            && let Some(parent) = feature_validation.get("parent")
+        {
+            let enabled = parent
+                .get("enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(false);
+
+            if !enabled {
+                return Ok(None);
+            }
+
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let depth = parent
+                .get("depth")
+                .and_then(toml::Value::as_integer)
+                .map(|d| d as u8);
+
+            let skip_features = parent
+                .get("skip-features")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                });
+
+            let prefix_overrides = parent
+                .get("prefix")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|entry| {
+                            let dep = entry.get("dependency")?.as_str()?;
+                            let prefix = entry.get("prefix")?.as_str()?;
+                            Some((dep.to_string(), prefix.to_string()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            return Ok(Some(ResolvedParentConfig {
+                depth,
+                skip_features,
+                prefix_overrides,
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// Validate a single parent package
+    fn validate_single_parent_package(
+        &self,
+        parent_name: &str,
+        parent_cargo: &Value,
+        config: &ResolvedParentConfig,
+        _warnings: &mut Vec<PackageValidationWarning>,
+    ) -> ParentValidationResult {
+        let mut missing_exposures = Vec::new();
+        let mut features_checked = 0;
+        let mut features_exposed = 0;
+
+        // Get parent package's features
+        let parent_features = get_all_feature_names(parent_cargo);
+
+        // Build skip features list using centralized resolver
+        let skip_features = resolve_skip_features(&config.skip_features);
+
+        // Get workspace dependencies of parent package
+        let deps = extract_all_dependencies(parent_cargo, false);
+        let workspace_deps: Vec<(String, bool)> = deps
+            .into_iter()
+            .filter(|(name, _)| self.workspace_packages.contains(name))
+            .collect();
+
+        // Track visited packages to prevent cycles
+        let mut visited = BTreeSet::new();
+        visited.insert(parent_name.to_string());
+
+        // Validate each workspace dependency
+        for (dep_name, is_optional) in &workspace_deps {
+            if let Some(dep_cargo) = self.package_cargo_values.get(dep_name) {
+                self.validate_parent_dependency(
+                    parent_name,
+                    &parent_features,
+                    dep_name,
+                    dep_cargo,
+                    *is_optional,
+                    config,
+                    &skip_features,
+                    1,
+                    &mut vec![parent_name.to_string(), dep_name.clone()],
+                    &mut visited,
+                    &mut missing_exposures,
+                    &mut features_checked,
+                    &mut features_exposed,
+                );
+            }
+        }
+
+        ParentValidationResult {
+            package: parent_name.to_string(),
+            missing_exposures,
+            features_checked,
+            features_exposed,
+        }
+    }
+
+    /// Validate that parent exposes all features from a dependency
+    #[allow(clippy::too_many_arguments)]
+    fn validate_parent_dependency(
+        &self,
+        parent_name: &str,
+        parent_features: &BTreeSet<String>,
+        dep_name: &str,
+        dep_cargo: &Value,
+        is_optional: bool,
+        config: &ResolvedParentConfig,
+        skip_features: &[String],
+        current_depth: u8,
+        chain: &mut Vec<String>,
+        visited: &mut BTreeSet<String>,
+        missing_exposures: &mut Vec<MissingFeatureExposure>,
+        features_checked: &mut usize,
+        features_exposed: &mut usize,
+    ) {
+        // Get prefix for this dependency
+        let prefix = config
+            .prefix_overrides
+            .get(dep_name)
+            .cloned()
+            .unwrap_or_else(|| infer_prefix(parent_name, dep_name));
+
+        // Get all features of the dependency
+        let dep_features = get_all_feature_names(dep_cargo);
+
+        for dep_feature in &dep_features {
+            // Skip features that match skip patterns
+            if should_skip_feature(dep_feature, skip_features) {
+                continue;
+            }
+
+            *features_checked += 1;
+
+            // Expected feature name in parent: "{prefix}-{feature}"
+            let expected_parent_feature = format!("{prefix}-{dep_feature}");
+
+            // Check if parent has this feature (with prefix or exact match)
+            if parent_features.contains(&expected_parent_feature)
+                || parent_features.contains(dep_feature)
+            {
+                *features_exposed += 1;
+            } else {
+                let expected_propagation = if is_optional {
+                    format!("{dep_name}?/{dep_feature}")
+                } else {
+                    format!("{dep_name}/{dep_feature}")
+                };
+
+                missing_exposures.push(MissingFeatureExposure {
+                    parent_package: parent_name.to_string(),
+                    dependency: dep_name.to_string(),
+                    dependency_feature: dep_feature.clone(),
+                    expected_parent_feature,
+                    expected_propagation,
+                    depth: current_depth,
+                    chain: chain.clone(),
+                });
+            }
+        }
+
+        // Recurse into nested dependencies if depth allows
+        let should_recurse = config.depth.is_none_or(|max| current_depth < max);
+
+        if should_recurse {
+            let nested_deps = extract_all_dependencies(dep_cargo, false);
+            let nested_workspace_deps: Vec<(String, bool)> = nested_deps
+                .into_iter()
+                .filter(|(name, _)| {
+                    self.workspace_packages.contains(name) && !visited.contains(name)
+                })
+                .collect();
+
+            for (nested_dep_name, nested_is_optional) in nested_workspace_deps {
+                if visited.insert(nested_dep_name.clone())
+                    && let Some(nested_cargo) = self.package_cargo_values.get(&nested_dep_name)
+                {
+                    chain.push(nested_dep_name.clone());
+                    self.validate_parent_dependency(
+                        parent_name,
+                        parent_features,
+                        &nested_dep_name,
+                        nested_cargo,
+                        nested_is_optional,
+                        config,
+                        skip_features,
+                        current_depth + 1,
+                        chain,
+                        visited,
+                        missing_exposures,
+                        features_checked,
+                        features_exposed,
+                    );
+                    chain.pop();
+                }
+            }
+        }
+    }
+}
+
+/// Resolved parent package configuration (after merging all sources)
+#[derive(Debug, Clone, Default)]
+struct ResolvedParentConfig {
+    /// Maximum depth (None = unlimited)
+    depth: Option<u8>,
+    /// Features to skip (None = use defaults, Some(empty) = skip nothing)
+    skip_features: Option<Vec<String>>,
+    /// Prefix overrides (dependency -> prefix)
+    prefix_overrides: BTreeMap<String, String>,
+}
+
+/// Infer prefix from dependency name relative to parent package
+///
+/// Examples:
+/// - `parent="switchy"`, `dep="switchy_database"` -> `"database"`
+/// - `parent="hyperchad"`, `dep="hyperchad_renderer_html"` -> `"renderer-html"`
+/// - `parent="moosicbox"`, `dep="moosicbox_audio_decoder"` -> `"audio-decoder"`
+fn infer_prefix(parent: &str, dep: &str) -> String {
+    let parent_prefix = format!("{parent}_");
+    if dep.starts_with(&parent_prefix) {
+        dep[parent_prefix.len()..].replace('_', "-")
+    } else {
+        dep.replace('_', "-")
+    }
+}
+
+/// Get all feature names from a Cargo.toml value
+fn get_all_feature_names(cargo_value: &Value) -> BTreeSet<String> {
+    cargo_value
+        .get("features")
+        .and_then(|f| f.as_table())
+        .map(|t| t.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 /// Find workspace root from a given path
@@ -1258,6 +1858,7 @@ fn extract_dependency_name(entry: &str) -> Option<String> {
 }
 
 /// Print human-readable output
+#[allow(clippy::too_many_lines)]
 pub fn print_human_output(result: &ValidationResult) {
     println!("🔍 Feature Propagation Validation Results");
     println!("=========================================");
@@ -1341,6 +1942,52 @@ pub fn print_human_output(result: &ValidationResult) {
             }
         }
     }
+
+    // Print parent package validation results
+    if !result.parent_results.is_empty() {
+        println!("\n🔍 Parent Package Validation Results");
+        println!("=====================================");
+
+        for parent_result in &result.parent_results {
+            let status = if parent_result.missing_exposures.is_empty() {
+                "✅"
+            } else {
+                "❌"
+            };
+            println!(
+                "\n{status} Parent Package: {} ({}/{} features exposed)",
+                parent_result.package,
+                parent_result.features_exposed,
+                parent_result.features_checked
+            );
+
+            if !parent_result.missing_exposures.is_empty() {
+                // Group by dependency for cleaner output
+                let mut by_dep: BTreeMap<&str, Vec<&MissingFeatureExposure>> = BTreeMap::new();
+                for exposure in &parent_result.missing_exposures {
+                    by_dep
+                        .entry(&exposure.dependency)
+                        .or_default()
+                        .push(exposure);
+                }
+
+                for (dep_name, exposures) in by_dep {
+                    println!("  📦 {dep_name}:");
+                    for exposure in exposures {
+                        println!(
+                            "    - {} → expected \"{}\" with [\"{}\"]",
+                            exposure.dependency_feature,
+                            exposure.expected_parent_feature,
+                            exposure.expected_propagation
+                        );
+                        if exposure.depth > 1 {
+                            println!("      (chain: {})", exposure.chain.join(" → "));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Print GitHub Actions format output
@@ -1360,6 +2007,19 @@ pub fn print_github_output(result: &ValidationResult) {
                     error.package, incorrect.entry, feature_error.feature
                 );
             }
+        }
+    }
+
+    // Parent package validation errors
+    for parent_result in &result.parent_results {
+        for exposure in &parent_result.missing_exposures {
+            println!(
+                "::error file=packages/{}/Cargo.toml::Missing feature exposure '{}' for dependency '{}' feature '{}'",
+                parent_result.package,
+                exposure.expected_parent_feature,
+                exposure.dependency,
+                exposure.dependency_feature
+            );
         }
     }
 
@@ -1853,6 +2513,7 @@ dev_dep = "1.0"
             }],
             overridden_errors: vec![],
             override_summary: None,
+            parent_results: vec![],
         };
 
         // Should be able to serialize to JSON
@@ -2446,5 +3107,213 @@ reason = "Wildcard pattern test"
         assert_eq!(deps.len(), 2);
         assert_eq!(deps[0], "dep_*");
         assert_eq!(deps[1], "other_dep");
+    }
+
+    // ==================== Parent Package Validation Tests ====================
+
+    #[test]
+    fn test_infer_prefix_with_matching_parent() {
+        // When dependency starts with parent_, strip the prefix
+        assert_eq!(infer_prefix("switchy", "switchy_database"), "database");
+        assert_eq!(infer_prefix("switchy", "switchy_async"), "async");
+        assert_eq!(
+            infer_prefix("hyperchad", "hyperchad_renderer_html"),
+            "renderer-html"
+        );
+        assert_eq!(
+            infer_prefix("moosicbox", "moosicbox_audio_decoder"),
+            "audio-decoder"
+        );
+    }
+
+    #[test]
+    fn test_infer_prefix_without_matching_parent() {
+        // When dependency doesn't start with parent_, use full name with underscores replaced
+        assert_eq!(infer_prefix("switchy", "other_package"), "other-package");
+        assert_eq!(infer_prefix("hyperchad", "some_lib"), "some-lib");
+    }
+
+    #[test]
+    fn test_get_all_feature_names() {
+        let cargo_toml = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+test-feature = []
+"#;
+        let value: Value = toml::from_str(cargo_toml).unwrap();
+        let features = get_all_feature_names(&value);
+
+        assert_eq!(features.len(), 4);
+        assert!(features.contains("default"));
+        assert!(features.contains("api"));
+        assert!(features.contains("serde"));
+        assert!(features.contains("test-feature"));
+    }
+
+    #[test]
+    fn test_get_all_feature_names_empty() {
+        let cargo_toml = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+"#;
+        let value: Value = toml::from_str(cargo_toml).unwrap();
+        let features = get_all_feature_names(&value);
+
+        assert!(features.is_empty());
+    }
+
+    /// Helper to create a test workspace for parent validation
+    fn create_parent_test_workspace() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create workspace Cargo.toml
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "child_a", "child_b"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create parent package that should expose child features
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child_a = { path = "../child_a", optional = true }
+parent_child_b = { path = "../child_b", optional = true }
+
+[features]
+default = []
+child-a = ["dep:parent_child_a"]
+child-a-api = ["child-a", "parent_child_a?/api"]
+child-b = ["dep:parent_child_b"]
+# Missing: child-a-serde, child-b-api, child-b-serde
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        // Create child_a with features
+        fs::create_dir(root_path.join("child_a")).unwrap();
+        let child_a_cargo = r#"[package]
+name = "parent_child_a"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+"#;
+        fs::write(root_path.join("child_a/Cargo.toml"), child_a_cargo).unwrap();
+
+        // Create child_b with features
+        fs::create_dir(root_path.join("child_b")).unwrap();
+        let child_b_cargo = r#"[package]
+name = "parent_child_b"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+"#;
+        fs::write(root_path.join("child_b/Cargo.toml"), child_b_cargo).unwrap();
+
+        temp_dir
+    }
+
+    #[test]
+    fn test_parent_validation_detects_missing_features() {
+        let temp_workspace = create_parent_test_workspace();
+        let config = ValidatorConfig {
+            features: None,
+            skip_features: None,
+            workspace_only: true,
+            output_format: OutputType::Raw,
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have parent results
+        assert_eq!(result.parent_results.len(), 1);
+
+        let parent_result = &result.parent_results[0];
+        assert_eq!(parent_result.package, "parent");
+
+        // Should have missing exposures
+        assert!(!parent_result.missing_exposures.is_empty());
+
+        // Should be missing child-a-serde
+        let missing_serde_a = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_a" && e.dependency_feature == "serde");
+        assert!(missing_serde_a.is_some());
+
+        // Should be missing child-b-api and child-b-serde
+        let missing_api_b = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_b" && e.dependency_feature == "api");
+        assert!(missing_api_b.is_some());
+
+        let missing_serde_b = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_b" && e.dependency_feature == "serde");
+        assert!(missing_serde_b.is_some());
+    }
+
+    #[test]
+    fn test_parent_validation_respects_skip_features() {
+        let temp_workspace = create_parent_test_workspace();
+        let config = ValidatorConfig {
+            features: None,
+            skip_features: None,
+            workspace_only: true,
+            output_format: OutputType::Raw,
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec!["serde".to_string()], // Skip serde features
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should NOT report serde as missing (it's skipped)
+        let missing_serde = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "serde");
+        assert!(missing_serde.is_none());
+
+        // Should still report api as missing for child_b
+        let missing_api_b = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_b" && e.dependency_feature == "api");
+        assert!(missing_api_b.is_some());
     }
 }

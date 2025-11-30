@@ -4308,9 +4308,15 @@ pub fn handle_validate_feature_propagation_command(
     warn_expired: bool,
     fail_on_expired: bool,
     verbose_overrides: bool,
+    parent_packages: Option<Vec<String>>,
+    parent_depth: Option<u8>,
+    parent_skip_features: Option<Vec<String>>,
+    parent_prefix: &[String],
+    no_parent_config: bool,
 ) -> Result<ValidationResult, Box<dyn std::error::Error>> {
     use crate::feature_validator::{
-        OverrideOptions, OverrideSource, OverrideType, ValidationOverride,
+        OverrideOptions, OverrideSource, OverrideType, ParentValidationConfig, PrefixOverride,
+        ValidationOverride,
     };
 
     // Parse CLI overrides for allow-missing
@@ -4359,6 +4365,22 @@ pub fn handle_validate_feature_propagation_command(
         });
     }
 
+    // Parse CLI prefix overrides for parent packages
+    let mut cli_prefix_overrides = Vec::new();
+    for entry in parent_prefix {
+        let parts: Vec<&str> = entry.split(':').collect();
+        if parts.len() != 2 {
+            return Err(format!(
+                "Invalid --parent-prefix format: {entry}. Expected 'dependency:prefix'"
+            )
+            .into());
+        }
+        cli_prefix_overrides.push(PrefixOverride {
+            dependency: parts[0].to_string(),
+            prefix: parts[1].to_string(),
+        });
+    }
+
     let config = ValidatorConfig {
         features,
         skip_features,
@@ -4375,6 +4397,13 @@ pub fn handle_validate_feature_propagation_command(
         },
         ignore_packages: ignore_packages.to_vec(),
         ignore_features: ignore_features.to_vec(),
+        parent_config: ParentValidationConfig {
+            cli_packages: parent_packages.unwrap_or_default(),
+            cli_depth: parent_depth,
+            cli_skip_features: parent_skip_features.unwrap_or_default(),
+            cli_prefix_overrides,
+            use_config: !no_parent_config,
+        },
     };
 
     let validator = FeatureValidator::new(path, config)?;
