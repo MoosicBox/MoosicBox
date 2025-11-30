@@ -3316,4 +3316,977 @@ serde = []
             .find(|e| e.dependency == "parent_child_b" && e.dependency_feature == "api");
         assert!(missing_api_b.is_some());
     }
+
+    // ==================== resolve_skip_features Tests ====================
+
+    #[test]
+    fn test_resolve_skip_features_none_returns_defaults() {
+        let result = resolve_skip_features(&None);
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&"default".to_string()));
+        assert!(result.contains(&"_*".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_skip_features_empty_vec_returns_empty() {
+        let result = resolve_skip_features(&Some(vec![]));
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_skip_features_custom_patterns() {
+        let patterns = vec!["test-*".to_string(), "internal".to_string()];
+        let result = resolve_skip_features(&Some(patterns.clone()));
+        assert_eq!(result, patterns);
+    }
+
+    // ==================== Parent Config Loading Tests ====================
+
+    /// Helper to create a workspace with clippier.toml configurations
+    fn create_workspace_with_parent_config() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create workspace Cargo.toml
+        let workspace_cargo = r#"[workspace]
+members = ["parent_pkg", "child_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create workspace-level clippier.toml
+        let workspace_clippier = r#"
+[[feature-validation.parent-packages]]
+package = "parent_pkg"
+depth = 2
+skip-features = ["workspace-skip"]
+
+[[feature-validation.parent-prefix]]
+dependency = "parent_pkg_child_pkg"
+prefix = "workspace-prefix"
+"#;
+        fs::write(root_path.join("clippier.toml"), workspace_clippier).unwrap();
+
+        // Create parent package
+        fs::create_dir(root_path.join("parent_pkg")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent_pkg"
+version = "0.1.0"
+
+[dependencies]
+parent_pkg_child_pkg = { path = "../child_pkg", optional = true }
+
+[features]
+default = []
+child = ["dep:parent_pkg_child_pkg"]
+"#;
+        fs::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
+
+        // Create child package
+        fs::create_dir(root_path.join("child_pkg")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_pkg_child_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+"#;
+        fs::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
+
+        temp_dir
+    }
+
+    #[test]
+    fn test_parent_config_from_workspace_clippier_toml() {
+        let temp_workspace = create_workspace_with_parent_config();
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec![],
+                cli_depth: None,
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: true,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have loaded parent_pkg from workspace clippier.toml
+        assert_eq!(result.parent_results.len(), 1);
+        assert_eq!(result.parent_results[0].package, "parent_pkg");
+    }
+
+    #[test]
+    fn test_parent_config_from_package_clippier_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create workspace Cargo.toml
+        let workspace_cargo = r#"[workspace]
+members = ["parent_pkg", "child_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create parent package with its own clippier.toml
+        fs::create_dir(root_path.join("parent_pkg")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent_pkg"
+version = "0.1.0"
+
+[dependencies]
+parent_pkg_child_pkg = { path = "../child_pkg", optional = true }
+
+[features]
+default = []
+child = ["dep:parent_pkg_child_pkg"]
+"#;
+        fs::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
+
+        // Package-level clippier.toml declaring it as a parent
+        let pkg_clippier = r#"
+[feature-validation.parent]
+enabled = true
+depth = 1
+skip-features = ["pkg-skip"]
+"#;
+        fs::write(root_path.join("parent_pkg/clippier.toml"), pkg_clippier).unwrap();
+
+        // Create child package
+        fs::create_dir(root_path.join("child_pkg")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_pkg_child_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+"#;
+        fs::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec![],
+                cli_depth: None,
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: true,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have loaded parent_pkg from package clippier.toml
+        assert_eq!(result.parent_results.len(), 1);
+        assert_eq!(result.parent_results[0].package, "parent_pkg");
+    }
+
+    #[test]
+    fn test_parent_config_precedence_cli_over_config() {
+        let temp_workspace = create_workspace_with_parent_config();
+
+        // CLI specifies depth=1, config has depth=2
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent_pkg".to_string()],
+                cli_depth: Some(1), // Override config's depth=2
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: true,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should still work - CLI depth takes precedence
+        assert_eq!(result.parent_results.len(), 1);
+    }
+
+    // ==================== Parent Validation Depth Tests ====================
+
+    /// Helper to create a workspace with nested dependencies for depth testing
+    fn create_nested_deps_workspace() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create workspace Cargo.toml
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "level1", "level2", "level3"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Parent -> level1 -> level2 -> level3
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_level1 = { path = "../level1", optional = true }
+
+[features]
+default = []
+level1 = ["dep:parent_level1"]
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        fs::create_dir(root_path.join("level1")).unwrap();
+        let level1_cargo = r#"[package]
+name = "parent_level1"
+version = "0.1.0"
+
+[dependencies]
+parent_level2 = { path = "../level2", optional = true }
+
+[features]
+default = []
+api = []
+level2 = ["dep:parent_level2"]
+"#;
+        fs::write(root_path.join("level1/Cargo.toml"), level1_cargo).unwrap();
+
+        fs::create_dir(root_path.join("level2")).unwrap();
+        let level2_cargo = r#"[package]
+name = "parent_level2"
+version = "0.1.0"
+
+[dependencies]
+parent_level3 = { path = "../level3", optional = true }
+
+[features]
+default = []
+api = []
+level3 = ["dep:parent_level3"]
+"#;
+        fs::write(root_path.join("level2/Cargo.toml"), level2_cargo).unwrap();
+
+        fs::create_dir(root_path.join("level3")).unwrap();
+        let level3_cargo = r#"[package]
+name = "parent_level3"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+deep-feature = []
+"#;
+        fs::write(root_path.join("level3/Cargo.toml"), level3_cargo).unwrap();
+
+        temp_dir
+    }
+
+    #[test]
+    fn test_parent_validation_depth_one_only_direct_deps() {
+        let temp_workspace = create_nested_deps_workspace();
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should only check level1's features, not level2 or level3
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level1")
+        );
+
+        // Should NOT have level2 or level3 features
+        assert!(
+            !parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level2")
+        );
+
+        assert!(
+            !parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level3")
+        );
+    }
+
+    #[test]
+    fn test_parent_validation_depth_two_includes_nested() {
+        let temp_workspace = create_nested_deps_workspace();
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(2),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should have level1 features
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level1")
+        );
+
+        // Should have level2 features (depth=2)
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level2")
+        );
+
+        // Should NOT have level3 features (depth=2 stops before level3)
+        assert!(
+            !parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level3")
+        );
+    }
+
+    #[test]
+    fn test_parent_validation_depth_unlimited() {
+        let temp_workspace = create_nested_deps_workspace();
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: None, // Unlimited
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should have features from all levels
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level1")
+        );
+
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level2")
+        );
+
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_level3")
+        );
+
+        // Verify deep-feature from level3 is detected
+        let deep_feature = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "deep-feature");
+        assert!(deep_feature.is_some());
+    }
+
+    #[test]
+    fn test_parent_validation_cycle_detection() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create workspace with circular dependencies
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "pkg_a", "pkg_b"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_pkg_a = { path = "../pkg_a", optional = true }
+
+[features]
+default = []
+pkg-a = ["dep:parent_pkg_a"]
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        // pkg_a depends on pkg_b
+        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        let pkg_a_cargo = r#"[package]
+name = "parent_pkg_a"
+version = "0.1.0"
+
+[dependencies]
+parent_pkg_b = { path = "../pkg_b", optional = true }
+
+[features]
+default = []
+api = []
+pkg-b = ["dep:parent_pkg_b"]
+"#;
+        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+
+        // pkg_b depends on pkg_a (cycle!)
+        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        let pkg_b_cargo = r#"[package]
+name = "parent_pkg_b"
+version = "0.1.0"
+
+[dependencies]
+parent_pkg_a = { path = "../pkg_a", optional = true }
+
+[features]
+default = []
+api = []
+pkg-a = ["dep:parent_pkg_a"]
+"#;
+        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: None, // Unlimited - would infinite loop without cycle detection
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+
+        // Should complete without infinite loop
+        let result = validator.validate().unwrap();
+        assert_eq!(result.parent_results.len(), 1);
+
+        // Should have found features from both pkg_a and pkg_b
+        let parent_result = &result.parent_results[0];
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_pkg_a")
+        );
+
+        assert!(
+            parent_result
+                .missing_exposures
+                .iter()
+                .any(|e| e.dependency == "parent_pkg_b")
+        );
+    }
+
+    // ==================== Prefix Override Tests ====================
+
+    #[test]
+    fn test_parent_prefix_override_from_cli() {
+        let temp_workspace = create_parent_test_workspace();
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![PrefixOverride {
+                    dependency: "parent_child_a".to_string(),
+                    prefix: "custom-a".to_string(),
+                }],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // child_a features should use "custom-a" prefix
+        let child_a_api = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_a" && e.dependency_feature == "api");
+
+        if let Some(exposure) = child_a_api {
+            assert_eq!(exposure.expected_parent_feature, "custom-a-api");
+        }
+
+        // child_b should still use inferred prefix "child-b"
+        let child_b_api = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency == "parent_child_b" && e.dependency_feature == "api");
+
+        if let Some(exposure) = child_b_api {
+            assert_eq!(exposure.expected_parent_feature, "child-b-api");
+        }
+    }
+
+    // ==================== Skip Features Behavior Tests ====================
+
+    #[test]
+    fn test_parent_validation_default_skips_underscore_features() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "child"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child = { path = "../child", optional = true }
+
+[features]
+default = []
+child = ["dep:parent_child"]
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        fs::create_dir(root_path.join("child")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_child"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+_internal = []
+_private_feature = []
+"#;
+        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![], // Empty - should use defaults
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should report api as missing
+        let api_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "api");
+        assert!(api_missing.is_some());
+
+        // Should NOT report _internal or _private_feature (skipped by default)
+        let internal_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "_internal");
+        assert!(internal_missing.is_none());
+
+        let private_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "_private_feature");
+        assert!(private_missing.is_none());
+
+        // Should NOT report default (skipped by default)
+        let default_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "default");
+        assert!(default_missing.is_none());
+    }
+
+    #[test]
+    fn test_parent_cli_skip_features_merge_with_defaults() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "child"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child = { path = "../child", optional = true }
+
+[features]
+default = []
+child = ["dep:parent_child"]
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        fs::create_dir(root_path.join("child")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_child"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+_internal = []
+"#;
+        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec!["serde".to_string()], // Add serde to skip list
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should report api as missing
+        let api_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "api");
+        assert!(api_missing.is_some());
+
+        // Should NOT report serde (CLI skip)
+        let serde_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "serde");
+        assert!(serde_missing.is_none());
+
+        // Should NOT report _internal (default skip still applies)
+        let internal_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "_internal");
+        assert!(internal_missing.is_none());
+
+        // Should NOT report default (default skip still applies)
+        let default_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "default");
+        assert!(default_missing.is_none());
+    }
+
+    // ==================== Edge Case Tests ====================
+
+    #[test]
+    fn test_parent_validation_no_workspace_deps() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["parent"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+serde = "1.0"
+
+[features]
+default = []
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have result for parent
+        assert_eq!(result.parent_results.len(), 1);
+
+        // Should have no missing exposures (no workspace deps)
+        assert!(result.parent_results[0].missing_exposures.is_empty());
+        assert_eq!(result.parent_results[0].features_checked, 0);
+    }
+
+    #[test]
+    fn test_parent_validation_all_features_exposed() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "child"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        // Parent correctly exposes all child features
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child = { path = "../child", optional = true }
+
+[features]
+default = []
+child = ["dep:parent_child"]
+child-api = ["child", "parent_child?/api"]
+child-serde = ["child", "parent_child?/serde"]
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        fs::create_dir(root_path.join("child")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_child"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+serde = []
+"#;
+        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have no missing exposures
+        assert!(result.parent_results[0].missing_exposures.is_empty());
+        assert_eq!(result.parent_results[0].features_exposed, 2); // api and serde
+    }
+
+    #[test]
+    fn test_parent_validation_non_optional_dependency() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["parent", "child"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("parent")).unwrap();
+        let parent_cargo = r#"[package]
+name = "parent"
+version = "0.1.0"
+
+[dependencies]
+parent_child = { path = "../child" }
+
+[features]
+default = []
+"#;
+        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+
+        fs::create_dir(root_path.join("child")).unwrap();
+        let child_cargo = r#"[package]
+name = "parent_child"
+version = "0.1.0"
+
+[features]
+default = []
+api = []
+"#;
+        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        let parent_result = &result.parent_results[0];
+
+        // Should detect missing api feature
+        let api_missing = parent_result
+            .missing_exposures
+            .iter()
+            .find(|e| e.dependency_feature == "api");
+        assert!(api_missing.is_some());
+
+        // Expected propagation should NOT have ? (non-optional dep)
+        let exposure = api_missing.unwrap();
+        assert_eq!(exposure.expected_propagation, "parent_child/api");
+    }
+
+    #[test]
+    fn test_parent_package_not_found_warning() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["real_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("real_pkg")).unwrap();
+        let pkg_cargo = r#"[package]
+name = "real_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+"#;
+        fs::write(root_path.join("real_pkg/Cargo.toml"), pkg_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["nonexistent_pkg".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should have a warning about nonexistent package
+        let warning = result
+            .warnings
+            .iter()
+            .find(|w| w.message.contains("nonexistent_pkg") && w.message.contains("not found"));
+        assert!(warning.is_some());
+    }
+
+    // ==================== Output Format Tests ====================
+
+    #[test]
+    fn test_parent_validation_json_output() {
+        let temp_workspace = create_parent_test_workspace();
+        let config = ValidatorConfig {
+            output_format: OutputType::Json,
+            parent_config: ParentValidationConfig {
+                cli_packages: vec!["parent".to_string()],
+                cli_depth: Some(1),
+                cli_skip_features: vec![],
+                cli_prefix_overrides: vec![],
+                use_config: false,
+            },
+            ..ValidatorConfig::test_default()
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // Should serialize to valid JSON
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("parent_results"));
+        assert!(json.contains("missing_exposures"));
+        assert!(json.contains("expected_parent_feature"));
+        assert!(json.contains("expected_propagation"));
+
+        // Should be parseable
+        let _parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    }
+
+    #[test]
+    fn test_parent_validation_result_serialization() {
+        let result = ParentValidationResult {
+            package: "test_parent".to_string(),
+            missing_exposures: vec![MissingFeatureExposure {
+                parent_package: "test_parent".to_string(),
+                dependency: "test_child".to_string(),
+                dependency_feature: "api".to_string(),
+                expected_parent_feature: "child-api".to_string(),
+                expected_propagation: "test_child?/api".to_string(),
+                depth: 1,
+                chain: vec!["test_parent".to_string(), "test_child".to_string()],
+            }],
+            features_checked: 5,
+            features_exposed: 4,
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("test_parent"));
+        assert!(json.contains("test_child"));
+        assert!(json.contains("child-api"));
+        assert!(json.contains("features_checked"));
+        assert!(json.contains("features_exposed"));
+    }
 }
