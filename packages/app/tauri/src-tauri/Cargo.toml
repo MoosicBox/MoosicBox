@@ -20,6 +20,9 @@ independent = true
 [package.metadata.cargo-machete]
 ignored = ["strum", "tauri-build"]
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
 name       = "moosicbox_lib"
