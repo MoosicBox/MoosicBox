@@ -543,4 +543,201 @@ mod tests {
             panic!("Expected complex BinaryOp expression");
         }
     }
+
+    #[test_log::test]
+    fn test_expression_variable_empty_path() {
+        // Edge case: variable with empty path
+        let expr = Expression::variable(std::iter::empty::<&str>());
+        assert_eq!(expr, Expression::Variable(vec![]));
+    }
+
+    #[test_log::test]
+    fn test_expression_double_negation() {
+        // Test double negation: !!value
+        let inner = Expression::boolean(false);
+        let single_not = Expression::unary_op(UnaryOperator::Not, inner.clone());
+        let double_not = Expression::unary_op(UnaryOperator::Not, single_not);
+
+        if let Expression::UnaryOp { op, expr } = &double_not {
+            assert_eq!(*op, UnaryOperator::Not);
+            if let Expression::UnaryOp {
+                op: inner_op,
+                expr: inner_expr,
+            } = expr.as_ref()
+            {
+                assert_eq!(*inner_op, UnaryOperator::Not);
+                assert_eq!(**inner_expr, inner);
+            } else {
+                panic!("Expected nested UnaryOp");
+            }
+        } else {
+            panic!("Expected UnaryOp expression");
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_nested_index() {
+        // Test nested indexing: arr[0][1]
+        let arr = Expression::variable(["arr"]);
+        let first_index = Expression::index(arr, Expression::number(0.0));
+        let nested_index = Expression::index(first_index, Expression::number(1.0));
+
+        if let Expression::Index { expr, index } = &nested_index {
+            assert_eq!(**index, Expression::Number(1.0));
+            if let Expression::Index {
+                expr: inner_expr,
+                index: inner_index,
+            } = expr.as_ref()
+            {
+                assert_eq!(**inner_expr, Expression::Variable(vec!["arr".to_string()]));
+                assert_eq!(**inner_index, Expression::Number(0.0));
+            } else {
+                panic!("Expected nested Index");
+            }
+        } else {
+            panic!("Expected Index expression");
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_index_with_string() {
+        // Test indexing with string key (object property access): obj["key"]
+        let obj = Expression::variable(["obj"]);
+        let expr = Expression::index(obj.clone(), Expression::string("key"));
+
+        if let Expression::Index {
+            expr: e,
+            index: idx,
+        } = expr
+        {
+            assert_eq!(*e, obj);
+            assert_eq!(*idx, Expression::String("key".to_string()));
+        } else {
+            panic!("Expected Index expression");
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_nested_function_calls() {
+        // Test nested function calls: toJson(fromJson(value))
+        let inner_call =
+            Expression::function_call("fromJson", vec![Expression::variable(["value"])]);
+        let outer_call = Expression::function_call("toJson", vec![inner_call.clone()]);
+
+        if let Expression::FunctionCall { name, args } = &outer_call {
+            assert_eq!(name, "toJson");
+            assert_eq!(args.len(), 1);
+            assert_eq!(args[0], inner_call);
+        } else {
+            panic!("Expected FunctionCall expression");
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_function_call_with_many_args() {
+        // Test function call with multiple arguments: format('{0} {1} {2}', a, b, c)
+        let expr = Expression::function_call(
+            "format",
+            vec![
+                Expression::string("{0} {1} {2}"),
+                Expression::variable(["a"]),
+                Expression::variable(["b"]),
+                Expression::variable(["c"]),
+            ],
+        );
+
+        if let Expression::FunctionCall { name, args } = expr {
+            assert_eq!(name, "format");
+            assert_eq!(args.len(), 4);
+            assert_eq!(args[0], Expression::String("{0} {1} {2}".to_string()));
+        } else {
+            panic!("Expected FunctionCall expression");
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_deeply_nested_binary_ops() {
+        // Test deeply nested binary operations: ((a == b) && (c != d)) || ((e == f) && (g != h))
+        let ab = Expression::binary_op(
+            Expression::variable(["a"]),
+            BinaryOperator::Equal,
+            Expression::variable(["b"]),
+        );
+        let cd = Expression::binary_op(
+            Expression::variable(["c"]),
+            BinaryOperator::NotEqual,
+            Expression::variable(["d"]),
+        );
+        let left_and = Expression::binary_op(ab, BinaryOperator::And, cd);
+
+        let ef = Expression::binary_op(
+            Expression::variable(["e"]),
+            BinaryOperator::Equal,
+            Expression::variable(["f"]),
+        );
+        let gh = Expression::binary_op(
+            Expression::variable(["g"]),
+            BinaryOperator::NotEqual,
+            Expression::variable(["h"]),
+        );
+        let right_and = Expression::binary_op(ef, BinaryOperator::And, gh);
+
+        let complex = Expression::binary_op(left_and, BinaryOperator::Or, right_and);
+
+        if let Expression::BinaryOp { left, op, right } = &complex {
+            assert_eq!(*op, BinaryOperator::Or);
+            assert!(matches!(left.as_ref(), Expression::BinaryOp { .. }));
+            assert!(matches!(right.as_ref(), Expression::BinaryOp { .. }));
+        } else {
+            panic!("Expected BinaryOp expression");
+        }
+
+        // Verify serde roundtrip for deeply nested structure
+        let json = serde_json::to_string(&complex).unwrap();
+        let deserialized: Expression = serde_json::from_str(&json).unwrap();
+        assert_eq!(complex, deserialized);
+    }
+
+    #[test_log::test]
+    fn test_expression_mixed_operators_in_condition() {
+        // Real-world condition: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip]') || github.ref == 'refs/heads/release'
+        let is_push = Expression::binary_op(
+            Expression::variable(["github", "event_name"]),
+            BinaryOperator::Equal,
+            Expression::string("push"),
+        );
+
+        let contains_skip = Expression::function_call(
+            "contains",
+            vec![
+                Expression::variable(["github", "event", "head_commit", "message"]),
+                Expression::string("[skip]"),
+            ],
+        );
+        let not_contains_skip = Expression::unary_op(UnaryOperator::Not, contains_skip);
+
+        let push_and_no_skip =
+            Expression::binary_op(is_push, BinaryOperator::And, not_contains_skip);
+
+        let is_release = Expression::binary_op(
+            Expression::variable(["github", "ref"]),
+            BinaryOperator::Equal,
+            Expression::string("refs/heads/release"),
+        );
+
+        let full_condition =
+            Expression::binary_op(push_and_no_skip, BinaryOperator::Or, is_release);
+
+        // Verify structure
+        if let Expression::BinaryOp { op, .. } = &full_condition {
+            assert_eq!(*op, BinaryOperator::Or);
+        } else {
+            panic!("Expected BinaryOp expression");
+        }
+
+        // Verify serde roundtrip
+        let json = serde_json::to_string(&full_condition).unwrap();
+        let deserialized: Expression = serde_json::from_str(&json).unwrap();
+        assert_eq!(full_condition, deserialized);
+    }
 }
