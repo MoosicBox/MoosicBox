@@ -6419,6 +6419,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "serial_test",
  "strum 0.27.2",
  "switchy_env",
  "switchy_time",

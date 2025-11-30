@@ -805,8 +805,8 @@ mod test_calculation_calc {
 
 #[cfg(test)]
 mod test_container_methods {
-    use crate::{Container, Element};
-    use hyperchad_transformer_models::{LayoutDirection, Position};
+    use crate::{Container, Element, Flex, Number};
+    use hyperchad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, Position};
 
     #[test_log::test]
     fn container_is_fixed_returns_true_for_fixed_position() {
@@ -1086,6 +1086,316 @@ mod test_container_methods {
             ..Default::default()
         };
         assert!(container.find_parent_by_id(1).is_none());
+    }
+
+    #[test_log::test]
+    fn find_parent_by_str_id_mut_returns_parent() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                str_id: Some("child-element".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let parent = container.find_parent_by_str_id_mut("child-element");
+        assert!(parent.is_some());
+        assert_eq!(parent.unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn find_parent_by_str_id_mut_returns_none_for_root() {
+        let mut container = Container {
+            id: 1,
+            str_id: Some("root".to_string()),
+            ..Default::default()
+        };
+        assert!(container.find_parent_by_str_id_mut("root").is_none());
+    }
+
+    #[test_log::test]
+    fn find_parent_by_str_id_mut_finds_nested_parent() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    str_id: Some("deeply-nested".to_string()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let parent = container.find_parent_by_str_id_mut("deeply-nested");
+        assert!(parent.is_some());
+        assert_eq!(parent.unwrap().id, 2);
+    }
+
+    #[test_log::test]
+    fn is_span_returns_false_when_child_is_not_span() {
+        let container = Container {
+            element: Element::Span,
+            children: vec![Container {
+                element: Element::Div,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(!container.is_span());
+    }
+
+    #[test_log::test]
+    fn is_span_returns_true_when_all_children_are_spans() {
+        let container = Container {
+            element: Element::Span,
+            children: vec![
+                Container {
+                    element: Element::Span,
+                    ..Default::default()
+                },
+                Container {
+                    element: Element::Raw {
+                        value: "text".to_string(),
+                    },
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        assert!(container.is_span());
+    }
+
+    #[test_log::test]
+    fn is_flex_container_returns_true_with_justify_content() {
+        let container = Container {
+            justify_content: Some(JustifyContent::Center),
+            ..Default::default()
+        };
+        assert!(container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn is_flex_container_returns_true_with_align_items() {
+        let container = Container {
+            align_items: Some(AlignItems::Center),
+            ..Default::default()
+        };
+        assert!(container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn is_flex_container_returns_true_with_column_gap() {
+        let container = Container {
+            column_gap: Some(Number::Integer(10)),
+            ..Default::default()
+        };
+        assert!(container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn is_flex_container_returns_true_when_child_has_flex() {
+        let container = Container {
+            children: vec![Container {
+                flex: Some(Flex::default()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(container.is_flex_container());
+    }
+
+    #[test_log::test]
+    fn replace_id_children_with_elements_replaces_children() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 10,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let replacements = vec![
+            Container {
+                id: 100,
+                ..Default::default()
+            },
+            Container {
+                id: 101,
+                ..Default::default()
+            },
+        ];
+
+        let original = container.replace_id_children_with_elements(replacements, 2);
+
+        assert!(original.is_some());
+        let original_children = original.unwrap();
+        assert_eq!(original_children.len(), 1);
+        assert_eq!(original_children[0].id, 10);
+
+        let target = container.find_element_by_id(2).unwrap();
+        assert_eq!(target.children.len(), 2);
+        assert_eq!(target.children[0].id, 100);
+        assert_eq!(target.children[1].id, 101);
+    }
+
+    #[test_log::test]
+    fn replace_id_children_with_elements_returns_none_for_missing_id() {
+        let mut container = Container {
+            id: 1,
+            ..Default::default()
+        };
+
+        let result = container.replace_id_children_with_elements(vec![], 999);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn replace_str_id_children_with_elements_replaces_children() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                str_id: Some("target".to_string()),
+                children: vec![Container {
+                    id: 10,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let replacements = vec![Container {
+            id: 200,
+            ..Default::default()
+        }];
+
+        let original = container.replace_str_id_children_with_elements(replacements, "target");
+
+        assert!(original.is_some());
+        let original_children = original.unwrap();
+        assert_eq!(original_children.len(), 1);
+        assert_eq!(original_children[0].id, 10);
+
+        let target = container.find_element_by_str_id("target").unwrap();
+        assert_eq!(target.children.len(), 1);
+        assert_eq!(target.children[0].id, 200);
+    }
+
+    #[test_log::test]
+    fn replace_str_id_children_with_elements_returns_none_for_missing_str_id() {
+        let mut container = Container {
+            id: 1,
+            ..Default::default()
+        };
+
+        let result = container.replace_str_id_children_with_elements(vec![], "nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn replace_id_with_elements_replaces_element_and_returns_original() {
+        let mut container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let replacements = vec![
+            Container {
+                id: 100,
+                ..Default::default()
+            },
+            Container {
+                id: 101,
+                ..Default::default()
+            },
+        ];
+
+        let original = container.replace_id_with_elements(replacements, 2);
+
+        assert!(original.is_some());
+        assert_eq!(original.unwrap().id, 2);
+        assert_eq!(container.children.len(), 3);
+        assert_eq!(container.children[0].id, 100);
+        assert_eq!(container.children[1].id, 101);
+        assert_eq!(container.children[2].id, 3);
+    }
+
+    #[test_log::test]
+    fn replace_id_with_elements_returns_none_for_missing_id() {
+        let mut container = Container {
+            id: 1,
+            ..Default::default()
+        };
+
+        let result = container.replace_id_with_elements(vec![], 999);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn replace_str_id_with_elements_replaces_element_and_returns_original() {
+        let mut container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    str_id: Some("to-replace".to_string()),
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let replacements = vec![Container {
+            id: 200,
+            str_id: Some("replacement".to_string()),
+            ..Default::default()
+        }];
+
+        let original = container.replace_str_id_with_elements(replacements, "to-replace");
+
+        assert!(original.is_some());
+        assert_eq!(original.unwrap().id, 2);
+        assert_eq!(container.children.len(), 2);
+        assert_eq!(container.children[0].id, 200);
+        assert_eq!(
+            container.children[0].str_id,
+            Some("replacement".to_string())
+        );
+        assert_eq!(container.children[1].id, 3);
+    }
+
+    #[test_log::test]
+    fn replace_str_id_with_elements_returns_none_for_missing_str_id() {
+        let mut container = Container {
+            id: 1,
+            ..Default::default()
+        };
+
+        let result = container.replace_str_id_with_elements(vec![], "nonexistent");
+        assert!(result.is_none());
     }
 
     #[test_log::test]

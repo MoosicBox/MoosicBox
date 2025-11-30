@@ -46,6 +46,7 @@ maud                         = { workspace = true }
 moosicbox_arb                = { workspace = true, features = ["css", "serde", "xml"] }
 pretty_assertions            = { workspace = true }
 proptest                     = { workspace = true }
+serial_test                  = { workspace = true }
 test-log                     = { workspace = true }
 tl                           = { workspace = true }
 
