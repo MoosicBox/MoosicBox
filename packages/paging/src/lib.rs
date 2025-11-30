@@ -2836,4 +2836,271 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "batch fetch failed");
     }
+
+    // ===== Additional Edge Case Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_transpose_fetch_error_propagation() {
+        // Test that errors from the underlying fetch are correctly propagated through transpose
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Ok(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<Result<i32, String>, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async { Err("fetch error".to_string()) })
+            });
+
+        let transposed = response.transpose().unwrap();
+
+        // Initial page should be OK
+        assert_eq!(transposed.items(), &[1, 2]);
+
+        // But fetching more pages should propagate the error
+        let result = transposed.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "fetch error");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_transpose_subsequent_page_item_error() {
+        // Test that Err items in subsequent pages are correctly handled by transpose
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Ok(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<Result<i32, String>, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![Ok(3), Err("item error".to_string())],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let transposed = response.transpose().unwrap();
+        assert_eq!(transposed.items(), &[1, 2]);
+
+        // Fetching more should fail due to Err item in subsequent page
+        let result = transposed.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "item error");
+    }
+
+    #[test_log::test]
+    fn test_page_has_more_exact_boundary() {
+        // Test when offset + items.len() exactly equals total (boundary condition)
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 7,
+            limit: 5,
+            total: 10,
+        };
+
+        // offset (7) + items.len() (3) = 10, which equals total (10)
+        assert!(!page.has_more());
+    }
+
+    #[test_log::test]
+    fn test_page_serialization_has_more_exact_boundary() {
+        // Test serialization when offset + items.len() == total produces hasMore: false
+        let page = Page::WithTotal {
+            items: vec![8, 9, 10],
+            offset: 7,
+            limit: 3,
+            total: 10,
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["hasMore"], false);
+        assert_eq!(parsed["total"], 10);
+    }
+
+    #[test_log::test]
+    fn test_page_with_has_more_empty_items() {
+        // Edge case: empty items with has_more true (unusual but valid)
+        let page: Page<i32> = Page::WithHasMore {
+            items: vec![],
+            offset: 0,
+            limit: 10,
+            has_more: true,
+        };
+
+        assert!(page.has_more());
+        assert!(page.items().is_empty());
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.limit(), 10);
+    }
+
+    #[test_log::test]
+    fn test_page_deserialization_with_null_total() {
+        // Explicit null total should result in WithHasMore variant
+        let json = r#"{"items":[1,2],"offset":0,"limit":2,"total":null,"hasMore":true}"#;
+
+        let page: Page<i32> = serde_json::from_str(json).unwrap();
+
+        assert_eq!(page.items(), &[1, 2]);
+        assert_eq!(page.total(), None);
+        assert!(page.has_more());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_map_fetch_error_transformation() {
+        // Test that map's fetch transformation correctly applies to both success and error paths
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![3, 4],
+                        offset: 2,
+                        limit: 2,
+                        total: 4,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        // Apply map transformation
+        let mapped = response.map(|x| x * 3);
+
+        // Verify subsequent fetches are also mapped
+        let all = mapped.with_rest_of_items().await.unwrap();
+        assert_eq!(all, vec![3, 6, 9, 12]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_sequential_multiple_pages() {
+        // Test sequential fetching across more than 2 pages using WithHasMore
+        let page = Page::WithHasMore {
+            items: vec![1],
+            offset: 0,
+            limit: 1,
+            has_more: true,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                match offset {
+                    1 => Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![2],
+                            offset: 1,
+                            limit: 1,
+                            has_more: true,
+                        },
+                        |off, _| {
+                            Box::pin(async move {
+                                if off == 2 {
+                                    Ok(PagingResponse::new(
+                                        Page::WithHasMore {
+                                            items: vec![3],
+                                            offset: 2,
+                                            limit: 1,
+                                            has_more: false,
+                                        },
+                                        |_, _| {
+                                            Box::pin(async {
+                                                Ok(PagingResponse::<i32, String>::empty())
+                                            })
+                                        },
+                                    ))
+                                } else {
+                                    Ok(PagingResponse::empty())
+                                }
+                            })
+                        },
+                    )),
+                    2 => Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![3],
+                            offset: 2,
+                            limit: 1,
+                            has_more: false,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let all_items = response.with_rest_of_items().await.unwrap();
+        assert_eq!(all_items, vec![1, 2, 3]);
+    }
+
+    #[test_log::test]
+    fn test_page_into_items_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec!["a".to_string(), "b".to_string()],
+            offset: 5,
+            limit: 2,
+            has_more: true,
+        };
+
+        let items = page.into_items();
+        assert_eq!(items, vec!["a", "b"]);
+    }
+
+    #[test_log::test]
+    fn test_page_into_vec_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec![10, 20, 30],
+            offset: 0,
+            limit: 3,
+            has_more: false,
+        };
+
+        let vec: Vec<i32> = Vec::from(page);
+        assert_eq!(vec, vec![10, 20, 30]);
+    }
+
+    #[test_log::test]
+    fn test_page_deref_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec![100, 200],
+            offset: 0,
+            limit: 2,
+            has_more: true,
+        };
+
+        // Deref to Vec should work
+        let vec_ref: &Vec<i32> = &page;
+        assert_eq!(vec_ref.len(), 2);
+        assert_eq!(vec_ref[1], 200);
+    }
+
+    #[test_log::test]
+    fn test_paging_request_clone() {
+        let req1 = PagingRequest {
+            offset: 10,
+            limit: 20,
+        };
+        let req2 = req1.clone();
+
+        assert_eq!(req1, req2);
+        assert_eq!(req2.offset, 10);
+        assert_eq!(req2.limit, 20);
+    }
 }

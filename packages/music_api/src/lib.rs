@@ -1990,10 +1990,10 @@ mod test {
 
     mod test_music_api_with_data {
         use super::{
-            AlbumOrder, AlbumOrderDirection, AlbumType, AlbumsRequest, AlbumVersion, Artist,
-            ArtistOrder, ArtistOrderDirection, Error, MusicApi, PagingResponse, PagingResult,
-            PlaybackQuality, Track, TrackAudioQuality, TrackOrId, TrackOrder, TrackOrderDirection,
-            TrackSource, API_SOURCE, Album, Id,
+            API_SOURCE, Album, AlbumOrder, AlbumOrderDirection, AlbumType, AlbumVersion,
+            AlbumsRequest, Artist, ArtistOrder, ArtistOrderDirection, Error, Id, MusicApi,
+            PagingResponse, PagingResult, PlaybackQuality, Track, TrackAudioQuality, TrackOrId,
+            TrackOrder, TrackOrderDirection, TrackSource,
         };
         use async_trait::async_trait;
         use moosicbox_music_models::ApiSource;
