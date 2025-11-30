@@ -436,3 +436,67 @@ fn parse_cookies(header: &str) -> Vec<(String, String)> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_parse_cookies_single() {
+        let cookies = parse_cookies("session=abc123");
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0], ("session".to_string(), "abc123".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_multiple() {
+        let cookies = parse_cookies("session=abc123; user=john; theme=dark");
+        assert_eq!(cookies.len(), 3);
+        assert_eq!(cookies[0], ("session".to_string(), "abc123".to_string()));
+        assert_eq!(cookies[1], ("user".to_string(), "john".to_string()));
+        assert_eq!(cookies[2], ("theme".to_string(), "dark".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_with_whitespace() {
+        let cookies = parse_cookies("  session = abc123  ;  user = john  ");
+        assert_eq!(cookies.len(), 2);
+        assert_eq!(cookies[0], ("session".to_string(), "abc123".to_string()));
+        assert_eq!(cookies[1], ("user".to_string(), "john".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_empty_string() {
+        let cookies = parse_cookies("");
+        assert!(cookies.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_no_equals() {
+        // Cookies without = sign should be filtered out
+        let cookies = parse_cookies("invalid_cookie; session=abc123");
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0], ("session".to_string(), "abc123".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_value_with_equals() {
+        // Cookie values can contain equals signs (e.g., base64 encoded)
+        let cookies = parse_cookies("token=abc=123=xyz");
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0], ("token".to_string(), "abc=123=xyz".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_empty_value() {
+        let cookies = parse_cookies("empty=");
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0], ("empty".to_string(), String::new()));
+    }
+
+    #[test_log::test]
+    fn test_parse_cookies_semicolon_only() {
+        let cookies = parse_cookies(";;;");
+        assert!(cookies.is_empty());
+    }
+}
