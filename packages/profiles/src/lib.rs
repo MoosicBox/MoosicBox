@@ -586,5 +586,20 @@ mod tests {
             let string: String = profile.into();
             assert_eq!(string, "test");
         }
+
+        #[test_log::test]
+        fn test_profile_name_unverified_invalid_utf8_header() {
+            use actix_web::http::header::HeaderValue;
+
+            // Create a header value with non-UTF8 bytes
+            let non_utf8_value = HeaderValue::from_bytes(&[0x80, 0x81, 0x82]).unwrap();
+
+            let req = TestRequest::default()
+                .insert_header(("moosicbox-profile", non_utf8_value))
+                .to_http_request();
+
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_err());
+        }
     }
 }
