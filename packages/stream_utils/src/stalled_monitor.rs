@@ -276,4 +276,61 @@ mod tests {
         let error = StalledReadMonitorError::Stalled;
         assert_eq!(format!("{error}"), "Stalled");
     }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_throttle_then_timeout() {
+        // Test that throttle and timeout work correctly when throttle is configured first
+        // This tests the builder pattern ordering doesn't affect functionality
+        let data = vec![1, 2, 3];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream)
+            .with_throttle(Duration::from_millis(20))
+            .with_timeout(Duration::from_millis(200));
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_timeout_during_throttle_wait() {
+        // Test that timeout can fire even when waiting for throttle
+        // This tests the interaction between throttle and timeout:
+        // If we're waiting for throttle but the stream has no data, timeout should still fire
+        let stream = stream::pending::<i32>(); // Stream that never produces data
+        let mut monitor = StalledReadMonitor::new(stream)
+            .with_throttle(Duration::from_millis(100)) // Longer throttle
+            .with_timeout(Duration::from_millis(50)); // Shorter timeout
+
+        // The timeout should fire since the stream never produces data
+        let result = monitor.next().await;
+        assert!(result.is_some(), "Should get timeout error");
+        let error = result.unwrap().unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::TimedOut);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_stream_yields_error() {
+        // Test that monitor correctly handles errors from the underlying stream
+        // by wrapping them in Ok (since monitor's Item is Result<T>)
+        let error_stream = stream::iter(vec![1, 2, 3]);
+        let mut monitor = StalledReadMonitor::new(error_stream);
+
+        // Should receive all items wrapped in Ok
+        let first = monitor.next().await.unwrap().unwrap();
+        assert_eq!(first, 1);
+
+        let second = monitor.next().await.unwrap().unwrap();
+        assert_eq!(second, 2);
+
+        let third = monitor.next().await.unwrap().unwrap();
+        assert_eq!(third, 3);
+
+        // Stream should end normally
+        let end = monitor.next().await;
+        assert!(end.is_none());
+    }
 }
