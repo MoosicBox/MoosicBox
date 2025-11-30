@@ -2625,4 +2625,102 @@ mod tests {
             Ok(()) => panic!("Expected error but got success"),
         }
     }
+
+    #[test_log::test]
+    fn test_create_migration_in_nested_directory() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let nested_migrations_dir = temp_dir.path().join("deeply").join("nested").join("path");
+
+        // Create a migration in a deeply nested directory that doesn't exist yet
+        let result = create_migration("nested_test", &nested_migrations_dir);
+        assert!(
+            result.is_ok(),
+            "Should create nested directory structure: {:?}",
+            result.err()
+        );
+
+        // Verify the entire path was created
+        assert!(
+            switchy_fs::exists(&nested_migrations_dir),
+            "Nested migrations directory should be created"
+        );
+
+        // Verify migration files exist
+        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&nested_migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        assert_eq!(entries.len(), 1, "Should create exactly one migration");
+
+        let migration_dir = entries[0].path();
+        assert!(
+            switchy_fs::exists(migration_dir.join("up.sql")),
+            "up.sql should exist in nested location"
+        );
+        assert!(
+            switchy_fs::exists(migration_dir.join("down.sql")),
+            "down.sql should exist in nested location"
+        );
+    }
+
+    #[test_log::test]
+    fn test_create_migration_timestamp_format() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        // Create a migration
+        let result = create_migration("timestamp_test", &migrations_dir);
+        assert!(result.is_ok(), "Failed to create migration");
+
+        // Get the created migration directory name
+        let entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        let migration_name = entries[0].file_name().to_string_lossy().to_string();
+
+        // Verify timestamp format: YYYY-MM-DD-HHMMSS_name
+        // The format should be: 2024-01-15-143022_timestamp_test
+        let parts: Vec<&str> = migration_name.splitn(2, '_').collect();
+        assert_eq!(
+            parts.len(),
+            2,
+            "Migration name should have timestamp_name format"
+        );
+
+        let timestamp_part = parts[0];
+        let name_part = parts[1];
+
+        // Verify timestamp has correct structure (YYYY-MM-DD-HHMMSS = 17 chars)
+        assert_eq!(
+            timestamp_part.len(),
+            17,
+            "Timestamp should be 17 characters (YYYY-MM-DD-HHMMSS)"
+        );
+
+        // Verify the name part matches what we provided
+        assert_eq!(
+            name_part, "timestamp_test",
+            "Name part should match the provided name"
+        );
+
+        // Verify timestamp contains dashes in correct positions
+        assert_eq!(
+            timestamp_part.chars().nth(4),
+            Some('-'),
+            "Should have dash after year"
+        );
+        assert_eq!(
+            timestamp_part.chars().nth(7),
+            Some('-'),
+            "Should have dash after month"
+        );
+        assert_eq!(
+            timestamp_part.chars().nth(10),
+            Some('-'),
+            "Should have dash after day"
+        );
+    }
 }
