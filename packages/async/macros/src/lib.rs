@@ -1315,6 +1315,41 @@ mod tests {
         assert!(result.is_err(), "Invalid flag should produce an error");
     }
 
+    /// Tests that `TestWithPathInput` correctly parses flags in reverse order.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_flags_reverse_order() {
+        let input = quote! {
+            @path = switchy_async;
+            no_simulator;
+            real_fs;
+            real_time;
+            async fn test_reverse_order() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with reverse flag order");
+
+        assert!(parsed.use_real_time, "real_time should be true");
+        assert!(parsed.use_real_fs, "real_fs should be true");
+        assert!(parsed.no_simulator, "no_simulator should be true");
+    }
+
+    /// Tests that `TestWithPathInput` handles only middle flags.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_real_fs_and_no_simulator() {
+        let input = quote! {
+            @path = crate;
+            real_fs;
+            no_simulator;
+            async fn test_partial_flags() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Failed to parse TestWithPathInput with partial flags");
+
+        assert!(!parsed.use_real_time, "real_time should be false");
+        assert!(parsed.use_real_fs, "real_fs should be true");
+        assert!(parsed.no_simulator, "no_simulator should be true");
+    }
+
     // ============================================================================
     // YieldInjector tests
     // ============================================================================
@@ -1374,6 +1409,105 @@ mod tests {
         assert_eq!(
             output, original,
             "Non-await expressions should not be modified"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles method chaining after await.
+    #[::core::prelude::v1::test]
+    fn yield_injector_method_chain_after_await() {
+        let input: Expr = syn::parse_quote! {
+            fetch_data().await.process().transform()
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        // Should have exactly one yield for the single await
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 1,
+            "Should have one yield_now for the single await: {output}"
+        );
+        // The method chain should still be present
+        assert!(
+            output.contains("process"),
+            "Method chain should be preserved: {output}"
+        );
+        assert!(
+            output.contains("transform"),
+            "Method chain should be preserved: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles the question mark operator after await.
+    #[::core::prelude::v1::test]
+    fn yield_injector_try_operator_after_await() {
+        let input: Expr = syn::parse_quote! {
+            fallible_operation().await?
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        // Should have exactly one yield for the single await
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 1,
+            "Should have one yield_now for the single await: {output}"
+        );
+        // The try operator should be preserved at the outer level
+        assert!(
+            output.contains('?'),
+            "Try operator should be preserved: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles sequential awaits in a block.
+    #[::core::prelude::v1::test]
+    fn yield_injector_sequential_awaits_in_block() {
+        let input: Expr = syn::parse_quote! {{
+            let a = first().await;
+            let b = second().await;
+            let c = third().await;
+            (a, b, c)
+        }};
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        // Should have three yields for the three awaits
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 3,
+            "Should have three yield_now calls for three awaits: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await inside a closure.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_async_block() {
+        let input: Expr = syn::parse_quote! {
+            async {
+                inner_future().await
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        // The await inside the async block should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 1,
+            "Should have one yield_now for the await inside async block: {output}"
         );
     }
 
@@ -1494,6 +1628,118 @@ mod tests {
         assert_eq!(
             output, original,
             "Struct definitions should not be modified"
+        );
+    }
+
+    /// Tests that `inject_item` preserves enum definitions unchanged.
+    #[::core::prelude::v1::test]
+    fn inject_item_enum_unchanged() {
+        let mut item: Item = syn::parse_quote! {
+            enum MyEnum {
+                VariantA,
+                VariantB(i32),
+                VariantC { field: String },
+            }
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(output, original, "Enum definitions should not be modified");
+    }
+
+    /// Tests that `inject_item` preserves type alias definitions unchanged.
+    #[::core::prelude::v1::test]
+    fn inject_item_type_alias_unchanged() {
+        let mut item: Item = syn::parse_quote! {
+            type MyResult<T> = Result<T, std::io::Error>;
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(
+            output, original,
+            "Type alias definitions should not be modified"
+        );
+    }
+
+    /// Tests that `inject_item` handles impl blocks with only sync methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_impl_block_only_sync_methods() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyStruct {
+                fn new() -> Self {
+                    Self { value: 0 }
+                }
+
+                fn compute(&self) -> i32 {
+                    self.value * 2
+                }
+            }
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(
+            output, original,
+            "Impl blocks with only sync methods should not be modified"
+        );
+    }
+
+    /// Tests that `inject_item` handles impl blocks with multiple async methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_impl_block_multiple_async_methods() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyStruct {
+                async fn first_async(&self) {
+                    first_future().await;
+                }
+
+                async fn second_async(&self) {
+                    second_future().await;
+                }
+
+                async fn third_async(&self) {
+                    third_future().await;
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        // All three async methods should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 3,
+            "All three async methods should have yields: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` handles module without content (declaration only).
+    #[::core::prelude::v1::test]
+    fn inject_item_module_declaration_only() {
+        let mut item: Item = syn::parse_quote! {
+            mod external_module;
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(
+            output, original,
+            "Module declarations without content should not be modified"
         );
     }
 
