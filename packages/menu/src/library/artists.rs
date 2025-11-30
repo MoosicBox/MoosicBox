@@ -327,4 +327,63 @@ mod tests {
         // All should be treated as equal case-insensitively
         assert_eq!(sorted.len(), 3);
     }
+
+    #[test_log::test]
+    fn test_filter_artists_with_combined_name_and_search_filters() {
+        let artists = vec![
+            create_test_artist(1, "The Beatles"), // matches name "the" but not search "rock"
+            create_test_artist(2, "The Rock Band"), // matches both name "the" and search "rock"
+            create_test_artist(3, "Pink Floyd Rock"), // matches search "rock" but not name "the"
+            create_test_artist(4, "Queen"),       // matches neither
+            create_test_artist(5, "The Rock Stars"), // matches both name "the" and search "rock"
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("the".to_string()),
+                search: Some("rock".to_string()),
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        // Only artists matching BOTH filters should be returned
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|a| a.title == "The Rock Band"));
+        assert!(filtered.iter().any(|a| a.title == "The Rock Stars"));
+        // These should NOT be in the result
+        assert!(!filtered.iter().any(|a| a.title == "The Beatles"));
+        assert!(!filtered.iter().any(|a| a.title == "Pink Floyd Rock"));
+        assert!(!filtered.iter().any(|a| a.title == "Queen"));
+    }
+
+    #[test_log::test]
+    fn test_filter_and_sort_artists_integration() {
+        let artists = vec![
+            create_test_artist(1, "Zebra Band"),
+            create_test_artist(2, "Alpha Band"),
+            create_test_artist(3, "Middle Band"),
+            create_test_artist(4, "Other Artist"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: Some("band".to_string()),
+                search: None,
+            },
+        };
+
+        // First filter, then sort (matching the get_all_artists behavior)
+        let filtered = filter_artists(artists, &request);
+        let sorted = sort_artists(filtered, &request);
+
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].title, "Alpha Band");
+        assert_eq!(sorted[1].title, "Middle Band");
+        assert_eq!(sorted[2].title, "Zebra Band");
+    }
 }
