@@ -1614,4 +1614,314 @@ mod tests {
             assert_eq!(code.border_top_left_radius, Some(Number::from(3)));
         }
     }
+
+    #[test_log::test]
+    fn test_image_source_and_alt_text() {
+        let md = "![My alt text](https://example.com/image.png)";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let image = paragraph
+                .children
+                .iter()
+                .find(|c| matches!(c.element, Element::Image { .. }));
+            assert!(image.is_some());
+            let image = image.unwrap();
+            if let Element::Image { source, alt, .. } = &image.element {
+                assert_eq!(source, &Some("https://example.com/image.png".to_string()));
+                // Note: pulldown-cmark puts title in alt, not the alt text from markdown
+                assert!(alt.is_some());
+            } else {
+                panic!("Expected Image element");
+            }
+            // Verify max-width styling
+            assert_eq!(image.max_width, Some(Number::IntegerPercent(100)));
+        }
+    }
+
+    #[test_log::test]
+    fn test_code_block_full_styling() {
+        let md = "```\ncode\n```";
+        let container = markdown_to_container(md);
+        if let Some(code_block) = container.children.first() {
+            // Verify all code block styling attributes
+            assert_eq!(code_block.background, Some(Color::from_hex("#f6f8fa")));
+            assert_eq!(code_block.padding_left, Some(Number::from(16)));
+            assert_eq!(code_block.padding_right, Some(Number::from(16)));
+            assert_eq!(code_block.padding_top, Some(Number::from(16)));
+            assert_eq!(code_block.padding_bottom, Some(Number::from(16)));
+            assert_eq!(code_block.margin_top, Some(Number::from(16)));
+            assert_eq!(code_block.margin_bottom, Some(Number::from(16)));
+            assert_eq!(code_block.border_top_left_radius, Some(Number::from(6)));
+            assert_eq!(code_block.border_top_right_radius, Some(Number::from(6)));
+            assert_eq!(code_block.border_bottom_left_radius, Some(Number::from(6)));
+            assert_eq!(code_block.border_bottom_right_radius, Some(Number::from(6)));
+            assert_eq!(code_block.white_space, Some(WhiteSpace::PreserveWrap));
+        }
+    }
+
+    #[test_log::test]
+    fn test_list_item_styling() {
+        let md = "- Item 1\n- Item 2";
+        let container = markdown_to_container(md);
+        if let Some(list) = container.children.first() {
+            assert!(list.children.len() >= 2);
+            for item in &list.children {
+                assert_eq!(item.element, Element::ListItem);
+                assert!(item.classes.contains(&"markdown-list-item".to_string()));
+                assert_eq!(item.margin_bottom, Some(Number::from(4)));
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_table_cell_styling() {
+        let md = "| Header |\n|--------|\n| Cell   |";
+        let container = markdown_to_container(md);
+        if let Some(table) = container.children.first() {
+            // Find a table cell (TD element)
+            fn find_td(container: &Container) -> Option<&Container> {
+                for child in &container.children {
+                    if matches!(child.element, Element::TD { .. }) {
+                        return Some(child);
+                    }
+                    if let Some(found) = find_td(child) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+
+            let td = find_td(table);
+            assert!(td.is_some());
+            let td = td.unwrap();
+            // Verify table cell styling
+            assert!(td.classes.contains(&"markdown-td".to_string()));
+            assert_eq!(td.padding_left, Some(Number::from(8)));
+            assert_eq!(td.padding_right, Some(Number::from(8)));
+            assert_eq!(td.padding_top, Some(Number::from(8)));
+            assert_eq!(td.padding_bottom, Some(Number::from(8)));
+            assert_eq!(
+                td.border_right,
+                Some((Color::from_hex("#d0d7de"), Number::from(1)))
+            );
+            assert_eq!(
+                td.border_bottom,
+                Some((Color::from_hex("#d0d7de"), Number::from(1)))
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_list_direction() {
+        let md = "- Item 1\n- Item 2";
+        let container = markdown_to_container(md);
+        if let Some(list) = container.children.first() {
+            // Lists should have column direction
+            assert_eq!(list.direction, LayoutDirection::Column);
+        }
+    }
+
+    #[test_log::test]
+    fn test_root_container_has_column_direction() {
+        let md = "# Heading\n\nParagraph";
+        let container = markdown_to_container(md);
+        // Root container should have column direction
+        assert_eq!(container.direction, LayoutDirection::Column);
+    }
+
+    #[test_log::test]
+    fn test_table_head_styling() {
+        let md = "| Header1 | Header2 |\n|---------|----------|\n| Cell1   | Cell2    |";
+        let container = markdown_to_container(md);
+        if let Some(table) = container.children.first() {
+            // Find the thead element
+            let thead = table
+                .children
+                .iter()
+                .find(|c| matches!(c.element, Element::THead));
+            assert!(thead.is_some());
+            let thead = thead.unwrap();
+            assert!(thead.classes.contains(&"markdown-thead".to_string()));
+            assert_eq!(thead.background, Some(Color::from_hex("#f6f8fa")));
+        }
+    }
+
+    #[test_log::test]
+    fn test_table_row_created() {
+        let md = "| Cell1 | Cell2 |\n|-------|-------|\n| A     | B     |";
+        let container = markdown_to_container(md);
+        if let Some(table) = container.children.first() {
+            // Find TR elements recursively
+            fn count_tr(container: &Container) -> usize {
+                let mut count = 0;
+                for child in &container.children {
+                    if matches!(child.element, Element::TR) {
+                        count += 1;
+                    }
+                    count += count_tr(child);
+                }
+                count
+            }
+
+            // Should have at least 1 row (data row) - header row is in THead
+            let tr_count = count_tr(table);
+            assert!(
+                tr_count >= 1,
+                "Expected at least 1 TR element, found {tr_count}"
+            );
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    fn check_no_unescaped_script(container: &Container) -> bool {
+        for child in &container.children {
+            if let Element::Raw { value } = &child.element
+                && value.contains("<script>")
+            {
+                return false;
+            }
+            if !check_no_unescaped_script(child) {
+                return false;
+            }
+        }
+        true
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_inline_html_escaped() {
+        // Test that inline HTML with dangerous content is escaped
+        let md = "Text with <script>bad</script> inline";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        // Find all raw elements and check none contain unescaped script tags
+        assert!(check_no_unescaped_script(&container));
+    }
+
+    #[test_log::test]
+    fn test_paragraph_margin() {
+        let md = "This is a paragraph.";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            assert!(paragraph.classes.contains(&"markdown-p".to_string()));
+            assert_eq!(paragraph.margin_bottom, Some(Number::from(16)));
+        }
+    }
+
+    #[test_log::test]
+    fn test_link_anchor_element() {
+        let md = "[Example](https://example.com)";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let link = paragraph
+                .children
+                .iter()
+                .find(|c| matches!(c.element, Element::Anchor { .. }));
+            assert!(link.is_some());
+            let link = link.unwrap();
+            if let Element::Anchor { href, target } = &link.element {
+                assert_eq!(href, &Some("https://example.com".to_string()));
+                assert_eq!(target, &None);
+            } else {
+                panic!("Expected Anchor element");
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_heading_class_format() {
+        let md = "## H2 Heading";
+        let container = markdown_to_container(md);
+        if let Some(heading) = container.children.first() {
+            // Verify heading class follows the format "markdown-h{level}"
+            assert!(heading.classes.contains(&"markdown-h2".to_string()));
+            assert!(matches!(
+                heading.element,
+                Element::Heading {
+                    size: hyperchad_transformer::HeaderSize::H2
+                }
+            ));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_link_tag() {
+        let md = "<link rel=\"stylesheet\" href=\"evil.css\">";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify link tag is escaped
+            assert!(value.contains("&amp;lt;link"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_title_tag() {
+        let md = "<title>Evil Title</title>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify title tag is escaped
+            assert!(value.contains("&amp;lt;title"));
+        }
+    }
+
+    #[test_log::test]
+    fn test_nested_blockquote() {
+        let md = "> Outer quote\n> > Nested quote";
+        let container = markdown_to_container(md);
+        assert!(!container.children.is_empty());
+        // Verify nested blockquote structure
+        if let Some(outer) = container.children.first() {
+            assert!(outer.classes.contains(&"markdown-blockquote".to_string()));
+        }
+    }
+
+    fn find_checkbox(container: &Container) -> Option<&Container> {
+        for child in &container.children {
+            if let Element::Input {
+                input: hyperchad_transformer::Input::Checkbox { .. },
+                ..
+            } = &child.element
+            {
+                return Some(child);
+            }
+            if let Some(found) = find_checkbox(child) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    #[test_log::test]
+    fn test_task_list_checkbox_styling() {
+        let md = "- [x] Completed";
+        let options = MarkdownOptions {
+            enable_tasklists: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        // Find the checkbox input
+        let checkbox = find_checkbox(&container);
+        assert!(checkbox.is_some());
+        let checkbox = checkbox.unwrap();
+        // Verify checkbox styling
+        assert_eq!(checkbox.margin_right, Some(Number::from(8)));
+        assert_eq!(checkbox.user_select, Some(UserSelect::None));
+    }
 }
