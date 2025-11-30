@@ -1134,6 +1134,173 @@ mod tests {
         assert!(!graph.has_dependents("nonexistent"));
     }
 
+    #[test_log::test]
+    fn test_collect_all_dependents_simple_chain() {
+        let mut graph = DependencyGraph::new();
+        // Chain: users <- posts <- comments
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+
+        // Starting from users, should collect posts and comments
+        let all_deps = graph.collect_all_dependents("users");
+        assert_eq!(all_deps.len(), 3); // users itself + posts + comments
+        assert!(all_deps.contains("users"));
+        assert!(all_deps.contains("posts"));
+        assert!(all_deps.contains("comments"));
+    }
+
+    #[test_log::test]
+    fn test_collect_all_dependents_diamond_pattern() {
+        let mut graph = DependencyGraph::new();
+        // Diamond: users <- posts <- post_tags, users <- comments <- post_tags
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "users".to_string());
+        graph.add_dependency("post_tags".to_string(), "posts".to_string());
+        graph.add_dependency("post_tags".to_string(), "comments".to_string());
+
+        // Starting from users, should collect all tables
+        let all_deps = graph.collect_all_dependents("users");
+        assert_eq!(all_deps.len(), 4);
+        assert!(all_deps.contains("users"));
+        assert!(all_deps.contains("posts"));
+        assert!(all_deps.contains("comments"));
+        assert!(all_deps.contains("post_tags"));
+    }
+
+    #[test_log::test]
+    fn test_collect_all_dependents_leaf_table() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+
+        // Starting from leaf table (comments) - should only include itself
+        let all_deps = graph.collect_all_dependents("comments");
+        assert_eq!(all_deps.len(), 1);
+        assert!(all_deps.contains("comments"));
+    }
+
+    #[test_log::test]
+    fn test_collect_all_dependents_nonexistent_table() {
+        let graph = DependencyGraph::new();
+
+        // Nonexistent table - should still include itself
+        let all_deps = graph.collect_all_dependents("nonexistent");
+        assert_eq!(all_deps.len(), 1);
+        assert!(all_deps.contains("nonexistent"));
+    }
+
+    #[test_log::test]
+    fn test_table_exists_in_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+
+        // Table with dependents
+        assert!(graph.table_exists("users"));
+
+        // Table with both dependencies and dependents
+        assert!(graph.table_exists("posts"));
+
+        // Table with only dependencies
+        assert!(graph.table_exists("comments"));
+
+        // Nonexistent table
+        assert!(!graph.table_exists("nonexistent"));
+    }
+
+    #[test_log::test]
+    fn test_table_exists_only_in_dependents() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        // users only appears in dependents, not in dependencies
+        assert!(graph.table_exists("users"));
+    }
+
+    #[test_log::test]
+    fn test_resolve_drop_order_simple() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+
+        let tables_to_drop = BTreeSet::from([
+            "users".to_string(),
+            "posts".to_string(),
+            "comments".to_string(),
+        ]);
+
+        let result = graph.resolve_drop_order(tables_to_drop).unwrap();
+        match result {
+            DropPlan::Simple(order) => {
+                assert_eq!(order.len(), 3);
+                // Verify proper ordering: users should come first (root), comments last
+                assert_eq!(order[0], "users");
+                assert_eq!(order[2], "comments");
+            }
+            DropPlan::WithCycles { .. } => panic!("Expected Simple plan, got WithCycles"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_resolve_drop_order_with_cycle() {
+        let mut graph = DependencyGraph::new();
+        // Create a cycle: A -> B -> A
+        graph.add_dependency("A".to_string(), "B".to_string());
+        graph.add_dependency("B".to_string(), "A".to_string());
+
+        let tables_to_drop = BTreeSet::from(["A".to_string(), "B".to_string()]);
+
+        let result = graph.resolve_drop_order(tables_to_drop).unwrap();
+        match result {
+            DropPlan::WithCycles {
+                tables,
+                requires_fk_disable,
+            } => {
+                assert!(requires_fk_disable);
+                assert_eq!(tables.len(), 2);
+                assert!(tables.contains(&"A".to_string()));
+                assert!(tables.contains(&"B".to_string()));
+            }
+            DropPlan::Simple(_) => panic!("Expected WithCycles plan, got Simple"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_validate_table_name_for_pragma_valid_names() {
+        assert!(validate_table_name_for_pragma("users").is_ok());
+        assert!(validate_table_name_for_pragma("my_table").is_ok());
+        assert!(validate_table_name_for_pragma("Table123").is_ok());
+        assert!(validate_table_name_for_pragma("_private").is_ok());
+        assert!(validate_table_name_for_pragma("a").is_ok());
+    }
+
+    #[test_log::test]
+    fn test_validate_table_name_for_pragma_empty_rejected() {
+        let result = validate_table_name_for_pragma("");
+        assert!(result.is_err());
+        match result {
+            Err(crate::DatabaseError::InvalidQuery(msg)) => {
+                assert!(msg.contains("unsafe characters"));
+            }
+            _ => panic!("Expected InvalidQuery error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_validate_table_name_for_pragma_special_chars_rejected() {
+        // SQL injection attempts
+        assert!(validate_table_name_for_pragma("users; DROP TABLE users").is_err());
+        assert!(validate_table_name_for_pragma("users--").is_err());
+        assert!(validate_table_name_for_pragma("users'").is_err());
+        assert!(validate_table_name_for_pragma("users\"").is_err());
+
+        // Other invalid characters
+        assert!(validate_table_name_for_pragma("table-name").is_err());
+        assert!(validate_table_name_for_pragma("table.name").is_err());
+        assert!(validate_table_name_for_pragma("table name").is_err());
+        assert!(validate_table_name_for_pragma("table*").is_err());
+    }
+
     #[test]
     fn test_column_dependencies_struct() {
         let deps = ColumnDependencies {

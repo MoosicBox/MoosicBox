@@ -2372,4 +2372,230 @@ mod tests {
             );
         }
     }
+
+    mod try_from_database_value_tests {
+        use super::*;
+
+        // u8 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_u8_overflow_from_u16() {
+            // u16 value that exceeds u8::MAX
+            let val = DatabaseValue::UInt16(300);
+            let result: Result<u8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u8_overflow_from_u32() {
+            let val = DatabaseValue::UInt32(1000);
+            let result: Result<u8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u8_overflow_from_u64() {
+            let val = DatabaseValue::UInt64(1_000_000);
+            let result: Result<u8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u8_negative_i8_fails() {
+            let val = DatabaseValue::Int8(-1);
+            let result: Result<u8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u8_negative_i64_fails() {
+            let val = DatabaseValue::Int64(-100);
+            let result: Result<u8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u8_unsupported_type() {
+            let val = DatabaseValue::String("not a number".to_string());
+            let result: Result<u8, _> = val.try_into();
+            assert!(matches!(result, Err(TryFromError::CouldNotConvert(_))));
+        }
+
+        // u16 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_u16_success_coercion_from_u8() {
+            let val = DatabaseValue::UInt8(200);
+            let result: u16 = val.try_into().unwrap();
+            assert_eq!(result, 200);
+        }
+
+        #[test_log::test]
+        fn test_try_from_u16_overflow_from_u32() {
+            let val = DatabaseValue::UInt32(100_000);
+            let result: Result<u16, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u16_negative_fails() {
+            let val = DatabaseValue::Int16(-500);
+            let result: Result<u16, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        // u32 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_u32_overflow_from_u64() {
+            let val = DatabaseValue::UInt64(u64::MAX);
+            let result: Result<u32, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u32_negative_i32_fails() {
+            let val = DatabaseValue::Int32(-1);
+            let result: Result<u32, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        // u64 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_u64_negative_i64_fails() {
+            let val = DatabaseValue::Int64(-1);
+            let result: Result<u64, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_u64_success_from_positive_i64() {
+            let val = DatabaseValue::Int64(1_000_000);
+            let result: u64 = val.try_into().unwrap();
+            assert_eq!(result, 1_000_000);
+        }
+
+        // i8 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_i8_overflow_from_i16() {
+            let val = DatabaseValue::Int16(200); // > i8::MAX (127)
+            let result: Result<i8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_i8_underflow_from_i16() {
+            let val = DatabaseValue::Int16(-200); // < i8::MIN (-128)
+            let result: Result<i8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_i8_overflow_from_u64() {
+            let val = DatabaseValue::UInt64(1000);
+            let result: Result<i8, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        // i16 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_i16_success_from_i8() {
+            let val = DatabaseValue::Int8(-50);
+            let result: i16 = val.try_into().unwrap();
+            assert_eq!(result, -50);
+        }
+
+        #[test_log::test]
+        fn test_try_from_i16_overflow_from_i32() {
+            let val = DatabaseValue::Int32(50_000); // > i16::MAX (32767)
+            let result: Result<i16, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        // i32 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_i32_overflow_from_i64() {
+            let val = DatabaseValue::Int64(i64::MAX);
+            let result: Result<i32, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_i32_overflow_from_u64() {
+            let val = DatabaseValue::UInt64(u64::MAX);
+            let result: Result<i32, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        // i64 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_i64_overflow_from_u64() {
+            let val = DatabaseValue::UInt64(u64::MAX); // > i64::MAX
+            let result: Result<i64, _> = val.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_i64_success_from_i32_coercion() {
+            let val = DatabaseValue::Int32(-100_000);
+            let result: i64 = val.try_into().unwrap();
+            assert_eq!(result, -100_000);
+        }
+
+        // f32 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_f32_truncation_from_f64() {
+            let val = DatabaseValue::Real64(1.5);
+            let result: f32 = val.try_into().unwrap();
+            assert!((result - 1.5).abs() < 0.0001);
+        }
+
+        #[test_log::test]
+        fn test_try_from_f32_unsupported_type() {
+            let val = DatabaseValue::Int64(42);
+            let result: Result<f32, _> = val.try_into();
+            assert!(matches!(result, Err(TryFromError::CouldNotConvert(_))));
+        }
+
+        // f64 TryFrom tests
+        #[test_log::test]
+        fn test_try_from_f64_coercion_from_f32() {
+            let val = DatabaseValue::Real32(2.5f32);
+            let result: f64 = val.try_into().unwrap();
+            assert!((result - 2.5).abs() < 0.0001);
+        }
+
+        #[test_log::test]
+        fn test_try_from_f64_unsupported_type() {
+            let val = DatabaseValue::String("not a float".to_string());
+            let result: Result<f64, _> = val.try_into();
+            assert!(matches!(result, Err(TryFromError::CouldNotConvert(_))));
+        }
+
+        // Opt variants in TryFrom tests
+        #[test_log::test]
+        fn test_try_from_u64_opt_some() {
+            let val = DatabaseValue::UInt64Opt(Some(500));
+            let result: u64 = val.try_into().unwrap();
+            assert_eq!(result, 500);
+        }
+
+        #[test_log::test]
+        fn test_try_from_u64_opt_none_fails() {
+            let val = DatabaseValue::UInt64Opt(None);
+            let result: Result<u64, _> = val.try_into();
+            assert!(matches!(result, Err(TryFromError::CouldNotConvert(_))));
+        }
+
+        #[test_log::test]
+        fn test_try_from_i64_opt_some() {
+            let val = DatabaseValue::Int64Opt(Some(-999));
+            let result: i64 = val.try_into().unwrap();
+            assert_eq!(result, -999);
+        }
+
+        #[test_log::test]
+        fn test_try_from_f64_opt_some() {
+            let val = DatabaseValue::Real64Opt(Some(std::f64::consts::PI));
+            let result: f64 = val.try_into().unwrap();
+            assert!((result - std::f64::consts::PI).abs() < 0.00001);
+        }
+    }
 }
