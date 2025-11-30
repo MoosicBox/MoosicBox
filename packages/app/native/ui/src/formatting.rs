@@ -394,4 +394,138 @@ mod tests {
             assert_eq!(AlbumType::Other.into_formatted(), "Other Albums");
         }
     }
+
+    mod display_album_version_qualities_tests {
+        use super::*;
+        use moosicbox_music_models::ApiSource;
+
+        // Helper struct that implements AlbumVersionQualityFormat for testing
+        struct MockQuality(String);
+
+        impl AlbumVersionQualityFormat for MockQuality {
+            fn into_formatted(self) -> String {
+                self.0
+            }
+        }
+
+        fn mock(s: &str) -> MockQuality {
+            MockQuality(s.to_string())
+        }
+
+        #[test_log::test]
+        fn test_empty_iterator_returns_empty_string() {
+            let qualities: Vec<MockQuality> = vec![];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            assert_eq!(result, "");
+        }
+
+        #[test_log::test]
+        fn test_single_item_no_separator() {
+            let qualities = vec![mock("FLAC 44.1 kHz")];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            assert_eq!(result, "FLAC 44.1 kHz");
+        }
+
+        #[test_log::test]
+        fn test_two_items_joined_with_separator() {
+            let qualities = vec![mock("FLAC"), mock("MP3")];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            assert_eq!(result, "FLAC / MP3");
+        }
+
+        #[test_log::test]
+        fn test_three_items_joined_with_separator() {
+            let qualities = vec![mock("FLAC"), mock("MP3"), mock("AAC")];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            assert_eq!(result, "FLAC / MP3 / AAC");
+        }
+
+        #[test_log::test]
+        fn test_no_truncation_when_max_characters_none() {
+            let qualities = vec![
+                mock("FLAC 96 kHz 24-bit"),
+                mock("FLAC 48 kHz 16-bit"),
+                mock("MP3 320kbps"),
+            ];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            assert_eq!(
+                result,
+                "FLAC 96 kHz 24-bit / FLAC 48 kHz 16-bit / MP3 320kbps"
+            );
+        }
+
+        #[test_log::test]
+        fn test_truncates_when_exceeding_max_characters() {
+            // "FLAC" = 4 chars, " / " = 3 chars, "MP3" = 3 chars
+            // Total for two = 4 + 3 + 3 = 10
+            // If max is 9, should truncate at second item
+            let qualities = vec![mock("FLAC"), mock("MP3"), mock("AAC")];
+            let result = display_album_version_qualities(qualities.into_iter(), Some(9));
+            // After "FLAC", adding " / MP3" would be 10 chars which exceeds 9
+            // So we truncate with "(+2)" for the remaining 2 items
+            assert_eq!(result, "FLAC (+2)");
+        }
+
+        #[test_log::test]
+        fn test_truncation_shows_correct_remaining_count() {
+            let qualities = vec![mock("A"), mock("B"), mock("C"), mock("D"), mock("E")];
+            // "A" = 1 char, adding " / B" = 4 more = 5 total
+            // With max_characters = 3, we can only fit "A"
+            let result = display_album_version_qualities(qualities.into_iter(), Some(3));
+            // Remaining: B, C, D, E = 4 items
+            assert_eq!(result, "A (+4)");
+        }
+
+        #[test_log::test]
+        fn test_truncation_at_last_item() {
+            let qualities = vec![mock("AAA"), mock("BBB")];
+            // "AAA" = 3 chars, " / BBB" = 6 more = 9 total
+            // With max_characters = 8, truncates at second item
+            let result = display_album_version_qualities(qualities.into_iter(), Some(8));
+            // Only 1 remaining item (BBB)
+            assert_eq!(result, "AAA (+1)");
+        }
+
+        #[test_log::test]
+        fn test_fits_exactly_at_max_characters() {
+            let qualities = vec![mock("AB"), mock("CD")];
+            // "AB" = 2 chars, " / CD" = 5 more = 7 total
+            let result = display_album_version_qualities(qualities.into_iter(), Some(7));
+            assert_eq!(result, "AB / CD");
+        }
+
+        #[test_log::test]
+        fn test_with_real_album_version_quality_api_source() {
+            // Test with actual AlbumVersionQuality using API source
+            let qualities = vec![
+                AlbumVersionQuality {
+                    source: TrackApiSource::Api(ApiSource::library()),
+                    ..Default::default()
+                },
+                AlbumVersionQuality {
+                    source: TrackApiSource::Api(ApiSource::library()),
+                    ..Default::default()
+                },
+            ];
+            let result = display_album_version_qualities(qualities.into_iter(), None);
+            // API sources format as "API:Library"
+            assert_eq!(result, "API:Library / API:Library");
+        }
+
+        #[test_log::test]
+        fn test_large_max_characters_no_truncation() {
+            let qualities = vec![mock("Short"), mock("Items")];
+            let result = display_album_version_qualities(qualities.into_iter(), Some(1000));
+            assert_eq!(result, "Short / Items");
+        }
+
+        #[test_log::test]
+        fn test_max_characters_zero_truncates_immediately() {
+            let qualities = vec![mock("A"), mock("B")];
+            // With max 0, adding anything to first item should trigger truncation
+            let result = display_album_version_qualities(qualities.into_iter(), Some(0));
+            // First item is always added, then second would exceed limit
+            assert_eq!(result, "A (+1)");
+        }
+    }
 }
