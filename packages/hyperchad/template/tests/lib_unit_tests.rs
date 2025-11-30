@@ -1524,3 +1524,146 @@ fn color_rgb_with_u32_clamping() {
         }
     );
 }
+
+// ============================================================================
+// ToBool trait tests for IfExpression (logic feature)
+// ============================================================================
+
+#[test_log::test]
+fn to_bool_if_expression_with_default_only() {
+    use hyperchad_actions::logic::{IfExpression, Responsive};
+    use hyperchad_template::ToBool;
+
+    // When only default is set, it should use the default
+    let expr = IfExpression {
+        condition: Responsive::Target("mobile".to_string()),
+        value: None,
+        default: Some(true),
+    };
+    assert!(expr.to_bool());
+
+    let expr = IfExpression {
+        condition: Responsive::Target("desktop".to_string()),
+        value: None,
+        default: Some(false),
+    };
+    assert!(!expr.to_bool());
+}
+
+#[test_log::test]
+fn to_bool_if_expression_with_value_only() {
+    use hyperchad_actions::logic::{IfExpression, Responsive};
+    use hyperchad_template::ToBool;
+
+    // When only value is set (no default), it should use value
+    let expr = IfExpression {
+        condition: Responsive::Target("mobile".to_string()),
+        value: Some(true),
+        default: None,
+    };
+    assert!(expr.to_bool());
+
+    let expr = IfExpression {
+        condition: Responsive::Target("desktop".to_string()),
+        value: Some(false),
+        default: None,
+    };
+    assert!(!expr.to_bool());
+}
+
+#[test_log::test]
+fn to_bool_if_expression_prefers_default_over_value() {
+    use hyperchad_actions::logic::{IfExpression, Responsive};
+    use hyperchad_template::ToBool;
+
+    // When both default and value are set, default takes precedence
+    let expr = IfExpression {
+        condition: Responsive::Target("mobile".to_string()),
+        value: Some(false),
+        default: Some(true),
+    };
+    assert!(expr.to_bool()); // default wins
+
+    let expr = IfExpression {
+        condition: Responsive::Target("desktop".to_string()),
+        value: Some(true),
+        default: Some(false),
+    };
+    assert!(!expr.to_bool()); // default wins
+}
+
+#[test_log::test]
+fn to_bool_if_expression_neither_set_uses_default_bool() {
+    use hyperchad_actions::logic::{IfExpression, Responsive};
+    use hyperchad_template::ToBool;
+
+    // When neither default nor value is set, fall back to bool::default() = false
+    let expr: IfExpression<bool, Responsive> = IfExpression {
+        condition: Responsive::Target("tablet".to_string()),
+        value: None,
+        default: None,
+    };
+    assert!(!expr.to_bool());
+}
+
+#[test_log::test]
+fn to_bool_if_expression_with_multiple_targets() {
+    use hyperchad_actions::logic::{IfExpression, Responsive};
+    use hyperchad_template::ToBool;
+
+    // Works with Responsive::Targets as well
+    let expr = IfExpression {
+        condition: Responsive::Targets(vec!["mobile".to_string(), "tablet".to_string()]),
+        value: Some(true),
+        default: None,
+    };
+    assert!(expr.to_bool());
+}
+
+// ============================================================================
+// IntoActionEffect trait tests for logic::If
+// ============================================================================
+
+#[test_log::test]
+fn into_action_effect_from_logic_if() {
+    use hyperchad_actions::ActionType;
+    use hyperchad_actions::logic::{Condition, If, hidden, visible};
+    use hyperchad_template::IntoActionEffect;
+
+    let if_logic = If {
+        condition: Condition::Eq(visible(), hidden()),
+        actions: vec![],
+        else_actions: vec![],
+    };
+    let effect = if_logic.into_action_effect();
+
+    assert!(matches!(effect.action, ActionType::Logic(_)));
+}
+
+#[test_log::test]
+fn into_action_effect_from_logic_if_with_actions() {
+    use hyperchad_actions::logic::{Condition, If, hidden, visible};
+    use hyperchad_actions::{ActionEffect, ActionType};
+    use hyperchad_template::IntoActionEffect;
+
+    let if_logic = If {
+        condition: Condition::Eq(visible(), hidden()),
+        actions: vec![ActionEffect {
+            action: ActionType::NoOp,
+            ..Default::default()
+        }],
+        else_actions: vec![ActionEffect {
+            action: ActionType::NoOp,
+            ..Default::default()
+        }],
+    };
+    let effect = if_logic.into_action_effect();
+
+    match effect.action {
+        ActionType::Logic(if_action) => {
+            assert_eq!(if_action.actions.len(), 1);
+            assert_eq!(if_action.else_actions.len(), 1);
+        }
+        _ => panic!("Expected Logic action type"),
+    }
+}
