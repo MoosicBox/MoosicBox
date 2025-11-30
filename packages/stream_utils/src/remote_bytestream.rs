@@ -1400,4 +1400,89 @@ mod tests {
         // Should return remaining data from buffer
         assert!(bytes_read2 <= 6);
     }
+
+    // ==== Seek Edge Cases ====
+
+    /// Test seeking to position 0 from various positions
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_to_zero() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate some read progress
+        stream.read_position = 500;
+
+        // Seek back to beginning
+        let pos = stream.seek(SeekFrom::Start(0)).unwrap();
+        assert_eq!(pos, 0);
+        assert_eq!(stream.read_position, 0);
+        assert_eq!(stream.fetcher.start, 0);
+    }
+
+    /// Test `SeekFrom::Current` with zero offset
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_current_zero() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        stream.read_position = 250;
+
+        // Seek current with 0 should return current position (using stream_position())
+        let pos = stream.stream_position().unwrap();
+        assert_eq!(pos, 250);
+        assert_eq!(stream.read_position, 250);
+    }
+
+    /// Test `SeekFrom::End` with zero offset
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_end_zero() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Seek to end with 0 offset should go to file size
+        let pos = stream.seek(SeekFrom::End(0)).unwrap();
+        assert_eq!(pos, 1000);
+        assert_eq!(stream.read_position, 1000);
+    }
+
+    /// Test that seeking resets finished flag (even when manually set)
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_resets_finished_flag() {
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Manually set finished to true
+        stream.finished = true;
+
+        // Seek should reset the finished flag
+        stream.seek(SeekFrom::Start(500)).unwrap();
+        assert!(!stream.finished, "Seek should reset the finished flag");
+
+        // Verify position was updated
+        assert_eq!(stream.read_position, 500);
+    }
 }

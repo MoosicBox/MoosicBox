@@ -882,4 +882,148 @@ mod tests {
         let result = stream.next().await;
         assert!(result.is_none(), "Stream should end when writer is dropped");
     }
+
+    // ===== Edge Case Tests for TypedWriter =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_last_receiver_disconnects_during_write() {
+        // Test the edge case where the last receiver disconnects during write
+        // The code has special logic for the last sender (it doesn't clone the value)
+        let writer = TypedWriter::<String>::default();
+        let stream = writer.stream();
+
+        // Initially 1 sender
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // Drop the only stream
+        drop(stream);
+
+        // Write should handle the disconnected receiver and remove it
+        writer.write("test".to_string());
+
+        // Should have 0 senders now
+        assert_eq!(writer.senders.read().unwrap().len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_first_receiver_disconnects_not_last() {
+        // Test disconnect cleanup when first receivers disconnect but not the last
+        // This tests the clone path in the write loop
+        let writer = TypedWriter::<i32>::default();
+        let stream1 = writer.stream();
+        let stream2 = writer.stream();
+        let mut stream3 = writer.stream();
+
+        assert_eq!(writer.senders.read().unwrap().len(), 3);
+
+        // Drop the first two streams (not the last)
+        drop(stream1);
+        drop(stream2);
+
+        // Write should cleanup disconnected receivers and deliver to stream3
+        writer.write(42);
+
+        // Should have 1 sender remaining
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // stream3 should have received the value
+        let val = stream3.next().await.unwrap();
+        assert_eq!(val, 42);
+    }
+
+    // ===== Additional ByteWriter Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_multiple_close_calls() {
+        // Test that multiple close calls are safe
+        let writer = ByteWriter::default();
+        let mut stream = writer.stream();
+
+        // First close
+        writer.close();
+
+        // Stream should receive close signal
+        let close1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(close1.len(), 0);
+
+        // Second close should be safe (stream already received signal)
+        writer.close();
+
+        // The sender should still be in the list (it's not removed until we try to send and fail)
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_stream_multiple_chunks_received() {
+        // Test receiving multiple chunks in sequence
+        let mut writer = ByteWriter::default();
+        let mut stream = writer.stream();
+
+        // Write multiple chunks
+        for i in 0..5 {
+            let data = format!("chunk{i}");
+            writer.write_all(data.as_bytes()).unwrap();
+        }
+        writer.close();
+
+        // Receive all chunks
+        let mut received = Vec::new();
+        while let Some(result) = stream.next().await {
+            let bytes = result.unwrap();
+            if bytes.is_empty() {
+                break;
+            }
+            received.push(String::from_utf8_lossy(&bytes).to_string());
+        }
+
+        assert_eq!(
+            received,
+            vec!["chunk0", "chunk1", "chunk2", "chunk3", "chunk4"]
+        );
+    }
+
+    #[test_log::test]
+    fn test_byte_writer_large_write() {
+        // Test writing larger data blocks
+        let mut writer = ByteWriter::default();
+        let _stream = writer.stream();
+
+        // Write 1MB of data
+        let large_data = vec![0u8; 1024 * 1024];
+        let result = writer.write_all(&large_data);
+        assert!(result.is_ok());
+        assert_eq!(writer.bytes_written(), 1024 * 1024);
+    }
+
+    // ===== TypedWriter with Complex Types =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_with_option_type() {
+        // Test TypedWriter with Option<T> values
+        let writer = TypedWriter::<Option<i32>>::default();
+        let mut stream = writer.stream();
+
+        writer.write(Some(42));
+        writer.write(None);
+        writer.write(Some(100));
+
+        assert_eq!(stream.next().await.unwrap(), Some(42));
+        assert_eq!(stream.next().await.unwrap(), None);
+        assert_eq!(stream.next().await.unwrap(), Some(100));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_with_result_type() {
+        // Test TypedWriter with Result<T, E> values
+        let writer = TypedWriter::<Result<i32, String>>::default();
+        let mut stream = writer.stream();
+
+        writer.write(Ok(42));
+        writer.write(Err("error".to_string()));
+        writer.write(Ok(100));
+
+        assert_eq!(stream.next().await.unwrap(), Ok(42));
+        assert_eq!(stream.next().await.unwrap(), Err("error".to_string()));
+        assert_eq!(stream.next().await.unwrap(), Ok(100));
+    }
 }
