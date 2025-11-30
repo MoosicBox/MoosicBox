@@ -39,3 +39,42 @@ impl NavigationStep {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn navigation_step_description_go_to() {
+        let step = NavigationStep::GoTo {
+            url: "/dashboard".to_string(),
+        };
+        assert_eq!(step.description(), "Navigate to /dashboard");
+    }
+
+    #[test_log::test]
+    fn navigation_step_description_go_back() {
+        let step = NavigationStep::GoBack;
+        assert_eq!(step.description(), "Go back");
+    }
+
+    #[test_log::test]
+    fn navigation_step_description_go_forward() {
+        let step = NavigationStep::GoForward;
+        assert_eq!(step.description(), "Go forward");
+    }
+
+    #[test_log::test]
+    fn navigation_step_description_reload() {
+        let step = NavigationStep::Reload;
+        assert_eq!(step.description(), "Reload page");
+    }
+
+    #[test_log::test]
+    fn navigation_step_description_set_hash() {
+        let step = NavigationStep::SetHash {
+            hash: "section-1".to_string(),
+        };
+        assert_eq!(step.description(), "Set hash to section-1");
+    }
+}
