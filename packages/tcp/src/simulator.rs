@@ -1410,4 +1410,82 @@ mod test {
         assert!(!is_local_host_name("localhost"));
         assert!(!is_local_host_name("example.com"));
     }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_zero_addr_uses_host_scope() {
+        reset_dns();
+
+        let scoped_addr = "scoped.zero.host";
+        with_host(scoped_addr.to_string(), |_| {
+            // 0.0.0.0 is also recognized as local host name
+            let result = parse_addr("0.0.0.0:9090".to_string(), true);
+            assert!(result.is_ok());
+
+            let (_sock_addr, host_name) = result.unwrap();
+            assert_eq!(host_name, Some(scoped_addr.to_string()));
+        });
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn split_stream_halves_can_be_used_independently() {
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+            task::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let (mut read_half, mut write_half) = stream.into_split();
+
+                // Use read half in one task
+                let read_task = task::spawn(async move {
+                    let mut buf = [0u8; 5];
+                    read_half.read_exact(&mut buf).await.unwrap();
+                    assert_eq!(&buf, b"ping!");
+                    buf
+                });
+
+                // Use write half concurrently
+                write_half.write_all(b"pong!").await.unwrap();
+                write_half.flush().await.unwrap();
+
+                read_task.await.unwrap();
+            });
+
+            let stream = TcpStream::connect(server_addr.to_string()).await.unwrap();
+            let (mut read_half, mut write_half) = stream.into_split();
+
+            // Send data while also preparing to read
+            write_half.write_all(b"ping!").await.unwrap();
+            write_half.flush().await.unwrap();
+
+            // Read response
+            let mut buf = [0u8; 5];
+            read_half.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"pong!");
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "ran out of available IPs")]
+    fn next_ip_panics_when_third_octet_exhausted() {
+        reset_next_ip();
+
+        // Set IP to the maximum before third octet overflow
+        NEXT_IP.with_borrow_mut(|x| {
+            *x = Ipv4Addr::new(192, 168, 255, 255);
+        });
+
+        // First call returns the current IP (192.168.255.255)
+        let _ip1 = next_ip();
+
+        // Second call should panic because we're out of IPs
+        let _ip2 = next_ip();
+    }
 }
