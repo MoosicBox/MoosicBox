@@ -1080,3 +1080,309 @@ impl ElementFinder for EguiElementFinder<'_> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper to create a container with specified id, str_id, classes, and children
+    fn make_container(
+        id: usize,
+        str_id: Option<&str>,
+        classes: Vec<&str>,
+        children: Vec<Container>,
+    ) -> Container {
+        Container {
+            id,
+            str_id: str_id.map(String::from),
+            classes: classes.into_iter().map(String::from).collect(),
+            children,
+            ..Default::default()
+        }
+    }
+
+    // ==================== EguiElementFinder::find_by_id tests ====================
+
+    #[test_log::test]
+    fn test_find_by_id_finds_root_element() {
+        let container = make_container(1, None, vec![], vec![]);
+        let result = EguiElementFinder::find_by_id(&container, 1);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn test_find_by_id_finds_nested_element() {
+        let grandchild = make_container(3, None, vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let result = EguiElementFinder::find_by_id(&container, 3);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 3);
+    }
+
+    #[test_log::test]
+    fn test_find_by_id_returns_none_when_not_found() {
+        let child = make_container(2, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let result = EguiElementFinder::find_by_id(&container, 999);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_find_by_id_searches_all_siblings() {
+        let grandchild = make_container(5, None, vec![], vec![]);
+        let child1 = make_container(2, None, vec![], vec![]);
+        let child2 = make_container(3, None, vec![], vec![]);
+        let child3 = make_container(4, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child1, child2, child3]);
+
+        let result = EguiElementFinder::find_by_id(&container, 5);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 5);
+    }
+
+    // ==================== EguiElementFinder::find_element_recursive tests ====================
+
+    #[test_log::test]
+    fn test_find_element_recursive_with_str_id_predicate() {
+        let grandchild = make_container(3, Some("target"), vec![], vec![]);
+        let child = make_container(2, Some("child"), vec![], vec![grandchild]);
+        let container = make_container(1, Some("root"), vec![], vec![child]);
+
+        let result = EguiElementFinder::find_element_recursive(&container, &|c| {
+            c.str_id.as_deref() == Some("target")
+        });
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_find_element_recursive_with_class_predicate() {
+        let grandchild = make_container(3, None, vec!["target-class"], vec![]);
+        let child = make_container(2, None, vec!["wrapper"], vec![grandchild]);
+        let container = make_container(1, None, vec!["root"], vec![child]);
+
+        let result = EguiElementFinder::find_element_recursive(&container, &|c| {
+            c.classes.iter().any(|class| class == "target-class")
+        });
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_find_element_recursive_returns_none_when_predicate_never_matches() {
+        let child = make_container(2, None, vec!["other"], vec![]);
+        let container = make_container(1, None, vec!["root"], vec![child]);
+
+        let result = EguiElementFinder::find_element_recursive(&container, &|c| c.id == 999);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_find_element_recursive_returns_first_match_dfs() {
+        // Multiple elements match; should return first in DFS order
+        let child1 = make_container(2, None, vec!["shared"], vec![]);
+        let child2 = make_container(3, None, vec!["shared"], vec![]);
+        let container = make_container(1, None, vec![], vec![child1, child2]);
+
+        let result = EguiElementFinder::find_element_recursive(&container, &|c| {
+            c.classes.iter().any(|class| class == "shared")
+        });
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 2); // First child in DFS order
+    }
+
+    // ==================== ElementFinder trait implementation tests ====================
+
+    #[test_log::test]
+    fn test_find_by_str_id_finds_element() {
+        let grandchild = make_container(3, Some("target-id"), vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.find_by_str_id("target-id");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_find_by_str_id_returns_none_when_not_found() {
+        let container = make_container(1, Some("root"), vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.find_by_str_id("nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_find_by_class_finds_element() {
+        let grandchild = make_container(3, None, vec!["target-class"], vec![]);
+        let child = make_container(2, None, vec!["wrapper"], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.find_by_class("target-class");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_find_by_class_returns_none_when_not_found() {
+        let container = make_container(1, None, vec!["root-class"], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.find_by_class("nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_find_child_by_class_finds_direct_child_only() {
+        // Note: v2's find_child_by_class only searches direct children, not descendants
+        let grandchild = make_container(3, None, vec!["deep-target"], vec![]);
+        let child = make_container(2, None, vec!["direct-target"], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let finder = EguiElementFinder::new(&container);
+
+        // Should find direct child
+        let result = finder.find_child_by_class(1, "direct-target");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 2);
+
+        // Should NOT find grandchild (only searches direct children)
+        let result = finder.find_child_by_class(1, "deep-target");
+        assert!(result.is_none());
+
+        // But should find grandchild when searching from parent id 2
+        let result = finder.find_child_by_class(2, "deep-target");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_find_child_by_class_returns_none_for_invalid_parent() {
+        let child = make_container(2, None, vec!["target"], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.find_child_by_class(999, "target");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_last_child_returns_last_child_id() {
+        let child1 = make_container(2, None, vec![], vec![]);
+        let child2 = make_container(3, None, vec![], vec![]);
+        let child3 = make_container(4, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child1, child2, child3]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_last_child(1);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 4);
+    }
+
+    #[test_log::test]
+    fn test_get_last_child_returns_none_for_childless_element() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_last_child(1);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_data_attr_returns_attribute_value() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container
+            .data
+            .insert("test-key".to_string(), "test-value".to_string());
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_data_attr(1, "test-key");
+        assert_eq!(result, Some("test-value".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_data_attr_returns_none_for_missing_key() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_data_attr(1, "nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_str_id_returns_string_id() {
+        let container = make_container(1, Some("element-id"), vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_str_id(1);
+        assert_eq!(result, Some("element-id".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_str_id_returns_none_when_missing() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_str_id(1);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_dimensions_returns_calculated_values() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_width = Some(200.0);
+        container.calculated_height = Some(100.0);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_dimensions(1);
+        assert!(result.is_some());
+        let (width, height) = result.unwrap();
+        assert!((width - 200.0).abs() < f32::EPSILON);
+        assert!((height - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_dimensions_defaults_to_zero() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_dimensions(1);
+        assert!(result.is_some());
+        let (width, height) = result.unwrap();
+        assert!((width - 0.0).abs() < f32::EPSILON);
+        assert!((height - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_position_returns_calculated_values() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_x = Some(50.0);
+        container.calculated_y = Some(150.0);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_position(1);
+        assert!(result.is_some());
+        let (x, y) = result.unwrap();
+        assert!((x - 50.0).abs() < f32::EPSILON);
+        assert!((y - 150.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_position_defaults_to_zero() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+        let result = finder.get_position(1);
+        assert!(result.is_some());
+        let (x, y) = result.unwrap();
+        assert!((x - 0.0).abs() < f32::EPSILON);
+        assert!((y - 0.0).abs() < f32::EPSILON);
+    }
+}
