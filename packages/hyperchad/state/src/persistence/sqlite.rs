@@ -177,6 +177,11 @@ mod tests {
         value: i32,
     }
 
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct DifferentType {
+        completely_different_field: Vec<bool>,
+    }
+
     #[test_log::test(switchy_async::test)]
     async fn test_sqlite_persistence() -> Result<(), crate::Error> {
         let persistence = SqlitePersistence::new_in_memory().await?;
@@ -338,6 +343,41 @@ mod tests {
         assert!(persistence.get::<TestSettings>("key1").await?.is_none());
         assert!(persistence.get::<TestSettings>("key2").await?.is_none());
         assert!(persistence.get::<TestSettings>("key3").await?.is_none());
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_get_nonexistent_key_returns_none() -> Result<(), crate::Error> {
+        // Test that getting a nonexistent key returns None (not an error)
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        let result: Option<TestSettings> = persistence.get("nonexistent").await?;
+        assert_eq!(result, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_type_mismatch_returns_serde_error() -> Result<(), crate::Error> {
+        // Test that deserializing to an incompatible type returns a serde error
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        // Store a TestSettings value
+        let settings = TestSettings {
+            name: "test".to_string(),
+            value: 42,
+        };
+        persistence.set("key", &settings).await?;
+
+        // Try to retrieve it as a completely different type
+        let result = persistence.get::<DifferentType>("key").await;
+
+        // Should return a serde deserialization error
+        assert!(
+            matches!(result, Err(crate::Error::Serde(_))),
+            "Expected Serde error, got: {result:?}"
+        );
 
         Ok(())
     }

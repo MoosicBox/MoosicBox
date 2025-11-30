@@ -158,6 +158,11 @@ mod tests {
         name: String,
     }
 
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct IncompatibleType {
+        required_field: Vec<u64>,
+    }
+
     #[test_log::test(switchy_async::test)]
     async fn test_cache_hit_after_get() -> Result<(), Error> {
         // Test that values retrieved from persistence are cached for subsequent gets
@@ -414,6 +419,43 @@ mod tests {
         assert_eq!(store.get::<TestData>("key_a").await?, Some(data1));
         assert_eq!(store.get::<TestData>("key_b").await?, None);
         assert_eq!(store.get::<TestData>("key_c").await?, Some(data3));
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_nonexistent_key_returns_none() -> Result<(), Error> {
+        // Test that getting a key that never existed returns None
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        let result: Option<TestData> = store.get("nonexistent").await?;
+        assert_eq!(result, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_store_type_mismatch_on_get_returns_error() -> Result<(), Error> {
+        // Test that deserializing as wrong type returns serde error through StateStore
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        // Set a TestData value
+        let data = TestData {
+            id: 1,
+            name: "test".to_string(),
+        };
+        store.set("key", &data).await?;
+
+        // Try to get it as an incompatible type
+        let result = store.get::<IncompatibleType>("key").await;
+
+        // Should return a serde error
+        assert!(
+            matches!(result, Err(Error::Serde(_))),
+            "Expected Serde error, got: {result:?}"
+        );
 
         Ok(())
     }
