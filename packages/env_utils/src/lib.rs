@@ -34,6 +34,10 @@
 /// Error type for integer parsing operations.
 #[derive(Clone, Copy, Debug)]
 pub enum ParseIntError {
+    /// The input string was empty.
+    ///
+    /// This error occurs when attempting to parse an empty string as a number.
+    Empty,
     /// An invalid digit was encountered in the input string.
     ///
     /// This error occurs when the input contains a character that is not a valid decimal digit
@@ -94,13 +98,18 @@ pub(crate) const POW10: [u128; 20] = {
 ///
 /// # Errors
 ///
+/// * Returns [`ParseIntError::Empty`] if the string is empty
 /// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9)
 pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
     let bytes = b.as_bytes();
 
-    let mut result: usize = 0;
-
     let len = bytes.len();
+
+    if len == 0 {
+        return Err(ParseIntError::Empty);
+    }
+
+    let mut result: usize = 0;
 
     // Start at the correct index of the table,
     // (skip the power's that are too large)
@@ -132,13 +141,23 @@ pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
 ///
 /// # Errors
 ///
+/// * Returns [`ParseIntError::Empty`] if the string is empty or contains only a sign character
 /// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9) or if a sign character (+/-) appears in an invalid position
 pub const fn parse_isize(b: &str) -> Result<isize, ParseIntError> {
     let bytes = b.as_bytes();
 
-    let mut result: usize = 0;
-
     let len = bytes.len();
+
+    if len == 0 {
+        return Err(ParseIntError::Empty);
+    }
+
+    // Check for sign-only strings (just "+" or "-")
+    if len == 1 && (bytes[0] == 43 || bytes[0] == 45) {
+        return Err(ParseIntError::Empty);
+    }
+
+    let mut result: usize = 0;
 
     // Start at the correct index of the table,
     // (skip the power's that are too large)
@@ -581,15 +600,13 @@ mod test {
     // Edge case tests
 
     #[test_log::test]
-    fn parse_usize_handles_empty_string() {
-        // Empty string should return 0 (no digits to parse)
-        assert_eq!(parse_usize("").unwrap(), 0);
+    fn parse_usize_returns_error_for_empty_string() {
+        assert!(matches!(parse_usize(""), Err(ParseIntError::Empty)));
     }
 
     #[test_log::test]
-    fn parse_isize_handles_empty_string() {
-        // Empty string should return 0 (no digits to parse)
-        assert_eq!(parse_isize("").unwrap(), 0);
+    fn parse_isize_returns_error_for_empty_string() {
+        assert!(matches!(parse_isize(""), Err(ParseIntError::Empty)));
     }
 
     #[test_log::test]
@@ -608,10 +625,10 @@ mod test {
     }
 
     #[test_log::test]
-    fn parse_isize_handles_sign_only_as_zero() {
-        // A string with only a sign and no digits is treated as signed zero
-        assert_eq!(parse_isize("+").unwrap(), 0);
-        assert_eq!(parse_isize("-").unwrap(), 0);
+    fn parse_isize_returns_error_for_sign_only() {
+        // A string with only a sign and no digits should be an error
+        assert!(matches!(parse_isize("+"), Err(ParseIntError::Empty)));
+        assert!(matches!(parse_isize("-"), Err(ParseIntError::Empty)));
     }
 
     #[test_log::test]
