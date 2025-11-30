@@ -46,7 +46,8 @@ strum      = { workspace = true, features = ["derive"] }
 tokio      = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+serial_test = { workspace = true }
+test-log    = { workspace = true }
 
 [features]
 default = ["player", "sqlite", "telemetry", "upnp"]

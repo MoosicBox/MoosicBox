@@ -9400,6 +9400,7 @@ dependencies = [
  "net2",
  "openport",
  "serde_json",
+ "serial_test",
  "simvar",
  "strum 0.27.2",
  "switchy_async",

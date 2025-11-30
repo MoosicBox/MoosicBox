@@ -93,6 +93,16 @@ pub fn handle_actions(sim: &mut impl Sim) {
     }
 }
 
+/// Clears all queued actions.
+///
+/// # Panics
+///
+/// * If the `ACTIONS` `Mutex` fails to lock
+#[cfg(test)]
+fn clear_actions() {
+    ACTIONS.lock().unwrap().clear();
+}
+
 /// Attempts to connect to a TCP stream with retries.
 ///
 /// # Errors
@@ -125,4 +135,161 @@ pub async fn try_connect(addr: &str, max_attempts: usize) -> Result<TcpStream, s
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+
+    use serial_test::serial;
+    use simvar::{Sim, client::ClientResult, host::HostResult};
+
+    use super::*;
+
+    /// A mock implementation of the `Sim` trait for testing.
+    struct MockSim {
+        bounced_hosts: Vec<String>,
+    }
+
+    impl MockSim {
+        fn new() -> Self {
+            Self {
+                bounced_hosts: vec![],
+            }
+        }
+    }
+
+    impl Sim for MockSim {
+        fn bounce(&mut self, host: impl Into<String>) {
+            self.bounced_hosts.push(host.into());
+        }
+
+        fn host<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
+            &mut self,
+            _name: impl Into<String>,
+            _action: F,
+        ) {
+            // Not needed for action handling tests
+        }
+
+        fn client(
+            &mut self,
+            _name: impl Into<String>,
+            _action: impl Future<Output = ClientResult> + 'static,
+        ) {
+            // Not needed for action handling tests
+        }
+    }
+
+    mod queue_bounce_tests {
+        use super::*;
+
+        #[test_log::test]
+        #[serial]
+        fn queues_single_bounce_action() {
+            clear_actions();
+            queue_bounce("test_host");
+
+            let actions = ACTIONS.lock().unwrap();
+            assert_eq!(actions.len(), 1);
+            assert!(matches!(&actions[0], Action::Bounce(h) if h == "test_host"));
+            drop(actions);
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn queues_multiple_bounce_actions_in_order() {
+            clear_actions();
+            queue_bounce("host1");
+            queue_bounce("host2");
+            queue_bounce("host3");
+
+            let actions = ACTIONS.lock().unwrap();
+            assert_eq!(actions.len(), 3);
+            assert!(matches!(&actions[0], Action::Bounce(h) if h == "host1"));
+            assert!(matches!(&actions[1], Action::Bounce(h) if h == "host2"));
+            assert!(matches!(&actions[2], Action::Bounce(h) if h == "host3"));
+            drop(actions);
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn accepts_string_and_str_inputs() {
+            clear_actions();
+            queue_bounce("str_host");
+            queue_bounce(String::from("string_host"));
+
+            let actions = ACTIONS.lock().unwrap();
+            assert_eq!(actions.len(), 2);
+            assert!(matches!(&actions[0], Action::Bounce(h) if h == "str_host"));
+            assert!(matches!(&actions[1], Action::Bounce(h) if h == "string_host"));
+            drop(actions);
+        }
+    }
+
+    mod handle_actions_tests {
+        use super::*;
+
+        #[test_log::test]
+        #[serial]
+        fn handles_empty_action_queue() {
+            clear_actions();
+            let mut sim = MockSim::new();
+
+            handle_actions(&mut sim);
+
+            assert!(sim.bounced_hosts.is_empty());
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn drains_and_processes_all_bounce_actions() {
+            clear_actions();
+            queue_bounce("host_a");
+            queue_bounce("host_b");
+
+            let mut sim = MockSim::new();
+            handle_actions(&mut sim);
+
+            // Verify bounces were called on the sim
+            assert_eq!(sim.bounced_hosts.len(), 2);
+            assert_eq!(sim.bounced_hosts[0], "host_a");
+            assert_eq!(sim.bounced_hosts[1], "host_b");
+
+            // Verify queue is now empty
+            assert!(ACTIONS.lock().unwrap().is_empty());
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn clears_queue_after_handling() {
+            clear_actions();
+            queue_bounce("host1");
+            queue_bounce("host2");
+
+            let mut sim = MockSim::new();
+            handle_actions(&mut sim);
+
+            // Queue should be empty after handling
+            assert!(ACTIONS.lock().unwrap().is_empty());
+
+            // Handle again should have no effect
+            handle_actions(&mut sim);
+            assert_eq!(sim.bounced_hosts.len(), 2); // Still just 2 from before
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn processes_actions_in_fifo_order() {
+            clear_actions();
+            queue_bounce("first");
+            queue_bounce("second");
+            queue_bounce("third");
+
+            let mut sim = MockSim::new();
+            handle_actions(&mut sim);
+
+            assert_eq!(sim.bounced_hosts, vec!["first", "second", "third"]);
+        }
+    }
 }
