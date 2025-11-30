@@ -1191,9 +1191,13 @@ pub mod sync {
         }
 
         /// Returns the file type of this entry
-        #[must_use]
-        pub const fn file_type(&self) -> &super::FileType {
-            &self.file_type_info
+        ///
+        /// # Errors
+        ///
+        /// This function always succeeds for simulator entries, but returns
+        /// `Result` to match the `std::fs::DirEntry::file_type()` API.
+        pub fn file_type(&self) -> std::io::Result<super::FileType> {
+            Ok(self.file_type_info.clone())
         }
     }
 
@@ -2209,7 +2213,7 @@ pub mod unsync {
             .map(|e| DirEntry {
                 path: e.path(),
                 file_name: e.file_name(),
-                file_type_info: e.file_type().clone(),
+                file_type_info: e.file_type().unwrap(),
             })
             .collect();
 
@@ -2251,7 +2255,7 @@ pub mod unsync {
             .map(|e| DirEntry {
                 path: e.path(),
                 file_name: e.file_name(),
-                file_type_info: e.file_type().clone(),
+                file_type_info: e.file_type().unwrap(),
             })
             .collect())
     }
@@ -2289,7 +2293,7 @@ pub mod unsync {
             .map(|e| DirEntry {
                 path: e.path(),
                 file_name: e.file_name(),
-                file_type_info: e.file_type().clone(),
+                file_type_info: e.file_type().unwrap(),
             })
             .collect())
     }

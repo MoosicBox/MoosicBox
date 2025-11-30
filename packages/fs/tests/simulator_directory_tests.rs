@@ -20,7 +20,7 @@ mod directory_tests {
         let root_entries = read_dir_sorted("/").unwrap();
         let dir_names: Vec<String> = root_entries
             .iter()
-            .filter(|e| e.file_type().is_dir())
+            .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
 
@@ -31,7 +31,7 @@ mod directory_tests {
         let tmp_entries = read_dir_sorted("/tmp").unwrap();
         let tmp_dirs: Vec<String> = tmp_entries
             .iter()
-            .filter(|e| e.file_type().is_dir())
+            .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
 
@@ -92,8 +92,14 @@ mod directory_tests {
         let entries = read_dir_sorted("/test").unwrap();
 
         // Should have 2 files and 1 directory
-        let files: Vec<_> = entries.iter().filter(|e| e.file_type().is_file()).collect();
-        let dirs: Vec<_> = entries.iter().filter(|e| e.file_type().is_dir()).collect();
+        let files: Vec<_> = entries
+            .iter()
+            .filter(|e| e.file_type().is_ok_and(|ft| ft.is_file()))
+            .collect();
+        let dirs: Vec<_> = entries
+            .iter()
+            .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
+            .collect();
 
         assert_eq!(files.len(), 2);
         assert_eq!(dirs.len(), 1);
