@@ -1397,3 +1397,168 @@ pub async fn search_endpoint(
             .into(),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_yt_track_to_api_track_with_album_cover() {
+        let yt_track = YtTrack {
+            id: "track123".to_string(),
+            track_number: 5,
+            artist_id: "artist456".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_cover: Some("artist-cover-url".to_string()),
+            album_id: "album789".to_string(),
+            album: "Test Album".to_string(),
+            album_type: YtAlbumType::Lp,
+            album_cover: Some("album-cover-url".to_string()),
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Test Label".to_string()),
+            duration: 180,
+            explicit: true,
+            isrc: "USABC1234567".to_string(),
+            popularity: 85,
+            title: "Test Track".to_string(),
+            media_metadata_tags: vec!["tag1".to_string(), "tag2".to_string()],
+        };
+
+        let api_track: ApiTrack = yt_track.into();
+        match api_track {
+            ApiTrack::Yt(track) => {
+                assert_eq!(track.id, "track123");
+                assert_eq!(track.number, 5);
+                assert_eq!(track.album, "Test Album");
+                assert_eq!(track.album_id, "album789");
+                assert_eq!(track.album_type, YtAlbumType::Lp);
+                assert_eq!(track.artist, "Test Artist");
+                assert_eq!(track.artist_id, "artist456");
+                assert!(track.contains_cover);
+                assert_eq!(track.audio_quality, "LOSSLESS");
+                assert_eq!(track.copyright, Some("2024 Test Label".to_string()));
+                assert_eq!(track.duration, 180);
+                assert!(track.explicit);
+                assert_eq!(track.isrc, "USABC1234567");
+                assert_eq!(track.popularity, 85);
+                assert_eq!(track.title, "Test Track");
+                assert_eq!(track.media_metadata_tags, vec!["tag1", "tag2"]);
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_yt_track_to_api_track_without_album_cover() {
+        let yt_track = YtTrack {
+            id: "track456".to_string(),
+            track_number: 1,
+            artist_id: "artist111".to_string(),
+            artist: "Another Artist".to_string(),
+            artist_cover: None,
+            album_id: "album222".to_string(),
+            album: "Another Album".to_string(),
+            album_type: YtAlbumType::EpsAndSingles,
+            album_cover: None,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 240,
+            explicit: false,
+            isrc: "USXYZ9876543".to_string(),
+            popularity: 60,
+            title: "Another Track".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let api_track: ApiTrack = yt_track.into();
+        match api_track {
+            ApiTrack::Yt(track) => {
+                assert!(!track.contains_cover);
+                assert_eq!(track.copyright, None);
+                assert!(!track.explicit);
+                assert!(track.media_metadata_tags.is_empty());
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_track_to_music_models_api_track() {
+        let api_yt_track = ApiYtTrack {
+            id: "track789".to_string(),
+            number: 3,
+            album: "Album Name".to_string(),
+            album_id: "album_id_123".to_string(),
+            album_type: YtAlbumType::Compilations,
+            artist: "Artist Name".to_string(),
+            artist_id: "artist_id_456".to_string(),
+            contains_cover: true,
+            audio_quality: "HI_RES_LOSSLESS".to_string(),
+            copyright: Some("Copyright Info".to_string()),
+            duration: 300,
+            explicit: true,
+            isrc: "ISRC123456789".to_string(),
+            popularity: 95,
+            title: "Track Title".to_string(),
+            media_metadata_tags: vec!["lossless".to_string()],
+            api_source: API_SOURCE.clone(),
+        };
+
+        let api_track = ApiTrack::Yt(api_yt_track);
+        let music_api_track: moosicbox_music_models::api::ApiTrack = api_track.into();
+
+        assert_eq!(music_api_track.number, 3);
+        assert_eq!(music_api_track.title, "Track Title");
+        assert!((music_api_track.duration - 300.0).abs() < f64::EPSILON);
+        assert_eq!(music_api_track.album, "Album Name");
+        assert_eq!(music_api_track.artist, "Artist Name");
+        assert!(music_api_track.contains_cover);
+        assert!(!music_api_track.blur);
+        assert!(music_api_track.date_released.is_none());
+        assert!(music_api_track.date_added.is_none());
+        assert!(music_api_track.format.is_none());
+        assert!(music_api_track.bit_depth.is_none());
+    }
+
+    #[test_log::test]
+    fn test_api_yt_track_to_music_models_api_track_directly() {
+        let api_yt_track = ApiYtTrack {
+            id: "direct_track".to_string(),
+            number: 7,
+            album: "Direct Album".to_string(),
+            album_id: "direct_album_id".to_string(),
+            album_type: YtAlbumType::Lp,
+            artist: "Direct Artist".to_string(),
+            artist_id: "direct_artist_id".to_string(),
+            contains_cover: false,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            duration: 210,
+            explicit: false,
+            isrc: "DIRECT123".to_string(),
+            popularity: 70,
+            title: "Direct Track Title".to_string(),
+            media_metadata_tags: vec![],
+            api_source: API_SOURCE.clone(),
+        };
+
+        let music_api_track: moosicbox_music_models::api::ApiTrack = api_yt_track.into();
+
+        assert_eq!(music_api_track.number, 7);
+        assert_eq!(music_api_track.title, "Direct Track Title");
+        assert!((music_api_track.duration - 210.0).abs() < f64::EPSILON);
+        assert!(!music_api_track.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_api_album_type_to_yt_album_type() {
+        assert_eq!(YtAlbumType::from(AlbumType::Lp), YtAlbumType::Lp);
+        assert_eq!(
+            YtAlbumType::from(AlbumType::EpsAndSingles),
+            YtAlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            YtAlbumType::from(AlbumType::Compilations),
+            YtAlbumType::Compilations
+        );
+    }
+}
