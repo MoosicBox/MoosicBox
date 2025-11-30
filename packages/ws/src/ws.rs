@@ -1008,4 +1008,207 @@ mod tests {
             _ => panic!("Expected Serde variant"),
         }
     }
+
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    struct RecordingMockSender {
+        send_called: AtomicBool,
+        send_all_called: AtomicBool,
+        send_all_except_called: AtomicBool,
+        fail_on_send: bool,
+        fail_on_send_all: bool,
+        fail_on_send_all_except: bool,
+    }
+
+    impl RecordingMockSender {
+        fn new() -> Self {
+            Self {
+                send_called: AtomicBool::new(false),
+                send_all_called: AtomicBool::new(false),
+                send_all_except_called: AtomicBool::new(false),
+                fail_on_send: false,
+                fail_on_send_all: false,
+                fail_on_send_all_except: false,
+            }
+        }
+
+        fn with_send_all_failing(mut self) -> Self {
+            self.fail_on_send_all = true;
+            self
+        }
+
+        fn with_send_all_except_failing(mut self) -> Self {
+            self.fail_on_send_all_except = true;
+            self
+        }
+    }
+
+    #[async_trait]
+    impl WebsocketSender for RecordingMockSender {
+        async fn send(&self, _connection_id: &str, _data: &str) -> Result<(), WebsocketSendError> {
+            self.send_called.store(true, Ordering::SeqCst);
+            if self.fail_on_send {
+                Err(WebsocketSendError::Unknown("send failed".to_string()))
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn send_all(&self, _data: &str) -> Result<(), WebsocketSendError> {
+            self.send_all_called.store(true, Ordering::SeqCst);
+            if self.fail_on_send_all {
+                Err(WebsocketSendError::Unknown("send_all failed".to_string()))
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn send_all_except(
+            &self,
+            _connection_id: &str,
+            _data: &str,
+        ) -> Result<(), WebsocketSendError> {
+            self.send_all_except_called.store(true, Ordering::SeqCst);
+            if self.fail_on_send_all_except {
+                Err(WebsocketSendError::Unknown(
+                    "send_all_except failed".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn ping(&self) -> Result<(), WebsocketSendError> {
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_download_event_with_context_calls_send_all_except() {
+        let sender = RecordingMockSender::new();
+        let context = WebsocketContext {
+            connection_id: "test-conn".to_string(),
+            profile: None,
+            player_actions: vec![],
+        };
+
+        let result =
+            send_download_event(&sender, Some(&context), serde_json::json!({"progress": 50})).await;
+
+        assert!(result.is_ok());
+        assert!(sender.send_all_except_called.load(Ordering::SeqCst));
+        assert!(!sender.send_all_called.load(Ordering::SeqCst));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_download_event_without_context_calls_send_all() {
+        let sender = RecordingMockSender::new();
+
+        let result = send_download_event(&sender, None, serde_json::json!({"progress": 75})).await;
+
+        assert!(result.is_ok());
+        assert!(sender.send_all_called.load(Ordering::SeqCst));
+        assert!(!sender.send_all_except_called.load(Ordering::SeqCst));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_download_event_propagates_send_all_error() {
+        let sender = RecordingMockSender::new().with_send_all_failing();
+
+        let result = send_download_event(&sender, None, serde_json::json!({"progress": 25})).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WebsocketSendError::Unknown(msg) => assert_eq!(msg, "send_all failed"),
+            _ => panic!("Expected Unknown error variant"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_download_event_propagates_send_all_except_error() {
+        let sender = RecordingMockSender::new().with_send_all_except_failing();
+        let context = WebsocketContext {
+            connection_id: "test-conn".to_string(),
+            profile: None,
+            player_actions: vec![],
+        };
+
+        let result =
+            send_download_event(&sender, Some(&context), serde_json::json!({"progress": 10})).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WebsocketSendError::Unknown(msg) => assert_eq!(msg, "send_all_except failed"),
+            _ => panic!("Expected Unknown error variant"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_scan_event_with_context_calls_send_all_except() {
+        let sender = RecordingMockSender::new();
+        let context = WebsocketContext {
+            connection_id: "scan-conn".to_string(),
+            profile: None,
+            player_actions: vec![],
+        };
+
+        let result =
+            send_scan_event(&sender, Some(&context), serde_json::json!({"scanned": 100})).await;
+
+        assert!(result.is_ok());
+        assert!(sender.send_all_except_called.load(Ordering::SeqCst));
+        assert!(!sender.send_all_called.load(Ordering::SeqCst));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_scan_event_without_context_calls_send_all() {
+        let sender = RecordingMockSender::new();
+
+        let result = send_scan_event(&sender, None, serde_json::json!({"scanned": 200})).await;
+
+        assert!(result.is_ok());
+        assert!(sender.send_all_called.load(Ordering::SeqCst));
+        assert!(!sender.send_all_except_called.load(Ordering::SeqCst));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_scan_event_propagates_send_all_error() {
+        let sender = RecordingMockSender::new().with_send_all_failing();
+
+        let result = send_scan_event(&sender, None, serde_json::json!({"scanned": 50})).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WebsocketSendError::Unknown(msg) => assert_eq!(msg, "send_all failed"),
+            _ => panic!("Expected Unknown error variant"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_scan_event_propagates_send_all_except_error() {
+        let sender = RecordingMockSender::new().with_send_all_except_failing();
+        let context = WebsocketContext {
+            connection_id: "scan-conn".to_string(),
+            profile: None,
+            player_actions: vec![],
+        };
+
+        let result =
+            send_scan_event(&sender, Some(&context), serde_json::json!({"scanned": 25})).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WebsocketSendError::Unknown(msg) => assert_eq!(msg, "send_all_except failed"),
+            _ => panic!("Expected Unknown error variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_websocket_message_error_unknown_variant() {
+        let error = WebsocketMessageError::Unknown {
+            message: "custom error message".to_string(),
+        };
+        let error_str = error.to_string();
+        assert!(error_str.contains("custom error message"));
+    }
 }
