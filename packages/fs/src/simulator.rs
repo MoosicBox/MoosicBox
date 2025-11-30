@@ -164,6 +164,48 @@ fn get_parent_directories(path: &str) -> Vec<String> {
     parents
 }
 
+/// Normalize a path by resolving `.` and `..` components
+///
+/// This function handles path normalization without requiring filesystem access,
+/// making it suitable for the simulator.
+fn normalize_path(path: &str) -> String {
+    let mut components: Vec<&str> = Vec::new();
+    let is_absolute = path.starts_with('/');
+
+    for component in path.split('/') {
+        match component {
+            "" | "." => {
+                // Skip empty components and current directory references
+            }
+            ".." => {
+                // Go up one directory (if possible)
+                if !components.is_empty() && components.last() != Some(&"..") {
+                    components.pop();
+                } else if !is_absolute {
+                    // For relative paths, keep the .. if we can't go up
+                    components.push("..");
+                }
+                // For absolute paths, ignore .. at root
+            }
+            other => {
+                components.push(other);
+            }
+        }
+    }
+
+    if is_absolute {
+        if components.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{}", components.join("/"))
+        }
+    } else if components.is_empty() {
+        ".".to_string()
+    } else {
+        components.join("/")
+    }
+}
+
 /// Check if a path exists
 ///
 /// # Panics
@@ -898,6 +940,38 @@ pub mod sync {
         });
 
         Ok(())
+    }
+
+    /// Canonicalizes a path by resolving `.` and `..` components and normalizing it
+    ///
+    /// Unlike `std::fs::canonicalize`, this does not require the path to exist,
+    /// but it will verify the path exists in the simulator filesystem.
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::canonicalize` fails (when using real filesystem)
+    /// * If the path cannot be converted to a string
+    /// * If the path does not exist in the simulator
+    pub fn canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<std::path::PathBuf> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::canonicalize(path);
+        }
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize the path by resolving . and .. components
+        let normalized = super::normalize_path(path_str);
+
+        // Check if the path exists (either as file or directory)
+        if !super::exists(&normalized) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Path not found: {normalized}"),
+            ));
+        }
+
+        Ok(std::path::PathBuf::from(normalized))
     }
 
     /// Read directory entries and return them sorted by filename for deterministic iteration
@@ -1910,6 +1984,29 @@ pub mod unsync {
         }
 
         super::sync::remove_dir_all(path)
+    }
+
+    /// Canonicalizes a path asynchronously by resolving `.` and `..` components
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::canonicalize` fails (when using real filesystem)
+    /// * If the path cannot be converted to a string
+    /// * If the path does not exist in the simulator
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
+    pub async fn canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<std::path::PathBuf> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::canonicalize(path))
+                .await
+                .unwrap();
+        }
+
+        super::sync::canonicalize(path)
     }
 
     /// Directory entry for asynchronous filesystem operations

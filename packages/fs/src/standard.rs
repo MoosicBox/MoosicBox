@@ -202,6 +202,15 @@ pub mod sync {
         ::std::fs::remove_dir_all(path)
     }
 
+    /// Canonicalizes a path
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::canonicalize` fails
+    pub fn canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<std::path::PathBuf> {
+        ::std::fs::canonicalize(path)
+    }
+
     /// Read directory entries and return them sorted by filename for deterministic iteration
     ///
     /// # Errors

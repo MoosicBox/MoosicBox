@@ -396,6 +396,15 @@ pub mod unsync {
         ::tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
     }
 
+    /// Canonicalizes a path asynchronously
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::canonicalize` fails
+    pub async fn canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<std::path::PathBuf> {
+        ::tokio::fs::canonicalize(path).await
+    }
+
     impl From<OpenOptions> for tokio::fs::OpenOptions {
         fn from(value: OpenOptions) -> Self {
             let mut options = Self::new();
