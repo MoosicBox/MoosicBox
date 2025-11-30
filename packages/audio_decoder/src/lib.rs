@@ -1065,4 +1065,403 @@ mod tests {
         let error = DecodeError::InvalidSource;
         assert_eq!(error.to_string(), "Invalid source");
     }
+
+    // Test utilities for write and flush tests
+    fn create_test_packet() -> Packet {
+        Packet::new_from_slice(0, 0, 0, &[0u8; 64])
+    }
+
+    fn create_test_track() -> Track {
+        use symphonia::core::codecs::CODEC_TYPE_FLAC;
+        Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone())
+    }
+
+    fn create_test_audio_buffer() -> AudioBuffer<f32> {
+        use symphonia::core::audio::Channels;
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        AudioBuffer::new(1024, spec)
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_filter_is_applied() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct TrackingOutput {
+            received_buffer: Arc<AtomicBool>,
+        }
+        impl AudioDecode for TrackingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                self.received_buffer.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let filter_called = Arc::new(AtomicBool::new(false));
+        let filter_called_clone = filter_called.clone();
+        let output_received = Arc::new(AtomicBool::new(false));
+        let output_received_clone = output_received.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_filter(Box::new(move |_buf, _packet, _track| {
+                filter_called_clone.store(true, Ordering::SeqCst);
+                Ok(())
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(TrackingOutput {
+                    received_buffer: output_received_clone.clone(),
+                }) as Box<dyn AudioDecode>)
+            }));
+
+        // Open the outputs
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        // Write some audio data
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+        assert!(result.is_ok());
+        assert!(
+            filter_called.load(Ordering::SeqCst),
+            "Filter should have been called"
+        );
+        assert!(
+            output_received.load(Ordering::SeqCst),
+            "Output should have received buffer"
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_filter_error_propagates() {
+        let mut handler = AudioDecodeHandler::new()
+            .with_filter(Box::new(|_buf, _packet, _track| {
+                Err(AudioDecodeError::Interrupt)
+            }))
+            .with_output(Box::new(|_spec, _duration| {
+                struct DummyOutput;
+                impl AudioDecode for DummyOutput {
+                    fn decoded(
+                        &mut self,
+                        _decoded: AudioBuffer<f32>,
+                        _packet: &Packet,
+                        _track: &Track,
+                    ) -> Result<(), AudioDecodeError> {
+                        Ok(())
+                    }
+                }
+                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AudioDecodeError::Interrupt)));
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_multiple_outputs_all_receive_data() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingOutput {
+            count: Arc<AtomicUsize>,
+        }
+        impl AudioDecode for CountingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                self.count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_1 = call_count.clone();
+        let call_count_2 = call_count.clone();
+        let call_count_3 = call_count.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(CountingOutput {
+                    count: call_count_1.clone(),
+                }) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(CountingOutput {
+                    count: call_count_2.clone(),
+                }) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(CountingOutput {
+                    count: call_count_3.clone(),
+                }) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+        assert_eq!(handler.outputs.len(), 3);
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+        assert!(result.is_ok());
+
+        // All 3 outputs should have received the decoded buffer
+        assert_eq!(call_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_output_error_propagates() {
+        struct FailingOutput;
+        impl AudioDecode for FailingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Err(AudioDecodeError::StreamClosed)
+            }
+        }
+
+        let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
+            Ok(Box::new(FailingOutput) as Box<dyn AudioDecode>)
+        }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AudioDecodeError::StreamClosed)));
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_flush_propagates_to_all_outputs() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct FlushCountingOutput {
+            flush_count: Arc<AtomicUsize>,
+        }
+        impl AudioDecode for FlushCountingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioDecodeError> {
+                self.flush_count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let flush_count = Arc::new(AtomicUsize::new(0));
+        let flush_count_1 = flush_count.clone();
+        let flush_count_2 = flush_count.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(FlushCountingOutput {
+                    flush_count: flush_count_1.clone(),
+                }) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(FlushCountingOutput {
+                    flush_count: flush_count_2.clone(),
+                }) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let result = handler.flush();
+        assert!(result.is_ok());
+        assert_eq!(flush_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_flush_error_propagates() {
+        struct FailingFlushOutput;
+        impl AudioDecode for FailingFlushOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioDecodeError> {
+                Err(AudioDecodeError::PlayStream)
+            }
+        }
+
+        let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
+            Ok(Box::new(FailingFlushOutput) as Box<dyn AudioDecode>)
+        }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let result = handler.flush();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AudioDecodeError::PlayStream)));
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_multiple_filters_applied_in_order() {
+        use std::sync::{Arc, Mutex};
+
+        struct DummyOutput;
+        impl AudioDecode for DummyOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let order_1 = order.clone();
+        let order_2 = order.clone();
+        let order_3 = order.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_filter(Box::new(move |_buf, _packet, _track| {
+                order_1.lock().unwrap().push(1);
+                Ok(())
+            }))
+            .with_filter(Box::new(move |_buf, _packet, _track| {
+                order_2.lock().unwrap().push(2);
+                Ok(())
+            }))
+            .with_filter(Box::new(move |_buf, _packet, _track| {
+                order_3.lock().unwrap().push(3);
+                Ok(())
+            }))
+            .with_output(Box::new(|_spec, _duration| {
+                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        handler.write(buffer, &packet, &track).unwrap();
+
+        // Filters should be applied in the order they were added
+        let recorded_order = order.lock().unwrap();
+        assert_eq!(*recorded_order, vec![1, 2, 3]);
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_try_open_multiple_outputs() {
+        struct Output1;
+        impl AudioDecode for Output1 {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        struct Output2;
+        impl AudioDecode for Output2 {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_output(Box::new(|_spec, _duration| {
+                Ok(Box::new(Output1) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(|_spec, _duration| {
+                Ok(Box::new(Output2) as Box<dyn AudioDecode>)
+            }));
+
+        assert_eq!(handler.open_decode_handlers.len(), 2);
+        assert!(handler.contains_outputs_to_open());
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        let result = handler.try_open(spec, 1024);
+
+        assert!(result.is_ok());
+        assert_eq!(handler.outputs.len(), 2);
+        assert_eq!(handler.open_decode_handlers.len(), 0);
+        assert!(!handler.contains_outputs_to_open());
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_flush_with_no_outputs() {
+        let mut handler = AudioDecodeHandler::new();
+        // Should succeed with no outputs to flush
+        let result = handler.flush();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_error_from_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::BrokenPipe, "pipe broken");
+        let audio_error: AudioDecodeError = io_error.into();
+        assert!(matches!(audio_error, AudioDecodeError::IO(_)));
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_error_from_boxed_error() {
+        let boxed_error: Box<dyn std::error::Error + Send + Sync> =
+            Box::new(std::io::Error::other("custom error"));
+        let audio_error: AudioDecodeError = boxed_error.into();
+        assert!(matches!(audio_error, AudioDecodeError::Other(_)));
+    }
+
+    #[test_log::test]
+    fn test_decode_error_from_audio_decode_error() {
+        let audio_error = AudioDecodeError::StreamEnd;
+        let decode_error: DecodeError = audio_error.into();
+        assert!(matches!(decode_error, DecodeError::AudioDecode(_)));
+    }
 }
