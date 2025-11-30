@@ -1135,4 +1135,67 @@ mod tests {
         let result = stream.next().await;
         assert!(result.is_none());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_end_of_stream_with_queued_packets() {
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(555, rx, abort_token, &noop_on_end);
+
+        // Send packets out of order: 2, 3, then close channel before sending 1
+        tx.send(create_tunnel_response(555, 2, false, b"packet2"))
+            .unwrap();
+        tx.send(create_tunnel_response(555, 3, true, b"packet3"))
+            .unwrap();
+
+        // Close the channel without sending packet 1
+        drop(tx);
+
+        // First poll: channel returns None, sets end_of_stream, packets 2,3 queued
+        // but packet 1 is missing so queue can't be processed - returns None
+        let result = stream.next().await;
+        assert!(result.is_none());
+
+        // Second poll: end_of_stream is true, queue still has undeliverable packets
+        // Returns EndOfStream error
+        let result = stream.next().await;
+        assert!(result.is_some());
+        let err = result.unwrap().unwrap_err();
+        assert!(matches!(err, TunnelStreamError::EndOfStream));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_processes_queued_packet_when_pending() {
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(666, rx, abort_token, &noop_on_end);
+
+        // Send packet 2 first (out of order), causing it to be queued
+        tx.send(create_tunnel_response(666, 2, false, b"packet2"))
+            .unwrap();
+
+        // Send packet 1, which should trigger processing of queued packet 2
+        tx.send(create_tunnel_response(666, 1, false, b"packet1"))
+            .unwrap();
+
+        // Send final packet
+        tx.send(create_tunnel_response(666, 3, true, b"packet3"))
+            .unwrap();
+
+        // Should receive in correct order
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.as_ref(), b"packet1");
+
+        let bytes2 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes2.as_ref(), b"packet2");
+
+        let bytes3 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes3.as_ref(), b"packet3");
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
 }
