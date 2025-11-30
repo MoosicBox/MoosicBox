@@ -3670,3 +3670,702 @@ pub mod temp_dir {
         }
     }
 }
+
+#[cfg(test)]
+mod init_fs_tests {
+    use super::{exists, init_minimal_fs, init_standard_fs, init_user_home, reset_fs, sync};
+
+    #[test_log::test]
+    fn test_init_minimal_fs_creates_essential_directories() {
+        reset_fs();
+        init_minimal_fs().unwrap();
+
+        // Verify essential directories are created
+        assert!(exists("/"), "root directory should exist");
+        assert!(exists("/tmp"), "/tmp directory should exist");
+        assert!(exists("/home"), "/home directory should exist");
+    }
+
+    #[test_log::test]
+    fn test_init_standard_fs_creates_fhs_structure() {
+        reset_fs();
+        init_standard_fs().unwrap();
+
+        // Verify root directories
+        assert!(exists("/bin"), "/bin should exist");
+        assert!(exists("/etc"), "/etc should exist");
+        assert!(exists("/home"), "/home should exist");
+        assert!(exists("/lib"), "/lib should exist");
+        assert!(exists("/opt"), "/opt should exist");
+        assert!(exists("/root"), "/root should exist");
+        assert!(exists("/sbin"), "/sbin should exist");
+        assert!(exists("/tmp"), "/tmp should exist");
+        assert!(exists("/usr"), "/usr should exist");
+        assert!(exists("/var"), "/var should exist");
+
+        // Verify /usr subdirectories
+        assert!(exists("/usr/bin"), "/usr/bin should exist");
+        assert!(exists("/usr/lib"), "/usr/lib should exist");
+        assert!(exists("/usr/local"), "/usr/local should exist");
+        assert!(exists("/usr/local/bin"), "/usr/local/bin should exist");
+        assert!(exists("/usr/share"), "/usr/share should exist");
+
+        // Verify /var subdirectories
+        assert!(exists("/var/log"), "/var/log should exist");
+        assert!(exists("/var/tmp"), "/var/tmp should exist");
+        assert!(exists("/var/cache"), "/var/cache should exist");
+    }
+
+    #[test_log::test]
+    fn test_init_user_home_creates_standard_user_directories() {
+        reset_fs();
+        init_minimal_fs().unwrap();
+        init_user_home("testuser").unwrap();
+
+        // Verify user home directories
+        assert!(exists("/home/testuser"), "user home should exist");
+        assert!(
+            exists("/home/testuser/.config"),
+            ".config directory should exist"
+        );
+        assert!(
+            exists("/home/testuser/.local"),
+            ".local directory should exist"
+        );
+        assert!(
+            exists("/home/testuser/.local/share"),
+            ".local/share directory should exist"
+        );
+        assert!(
+            exists("/home/testuser/.cache"),
+            ".cache directory should exist"
+        );
+        assert!(
+            exists("/home/testuser/Documents"),
+            "Documents directory should exist"
+        );
+        assert!(
+            exists("/home/testuser/Downloads"),
+            "Downloads directory should exist"
+        );
+    }
+
+    #[test_log::test]
+    fn test_init_user_home_with_different_usernames() {
+        reset_fs();
+        init_minimal_fs().unwrap();
+
+        init_user_home("alice").unwrap();
+        init_user_home("bob").unwrap();
+
+        assert!(exists("/home/alice"), "alice home should exist");
+        assert!(exists("/home/bob"), "bob home should exist");
+        assert!(
+            exists("/home/alice/Documents"),
+            "alice Documents should exist"
+        );
+        assert!(exists("/home/bob/Documents"), "bob Documents should exist");
+    }
+
+    #[test_log::test]
+    fn test_init_standard_fs_allows_listing_usr_subdirs() {
+        reset_fs();
+        init_standard_fs().unwrap();
+
+        let entries = sync::read_dir_sorted("/usr").unwrap();
+        let dir_names: Vec<_> = entries.iter().map(sync::DirEntry::file_name).collect();
+
+        // Verify we can list subdirectories
+        assert!(
+            dir_names.iter().any(|n| n == "bin"),
+            "should contain bin directory"
+        );
+        assert!(
+            dir_names.iter().any(|n| n == "lib"),
+            "should contain lib directory"
+        );
+        assert!(
+            dir_names.iter().any(|n| n == "local"),
+            "should contain local directory"
+        );
+        assert!(
+            dir_names.iter().any(|n| n == "share"),
+            "should contain share directory"
+        );
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::{Metadata, reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_metadata_for_empty_file() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/empty.txt", b"").unwrap();
+
+        let file = sync::File::open("/tmp/empty.txt").unwrap();
+        let metadata = file.metadata().unwrap();
+
+        assert_eq!(metadata.len(), 0, "empty file should have length 0");
+        assert!(
+            metadata.is_empty(),
+            "empty file should return true for is_empty"
+        );
+        assert!(metadata.is_file(), "should be a file");
+        assert!(!metadata.is_dir(), "should not be a directory");
+        assert!(!metadata.is_symlink(), "should not be a symlink");
+    }
+
+    #[test_log::test]
+    fn test_metadata_for_file_with_content() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/content.txt", b"Hello, World!").unwrap();
+
+        let file = sync::File::open("/tmp/content.txt").unwrap();
+        let metadata = file.metadata().unwrap();
+
+        assert_eq!(metadata.len(), 13, "file should have correct length");
+        assert!(
+            !metadata.is_empty(),
+            "non-empty file should return false for is_empty"
+        );
+        assert!(metadata.is_file(), "should be a file");
+    }
+
+    #[test_log::test]
+    fn test_metadata_from_std_fs_metadata() {
+        // Test the From<std::fs::Metadata> implementation
+        // We can't easily create std::fs::Metadata directly, but we can test
+        // the Metadata struct behavior directly
+
+        let metadata = Metadata {
+            len: 1024,
+            is_file: true,
+            is_dir: false,
+            is_symlink: false,
+        };
+
+        assert_eq!(metadata.len(), 1024);
+        assert!(metadata.is_file());
+        assert!(!metadata.is_dir());
+        assert!(!metadata.is_symlink());
+    }
+
+    #[test_log::test]
+    fn test_metadata_for_directory_entry() {
+        let dir_metadata = Metadata {
+            len: 0,
+            is_file: false,
+            is_dir: true,
+            is_symlink: false,
+        };
+
+        assert!(dir_metadata.is_dir());
+        assert!(!dir_metadata.is_file());
+        assert!(dir_metadata.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_metadata_for_symlink_entry() {
+        let symlink_metadata = Metadata {
+            len: 0,
+            is_file: false,
+            is_dir: false,
+            is_symlink: true,
+        };
+
+        assert!(symlink_metadata.is_symlink());
+        assert!(!symlink_metadata.is_file());
+        assert!(!symlink_metadata.is_dir());
+    }
+}
+
+#[cfg(test)]
+mod walk_dir_sorted_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_empty_directory() {
+        reset_fs();
+        sync::create_dir_all("/walk_empty").unwrap();
+
+        let entries = sync::walk_dir_sorted("/walk_empty").unwrap();
+        assert!(entries.is_empty(), "empty directory should have no entries");
+    }
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_flat_directory() {
+        reset_fs();
+        sync::create_dir_all("/walk_flat").unwrap();
+        sync::write("/walk_flat/a.txt", b"a").unwrap();
+        sync::write("/walk_flat/b.txt", b"b").unwrap();
+        sync::write("/walk_flat/c.txt", b"c").unwrap();
+
+        let entries = sync::walk_dir_sorted("/walk_flat").unwrap();
+        assert_eq!(entries.len(), 3, "should have 3 files");
+
+        // Verify entries are sorted by path
+        let paths: Vec<_> = entries.iter().map(sync::DirEntry::path).collect();
+        assert_eq!(
+            paths,
+            vec![
+                std::path::PathBuf::from("/walk_flat/a.txt"),
+                std::path::PathBuf::from("/walk_flat/b.txt"),
+                std::path::PathBuf::from("/walk_flat/c.txt"),
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_nested_structure() {
+        reset_fs();
+        sync::create_dir_all("/walk_nested/dir1").unwrap();
+        sync::create_dir_all("/walk_nested/dir2").unwrap();
+        sync::write("/walk_nested/root.txt", b"root").unwrap();
+        sync::write("/walk_nested/dir1/nested1.txt", b"nested1").unwrap();
+        sync::write("/walk_nested/dir2/nested2.txt", b"nested2").unwrap();
+
+        let entries = sync::walk_dir_sorted("/walk_nested").unwrap();
+
+        // Should include directories and files
+        let paths: Vec<_> = entries.iter().map(sync::DirEntry::path).collect();
+
+        // Verify all expected entries are present (directories + files)
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/walk_nested/dir1")),
+            "should contain dir1"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/walk_nested/dir2")),
+            "should contain dir2"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/walk_nested/root.txt")),
+            "should contain root.txt"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/walk_nested/dir1/nested1.txt")),
+            "should contain nested1.txt"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/walk_nested/dir2/nested2.txt")),
+            "should contain nested2.txt"
+        );
+    }
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_deeply_nested() {
+        reset_fs();
+        sync::create_dir_all("/deep/a/b/c").unwrap();
+        sync::write("/deep/a/b/c/file.txt", b"deep").unwrap();
+
+        let entries = sync::walk_dir_sorted("/deep").unwrap();
+
+        // Should include all intermediate directories and the file
+        let paths: Vec<_> = entries.iter().map(sync::DirEntry::path).collect();
+
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/deep/a")),
+            "should contain /deep/a"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/deep/a/b")),
+            "should contain /deep/a/b"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/deep/a/b/c")),
+            "should contain /deep/a/b/c"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/deep/a/b/c/file.txt")),
+            "should contain the file"
+        );
+    }
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_nonexistent_dir_fails() {
+        reset_fs();
+
+        let result = sync::walk_dir_sorted("/nonexistent_walk");
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_walk_dir_sorted_returns_sorted_paths() {
+        reset_fs();
+        sync::create_dir_all("/sorted/z_dir").unwrap();
+        sync::create_dir_all("/sorted/a_dir").unwrap();
+        sync::write("/sorted/m_file.txt", b"m").unwrap();
+        sync::write("/sorted/a_dir/nested.txt", b"nested").unwrap();
+
+        let entries = sync::walk_dir_sorted("/sorted").unwrap();
+        let paths: Vec<_> = entries.iter().map(sync::DirEntry::path).collect();
+
+        // Verify paths are sorted
+        let mut sorted_paths = paths.clone();
+        sorted_paths.sort();
+        assert_eq!(
+            paths, sorted_paths,
+            "walk_dir_sorted should return paths in sorted order"
+        );
+    }
+}
+
+#[cfg(test)]
+mod read_dir_sorted_sync_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_read_dir_sorted_empty_directory() {
+        reset_fs();
+        sync::create_dir_all("/read_empty").unwrap();
+
+        let entries = sync::read_dir_sorted("/read_empty").unwrap();
+        assert!(entries.is_empty(), "empty directory should have no entries");
+    }
+
+    #[test_log::test]
+    fn test_read_dir_sorted_files_and_dirs_mixed() {
+        reset_fs();
+        sync::create_dir_all("/mixed_content/subdir").unwrap();
+        sync::write("/mixed_content/file1.txt", b"f1").unwrap();
+        sync::write("/mixed_content/file2.txt", b"f2").unwrap();
+
+        let entries = sync::read_dir_sorted("/mixed_content").unwrap();
+        assert_eq!(entries.len(), 3, "should have 2 files and 1 directory");
+
+        // Verify we have both files and directory
+        let file_count = entries.iter().filter(|e| e.file_type().is_file()).count();
+        let dir_count = entries.iter().filter(|e| e.file_type().is_dir()).count();
+
+        assert_eq!(file_count, 2, "should have 2 files");
+        assert_eq!(dir_count, 1, "should have 1 directory");
+    }
+
+    #[test_log::test]
+    fn test_read_dir_sorted_returns_sorted_by_filename() {
+        reset_fs();
+        sync::create_dir_all("/sort_test").unwrap();
+        sync::write("/sort_test/zebra.txt", b"z").unwrap();
+        sync::write("/sort_test/apple.txt", b"a").unwrap();
+        sync::write("/sort_test/mango.txt", b"m").unwrap();
+
+        let entries = sync::read_dir_sorted("/sort_test").unwrap();
+        let filenames: Vec<_> = entries.iter().map(sync::DirEntry::file_name).collect();
+
+        // Should be sorted alphabetically
+        assert_eq!(
+            filenames,
+            vec![
+                std::ffi::OsString::from("apple.txt"),
+                std::ffi::OsString::from("mango.txt"),
+                std::ffi::OsString::from("zebra.txt"),
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn test_read_dir_sorted_nonexistent_dir_fails() {
+        reset_fs();
+
+        let result = sync::read_dir_sorted("/nonexistent_read");
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_read_dir_sorted_does_not_include_nested() {
+        reset_fs();
+        sync::create_dir_all("/parent/child").unwrap();
+        sync::write("/parent/direct.txt", b"direct").unwrap();
+        sync::write("/parent/child/nested.txt", b"nested").unwrap();
+
+        let entries = sync::read_dir_sorted("/parent").unwrap();
+        let filenames: Vec<_> = entries.iter().map(sync::DirEntry::file_name).collect();
+
+        // Should only include direct children, not nested
+        assert!(
+            filenames.contains(&std::ffi::OsString::from("direct.txt")),
+            "should contain direct.txt"
+        );
+        assert!(
+            filenames.contains(&std::ffi::OsString::from("child")),
+            "should contain child directory"
+        );
+        assert!(
+            !filenames.contains(&std::ffi::OsString::from("nested.txt")),
+            "should NOT contain nested.txt"
+        );
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_read_dir_tests {
+    use super::{reset_fs, sync, unsync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_dir_iteration() {
+        reset_fs();
+        sync::create_dir_all("/async_iter").unwrap();
+        sync::write("/async_iter/a.txt", b"a").unwrap();
+        sync::write("/async_iter/b.txt", b"b").unwrap();
+
+        let mut read_dir = unsync::read_dir("/async_iter").await.unwrap();
+
+        // Collect all entries
+        let mut entries = Vec::new();
+        while let Some(entry) = read_dir.next_entry().await.unwrap() {
+            entries.push(entry);
+        }
+
+        assert_eq!(entries.len(), 2, "should have 2 entries");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_dir_empty() {
+        reset_fs();
+        sync::create_dir_all("/async_empty").unwrap();
+
+        let mut read_dir = unsync::read_dir("/async_empty").await.unwrap();
+
+        // Should return None immediately for empty directory
+        let entry = read_dir.next_entry().await.unwrap();
+        assert!(entry.is_none(), "empty directory should return None");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_dir_entry_file_type() {
+        reset_fs();
+        sync::create_dir_all("/async_type/subdir").unwrap();
+        sync::write("/async_type/file.txt", b"content").unwrap();
+
+        let entries = unsync::read_dir_sorted("/async_type").await.unwrap();
+
+        // Find file and directory entries
+        let file_entry = entries
+            .iter()
+            .find(|e| e.file_name() == "file.txt")
+            .unwrap();
+        let dir_entry = entries.iter().find(|e| e.file_name() == "subdir").unwrap();
+
+        // Test file_type method
+        let file_type = file_entry.file_type().await.unwrap();
+        assert!(file_type.is_file(), "file.txt should be a file");
+        assert!(!file_type.is_dir(), "file.txt should not be a directory");
+
+        let dir_type = dir_entry.file_type().await.unwrap();
+        assert!(dir_type.is_dir(), "subdir should be a directory");
+        assert!(!dir_type.is_file(), "subdir should not be a file");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_dir_entry_metadata() {
+        reset_fs();
+        sync::create_dir_all("/async_meta").unwrap();
+        sync::write("/async_meta/test.txt", b"test content").unwrap();
+
+        let entries = unsync::read_dir_sorted("/async_meta").await.unwrap();
+        let file_entry = entries
+            .iter()
+            .find(|e| e.file_name() == "test.txt")
+            .unwrap();
+
+        let metadata = file_entry.metadata().await.unwrap();
+        assert_eq!(
+            metadata.len(),
+            12,
+            "file should have correct length (12 bytes)"
+        );
+        assert!(metadata.is_file(), "should be a file");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_dir_entry_path_and_file_name() {
+        reset_fs();
+        sync::create_dir_all("/async_paths").unwrap();
+        sync::write("/async_paths/example.txt", b"data").unwrap();
+
+        let entries = unsync::read_dir_sorted("/async_paths").await.unwrap();
+        let entry = &entries[0];
+
+        assert_eq!(
+            entry.path(),
+            std::path::PathBuf::from("/async_paths/example.txt")
+        );
+        assert_eq!(entry.file_name(), std::ffi::OsString::from("example.txt"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_walk_dir_sorted() {
+        reset_fs();
+        sync::create_dir_all("/async_walk/sub").unwrap();
+        sync::write("/async_walk/root.txt", b"root").unwrap();
+        sync::write("/async_walk/sub/nested.txt", b"nested").unwrap();
+
+        let entries = unsync::walk_dir_sorted("/async_walk").await.unwrap();
+
+        // Should include all entries (directories and files)
+        let paths: Vec<_> = entries.iter().map(unsync::DirEntry::path).collect();
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/async_walk/sub")),
+            "should contain sub directory"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/async_walk/root.txt")),
+            "should contain root.txt"
+        );
+        assert!(
+            paths.contains(&std::path::PathBuf::from("/async_walk/sub/nested.txt")),
+            "should contain nested.txt"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_dir_entry_metadata_for_directory() {
+        reset_fs();
+        sync::create_dir_all("/async_dir_meta/subdir").unwrap();
+
+        let entries = unsync::read_dir_sorted("/async_dir_meta").await.unwrap();
+        let dir_entry = &entries[0];
+
+        let metadata = dir_entry.metadata().await.unwrap();
+        assert!(metadata.is_dir(), "should be a directory");
+        assert_eq!(metadata.len(), 0, "directory should have length 0");
+    }
+}
+
+#[cfg(test)]
+mod dir_entry_sync_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_dir_entry_new_file() {
+        let entry =
+            sync::DirEntry::new_file("/path/to/file.txt".to_string(), "file.txt".to_string())
+                .unwrap();
+
+        assert_eq!(entry.path(), std::path::PathBuf::from("/path/to/file.txt"));
+        assert_eq!(entry.file_name(), std::ffi::OsString::from("file.txt"));
+        assert!(entry.file_type().is_file());
+        assert!(!entry.file_type().is_dir());
+    }
+
+    #[test_log::test]
+    fn test_dir_entry_new_dir() {
+        let entry = sync::DirEntry::new_dir("/path/to/dir".to_string(), "dir".to_string()).unwrap();
+
+        assert_eq!(entry.path(), std::path::PathBuf::from("/path/to/dir"));
+        assert_eq!(entry.file_name(), std::ffi::OsString::from("dir"));
+        assert!(entry.file_type().is_dir());
+        assert!(!entry.file_type().is_file());
+    }
+
+    #[test_log::test]
+    fn test_dir_entry_file_type_accessor() {
+        reset_fs();
+        sync::create_dir_all("/entry_test/subdir").unwrap();
+        sync::write("/entry_test/file.txt", b"content").unwrap();
+
+        let entries = sync::read_dir_sorted("/entry_test").unwrap();
+
+        for entry in entries {
+            let file_type = entry.file_type();
+            // Each entry should have exactly one type set
+            let type_count = [
+                file_type.is_file(),
+                file_type.is_dir(),
+                file_type.is_symlink(),
+            ]
+            .iter()
+            .filter(|&&x| x)
+            .count();
+            assert_eq!(type_count, 1, "each entry should have exactly one type");
+        }
+    }
+}
+
+#[cfg(test)]
+mod file_create_and_open_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+    use std::io::{Read as _, Write as _};
+
+    #[test_log::test]
+    fn test_file_create_new_file() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        let mut file = sync::File::create("/tmp/new_file.txt").unwrap();
+        file.write_all(b"created content").unwrap();
+        drop(file);
+
+        let content = sync::read_to_string("/tmp/new_file.txt").unwrap();
+        assert_eq!(content, "created content");
+    }
+
+    #[test_log::test]
+    fn test_file_create_truncates_existing() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/existing.txt", b"original content that is long").unwrap();
+
+        let mut file = sync::File::create("/tmp/existing.txt").unwrap();
+        file.write_all(b"short").unwrap();
+        drop(file);
+
+        let content = sync::read_to_string("/tmp/existing.txt").unwrap();
+        assert_eq!(content, "short");
+    }
+
+    #[test_log::test]
+    fn test_file_open_reads_content() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/read_test.txt", b"readable content").unwrap();
+
+        let mut file = sync::File::open("/tmp/read_test.txt").unwrap();
+        let mut content = String::new();
+        file.read_to_string(&mut content).unwrap();
+
+        assert_eq!(content, "readable content");
+    }
+
+    #[test_log::test]
+    fn test_file_open_nonexistent_fails() {
+        reset_fs();
+
+        let result = sync::File::open("/nonexistent/file.txt");
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_file_create_without_parent_fails() {
+        reset_fs();
+
+        let result = sync::File::create("/no/parent/file.txt");
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_file_options_returns_open_options() {
+        let options = sync::File::options();
+        // Verify it returns an OpenOptions by chaining methods
+        let _ = options.read(true).write(true).create(true);
+    }
+}
