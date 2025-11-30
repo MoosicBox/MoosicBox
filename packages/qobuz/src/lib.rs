@@ -2958,4 +2958,127 @@ mod tests {
         let result = search_app_config(bundle);
         assert!(matches!(result, Err(Error::NoInfoAndExtras)));
     }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_login_url() {
+        let url = QobuzApiEndpoint::Login.to_url();
+        assert_eq!(url, "https://play.qobuz.com/login");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_bundle_url() {
+        let url = QobuzApiEndpoint::Bundle.to_url();
+        assert_eq!(
+            url,
+            "https://play.qobuz.com/resources/:bundleVersion/bundle.js"
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_user_login_url() {
+        let url = QobuzApiEndpoint::UserLogin.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/user/login");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_artist_url() {
+        let url = QobuzApiEndpoint::Artist.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/artist/get");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_artist_albums_url() {
+        let url = QobuzApiEndpoint::ArtistAlbums.to_url();
+        assert_eq!(
+            url,
+            "https://www.qobuz.com/api.json/0.2/artist/getReleasesList"
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_album_url() {
+        let url = QobuzApiEndpoint::Album.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/album/get");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_track_url() {
+        let url = QobuzApiEndpoint::Track.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/track/get");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_track_file_url() {
+        let url = QobuzApiEndpoint::TrackFileUrl.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/track/getFileUrl");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_favorites_url() {
+        let url = QobuzApiEndpoint::Favorites.to_url();
+        assert_eq!(
+            url,
+            "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites"
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_add_favorites_url() {
+        let url = QobuzApiEndpoint::AddFavorites.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/favorite/create");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_remove_favorites_url() {
+        let url = QobuzApiEndpoint::RemoveFavorites.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/favorite/delete");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_search_url() {
+        let url = QobuzApiEndpoint::Search.to_url();
+        assert_eq!(url, "https://www.qobuz.com/api.json/0.2/catalog/search");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_macro_basic() {
+        let url = qobuz_api_endpoint!(Login);
+        assert_eq!(url, "https://play.qobuz.com/login");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_macro_with_params() {
+        let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", "7.1.3-b011")]);
+        assert_eq!(url, "https://play.qobuz.com/resources/7.1.3-b011/bundle.js");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_api_endpoint_macro_with_query() {
+        let url = qobuz_api_endpoint!(Artist, &[], &[("artist_id", "12345"), ("limit", "10")]);
+        assert_eq!(
+            url,
+            "https://www.qobuz.com/api.json/0.2/artist/get?artist_id=12345&limit=10"
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_sort_default() {
+        assert_eq!(
+            QobuzAlbumSort::default(),
+            QobuzAlbumSort::ReleaseDateByPriority
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_order_default() {
+        assert_eq!(QobuzAlbumOrder::default(), QobuzAlbumOrder::Desc);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_default() {
+        assert_eq!(
+            QobuzAlbumReleaseType::default(),
+            QobuzAlbumReleaseType::Album
+        );
+    }
 }

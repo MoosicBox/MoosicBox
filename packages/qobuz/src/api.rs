@@ -1138,4 +1138,158 @@ mod tests {
     fn test_album_order_default_is_desc() {
         assert_eq!(AlbumOrder::default(), AlbumOrder::Desc);
     }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_unauthorized() {
+        let error = Error::Unauthorized;
+        let actix_error: actix_web::Error = error.into();
+        // Unauthorized errors should produce a 401 status
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_not_found() {
+        let error = Error::HttpRequestFailed(404, "Album not found".to_string());
+        let actix_error: actix_web::Error = error.into();
+        // 404 HttpRequestFailed should produce a NOT_FOUND status
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_other_http_status() {
+        // Non-404 HTTP errors should produce INTERNAL_SERVER_ERROR
+        let error = Error::HttpRequestFailed(500, "Server error".to_string());
+        let actix_error: actix_web::Error = error.into();
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_access_token() {
+        let error = Error::NoAccessTokenAvailable;
+        let actix_error: actix_web::Error = error.into();
+        // NoAccessTokenAvailable should produce INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_max_failed_attempts() {
+        let error = Error::MaxFailedAttempts;
+        let actix_error: actix_web::Error = error.into();
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_app_id() {
+        let error = Error::NoAppId;
+        let actix_error: actix_web::Error = error.into();
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_release_from_qobuz_release() {
+        let release = crate::QobuzRelease {
+            id: "release123".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: 42,
+            album_type: QobuzAlbumReleaseType::Live,
+            maximum_bit_depth: 24,
+            image: Some(crate::models::QobuzImage {
+                thumbnail: None,
+                small: None,
+                medium: Some("medium.jpg".to_string()),
+                large: None,
+                extralarge: None,
+                mega: None,
+            }),
+            title: "Test Release".to_string(),
+            version: Some("Remastered".to_string()),
+            release_date_original: "2023-01-15".to_string(),
+            duration: 3600,
+            parental_warning: true,
+            tracks_count: 12,
+            genre: "Rock".to_string(),
+            maximum_channel_count: 2,
+            maximum_sampling_rate: 96.0,
+        };
+
+        let api_release: ApiRelease = release.into();
+
+        match api_release {
+            ApiRelease::Qobuz(api_qobuz_release) => {
+                assert_eq!(api_qobuz_release.id, "release123");
+                assert_eq!(api_qobuz_release.artist, "Test Artist");
+                assert_eq!(api_qobuz_release.artist_id, 42);
+                assert!(api_qobuz_release.contains_cover);
+                assert_eq!(api_qobuz_release.duration, 3600);
+                assert!(api_qobuz_release.parental_warning);
+                assert_eq!(api_qobuz_release.number_of_tracks, 12);
+                // Title should include the version
+                assert_eq!(api_qobuz_release.title, "Test Release - Remastered");
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_track_from_qobuz_track() {
+        let track = crate::QobuzTrack {
+            id: 12345,
+            track_number: 3,
+            artist: "Track Artist".to_string(),
+            artist_id: 99,
+            album: "Test Album".to_string(),
+            album_id: "album789".to_string(),
+            album_type: QobuzAlbumReleaseType::Album,
+            image: Some(crate::models::QobuzImage {
+                thumbnail: Some("track_thumb.jpg".to_string()),
+                small: None,
+                medium: None,
+                large: None,
+                extralarge: None,
+                mega: None,
+            }),
+            copyright: Some("2023 Record Label".to_string()),
+            duration: 240,
+            parental_warning: false,
+            isrc: "USRC12300001".to_string(),
+            title: "Test Track".to_string(),
+            version: Some("Radio Edit".to_string()),
+        };
+
+        let api_track: ApiTrack = track.into();
+
+        match api_track {
+            ApiTrack::Qobuz(api_qobuz_track) => {
+                assert_eq!(api_qobuz_track.id, 12345);
+                assert_eq!(api_qobuz_track.number, 3);
+                assert_eq!(api_qobuz_track.artist, "Track Artist");
+                assert_eq!(api_qobuz_track.artist_id, 99);
+                assert_eq!(api_qobuz_track.album, "Test Album");
+                assert_eq!(api_qobuz_track.album_id, "album789");
+                assert!(api_qobuz_track.contains_cover);
+                assert_eq!(api_qobuz_track.duration, 240);
+                assert!(!api_qobuz_track.parental_warning);
+                assert_eq!(api_qobuz_track.isrc, "USRC12300001");
+                // Title should include the version
+                assert_eq!(api_qobuz_track.title, "Test Track - Radio Edit");
+            }
+        }
+    }
 }
