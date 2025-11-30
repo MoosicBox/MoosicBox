@@ -277,4 +277,75 @@ mod tests {
         assert_eq!(artist.id, 456);
         assert_eq!(artist.title, "Cached Artist");
     }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    #[serial]
+    async fn get_or_set_to_cache_recomputes_value_when_expired() {
+        clear_cache();
+
+        let call_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+        // First call - insert with a very short expiration
+        let call_count_clone = Arc::clone(&call_count);
+        let result1 = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_expiration",
+                expiration: Duration::from_nanos(1), // Very short expiration
+            },
+            || {
+                let count = Arc::clone(&call_count_clone);
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                        crate::models::LibraryArtist {
+                            id: 100,
+                            title: "First Artist".to_string(),
+                            cover: None,
+                            ..Default::default()
+                        },
+                    )))
+                }
+            },
+        )
+        .await;
+
+        assert!(result1.is_ok());
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+        // Wait a bit to ensure expiration
+        switchy_async::time::sleep(Duration::from_millis(10)).await;
+
+        // Second call - should recompute because entry is expired
+        let call_count_clone = Arc::clone(&call_count);
+        let result2 = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_expiration",
+                expiration: Duration::from_secs(60),
+            },
+            || {
+                let count = Arc::clone(&call_count_clone);
+                async move {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                        crate::models::LibraryArtist {
+                            id: 200,
+                            title: "Second Artist".to_string(),
+                            cover: None,
+                            ..Default::default()
+                        },
+                    )))
+                }
+            },
+        )
+        .await;
+
+        assert!(result2.is_ok());
+        // Compute function should have been called twice (once for initial, once for expired)
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+        // Verify the new value is returned
+        let artist = result2.unwrap().into_artist().unwrap();
+        assert_eq!(artist.id, 200);
+        assert_eq!(artist.title, "Second Artist");
+    }
 }
