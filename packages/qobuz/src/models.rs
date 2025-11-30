@@ -1114,4 +1114,320 @@ mod tests {
         assert_eq!(format!("{}", QobuzImageSize::ExtraLarge), "2400");
         assert_eq!(format!("{}", QobuzImageSize::Mega), "4800");
     }
+
+    #[test_log::test]
+    fn test_search_results_to_api_response_position_calculation() {
+        // Test position when offset + limit is less than total
+        let results = QobuzSearchResults {
+            albums: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 100,
+            },
+            artists: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 50,
+            },
+            tracks: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 75,
+            },
+        };
+        let response: ApiSearchResultsResponse = results.into();
+        assert_eq!(response.position, 10); // offset (0) + limit (10) = 10 < total (100)
+    }
+
+    #[test_log::test]
+    fn test_search_results_to_api_response_position_capped_at_total() {
+        // Test position is capped at total when offset + limit exceeds total
+        let results = QobuzSearchResults {
+            albums: QobuzSearchResultList {
+                items: vec![],
+                offset: 95,
+                limit: 10,
+                total: 100,
+            },
+            artists: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 50,
+            },
+            tracks: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 75,
+            },
+        };
+        let response: ApiSearchResultsResponse = results.into();
+        // offset (95) + limit (10) = 105, but total is 100, so position should be 100
+        assert_eq!(response.position, 100);
+    }
+
+    #[test_log::test]
+    fn test_search_results_to_api_response_position_exactly_at_total() {
+        // Test when offset + limit equals total exactly
+        let results = QobuzSearchResults {
+            albums: QobuzSearchResultList {
+                items: vec![],
+                offset: 90,
+                limit: 10,
+                total: 100,
+            },
+            artists: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 50,
+            },
+            tracks: QobuzSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 75,
+            },
+        };
+        let response: ApiSearchResultsResponse = results.into();
+        assert_eq!(response.position, 100); // offset (90) + limit (10) = 100 = total
+    }
+
+    #[test_log::test]
+    fn test_qobuz_release_to_qobuz_album_conversion() {
+        let release = QobuzRelease {
+            id: "album123".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: 42,
+            album_type: crate::QobuzAlbumReleaseType::Live,
+            maximum_bit_depth: 24,
+            image: Some(QobuzImage {
+                thumbnail: Some("thumb.jpg".to_string()),
+                small: None,
+                medium: None,
+                large: None,
+                extralarge: None,
+                mega: None,
+            }),
+            title: "Test Album".to_string(),
+            version: Some("Deluxe".to_string()),
+            release_date_original: "2023-06-15T00:00:00Z".to_string(),
+            duration: 3600,
+            parental_warning: true,
+            tracks_count: 12,
+            genre: "Rock".to_string(),
+            maximum_channel_count: 2,
+            maximum_sampling_rate: 96.0,
+        };
+
+        let album: QobuzAlbum = release.into();
+
+        assert_eq!(album.id, "album123");
+        assert_eq!(album.artist, "Test Artist");
+        assert_eq!(album.artist_id, 42);
+        assert_eq!(album.maximum_bit_depth, 24);
+        assert_eq!(album.title, "Test Album");
+        assert_eq!(album.version, Some("Deluxe".to_string()));
+        assert_eq!(album.duration, 3600);
+        assert!(album.parental_warning);
+        assert_eq!(album.tracks_count, 12);
+        assert!((album.maximum_sampling_rate - 96.0).abs() < f32::EPSILON);
+        // released_at should be a valid timestamp from the ISO 8601 date
+        assert!(album.released_at > 0);
+        // album_type is always set to Album in this conversion
+        assert_eq!(album.album_type, crate::QobuzAlbumReleaseType::Album);
+        // qobuz_id and popularity are set to 0
+        assert_eq!(album.qobuz_id, 0);
+        assert_eq!(album.popularity, 0);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_release_to_qobuz_album_with_invalid_date() {
+        // Test that invalid date results in released_at = 0
+        let release = QobuzRelease {
+            id: "album456".to_string(),
+            artist: "Artist".to_string(),
+            artist_id: 1,
+            album_type: crate::QobuzAlbumReleaseType::Album,
+            maximum_bit_depth: 16,
+            image: None,
+            title: "Album".to_string(),
+            version: None,
+            release_date_original: "not-a-valid-date".to_string(),
+            duration: 1000,
+            parental_warning: false,
+            tracks_count: 10,
+            genre: "Pop".to_string(),
+            maximum_channel_count: 2,
+            maximum_sampling_rate: 44.1,
+        };
+
+        let album: QobuzAlbum = release.into();
+
+        // Invalid date should result in released_at = 0
+        assert_eq!(album.released_at, 0);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_cover_url_with_image() {
+        let album = QobuzAlbum {
+            id: "123".to_string(),
+            image: Some(QobuzImage {
+                thumbnail: None,
+                small: None,
+                medium: Some("medium.jpg".to_string()),
+                large: None,
+                extralarge: None,
+                mega: None,
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(album.cover_url(), Some("medium.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_cover_url_without_image() {
+        let album = QobuzAlbum {
+            id: "123".to_string(),
+            image: None,
+            ..Default::default()
+        };
+
+        assert_eq!(album.cover_url(), None);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_release_cover_url_with_image() {
+        let release = QobuzRelease {
+            id: "456".to_string(),
+            image: Some(QobuzImage {
+                thumbnail: None,
+                small: None,
+                medium: None,
+                large: Some("large.jpg".to_string()),
+                extralarge: None,
+                mega: None,
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(release.cover_url(), Some("large.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_track_cover_url() {
+        let track = QobuzTrack {
+            id: 789,
+            image: Some(QobuzImage {
+                thumbnail: Some("track_thumb.jpg".to_string()),
+                small: None,
+                medium: None,
+                large: None,
+                extralarge: None,
+                mega: None,
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(track.cover_url(), Some("track_thumb.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_artist_cover_url() {
+        let artist = QobuzArtist {
+            id: 111,
+            name: "Test Artist".to_string(),
+            image: Some(QobuzImage {
+                thumbnail: None,
+                small: None,
+                medium: None,
+                large: None,
+                extralarge: Some("artist_xl.jpg".to_string()),
+                mega: None,
+            }),
+        };
+
+        assert_eq!(artist.cover_url(), Some("artist_xl.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_image_cover_url_for_size_extralarge() {
+        // Test the ExtraLarge fallback path
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: None,
+            medium: None,
+            large: None,
+            extralarge: Some("xl.jpg".to_string()),
+            mega: None,
+        };
+
+        // ExtraLarge should return its own value
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::ExtraLarge),
+            Some("xl.jpg".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_image_cover_url_for_size_small() {
+        // Test the Small fallback path
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: Some("small.jpg".to_string()),
+            medium: None,
+            large: None,
+            extralarge: None,
+            mega: None,
+        };
+
+        // Small should return its own value first
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Small),
+            Some("small.jpg".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_image_cover_url_for_size_large() {
+        // Test the Large fallback path
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: None,
+            medium: None,
+            large: Some("large.jpg".to_string()),
+            extralarge: None,
+            mega: None,
+        };
+
+        // Large should return its own value first
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Large),
+            Some("large.jpg".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_qobuz_image_cover_url_for_size_small_fallback_to_thumbnail() {
+        // Test Small falling back to thumbnail when no larger sizes available
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: None,
+            medium: None,
+            large: None,
+            extralarge: None,
+            mega: None,
+        };
+
+        // Small with only thumbnail available should fall back to thumbnail
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Small),
+            Some("thumb.jpg".to_string())
+        );
+    }
 }
