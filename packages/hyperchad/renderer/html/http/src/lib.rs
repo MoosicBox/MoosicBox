@@ -546,4 +546,373 @@ mod tests {
         let err = Error::from(json_err);
         assert!(matches!(err, Error::SerdeJson(_)));
     }
+
+    mod process_tests {
+        use super::*;
+        use bytes::Bytes;
+        use hyperchad_renderer::Content;
+        use hyperchad_renderer_html::DefaultHtmlTagRenderer;
+        use hyperchad_router::{RequestInfo, RouteRequest, Router};
+        use switchy::http::models::Method;
+
+        fn create_route_request(path: &str) -> RouteRequest {
+            RouteRequest {
+                path: path.to_string(),
+                method: Method::Get,
+                query: BTreeMap::new(),
+                headers: BTreeMap::new(),
+                cookies: BTreeMap::new(),
+                info: RequestInfo::default(),
+                body: None,
+            }
+        }
+
+        fn create_route_request_with_headers(
+            path: &str,
+            headers: BTreeMap<String, String>,
+        ) -> RouteRequest {
+            RouteRequest {
+                path: path.to_string(),
+                method: Method::Get,
+                query: BTreeMap::new(),
+                headers,
+                cookies: BTreeMap::new(),
+                info: RequestInfo::default(),
+                body: None,
+            }
+        }
+
+        #[cfg(feature = "actions")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_action_route_without_action_tx_returns_204() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let app = HttpApp::new(renderer, router);
+            // action_tx is None by default
+
+            let req = create_route_request("/$action");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 204);
+            assert!(response.body().is_empty());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_no_matching_route_returns_navigate_error() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            // No routes added
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/nonexistent");
+            let result = app.process(&req).await;
+
+            // When no route matches, the router returns an InvalidPath error
+            assert!(matches!(result, Err(Error::Navigate(_))));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_raw_content_response() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/raw", |_req| async {
+                Content::Raw {
+                    data: Bytes::from_static(b"raw content"),
+                    content_type: "text/plain".to_string(),
+                }
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/raw");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/plain"
+            );
+            assert_eq!(response.body(), b"raw content");
+        }
+
+        #[cfg(feature = "json")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_json_content_response() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/json", |_req| async {
+                Content::Json(serde_json::json!({"key": "value"}))
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/json");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "application/json"
+            );
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("key"));
+            assert!(body_str.contains("value"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_content_returns_html() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/page", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router).with_title("Test Page");
+
+            let req = create_route_request("/page");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("<!DOCTYPE html>"));
+            assert!(body_str.contains("Test Page"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_htmx_request_returns_partial_html() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/partial", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router).with_title("Test Page");
+
+            let mut headers = BTreeMap::new();
+            headers.insert("hx-request".to_string(), "true".to_string());
+            let req = create_route_request_with_headers("/partial", headers);
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            // Partial responses don't include full HTML document structure
+            assert!(!body_str.contains("<!DOCTYPE html>"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_with_fragments_sets_header() {
+            use hyperchad_renderer::View;
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/fragments", |_req| async {
+                let fragment = Container {
+                    element: Element::Span,
+                    str_id: Some("target".to_string()),
+                    ..Default::default()
+                };
+                let view = View::builder().with_fragment(fragment).build();
+                Content::View(Box::new(view))
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/fragments");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("X-HyperChad-Fragments").unwrap(),
+                "true"
+            );
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_with_delete_selectors_sets_header() {
+            use hyperchad_renderer::{View, transformer::models::Selector};
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/delete", |_req| async {
+                let view = View::builder()
+                    .with_primary(Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    })
+                    .with_delete_selector(Selector::Class("old-element".to_string()))
+                    .build();
+                Content::View(Box::new(view))
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/delete");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let delete_header = response
+                .headers()
+                .get("X-HyperChad-Delete-Selectors")
+                .unwrap()
+                .to_str()
+                .unwrap();
+            assert!(delete_header.contains(".old-element"));
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_static_asset_file_contents() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/style.css".to_string(),
+                target: AssetPathTarget::FileContents(Bytes::from_static(b"body { color: red; }")),
+            });
+
+            let req = create_route_request("/style.css");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(response.headers().get("Content-Type").unwrap(), "text/css");
+            assert_eq!(response.body(), b"body { color: red; }");
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_static_asset_handler() {
+            use hyperchad_renderer::assets::AssetPathTarget;
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let app = HttpApp::new(renderer, router).with_static_asset_route_handler(
+                |req: &RouteRequest| {
+                    if req.path == "/custom.js" {
+                        Some(AssetPathTarget::FileContents(Bytes::from_static(
+                            b"console.log('test');",
+                        )))
+                    } else {
+                        None
+                    }
+                },
+            );
+
+            let req = create_route_request("/custom.js");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            // mime_guess returns "text/javascript" for .js files
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/javascript"
+            );
+            assert_eq!(response.body(), b"console.log('test');");
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_without_primary_returns_empty_html() {
+            use hyperchad_renderer::View;
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/empty", |_req| async {
+                let view = View::builder().build();
+                Content::View(Box::new(view))
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/empty");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+            // View without primary returns empty string for html content
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.is_empty());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_includes_css_urls_in_response() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/styled", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router)
+                .with_css_url("https://example.com/style.css")
+                .with_css_urls(vec!["https://example.com/another.css"]);
+
+            let req = create_route_request("/styled");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("https://example.com/style.css"));
+            assert!(body_str.contains("https://example.com/another.css"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_with_viewport_meta() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/mobile", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app =
+                HttpApp::new(renderer, router).with_viewport("width=device-width, initial-scale=1");
+
+            let req = create_route_request("/mobile");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("width=device-width"));
+        }
+
+        #[cfg(feature = "actions")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_action_route_with_tx_delegates_to_handler() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let (tx, rx) = flume::unbounded();
+            let app = HttpApp::new(renderer, router).with_action_tx(tx);
+
+            // Create a request with action payload
+            let req = RouteRequest {
+                path: "/$action".to_string(),
+                method: Method::Post,
+                query: BTreeMap::new(),
+                headers: BTreeMap::new(),
+                cookies: BTreeMap::new(),
+                info: RequestInfo::default(),
+                body: Some(std::sync::Arc::new(Bytes::from_static(
+                    br#"{"action":"test"}"#,
+                ))),
+            };
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 204);
+
+            // Verify action was sent through channel
+            let (action_name, value) = rx.try_recv().unwrap();
+            assert_eq!(action_name, "test");
+            assert!(value.is_none());
+        }
+    }
 }

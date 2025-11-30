@@ -35,9 +35,10 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
-bytes    = { workspace = true }
-switchy  = { workspace = true, features = ["http"] }
-test-log = { workspace = true }
+bytes         = { workspace = true }
+switchy       = { workspace = true, features = ["http"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
 
 [features]
 default = ["actions", "assets", "debug", "json"]
