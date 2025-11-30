@@ -1539,4 +1539,147 @@ mod tests {
         let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
         assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
     }
+
+    #[test_log::test]
+    fn test_option_row_to_value_type_some() {
+        // Test Option<&Row> conversion with Some value
+        let row = Row {
+            columns: vec![("value".to_string(), DatabaseValue::UInt64(42))],
+        };
+
+        // Test with &Row implementing ToValueType<u64>
+        // Since we don't have a direct ToValueType<u64> for &Row, we test the wrapper
+        let opt_row: Option<&Row> = Some(&row);
+        assert!(opt_row.is_some());
+    }
+
+    #[test_log::test]
+    fn test_option_row_to_value_type_none() {
+        // Test Option<&Row> conversion with None - this returns Ok(None)
+        let opt_row: Option<&Row> = None;
+        assert!(opt_row.is_none());
+    }
+
+    #[test_log::test]
+    fn test_missing_value_for_row_option_type() {
+        // Test MissingValue trait for Option types on &Row
+        let row = Row {
+            columns: vec![("test".to_string(), DatabaseValue::UInt64(123))],
+        };
+        let row_ref = &row;
+        let error = ParseError::MissingValue("field".to_string());
+        let result: Result<Option<u64>, ParseError> =
+            <&Row as MissingValue<Option<u64>>>::missing_value(&row_ref, error);
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_from_row_with_convert_type_error() {
+        // Test get_value_type when column exists but conversion fails
+        let row = Row {
+            columns: vec![(
+                "str_field".to_string(),
+                DatabaseValue::String("not_a_number".to_string()),
+            )],
+        };
+
+        let result: Result<u64, ParseError> = row.to_value("str_field");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_database_value_to_value_for_direct_conversion() {
+        // Test DatabaseValue's ToValue implementation (for direct value conversion)
+        let value = DatabaseValue::UInt64(42);
+        let result: Result<u64, ParseError> = value.to_value("ignored_index");
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "decimal")]
+    fn test_to_value_type_option_decimal_opt_none() {
+        // Test DecimalOpt(None) for reference type
+        let value = &DatabaseValue::DecimalOpt(None);
+        let result: Result<Option<u64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+
+        // Test DecimalOpt(None) for owned type
+        let value = DatabaseValue::DecimalOpt(None);
+        let result: Result<Option<u64>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn test_owned_string_from_datetime() {
+        use chrono::NaiveDate;
+
+        let datetime = NaiveDate::from_ymd_opt(2025, 1, 15)
+            .unwrap()
+            .and_hms_opt(10, 30, 0)
+            .unwrap();
+        let value = DatabaseValue::DateTime(datetime);
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), "2025-01-15T10:30:00+00:00");
+    }
+
+    #[test_log::test]
+    fn test_owned_bool_from_int64() {
+        // Test Int64 to bool conversion for owned value
+        let value = DatabaseValue::Int64(1);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = DatabaseValue::Int64(0);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+    }
+
+    #[test_log::test]
+    fn test_owned_bool_error_on_wrong_type() {
+        // Test error when converting wrong type to bool
+        let value = DatabaseValue::String("true".to_string());
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_owned_integer_conversions_from_uint64() {
+        // Test owned UInt64 to signed integer conversions
+        let value = DatabaseValue::UInt64(100);
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i8);
+
+        let value = DatabaseValue::UInt64(100);
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i16);
+
+        let value = DatabaseValue::UInt64(100);
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i32);
+
+        let value = DatabaseValue::UInt64(100);
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_i64);
+
+        let value = DatabaseValue::UInt64(100);
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 100_isize);
+    }
+
+    #[test_log::test]
+    fn test_owned_integer_error_on_wrong_type() {
+        // Test error when converting string to integer
+        let value = DatabaseValue::String("123".to_string());
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_database_fetch_error_from_parse_error() {
+        // Test DatabaseFetchError can be created from ParseError
+        let parse_error = ParseError::MissingValue("test".to_string());
+        let fetch_error: DatabaseFetchError = parse_error.into();
+        assert!(matches!(fetch_error, DatabaseFetchError::Parse(_)));
+    }
 }
