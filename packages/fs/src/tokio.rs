@@ -366,6 +366,27 @@ pub mod unsync {
         Ok(all_entries)
     }
 
+    /// Checks if a path exists asynchronously
+    ///
+    /// Returns `true` if the path exists, `false` otherwise.
+    pub async fn exists<P: AsRef<Path>>(path: P) -> bool {
+        ::tokio::fs::try_exists(path).await.unwrap_or(false)
+    }
+
+    /// Checks if a path is a file asynchronously
+    ///
+    /// Returns `true` if the path exists and is a file, `false` otherwise.
+    pub async fn is_file<P: AsRef<Path>>(path: P) -> bool {
+        ::tokio::fs::metadata(path).await.is_ok_and(|m| m.is_file())
+    }
+
+    /// Checks if a path is a directory asynchronously
+    ///
+    /// Returns `true` if the path exists and is a directory, `false` otherwise.
+    pub async fn is_dir<P: AsRef<Path>>(path: P) -> bool {
+        ::tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
+    }
+
     impl From<OpenOptions> for tokio::fs::OpenOptions {
         fn from(value: OpenOptions) -> Self {
             let mut options = Self::new();
