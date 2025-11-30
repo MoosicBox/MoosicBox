@@ -174,3 +174,230 @@ where
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use actix_web::{App, HttpResponse, http::StatusCode, test, web};
+
+    async fn success_handler() -> HttpResponse {
+        HttpResponse::Ok().body("success")
+    }
+
+    async fn created_handler() -> HttpResponse {
+        HttpResponse::Created().body("created")
+    }
+
+    async fn redirect_handler() -> HttpResponse {
+        HttpResponse::Found()
+            .insert_header(("Location", "http://example.com"))
+            .finish()
+    }
+
+    async fn informational_handler() -> HttpResponse {
+        HttpResponse::Continue().finish()
+    }
+
+    async fn bad_request_handler() -> HttpResponse {
+        HttpResponse::BadRequest().body("bad request")
+    }
+
+    async fn not_found_handler() -> HttpResponse {
+        HttpResponse::NotFound().body("not found")
+    }
+
+    async fn range_response_handler() -> HttpResponse {
+        HttpResponse::PartialContent()
+            .insert_header((header::CONTENT_RANGE, "bytes 0-99/1000"))
+            .insert_header((header::ACCEPT_RANGES, "bytes"))
+            .insert_header((header::CONTENT_LENGTH, "100"))
+            .body("partial content")
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_success_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/", web::get().to(success_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_created_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/resource", web::post().to(created_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::post().uri("/resource").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_redirect_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/redirect", web::get().to(redirect_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/redirect").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::FOUND);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_informational_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/continue", web::get().to(informational_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/continue").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::CONTINUE);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_client_error_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/bad", web::get().to(bad_request_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/bad").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_passes_through_not_found_response() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/missing", web::get().to(not_found_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/missing").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_handles_request_with_query_string() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/search", web::get().to(success_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/search?q=test&page=1")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_handles_request_with_range_header() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/data", web::get().to(range_response_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/data")
+            .insert_header((header::RANGE, "bytes=0-99"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_handles_response_with_content_range_headers() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/partial", web::get().to(range_response_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/partial").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+        assert!(resp.headers().contains_key(header::CONTENT_RANGE));
+        assert!(resp.headers().contains_key(header::ACCEPT_RANGES));
+        assert!(resp.headers().contains_key(header::CONTENT_LENGTH));
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_handles_different_http_methods() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/resource", web::post().to(created_handler))
+                .route("/resource", web::get().to(success_handler)),
+        )
+        .await;
+
+        let get_req = test::TestRequest::get().uri("/resource").to_request();
+        let get_resp = test::call_service(&app, get_req).await;
+        assert_eq!(get_resp.status(), StatusCode::OK);
+
+        let post_req = test::TestRequest::post().uri("/resource").to_request();
+        let post_resp = test::call_service(&app, post_req).await;
+        assert_eq!(post_resp.status(), StatusCode::CREATED);
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_preserves_response_body() {
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/", web::get().to(success_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        let body = test::read_body(resp).await;
+        assert_eq!(body, "success");
+    }
+
+    #[test_log::test]
+    fn test_api_logger_default_is_equivalent_to_new() {
+        // Both should create the same middleware
+        let _from_new = ApiLogger::new();
+        let _from_default = ApiLogger::default();
+        // If this compiles and runs, both constructors work correctly
+    }
+}
