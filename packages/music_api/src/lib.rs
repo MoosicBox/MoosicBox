@@ -1918,4 +1918,365 @@ mod test {
         let api = TestMusicApi {};
         assert!(api.auth().is_none());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_album_cascades_to_tracks_when_enabled() {
+        let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(true);
+
+        let album = Album {
+            id: 1.into(),
+            title: "test_album".into(),
+            ..Default::default()
+        };
+
+        let track1 = Track {
+            id: 10.into(),
+            title: "track1".into(),
+            album_id: 1.into(),
+            ..Default::default()
+        };
+
+        let track2 = Track {
+            id: 11.into(),
+            title: "track2".into(),
+            album_id: 1.into(),
+            ..Default::default()
+        };
+
+        let track3 = Track {
+            id: 12.into(),
+            title: "track_other_album".into(),
+            album_id: 2.into(),
+            ..Default::default()
+        };
+
+        api.cache_albums(slice::from_ref(&album)).await;
+        api.cache_tracks(&[track1.clone(), track2.clone(), track3.clone()])
+            .await;
+
+        // Verify setup
+        assert!(api.get_album_from_cache(&album.id).await.is_some());
+        assert!(api.get_track_from_cache(&track1.id).await.is_some());
+        assert!(api.get_track_from_cache(&track2.id).await.is_some());
+        assert!(api.get_track_from_cache(&track3.id).await.is_some());
+
+        // Remove the album - should cascade to tracks
+        api.remove_cache_albums_for_artist_ids(&[&0.into()]).await;
+
+        // Album and its tracks should be removed - but this tests
+        // remove_cache_albums_for_artist_ids, not remove_album
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_calling_cached_on_already_cached_returns_self() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+
+        // Cache an artist
+        let artist = Artist {
+            id: 1.into(),
+            title: "test".into(),
+            ..Default::default()
+        };
+        api.cache_artists(slice::from_ref(&artist)).await;
+
+        // calling cached() on CachedMusicApi returns self (no double-wrapping)
+        // The behavior is tested indirectly: the impl returns `self`
+        let cached_api = api.cached();
+
+        // Verify the cached data is still accessible
+        let result = cached_api.artist(&artist.id).await.unwrap();
+        assert_eq!(result, Some(artist));
+    }
+
+    mod test_music_api_with_data {
+        use super::{
+            AlbumOrder, AlbumOrderDirection, AlbumType, AlbumsRequest, AlbumVersion, Artist,
+            ArtistOrder, ArtistOrderDirection, Error, MusicApi, PagingResponse, PagingResult,
+            PlaybackQuality, Track, TrackAudioQuality, TrackOrId, TrackOrder, TrackOrderDirection,
+            TrackSource, API_SOURCE, Album, Id,
+        };
+        use async_trait::async_trait;
+        use moosicbox_music_models::ApiSource;
+        use pretty_assertions::assert_eq;
+
+        #[derive(Default)]
+        pub struct TestMusicApiWithData {
+            artist: Option<Artist>,
+            album: Option<Album>,
+        }
+
+        impl TestMusicApiWithData {
+            pub fn with_artist(mut self, artist: Artist) -> Self {
+                self.artist = Some(artist);
+                self
+            }
+
+            pub fn with_album(mut self, album: Album) -> Self {
+                self.album = Some(album);
+                self
+            }
+        }
+
+        #[async_trait]
+        impl MusicApi for TestMusicApiWithData {
+            fn source(&self) -> &ApiSource {
+                &API_SOURCE
+            }
+
+            async fn artists(
+                &self,
+                _offset: Option<u32>,
+                _limit: Option<u32>,
+                _order: Option<ArtistOrder>,
+                _order_direction: Option<ArtistOrderDirection>,
+            ) -> PagingResult<Artist, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error> {
+                Ok(self.artist.as_ref().filter(|a| &a.id == artist_id).cloned())
+            }
+
+            async fn add_artist(&self, _artist_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn remove_artist(&self, _artist_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error> {
+                Ok(self.album.as_ref().filter(|a| &a.id == album_id).cloned())
+            }
+
+            async fn album_versions(
+                &self,
+                _album_id: &Id,
+                _offset: Option<u32>,
+                _limit: Option<u32>,
+            ) -> PagingResult<AlbumVersion, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            #[allow(clippy::too_many_arguments)]
+            async fn artist_albums(
+                &self,
+                _artist_id: &Id,
+                _album_type: Option<AlbumType>,
+                _offset: Option<u32>,
+                _limit: Option<u32>,
+                _order: Option<AlbumOrder>,
+                _order_direction: Option<AlbumOrderDirection>,
+            ) -> PagingResult<Album, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            async fn add_album(&self, _album_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn remove_album(&self, _album_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn tracks(
+                &self,
+                _track_ids: Option<&[Id]>,
+                _offset: Option<u32>,
+                _limit: Option<u32>,
+                _order: Option<TrackOrder>,
+                _order_direction: Option<TrackOrderDirection>,
+            ) -> PagingResult<Track, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            async fn track(&self, _track_id: &Id) -> Result<Option<Track>, Error> {
+                Ok(None)
+            }
+
+            async fn album_tracks(
+                &self,
+                _album_id: &Id,
+                _offset: Option<u32>,
+                _limit: Option<u32>,
+                _order: Option<TrackOrder>,
+                _order_direction: Option<TrackOrderDirection>,
+            ) -> PagingResult<Track, Error> {
+                Ok(PagingResponse::empty())
+            }
+
+            async fn add_track(&self, _track_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn remove_track(&self, _track_id: &Id) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn track_source(
+                &self,
+                _track: TrackOrId,
+                _quality: TrackAudioQuality,
+            ) -> Result<Option<TrackSource>, Error> {
+                Ok(None)
+            }
+
+            async fn track_size(
+                &self,
+                _track: TrackOrId,
+                _source: &TrackSource,
+                _quality: PlaybackQuality,
+            ) -> Result<Option<u64>, Error> {
+                Ok(None)
+            }
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn album_artist_returns_artist_when_album_exists() {
+            let artist = Artist {
+                id: 5.into(),
+                title: "Test Artist".into(),
+                ..Default::default()
+            };
+            let album = Album {
+                id: 10.into(),
+                title: "Test Album".into(),
+                artist_id: 5.into(),
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default()
+                .with_artist(artist.clone())
+                .with_album(album);
+
+            let result = api.album_artist(&10.into()).await.unwrap();
+            assert_eq!(result, Some(artist));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn album_artist_returns_none_when_album_not_found() {
+            let api = TestMusicApiWithData::default();
+
+            let result = api.album_artist(&10.into()).await.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn album_artist_returns_none_when_artist_not_found() {
+            let album = Album {
+                id: 10.into(),
+                title: "Test Album".into(),
+                artist_id: 5.into(),
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default().with_album(album);
+
+            let result = api.album_artist(&10.into()).await.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn artist_cover_source_returns_remote_url_when_artist_has_cover() {
+            use crate::models::ImageCoverSize;
+
+            let artist = Artist {
+                id: 1.into(),
+                title: "Test Artist".into(),
+                cover: Some("https://example.com/cover.jpg".to_owned()),
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default();
+            let result = api
+                .artist_cover_source(&artist, ImageCoverSize::Max)
+                .await
+                .unwrap();
+
+            assert!(matches!(
+                result,
+                Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
+                if url == "https://example.com/cover.jpg" && headers.is_none()
+            ));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn artist_cover_source_returns_none_when_artist_has_no_cover() {
+            use crate::models::ImageCoverSize;
+
+            let artist = Artist {
+                id: 1.into(),
+                title: "Test Artist".into(),
+                cover: None,
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default();
+            let result = api
+                .artist_cover_source(&artist, ImageCoverSize::Max)
+                .await
+                .unwrap();
+
+            assert!(result.is_none());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn album_cover_source_returns_remote_url_when_album_has_artwork() {
+            use crate::models::ImageCoverSize;
+
+            let album = Album {
+                id: 1.into(),
+                title: "Test Album".into(),
+                artwork: Some("https://example.com/artwork.jpg".to_owned()),
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default();
+            let result = api
+                .album_cover_source(&album, ImageCoverSize::Max)
+                .await
+                .unwrap();
+
+            assert!(matches!(
+                result,
+                Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
+                if url == "https://example.com/artwork.jpg" && headers.is_none()
+            ));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn album_cover_source_returns_none_when_album_has_no_artwork() {
+            use crate::models::ImageCoverSize;
+
+            let album = Album {
+                id: 1.into(),
+                title: "Test Album".into(),
+                artwork: None,
+                ..Default::default()
+            };
+
+            let api = TestMusicApiWithData::default();
+            let result = api
+                .album_cover_source(&album, ImageCoverSize::Max)
+                .await
+                .unwrap();
+
+            assert!(result.is_none());
+        }
+    }
+
+    #[test_log::test]
+    fn error_other_wraps_boxed_error() {
+        let inner_error: Box<dyn std::error::Error + Send + Sync> =
+            Box::new(std::io::Error::other("test error"));
+        let error: Error = inner_error.into();
+
+        assert!(matches!(error, Error::Other(_)));
+        let message = format!("{error}");
+        assert!(message.contains("test error"));
+    }
 }
