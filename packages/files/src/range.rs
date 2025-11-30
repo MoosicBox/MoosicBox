@@ -185,4 +185,47 @@ mod tests {
         assert_eq!(range.start, Some(1_000_000));
         assert_eq!(range.end, Some(9_999_999));
     }
+
+    #[test_log::test]
+    fn test_parse_range_open_range() {
+        // An open range "-" (no start, no end) is valid per the parser logic
+        // though semantically unusual for HTTP byte ranges
+        let range = parse_range("-").unwrap();
+        assert_eq!(range.start, None);
+        assert_eq!(range.end, None);
+    }
+
+    #[test_log::test]
+    fn test_parse_range_whitespace_in_numbers() {
+        // Whitespace in numbers should fail parsing
+        let result = parse_range(" 100-200");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseRangesError::Parse(_)));
+
+        let result = parse_range("100- 200");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseRangesError::Parse(_)));
+    }
+
+    #[test_log::test]
+    fn test_parse_ranges_empty_segments() {
+        // Empty segments between commas should produce TooFewValues errors
+        let result = parse_ranges("0-100,,200-300");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseRangesError::TooFewValues(_)
+        ));
+    }
+
+    #[test_log::test]
+    fn test_parse_range_negative_looking_number() {
+        // "-100-200" splits as ["", "100", "200"] which has 3 elements (too many)
+        let result = parse_range("-100-200");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseRangesError::TooManyValues(_)
+        ));
+    }
 }
