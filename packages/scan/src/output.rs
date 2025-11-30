@@ -2516,4 +2516,139 @@ mod test {
         assert_eq!(values[0], ("entity_type", "artists".into()));
         assert_eq!(values[1], ("source", api_source.into()));
     }
+
+    #[test_log::test]
+    fn test_scan_album_to_sqlite_values_includes_all_fields() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let album = ScanAlbum::new(
+            artist,
+            "Test Album",
+            &Some("2024-01-15".to_string()),
+            Some("/path/to/album"),
+            &None,
+            api_source,
+        );
+
+        let artist_id = 42u64;
+        let values = album.to_sqlite_values(artist_id);
+
+        assert_eq!(values.len(), 5);
+        assert_eq!(values[0], ("artist_id", DatabaseValue::Int64(42)));
+        assert_eq!(
+            values[1],
+            ("title", DatabaseValue::String("Test Album".to_string()))
+        );
+        assert_eq!(
+            values[2],
+            (
+                "date_released",
+                DatabaseValue::StringOpt(Some("2024-01-15".to_string()))
+            )
+        );
+        assert_eq!(values[3], ("artwork", DatabaseValue::StringOpt(None)));
+        assert_eq!(
+            values[4],
+            (
+                "directory",
+                DatabaseValue::StringOpt(Some("/path/to/album".to_string()))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn test_scan_album_to_sqlite_values_handles_optional_fields() {
+        let api_source = ApiSource::register("TestApi", "TestApi");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let album = ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source);
+
+        let values = album.to_sqlite_values(1);
+
+        assert_eq!(values[2], ("date_released", DatabaseValue::StringOpt(None)));
+        assert_eq!(values[4], ("directory", DatabaseValue::StringOpt(None)));
+    }
+
+    #[test_log::test]
+    fn test_scan_album_to_api_source_sqlite_values_returns_values_for_api_source() {
+        let api_source = ApiSource::register("TestApiAlbum", "TestApiAlbum");
+        let id: Id = "album456".into();
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let album = ScanAlbum::new(
+            artist,
+            "Test Album",
+            &None,
+            None,
+            &Some(&id),
+            api_source.clone(),
+        );
+
+        let values = album.to_api_source_sqlite_values();
+        assert!(values.is_some());
+
+        let values = values.unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], ("entity_type", "albums".into()));
+        assert_eq!(values[1], ("source", api_source.into()));
+    }
+
+    #[test_log::test]
+    fn test_scan_track_to_api_source_sqlite_values_returns_none_when_no_id() {
+        let api_source = ApiSource::register("TestApiTrack", "TestApiTrack");
+        let track = ScanTrack::new(
+            &None,
+            1,
+            "Track Name",
+            180.0,
+            &None,
+            AudioFormat::Source,
+            &None,
+            &None,
+            &None,
+            &None,
+            &None,
+            api_source.clone().into(),
+            &None, // No ID
+            api_source,
+        );
+
+        // Without an ID, even for API source, should return None
+        assert!(track.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_artist_to_api_source_sqlite_values_returns_none_when_no_id() {
+        let api_source = ApiSource::register("TestApiArtistNoId", "TestApiArtistNoId");
+        let artist = ScanArtist::new("Test Artist", &None, api_source);
+
+        // Without an ID, even for API source, should return None
+        assert!(artist.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_album_to_api_source_sqlite_values_returns_none_when_no_id() {
+        let api_source = ApiSource::register("TestApiAlbumNoId", "TestApiAlbumNoId");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let album = ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source);
+
+        // Without an ID, even for API source, should return None
+        assert!(album.to_api_source_sqlite_values().is_none());
+    }
+
+    #[test_log::test]
+    fn test_scan_artist_to_sqlite_values_includes_all_fields() {
+        let api_source = ApiSource::register("TestApiArtistSqlite", "TestApiArtistSqlite");
+        let artist = ScanArtist::new("The Artist Name", &None, api_source);
+
+        let values = artist.to_sqlite_values();
+
+        assert_eq!(values.len(), 2);
+        assert_eq!(
+            values[0],
+            (
+                "title",
+                DatabaseValue::String("The Artist Name".to_string())
+            )
+        );
+        assert_eq!(values[1], ("cover", DatabaseValue::StringOpt(None)));
+    }
 }

@@ -349,4 +349,55 @@ mod tests {
         let state = ScanTaskState::default();
         assert_eq!(state, ScanTaskState::Pending);
     }
+
+    #[test_log::test]
+    fn test_scan_task_equality_for_api_variant() {
+        let tidal = moosicbox_music_models::ApiSource::register("TidalEq", "TidalEq");
+        let qobuz = moosicbox_music_models::ApiSource::register("QobuzEq", "QobuzEq");
+
+        let task1 = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal.clone()),
+        };
+        let task2 = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal),
+        };
+        let task3 = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(qobuz),
+        };
+
+        assert_eq!(task1, task2);
+        assert_ne!(task1, task3);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test]
+    fn test_scan_task_equality_for_local_variant() {
+        let task1 = ScanTask::Local {
+            paths: vec!["/music".to_string()],
+        };
+        let task2 = ScanTask::Local {
+            paths: vec!["/music".to_string()],
+        };
+        let task3 = ScanTask::Local {
+            paths: vec!["/other".to_string()],
+        };
+
+        assert_eq!(task1, task2);
+        assert_ne!(task1, task3);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test]
+    fn test_scan_task_local_and_api_are_different() {
+        let tidal = moosicbox_music_models::ApiSource::register("TidalDiff", "TidalDiff");
+
+        let local_task = ScanTask::Local {
+            paths: vec!["/music".to_string()],
+        };
+        let api_task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal),
+        };
+
+        assert_ne!(local_task, api_task);
+    }
 }
