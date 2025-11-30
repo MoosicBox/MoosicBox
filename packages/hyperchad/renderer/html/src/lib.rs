@@ -922,3 +922,458 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperchad_transformer::{
+        ConfigOverride, Number, OverrideCondition, OverrideItem,
+        models::{LayoutDirection, Visibility},
+    };
+    use std::collections::BTreeMap;
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_max_width_trigger() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("test-element".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "mobile".to_string(),
+                },
+                overrides: vec![OverrideItem::Hidden(true)],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(css.starts_with("<style>"));
+        assert!(css.ends_with("</style>"));
+        assert!(css.contains("@media(max-width:768px)"));
+        assert!(css.contains("#test-element{"));
+        assert!(css.contains("display:none !important;"));
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_max_height_trigger() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "short".to_string(),
+            ResponsiveTrigger::MaxHeight(Number::Integer(480)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("compact-view".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "short".to_string(),
+                },
+                overrides: vec![OverrideItem::Direction(LayoutDirection::Row)],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(css.contains("@media(max-height:480px)"));
+        assert!(css.contains("flex-direction:row !important;"));
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_multiple_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "tablet".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(1024)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("responsive-box".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "tablet".to_string(),
+                },
+                overrides: vec![
+                    OverrideItem::Width(Number::RealPercent(100.0)),
+                    OverrideItem::MarginLeft(Number::Integer(0)),
+                    OverrideItem::Visibility(Visibility::Hidden),
+                ],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(css.contains("width:100% !important;"));
+        assert!(css.contains("margin-left:0px !important;"));
+        assert!(css.contains("visibility:hidden !important;"));
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_no_id_skipped() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Container without str_id should be skipped
+        let container = Container {
+            str_id: None,
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "mobile".to_string(),
+                },
+                overrides: vec![OverrideItem::Hidden(true)],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        // Should only have style tags with no content
+        assert_eq!(css, "<style></style>");
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_unknown_trigger_skipped() {
+        let responsive_triggers = BTreeMap::new(); // Empty triggers
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("test-element".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "unknown_trigger".to_string(),
+                },
+                overrides: vec![OverrideItem::Hidden(true)],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        // Trigger not found, so nothing generated
+        assert_eq!(css, "<style></style>");
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_empty_container() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container::default();
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert_eq!(css, "<style></style>");
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_viewport_units() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "small".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::RealVw(50.0)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("vw-test".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "small".to_string(),
+                },
+                overrides: vec![OverrideItem::Height(Number::RealVh(50.0))],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(css.contains("max-width:50vw"));
+        assert!(css.contains("height:50vh !important;"));
+    }
+
+    #[test_log::test]
+    fn test_override_item_to_css_name_gap_properties() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::ColumnGap(Number::Integer(10))),
+            b"column-gap"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::RowGap(Number::Integer(10))),
+            b"row-gap"
+        );
+    }
+
+    #[test_log::test]
+    fn test_override_item_to_css_name_position_properties() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Left(Number::Integer(0))),
+            b"left"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Right(Number::Integer(0))),
+            b"right"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Top(Number::Integer(0))),
+            b"top"
+        );
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Bottom(Number::Integer(0))),
+            b"bottom"
+        );
+    }
+
+    #[test_log::test]
+    fn test_override_item_to_css_name_opacity() {
+        assert_eq!(
+            override_item_to_css_name(&OverrideItem::Opacity(Number::Real(0.5))),
+            b"opacity"
+        );
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_with_responsive_trigger() {
+        let renderer = DefaultHtmlTagRenderer::default()
+            .with_responsive_trigger("mobile", ResponsiveTrigger::MaxWidth(Number::Integer(768)));
+
+        assert!(renderer.responsive_triggers.contains_key("mobile"));
+        assert!(matches!(
+            renderer.responsive_triggers.get("mobile"),
+            Some(ResponsiveTrigger::MaxWidth(_))
+        ));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_add_responsive_trigger() {
+        let mut renderer = DefaultHtmlTagRenderer::default();
+        renderer.add_responsive_trigger(
+            "tablet".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(1024)),
+        );
+
+        assert!(renderer.responsive_triggers.contains_key("tablet"));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_element_attrs_to_html_with_id() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container {
+            str_id: Some("my-element".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .element_attrs_to_html(&mut buffer, &container, false)
+            .unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("id=\"my-element\""));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_element_attrs_to_html_with_data() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let mut data = BTreeMap::new();
+        data.insert("custom-attr".to_string(), "value123".to_string());
+        data.insert("another".to_string(), "test".to_string());
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            data,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .element_attrs_to_html(&mut buffer, &container, false)
+            .unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("data-custom-attr=\"value123\""));
+        assert!(html.contains("data-another=\"test\""));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_element_attrs_html_escaping() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let mut data = BTreeMap::new();
+        // Test that special HTML characters are properly escaped
+        data.insert(
+            "test".to_string(),
+            "value with \"quotes\" & <tags>".to_string(),
+        );
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            data,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .element_attrs_to_html(&mut buffer, &container, false)
+            .unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Should not contain raw quotes or angle brackets
+        assert!(!html.contains("\"quotes\""));
+        assert!(!html.contains("<tags>"));
+        // Should contain escaped versions
+        assert!(html.contains("&quot;") || html.contains("&#34;"));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_partial_html() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let headers = BTreeMap::new();
+        let container = Container::default();
+
+        let result = tag_renderer.partial_html(
+            &headers,
+            &container,
+            "<div>content</div>".to_string(),
+            Some("width=device-width"),
+            Some(Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: None,
+            }),
+        );
+
+        // partial_html just returns the content unchanged
+        assert_eq!(result, "<div>content</div>");
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_root_html_basic() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let headers = BTreeMap::new();
+        let container = Container::default();
+
+        let result = tag_renderer.root_html(
+            &headers,
+            &container,
+            "<div>content</div>".to_string(),
+            Some("width=device-width"),
+            None,
+            Some("Page Title"),
+            Some("Page description"),
+            &["https://cdn.example.com/style.css".to_string()],
+            &["/static/main.css".to_string()],
+            &["body { margin: 0; }".to_string()],
+        );
+
+        assert!(result.contains("<!DOCTYPE html>"));
+        assert!(result.contains("<title>Page Title</title>"));
+        assert!(result.contains("Page description"));
+        assert!(result.contains("href=\"https://cdn.example.com/style.css\""));
+        assert!(result.contains("href=\"/static/main.css\""));
+        assert!(result.contains("body { margin: 0; }"));
+        assert!(result.contains("<div>content</div>"));
+        assert!(result.contains("viewport"));
+    }
+
+    #[test_log::test]
+    fn test_default_html_tag_renderer_root_html_with_background() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let headers = BTreeMap::new();
+        let container = Container::default();
+
+        let result = tag_renderer.root_html(
+            &headers,
+            &container,
+            String::new(),
+            None,
+            Some(Color {
+                r: 255,
+                g: 128,
+                b: 64,
+                a: None,
+            }),
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+        );
+
+        assert!(result.contains("background:rgb(255,128,64)"));
+    }
+}
