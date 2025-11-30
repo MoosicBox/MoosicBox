@@ -409,10 +409,21 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
         const SIMULATOR_ENABLED: bool = cfg!(feature = "simulator");
 
         if SIMULATOR_ENABLED {
-            // Skip the test by generating a non-test function - preserve async if present
+            // Skip the test by generating a non-test function - preserve async if present.
+            // Filter out test-related attributes like #[serial] and #[parallel] from serial_test
+            // since this function won't be a test. Keeping them would cause issues like
+            // `future_not_send` warnings because #[serial] generates synchronization code
+            // that expects the future to be Send.
+            let skip_attrs: Vec<_> = fn_attrs
+                .iter()
+                .filter(|attr| {
+                    let path = attr.path();
+                    !path.is_ident("test") && !path.is_ident("serial") && !path.is_ident("parallel")
+                })
+                .collect();
             let async_token = &input_fn.sig.asyncness;
             let result = quote! {
-                #(#filtered_attrs)*
+                #(#skip_attrs)*
                 #[allow(dead_code)]
                 #fn_vis #async_token fn #fn_name(#fn_inputs) #fn_output #fn_block
             };
