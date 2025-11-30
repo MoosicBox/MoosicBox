@@ -670,4 +670,17 @@ mod tests {
         new_token.cancel();
         assert!(client_with_token.cancellation_token.is_cancelled());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_message_handler_returns_error_when_channel_closed() {
+        let (tx, rx) = mpsc::unbounded();
+        // Close the receiver to simulate channel being closed
+        drop(rx);
+
+        let message = Message::Text("test".to_string().into());
+        let result = WsClient::message_handler(tx, message).await;
+
+        // Should return an error when the channel is closed
+        assert!(result.is_err());
+    }
 }
