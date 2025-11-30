@@ -557,6 +557,43 @@ impl AppState {
         Ok(())
     }
 
+    /// Applies an update to a session's state fields.
+    ///
+    /// This method updates the session matching `update.session_id` in `current_sessions`
+    /// with any non-`None` fields from the update. This is a pure state mutation
+    /// without player interaction or event triggering.
+    pub async fn apply_session_update(&self, update: &ApiUpdateSession) {
+        let mut binding = self.current_sessions.write().await;
+        let session = binding
+            .iter_mut()
+            .find(|x| x.session_id == update.session_id);
+
+        if let Some(session) = session {
+            if let Some(seek) = update.seek {
+                session.seek.replace(seek);
+            }
+            if let Some(name) = update.name.clone() {
+                session.name = name;
+            }
+            if let Some(active) = update.active {
+                session.active = active;
+            }
+            if let Some(playing) = update.playing {
+                session.playing = playing;
+            }
+            if let Some(volume) = update.volume {
+                session.volume.replace(volume);
+            }
+            if let Some(position) = update.position {
+                session.position.replace(position);
+            }
+            if let Some(playlist) = update.playlist.clone() {
+                session.playlist.tracks = playlist.tracks;
+            }
+        }
+        drop(binding);
+    }
+
     /// Updates the playlist for the current session.
     ///
     /// Fetches the current session and triggers all registered playlist update
@@ -653,38 +690,7 @@ impl AppState {
             }
         }
 
-        {
-            let mut binding = self.current_sessions.write().await;
-            let session = binding
-                .iter_mut()
-                .find(|x| x.session_id == update.session_id);
-
-            if let Some(session) = session {
-                if let Some(seek) = update.seek {
-                    session.seek.replace(seek);
-                }
-                if let Some(name) = update.name.clone() {
-                    session.name = name;
-                }
-                if let Some(active) = update.active {
-                    session.active = active;
-                }
-                if let Some(playing) = update.playing {
-                    session.playing = playing;
-                }
-                if let Some(volume) = update.volume {
-                    session.volume.replace(volume);
-                }
-                if let Some(position) = update.position {
-                    session.position.replace(position);
-                }
-                if let Some(playlist) = update.playlist.clone() {
-                    session.playlist.tracks = playlist.tracks;
-                }
-
-                drop(binding);
-            }
-        }
+        self.apply_session_update(update).await;
 
         let players = self
             .get_players(update.session_id, Some(&update.playback_target))
@@ -738,5 +744,269 @@ impl AppState {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_session::models::{
+        ApiPlaybackTarget, ApiSessionPlaylist, ApiUpdateSessionPlaylist,
+    };
+
+    fn create_test_session(session_id: u64, name: &str) -> ApiSession {
+        ApiSession {
+            session_id,
+            name: name.to_string(),
+            active: true,
+            playing: false,
+            position: None,
+            seek: None,
+            volume: Some(0.5),
+            playback_target: None,
+            playlist: ApiSessionPlaylist {
+                session_playlist_id: 1,
+                tracks: vec![],
+            },
+        }
+    }
+
+    fn create_update(session_id: u64) -> ApiUpdateSession {
+        ApiUpdateSession {
+            session_id,
+            profile: "test".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            play: None,
+            stop: None,
+            name: None,
+            active: None,
+            playing: None,
+            position: None,
+            seek: None,
+            volume: None,
+            playlist: None,
+            quality: None,
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_does_nothing_when_session_not_found() {
+        let state = crate::AppState::new();
+
+        // Add a session with ID 1
+        let session = create_test_session(1, "Session 1");
+        *state.current_sessions.write().await = vec![session];
+
+        // Try to update session with ID 999 (doesn't exist)
+        let update = create_update(999);
+        state.apply_session_update(&update).await;
+
+        // Session 1 should remain unchanged
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, 1);
+        assert_eq!(sessions[0].name, "Session 1");
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_seek() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.seek = Some(42.5);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].seek, Some(42.5));
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_name() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Original Name");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.name = Some("New Name".to_string());
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].name, "New Name");
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_active() {
+        let state = crate::AppState::new();
+
+        let mut session = create_test_session(1, "Test Session");
+        session.active = true;
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.active = Some(false);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert!(!sessions[0].active);
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_playing() {
+        let state = crate::AppState::new();
+
+        let mut session = create_test_session(1, "Test Session");
+        session.playing = false;
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.playing = Some(true);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert!(sessions[0].playing);
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_volume() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.volume = Some(0.8);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].volume, Some(0.8));
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_position() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.position = Some(5);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].position, Some(5));
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_playlist_tracks() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        let track = moosicbox_music_models::api::ApiTrack::default();
+        update.playlist = Some(ApiUpdateSessionPlaylist {
+            session_playlist_id: 1,
+            tracks: vec![track.clone()],
+        });
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].playlist.tracks.len(), 1);
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_does_not_update_unset_fields() {
+        let state = crate::AppState::new();
+
+        let mut session = create_test_session(1, "Original");
+        session.seek = Some(10.0);
+        session.volume = Some(0.5);
+        session.position = Some(3);
+        session.active = true;
+        session.playing = true;
+        *state.current_sessions.write().await = vec![session];
+
+        // Update with only name set, others None
+        let mut update = create_update(1);
+        update.name = Some("Updated Name".to_string());
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        // Name should be updated
+        assert_eq!(sessions[0].name, "Updated Name");
+        // Other fields should remain unchanged
+        assert_eq!(sessions[0].seek, Some(10.0));
+        assert_eq!(sessions[0].volume, Some(0.5));
+        assert_eq!(sessions[0].position, Some(3));
+        assert!(sessions[0].active);
+        assert!(sessions[0].playing);
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_multiple_fields_at_once() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Original");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.name = Some("New Name".to_string());
+        update.seek = Some(25.0);
+        update.volume = Some(0.9);
+        update.playing = Some(true);
+        update.active = Some(false);
+        update.position = Some(7);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].name, "New Name");
+        assert_eq!(sessions[0].seek, Some(25.0));
+        assert_eq!(sessions[0].volume, Some(0.9));
+        assert!(sessions[0].playing);
+        assert!(!sessions[0].active);
+        assert_eq!(sessions[0].position, Some(7));
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_apply_session_update_updates_correct_session_among_multiple() {
+        let state = crate::AppState::new();
+
+        let session1 = create_test_session(1, "Session 1");
+        let session2 = create_test_session(2, "Session 2");
+        let session3 = create_test_session(3, "Session 3");
+        *state.current_sessions.write().await = vec![session1, session2, session3];
+
+        // Update session 2 only
+        let mut update = create_update(2);
+        update.name = Some("Updated Session 2".to_string());
+        update.volume = Some(0.3);
+        state.apply_session_update(&update).await;
+
+        let sessions = state.current_sessions.read().await;
+        // Session 1 unchanged
+        assert_eq!(sessions[0].name, "Session 1");
+        assert_eq!(sessions[0].volume, Some(0.5));
+        // Session 2 updated
+        assert_eq!(sessions[1].name, "Updated Session 2");
+        assert_eq!(sessions[1].volume, Some(0.3));
+        // Session 3 unchanged
+        assert_eq!(sessions[2].name, "Session 3");
+        assert_eq!(sessions[2].volume, Some(0.5));
+        drop(sessions);
     }
 }
