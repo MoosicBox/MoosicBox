@@ -1185,4 +1185,150 @@ mod tests {
         let state = ApiDownloadTaskState::default();
         assert_eq!(state, ApiDownloadTaskState::Pending);
     }
+
+    #[test_log::test]
+    fn test_stripped_api_download_item_to_value_type_invalid_type_returns_error() {
+        let json = serde_json::json!({
+            "type": "INVALID_TYPE",
+            "track_id": 123,
+            "source": {"source": "API", "url": "test"},
+            "quality": "FLAC_HIGHEST_RES"
+        });
+
+        let result: Result<StrippedApiDownloadItem, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("Invalid DownloadItem type"));
+                assert!(msg.contains("INVALID_TYPE"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_item_to_value_type_invalid_type_returns_error() {
+        let json = serde_json::json!({
+            "type": "UNKNOWN_TYPE",
+            "source": {"source": "API", "url": "test"},
+            "track_id": 1,
+            "quality": "FLAC_HIGHEST_RES",
+            "artist_id": 2,
+            "artist": "Artist",
+            "album_id": 3,
+            "album": "Album",
+            "title": "Title",
+            "contains_cover": false
+        });
+
+        let result: Result<ApiDownloadItem, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("Invalid DownloadItem type"));
+                assert!(msg.contains("UNKNOWN_TYPE"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_task_state_to_value_type_non_string_returns_error() {
+        let json = serde_json::json!(123);
+
+        let result: Result<ApiDownloadTaskState, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("ApiDownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_task_state_to_value_type_invalid_string_returns_error() {
+        let json = serde_json::json!("NOT_A_VALID_STATE");
+
+        let result: Result<ApiDownloadTaskState, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("ApiDownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_api_source_to_value_type_non_string_returns_error() {
+        let json = serde_json::json!(42);
+
+        let result: Result<ApiDownloadApiSource, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("ApiDownloadApiSource"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_api_source_to_value_type_invalid_string_returns_error() {
+        let json = serde_json::json!("NOT_A_VALID_SOURCE");
+
+        let result: Result<ApiDownloadApiSource, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("ApiDownloadApiSource"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_calc_progress_caps_at_100_percent_when_bytes_exceed_total() {
+        // Create a task file that exists with a known size
+        let task = ApiDownloadTask {
+            id: 1,
+            state: ApiDownloadTaskState::Started,
+            item: ApiDownloadItem::Track {
+                source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+                track_id: 1.into(),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 2.into(),
+                artist: "Artist".to_string(),
+                album_id: 3.into(),
+                album: "Album".to_string(),
+                title: "Title".to_string(),
+                contains_cover: false,
+            },
+            // Use a real file path that exists (the test file)
+            file_path: std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("Cargo.toml")
+                .to_str()
+                .unwrap()
+                .to_string(),
+            progress: 0.0,
+            bytes: 0,
+            // Set total_bytes to a very small number so actual bytes will exceed it
+            total_bytes: Some(1),
+            speed: None,
+        };
+
+        let result = calc_progress_for_task(task);
+
+        // Progress should be capped at 100%, not exceed it even if bytes > total_bytes
+        assert!((result.progress - 100.0).abs() < f64::EPSILON);
+        // Bytes should reflect actual file size (greater than 1)
+        assert!(result.bytes > 1);
+    }
 }

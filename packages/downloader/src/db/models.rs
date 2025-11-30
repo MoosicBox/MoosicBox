@@ -701,4 +701,122 @@ mod tests {
         let item = create_test_artist_cover_item();
         assert_eq!(item.as_ref(), "ARTIST_COVER");
     }
+
+    #[test_log::test]
+    fn test_download_item_to_value_type_from_json_invalid_type_returns_error() {
+        use moosicbox_json_utils::ParseError;
+
+        let json = serde_json::json!({
+            "type": "INVALID_DOWNLOAD_TYPE",
+            "source": {"source": "API", "url": "test"},
+            "trackId": 1,
+            "quality": "FLAC_HIGHEST_RES",
+            "artistId": 2,
+            "artist": "Artist",
+            "albumId": 3,
+            "album": "Album",
+            "track": "Title",
+            "containsCover": false
+        });
+
+        let result: Result<DownloadItem, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("Invalid DownloadItem type"));
+                assert!(msg.contains("INVALID_DOWNLOAD_TYPE"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_to_value_type_from_json_non_string_returns_error() {
+        use moosicbox_json_utils::ParseError;
+
+        let json = serde_json::json!(42);
+
+        let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_to_value_type_from_json_invalid_string_returns_error() {
+        use moosicbox_json_utils::ParseError;
+
+        let json = serde_json::json!("NOT_A_STATE");
+
+        let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_api_source_to_value_type_from_json_invalid_json_returns_error() {
+        use moosicbox_json_utils::ParseError;
+
+        // Use a JSON value that is not valid for DownloadApiSource
+        let json = serde_json::json!({"invalid": "json_structure"});
+
+        let result: Result<crate::DownloadApiSource, ParseError> = (&json).to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadApiSource"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_location_as_id_returns_correct_database_value() {
+        let location = DownloadLocation {
+            id: 123,
+            path: "/test/path".to_string(),
+            created: "2024-01-01".to_string(),
+            updated: "2024-01-02".to_string(),
+        };
+
+        let db_value = location.as_id();
+
+        match db_value {
+            DatabaseValue::Int64(val) => assert_eq!(val, 123),
+            _ => panic!("Expected Int64 database value"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_task_as_id_returns_correct_database_value() {
+        let task = DownloadTask {
+            id: 456,
+            state: DownloadTaskState::Pending,
+            item: create_test_track_item(),
+            file_path: "/test/path".to_string(),
+            total_bytes: None,
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let db_value = task.as_id();
+
+        match db_value {
+            DatabaseValue::Int64(val) => assert_eq!(val, 456),
+            _ => panic!("Expected Int64 database value"),
+        }
+    }
 }
