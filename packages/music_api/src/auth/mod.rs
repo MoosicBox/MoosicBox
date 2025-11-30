@@ -508,6 +508,15 @@ mod test {
         assert!(matches!(auth, Auth::None));
     }
 
+    #[test_log::test]
+    fn api_auth_builder_auth_mutable_method_sets_auth() {
+        let mut builder = super::ApiAuthBuilder::new();
+        builder.auth(Auth::None);
+        let api_auth = builder.build();
+
+        assert!(matches!(*api_auth, Auth::None));
+    }
+
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn auth_as_poll_returns_some_for_poll_variant() {
