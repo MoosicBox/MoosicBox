@@ -1462,4 +1462,279 @@ mod tests {
         // Should only count the latency of existing links (a -> b)
         assert_eq!(latency, Duration::from_millis(50));
     }
+
+    // === Discovery Tests ===
+    // Note: These tests use real_time because discover() has a simulated delay
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_discover_returns_registered_node_id() {
+        let sim = SimulatorP2P::with_seed("discover_test");
+        let peer_id = test_node_id("discoverable_peer");
+
+        // Register a peer with a name
+        sim.register_peer("my-peer", peer_id.clone()).await.unwrap();
+
+        // Discover should return the correct node ID
+        let discovered_id = sim.discover("my-peer").await.unwrap();
+        assert_eq!(discovered_id, peer_id);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_discover_name_not_found_returns_error() {
+        let sim = SimulatorP2P::with_seed("discover_notfound_test");
+
+        // Try to discover a name that was never registered
+        let result = sim.discover("nonexistent-peer").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("not found"),
+            "Expected 'not found' error, got: {err}"
+        );
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_discover_multiple_registered_names() {
+        let sim = SimulatorP2P::with_seed("discover_multi_test");
+        let peer1_id = test_node_id("peer1");
+        let peer2_id = test_node_id("peer2");
+
+        // Register multiple peers
+        sim.register_peer("first-peer", peer1_id.clone())
+            .await
+            .unwrap();
+        sim.register_peer("second-peer", peer2_id.clone())
+            .await
+            .unwrap();
+
+        // Both should be discoverable
+        let discovered1 = sim.discover("first-peer").await.unwrap();
+        let discovered2 = sim.discover("second-peer").await.unwrap();
+
+        assert_eq!(discovered1, peer1_id);
+        assert_eq!(discovered2, peer2_id);
+        assert_ne!(discovered1, discovered2);
+    }
+
+    // === connect_by_name Tests ===
+    // Note: These tests use real_time because connect_by_name calls discover()
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_connect_by_name_success() {
+        let alice = SimulatorP2P::with_seed("alice_cbn");
+        let bob_id = test_node_id("bob_cbn");
+
+        // Register bob and set up the network link
+        alice.register_peer("bob", bob_id.clone()).await.unwrap();
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice.local_node_id().clone());
+            graph.connect_nodes(
+                alice.local_node_id().clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(1),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        // Connect by name should work
+        let conn = alice.connect_by_name("bob").await.unwrap();
+
+        assert!(conn.is_connected());
+        assert_eq!(conn.remote_node_id(), &bob_id);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_connect_by_name_discovery_fails() {
+        let alice = SimulatorP2P::with_seed("alice_cbn_fail");
+
+        // Don't register any peer, connect_by_name should fail during discovery
+        let result = alice.connect_by_name("unknown-peer").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("not found"),
+            "Expected discovery error, got: {err}"
+        );
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_connect_by_name_connection_fails_no_route() {
+        let alice = SimulatorP2P::with_seed("alice_cbn_noroute");
+        let bob_id = test_node_id("bob_cbn_noroute");
+
+        // Register bob but don't create a network link
+        alice
+            .register_peer("bob-noroute", bob_id.clone())
+            .await
+            .unwrap();
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice.local_node_id().clone());
+            // bob is added by register_peer but no link exists
+        }
+
+        // Discovery should succeed, but connection should fail
+        let result = alice.connect_by_name("bob-noroute").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("No route"),
+            "Expected 'No route' error, got: {err}"
+        );
+    }
+
+    // === Packet Loss Edge Case Tests ===
+
+    #[test_log::test]
+    fn test_packet_lost_zero_packet_loss_never_drops() {
+        // With 0% packet loss, packets should never be dropped
+        let mut graph = NetworkGraph::new();
+        let a = test_node_id("pl_zero_a");
+        let b = test_node_id("pl_zero_b");
+
+        graph.add_node(a.clone());
+        graph.add_node(b.clone());
+        graph.connect_nodes(
+            a.clone(),
+            b.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(1),
+                packet_loss: 0.0, // 0% loss
+                bandwidth_limit: None,
+                is_active: true,
+            },
+        );
+
+        let path = vec![a, b];
+
+        // Run many times to verify no packet loss
+        for _ in 0..100 {
+            assert!(
+                !SimulatorConnection::packet_lost(&graph, &path),
+                "Packet should never be lost with 0% packet loss"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_packet_lost_empty_path_never_drops() {
+        let graph = NetworkGraph::new();
+        let path: Vec<SimulatorNodeId> = vec![];
+
+        // Empty path has no links to lose packets on
+        assert!(!SimulatorConnection::packet_lost(&graph, &path));
+    }
+
+    #[test_log::test]
+    fn test_packet_lost_single_node_path_never_drops() {
+        let graph = NetworkGraph::new();
+        let a = test_node_id("pl_single");
+        let path = vec![a];
+
+        // Single node path has no links to lose packets on
+        assert!(!SimulatorConnection::packet_lost(&graph, &path));
+    }
+
+    // === Send After Network Partition Test ===
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_fails_after_network_partition() {
+        let alice = SimulatorP2P::with_seed("alice_partition_send");
+        let bob_id = test_node_id("bob_partition_send");
+        let alice_id = alice.local_node_id().clone();
+
+        // Setup network with link (no latency to avoid time issues in simulator mode)
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice_id.clone());
+            graph.add_node(bob_id.clone());
+            graph.connect_nodes(
+                alice_id.clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(0),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        // Establish connection (should succeed)
+        let mut conn = alice.connect(bob_id.clone()).await.unwrap();
+        assert!(conn.is_connected());
+
+        // Now create a network partition that removes the route
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_partition(&[alice_id], &[bob_id]);
+        }
+
+        // Send should now fail because route no longer exists
+        let result = conn.send(b"hello after partition").await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("No route"),
+            "Expected 'No route' error after partition, got: {err}"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_message_delivery_fifo_ordering() {
+        // Test that messages are delivered in FIFO order
+        let alice = SimulatorP2P::with_seed("alice_fifo");
+        let bob_id = test_node_id("bob_fifo");
+        let alice_id = alice.local_node_id().clone();
+
+        // Setup network (no latency to avoid time issues in simulator mode)
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice_id.clone());
+            graph.add_node(bob_id.clone());
+            graph.connect_nodes(
+                alice_id.clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(0),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        // Connect from alice to bob
+        let mut conn = alice.connect(bob_id.clone()).await.unwrap();
+
+        // Send multiple messages
+        conn.send(b"message1").await.unwrap();
+        conn.send(b"message2").await.unwrap();
+        conn.send(b"message3").await.unwrap();
+
+        // Create bob's view of the connection to receive
+        let bob = SimulatorP2P {
+            node_id: bob_id.clone(),
+            network_graph: alice.network_graph.clone(),
+            connections: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+        let mut bob_conn = bob.connect(alice_id).await.unwrap();
+
+        // Messages should be received in FIFO order
+        let msg1 = bob_conn.recv().await.unwrap();
+        let msg2 = bob_conn.recv().await.unwrap();
+        let msg3 = bob_conn.recv().await.unwrap();
+
+        assert_eq!(msg1, b"message1");
+        assert_eq!(msg2, b"message2");
+        assert_eq!(msg3, b"message3");
+    }
 }

@@ -40,8 +40,9 @@ simulator = ["switchy_async/simulator", "switchy_random/simulator"]
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_time  = { workspace = true }
 test-log      = { workspace = true }
 tokio         = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["tokio"]
+ignored = ["switchy_time", "tokio"]
