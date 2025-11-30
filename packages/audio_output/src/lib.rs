@@ -1289,4 +1289,292 @@ mod tests {
         assert!(spec.is_some());
         assert_eq!(spec.unwrap().rate, 48000);
     }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_decoded_success() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an audio buffer with matching sample rate
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(50, spec);
+        buffer.render_reserved(Some(50));
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            #[allow(clippy::cast_precision_loss)]
+            for (i, sample) in chan.iter_mut().enumerate().take(50) {
+                *sample = (i as f32) / 100.0;
+            }
+        }
+
+        // Create dummy packet and track for the AudioDecode trait
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded through AudioDecode trait
+        let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
+        assert!(result.is_ok());
+
+        // Verify frames were passed through to the underlying writer
+        assert_eq!(written_frames.load(std::sync::atomic::Ordering::SeqCst), 50);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_flush_success() {
+        use moosicbox_audio_decoder::AudioDecode;
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let flush_count = mock_writer.flush_count.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Call flush through AudioDecode trait
+        let result = AudioDecode::flush(&mut output);
+        assert!(result.is_ok());
+
+        // Verify flush was called on underlying writer
+        assert_eq!(flush_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_flush_error() {
+        use moosicbox_audio_decoder::AudioDecode;
+
+        struct FailingFlushWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingFlushWriter {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Err(AudioOutputError::StreamClosed)
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingFlushWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Call flush through AudioDecode trait - should convert error
+        let result = AudioDecode::flush(&mut output);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_box_dyn_audio_write_audio_decode_decoded() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+
+        // Create an audio buffer
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(25, spec);
+        buffer.render_reserved(Some(25));
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            for sample in chan.iter_mut().take(25) {
+                *sample = 0.5;
+            }
+        }
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded through AudioDecode trait on Box<dyn AudioWrite>
+        let result = AudioDecode::decoded(&mut boxed_writer, buffer, &packet, &track);
+        assert!(result.is_ok());
+
+        // Verify frames were written
+        assert_eq!(written_frames.load(std::sync::atomic::Ordering::SeqCst), 25);
+    }
+
+    #[test_log::test]
+    fn test_box_dyn_audio_write_audio_decode_flush() {
+        use moosicbox_audio_decoder::AudioDecode;
+
+        let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let flush_count = mock_writer.flush_count.clone();
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+
+        // Call flush through AudioDecode trait on Box<dyn AudioWrite>
+        let result = AudioDecode::flush(&mut boxed_writer);
+        assert!(result.is_ok());
+
+        // Verify flush was called
+        assert_eq!(flush_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test]
+    fn test_ref_mut_dyn_audio_write_audio_decode_decoded() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+        let writer_ref: &mut dyn AudioWrite = &mut *boxed_writer;
+
+        // Create an audio buffer
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(30, spec);
+        buffer.render_reserved(Some(30));
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            for sample in chan.iter_mut().take(30) {
+                *sample = 0.3;
+            }
+        }
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded through AudioDecode trait on &mut dyn AudioWrite
+        let result = AudioDecode::decoded(&mut { writer_ref }, buffer, &packet, &track);
+        assert!(result.is_ok());
+
+        // Verify frames were written
+        assert_eq!(written_frames.load(std::sync::atomic::Ordering::SeqCst), 30);
+    }
+
+    #[test_log::test]
+    fn test_ref_mut_dyn_audio_write_audio_decode_flush() {
+        use moosicbox_audio_decoder::AudioDecode;
+
+        let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let flush_count = mock_writer.flush_count.clone();
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+        let writer_ref: &mut dyn AudioWrite = &mut *boxed_writer;
+
+        // Call flush through AudioDecode trait on &mut dyn AudioWrite
+        let result = AudioDecode::flush(&mut { writer_ref });
+        assert!(result.is_ok());
+
+        // Verify flush was called
+        assert_eq!(flush_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test]
+    fn test_box_dyn_audio_write_audio_decode_write_error() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        struct FailingWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingWriter {
+            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Err(AudioOutputError::StreamClosed)
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
+        buffer.render_reserved(Some(10));
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded - should convert AudioOutputError to AudioDecodeError
+        let result = AudioDecode::decoded(&mut boxed_writer, buffer, &packet, &track);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_box_dyn_audio_write_audio_decode_flush_error() {
+        use moosicbox_audio_decoder::AudioDecode;
+
+        struct FailingFlushWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingFlushWriter {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Err(AudioOutputError::Interrupt)
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingFlushWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
+
+        // Call flush - should convert AudioOutputError to AudioDecodeError
+        let result = AudioDecode::flush(&mut boxed_writer);
+        assert!(result.is_err());
+    }
 }
