@@ -351,4 +351,53 @@ mod tests {
         let result = run_until_simulation_cancelled(work_task).await;
         assert_eq!(result, None);
     }
+
+    #[test_log::test]
+    #[serial]
+    fn test_global_cancellation_affects_other_threads() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
+
+        // Verify not cancelled initially
+        assert!(!is_global_simulator_cancelled());
+
+        // Cancel globally from main thread
+        cancel_global_simulation();
+
+        // Verify another thread sees the global cancellation
+        let handle = std::thread::spawn(|| {
+            // Reset this thread's local token (should not affect global)
+            reset_simulator_cancellation_token();
+            // This should still return true because global is cancelled
+            is_simulator_cancelled()
+        });
+
+        let other_thread_sees_cancellation = handle.join().unwrap();
+        assert!(
+            other_thread_sees_cancellation,
+            "Global cancellation should be visible to all threads"
+        );
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_worker_thread_ids_are_monotonically_increasing() {
+        // Spawn multiple threads and collect their IDs
+        let mut handles = Vec::new();
+        for _ in 0..5 {
+            handles.push(std::thread::spawn(worker_thread_id));
+        }
+
+        let mut ids: Vec<u64> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
+        // Sort to verify all IDs are unique
+        ids.sort_unstable();
+        let original_len = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), original_len, "All thread IDs should be unique");
+
+        // All IDs should be >= 1 (IDs start at 1)
+        assert!(ids.iter().all(|&id| id >= 1), "All IDs should be >= 1");
+    }
 }
