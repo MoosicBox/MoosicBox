@@ -2126,6 +2126,44 @@ pub mod unsync {
             .collect())
     }
 
+    /// Checks if a path exists asynchronously
+    ///
+    /// Returns `true` if the path exists, `false` otherwise.
+    #[allow(clippy::unused_async)]
+    pub async fn exists<P: AsRef<Path>>(path: P) -> bool {
+        super::exists(path)
+    }
+
+    /// Checks if a path is a file asynchronously
+    ///
+    /// Returns `true` if the path exists and is a file, `false` otherwise.
+    ///
+    /// # Panics
+    ///
+    /// * If the `FILES` `RwLock` is poisoned
+    #[allow(clippy::unused_async)]
+    pub async fn is_file<P: AsRef<Path>>(path: P) -> bool {
+        let Some(path_str) = path.as_ref().to_str() else {
+            return false;
+        };
+        super::FILES.with_borrow(|files| files.read().unwrap().contains_key(path_str))
+    }
+
+    /// Checks if a path is a directory asynchronously
+    ///
+    /// Returns `true` if the path exists and is a directory, `false` otherwise.
+    ///
+    /// # Panics
+    ///
+    /// * If the `DIRECTORIES` `RwLock` is poisoned
+    #[allow(clippy::unused_async)]
+    pub async fn is_dir<P: AsRef<Path>>(path: P) -> bool {
+        let Some(path_str) = path.as_ref().to_str() else {
+            return false;
+        };
+        super::DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path_str))
+    }
+
     #[cfg(test)]
     #[allow(clippy::await_holding_lock)]
     mod test {
