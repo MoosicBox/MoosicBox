@@ -748,4 +748,283 @@ mod tests {
 
         assert!(tx.is_empty());
     }
+
+    #[test]
+    fn test_recv_blocking_with_available_data() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Pre-populate the channel
+        tx.try_send(42).unwrap();
+        tx.try_send(43).unwrap();
+
+        // Blocking recv should return immediately when data is available
+        let val1 = rx.recv().unwrap();
+        let val2 = rx.recv().unwrap();
+
+        assert_eq!(val1, 42);
+        assert_eq!(val2, 43);
+    }
+
+    #[test]
+    fn test_recv_returns_disconnected_when_senders_dropped() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Drop all senders
+        drop(tx);
+
+        // recv should return Disconnected
+        let result = rx.recv();
+        assert!(matches!(result, Err(RecvError::Disconnected)));
+    }
+
+    #[test]
+    fn test_recv_timeout_returns_timeout_when_channel_empty() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Keep sender alive to avoid Disconnected error
+        let _keep_alive = tx;
+
+        // recv_timeout should return Timeout when no data is available
+        let result = rx.recv_timeout(Duration::from_millis(1));
+        assert!(matches!(result, Err(RecvTimeoutError::Timeout)));
+    }
+
+    #[test]
+    fn test_recv_timeout_returns_data_when_available() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Send data first
+        tx.try_send(99).unwrap();
+
+        // recv_timeout should return the data immediately
+        let result = rx.recv_timeout(Duration::from_secs(1));
+        assert_eq!(result.unwrap(), 99);
+    }
+
+    #[test]
+    fn test_recv_timeout_returns_disconnected_when_senders_dropped() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Drop all senders
+        drop(tx);
+
+        // recv_timeout should return Disconnected
+        let result = rx.recv_timeout(Duration::from_millis(10));
+        assert!(matches!(result, Err(RecvTimeoutError::Disconnected)));
+    }
+
+    #[test]
+    fn test_unbounded_channel_alias() {
+        // Test that unbounded_channel is an alias for unbounded
+        let (tx1, rx1) = unbounded::<i32>();
+        let (tx2, rx2) = unbounded_channel::<i32>();
+
+        tx1.try_send(1).unwrap();
+        tx2.try_send(2).unwrap();
+
+        assert_eq!(rx1.try_recv().unwrap(), 1);
+        assert_eq!(rx2.try_recv().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_bounded_channel_alias() {
+        // Test that bounded_channel is an alias for bounded
+        let (tx1, rx1) = bounded::<i32>(5);
+        let (tx2, rx2) = bounded_channel::<i32>(5);
+
+        tx1.try_send(1).unwrap();
+        tx2.try_send(2).unwrap();
+
+        assert_eq!(rx1.try_recv().unwrap(), 1);
+        assert_eq!(rx2.try_recv().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_waker_registration_on_poll_recv() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, rx) = bounded::<i32>(10);
+
+        // poll_recv on empty channel should return Pending and register waker
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Pending));
+
+        // Send data
+        tx.try_send(42).unwrap();
+
+        // Now poll_recv should return Ready
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(Some(42))));
+    }
+
+    #[test]
+    fn test_poll_recv_returns_none_when_disconnected() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Drop sender
+        drop(tx);
+
+        // poll_recv should return Ready(None) when disconnected
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(None)));
+    }
+
+    #[test]
+    fn test_send_wakes_receiver_wakers() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static WOKEN: AtomicBool = AtomicBool::new(false);
+
+        static VTABLE: RawWakerVTable = RawWakerVTable::new(
+            |data| RawWaker::new(data, &VTABLE),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| {},
+        );
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Register a waker via poll_recv
+        WOKEN.store(false, Ordering::SeqCst);
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Pending));
+
+        // Send should wake the receiver
+        tx.try_send(42).unwrap();
+        assert!(WOKEN.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_receiver_drop_wakes_sender_wakers() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::task::{Context, RawWaker, RawWakerVTable, Waker};
+
+        static WOKEN: AtomicBool = AtomicBool::new(false);
+
+        static VTABLE: RawWakerVTable = RawWakerVTable::new(
+            |data| RawWaker::new(data, &VTABLE),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| {},
+        );
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut _cx = Context::from_waker(&waker);
+
+        let (tx, rx) = bounded::<i32>(1);
+
+        // Fill the channel
+        tx.try_send(1).unwrap();
+
+        // Add a sender waker manually
+        {
+            let mut inner = tx.inner.lock().unwrap();
+            inner.sender_wakers.push(waker.clone());
+        }
+
+        WOKEN.store(false, Ordering::SeqCst);
+
+        // Drop the receiver - should wake sender wakers
+        drop(rx);
+
+        assert!(WOKEN.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_sender_drop_wakes_receiver_wakers() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::task::{Context, RawWaker, RawWakerVTable, Waker};
+
+        static WOKEN: AtomicBool = AtomicBool::new(false);
+
+        static VTABLE: RawWakerVTable = RawWakerVTable::new(
+            |data| RawWaker::new(data, &VTABLE),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| WOKEN.store(true, Ordering::SeqCst),
+            |_| {},
+        );
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let _cx = Context::from_waker(&waker);
+
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Add a receiver waker manually
+        {
+            let mut inner = rx.inner.lock().unwrap();
+            inner.receiver_wakers.push(waker.clone());
+        }
+
+        WOKEN.store(false, Ordering::SeqCst);
+
+        // Drop the sender - should wake receiver wakers
+        drop(tx);
+
+        assert!(WOKEN.load(Ordering::SeqCst));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_async_receives_data() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        tx.try_send(42).unwrap();
+
+        let result = rx.recv_async().await;
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_recv_async_returns_disconnected_when_senders_dropped() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Drop all senders
+        drop(tx);
+
+        let result = rx.recv_async().await;
+        assert!(matches!(result, Err(RecvError::Disconnected)));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_send_async_sends_data() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        tx.send_async(123).await.unwrap();
+
+        let result = rx.try_recv();
+        assert_eq!(result.unwrap(), 123);
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_send_async_returns_error_when_receivers_dropped() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        // Drop the receiver
+        drop(rx);
+
+        let result = tx.send_async(42).await;
+        assert!(matches!(result, Err(SendError(42))));
+    }
 }
