@@ -422,7 +422,7 @@ glob = "0.3.3"
 globset = { version = "0.4.18", default-features = false }
 hex = "0.4.3"
 home = "0.5.12"
-hostname = "0.4.1"
+hostname = "0.4.2"
 html-escape = "0.2.13"
 http = "1.4.0"
 id3 = "1.16.3"
@@ -575,9 +575,9 @@ tokio-tungstenite = { version = "0.28.0", features = [
 ] }
 tokio-util = "0.7.17"
 toml = "0.9.8"
-tracing = "0.1.41"
+tracing = "0.1.43"
 tracing-opentelemetry = { version = "0.32.0" }
-tracing-subscriber = "0.3.20"
+tracing-subscriber = "0.3.22"
 tracy-client = { version = "0.18.3", default-features = false }
 trybuild = "1.0.114"
 turso = "0.3.2"
