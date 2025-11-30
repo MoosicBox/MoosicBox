@@ -2011,4 +2011,74 @@ mod tests {
         assert_eq!(*BINARY_REQUEST_BUFFER_OFFSET, expected_offset);
         assert_eq!(*BINARY_REQUEST_BUFFER_OFFSET, 13);
     }
+
+    #[test_log::test]
+    fn test_is_request_aborted_returns_false_for_unknown_request() {
+        // When a request_id doesn't exist in the tokens map, should return false
+        let tokens = Arc::new(RwLock::new(BTreeMap::new()));
+        let unknown_request_id = 99999_u64;
+
+        assert!(!TunnelSender::is_request_aborted(
+            unknown_request_id,
+            &tokens
+        ));
+    }
+
+    #[test_log::test]
+    fn test_is_request_aborted_returns_false_for_uncancelled_token() {
+        let tokens = Arc::new(RwLock::new(BTreeMap::new()));
+        let request_id = 12345_u64;
+        let token = CancellationToken::new();
+
+        tokens.write().unwrap().insert(request_id, token);
+
+        // Token exists but is not cancelled
+        assert!(!TunnelSender::is_request_aborted(request_id, &tokens));
+    }
+
+    #[test_log::test]
+    fn test_is_request_aborted_returns_true_for_cancelled_token() {
+        let tokens = Arc::new(RwLock::new(BTreeMap::new()));
+        let request_id = 12345_u64;
+        let token = CancellationToken::new();
+
+        // Cancel the token before checking
+        token.cancel();
+        tokens.write().unwrap().insert(request_id, token);
+
+        // Token exists and is cancelled
+        assert!(TunnelSender::is_request_aborted(request_id, &tokens));
+    }
+
+    #[test_log::test]
+    fn test_is_request_aborted_handles_multiple_requests() {
+        let tokens = Arc::new(RwLock::new(BTreeMap::new()));
+
+        let cancelled_id = 111_u64;
+        let active_id = 222_u64;
+
+        let cancelled_token = CancellationToken::new();
+        cancelled_token.cancel();
+
+        let active_token = CancellationToken::new();
+
+        {
+            let mut tokens_guard = tokens.write().unwrap();
+            tokens_guard.insert(cancelled_id, cancelled_token);
+            tokens_guard.insert(active_id, active_token);
+        }
+
+        // Verify each request is checked independently
+        assert!(TunnelSender::is_request_aborted(cancelled_id, &tokens));
+        assert!(!TunnelSender::is_request_aborted(active_id, &tokens));
+    }
+
+    #[test_log::test]
+    fn test_close_error_display() {
+        let error = CloseError::Unknown("connection dropped unexpectedly".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Unknown \"connection dropped unexpectedly\""
+        );
+    }
 }
