@@ -220,3 +220,150 @@ pub fn set_float(opt: &mut Option<f32>, value: f32) -> Option<f32> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    use super::*;
+
+    #[test_log::test]
+    #[serial(scrollbar_size)]
+    fn get_and_set_scrollbar_size_updates_global_value() {
+        let original = get_scrollbar_size();
+
+        set_scrollbar_size(42);
+        assert_eq!(get_scrollbar_size(), 42);
+
+        set_scrollbar_size(100);
+        assert_eq!(get_scrollbar_size(), 100);
+
+        // Restore original value
+        set_scrollbar_size(original);
+    }
+
+    #[test_log::test]
+    fn order_float_returns_greater_when_a_greater_than_b() {
+        assert_eq!(order_float(&2.0, &1.0), std::cmp::Ordering::Greater);
+        assert_eq!(order_float(&100.5, &100.4), std::cmp::Ordering::Greater);
+    }
+
+    #[test_log::test]
+    fn order_float_returns_less_when_a_less_than_b() {
+        assert_eq!(order_float(&1.0, &2.0), std::cmp::Ordering::Less);
+        assert_eq!(order_float(&-5.0, &0.0), std::cmp::Ordering::Less);
+    }
+
+    #[test_log::test]
+    fn order_float_returns_equal_when_values_equal() {
+        assert_eq!(order_float(&1.0, &1.0), std::cmp::Ordering::Equal);
+        assert_eq!(order_float(&0.0, &0.0), std::cmp::Ordering::Equal);
+    }
+
+    #[test_log::test]
+    fn increase_opt_sets_value_when_none() {
+        let mut opt: Option<f32> = None;
+        let result = increase_opt(&mut opt, 10.0);
+
+        assert!((result - 10.0).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn increase_opt_adds_to_existing_value() {
+        let mut opt: Option<f32> = Some(5.0);
+        let result = increase_opt(&mut opt, 10.0);
+
+        assert!((result - 15.0).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 15.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn increase_opt_handles_negative_values() {
+        let mut opt: Option<f32> = Some(10.0);
+        let result = increase_opt(&mut opt, -3.0);
+
+        assert!((result - 7.0).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 7.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn increase_opt_accumulates_multiple_calls() {
+        let mut opt: Option<f32> = None;
+
+        increase_opt(&mut opt, 5.0);
+        increase_opt(&mut opt, 3.0);
+        let result = increase_opt(&mut opt, 2.0);
+
+        assert!((result - 10.0).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn set_value_sets_when_none_and_returns_new_value() {
+        let mut opt: Option<i32> = None;
+        let result = set_value(&mut opt, 42);
+
+        assert_eq!(result, Some(42));
+        assert_eq!(opt, Some(42));
+    }
+
+    #[test_log::test]
+    fn set_value_updates_when_different_value() {
+        let mut opt: Option<i32> = Some(10);
+        let result = set_value(&mut opt, 42);
+
+        assert_eq!(result, Some(42));
+        assert_eq!(opt, Some(42));
+    }
+
+    #[test_log::test]
+    fn set_value_returns_none_when_same_value() {
+        let mut opt: Option<i32> = Some(42);
+        let result = set_value(&mut opt, 42);
+
+        assert_eq!(result, None);
+        assert_eq!(opt, Some(42));
+    }
+
+    #[test_log::test]
+    fn set_float_sets_when_none_and_returns_new_value() {
+        let mut opt: Option<f32> = None;
+        let result = set_float(&mut opt, 7.25);
+
+        assert!(result.is_some());
+        assert!((result.unwrap() - 7.25).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 7.25).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn set_float_updates_when_significantly_different() {
+        let mut opt: Option<f32> = Some(1.0);
+        let result = set_float(&mut opt, 2.0);
+
+        assert!(result.is_some());
+        assert!((result.unwrap() - 2.0).abs() < f32::EPSILON);
+        assert!((opt.unwrap() - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn set_float_returns_none_when_within_epsilon() {
+        let mut opt: Option<f32> = Some(1.0);
+        // Value within epsilon (0.001) should not trigger an update
+        let result = set_float(&mut opt, 1.0005);
+
+        assert!(result.is_none());
+        // Original value should be preserved
+        assert!((opt.unwrap() - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn set_float_updates_when_just_outside_epsilon() {
+        let mut opt: Option<f32> = Some(1.0);
+        // Value just outside epsilon should trigger an update
+        let result = set_float(&mut opt, 1.002);
+
+        assert!(result.is_some());
+        assert!((opt.unwrap() - 1.002).abs() < f32::EPSILON);
+    }
+}
