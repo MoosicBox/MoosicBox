@@ -1543,4 +1543,55 @@ mod tests {
             assert!(result.is_err());
         }
     }
+
+    mod upnp_device_scanner_tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_scanner_returns_early_when_already_scanning() {
+            let mut scanner = UpnpDeviceScanner {
+                scanning: true,
+                devices: vec![],
+            };
+
+            // Should return Ok immediately without actually scanning
+            let result = scanner.scan().await;
+            assert!(result.is_ok());
+            // Devices should still be empty since scan was skipped
+            assert!(scanner.devices.is_empty());
+            // Scanning flag should remain true (it wasn't reset because scan was skipped)
+            assert!(scanner.scanning);
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_scanner_returns_early_when_devices_already_found() {
+            let existing_device = UpnpDevice {
+                name: "Test Device".to_string(),
+                udn: "uuid:test-123".to_string(),
+                volume: None,
+                services: vec![],
+            };
+
+            let mut scanner = UpnpDeviceScanner {
+                scanning: false,
+                devices: vec![existing_device.clone()],
+            };
+
+            // Should return Ok immediately without rescanning
+            let result = scanner.scan().await;
+            assert!(result.is_ok());
+            // Devices should still contain the original device
+            assert_eq!(scanner.devices.len(), 1);
+            assert_eq!(scanner.devices[0].udn, "uuid:test-123");
+            // Scanning flag should remain false (scan was skipped)
+            assert!(!scanner.scanning);
+        }
+
+        #[test_log::test]
+        fn test_scanner_new_creates_default_state() {
+            let scanner = UpnpDeviceScanner::new();
+            assert!(!scanner.scanning);
+            assert!(scanner.devices.is_empty());
+        }
+    }
 }
