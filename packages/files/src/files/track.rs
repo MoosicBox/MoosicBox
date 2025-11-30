@@ -1387,4 +1387,67 @@ mod tests {
             assert_eq!(*value, 5);
         }
     }
+
+    #[test_log::test]
+    fn test_visualize_maximum_amplitude() {
+        use symphonia::core::audio::Signal as _;
+
+        // Test with maximum positive amplitude (i16::MAX = 32767)
+        // Verifies no overflow when handling maximum sample values
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(5, spec);
+        buffer.render_silence(None);
+
+        // Fill both channels with maximum amplitude
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            for sample in chan.iter_mut() {
+                *sample = i16::MAX; // 32767
+            }
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 5);
+        // i16::MAX (32767) / DIV (257) = 127 per channel
+        // Both channels contribute 127, average = (127 + 127) / 2 = 127
+        for value in &result {
+            assert_eq!(*value, 127);
+        }
+    }
+
+    #[test_log::test]
+    fn test_visualize_minimum_amplitude() {
+        use symphonia::core::audio::Signal as _;
+
+        // Test with minimum negative amplitude (i16::MIN = -32768)
+        // Verifies the clamping behavior for values that would overflow when negated
+        let spec = symphonia::core::audio::SignalSpec::new(
+            44100,
+            symphonia::core::audio::Channels::FRONT_LEFT
+                | symphonia::core::audio::Channels::FRONT_RIGHT,
+        );
+        let mut buffer = AudioBuffer::<i16>::new(5, spec);
+        buffer.render_silence(None);
+
+        // Fill both channels with minimum amplitude
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            for sample in chan.iter_mut() {
+                *sample = i16::MIN; // -32768
+            }
+        }
+
+        let result = visualize(&buffer);
+        assert_eq!(result.len(), 5);
+        // i16::MIN (-32768) -> abs() in i32 = 32768 -> clamped to i16::MAX (32767)
+        // 32767 / DIV (257) = 127 per channel
+        // Both channels contribute 127, average = (127 + 127) / 2 = 127
+        for value in &result {
+            assert_eq!(*value, 127);
+        }
+    }
 }
