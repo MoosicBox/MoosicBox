@@ -29,6 +29,41 @@ use swc_ecma_transforms_base::{fixer::fixer, helpers::Helpers};
 use swc_ecma_transforms_typescript::strip;
 use swc_ecma_visit::VisitMutWith as _;
 
+/// Determines the syntax configuration for a file based on its extension.
+///
+/// Returns the appropriate parser syntax for the given file extension.
+///
+/// # Returns
+///
+/// * `Some(Syntax::Typescript(..))` for `.ts` files with decorators enabled
+/// * `Some(Syntax::Es(..))` for `.js`, `.mjs`, or `.cjs` files
+/// * `None` for unsupported file extensions
+#[must_use]
+pub fn syntax_for_extension(extension: Option<&str>) -> Option<Syntax> {
+    match extension {
+        Some("ts") => Some(Syntax::Typescript(TsSyntax {
+            tsx: false,
+            decorators: true,
+            dts: false,
+            no_early_errors: false,
+            disallow_ambiguous_jsx_like: true,
+        })),
+        Some("js" | "mjs" | "cjs") => Some(Syntax::Es(EsSyntax {
+            jsx: false,
+            fn_bind: false,
+            decorators: true,
+            decorators_before_export: false,
+            export_default_from: false,
+            import_attributes: false,
+            allow_super_outside_method: false,
+            allow_return_outside_function: false,
+            auto_accessors: false,
+            explicit_resource_management: false,
+        })),
+        _ => None,
+    }
+}
+
 /// Bundles a JavaScript or TypeScript file using SWC.
 ///
 /// This function uses the SWC bundler to process the target file and its dependencies,
@@ -230,28 +265,9 @@ impl Load for Loader {
 
         println!("load: loading file {}", path.display());
 
-        let syntax = match path.extension().and_then(|x| x.to_str()) {
-            Some("ts") => Syntax::Typescript(TsSyntax {
-                tsx: false,
-                decorators: true,
-                dts: false,
-                no_early_errors: false,
-                disallow_ambiguous_jsx_like: true,
-            }),
-            Some("js" | "mjs" | "cjs") => Syntax::Es(EsSyntax {
-                jsx: false,
-                fn_bind: false,
-                decorators: true,
-                decorators_before_export: false,
-                export_default_from: false,
-                import_attributes: false,
-                allow_super_outside_method: false,
-                allow_return_outside_function: false,
-                auto_accessors: false,
-                explicit_resource_management: false,
-            }),
-            _ => panic!("Invalid file: {}", path.display()),
-        };
+        let extension = path.extension().and_then(|x| x.to_str());
+        let syntax = syntax_for_extension(extension)
+            .unwrap_or_else(|| panic!("Invalid file: {}", path.display()));
         let fm = self.cm.load_file(path)?;
 
         let module = if matches!(syntax, Syntax::Typescript(..)) {
@@ -279,5 +295,168 @@ impl Load for Loader {
             module,
             helpers: Helpers::new(false),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_syntax_for_extension_typescript() {
+        let syntax = syntax_for_extension(Some("ts"));
+        assert!(syntax.is_some());
+        let syntax = syntax.unwrap();
+        assert!(matches!(syntax, Syntax::Typescript(_)));
+        if let Syntax::Typescript(ts) = syntax {
+            assert!(!ts.tsx, "tsx should be disabled");
+            assert!(ts.decorators, "decorators should be enabled");
+            assert!(!ts.dts, "dts should be disabled");
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_javascript() {
+        let syntax = syntax_for_extension(Some("js"));
+        assert!(syntax.is_some());
+        let syntax = syntax.unwrap();
+        assert!(matches!(syntax, Syntax::Es(_)));
+        if let Syntax::Es(es) = syntax {
+            assert!(!es.jsx, "jsx should be disabled");
+            assert!(es.decorators, "decorators should be enabled");
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_mjs() {
+        let syntax = syntax_for_extension(Some("mjs"));
+        assert!(syntax.is_some());
+        assert!(matches!(syntax.unwrap(), Syntax::Es(_)));
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_cjs() {
+        let syntax = syntax_for_extension(Some("cjs"));
+        assert!(syntax.is_some());
+        assert!(matches!(syntax.unwrap(), Syntax::Es(_)));
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_unsupported() {
+        // Unsupported extensions should return None
+        assert!(syntax_for_extension(Some("tsx")).is_none());
+        assert!(syntax_for_extension(Some("jsx")).is_none());
+        assert!(syntax_for_extension(Some("py")).is_none());
+        assert!(syntax_for_extension(Some("rs")).is_none());
+        assert!(syntax_for_extension(Some("")).is_none());
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_none() {
+        // No extension should return None
+        assert!(syntax_for_extension(None).is_none());
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_typescript_has_correct_config() {
+        let syntax = syntax_for_extension(Some("ts")).unwrap();
+        if let Syntax::Typescript(ts) = syntax {
+            // Verify the TypeScript configuration is suitable for bundling
+            assert!(!ts.tsx, "tsx should be disabled for .ts files");
+            assert!(ts.decorators, "decorators should be enabled for bundling");
+            assert!(!ts.dts, "dts should be disabled - not type definitions");
+            assert!(!ts.no_early_errors, "early errors should be caught");
+            assert!(
+                ts.disallow_ambiguous_jsx_like,
+                "ambiguous JSX-like syntax should be disallowed"
+            );
+        } else {
+            panic!("Expected Typescript syntax");
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_javascript_has_correct_config() {
+        let syntax = syntax_for_extension(Some("js")).unwrap();
+        if let Syntax::Es(es) = syntax {
+            // Verify the ES configuration is suitable for bundling
+            assert!(!es.jsx, "jsx should be disabled for .js files");
+            assert!(es.decorators, "decorators should be enabled for bundling");
+            assert!(!es.fn_bind, "function bind syntax should be disabled");
+            assert!(
+                !es.decorators_before_export,
+                "decorators should come after export"
+            );
+            assert!(
+                !es.export_default_from,
+                "export default from should be disabled"
+            );
+            assert!(
+                !es.import_attributes,
+                "import attributes should be disabled"
+            );
+            assert!(
+                !es.allow_super_outside_method,
+                "super outside method should not be allowed"
+            );
+            assert!(
+                !es.allow_return_outside_function,
+                "return outside function should not be allowed"
+            );
+            assert!(!es.auto_accessors, "auto accessors should be disabled");
+            assert!(
+                !es.explicit_resource_management,
+                "explicit resource management should be disabled"
+            );
+        } else {
+            panic!("Expected Es syntax");
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_all_js_variants_produce_es_syntax() {
+        // All JavaScript variants should produce ES syntax
+        for ext in ["js", "mjs", "cjs"] {
+            let syntax = syntax_for_extension(Some(ext));
+            assert!(syntax.is_some(), "Extension '{ext}' should be supported");
+            assert!(
+                matches!(syntax.unwrap(), Syntax::Es(_)),
+                "Extension '{ext}' should produce Es syntax"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_for_extension_consistency_across_js_variants() {
+        // All JavaScript variants should produce identical configuration
+        let js_syntax = syntax_for_extension(Some("js")).unwrap();
+        let mjs_syntax = syntax_for_extension(Some("mjs")).unwrap();
+        let cjs_syntax = syntax_for_extension(Some("cjs")).unwrap();
+
+        if let (Syntax::Es(js), Syntax::Es(mjs), Syntax::Es(cjs)) =
+            (js_syntax, mjs_syntax, cjs_syntax)
+        {
+            // All ES variants should have identical configuration
+            assert_eq!(js.jsx, mjs.jsx, "jsx should match across variants");
+            assert_eq!(js.jsx, cjs.jsx, "jsx should match across variants");
+            assert_eq!(
+                js.decorators, mjs.decorators,
+                "decorators should match across variants"
+            );
+            assert_eq!(
+                js.decorators, cjs.decorators,
+                "decorators should match across variants"
+            );
+            assert_eq!(
+                js.fn_bind, mjs.fn_bind,
+                "fn_bind should match across variants"
+            );
+            assert_eq!(
+                js.fn_bind, cjs.fn_bind,
+                "fn_bind should match across variants"
+            );
+        } else {
+            panic!("Expected all variants to produce Es syntax");
+        }
     }
 }
