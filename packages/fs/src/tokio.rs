@@ -288,6 +288,15 @@ pub mod unsync {
         ::tokio::fs::write(path, contents).await
     }
 
+    /// Creates a directory asynchronously
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::create_dir` fails
+    pub async fn create_dir<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        tokio::fs::create_dir(path).await
+    }
+
     /// Creates a directory and all missing parent directories asynchronously
     ///
     /// # Errors

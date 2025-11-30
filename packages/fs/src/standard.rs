@@ -175,6 +175,15 @@ pub mod sync {
         ::std::fs::write(path, contents)
     }
 
+    /// Creates a directory
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::create_dir` fails
+    pub fn create_dir<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        ::std::fs::create_dir(path)
+    }
+
     /// Creates a directory and all missing parent directories
     ///
     /// # Errors

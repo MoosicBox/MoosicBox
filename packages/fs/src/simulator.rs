@@ -758,6 +758,55 @@ pub mod sync {
     ///
     /// # Errors
     ///
+    /// * If underlying `std::fs::create_dir` fails (when using real filesystem)
+    /// * If the path cannot be converted to a string
+    /// * If the parent directory does not exist
+    ///
+    /// # Panics
+    ///
+    /// * If the `DIRECTORIES` `RwLock` fails to write to
+    pub fn create_dir<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::create_dir(path);
+        }
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize path - remove trailing slashes except for root
+        let normalized = if path_str == "/" {
+            "/".to_string()
+        } else {
+            path_str.trim_end_matches('/').to_string()
+        };
+
+        // Check that parent directory exists
+        if let Some(parent) = std::path::Path::new(&normalized).parent() {
+            let parent_str = parent.to_string_lossy().to_string();
+            if !parent_str.is_empty() && parent_str != "/" {
+                let parent_exists =
+                    DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(&parent_str));
+                if !parent_exists {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("Parent directory does not exist: {parent_str}"),
+                    ));
+                }
+            }
+        }
+
+        // Create the directory
+        DIRECTORIES.with_borrow_mut(|dirs| {
+            dirs.write().unwrap().insert(normalized);
+        });
+
+        Ok(())
+    }
+
+    /// Creates a directory and all missing parent directories
+    ///
+    /// # Errors
+    ///
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
     /// * If the path cannot be converted to a string
     ///
@@ -1797,6 +1846,28 @@ pub mod unsync {
 
         file.write_all(contents.as_ref()).await?;
         Ok(())
+    }
+
+    /// Creates a directory and all missing parent directories asynchronously
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::create_dir` fails (when using real filesystem)
+    /// * If the parent directory does not exist
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
+    pub async fn create_dir<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::create_dir(path))
+                .await
+                .unwrap();
+        }
+
+        super::sync::create_dir(path)
     }
 
     /// Creates a directory and all missing parent directories asynchronously

@@ -192,7 +192,7 @@ macro_rules! impl_sync_fs {
         #[cfg(feature = "sync")]
         pub mod sync {
             pub use $crate::$module::sync::{
-                File, create_dir_all, read_dir_sorted, read_to_string, remove_dir_all,
+                File, create_dir, create_dir_all, read_dir_sorted, read_to_string, remove_dir_all,
                 walk_dir_sorted, write,
             };
 
@@ -212,8 +212,9 @@ macro_rules! impl_async_fs {
         #[cfg(feature = "async")]
         pub mod unsync {
             pub use $crate::$module::unsync::{
-                DirEntry, File, Metadata, ReadDir, create_dir_all, read_dir, read_dir_sorted,
-                read_to_string, remove_dir_all, walk_dir_sorted, write,
+                DirEntry, File, Metadata, ReadDir, create_dir, create_dir_all, exists, is_dir,
+                is_file, read_dir, read_dir_sorted, read_to_string, remove_dir_all,
+                walk_dir_sorted, write,
             };
 
             impl_open_options!();
