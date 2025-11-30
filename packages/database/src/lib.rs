@@ -2382,35 +2382,35 @@ mod tests {
             // u16 value that exceeds u8::MAX
             let val = DatabaseValue::UInt16(300);
             let result: Result<u8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u8_overflow_from_u32() {
             let val = DatabaseValue::UInt32(1000);
             let result: Result<u8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u8_overflow_from_u64() {
             let val = DatabaseValue::UInt64(1_000_000);
             let result: Result<u8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u8_negative_i8_fails() {
             let val = DatabaseValue::Int8(-1);
             let result: Result<u8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u8_negative_i64_fails() {
             let val = DatabaseValue::Int64(-100);
             let result: Result<u8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
@@ -2432,14 +2432,14 @@ mod tests {
         fn test_try_from_u16_overflow_from_u32() {
             let val = DatabaseValue::UInt32(100_000);
             let result: Result<u16, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u16_negative_fails() {
             let val = DatabaseValue::Int16(-500);
             let result: Result<u16, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         // u32 TryFrom tests
@@ -2447,14 +2447,14 @@ mod tests {
         fn test_try_from_u32_overflow_from_u64() {
             let val = DatabaseValue::UInt64(u64::MAX);
             let result: Result<u32, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_u32_negative_i32_fails() {
             let val = DatabaseValue::Int32(-1);
             let result: Result<u32, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         // u64 TryFrom tests
@@ -2462,7 +2462,7 @@ mod tests {
         fn test_try_from_u64_negative_i64_fails() {
             let val = DatabaseValue::Int64(-1);
             let result: Result<u64, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
@@ -2477,21 +2477,21 @@ mod tests {
         fn test_try_from_i8_overflow_from_i16() {
             let val = DatabaseValue::Int16(200); // > i8::MAX (127)
             let result: Result<i8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_i8_underflow_from_i16() {
             let val = DatabaseValue::Int16(-200); // < i8::MIN (-128)
             let result: Result<i8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_i8_overflow_from_u64() {
             let val = DatabaseValue::UInt64(1000);
             let result: Result<i8, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         // i16 TryFrom tests
@@ -2506,7 +2506,7 @@ mod tests {
         fn test_try_from_i16_overflow_from_i32() {
             let val = DatabaseValue::Int32(50_000); // > i16::MAX (32767)
             let result: Result<i16, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         // i32 TryFrom tests
@@ -2514,14 +2514,14 @@ mod tests {
         fn test_try_from_i32_overflow_from_i64() {
             let val = DatabaseValue::Int64(i64::MAX);
             let result: Result<i32, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
         fn test_try_from_i32_overflow_from_u64() {
             let val = DatabaseValue::UInt64(u64::MAX);
             let result: Result<i32, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         // i64 TryFrom tests
@@ -2529,7 +2529,7 @@ mod tests {
         fn test_try_from_i64_overflow_from_u64() {
             let val = DatabaseValue::UInt64(u64::MAX); // > i64::MAX
             let result: Result<i64, _> = val.try_into();
-            assert!(result.is_err());
+            assert!(matches!(result, Err(TryFromError::TryFromInt(_))));
         }
 
         #[test_log::test]
