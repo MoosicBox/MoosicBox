@@ -19,7 +19,7 @@ ignored = ["switchy_schema_test_utils", "tokio"]
 [dependencies]
 moosicbox_assert = { workspace = true }
 switchy_database = { workspace = true, features = ["schema"] }
-switchy_env      = { workspace = true, features = ["std"] }
+switchy_env      = { workspace = true, features = ["simulator", "std"] }
 switchy_schema   = { workspace = true, features = ["code"] }
 
 include_dir = { workspace = true }
@@ -30,6 +30,7 @@ thiserror   = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 moosicbox_music_models = { workspace = true, features = ["db"] }
 pretty_assertions = { workspace = true }
+serial_test = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",

@@ -9272,6 +9272,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "pretty_assertions",
+ "serial_test",
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",

@@ -656,6 +656,95 @@ fn postgres_library_migrations() -> CodeMigrationSource<'static> {
 mod tests {
     use super::*;
 
+    #[cfg(any(feature = "postgres", feature = "sqlite"))]
+    mod env_var_tests {
+        use super::*;
+        use serial_test::serial;
+        use switchy_env::simulator::{remove_var, set_var};
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_skip_migrations_returns_true_when_set_to_one() {
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
+            assert!(should_skip_migrations());
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_skip_migrations_returns_false_when_set_to_zero() {
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "0");
+            assert!(!should_skip_migrations());
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_skip_migrations_returns_false_when_not_set() {
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+            assert!(!should_skip_migrations());
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_skip_migrations_returns_false_for_other_values() {
+            // "true" should return false (only "1" is accepted)
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "true");
+            assert!(!should_skip_migrations());
+
+            // "yes" should return false
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "yes");
+            assert!(!should_skip_migrations());
+
+            // empty string should return false
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "");
+            assert!(!should_skip_migrations());
+
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_drop_migrations_table_returns_true_when_set_to_one() {
+            set_var("MOOSICBOX_DROP_MIGRATIONS_TABLE", "1");
+            assert!(should_drop_migrations_table());
+            remove_var("MOOSICBOX_DROP_MIGRATIONS_TABLE");
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_drop_migrations_table_returns_false_when_set_to_zero() {
+            set_var("MOOSICBOX_DROP_MIGRATIONS_TABLE", "0");
+            assert!(!should_drop_migrations_table());
+            remove_var("MOOSICBOX_DROP_MIGRATIONS_TABLE");
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_drop_migrations_table_returns_false_when_not_set() {
+            remove_var("MOOSICBOX_DROP_MIGRATIONS_TABLE");
+            assert!(!should_drop_migrations_table());
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn test_should_drop_migrations_table_returns_false_for_other_values() {
+            // "true" should return false (only "1" is accepted)
+            set_var("MOOSICBOX_DROP_MIGRATIONS_TABLE", "true");
+            assert!(!should_drop_migrations_table());
+
+            // "yes" should return false
+            set_var("MOOSICBOX_DROP_MIGRATIONS_TABLE", "yes");
+            assert!(!should_drop_migrations_table());
+
+            // empty string should return false
+            set_var("MOOSICBOX_DROP_MIGRATIONS_TABLE", "");
+            assert!(!should_drop_migrations_table());
+
+            remove_var("MOOSICBOX_DROP_MIGRATIONS_TABLE");
+        }
+    }
+
     #[cfg(feature = "sqlite")]
     #[test_log::test(switchy_async::test)]
     async fn test_get_sqlite_library_migrations_returns_migrations() {
@@ -727,6 +816,78 @@ mod tests {
         assert!(
             result.is_ok(),
             "Migration with None should run all migrations successfully"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlite_library_migrations_are_sorted_by_timestamp() {
+        let migrations = get_sqlite_library_migrations().await.unwrap();
+
+        // Collect migration IDs
+        let ids: Vec<_> = migrations.iter().map(|m| m.id().to_string()).collect();
+
+        // Verify migrations are sorted by ID (which includes timestamp prefix)
+        let mut sorted_ids = ids.clone();
+        sorted_ids.sort();
+
+        assert_eq!(
+            ids, sorted_ids,
+            "Migrations should be sorted by ID (timestamp order)"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlite_config_migrations_are_sorted_by_timestamp() {
+        let migrations = get_sqlite_config_migrations().await.unwrap();
+
+        // Collect migration IDs
+        let ids: Vec<_> = migrations.iter().map(|m| m.id().to_string()).collect();
+
+        // Verify migrations are sorted by ID (which includes timestamp prefix)
+        let mut sorted_ids = ids.clone();
+        sorted_ids.sort();
+
+        assert_eq!(
+            ids, sorted_ids,
+            "Migrations should be sorted by ID (timestamp order)"
+        );
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_library_migrations_are_sorted_by_timestamp() {
+        let migrations = get_postgres_library_migrations().await.unwrap();
+
+        // Collect migration IDs
+        let ids: Vec<_> = migrations.iter().map(|m| m.id().to_string()).collect();
+
+        // Verify migrations are sorted by ID (which includes timestamp prefix)
+        let mut sorted_ids = ids.clone();
+        sorted_ids.sort();
+
+        assert_eq!(
+            ids, sorted_ids,
+            "Migrations should be sorted by ID (timestamp order)"
+        );
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_config_migrations_are_sorted_by_timestamp() {
+        let migrations = get_postgres_config_migrations().await.unwrap();
+
+        // Collect migration IDs
+        let ids: Vec<_> = migrations.iter().map(|m| m.id().to_string()).collect();
+
+        // Verify migrations are sorted by ID (which includes timestamp prefix)
+        let mut sorted_ids = ids.clone();
+        sorted_ids.sort();
+
+        assert_eq!(
+            ids, sorted_ids,
+            "Migrations should be sorted by ID (timestamp order)"
         );
     }
 }
