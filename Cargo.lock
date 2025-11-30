@@ -15413,6 +15413,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "switchy_async",
  "switchy_http_models",
  "test-log",
  "thiserror 2.0.17",

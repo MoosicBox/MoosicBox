@@ -36,7 +36,9 @@ strum       = { workspace = true, features = ["derive"] }
 thiserror   = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+futures-util  = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
 
 [features]
 default = ["json", "reqwest", "simulator", "stream"]

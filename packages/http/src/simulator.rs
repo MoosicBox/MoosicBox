@@ -164,4 +164,132 @@ mod tests {
         let _builder = client.request(Method::Get, "http://example.com");
         // If we get here without panic, the test passes
     }
+
+    /// Test the complete request/response flow through the macro-generated HTTP client.
+    /// This exercises the full integration: client creation, request builder configuration,
+    /// sending requests, and consuming responses.
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_full_request_response_flow() {
+        let client = crate::SimulatorClient::new();
+
+        // Build and send a request with multiple configurations
+        let response = client
+            .get("http://example.com/test")
+            .header("Authorization", "Bearer token")
+            .query_param("key", "value")
+            .query_param_opt("optional", Some("present"))
+            .query_param_opt("missing", None)
+            .query_params(&[("page", "1"), ("limit", "10")])
+            .send()
+            .await
+            .unwrap();
+
+        // Verify response properties
+        assert_eq!(response.status(), StatusCode::Ok);
+
+        // Verify response body consumption works
+        let text = response.text().await.unwrap();
+        assert!(text.is_empty());
+    }
+
+    /// Test that all HTTP method convenience methods are correctly wired through the macro.
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_all_http_methods() {
+        let client = crate::SimulatorClient::new();
+
+        // Test all HTTP method convenience methods work through the macro-generated client
+        let get = client.get("http://example.com").send().await.unwrap();
+        assert_eq!(get.status(), StatusCode::Ok);
+
+        let post = client.post("http://example.com").send().await.unwrap();
+        assert_eq!(post.status(), StatusCode::Ok);
+
+        let put = client.put("http://example.com").send().await.unwrap();
+        assert_eq!(put.status(), StatusCode::Ok);
+
+        let patch = client.patch("http://example.com").send().await.unwrap();
+        assert_eq!(patch.status(), StatusCode::Ok);
+
+        let delete = client.delete("http://example.com").send().await.unwrap();
+        assert_eq!(delete.status(), StatusCode::Ok);
+
+        let head = client.head("http://example.com").send().await.unwrap();
+        assert_eq!(head.status(), StatusCode::Ok);
+
+        let options = client.options("http://example.com").send().await.unwrap();
+        assert_eq!(options.status(), StatusCode::Ok);
+    }
+
+    /// Test that the JSON serialization path works correctly through the macro-generated client.
+    /// This exercises the `json()` method which serializes via `serde_json`.
+    #[cfg(feature = "json")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_json_body_serialization() {
+        #[derive(serde::Serialize)]
+        struct TestPayload {
+            name: String,
+            value: i32,
+        }
+
+        let client = crate::SimulatorClient::new();
+
+        let payload = TestPayload {
+            name: "test".to_string(),
+            value: 42,
+        };
+
+        // Verify the JSON serialization path doesn't panic
+        let response = client
+            .post("http://example.com/api")
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::Ok);
+    }
+
+    /// Test that the form serialization path works correctly through the macro-generated client.
+    /// This exercises the `form()` method which serializes via `serde_json::to_value`.
+    #[cfg(feature = "json")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_form_body_serialization() {
+        #[derive(serde::Serialize)]
+        struct FormData {
+            username: String,
+            password: String,
+        }
+
+        let client = crate::SimulatorClient::new();
+
+        let form = FormData {
+            username: "user".to_string(),
+            password: "pass".to_string(),
+        };
+
+        // Verify the form serialization path doesn't panic
+        let response = client
+            .post("http://example.com/login")
+            .form(&form)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::Ok);
+    }
+
+    /// Test the `bytes_stream` response method works correctly through the macro-generated response.
+    #[cfg(feature = "stream")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_bytes_stream_consumption() {
+        use futures_util::StreamExt;
+
+        let client = crate::SimulatorClient::new();
+        let response = client.get("http://example.com").send().await.unwrap();
+
+        // Test consuming the response as a stream
+        let mut stream = response.bytes_stream();
+        let chunks: Vec<_> = stream.by_ref().collect().await;
+        assert!(chunks.is_empty());
+    }
 }
