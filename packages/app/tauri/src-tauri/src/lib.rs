@@ -1621,3 +1621,99 @@ mod native_app {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::api::ApiTrack;
+
+    #[test_log::test]
+    fn test_album_cover_url_generates_correct_format() {
+        let result = album_cover_url("123", &ApiSource::default(), "http://localhost:8080", "");
+        assert_eq!(
+            result,
+            "http://localhost:8080/files/albums/123/300x300?source=Library"
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_cover_url_with_query_string() {
+        let result = album_cover_url(
+            "456",
+            &ApiSource::default(),
+            "https://api.example.com",
+            "&clientId=abc&signature=xyz",
+        );
+        assert_eq!(
+            result,
+            "https://api.example.com/files/albums/456/300x300?source=Library&clientId=abc&signature=xyz"
+        );
+    }
+
+    #[test_log::test]
+    fn test_convert_track_with_cover_generates_album_cover_url() {
+        let track = ApiTrack {
+            track_id: 1.into(),
+            number: 1,
+            title: "Test Track".to_string(),
+            duration: 180.0,
+            album: "Test Album".to_string(),
+            album_id: 100.into(),
+            artist: "Test Artist".to_string(),
+            contains_cover: true,
+            ..Default::default()
+        };
+
+        let result = convert_track(track, "http://localhost:8080", "");
+
+        assert!(result.album_cover.is_some());
+        assert_eq!(
+            result.album_cover.unwrap(),
+            "http://localhost:8080/files/albums/100/300x300?source=Library"
+        );
+    }
+
+    #[test_log::test]
+    fn test_convert_track_without_cover_has_no_album_cover_url() {
+        let track = ApiTrack {
+            track_id: 2.into(),
+            number: 3,
+            title: "Another Track".to_string(),
+            duration: 240.5,
+            album: "Another Album".to_string(),
+            album_id: 200.into(),
+            artist: "Another Artist".to_string(),
+            contains_cover: false,
+            ..Default::default()
+        };
+
+        let result = convert_track(track, "http://localhost:8080", "");
+
+        assert!(result.album_cover.is_none());
+    }
+
+    #[test_log::test]
+    fn test_convert_track_preserves_track_metadata() {
+        let track = ApiTrack {
+            track_id: 42.into(),
+            number: 5,
+            title: "My Song".to_string(),
+            duration: 300.0,
+            album: "Great Album".to_string(),
+            album_id: 10.into(),
+            artist: "Famous Artist".to_string(),
+            contains_cover: false,
+            ..Default::default()
+        };
+
+        let result = convert_track(track, "http://localhost", "");
+
+        assert_eq!(result.id, "42");
+        assert_eq!(result.number, 5);
+        assert_eq!(result.title, "My Song");
+        assert!((result.duration - 300.0).abs() < f64::EPSILON);
+        assert_eq!(result.album, "Great Album");
+        assert_eq!(result.artist, "Famous Artist");
+        assert!(result.artist_cover.is_none());
+    }
+}
