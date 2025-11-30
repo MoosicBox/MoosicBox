@@ -3337,4 +3337,75 @@ mod tests {
         assert!(TidalAlbumType::try_from(AlbumType::Other).is_err());
         assert!(TidalAlbumType::try_from(AlbumType::Download).is_err());
     }
+
+    // ToValueType<TidalAlbumType> tests for JSON parsing
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_lp() {
+        let json_value = serde_json::json!("LP");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_epsandsingles() {
+        let json_value = serde_json::json!("EPSANDSINGLES");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_ep() {
+        let json_value = serde_json::json!("EP");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_single() {
+        let json_value = serde_json::json!("SINGLE");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_compilations() {
+        let json_value = serde_json::json!("COMPILATIONS");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::Compilations);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_unknown_defaults_to_lp() {
+        let json_value = serde_json::json!("UNKNOWN");
+        let result: TidalAlbumType = (&json_value).to_value_type().unwrap();
+        assert_eq!(result, TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_null_returns_error() {
+        let json_value = serde_json::json!(null);
+        let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_number_returns_error() {
+        let json_value = serde_json::json!(123);
+        let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_object_returns_error() {
+        let json_value = serde_json::json!({"type": "LP"});
+        let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_type_to_value_type_array_returns_error() {
+        let json_value = serde_json::json!(["LP"]);
+        let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+    }
 }

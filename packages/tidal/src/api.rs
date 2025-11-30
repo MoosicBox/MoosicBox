@@ -1693,3 +1693,264 @@ pub async fn search_endpoint(
 
     Ok(Json(results.into()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_json_utils::ParseError;
+    use moosicbox_music_models::id::Id;
+    use pretty_assertions::assert_eq;
+
+    // Error conversion tests
+    #[test_log::test]
+    fn test_error_to_actix_error_unauthorized() {
+        let error = Error::Unauthorized;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_http_request_failed_404() {
+        let error = Error::HttpRequestFailed(404, "Not found".to_string());
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(response.status(), actix_web::http::StatusCode::NOT_FOUND);
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_http_request_failed_non_404() {
+        let error = Error::HttpRequestFailed(500, "Server error".to_string());
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_user_id_available() {
+        let error = Error::NoUserIdAvailable;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_access_token_available() {
+        let error = Error::NoAccessTokenAvailable;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_parse() {
+        let error = Error::Parse(ParseError::MissingValue("test".to_string()));
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_max_failed_attempts() {
+        let error = Error::MaxFailedAttempts;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_response_body() {
+        let error = Error::NoResponseBody;
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_request_failed() {
+        let error = Error::RequestFailed("Some error".to_string());
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    // AlbumType conversion tests
+    #[test_log::test]
+    fn test_album_type_to_tidal_album_type_lp() {
+        let api_album_type = AlbumType::Lp;
+        let tidal_album_type: TidalAlbumType = api_album_type.into();
+        assert_eq!(tidal_album_type, TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_album_type_to_tidal_album_type_eps_and_singles() {
+        let api_album_type = AlbumType::EpsAndSingles;
+        let tidal_album_type: TidalAlbumType = api_album_type.into();
+        assert_eq!(tidal_album_type, TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_album_type_to_tidal_album_type_compilations() {
+        let api_album_type = AlbumType::Compilations;
+        let tidal_album_type: TidalAlbumType = api_album_type.into();
+        assert_eq!(tidal_album_type, TidalAlbumType::Compilations);
+    }
+
+    // TidalTrack to ApiTrack conversion tests
+    #[test_log::test]
+    fn test_tidal_track_to_api_track_with_album_cover() {
+        let tidal_track = TidalTrack {
+            id: 12345,
+            track_number: 5,
+            artist_id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_cover: None,
+            album_id: 11111,
+            album_type: TidalAlbumType::Lp,
+            album: "Test Album".to_string(),
+            album_cover: Some("cover-hash".to_string()),
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Test".to_string()),
+            duration: 240,
+            explicit: true,
+            isrc: "USRC12345678".to_string(),
+            popularity: 85,
+            title: "Test Track".to_string(),
+            media_metadata_tags: vec!["LOSSLESS".to_string()],
+        };
+
+        let api_track: ApiTrack = tidal_track.into();
+        match api_track {
+            ApiTrack::Tidal(track) => {
+                assert_eq!(track.id, 12345);
+                assert_eq!(track.number, 5);
+                assert_eq!(track.artist, "Test Artist");
+                assert_eq!(track.artist_id, 67890);
+                assert_eq!(track.album, "Test Album");
+                assert_eq!(track.album_id, 11111);
+                assert_eq!(track.album_type, TidalAlbumType::Lp);
+                assert!(track.contains_cover);
+                assert_eq!(track.audio_quality, "LOSSLESS");
+                assert_eq!(track.copyright, Some("2024 Test".to_string()));
+                assert_eq!(track.duration, 240);
+                assert!(track.explicit);
+                assert_eq!(track.isrc, "USRC12345678");
+                assert_eq!(track.popularity, 85);
+                assert_eq!(track.title, "Test Track");
+                assert_eq!(track.media_metadata_tags, vec!["LOSSLESS".to_string()]);
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_to_api_track_without_album_cover() {
+        let tidal_track = TidalTrack {
+            id: 12345,
+            track_number: 1,
+            artist_id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_cover: None,
+            album_id: 11111,
+            album_type: TidalAlbumType::EpsAndSingles,
+            album: "Test Single".to_string(),
+            album_cover: None,
+            audio_quality: "HIGH".to_string(),
+            copyright: None,
+            duration: 180,
+            explicit: false,
+            isrc: "USRC87654321".to_string(),
+            popularity: 50,
+            title: "Test Single Track".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let api_track: ApiTrack = tidal_track.into();
+        match api_track {
+            ApiTrack::Tidal(track) => {
+                assert!(!track.contains_cover);
+                assert_eq!(track.album_type, TidalAlbumType::EpsAndSingles);
+                assert!(track.copyright.is_none());
+                assert!(!track.explicit);
+                assert!(track.media_metadata_tags.is_empty());
+            }
+        }
+    }
+
+    // ApiTidalTrack to moosicbox_music_models::api::ApiTrack conversion tests
+    #[test_log::test]
+    fn test_api_tidal_track_to_api_track_conversion() {
+        let api_tidal_track = ApiTidalTrack {
+            id: 98765,
+            number: 3,
+            album: "Test Album".to_string(),
+            album_id: 54321,
+            album_type: TidalAlbumType::Lp,
+            artist: "Test Artist".to_string(),
+            artist_id: 11111,
+            contains_cover: true,
+            audio_quality: "HI_RES_LOSSLESS".to_string(),
+            copyright: Some("2024 Test Corp".to_string()),
+            duration: 300,
+            explicit: false,
+            isrc: "GBRC12345678".to_string(),
+            popularity: 75,
+            title: "Test Track Title".to_string(),
+            media_metadata_tags: vec!["HIRES_LOSSLESS".to_string()],
+            api_source: API_SOURCE.clone(),
+        };
+
+        let api_track: moosicbox_music_models::api::ApiTrack = api_tidal_track.into();
+        assert_eq!(api_track.track_id, Id::from(98765_u64));
+        assert_eq!(api_track.number, 3);
+        assert_eq!(api_track.title, "Test Track Title");
+        assert!((api_track.duration - 300.0).abs() < f64::EPSILON);
+        assert_eq!(api_track.album, "Test Album");
+        assert_eq!(api_track.album_id, Id::from(54321_u64));
+        assert_eq!(api_track.artist, "Test Artist");
+        assert_eq!(api_track.artist_id, Id::from(11111_u64));
+        assert!(api_track.contains_cover);
+        assert!(!api_track.blur);
+        assert!(api_track.format.is_none());
+        assert!(api_track.bit_depth.is_none());
+        assert!(api_track.sample_rate.is_none());
+        assert!(api_track.channels.is_none());
+        assert_eq!(api_track.api_source, *API_SOURCE);
+    }
+
+    #[test_log::test]
+    fn test_api_tidal_track_to_api_track_default_values() {
+        let api_tidal_track = ApiTidalTrack::default();
+
+        let api_track: moosicbox_music_models::api::ApiTrack = api_tidal_track.into();
+        assert_eq!(api_track.track_id, Id::from(0_u64));
+        assert_eq!(api_track.number, 0);
+        assert!(api_track.title.is_empty());
+        assert!((api_track.duration - 0.0).abs() < f64::EPSILON);
+        assert!(api_track.album.is_empty());
+        assert!(api_track.artist.is_empty());
+        assert!(!api_track.contains_cover);
+        assert!(api_track.date_released.is_none());
+        assert!(api_track.date_added.is_none());
+    }
+}
