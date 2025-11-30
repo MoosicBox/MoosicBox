@@ -453,4 +453,123 @@ mod tests {
         let pos = callback_positions.lock().unwrap()[0];
         assert!((pos - 1.0).abs() < 0.001);
     }
+
+    #[test_log::test]
+    #[allow(clippy::type_complexity)]
+    fn test_update_from_callback_refs_zero_samples() {
+        let consumed = Arc::new(AtomicUsize::new(100));
+        let sample_rate = Arc::new(AtomicU32::new(44100));
+        let channels = Arc::new(AtomicU32::new(2));
+        let callback: Arc<RwLock<Option<Box<dyn Fn(f64) + Send + Sync + 'static>>>> =
+            Arc::new(RwLock::new(None));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        // Update with zero samples should return early without changes
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            0, // zero samples
+            0.1,
+        );
+
+        // Consumed samples should remain unchanged
+        assert_eq!(consumed.load(Ordering::SeqCst), 100);
+    }
+
+    #[test_log::test]
+    #[allow(clippy::type_complexity)]
+    fn test_update_from_callback_refs_zero_sample_rate() {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let sample_rate = Arc::new(AtomicU32::new(0)); // Zero sample rate
+        let channels = Arc::new(AtomicU32::new(2));
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+        let callback: Arc<RwLock<Option<Box<dyn Fn(f64) + Send + Sync + 'static>>>> =
+            Arc::new(RwLock::new(Some(Box::new(move |pos| {
+                callback_positions_clone.lock().unwrap().push(pos);
+            }))));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        // Update with zero sample rate should not call callback
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            88200,
+            0.5,
+        );
+
+        // Samples should be added
+        assert_eq!(consumed.load(Ordering::SeqCst), 88200);
+        // But callback should not be called due to zero sample rate
+        assert!(callback_positions.lock().unwrap().is_empty());
+    }
+
+    #[test_log::test]
+    #[allow(clippy::type_complexity)]
+    fn test_update_from_callback_refs_zero_channels() {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let sample_rate = Arc::new(AtomicU32::new(44100));
+        let channels = Arc::new(AtomicU32::new(0)); // Zero channels
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+        let callback: Arc<RwLock<Option<Box<dyn Fn(f64) + Send + Sync + 'static>>>> =
+            Arc::new(RwLock::new(Some(Box::new(move |pos| {
+                callback_positions_clone.lock().unwrap().push(pos);
+            }))));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        // Update with zero channels should not call callback
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            88200,
+            0.5,
+        );
+
+        // Samples should be added
+        assert_eq!(consumed.load(Ordering::SeqCst), 88200);
+        // But callback should not be called due to zero channels
+        assert!(callback_positions.lock().unwrap().is_empty());
+    }
+
+    #[test_log::test]
+    #[allow(clippy::type_complexity)]
+    fn test_update_from_callback_refs_below_threshold() {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let sample_rate = Arc::new(AtomicU32::new(44100));
+        let channels = Arc::new(AtomicU32::new(2));
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+        let callback: Arc<RwLock<Option<Box<dyn Fn(f64) + Send + Sync + 'static>>>> =
+            Arc::new(RwLock::new(Some(Box::new(move |pos| {
+                callback_positions_clone.lock().unwrap().push(pos);
+            }))));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        // Update with samples below threshold (0.5 seconds = 44100 samples)
+        // Only 22050 samples = 0.25 seconds, below 0.5 threshold
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            22050, // 0.25 seconds worth of stereo samples
+            0.5,   // 0.5 second threshold
+        );
+
+        // Samples should be added
+        assert_eq!(consumed.load(Ordering::SeqCst), 22050);
+        // But callback should not be called because position change is below threshold
+        assert!(callback_positions.lock().unwrap().is_empty());
+    }
 }
