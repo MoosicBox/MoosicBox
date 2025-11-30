@@ -2545,4 +2545,635 @@ mod tests {
             assert!(renderer.default.responsive_triggers.contains_key("mobile"));
         }
     }
+
+    #[cfg(test)]
+    mod element_attrs_to_html_tests {
+        use super::*;
+        use hyperchad_renderer::HtmlTagRenderer;
+        use hyperchad_transformer::models::{Route, Selector, SwapStrategy};
+        use hyperchad_transformer::{
+            Container,
+            actions::{Action, ActionEffect, ActionTrigger, ActionType, LogLevel},
+        };
+
+        fn render_attrs(container: &Container) -> String {
+            let renderer = VanillaJsTagRenderer::default();
+            let mut buf = Vec::new();
+            renderer
+                .element_attrs_to_html(&mut buf, container, false)
+                .expect("render failed");
+            String::from_utf8(buf).expect("invalid utf8")
+        }
+
+        #[test_log::test]
+        fn test_route_get_with_self_target() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/data".to_string(),
+                    trigger: None,
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::This,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-swap="this""#));
+            assert!(result.contains(r#"hx-get="/api/data""#));
+            // SelfTarget should NOT generate hx-target
+            assert!(!result.contains("hx-target"));
+        }
+
+        #[test_log::test]
+        fn test_route_get_with_id_target() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/data".to_string(),
+                    trigger: None,
+                    target: Selector::Id("myTarget".to_string()),
+                    strategy: SwapStrategy::Children,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("hx-target=\"#myTarget\""));
+            assert!(result.contains("hx-swap=\"children\""));
+            assert!(result.contains("hx-get=\"/api/data\""));
+        }
+
+        #[test_log::test]
+        fn test_route_get_with_trigger() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/data".to_string(),
+                    trigger: Some("click".to_string()),
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::This,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-trigger="click""#));
+        }
+
+        #[test_log::test]
+        fn test_route_post() {
+            let container = Container {
+                route: Some(Route::Post {
+                    route: "/api/submit".to_string(),
+                    trigger: None,
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::BeforeEnd,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-post="/api/submit""#));
+            assert!(result.contains(r#"hx-swap="beforeend""#));
+        }
+
+        #[test_log::test]
+        fn test_route_put() {
+            let container = Container {
+                route: Some(Route::Put {
+                    route: "/api/update".to_string(),
+                    trigger: None,
+                    target: Selector::Class("target-class".to_string()),
+                    strategy: SwapStrategy::AfterBegin,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-put="/api/update""#));
+            assert!(result.contains(r#"hx-target=".target-class""#));
+            assert!(result.contains(r#"hx-swap="afterbegin""#));
+        }
+
+        #[test_log::test]
+        fn test_route_delete() {
+            let container = Container {
+                route: Some(Route::Delete {
+                    route: "/api/remove".to_string(),
+                    trigger: None,
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::Delete,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-delete="/api/remove""#));
+            assert!(result.contains(r#"hx-swap="delete""#));
+        }
+
+        #[test_log::test]
+        fn test_route_patch() {
+            let container = Container {
+                route: Some(Route::Patch {
+                    route: "/api/patch".to_string(),
+                    trigger: Some("change".to_string()),
+                    target: Selector::ChildClass("child".to_string()),
+                    strategy: SwapStrategy::None,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-patch="/api/patch""#));
+            assert!(result.contains(r#"hx-target="> .child""#));
+            assert!(result.contains(r#"hx-swap="none""#));
+            assert!(result.contains(r#"hx-trigger="change""#));
+        }
+
+        #[test_log::test]
+        fn test_action_click_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Click,
+                    effect: ActionEffect {
+                        action: ActionType::Log {
+                            message: "clicked".to_string(),
+                            level: LogLevel::Info,
+                        },
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onclick="));
+            assert!(result.contains("console.log"));
+        }
+
+        #[test_log::test]
+        fn test_action_click_outside_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::ClickOutside,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onclickoutside="));
+        }
+
+        #[test_log::test]
+        fn test_action_mousedown_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::MouseDown,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onmousedown="));
+        }
+
+        #[test_log::test]
+        fn test_action_hover_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Hover,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onmouseover="));
+        }
+
+        #[test_log::test]
+        fn test_action_change_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Change,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onchange="));
+        }
+
+        #[test_log::test]
+        fn test_action_resize_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Resize,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onresize="));
+        }
+
+        #[test_log::test]
+        fn test_action_event_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Event("customEvent".to_string()),
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onevent="));
+            assert!(result.contains("customEvent:"));
+        }
+
+        #[test_log::test]
+        fn test_action_keydown_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::KeyDown,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onkeydown="));
+        }
+
+        #[test_log::test]
+        fn test_action_immediate_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::Immediate,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onload="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_before_request_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpBeforeRequest,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-before-request="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_after_request_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpAfterRequest,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-after-request="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_success_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpRequestSuccess,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-success="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_error_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpRequestError,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-error="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_abort_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpRequestAbort,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-abort="));
+        }
+
+        #[test_log::test]
+        fn test_action_http_timeout_trigger() {
+            let container = Container {
+                actions: vec![Action {
+                    trigger: ActionTrigger::HttpRequestTimeout,
+                    effect: ActionEffect {
+                        action: ActionType::NoOp,
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-http-timeout="));
+        }
+
+        #[test_log::test]
+        fn test_multiple_actions() {
+            let container = Container {
+                actions: vec![
+                    Action {
+                        trigger: ActionTrigger::Click,
+                        effect: ActionEffect {
+                            action: ActionType::Log {
+                                message: "clicked".to_string(),
+                                level: LogLevel::Info,
+                            },
+                            throttle: None,
+                            delay_off: None,
+                            unique: None,
+                        },
+                    },
+                    Action {
+                        trigger: ActionTrigger::Hover,
+                        effect: ActionEffect {
+                            action: ActionType::Log {
+                                message: "hovered".to_string(),
+                                level: LogLevel::Debug,
+                            },
+                            throttle: None,
+                            delay_off: None,
+                            unique: None,
+                        },
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("v-onclick="));
+            assert!(result.contains("v-onmouseover="));
+        }
+
+        #[test_log::test]
+        fn test_route_and_actions_combined() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/data".to_string(),
+                    trigger: None,
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::This,
+                }),
+                actions: vec![Action {
+                    trigger: ActionTrigger::Click,
+                    effect: ActionEffect {
+                        action: ActionType::Log {
+                            message: "before fetch".to_string(),
+                            level: LogLevel::Info,
+                        },
+                        throttle: None,
+                        delay_off: None,
+                        unique: None,
+                    },
+                }],
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains("hx-get="));
+            assert!(result.contains("v-onclick="));
+        }
+    }
+
+    #[cfg(test)]
+    mod additional_action_to_js_tests {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        fn test_action_parameterized_trigger_true() {
+            let action = ActionType::Parameterized {
+                action: Box::new(ActionType::Custom {
+                    action: "myAction".to_string(),
+                }),
+                value: Value::Real(100.0),
+            };
+            let (result, reset) = action_to_js(&action, true);
+            // When trigger_action is true, it should wrap with triggerAction()
+            assert!(
+                result.starts_with("triggerAction("),
+                "Expected triggerAction wrapper, got: {result}"
+            );
+            assert!(result.contains("myAction"));
+            assert!(result.contains("100"));
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_parameterized_with_string_value() {
+            let action = ActionType::Parameterized {
+                action: Box::new(ActionType::Custom {
+                    action: "sendMessage".to_string(),
+                }),
+                value: Value::String("hello".to_string()),
+            };
+            let (result, _) = action_to_js(&action, true);
+            assert!(result.contains("sendMessage"));
+            assert!(result.contains("{String:'hello'}"));
+        }
+
+        #[test_log::test]
+        fn test_action_custom_escapes_special_chars() {
+            let action = ActionType::Custom {
+                action: "action<with>special\"chars\"".to_string(),
+            };
+            let (result, _) = action_to_js(&action, true);
+            // The result should have the special characters HTML encoded
+            assert!(result.contains("&lt;"));
+            assert!(result.contains("&gt;"));
+            assert!(result.contains("&quot;"));
+        }
+    }
+
+    #[cfg(test)]
+    mod additional_calc_value_tests {
+        use super::*;
+        use hyperchad_transformer::actions::Key;
+        use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        fn test_calc_value_key_variants() {
+            // Test various key values
+            assert_eq!(
+                calc_value_to_js(&CalcValue::Key { key: Key::Enter }, false),
+                "'Enter'"
+            );
+            assert_eq!(
+                calc_value_to_js(&CalcValue::Key { key: Key::Escape }, false),
+                "'Escape'"
+            );
+            assert_eq!(
+                calc_value_to_js(&CalcValue::Key { key: Key::ArrowUp }, false),
+                "'ArrowUp'"
+            );
+            assert_eq!(
+                calc_value_to_js(
+                    &CalcValue::Key {
+                        key: Key::ArrowDown
+                    },
+                    false
+                ),
+                "'ArrowDown'"
+            );
+            assert_eq!(
+                calc_value_to_js(
+                    &CalcValue::Key {
+                        key: Key::ArrowLeft
+                    },
+                    false
+                ),
+                "'ArrowLeft'"
+            );
+            assert_eq!(
+                calc_value_to_js(
+                    &CalcValue::Key {
+                        key: Key::ArrowRight
+                    },
+                    false
+                ),
+                "'ArrowRight'"
+            );
+        }
+
+        #[test_log::test]
+        fn test_calc_value_data_attr_various_casing() {
+            // Test that data attribute names are properly converted to camelCase
+            let calc = CalcValue::DataAttrValue {
+                target: ElementTarget::SelfTarget,
+                attr: "my-custom-data".to_string(),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(
+                result.contains(".dataset.myCustomData"),
+                "Expected camelCase conversion, got: {result}"
+            );
+        }
+
+        #[test_log::test]
+        fn test_calc_value_data_attr_already_camel() {
+            let calc = CalcValue::DataAttrValue {
+                target: ElementTarget::SelfTarget,
+                attr: "alreadyCamel".to_string(),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains(".dataset.alreadyCamel"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_with_class_target() {
+            let calc = CalcValue::WidthPx {
+                target: ElementTarget::Class(Target::Literal("myClass".to_string())),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains("querySelectorAll('.myClass')"));
+            assert!(result.contains("clientWidth"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_with_child_class_target() {
+            let calc = CalcValue::HeightPx {
+                target: ElementTarget::ChildClass(Target::Literal("childClass".to_string())),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains("ctx.element.querySelectorAll('.childClass')"));
+            assert!(result.contains("clientHeight"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_with_ref_target() {
+            let calc = CalcValue::PositionX {
+                target: ElementTarget::StrId(Target::Ref("myRef".to_string())),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains("[myRef]"));
+            assert!(result.contains("getBoundingClientRect().left"));
+        }
+    }
 }
