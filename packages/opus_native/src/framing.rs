@@ -552,4 +552,169 @@ mod tests {
         let packet = &[(16 << 3) | 0b011, 0b0011_0010, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
+
+    #[test]
+    fn test_decode_frame_length_empty_data() {
+        let result = decode_frame_length(&[]);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Empty frame length data"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_decode_frame_length_two_byte_missing_second() {
+        // First byte >= 252 requires a second byte
+        let result = decode_frame_length(&[252]);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Missing second length byte"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_decode_frame_length_boundary_251() {
+        // 251 is the maximum single-byte length
+        let (len, bytes) = decode_frame_length(&[251]).unwrap();
+        assert_eq!(len, 251);
+        assert_eq!(bytes, 1);
+    }
+
+    #[test]
+    fn test_decode_frame_length_boundary_252() {
+        // 252 requires second byte: length = second*4 + 252
+        // When second byte is 0: 0*4 + 252 = 252
+        let (len, bytes) = decode_frame_length(&[252, 0]).unwrap();
+        assert_eq!(len, 252);
+        assert_eq!(bytes, 2);
+    }
+
+    #[test]
+    fn test_code3_vbr_frame_exceeds_packet() {
+        // VBR packet where frame length exceeds available data
+        let packet = &[
+            0b0000_0011, // TOC: code 3
+            0b1000_0010, // Frame count byte: VBR, 2 frames
+            200,         // First frame length = 200 (way too large)
+            0x01,
+            0x02, // Not enough data for 200-byte frame
+        ];
+        let result = parse_frames(packet);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("VBR frame exceeds packet"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_code3_padding_exceeds_packet_size() {
+        // Padding that claims more bytes than available
+        let packet = &[
+            0b0000_0011, // TOC: code 3
+            0b0100_0001, // Frame count byte: padding bit set, 1 frame
+            200,         // Padding length = 200 (too large for small packet)
+            0x01,
+        ];
+        let result = parse_frames(packet);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Padding exceeds packet size"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_code3_incomplete_padding() {
+        // Packet with padding flag set but no padding length bytes
+        let packet = &[
+            0b0000_0011, // TOC: code 3
+            0b0100_0001, // Frame count byte: padding bit set, 1 frame
+                         // Missing padding length byte
+        ];
+        let result = parse_frames(packet);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Incomplete padding"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_code2_packet_too_short() {
+        // Code 2 packet with only TOC byte
+        let packet = &[0b0000_0010];
+        let result = parse_frames(packet);
+        assert!(result.is_err());
+        if let Err(crate::Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Code 2 too short"));
+        } else {
+            panic!("Expected InvalidPacket error");
+        }
+    }
+
+    #[test]
+    fn test_code3_cbr_with_zero_length_frames() {
+        // CBR with frames of length 0 (valid for DTX/silence)
+        let packet = &[
+            0b0000_0011, // TOC: code 3
+            0b0000_0010, // Frame count byte: CBR, 2 frames
+                         // 0 bytes of frame data = 0-length frames
+        ];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].len(), 0);
+        assert_eq!(frames[1].len(), 0);
+    }
+
+    #[test]
+    fn test_code3_vbr_with_dtx_zero_length_frame() {
+        // VBR with first frame being 0-length (DTX/silence)
+        let packet = &[
+            0b0000_0011, // TOC: code 3
+            0b1000_0010, // Frame count byte: VBR, 2 frames
+            0,           // First frame length = 0 (DTX)
+            0x01,
+            0x02, // Second frame data
+        ];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].len(), 0);
+        assert_eq!(frames[1], &[0x01, 0x02]);
+    }
+
+    #[test]
+    fn test_frame_count_byte_max_count() {
+        // Maximum frame count is 63 (6 bits)
+        let fc_byte = FrameCountByte::parse(0b0011_1111).unwrap();
+        assert_eq!(fc_byte.count, 63);
+        assert!(!fc_byte.vbr);
+        assert!(!fc_byte.padding);
+    }
+
+    #[test]
+    fn test_frame_count_byte_all_flags_set() {
+        // VBR + padding + count = 63
+        let fc_byte = FrameCountByte::parse(0b1111_1111).unwrap();
+        assert_eq!(fc_byte.count, 63);
+        assert!(fc_byte.vbr);
+        assert!(fc_byte.padding);
+    }
+
+    #[test]
+    fn test_code1_empty_frames() {
+        // Code 1 with only TOC byte = 0-length payload
+        let packet = &[0b0000_0001];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].len(), 0);
+        assert_eq!(frames[1].len(), 0);
+    }
 }

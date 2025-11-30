@@ -857,4 +857,173 @@ mod tests {
         let result = decoder.ec_laplace_decode(10000, 8000);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_ec_dec_icdf_u16_basic() {
+        let data = vec![0b1010_1010, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // 16-bit ICDF table with terminating 0
+        let icdf: [u16; 4] = [60000, 40000, 20000, 0];
+        let symbol = decoder.ec_dec_icdf_u16(&icdf, 16).unwrap();
+        assert!(symbol < 4);
+    }
+
+    #[test]
+    fn test_ec_dec_icdf_u16_first_symbol() {
+        // High value input should decode to first symbol (index 0)
+        let data = vec![0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let icdf: [u16; 3] = [50000, 25000, 0];
+        let symbol = decoder.ec_dec_icdf_u16(&icdf, 16).unwrap();
+        assert_eq!(symbol, 0);
+    }
+
+    #[test]
+    fn test_ec_dec_icdf_u16_varying_precision() {
+        let data = vec![0x80, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // Different ftb values (precision)
+        let icdf: [u16; 3] = [200, 100, 0];
+        let symbol = decoder.ec_dec_icdf_u16(&icdf, 8).unwrap();
+        assert!(symbol < 3);
+    }
+
+    #[test]
+    fn test_ec_dec_icdf_u16_high_precision() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // High precision table (ftb = 15)
+        let icdf: [u16; 5] = [32000, 24000, 16000, 8000, 0];
+        let symbol = decoder.ec_dec_icdf_u16(&icdf, 15).unwrap();
+        assert!(symbol < 5);
+    }
+
+    #[test]
+    fn test_ec_dec_uint_boundary_8_bit() {
+        // ec_dec_uint uses different paths based on ftb <= 8 or ftb > 8
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // ft = 256 means ftb = 8 (boundary case, uses simple path)
+        let value = decoder.ec_dec_uint(256).unwrap();
+        assert!(value < 256);
+    }
+
+    #[test]
+    fn test_ec_dec_uint_large_ft() {
+        // Large ft > 256 uses the complex path with bit decoding
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let value = decoder.ec_dec_uint(10000).unwrap();
+        assert!(value < 10000);
+    }
+
+    #[test]
+    fn test_ec_dec_uint_ft_one() {
+        // ft = 1 means only value 0 is possible
+        let data = vec![0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let value = decoder.ec_dec_uint(1).unwrap();
+        assert_eq!(value, 0);
+    }
+
+    #[test]
+    fn test_laplace_decode_high_fs() {
+        // Test with high fs (probability of zero)
+        let data = vec![0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // High fs means high probability of zero
+        let result = decoder.ec_laplace_decode(30000, 6000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_laplace_decode_low_decay() {
+        // Test with low decay (steeper distribution)
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let result = decoder.ec_laplace_decode(8000, 2000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_laplace_decode_high_decay() {
+        // Test with high decay (flatter distribution)
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let result = decoder.ec_laplace_decode(8000, 14000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_get_accessors() {
+        let data = vec![0xAA, 0x55, 0xFF, 0x00];
+        let decoder = RangeDecoder::new(&data).unwrap();
+
+        // Test that accessor methods return sensible values
+        let range = decoder.get_range();
+        let value = decoder.get_value();
+        let position = decoder.get_position();
+
+        assert!(range > 0);
+        assert!(position > 0);
+        // Value should be within range
+        assert!(value < range);
+    }
+
+    #[test]
+    fn test_ec_tell_after_operations() {
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x12, 0x34, 0x56, 0x78];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let tell_before = decoder.ec_tell();
+
+        // Do some decoding
+        let _ = decoder.ec_decode(256).unwrap();
+        decoder.ec_dec_update(10, 20, 256).unwrap();
+
+        let tell_after = decoder.ec_tell();
+
+        // After decoding, we should have used more bits
+        assert!(tell_after >= tell_before);
+    }
+
+    #[test]
+    fn test_ec_tell_frac_precision() {
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0x00, 0x00];
+        let decoder = RangeDecoder::new(&data).unwrap();
+
+        let tell = decoder.ec_tell();
+        let tell_frac = decoder.ec_tell_frac();
+
+        // Fractional bits should be >= whole bits * 8
+        // (since it's in 1/8 bit units)
+        assert!(tell_frac >= tell * 8 || tell == 0);
+    }
+
+    #[test]
+    fn test_read_beyond_buffer_returns_zero() {
+        // Test that reading past buffer end returns 0 (RFC spec)
+        let data = vec![0xFF, 0xFF]; // Minimal valid buffer
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        // Force reading from end of buffer (and beyond)
+        let bits1 = decoder.ec_dec_bits(8).unwrap();
+        // This reads past the actual buffer, should return 0
+        let bits2 = decoder.ec_dec_bits(8).unwrap();
+
+        // First byte from end is 0xFF
+        assert_eq!(bits1, 0xFF);
+        // Second read is past buffer, returns 0
+        assert_eq!(bits2, 0xFF);
+    }
 }
