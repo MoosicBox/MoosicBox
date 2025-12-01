@@ -703,11 +703,6 @@ Valid packages: 147
 **Advanced Override Options:**
 
 ```bash
-# Disable config file overrides (use CLI only)
-clippier validate-feature-propagation . \
-  --no-use-config-overrides \
-  --allow-missing "fail-on-warnings:some_dep"
-
 # Fail if any overrides have expired
 clippier validate-feature-propagation . \
   --fail-on-expired
