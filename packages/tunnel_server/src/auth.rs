@@ -53,10 +53,8 @@ fn is_authorized(req: &HttpRequest) -> bool {
     {
         let token = if auth.to_lowercase().starts_with("bearer ") && auth.len() > 7 {
             auth[7..].trim_start()
-        } else if auth.to_lowercase().starts_with("bearer") && auth.len() > 6 {
-            auth[6..].trim_start()
         } else {
-            auth
+            return false;
         };
 
         // Use constant-time comparison to prevent timing attacks
@@ -112,10 +110,9 @@ async fn client_is_authorized(
             if let Ok(auth) = auth.to_str() {
                 let token = if auth.to_lowercase().starts_with("bearer ") && auth.len() > 7 {
                     auth[7..].trim_start()
-                } else if auth.to_lowercase().starts_with("bearer") && auth.len() > 6 {
-                    auth[6..].trim_start()
                 } else {
-                    auth
+                    log::debug!("UNAUTHORIZED: Invalid bearer token format");
+                    return Ok(false);
                 };
 
                 let token_hash = &hash_token(token);
