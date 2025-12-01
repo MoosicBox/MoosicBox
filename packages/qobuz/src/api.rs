@@ -1292,4 +1292,160 @@ mod tests {
             }
         }
     }
+
+    #[test_log::test]
+    fn test_api_qobuz_track_to_api_track_conversion() {
+        // Test conversion from ApiQobuzTrack to moosicbox_music_models::api::ApiTrack
+        let api_qobuz_track = ApiQobuzTrack {
+            id: 77777,
+            number: 2,
+            artist: "Conversion Artist".to_string(),
+            artist_id: 555,
+            album_type: QobuzAlbumReleaseType::Live,
+            album: "Live at Venue".to_string(),
+            album_id: "livealbum001".to_string(),
+            contains_cover: true,
+            duration: 360,
+            parental_warning: true,
+            isrc: "LIVETRACK001".to_string(),
+            title: "Live Performance".to_string(),
+            api_source: crate::API_SOURCE.clone(),
+        };
+
+        let api_track: moosicbox_music_models::api::ApiTrack = api_qobuz_track.into();
+
+        assert_eq!(api_track.track_id, 77777_u64.into());
+        assert_eq!(api_track.number, 2);
+        assert_eq!(api_track.title, "Live Performance");
+        assert!((api_track.duration - 360.0).abs() < f64::EPSILON);
+        assert_eq!(api_track.album, "Live at Venue");
+        assert_eq!(api_track.album_id, "livealbum001".into());
+        assert_eq!(api_track.artist, "Conversion Artist");
+        assert_eq!(api_track.artist_id, 555_u64.into());
+        assert!(api_track.contains_cover);
+        assert!(!api_track.blur); // Always false in conversion
+        assert!(api_track.date_released.is_none());
+        assert!(api_track.date_added.is_none());
+        assert!(api_track.format.is_none());
+        assert!(api_track.bit_depth.is_none());
+        assert_eq!(api_track.api_source, crate::API_SOURCE.clone());
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_release_from_qobuz_release_without_cover() {
+        let release = crate::QobuzRelease {
+            id: "nocoverrelease".to_string(),
+            artist: "No Cover Artist".to_string(),
+            artist_id: 888,
+            album_type: QobuzAlbumReleaseType::Album,
+            maximum_bit_depth: 16,
+            image: None, // No image
+            title: "No Cover Album".to_string(),
+            version: None,
+            release_date_original: "2020-01-01".to_string(),
+            duration: 1800,
+            parental_warning: false,
+            tracks_count: 8,
+            genre: "Jazz".to_string(),
+            maximum_channel_count: 2,
+            maximum_sampling_rate: 44.1,
+        };
+
+        let api_release: ApiRelease = release.into();
+
+        match api_release {
+            ApiRelease::Qobuz(api_qobuz_release) => {
+                assert!(!api_qobuz_release.contains_cover);
+                assert_eq!(api_qobuz_release.title, "No Cover Album"); // No version
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_album_default() {
+        let album = ApiQobuzAlbum::default();
+
+        assert_eq!(album.id, String::new());
+        assert_eq!(album.artist, String::new());
+        assert_eq!(album.artist_id, 0);
+        assert_eq!(album.album_type, QobuzAlbumReleaseType::default());
+        assert!(!album.contains_cover);
+        assert_eq!(album.duration, 0);
+        assert!(!album.parental_warning);
+        assert_eq!(album.number_of_tracks, 0);
+        assert_eq!(album.date_released, String::new());
+        assert_eq!(album.title, String::new());
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_release_default() {
+        let release = ApiQobuzRelease::default();
+
+        assert_eq!(release.id, String::new());
+        assert_eq!(release.artist, String::new());
+        assert_eq!(release.artist_id, 0);
+        assert_eq!(release.album_type, QobuzAlbumReleaseType::default());
+        assert!(!release.contains_cover);
+        assert_eq!(release.duration, 0);
+        assert!(!release.parental_warning);
+        assert_eq!(release.number_of_tracks, 0);
+        assert_eq!(release.date_released, String::new());
+        assert_eq!(release.title, String::new());
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_track_default() {
+        let track = ApiQobuzTrack::default();
+
+        assert_eq!(track.id, 0);
+        assert_eq!(track.number, 0);
+        assert_eq!(track.artist, String::new());
+        assert_eq!(track.artist_id, 0);
+        assert_eq!(track.album, String::new());
+        assert_eq!(track.album_id, String::new());
+        assert!(!track.contains_cover);
+        assert_eq!(track.duration, 0);
+        assert!(!track.parental_warning);
+        assert_eq!(track.isrc, String::new());
+        assert_eq!(track.title, String::new());
+    }
+
+    #[test_log::test]
+    fn test_api_qobuz_artist_default() {
+        let artist = ApiQobuzArtist::default();
+
+        assert_eq!(artist.id, 0);
+        assert!(!artist.contains_cover);
+        assert_eq!(artist.title, String::new());
+    }
+
+    #[test_log::test]
+    fn test_qobuz_track_without_version() {
+        let track = crate::QobuzTrack {
+            id: 44444,
+            track_number: 1,
+            artist: "Simple Artist".to_string(),
+            artist_id: 22,
+            album: "Simple Album".to_string(),
+            album_id: "simplealbum".to_string(),
+            album_type: QobuzAlbumReleaseType::Single,
+            image: None,
+            copyright: None,
+            duration: 180,
+            parental_warning: false,
+            isrc: "SIMPLE001".to_string(),
+            title: "Simple Track".to_string(),
+            version: None, // No version
+        };
+
+        let api_track: ApiTrack = track.into();
+
+        match api_track {
+            ApiTrack::Qobuz(api_qobuz_track) => {
+                // Title should NOT have a version appended
+                assert_eq!(api_qobuz_track.title, "Simple Track");
+                assert!(!api_qobuz_track.contains_cover);
+            }
+        }
+    }
 }
