@@ -2281,4 +2281,88 @@ mod test {
         let message = format!("{error}");
         assert!(message.contains("test error"));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_tracks_for_album_ids_only_removes_matching_tracks() {
+        let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(true);
+
+        let track1 = Track {
+            id: 1.into(),
+            title: "track1".into(),
+            album_id: 10.into(),
+            ..Default::default()
+        };
+
+        let track2 = Track {
+            id: 2.into(),
+            title: "track2".into(),
+            album_id: 10.into(),
+            ..Default::default()
+        };
+
+        let track3 = Track {
+            id: 3.into(),
+            title: "track3_different_album".into(),
+            album_id: 20.into(),
+            ..Default::default()
+        };
+
+        api.cache_tracks(&[track1.clone(), track2.clone(), track3.clone()])
+            .await;
+
+        // Verify all tracks cached
+        assert!(api.get_track_from_cache(&track1.id).await.is_some());
+        assert!(api.get_track_from_cache(&track2.id).await.is_some());
+        assert!(api.get_track_from_cache(&track3.id).await.is_some());
+
+        // Remove tracks for album_id 10
+        api.remove_cache_tracks_for_album_ids(&[&10.into()]).await;
+
+        // Tracks from album 10 should be removed
+        assert!(api.get_track_from_cache(&track1.id).await.is_none());
+        assert!(api.get_track_from_cache(&track2.id).await.is_none());
+
+        // Track from album 20 should still be cached
+        assert!(api.get_track_from_cache(&track3.id).await.is_some());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_tracks_for_album_ids_retains_empty_cache_entries() {
+        let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(true);
+
+        let track = Track {
+            id: 1.into(),
+            title: "track1".into(),
+            album_id: 10.into(),
+            ..Default::default()
+        };
+
+        // Cache a track and mark another ID as empty
+        api.cache_tracks(slice::from_ref(&track)).await;
+        api.cache_empty_tracks(&[&2.into()]).await;
+
+        // Remove tracks for album_id 10
+        api.remove_cache_tracks_for_album_ids(&[&10.into()]).await;
+
+        // Track from album 10 should be removed
+        assert!(api.get_track_from_cache(&track.id).await.is_none());
+
+        // Empty cache entry should be retained (not associated with any album)
+        let cached = api.get_track_from_cache(&2.into()).await;
+        assert_eq!(cached, Some(None));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_iter_empty_collection_returns_no_items() {
+        let apis = MusicApis::new();
+        let count = apis.iter().count();
+        assert_eq!(count, 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_into_iter_empty_collection_returns_no_items() {
+        let apis = MusicApis::new();
+        let count = (&apis).into_iter().count();
+        assert_eq!(count, 0);
+    }
 }

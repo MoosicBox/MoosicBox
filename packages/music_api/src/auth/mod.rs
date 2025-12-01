@@ -672,4 +672,55 @@ mod test {
         let api_auth = ApiAuth::builder().without_auth().build();
         assert!(api_auth.as_username_password().is_none());
     }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn auth_from_option_some_converts_to_wrapped_auth() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let auth: Auth = Some(Auth::Poll(poll)).into();
+
+        assert!(matches!(auth, Auth::Poll(_)));
+    }
+
+    #[test_log::test]
+    fn api_auth_deref_returns_inner_auth() {
+        let api_auth = ApiAuth::builder().without_auth().build();
+
+        let auth_ref: &Auth = &api_auth;
+        assert!(matches!(auth_ref, Auth::None));
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_deref_mut_allows_modifying_inner_auth() {
+        use super::poll::PollAuth;
+
+        let mut api_auth = ApiAuth::builder().without_auth().build();
+
+        // Verify starts as None
+        assert!(matches!(*api_auth, Auth::None));
+
+        // Modify through DerefMut
+        *api_auth = Auth::Poll(PollAuth::new());
+
+        // Verify changed to Poll
+        assert!(matches!(*api_auth, Auth::Poll(_)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn api_auth_validate_credentials_sets_logged_in_to_false_when_validator_returns_false() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_logged_in(true)
+            .with_validate_credentials(|| async { Ok(false) })
+            .build();
+
+        assert!(auth.is_logged_in().await.unwrap());
+
+        auth.validate_credentials().await.unwrap();
+
+        assert!(!auth.is_logged_in().await.unwrap());
+    }
 }
