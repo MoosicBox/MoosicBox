@@ -749,10 +749,17 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    };
+
     use moosicbox_session::models::{
         ApiPlaybackTarget, ApiSessionPlaylist, ApiUpdateSessionPlaylist,
     };
+    use moosicbox_ws::models::EmptyPayload;
+
+    use super::*;
 
     fn create_test_session(session_id: u64, name: &str) -> ApiSession {
         ApiSession {
@@ -788,6 +795,192 @@ mod tests {
             quality: None,
         }
     }
+
+    // Tests for queue_ws_message
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_queue_ws_message_buffers_when_no_handle() {
+        let state = crate::AppState::new();
+
+        // Ensure no ws_handle is set (default state)
+        assert!(state.ws_handle.read().await.is_none());
+
+        // Queue a message
+        let message = InboundPayload::Ping(EmptyPayload {});
+        state
+            .queue_ws_message(message, false)
+            .await
+            .expect("queue_ws_message should succeed");
+
+        // Verify message was buffered
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 1);
+        // Verify it's the right type of message
+        assert!(matches!(buffer[0], InboundPayload::Ping(_)));
+        drop(buffer);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_queue_ws_message_multiple_messages_buffer() {
+        let state = crate::AppState::new();
+
+        // Queue multiple messages
+        let message1 = InboundPayload::Ping(EmptyPayload {});
+        let message2 = InboundPayload::GetConnectionId(EmptyPayload {});
+        let message3 = InboundPayload::GetSessions(EmptyPayload {});
+
+        state
+            .queue_ws_message(message1, false)
+            .await
+            .expect("queue_ws_message should succeed");
+        state
+            .queue_ws_message(message2, false)
+            .await
+            .expect("queue_ws_message should succeed");
+        state
+            .queue_ws_message(message3, false)
+            .await
+            .expect("queue_ws_message should succeed");
+
+        // Verify all messages were buffered in order
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 3);
+        assert!(matches!(buffer[0], InboundPayload::Ping(_)));
+        assert!(matches!(buffer[1], InboundPayload::GetConnectionId(_)));
+        assert!(matches!(buffer[2], InboundPayload::GetSessions(_)));
+        drop(buffer);
+    }
+
+    // Tests for update_playlist
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_calls_before_listeners_even_without_session_id() {
+        let before_count = Arc::new(AtomicU32::new(0));
+        let before_count_clone = before_count.clone();
+
+        let state = crate::AppState::new().with_on_before_update_playlist_listener(move || {
+            let count = before_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+
+        // No session ID is set, but before listener should still be called
+        state.update_playlist().await;
+
+        assert_eq!(before_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_does_not_call_after_listeners_without_session_id() {
+        let after_count = Arc::new(AtomicU32::new(0));
+        let after_count_clone = after_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_update_playlist_listener(move |_session| {
+                let count = after_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        // No session ID is set
+        state.update_playlist().await;
+
+        // After listener should NOT be called when no session ID
+        assert_eq!(after_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_does_not_call_after_listeners_when_session_not_found() {
+        let after_count = Arc::new(AtomicU32::new(0));
+        let after_count_clone = after_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_update_playlist_listener(move |_session| {
+                let count = after_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        // Set session ID but don't add any sessions
+        *state.current_session_id.write().await = Some(999);
+
+        state.update_playlist().await;
+
+        // After listener should NOT be called when session not found
+        assert_eq!(after_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_calls_after_listeners_when_session_exists() {
+        let before_count = Arc::new(AtomicU32::new(0));
+        let before_count_clone = before_count.clone();
+        let after_count = Arc::new(AtomicU32::new(0));
+        let after_count_clone = after_count.clone();
+        let received_session_id = Arc::new(AtomicU32::new(0));
+        let received_session_id_clone = received_session_id.clone();
+
+        let state = crate::AppState::new()
+            .with_on_before_update_playlist_listener(move || {
+                let count = before_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+            .with_on_after_update_playlist_listener(move |session| {
+                let count = after_count_clone.clone();
+                let session_id_store = received_session_id_clone.clone();
+                let session_id = session.session_id;
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    #[allow(clippy::cast_possible_truncation)]
+                    session_id_store.store(session_id as u32, Ordering::SeqCst);
+                }
+            });
+
+        // Add a session and set it as current
+        let session = create_test_session(42, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+        *state.current_session_id.write().await = Some(42);
+
+        state.update_playlist().await;
+
+        // Both listeners should be called
+        assert_eq!(before_count.load(Ordering::SeqCst), 1);
+        assert_eq!(after_count.load(Ordering::SeqCst), 1);
+        // And should receive the correct session
+        assert_eq!(received_session_id.load(Ordering::SeqCst), 42);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_finds_correct_session_among_multiple() {
+        let received_session_name = Arc::new(std::sync::RwLock::new(String::new()));
+        let received_session_name_clone = received_session_name.clone();
+
+        let state = crate::AppState::new().with_on_after_update_playlist_listener(move |session| {
+            let name_store = received_session_name_clone.clone();
+            let name = session.name;
+            async move {
+                *name_store.write().unwrap() = name;
+            }
+        });
+
+        // Add multiple sessions
+        let session1 = create_test_session(1, "First");
+        let session2 = create_test_session(2, "Target");
+        let session3 = create_test_session(3, "Third");
+        *state.current_sessions.write().await = vec![session1, session2, session3];
+        *state.current_session_id.write().await = Some(2);
+
+        state.update_playlist().await;
+
+        // Should receive the correct session
+        assert_eq!(*received_session_name.read().unwrap(), "Target");
+    }
+
+    // Tests for apply_session_update
 
     #[test_log::test(switchy_async::test)]
     async fn test_apply_session_update_does_nothing_when_session_not_found() {
