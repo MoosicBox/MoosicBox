@@ -1,3 +1,31 @@
+//! Simulator-based test client implementation.
+//!
+//! This module provides `SimulatorTestClient`, a test client implementation that uses the
+//! in-memory [`SimulatorWebServer`](crate::simulator::SimulatorWebServer) backend for fast,
+//! deterministic testing without starting a real HTTP server.
+//!
+//! # Overview
+//!
+//! The simulator test client processes requests entirely in-memory, making it ideal for:
+//!
+//! * Unit testing HTTP handlers in isolation
+//! * Fast test execution without network overhead
+//! * Deterministic testing without port conflicts
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::test_client::simulator_impl::SimulatorTestClient;
+//! use moosicbox_web_server::simulator::SimulatorWebServer;
+//! use moosicbox_web_server::test_client::{TestClient, TestResponseExt};
+//!
+//! let server = SimulatorWebServer::with_test_routes();
+//! let client = SimulatorTestClient::new(server);
+//!
+//! let response = client.get("/test").send().unwrap();
+//! response.assert_status(200);
+//! ```
+
 use std::collections::BTreeMap;
 
 use super::traits::GenericTestClient;
