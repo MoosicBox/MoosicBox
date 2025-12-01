@@ -237,7 +237,7 @@ pub fn parse_frames(packet: &[u8]) -> Result<Vec<&[u8]>> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_code0_single_frame() {
         let packet = &[0b0000_0000, 0x01, 0x02, 0x03];
         let frames = parse_frames(packet).unwrap();
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(frames[0], &[0x01, 0x02, 0x03]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code1_two_equal_frames() {
         let packet = &[0b0000_0001, 0x01, 0x02, 0x03, 0x04];
         let frames = parse_frames(packet).unwrap();
@@ -254,13 +254,13 @@ mod tests {
         assert_eq!(frames[1], &[0x03, 0x04]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code1_odd_payload_fails() {
         let packet = &[0b0000_0001, 0x01, 0x02, 0x03];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code2_two_variable_frames() {
         let packet = &[0b0000_0010, 2, 0x01, 0x02, 0x03, 0x04, 0x05];
         let frames = parse_frames(packet).unwrap();
@@ -269,13 +269,13 @@ mod tests {
         assert_eq!(frames[1], &[0x03, 0x04, 0x05]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code2_frame1_too_large() {
         let packet = &[0b0000_0010, 10, 0x01, 0x02];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_cbr_three_frames() {
         let packet = &[0b0000_0011, 0b0000_0011, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
         let frames = parse_frames(packet).unwrap();
@@ -285,13 +285,13 @@ mod tests {
         assert_eq!(frames[2], &[0x05, 0x06]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_cbr_non_divisible_fails() {
         let packet = &[0b0000_0011, 0b0000_0011, 0x01, 0x02, 0x03, 0x04, 0x05];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_vbr_three_frames() {
         let packet = &[
             0b0000_0011,
@@ -313,35 +313,35 @@ mod tests {
         assert_eq!(frames[2], &[0x06, 0x07]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_direct() {
         let (len, bytes) = decode_frame_length(&[100]).unwrap();
         assert_eq!(len, 100);
         assert_eq!(bytes, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_two_byte() {
         let (len, bytes) = decode_frame_length(&[252, 10]).unwrap();
         assert_eq!(len, 10 * 4 + 252);
         assert_eq!(bytes, 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_max() {
         let (len, bytes) = decode_frame_length(&[255, 255]).unwrap();
         assert_eq!(len, 255 * 4 + 255);
         assert_eq!(bytes, 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_dtx() {
         let (len, bytes) = decode_frame_length(&[0]).unwrap();
         assert_eq!(len, 0);
         assert_eq!(bytes, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_padding_single_byte() {
         let packet = &[
             0b0000_0011,
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(frames[0], &[0x01]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_padding_chain() {
         let mut packet = vec![0b0000_0011, 0b0100_0001, 255, 255, 2];
         packet.push(0x01);
@@ -371,18 +371,18 @@ mod tests {
         assert_eq!(frames[0], &[0x01]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_empty_packet_fails() {
         assert!(parse_frames(&[]).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_frame_count_zero_fails() {
         let packet = &[0b0000_0011, 0b0000_0000];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code1_frame_content_validation() {
         let packet = &[0b0000_0001, 0xAA, 0xBB, 0xCC, 0xDD];
         let frames = parse_frames(packet).unwrap();
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(frames[1], &[0xCC, 0xDD]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_cbr_with_padding_content() {
         let packet = &[
             0b0000_0011,
@@ -411,7 +411,7 @@ mod tests {
         assert_eq!(frames[1], &[0xCC, 0xDD]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_vbr_with_padding_content() {
         let packet = &[
             0b0000_0011,
@@ -435,7 +435,7 @@ mod tests {
         assert_eq!(frames[2], &[0xFF]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_2_5ms() {
         let mut packet = vec![(16 << 3) | 0b011, 0b0011_0000];
         packet.extend(vec![0x01; 96]);
@@ -443,13 +443,13 @@ mod tests {
         assert_eq!(frames.len(), 48);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_2_5ms() {
         let packet = &[(16 << 3) | 0b011, 0b0011_0001, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_5ms() {
         let mut packet = vec![(17 << 3) | 0b011, 0b0001_1000];
         packet.extend(vec![0x01; 96]);
@@ -457,13 +457,13 @@ mod tests {
         assert_eq!(frames.len(), 24);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_5ms() {
         let packet = &[(17 << 3) | 0b011, 0b0001_1001, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_10ms() {
         let mut packet = vec![0b0000_0011, 0b0000_1100];
         packet.extend(vec![0x01; 48]);
@@ -471,13 +471,13 @@ mod tests {
         assert_eq!(frames.len(), 12);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_10ms() {
         let packet = &[0b0000_0011, 0b0000_1101, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_20ms() {
         let packet = &[
             (1 << 3) | 0b011,
@@ -493,39 +493,39 @@ mod tests {
         assert_eq!(frames.len(), 6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_20ms() {
         let packet = &[(1 << 3) | 0b011, 0b0000_0111, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_40ms() {
         let packet = &[(2 << 3) | 0b011, 0b0000_0011, 0x01, 0x01, 0x01];
         let frames = parse_frames(packet).unwrap();
         assert_eq!(frames.len(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_40ms() {
         let packet = &[(2 << 3) | 0b011, 0b0000_0100, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_valid_at_120ms_limit_60ms() {
         let packet = &[(3 << 3) | 0b011, 0b0000_0010, 0x01, 0x01];
         let frames = parse_frames(packet).unwrap();
         assert_eq!(frames.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_exceeds_120ms_60ms() {
         let packet = &[(3 << 3) | 0b011, 0b0000_0011, 0x01, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_2_5ms_boundary_47_frames_valid() {
         let mut packet = vec![(16 << 3) | 0b011, 0b0010_1111];
         packet.extend(vec![0x01; 94]);
@@ -533,7 +533,7 @@ mod tests {
         assert_eq!(frames.len(), 47);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_2_5ms_boundary_48_frames_valid() {
         let mut packet = vec![(16 << 3) | 0b011, 0b0011_0000];
         packet.extend(vec![0x01; 96]);
@@ -541,19 +541,19 @@ mod tests {
         assert_eq!(frames.len(), 48);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_2_5ms_boundary_49_frames_invalid() {
         let packet = &[(16 << 3) | 0b011, 0b0011_0001, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_r5_2_5ms_boundary_50_frames_invalid() {
         let packet = &[(16 << 3) | 0b011, 0b0011_0010, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_empty_data() {
         let result = decode_frame_length(&[]);
         assert!(result.is_err());
@@ -564,7 +564,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_two_byte_missing_second() {
         // First byte >= 252 requires a second byte
         let result = decode_frame_length(&[252]);
@@ -576,7 +576,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_boundary_251() {
         // 251 is the maximum single-byte length
         let (len, bytes) = decode_frame_length(&[251]).unwrap();
@@ -584,7 +584,7 @@ mod tests {
         assert_eq!(bytes, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_frame_length_boundary_252() {
         // 252 requires second byte: length = second*4 + 252
         // When second byte is 0: 0*4 + 252 = 252
@@ -593,7 +593,7 @@ mod tests {
         assert_eq!(bytes, 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_vbr_frame_exceeds_packet() {
         // VBR packet where frame length exceeds available data
         let packet = &[
@@ -612,7 +612,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_padding_exceeds_packet_size() {
         // Padding that claims more bytes than available
         let packet = &[
@@ -630,7 +630,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_incomplete_padding() {
         // Packet with padding flag set but no padding length bytes
         let packet = &[
@@ -647,7 +647,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code2_packet_too_short() {
         // Code 2 packet with only TOC byte
         let packet = &[0b0000_0010];
@@ -660,7 +660,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_cbr_with_zero_length_frames() {
         // CBR with frames of length 0 (valid for DTX/silence)
         let packet = &[
@@ -674,7 +674,7 @@ mod tests {
         assert_eq!(frames[1].len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code3_vbr_with_dtx_zero_length_frame() {
         // VBR with first frame being 0-length (DTX/silence)
         let packet = &[
@@ -690,7 +690,7 @@ mod tests {
         assert_eq!(frames[1], &[0x01, 0x02]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_frame_count_byte_max_count() {
         // Maximum frame count is 63 (6 bits)
         let fc_byte = FrameCountByte::parse(0b0011_1111).unwrap();
@@ -699,7 +699,7 @@ mod tests {
         assert!(!fc_byte.padding);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_frame_count_byte_all_flags_set() {
         // VBR + padding + count = 63
         let fc_byte = FrameCountByte::parse(0b1111_1111).unwrap();
@@ -708,7 +708,7 @@ mod tests {
         assert!(fc_byte.padding);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code1_empty_frames() {
         // Code 1 with only TOC byte = 0-length payload
         let packet = &[0b0000_0001];
