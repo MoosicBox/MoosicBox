@@ -378,7 +378,12 @@ let calc = Number::Calc(Calculation::Add(
 
 - **`html`**: Enable HTML generation and parsing
 - **`layout`**: Enable layout calculation system
-- **`layout-offset`**: Enable offset calculations
+- **`layout-offset`**: Enable offset calculations (requires `layout`)
+- **`canvas`**: Enable canvas element support
+- **`logic`**: Enable logic/conditional features
+- **`format`**: Enable XML formatting for pretty-printed output
+- **`syntax-highlighting`**: Enable syntax highlighting in output
+- **`simd`**: Enable SIMD optimizations for HTML parsing
 
 ## Dependencies
 
