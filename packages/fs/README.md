@@ -120,7 +120,8 @@ fn sync_file_operations() -> std::io::Result<()> {
 
 ```rust
 use switchy_fs::unsync::{File, OpenOptions, read_to_string, create_dir_all, remove_dir_all};
-use switchy_async::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt, SeekFrom};
+use switchy_async::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt};
+use std::io::SeekFrom;
 
 async fn async_file_operations() -> std::io::Result<()> {
     // Create directory
