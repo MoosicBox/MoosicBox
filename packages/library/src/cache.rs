@@ -348,4 +348,197 @@ mod tests {
         assert_eq!(artist.id, 200);
         assert_eq!(artist.title, "Second Artist");
     }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn get_or_set_to_cache_works_with_albums_type() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_albums",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::Albums(Arc::new(vec![
+                    crate::models::LibraryAlbum {
+                        id: 1,
+                        title: "Album 1".to_string(),
+                        artist: "Artist".to_string(),
+                        ..Default::default()
+                    },
+                    crate::models::LibraryAlbum {
+                        id: 2,
+                        title: "Album 2".to_string(),
+                        artist: "Artist".to_string(),
+                        ..Default::default()
+                    },
+                ])))
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let albums = result.unwrap().into_albums().unwrap();
+        assert_eq!(albums.len(), 2);
+        assert_eq!(albums[0].id, 1);
+        assert_eq!(albums[1].id, 2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn get_or_set_to_cache_works_with_album_tracks_type() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_album_tracks",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::AlbumTracks(Arc::new(vec![
+                    crate::models::LibraryTrack {
+                        id: 1,
+                        number: 1,
+                        title: "Track 1".to_string(),
+                        duration: 180.0,
+                        album: "Test Album".to_string(),
+                        album_id: 100,
+                        ..Default::default()
+                    },
+                    crate::models::LibraryTrack {
+                        id: 2,
+                        number: 2,
+                        title: "Track 2".to_string(),
+                        duration: 200.0,
+                        album: "Test Album".to_string(),
+                        album_id: 100,
+                        ..Default::default()
+                    },
+                ])))
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let tracks = result.unwrap().into_album_tracks().unwrap();
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].number, 1);
+        assert_eq!(tracks[1].number, 2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn get_or_set_to_cache_works_with_artist_albums_type() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_artist_albums",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::ArtistAlbums(Arc::new(vec![
+                    crate::models::LibraryAlbum {
+                        id: 10,
+                        title: "Artist Album 1".to_string(),
+                        artist: "Same Artist".to_string(),
+                        artist_id: 5,
+                        ..Default::default()
+                    },
+                ])))
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let albums = result.unwrap().into_artist_albums().unwrap();
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].title, "Artist Album 1");
+        assert_eq!(albums[0].artist_id, 5);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn get_or_set_to_cache_works_with_album_type() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_single_album",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::Album(Arc::new(
+                    crate::models::LibraryAlbum {
+                        id: 42,
+                        title: "Single Album".to_string(),
+                        artist: "Solo Artist".to_string(),
+                        date_released: Some("2024-01-01".to_string()),
+                        ..Default::default()
+                    },
+                )))
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let album = result.unwrap().into_album().unwrap();
+        assert_eq!(album.id, 42);
+        assert_eq!(album.title, "Single Album");
+        assert_eq!(album.date_released, Some("2024-01-01".to_string()));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn cache_preserves_distinct_keys_for_different_types() {
+        clear_cache();
+
+        // Cache an artist under "key_1"
+        let artist_result = get_or_set_to_cache(
+            CacheRequest {
+                key: "distinct_key_artist",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                    crate::models::LibraryArtist {
+                        id: 1,
+                        title: "Artist Name".to_string(),
+                        ..Default::default()
+                    },
+                )))
+            },
+        )
+        .await;
+
+        // Cache an album under "key_2"
+        let album_result = get_or_set_to_cache(
+            CacheRequest {
+                key: "distinct_key_album",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::Album(Arc::new(
+                    crate::models::LibraryAlbum {
+                        id: 2,
+                        title: "Album Name".to_string(),
+                        ..Default::default()
+                    },
+                )))
+            },
+        )
+        .await;
+
+        // Verify both are cached correctly and distinct
+        assert!(artist_result.is_ok());
+        assert!(album_result.is_ok());
+
+        let artist = artist_result.unwrap().into_artist().unwrap();
+        let album = album_result.unwrap().into_album().unwrap();
+
+        assert_eq!(artist.id, 1);
+        assert_eq!(album.id, 2);
+        assert_eq!(CACHE_MAP.read().unwrap().len(), 2);
+    }
 }
