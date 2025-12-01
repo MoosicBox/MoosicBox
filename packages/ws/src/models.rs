@@ -225,7 +225,10 @@ pub struct SetSeek {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moosicbox_session::models::ApiPlaybackTarget;
+    use moosicbox_audio_zone::models::CreateAudioZone;
+    use moosicbox_session::models::{
+        ApiPlaybackTarget, DeleteSession, RegisterConnection, RegisterPlayer,
+    };
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
@@ -410,5 +413,353 @@ mod tests {
         let json = serde_json::to_value(&payload).unwrap();
 
         assert_eq!(json["payload"], json!([]));
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_set_seek_serialization() {
+        let seek = SetSeek {
+            session_id: 42,
+            profile: "test-profile".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            seek: 120,
+        };
+        let payload = InboundPayload::SetSeek(SetSeekPayload { payload: seek });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "SET_SEEK");
+        assert_eq!(json["payload"]["sessionId"], 42);
+        assert_eq!(json["payload"]["profile"], "test-profile");
+        assert_eq!(json["payload"]["seek"], 120);
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_set_seek_deserialization() {
+        let json = json!({
+            "type": "SET_SEEK",
+            "payload": {
+                "sessionId": 99,
+                "profile": "my-profile",
+                "playbackTarget": {
+                    "type": "AUDIO_ZONE",
+                    "audioZoneId": 1
+                },
+                "seek": 300
+            }
+        });
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::SetSeek(p) => {
+                assert_eq!(p.payload.session_id, 99);
+                assert_eq!(p.payload.profile, "my-profile");
+                assert_eq!(p.payload.seek, 300);
+            }
+            _ => panic!("Expected SetSeek variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_delete_session_serialization() {
+        let delete = DeleteSession { session_id: 123 };
+        let payload = InboundPayload::DeleteSession(DeleteSessionPayload { payload: delete });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "DELETE_SESSION");
+        assert_eq!(json["payload"]["sessionId"], 123);
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_delete_session_deserialization() {
+        let json = json!({
+            "type": "DELETE_SESSION",
+            "payload": {
+                "sessionId": 456
+            }
+        });
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::DeleteSession(p) => {
+                assert_eq!(p.payload.session_id, 456);
+            }
+            _ => panic!("Expected DeleteSession variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_register_connection_serialization() {
+        let register = RegisterConnection {
+            connection_id: "conn-123".to_string(),
+            name: "Test Connection".to_string(),
+            players: vec![],
+        };
+        let payload =
+            InboundPayload::RegisterConnection(RegisterConnectionPayload { payload: register });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "REGISTER_CONNECTION");
+        assert_eq!(json["payload"]["connectionId"], "conn-123");
+        assert_eq!(json["payload"]["name"], "Test Connection");
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_register_connection_deserialization() {
+        let json = json!({
+            "type": "REGISTER_CONNECTION",
+            "payload": {
+                "connectionId": "conn-456",
+                "name": "My Connection",
+                "players": []
+            }
+        });
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::RegisterConnection(p) => {
+                assert_eq!(p.payload.connection_id, "conn-456");
+                assert_eq!(p.payload.name, "My Connection");
+                assert!(p.payload.players.is_empty());
+            }
+            _ => panic!("Expected RegisterConnection variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_register_players_serialization() {
+        let players = vec![RegisterPlayer {
+            audio_output_id: "output-1".to_string(),
+            name: "Speaker 1".to_string(),
+        }];
+        let payload = InboundPayload::RegisterPlayers(RegisterPlayersPayload { payload: players });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "REGISTER_PLAYERS");
+        assert_eq!(json["payload"][0]["audioOutputId"], "output-1");
+        assert_eq!(json["payload"][0]["name"], "Speaker 1");
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_register_players_deserialization() {
+        let json = json!({
+            "type": "REGISTER_PLAYERS",
+            "payload": [
+                {
+                    "audioOutputId": "output-2",
+                    "name": "Speaker 2"
+                },
+                {
+                    "audioOutputId": "output-3",
+                    "name": "Speaker 3"
+                }
+            ]
+        });
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::RegisterPlayers(p) => {
+                assert_eq!(p.payload.len(), 2);
+                assert_eq!(p.payload[0].audio_output_id, "output-2");
+                assert_eq!(p.payload[0].name, "Speaker 2");
+                assert_eq!(p.payload[1].audio_output_id, "output-3");
+                assert_eq!(p.payload[1].name, "Speaker 3");
+            }
+            _ => panic!("Expected RegisterPlayers variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_create_audio_zone_serialization() {
+        let create = CreateAudioZone {
+            name: "Living Room".to_string(),
+        };
+        let payload = InboundPayload::CreateAudioZone(CreateAudioZonePayload { payload: create });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "CREATE_AUDIO_ZONE");
+        assert_eq!(json["payload"]["name"], "Living Room");
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_create_audio_zone_deserialization() {
+        let json = json!({
+            "type": "CREATE_AUDIO_ZONE",
+            "payload": {
+                "name": "Kitchen"
+            }
+        });
+        let payload: InboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            InboundPayload::CreateAudioZone(p) => {
+                assert_eq!(p.payload.name, "Kitchen");
+            }
+            _ => panic!("Expected CreateAudioZone variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_set_seek_serialization() {
+        let seek = SetSeek {
+            session_id: 55,
+            profile: "outbound-profile".to_string(),
+            playback_target: ApiPlaybackTarget::default(),
+            seek: 250,
+        };
+        let payload = OutboundPayload::SetSeek(SetSeekPayload { payload: seek });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "SET_SEEK");
+        assert_eq!(json["payload"]["sessionId"], 55);
+        assert_eq!(json["payload"]["profile"], "outbound-profile");
+        assert_eq!(json["payload"]["seek"], 250);
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_set_seek_deserialization() {
+        let json = json!({
+            "type": "SET_SEEK",
+            "payload": {
+                "sessionId": 77,
+                "profile": "test-profile",
+                "playbackTarget": {
+                    "type": "AUDIO_ZONE",
+                    "audioZoneId": 5
+                },
+                "seek": 180
+            }
+        });
+        let payload: OutboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            OutboundPayload::SetSeek(p) => {
+                assert_eq!(p.payload.session_id, 77);
+                assert_eq!(p.payload.profile, "test-profile");
+                assert_eq!(p.payload.seek, 180);
+            }
+            _ => panic!("Expected SetSeek variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_download_event_serialization() {
+        let event_data = json!({"progress": 75, "file": "song.mp3"});
+        let payload = OutboundPayload::DownloadEvent(DownloadEventPayload {
+            payload: event_data,
+        });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "DOWNLOAD_EVENT");
+        assert_eq!(json["payload"]["progress"], 75);
+        assert_eq!(json["payload"]["file"], "song.mp3");
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_download_event_deserialization() {
+        let json = json!({
+            "type": "DOWNLOAD_EVENT",
+            "payload": {
+                "status": "complete",
+                "bytes": 1024
+            }
+        });
+        let payload: OutboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            OutboundPayload::DownloadEvent(p) => {
+                assert_eq!(p.payload["status"], "complete");
+                assert_eq!(p.payload["bytes"], 1024);
+            }
+            _ => panic!("Expected DownloadEvent variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_scan_event_serialization() {
+        let event_data = json!({"scanned": 150, "total": 500});
+        let payload = OutboundPayload::ScanEvent(ScanEventPayload {
+            payload: event_data,
+        });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "SCAN_EVENT");
+        assert_eq!(json["payload"]["scanned"], 150);
+        assert_eq!(json["payload"]["total"], 500);
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_scan_event_deserialization() {
+        let json = json!({
+            "type": "SCAN_EVENT",
+            "payload": {
+                "phase": "analyzing",
+                "count": 42
+            }
+        });
+        let payload: OutboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            OutboundPayload::ScanEvent(p) => {
+                assert_eq!(p.payload["phase"], "analyzing");
+                assert_eq!(p.payload["count"], 42);
+            }
+            _ => panic!("Expected ScanEvent variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_connections_serialization() {
+        let payload = OutboundPayload::Connections(ConnectionsPayload { payload: vec![] });
+        let json = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["type"], "CONNECTIONS");
+        assert_eq!(json["payload"], json!([]));
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_connections_deserialization() {
+        let json = json!({
+            "type": "CONNECTIONS",
+            "payload": []
+        });
+        let payload: OutboundPayload = serde_json::from_value(json).unwrap();
+
+        match payload {
+            OutboundPayload::Connections(p) => {
+                assert!(p.payload.is_empty());
+            }
+            _ => panic!("Expected Connections variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_invalid_type_fails_deserialization() {
+        let json = json!({
+            "type": "INVALID_TYPE",
+            "payload": {}
+        });
+        let result: Result<InboundPayload, _> = serde_json::from_value(json);
+
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_outbound_payload_invalid_type_fails_deserialization() {
+        let json = json!({
+            "type": "INVALID_TYPE",
+            "payload": {}
+        });
+        let result: Result<OutboundPayload, _> = serde_json::from_value(json);
+
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_inbound_payload_missing_type_fails_deserialization() {
+        let json = json!({
+            "payload": {}
+        });
+        let result: Result<InboundPayload, _> = serde_json::from_value(json);
+
+        assert!(result.is_err());
     }
 }
