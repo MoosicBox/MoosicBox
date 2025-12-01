@@ -26,10 +26,10 @@ moosicbox_app_ws = { path = "../app/tauri/ws" }
 
 ```rust
 use moosicbox_app_ws::{WsClient, WsMessage};
-use tokio::sync::mpsc;
+use switchy_async::sync::mpsc;
 
 let (client, handle) = WsClient::new("ws://localhost:8080".to_string());
-let (tx, mut rx) = mpsc::channel::<WsMessage>(100);
+let (tx, mut rx) = mpsc::unbounded();
 
 // Start the WebSocket connection
 client.start(
