@@ -36,13 +36,12 @@ use hyperchad::template::container;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
         .with_route("/", |_req: RouteRequest| async move {
-            let content = container! {
+            container! {
                 div {
                     h1 { "Welcome to HyperChad" }
                     button { "Click Me" }
                 }
-            };
-            Ok(content)
+            }
         });
 
     let app = AppBuilder::new()
@@ -80,26 +79,23 @@ use hyperchad::router::{Router, RoutePath, RouteRequest};
 
 let router = Router::new()
     .with_route("/", |_req| async move {
-        let content = container! {
+        container! {
             div { "Home Page" }
-        };
-        Ok(content)
+        }
     })
     .with_route("/about", |_req| async move {
-        let content = container! {
+        container! {
             div { "About Page" }
-        };
-        Ok(content)
+        }
     })
     .with_route(RoutePath::LiteralPrefix("/user/".to_string()), |req| async move {
         let user_id = req.path.strip_prefix("/user/").unwrap_or("");
-        let content = container! {
+        container! {
             div {
                 h1 { "User Profile" }
                 p { format!("User ID: {}", user_id) }
             }
-        };
-        Ok(content)
+        }
     });
 ```
 
@@ -108,7 +104,7 @@ let router = Router::new()
 HyperChad provides a simple key-value state store:
 
 ```rust
-use hyperchad::state::{StateStore, SqlitePersistence};
+use hyperchad::state::{StateStore, sqlite::SqlitePersistence};
 use serde_json::json;
 
 let state = StateStore::new(SqlitePersistence::new_in_memory().await?);
@@ -125,7 +121,7 @@ if let Some(user_id) = state.get::<serde_json::Value>("user_id").await? {
 // With SQLite file persistence (requires "state-sqlite" feature)
 #[cfg(feature = "state-sqlite")]
 {
-    use hyperchad::state::SqlitePersistence;
+    use hyperchad::state::sqlite::SqlitePersistence;
     let state = StateStore::new(SqlitePersistence::new("app.db").await?);
 }
 ```
