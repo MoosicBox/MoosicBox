@@ -327,4 +327,3 @@ cargo test --all-features
 
 - [`switchy_database`](../database/README.md) - Database abstraction layer
 - [`moosicbox_search`](../search/README.md) - Search engine functionality
-- [`moosicbox_music_models`](../music_models/README.md) - Music data models
