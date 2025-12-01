@@ -1510,4 +1510,1055 @@ mod tests {
         // Throttle should be cleared
         assert!(!manager.should_throttle(1, 10000));
     }
+
+    // ============================================
+    // ActionHandler tests with mock implementations
+    // ============================================
+
+    /// Mock element finder for testing `ActionHandler`
+    #[derive(Default)]
+    struct MockElementFinder {
+        str_id_map: BTreeMap<String, usize>,
+        class_map: BTreeMap<String, usize>,
+        child_class_map: BTreeMap<(usize, String), usize>,
+        last_child_map: BTreeMap<usize, usize>,
+        data_attrs: BTreeMap<(usize, String), String>,
+        str_ids: BTreeMap<usize, String>,
+        dimensions: BTreeMap<usize, (f32, f32)>,
+        positions: BTreeMap<usize, (f32, f32)>,
+    }
+
+    impl ElementFinder for MockElementFinder {
+        fn find_by_str_id(&self, str_id: &str) -> Option<usize> {
+            self.str_id_map.get(str_id).copied()
+        }
+
+        fn find_by_class(&self, class: &str) -> Option<usize> {
+            self.class_map.get(class).copied()
+        }
+
+        fn find_child_by_class(&self, parent_id: usize, class: &str) -> Option<usize> {
+            self.child_class_map
+                .get(&(parent_id, class.to_string()))
+                .copied()
+        }
+
+        fn get_last_child(&self, parent_id: usize) -> Option<usize> {
+            self.last_child_map.get(&parent_id).copied()
+        }
+
+        fn get_data_attr(&self, element_id: usize, attr: &str) -> Option<String> {
+            self.data_attrs
+                .get(&(element_id, attr.to_string()))
+                .cloned()
+        }
+
+        fn get_str_id(&self, element_id: usize) -> Option<String> {
+            self.str_ids.get(&element_id).cloned()
+        }
+
+        fn get_dimensions(&self, element_id: usize) -> Option<(f32, f32)> {
+            self.dimensions.get(&element_id).copied()
+        }
+
+        fn get_position(&self, element_id: usize) -> Option<(f32, f32)> {
+            self.positions.get(&element_id).copied()
+        }
+    }
+
+    /// Mock action context for testing `ActionHandler`
+    struct MockActionContext {
+        repaint_called: std::cell::Cell<bool>,
+        mouse_position: Option<(f32, f32)>,
+        logs: std::cell::RefCell<Vec<(LogLevel, String)>>,
+    }
+
+    impl Default for MockActionContext {
+        fn default() -> Self {
+            Self {
+                repaint_called: std::cell::Cell::new(false),
+                mouse_position: None,
+                logs: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl ActionContext for MockActionContext {
+        fn request_repaint(&self) {
+            self.repaint_called.set(true);
+        }
+
+        fn get_mouse_position(&self) -> Option<(f32, f32)> {
+            self.mouse_position
+        }
+
+        fn get_mouse_position_relative(&self, _element_id: usize) -> Option<(f32, f32)> {
+            self.mouse_position
+        }
+
+        fn navigate(&self, _url: String) -> Result<(), Box<dyn std::error::Error + Send>> {
+            Ok(())
+        }
+
+        fn request_custom_action(
+            &self,
+            _action: String,
+            _value: Option<Value>,
+        ) -> Result<(), Box<dyn std::error::Error + Send>> {
+            Ok(())
+        }
+
+        fn log(&self, level: LogLevel, message: &str) {
+            self.logs.borrow_mut().push((level, message.to_string()));
+        }
+    }
+
+    type TestHandler = ActionHandler<
+        MockElementFinder,
+        BTreeMapStyleManager<Option<Visibility>>,
+        BTreeMapStyleManager<Option<Color>>,
+        BTreeMapStyleManager<bool>,
+    >;
+
+    fn create_test_handler() -> TestHandler {
+        let mut finder = MockElementFinder::default();
+        finder.str_id_map.insert("test-element".to_string(), 10);
+        finder.str_id_map.insert("other-element".to_string(), 20);
+        finder.class_map.insert("my-class".to_string(), 30);
+        finder
+            .child_class_map
+            .insert((10, "child-class".to_string()), 11);
+        finder.last_child_map.insert(10, 12);
+        finder.str_ids.insert(10, "test-element".to_string());
+        finder
+            .data_attrs
+            .insert((10, "custom-attr".to_string()), "attr-value".to_string());
+        finder.dimensions.insert(10, (100.0, 200.0));
+        finder.positions.insert(10, (50.0, 75.0));
+
+        ActionHandler::new(
+            finder,
+            BTreeMapStyleManager::default(),
+            BTreeMapStyleManager::default(),
+            BTreeMapStyleManager::default(),
+        )
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_str_id() {
+        let handler = create_test_handler();
+        let target = ElementTarget::StrId(Target::from("test-element"));
+
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, Some(10));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_class() {
+        let handler = create_test_handler();
+        let target = ElementTarget::Class(Target::from("my-class"));
+
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, Some(30));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_child_class() {
+        let handler = create_test_handler();
+        let target = ElementTarget::ChildClass(Target::from("child-class"));
+
+        // Using parent element 10 which has a child with "child-class" at ID 11
+        let result = handler.get_element_id(&target, 10);
+        assert_eq!(result, Some(11));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_numeric_id() {
+        let handler = create_test_handler();
+        let target = ElementTarget::Id(42);
+
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, Some(42));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_self_target() {
+        let handler = create_test_handler();
+        let target = ElementTarget::SelfTarget;
+
+        let result = handler.get_element_id(&target, 99);
+        assert_eq!(result, Some(99));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_last_child() {
+        let handler = create_test_handler();
+        let target = ElementTarget::LastChild;
+
+        // Element 10 has last child at ID 12
+        let result = handler.get_element_id(&target, 10);
+        assert_eq!(result, Some(12));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_not_found() {
+        let handler = create_test_handler();
+        let target = ElementTarget::StrId(Target::from("nonexistent"));
+
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_visibility() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetVisibility(Visibility::Hidden);
+
+        let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_display() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetDisplay(false);
+
+        let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+
+        assert!(success);
+        assert_eq!(handler.get_display_override(10), Some(&false));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_background_valid_hex() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetBackground(Some("#FF5500".to_string()));
+
+        let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+
+        assert!(success);
+        assert!(handler.get_background_override(10).is_some());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_background_remove() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+
+        // First set a background
+        let set_action = StyleAction::SetBackground(Some("#FF5500".to_string()));
+        handler.handle_style_action(&set_action, &target, StyleTrigger::UiEvent, 1);
+
+        // Then remove it
+        let remove_action = StyleAction::SetBackground(None);
+        let success =
+            handler.handle_style_action(&remove_action, &target, StyleTrigger::UiEvent, 1);
+
+        assert!(success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_background_invalid_hex() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetBackground(Some("not-a-color".to_string()));
+
+        let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+
+        // Should fail for invalid hex color
+        assert!(!success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_target_not_found() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::StrId(Target::from("nonexistent"));
+        let action = StyleAction::SetVisibility(Visibility::Hidden);
+
+        let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+
+        assert!(!success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_style_action_visibility() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetVisibility(Visibility::Hidden);
+
+        // First apply the style
+        handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_visibility_override(10).is_some());
+
+        // Then remove it
+        handler.unhandle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_style_action_display() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetDisplay(false);
+
+        // First apply the style
+        handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_display_override(10).is_some());
+
+        // Then remove it
+        handler.unhandle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_style_action_background() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+        let action = StyleAction::SetBackground(Some("#FF0000".to_string()));
+
+        // First apply the style
+        handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_background_override(10).is_some());
+
+        // Then remove it
+        handler.unhandle_style_action(&action, &target, StyleTrigger::UiEvent, 1);
+        assert!(handler.get_background_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_clear_element_overrides() {
+        let mut handler = create_test_handler();
+        let target = ElementTarget::Id(10);
+
+        // Apply multiple style overrides
+        handler.handle_style_action(
+            &StyleAction::SetVisibility(Visibility::Hidden),
+            &target,
+            StyleTrigger::UiEvent,
+            1,
+        );
+        handler.handle_style_action(
+            &StyleAction::SetDisplay(false),
+            &target,
+            StyleTrigger::UiEvent,
+            1,
+        );
+        handler.handle_style_action(
+            &StyleAction::SetBackground(Some("#FF0000".to_string())),
+            &target,
+            StyleTrigger::UiEvent,
+            1,
+        );
+
+        // Verify they're applied
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(10).is_some());
+        assert!(handler.get_background_override(10).is_some());
+
+        // Clear all overrides
+        handler.clear_element_overrides(10);
+
+        // Verify all are removed
+        assert!(handler.get_visibility_override(10).is_none());
+        assert!(handler.get_display_override(10).is_none());
+        assert!(handler.get_background_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_noop() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::NoOp;
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_style() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_log() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Log {
+            message: "Test log message".to_string(),
+            level: crate::LogLevel::Info,
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        let logs = context.logs.borrow();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].0, LogLevel::Info);
+        assert_eq!(logs[0].1, "Test log message");
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_navigate() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Navigate {
+            url: "/home".to_string(),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_custom() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Custom {
+            action: "my-custom-action".to_string(),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_multi() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Multi(vec![
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(20),
+                action: StyleAction::SetDisplay(false),
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert_eq!(handler.get_display_override(20), Some(&false));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_multi_effect() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::MultiEffect(vec![
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: Some(100),
+                throttle: None,
+                unique: None,
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert_eq!(handler.get_display_override(20), Some(&false));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_with_throttle() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+        let effect = ActionEffect {
+            action: action.clone(),
+            throttle: Some(10000), // 10 second throttle
+            delay_off: None,
+            unique: None,
+        };
+
+        // First call should succeed
+        let success1 = handler.handle_action(
+            &action,
+            Some(&effect),
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+        assert!(success1);
+
+        // Second immediate call should be throttled (returns true but requests repaint)
+        let success2 = handler.handle_action(
+            &action,
+            Some(&effect),
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+        assert!(success2);
+        assert!(context.repaint_called.get());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_multi() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First, apply Multi action
+        let action = ActionType::Multi(vec![
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(20),
+                action: StyleAction::SetDisplay(false),
+            },
+        ]);
+
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify styles were applied
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(20).is_some());
+
+        // Now unhandle the action
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Verify styles were removed
+        assert!(handler.get_visibility_override(10).is_none());
+        assert!(handler.get_display_override(20).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_real() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Real(42.5);
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(42.5)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_visibility() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Visibility(Visibility::Hidden);
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Visibility(Visibility::Hidden)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_string() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::String("test".to_string());
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::String("test".to_string())));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_width_px() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has dimensions (100.0, 200.0)
+        let value = Value::Calc(crate::logic::CalcValue::WidthPx {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(100.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_height_px() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has dimensions (100.0, 200.0)
+        let value = Value::Calc(crate::logic::CalcValue::HeightPx {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(200.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_position_x() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has position (50.0, 75.0)
+        let value = Value::Calc(crate::logic::CalcValue::PositionX {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(50.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_position_y() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has position (50.0, 75.0)
+        let value = Value::Calc(crate::logic::CalcValue::PositionY {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(75.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_id() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has str_id "test-element"
+        let value = Value::Calc(crate::logic::CalcValue::Id {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::String("test-element".to_string())));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_data_attr_value() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has data attr "custom-attr" = "attr-value"
+        let value = Value::Calc(crate::logic::CalcValue::DataAttrValue {
+            attr: "custom-attr".to_string(),
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::String("attr-value".to_string())));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_event_value() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::EventValue);
+        let result = handler.calc_value(&value, 1, &context, Some("input-value"));
+
+        assert_eq!(result, Some(Value::String("input-value".to_string())));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_event_value_none() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::EventValue);
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_key() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::Key {
+            key: crate::Key::Enter,
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::String("Enter".to_string())));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_mouse_x_global() {
+        let handler = create_test_handler();
+        let context = MockActionContext {
+            mouse_position: Some((150.0, 200.0)),
+            ..Default::default()
+        };
+
+        let value = Value::Calc(crate::logic::CalcValue::MouseX { target: None });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(150.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_mouse_y_global() {
+        let handler = create_test_handler();
+        let context = MockActionContext {
+            mouse_position: Some((150.0, 200.0)),
+            ..Default::default()
+        };
+
+        let value = Value::Calc(crate::logic::CalcValue::MouseY { target: None });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(200.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_mouse_x_relative() {
+        let handler = create_test_handler();
+        let context = MockActionContext {
+            mouse_position: Some((150.0, 200.0)),
+            ..Default::default()
+        };
+
+        // Element 10 has position (50.0, 75.0), so relative mouse X should be 150 - 50 = 100
+        let value = Value::Calc(crate::logic::CalcValue::MouseX {
+            target: Some(ElementTarget::Id(10)),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(100.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_mouse_y_relative() {
+        let handler = create_test_handler();
+        let context = MockActionContext {
+            mouse_position: Some((150.0, 200.0)),
+            ..Default::default()
+        };
+
+        // Element 10 has position (50.0, 75.0), so relative mouse Y should be 200 - 75 = 125
+        let value = Value::Calc(crate::logic::CalcValue::MouseY {
+            target: Some(ElementTarget::Id(10)),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(125.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_arithmetic() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Test arithmetic: 10 + 5 = 15
+        let arith = crate::logic::Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let value = Value::Arithmetic(Box::new(arith));
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Real(15.0)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_logic_condition_true() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Logic action with Bool(true) condition
+        let action = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Bool(true),
+            actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        });
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        // true branch should execute (element 10 hidden)
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        // else branch should NOT execute (element 20 unchanged)
+        assert!(handler.get_display_override(20).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_logic_condition_false() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Logic action with Bool(false) condition
+        let action = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Bool(false),
+            actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        });
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        // true branch should NOT execute (element 10 unchanged)
+        assert!(handler.get_visibility_override(10).is_none());
+        // else branch should execute (element 20 display false)
+        assert_eq!(handler.get_display_override(20), Some(&false));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_logic_condition_eq() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Logic action with Eq condition comparing equal values
+        let action = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(Value::Real(42.0), Value::Real(42.0)),
+            actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![],
+        });
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        // Values are equal, so true branch should execute
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_parameterized() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Parameterized action that passes a value
+        let action = ActionType::Parameterized {
+            action: Box::new(ActionType::Custom {
+                action: "test-action".to_string(),
+            }),
+            value: Value::Real(100.0),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_log_level_mapping() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Test all log levels
+        let levels = [
+            (crate::LogLevel::Error, LogLevel::Error),
+            (crate::LogLevel::Warn, LogLevel::Warn),
+            (crate::LogLevel::Info, LogLevel::Info),
+            (crate::LogLevel::Debug, LogLevel::Debug),
+            (crate::LogLevel::Trace, LogLevel::Trace),
+        ];
+
+        for (i, (action_level, expected_level)) in levels.iter().enumerate() {
+            let action = ActionType::Log {
+                message: format!("Message {i}"),
+                level: *action_level,
+            };
+
+            handler.handle_action(
+                &action,
+                None,
+                StyleTrigger::UiEvent,
+                1,
+                &context,
+                None,
+                None,
+            );
+
+            let logs = context.logs.borrow();
+            let (logged_level, _) = &logs[i];
+            assert_eq!(logged_level, expected_level);
+        }
+    }
 }
