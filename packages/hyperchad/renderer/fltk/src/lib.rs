@@ -2019,5 +2019,199 @@ mod tests {
             // Should use height (200), not width (100)
             assert_eq!(*captured.borrow(), Some(200));
         }
+
+        #[test_log::test]
+        fn test_row_direction_rounds_at_half_boundary_up() {
+            // Standard rounding: .5 rounds away from zero (up for positive numbers)
+            // 100.5 -> 101, 101.5 -> 102
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Row, Some(101.5), None, |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            // 101.5 rounds to 102 (rounds away from zero)
+            assert_eq!(*captured.borrow(), Some(102));
+        }
+
+        #[test_log::test]
+        fn test_column_direction_rounds_at_half_boundary_up() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Column, None, Some(100.5), |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            // 100.5 rounds to 101 (rounds away from zero)
+            assert_eq!(*captured.borrow(), Some(101));
+        }
+
+        #[test_log::test]
+        fn test_row_direction_with_zero_width() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Row, Some(0.0), Some(200.0), |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), Some(0));
+        }
+
+        #[test_log::test]
+        fn test_column_direction_with_zero_height() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Column, Some(100.0), Some(0.0), |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), Some(0));
+        }
+
+        #[test_log::test]
+        fn test_row_direction_with_negative_width() {
+            // Negative values should still be passed through after rounding
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Row, Some(-50.7), None, |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), Some(-51));
+        }
+
+        #[test_log::test]
+        fn test_column_direction_with_negative_height() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Column, None, Some(-25.3), |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), Some(-25));
+        }
+
+        #[test_log::test]
+        fn test_both_none_row_direction() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Row, None, None, |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), None);
+        }
+
+        #[test_log::test]
+        fn test_both_none_column_direction() {
+            let captured = RefCell::new(None);
+            call_fixed_size(LayoutDirection::Column, None, None, |size| {
+                *captured.borrow_mut() = Some(size);
+            });
+
+            assert_eq!(*captured.borrow(), None);
+        }
+    }
+
+    mod context_with_container_asymmetric {
+        use super::*;
+        use hyperchad_transformer::Number;
+
+        #[test_log::test]
+        fn test_only_calculated_width_set() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                calculated_width: Some(400.0),
+                calculated_height: None,
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width should be from calculated_width
+            assert!((updated.width - 400.0).abs() < f32::EPSILON);
+            // Height should fall back to context height
+            assert!((updated.height - 600.0).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_only_calculated_height_set() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                calculated_width: None,
+                calculated_height: Some(300.0),
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width should fall back to context width
+            assert!((updated.width - 800.0).abs() < f32::EPSILON);
+            // Height should be from calculated_height
+            assert!((updated.height - 300.0).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_only_width_from_size_set() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                width: Some(Number::Real(500.0)),
+                height: None,
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width should be from calculated width property
+            assert!((updated.width - 500.0).abs() < f32::EPSILON);
+            // Height should fall back to context height
+            assert!((updated.height - 600.0).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_only_height_from_size_set() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                width: None,
+                height: Some(Number::Real(400.0)),
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width should fall back to context width
+            assert!((updated.width - 800.0).abs() < f32::EPSILON);
+            // Height should be from calculated height property
+            assert!((updated.height - 400.0).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_mixed_calculated_width_and_height_from_size() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                calculated_width: Some(400.0),
+                calculated_height: None,
+                height: Some(Number::Real(350.0)),
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width from calculated_width
+            assert!((updated.width - 400.0).abs() < f32::EPSILON);
+            // Height from height property since calculated_height is None
+            assert!((updated.height - 350.0).abs() < f32::EPSILON);
+        }
+
+        #[test_log::test]
+        fn test_mixed_calculated_height_and_width_from_size() {
+            let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
+            let container = Container {
+                calculated_width: None,
+                calculated_height: Some(300.0),
+                width: Some(Number::Real(450.0)),
+                ..Default::default()
+            };
+
+            let updated = context.with_container(&container);
+
+            // Width from width property since calculated_width is None
+            assert!((updated.width - 450.0).abs() < f32::EPSILON);
+            // Height from calculated_height
+            assert!((updated.height - 300.0).abs() < f32::EPSILON);
+        }
     }
 }
