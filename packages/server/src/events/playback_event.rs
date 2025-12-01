@@ -1,3 +1,9 @@
+//! Playback event handling and session broadcasting.
+//!
+//! This module provides event handling for playback state changes (play, pause, seek, track
+//! change, etc.) and broadcasts session updates to connected WebSocket clients. It uses an
+//! async service pattern to process commands in a dedicated task.
+
 use std::{fmt::Display, sync::LazyLock};
 
 use moosicbox_async_service::Arc;

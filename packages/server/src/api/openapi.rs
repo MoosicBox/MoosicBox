@@ -1,3 +1,10 @@
+//! `OpenAPI` specification generation and documentation UI services.
+//!
+//! This module provides functions to initialize and serve `OpenAPI` documentation for the
+//! `MoosicBox` server API. It aggregates documentation from all enabled API modules and
+//! provides multiple UI interfaces (Swagger UI, Redoc, `RapiDoc`, Scalar) for browsing
+//! the API documentation.
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{

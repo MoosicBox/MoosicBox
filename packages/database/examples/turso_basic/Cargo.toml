@@ -18,6 +18,12 @@ tests = false
 switchy_async    = { workspace = true, features = ["macros", "rt-multi-thread"] }
 switchy_database = { workspace = true, features = ["schema", "turso"] }
 
+[features]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
+
 [[bin]]
 name = "turso_basic"
 path = "src/main.rs"

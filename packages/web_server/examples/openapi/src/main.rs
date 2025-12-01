@@ -22,6 +22,10 @@ use utoipa::{OpenApi as _, openapi::OpenApi};
 ///
 /// * Logging initialization fails
 /// * Server startup encounters an error
+///
+/// # Panics
+///
+/// * Panics if the global `OPENAPI` `RwLock` is poisoned (another thread panicked while holding the lock)
 #[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None)?;

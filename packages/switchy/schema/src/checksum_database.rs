@@ -1,3 +1,43 @@
+//! # Checksum Database
+//!
+//! This module provides [`ChecksumDatabase`], a mock database implementation that
+//! computes checksums instead of executing SQL operations. This is used for
+//! migration content validation.
+//!
+//! ## Purpose
+//!
+//! The checksum database enables the migration system to:
+//!
+//! * Generate reproducible checksums for migrations
+//! * Detect if migration content has changed since last application
+//! * Validate migration integrity without executing SQL
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use switchy_schema::ChecksumDatabase;
+//! use switchy_database::Database;
+//!
+//! # async fn example() -> switchy_schema::Result<()> {
+//! let db = ChecksumDatabase::new();
+//!
+//! // Execute database operations (no actual SQL runs)
+//! db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY)").await?;
+//! db.exec_raw("INSERT INTO users (id) VALUES (1)").await?;
+//!
+//! // Get the checksum of all operations
+//! let checksum = db.finalize().await;
+//! assert_eq!(checksum.len(), 32); // SHA-256 produces 32 bytes
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Determinism
+//!
+//! The checksum database produces deterministic results - the same sequence
+//! of operations will always produce the same checksum. This is critical for
+//! migration validation.
+
 #![allow(clippy::items_after_test_module)]
 
 use crate::digest::Digest;

@@ -94,6 +94,11 @@ async fn multi_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Runs the handler macro test suite for Actix backend.
+///
+/// # Errors
+///
+/// Returns an error if any handler fails to compile or convert to a route.
 #[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing handler macro system with Actix backend...");
