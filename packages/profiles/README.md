@@ -43,7 +43,7 @@ fn main() {
 
     // Get all profile names
     let all_profiles = PROFILES.names();
-    println!("All profiles: {:?}", all_profiles);
+    println!("All profiles: {all_profiles:?}");
 
     // Add and fetch a profile in one operation
     let profile = PROFILES.add_fetch("user456");
@@ -86,8 +86,8 @@ async fn main() {
         let added = added.to_vec();
         let removed = removed.to_vec();
         async move {
-            println!("Profiles added: {:?}", added);
-            println!("Profiles removed: {:?}", removed);
+            println!("Profiles added: {added:?}");
+            println!("Profiles removed: {removed:?}");
             Ok(())
         }
     }).await;
