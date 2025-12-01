@@ -35,6 +35,7 @@ async fn info_handler(info: RequestInfo) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Runs the `IntoHandler` trait debug tests.
 fn main() {
     println!("Testing IntoHandler trait implementation...");
 
