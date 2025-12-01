@@ -1,6 +1,6 @@
 # Turso Database - Transaction Example
 
-This example demonstrates transaction management with the Turso Database backend, including commit, rollback, and nested transaction scenarios.
+This example demonstrates transaction management with the Turso Database backend, including commit, rollback, and multi-step transaction scenarios.
 
 ## What This Example Demonstrates
 
