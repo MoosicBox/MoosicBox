@@ -3176,4 +3176,372 @@ mod tests {
             assert!(result.contains("getBoundingClientRect().left"));
         }
     }
+
+    #[cfg(test)]
+    mod html_generation_tests {
+        use super::*;
+        use hyperchad_renderer::{Color, HtmlTagRenderer};
+        use hyperchad_transformer::Container;
+        use std::collections::BTreeMap;
+
+        #[test_log::test]
+        fn test_partial_html_basic() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let content = "<div>Test content</div>".to_string();
+            let headers = BTreeMap::new();
+
+            let result = renderer.partial_html(&headers, &container, content.clone(), None, None);
+
+            // Should contain the content
+            assert!(result.contains(&content));
+            // Should have the newline separator between css and content
+            assert!(result.contains("\n\n"));
+        }
+
+        #[test_log::test]
+        fn test_partial_html_preserves_content() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let content = "<p>Special chars: &amp; &lt; &gt;</p>".to_string();
+            let headers = BTreeMap::new();
+
+            let result = renderer.partial_html(&headers, &container, content.clone(), None, None);
+
+            // Content should be preserved exactly
+            assert!(result.ends_with(&content));
+        }
+
+        #[test_log::test]
+        fn test_root_html_basic_structure() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let content = "<div>Body content</div>".to_string();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                content.clone(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            // Should have DOCTYPE
+            assert!(result.contains("<!DOCTYPE html>"));
+            // Should have html tag with height style and lang attribute
+            assert!(result.contains("<html"));
+            assert!(result.contains("lang=\"en\""));
+            // Should have head section
+            assert!(result.contains("<head>"));
+            assert!(result.contains("</head>"));
+            // Should have body section
+            assert!(result.contains("<body"));
+            assert!(result.contains("</body>"));
+            // Should contain the content
+            assert!(result.contains(&content));
+            // Should have the script tag for hyperchad.js
+            assert!(result.contains("hyperchad"));
+            assert!(result.contains(".js"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_title() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                Some("My Page Title"),
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(result.contains("<title>My Page Title</title>"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_description() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                Some("This is a page description"),
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(result.contains("meta"));
+            assert!(result.contains("name=\"description\""));
+            assert!(result.contains("content=\"This is a page description\""));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_viewport() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                Some("width=device-width, initial-scale=1"),
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(result.contains("meta"));
+            assert!(result.contains("name=\"viewport\""));
+            assert!(result.contains("content=\"width=device-width, initial-scale=1\""));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_background_color() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                Some(Color {
+                    r: 255,
+                    g: 128,
+                    b: 64,
+                    a: None,
+                }),
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            // Should include background color in body style
+            assert!(result.contains("background:rgb(255,128,64)"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_css_urls() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let css_urls = vec![
+                "https://example.com/styles.css".to_string(),
+                "https://cdn.example.com/other.css".to_string(),
+            ];
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &css_urls,
+                &[],
+                &[],
+            );
+
+            assert!(result.contains("link"));
+            assert!(result.contains("rel=\"stylesheet\""));
+            assert!(result.contains("href=\"https://example.com/styles.css\""));
+            assert!(result.contains("href=\"https://cdn.example.com/other.css\""));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_css_paths() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let css_paths = vec!["/css/main.css".to_string(), "/css/theme.css".to_string()];
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &css_paths,
+                &[],
+            );
+
+            assert!(result.contains("href=\"/css/main.css\""));
+            assert!(result.contains("href=\"/css/theme.css\""));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_inline_css() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let inline_css = vec![
+                ".custom { color: red; }".to_string(),
+                ".another { font-size: 16px; }".to_string(),
+            ];
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &inline_css,
+            );
+
+            assert!(result.contains("<style>.custom { color: red; }</style>"));
+            assert!(result.contains("<style>.another { font-size: 16px; }</style>"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_with_all_options() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                "<main>Content</main>".to_string(),
+                Some("width=device-width"),
+                Some(Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: None,
+                }),
+                Some("Full Test"),
+                Some("Testing all options"),
+                &["https://example.com/external.css".to_string()],
+                &["/local.css".to_string()],
+                &[".inline { display: block; }".to_string()],
+            );
+
+            // Verify all options are included
+            assert!(result.contains("<!DOCTYPE html>"));
+            assert!(result.contains("<title>Full Test</title>"));
+            assert!(result.contains("content=\"Testing all options\""));
+            assert!(result.contains("content=\"width=device-width\""));
+            assert!(result.contains("background:rgb(0,0,0)"));
+            assert!(result.contains("href=\"https://example.com/external.css\""));
+            assert!(result.contains("href=\"/local.css\""));
+            assert!(result.contains(".inline { display: block; }"));
+            assert!(result.contains("<main>Content</main>"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_default_body_styles() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            // Should include default body margin reset
+            assert!(result.contains("margin: 0"));
+            // Should include overflow: hidden for body in default styles
+            assert!(result.contains("overflow: hidden"));
+            // Body should have height:100% and overflow:auto
+            assert!(result.contains("height:100%"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_remove_button_styles() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            // Should include the .remove-button-styles class
+            assert!(result.contains(".remove-button-styles"));
+            assert!(result.contains("background: none"));
+            assert!(result.contains("border: none"));
+            assert!(result.contains("cursor: pointer"));
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_remove_table_styles() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            // Should include the table.remove-table-styles rules
+            assert!(result.contains("table.remove-table-styles"));
+            assert!(result.contains("border-collapse: collapse"));
+        }
+    }
 }
