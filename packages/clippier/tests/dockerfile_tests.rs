@@ -1,7 +1,7 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_basic_dockerfile_generation() {
+#[switchy_async::test]
+async fn test_basic_dockerfile_generation() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test basic Dockerfile generation
@@ -19,12 +19,13 @@ fn test_basic_dockerfile_generation() {
         &[],
         &[],
         None,
-    );
+    )
+    .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dockerfile_feature_inclusion() {
+#[switchy_async::test]
+async fn test_dockerfile_feature_inclusion() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test feature-specific builds
@@ -42,12 +43,13 @@ fn test_dockerfile_feature_inclusion() {
         &[],
         &[],
         None,
-    );
+    )
+    .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dockerfile_system_dependencies() {
+#[switchy_async::test]
+async fn test_dockerfile_system_dependencies() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test system dependency collection
@@ -62,8 +64,8 @@ fn test_dockerfile_system_dependencies() {
     insta::assert_yaml_snapshot!("dockerfile_system_deps", test_data);
 }
 
-#[test]
-fn test_dockerignore_generation() {
+#[switchy_async::test]
+async fn test_dockerignore_generation() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test dockerignore file generation
@@ -82,8 +84,8 @@ fn test_dockerignore_generation() {
     insta::assert_yaml_snapshot!("dockerignore_generation", test_data);
 }
 
-#[test]
-fn test_dockerfile_env_vars() {
+#[switchy_async::test]
+async fn test_dockerfile_env_vars() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test environment variables and build args
@@ -99,8 +101,8 @@ fn test_dockerfile_env_vars() {
     insta::assert_yaml_snapshot!("dockerfile_env_vars", test_data);
 }
 
-#[test]
-fn test_dockerfile_binary_name_detection() {
+#[switchy_async::test]
+async fn test_dockerfile_binary_name_detection() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test binary name detection from Cargo.toml
@@ -108,8 +110,8 @@ fn test_dockerfile_binary_name_detection() {
     assert_eq!(binary_name, "cli-tool");
 }
 
-#[test]
-fn test_dockerfile_workspace_modification() {
+#[switchy_async::test]
+async fn test_dockerfile_workspace_modification() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace Cargo.toml modification for Docker
@@ -122,8 +124,8 @@ fn test_dockerfile_workspace_modification() {
     insta::assert_yaml_snapshot!("dockerfile_workspace_mod", test_data);
 }
 
-#[test]
-fn test_dockerfile_custom_images() {
+#[switchy_async::test]
+async fn test_dockerfile_custom_images() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test custom base and final images
@@ -141,12 +143,13 @@ fn test_dockerfile_custom_images() {
         &[],
         &[],
         None,
-    );
+    )
+    .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dockerfile_dependency_resolution() {
+#[switchy_async::test]
+async fn test_dockerfile_dependency_resolution() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace dependency resolution in Docker context
@@ -159,8 +162,8 @@ fn test_dockerfile_dependency_resolution() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dockerfile_minimal_workspace() {
+#[switchy_async::test]
+async fn test_dockerfile_minimal_workspace() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test with minimal workspace without clippier.toml
@@ -178,12 +181,13 @@ fn test_dockerfile_minimal_workspace() {
         &[],
         &[],
         None,
-    );
+    )
+    .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dockerfile_with_custom_binary_name() {
+#[switchy_async::test]
+async fn test_dockerfile_with_custom_binary_name() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test Dockerfile generation with custom binary name
@@ -201,12 +205,14 @@ fn test_dockerfile_with_custom_binary_name() {
         &[],
         &[],
         Some("my-custom-binary"),
-    );
+    )
+    .await;
     assert!(result.is_ok());
 
     // Read the generated Dockerfile and verify it uses the custom binary name
-    let dockerfile_content = std::fs::read_to_string(temp_dir.path().join("Dockerfile.custom_bin"))
-        .expect("Failed to read generated Dockerfile");
+    let dockerfile_content =
+        switchy_fs::sync::read_to_string(temp_dir.path().join("Dockerfile.custom_bin"))
+            .expect("Failed to read generated Dockerfile");
 
     // Check that the custom binary name is used in the COPY command
     assert!(
@@ -217,8 +223,8 @@ fn test_dockerfile_with_custom_binary_name() {
     assert!(dockerfile_content.contains("CMD [\"./my-custom-binary\"]"));
 }
 
-#[test]
-fn test_get_binary_name_with_override() {
+#[switchy_async::test]
+async fn test_get_binary_name_with_override() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test that binary name override takes precedence

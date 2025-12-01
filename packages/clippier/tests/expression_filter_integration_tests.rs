@@ -7,8 +7,8 @@ fn toml(s: &str) -> toml::Value {
     toml::from_str(s).unwrap()
 }
 
-#[test]
-fn test_and_expression_both_match() {
+#[switchy_async::test]
+async fn test_and_expression_both_match() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -22,8 +22,8 @@ fn test_and_expression_both_match() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_and_expression_one_fails() {
+#[switchy_async::test]
+async fn test_and_expression_one_fails() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -37,8 +37,8 @@ fn test_and_expression_one_fails() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_or_expression_one_matches() {
+#[switchy_async::test]
+async fn test_or_expression_one_matches() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -52,8 +52,8 @@ fn test_or_expression_one_matches() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_or_expression_both_fail() {
+#[switchy_async::test]
+async fn test_or_expression_both_fail() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -67,8 +67,8 @@ fn test_or_expression_both_fail() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_not_expression() {
+#[switchy_async::test]
+async fn test_not_expression() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -85,8 +85,8 @@ fn test_not_expression() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_complex_expression_with_grouping() {
+#[switchy_async::test]
+async fn test_complex_expression_with_grouping() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -129,8 +129,8 @@ fn test_complex_expression_with_grouping() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_precedence_not_and_or() {
+#[switchy_async::test]
+async fn test_precedence_not_and_or() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -166,8 +166,8 @@ fn test_precedence_not_and_or() {
     assert!(!evaluate_expression(&expr, &cargo_toml_with_test).unwrap());
 }
 
-#[test]
-fn test_quoted_value_with_spaces() {
+#[switchy_async::test]
+async fn test_quoted_value_with_spaces() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -180,8 +180,8 @@ fn test_quoted_value_with_spaces() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_quoted_value_with_keyword() {
+#[switchy_async::test]
+async fn test_quoted_value_with_keyword() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -194,8 +194,8 @@ fn test_quoted_value_with_keyword() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_complex_nested_expression() {
+#[switchy_async::test]
+async fn test_complex_nested_expression() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -228,8 +228,8 @@ fn test_complex_nested_expression() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_multiple_and_conditions() {
+#[switchy_async::test]
+async fn test_multiple_and_conditions() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -253,8 +253,8 @@ fn test_multiple_and_conditions() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_multiple_or_conditions() {
+#[switchy_async::test]
+async fn test_multiple_or_conditions() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -274,8 +274,8 @@ fn test_multiple_or_conditions() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_double_negation() {
+#[switchy_async::test]
+async fn test_double_negation() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -288,8 +288,8 @@ fn test_double_negation() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_nested_property_in_expression() {
+#[switchy_async::test]
+async fn test_nested_property_in_expression() {
     let cargo_toml = toml(
         r#"
         [package.metadata.workspaces]
@@ -307,8 +307,8 @@ fn test_nested_property_in_expression() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_array_operators_in_expression() {
+#[switchy_async::test]
+async fn test_array_operators_in_expression() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -326,8 +326,8 @@ fn test_array_operators_in_expression() {
     assert!(evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_existence_operators_in_expression() {
+#[switchy_async::test]
+async fn test_existence_operators_in_expression() {
     let cargo_toml = toml(
         r#"
         [package]
@@ -343,8 +343,8 @@ fn test_existence_operators_in_expression() {
     assert!(!evaluate_expression(&expr, &cargo_toml).unwrap());
 }
 
-#[test]
-fn test_case_insensitive_keywords() {
+#[switchy_async::test]
+async fn test_case_insensitive_keywords() {
     let cargo_toml = toml(
         r#"
         [package]

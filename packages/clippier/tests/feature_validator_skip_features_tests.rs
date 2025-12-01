@@ -64,8 +64,8 @@ test-fixtures = []
     temp_dir
 }
 
-#[test]
-fn test_cli_skip_features_default_behavior() {
+#[switchy_async::test]
+async fn test_cli_skip_features_default_behavior() {
     let workspace = create_multi_feature_workspace();
 
     // Default behavior: skip "default" feature
@@ -92,8 +92,8 @@ fn test_cli_skip_features_default_behavior() {
     );
 }
 
-#[test]
-fn test_cli_skip_features_empty_string() {
+#[switchy_async::test]
+async fn test_cli_skip_features_empty_string() {
     let workspace = create_multi_feature_workspace();
 
     // Empty skip_features list means validate ALL features (including default)
@@ -116,8 +116,8 @@ fn test_cli_skip_features_empty_string() {
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_cli_skip_features_wildcard_pattern() {
+#[switchy_async::test]
+async fn test_cli_skip_features_wildcard_pattern() {
     let workspace = create_multi_feature_workspace();
 
     // Skip all test-* features
@@ -142,8 +142,8 @@ fn test_cli_skip_features_wildcard_pattern() {
     );
 }
 
-#[test]
-fn test_cli_skip_features_multiple_patterns() {
+#[switchy_async::test]
+async fn test_cli_skip_features_multiple_patterns() {
     let workspace = create_multi_feature_workspace();
 
     // Skip codecs and test features
@@ -174,8 +174,8 @@ fn test_cli_skip_features_multiple_patterns() {
     }
 }
 
-#[test]
-fn test_cli_skip_features_with_negation() {
+#[switchy_async::test]
+async fn test_cli_skip_features_with_negation() {
     let workspace = create_multi_feature_workspace();
 
     // Skip all except fail-on-warnings
@@ -205,8 +205,8 @@ fn test_cli_skip_features_with_negation() {
     }
 }
 
-#[test]
-fn test_cli_skip_features_specific_list() {
+#[switchy_async::test]
+async fn test_cli_skip_features_specific_list() {
     let workspace = create_multi_feature_workspace();
 
     // Skip specific features by name
@@ -242,8 +242,8 @@ fn test_cli_skip_features_specific_list() {
     }
 }
 
-#[test]
-fn test_cli_skip_features_combined_with_explicit_features() {
+#[switchy_async::test]
+async fn test_cli_skip_features_combined_with_explicit_features() {
     let workspace = create_multi_feature_workspace();
 
     // Explicitly request features, but skip some

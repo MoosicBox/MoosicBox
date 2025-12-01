@@ -1,7 +1,7 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_invalid_cargo_toml() {
+#[switchy_async::test]
+async fn test_invalid_cargo_toml() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test invalid Cargo.toml parsing scenarios
@@ -25,8 +25,8 @@ fn test_invalid_cargo_toml() {
     insta::assert_yaml_snapshot!("invalid_cargo_toml", test_data);
 }
 
-#[test]
-fn test_missing_files() {
+#[switchy_async::test]
+async fn test_missing_files() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test missing file scenarios
@@ -50,8 +50,8 @@ fn test_missing_files() {
     insta::assert_yaml_snapshot!("missing_files", test_data);
 }
 
-#[test]
-fn test_workspace_validation_errors() {
+#[switchy_async::test]
+async fn test_workspace_validation_errors() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace validation error scenarios
@@ -71,8 +71,8 @@ fn test_workspace_validation_errors() {
     insta::assert_yaml_snapshot!("workspace_validation_errors", test_data);
 }
 
-#[test]
-fn test_dockerfile_generation_errors() {
+#[switchy_async::test]
+async fn test_dockerfile_generation_errors() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test Dockerfile generation error scenarios
@@ -87,8 +87,8 @@ fn test_dockerfile_generation_errors() {
     insta::assert_yaml_snapshot!("dockerfile_generation_errors", test_data);
 }
 
-#[test]
-fn test_clippier_toml_validation() {
+#[switchy_async::test]
+async fn test_clippier_toml_validation() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test clippier.toml validation scenarios
@@ -103,8 +103,8 @@ fn test_clippier_toml_validation() {
     insta::assert_yaml_snapshot!("clippier_toml_validation", test_data);
 }
 
-#[test]
-fn test_feature_processing_edge_cases() {
+#[switchy_async::test]
+async fn test_feature_processing_edge_cases() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test feature processing edge case scenarios
@@ -125,8 +125,8 @@ fn test_feature_processing_edge_cases() {
     insta::assert_yaml_snapshot!("feature_processing_edge_cases", test_data);
 }
 
-#[test]
-fn test_cargo_lock_parsing_failures() {
+#[switchy_async::test]
+async fn test_cargo_lock_parsing_failures() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test Cargo.lock parsing failure scenarios
@@ -150,8 +150,8 @@ fn test_cargo_lock_parsing_failures() {
     insta::assert_yaml_snapshot!("cargo_lock_parsing_failures", test_data);
 }
 
-#[test]
-fn test_feature_filtering_edge_cases() {
+#[switchy_async::test]
+async fn test_feature_filtering_edge_cases() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test feature filtering edge cases
@@ -177,8 +177,8 @@ fn test_feature_filtering_edge_cases() {
     insta::assert_yaml_snapshot!("feature_filtering_edge_cases", test_data);
 }
 
-#[test]
-fn test_circular_dependency_handling() {
+#[switchy_async::test]
+async fn test_circular_dependency_handling() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test circular dependency detection
@@ -193,8 +193,8 @@ fn test_circular_dependency_handling() {
     insta::assert_yaml_snapshot!("circular_dependency_handling", test_data);
 }
 
-#[test]
-fn test_malformed_toml_values() {
+#[switchy_async::test]
+async fn test_malformed_toml_values() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test malformed TOML value scenarios
@@ -215,8 +215,8 @@ fn test_malformed_toml_values() {
     insta::assert_yaml_snapshot!("malformed_toml_values", test_data);
 }
 
-#[test]
-fn test_empty_configurations() {
+#[switchy_async::test]
+async fn test_empty_configurations() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test empty configuration scenarios
@@ -241,8 +241,8 @@ fn test_empty_configurations() {
     insta::assert_yaml_snapshot!("empty_configurations", test_data);
 }
 
-#[test]
-fn test_io_error_scenarios() {
+#[switchy_async::test]
+async fn test_io_error_scenarios() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test I/O error scenarios
@@ -266,8 +266,8 @@ fn test_io_error_scenarios() {
     insta::assert_yaml_snapshot!("io_error_scenarios", test_data);
 }
 
-#[test]
-fn test_unicode_and_encoding_issues() {
+#[switchy_async::test]
+async fn test_unicode_and_encoding_issues() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test Unicode and encoding edge cases
@@ -288,8 +288,8 @@ fn test_unicode_and_encoding_issues() {
     insta::assert_yaml_snapshot!("unicode_and_encoding_issues", test_data);
 }
 
-#[test]
-fn test_git_submodules_invalid_type() {
+#[switchy_async::test]
+async fn test_git_submodules_invalid_type() {
     let toml_str = r#"
         git-submodules = "yes"
 
@@ -301,8 +301,8 @@ fn test_git_submodules_invalid_type() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_git_submodules_invalid_type_in_config() {
+#[switchy_async::test]
+async fn test_git_submodules_invalid_type_in_config() {
     let toml_str = r#"
         [[config]]
         os = "ubuntu"

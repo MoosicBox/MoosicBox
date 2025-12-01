@@ -7,7 +7,6 @@ use clippier::package_filter::{
     FilterOperator, apply_filters, evaluate_expression, parse_expression,
 };
 use std::collections::BTreeMap;
-use tempfile::TempDir;
 
 // Import core expression assertions
 mod expression_assertions;
@@ -19,16 +18,16 @@ fn toml(s: &str) -> toml::Value {
 
 fn create_test_package(dir: &std::path::Path, name: &str, toml_content: &str) {
     let pkg_dir = dir.join(name);
-    std::fs::create_dir_all(&pkg_dir).unwrap();
-    std::fs::write(pkg_dir.join("Cargo.toml"), toml_content).unwrap();
+    switchy_fs::sync::create_dir_all(&pkg_dir).unwrap();
+    switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), toml_content).unwrap();
 }
 
 // ============================================================================
 // CI/CD Filtering Scenarios
 // ============================================================================
 
-#[test]
-fn test_skip_unpublished_and_examples() {
+#[switchy_async::test]
+async fn test_skip_unpublished_and_examples() {
     let cargo = toml(
         r#"[package]
         name = "test_example"
@@ -55,8 +54,8 @@ fn test_skip_unpublished_and_examples() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_include_only_production_packages() {
+#[switchy_async::test]
+async fn test_include_only_production_packages() {
     let cargo = toml(
         r#"[package]
         name = "moosicbox_audio"
@@ -94,8 +93,8 @@ fn test_include_only_production_packages() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_quality_gate_well_documented() {
+#[switchy_async::test]
+async fn test_quality_gate_well_documented() {
     let cargo = toml(
         r#"[package]
         name = "test"
@@ -141,8 +140,8 @@ fn test_quality_gate_well_documented() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_component_isolation_by_prefix() {
+#[switchy_async::test]
+async fn test_component_isolation_by_prefix() {
     let cargo = toml(
         r#"[package]
         name = "moosicbox_player_core""#,
@@ -164,8 +163,8 @@ fn test_component_isolation_by_prefix() {
 // Release Preparation Scenarios
 // ============================================================================
 
-#[test]
-fn test_release_ready_packages() {
+#[switchy_async::test]
+async fn test_release_ready_packages() {
     let cargo = toml(
         r#"[package]
         name = "moosicbox_audio"
@@ -210,8 +209,8 @@ fn test_release_ready_packages() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_version_range_filtering() {
+#[switchy_async::test]
+async fn test_version_range_filtering() {
     let cargo = toml(
         r#"[package]
         version = "0.1.4""#,
@@ -229,8 +228,8 @@ fn test_version_range_filtering() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_breaking_change_detection() {
+#[switchy_async::test]
+async fn test_breaking_change_detection() {
     let cargo = toml(
         r#"[package]
         version = "1.0.0""#,
@@ -252,8 +251,8 @@ fn test_breaking_change_detection() {
 // Metadata-based Filtering
 // ============================================================================
 
-#[test]
-fn test_workspace_independent_packages() {
+#[switchy_async::test]
+async fn test_workspace_independent_packages() {
     let cargo = toml(
         r#"[package.metadata.workspaces]
         independent = true
@@ -273,8 +272,8 @@ fn test_workspace_independent_packages() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_ci_skip_metadata() {
+#[switchy_async::test]
+async fn test_ci_skip_metadata() {
     let cargo = toml(
         r#"[package.metadata.ci]
         skip-tests = true
@@ -294,8 +293,8 @@ fn test_ci_skip_metadata() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_complex_metadata_filtering() {
+#[switchy_async::test]
+async fn test_complex_metadata_filtering() {
     let cargo = toml(
         r#"[package.metadata]
         internal = true
@@ -328,8 +327,8 @@ fn test_complex_metadata_filtering() {
 // Category and Keyword Filtering
 // ============================================================================
 
-#[test]
-fn test_multimedia_packages() {
+#[switchy_async::test]
+async fn test_multimedia_packages() {
     let cargo = toml(
         r#"[package]
         categories = ["multimedia", "audio"]"#,
@@ -355,8 +354,8 @@ fn test_multimedia_packages() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_api_related_packages() {
+#[switchy_async::test]
+async fn test_api_related_packages() {
     let cargo = toml(
         r#"[package]
         keywords = ["music-api", "rest-api"]"#,
@@ -374,8 +373,8 @@ fn test_api_related_packages() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_exclude_deprecated_packages() {
+#[switchy_async::test]
+async fn test_exclude_deprecated_packages() {
     let cargo = toml(
         r#"[package]
         keywords = ["music", "player"]"#,
@@ -397,10 +396,10 @@ fn test_exclude_deprecated_packages() {
 // apply_filters() with Expressions
 // ============================================================================
 
-#[test]
+#[switchy_async::test]
 #[ignore] // TODO: Fix temp directory path handling
-fn test_apply_filters_with_complex_skip() {
-    let temp_dir = TempDir::new().unwrap();
+async fn test_apply_filters_with_complex_skip() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let temp_path = temp_dir.path();
 
     create_test_package(
@@ -442,9 +441,9 @@ fn test_apply_filters_with_complex_skip() {
     assert_eq!(result, vec!["pkg3"]);
 }
 
-#[test]
-fn test_apply_filters_with_complex_include() {
-    let temp_dir = TempDir::new().unwrap();
+#[switchy_async::test]
+async fn test_apply_filters_with_complex_include() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let temp_path = temp_dir.path();
 
     create_test_package(
@@ -491,9 +490,9 @@ fn test_apply_filters_with_complex_include() {
     assert_eq!(result, vec!["moosicbox_audio", "moosicbox_video"]);
 }
 
-#[test]
-fn test_apply_filters_skip_and_include_together() {
-    let temp_dir = TempDir::new().unwrap();
+#[switchy_async::test]
+async fn test_apply_filters_skip_and_include_together() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let temp_path = temp_dir.path();
 
     create_test_package(
@@ -541,8 +540,8 @@ fn test_apply_filters_skip_and_include_together() {
 // Error Handling
 // ============================================================================
 
-#[test]
-fn test_invalid_regex_error_in_expression() {
+#[switchy_async::test]
+async fn test_invalid_regex_error_in_expression() {
     let cargo = toml(
         r#"[package]
         name = "test""#,
@@ -552,8 +551,8 @@ fn test_invalid_regex_error_in_expression() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_invalid_array_length_value() {
+#[switchy_async::test]
+async fn test_invalid_array_length_value() {
     let cargo = toml(
         r#"[package]
         keywords = ["a", "b"]"#,
@@ -567,8 +566,8 @@ fn test_invalid_array_length_value() {
 // Backward Compatibility
 // ============================================================================
 
-#[test]
-fn test_simple_filter_still_works() {
+#[switchy_async::test]
+async fn test_simple_filter_still_works() {
     let cargo = toml(
         r#"[package]
         publish = false"#,
@@ -577,8 +576,8 @@ fn test_simple_filter_still_works() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_all_existing_operators_work() {
+#[switchy_async::test]
+async fn test_all_existing_operators_work() {
     let cargo = toml(
         r#"[package]
         name = "test"
@@ -619,8 +618,8 @@ fn test_all_existing_operators_work() {
 // Performance / Stress Tests
 // ============================================================================
 
-#[test]
-fn test_wide_or_expression_matches_first() {
+#[switchy_async::test]
+async fn test_wide_or_expression_matches_first() {
     let cargo = toml(
         r#"[package]
         name = "test""#,
@@ -633,8 +632,8 @@ fn test_wide_or_expression_matches_first() {
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_wide_and_expression_fails_fast() {
+#[switchy_async::test]
+async fn test_wide_and_expression_fails_fast() {
     let cargo = toml(
         r#"[package]
         name = "test""#,
@@ -647,8 +646,8 @@ fn test_wide_and_expression_fails_fast() {
     assert!(!evaluate_expression(&expr, &cargo).unwrap());
 }
 
-#[test]
-fn test_deeply_nested_expression_evaluates() {
+#[switchy_async::test]
+async fn test_deeply_nested_expression_evaluates() {
     let cargo = toml(
         r#"[package]
         name = "test""#,

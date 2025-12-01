@@ -91,8 +91,8 @@ fail-on-warnings = []
     temp_dir
 }
 
-#[test]
-fn test_unicode_in_skip_patterns() {
+#[switchy_async::test]
+async fn test_unicode_in_skip_patterns() {
     let workspace = create_workspace_with_unicode_features();
 
     let config = ValidatorConfig {
@@ -117,8 +117,8 @@ fn test_unicode_in_skip_patterns() {
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_conflicting_patterns() {
+#[switchy_async::test]
+async fn test_conflicting_patterns() {
     // Test behavior when patterns conflict
     let workspace = create_multi_feature_workspace();
 
@@ -149,8 +149,8 @@ fn test_conflicting_patterns() {
     );
 }
 
-#[test]
-fn test_empty_workspace() {
+#[switchy_async::test]
+async fn test_empty_workspace() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
 
@@ -178,8 +178,8 @@ members = []
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_package_with_no_features() {
+#[switchy_async::test]
+async fn test_package_with_no_features() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
 
@@ -214,8 +214,8 @@ version = "0.1.0"
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_circular_dependency_detection() {
+#[switchy_async::test]
+async fn test_circular_dependency_detection() {
     // Create workspace with circular feature dependencies
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
@@ -281,8 +281,8 @@ test = []
     }
 }
 
-#[test]
-fn test_malformed_cargo_toml() {
+#[switchy_async::test]
+async fn test_malformed_cargo_toml() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
 
@@ -314,8 +314,8 @@ this is not valid toml
     assert!(validator.is_err());
 }
 
-#[test]
-fn test_skip_features_with_whitespace() {
+#[switchy_async::test]
+async fn test_skip_features_with_whitespace() {
     let workspace = create_simple_workspace();
 
     // Patterns with leading/trailing whitespace
@@ -335,8 +335,8 @@ fn test_skip_features_with_whitespace() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_nonexistent_feature_in_skip_list() {
+#[switchy_async::test]
+async fn test_nonexistent_feature_in_skip_list() {
     let workspace = create_simple_workspace();
 
     // Skip features that don't exist, but validate real features
@@ -361,8 +361,8 @@ fn test_nonexistent_feature_in_skip_list() {
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_skip_all_features_with_wildcard() {
+#[switchy_async::test]
+async fn test_skip_all_features_with_wildcard() {
     let workspace = create_multi_feature_workspace();
 
     // Skip ALL features
@@ -384,8 +384,8 @@ fn test_skip_all_features_with_wildcard() {
     assert_eq!(result.total_packages, result.valid_packages);
 }
 
-#[test]
-fn test_skip_features_negation_edge_case() {
+#[switchy_async::test]
+async fn test_skip_features_negation_edge_case() {
     let workspace = create_multi_feature_workspace();
 
     // Negation-only pattern: nothing is initially skipped, so negation has no effect
@@ -411,8 +411,8 @@ fn test_skip_features_negation_edge_case() {
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_workspace_only_flag_behavior() {
+#[switchy_async::test]
+async fn test_workspace_only_flag_behavior() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
 
@@ -473,8 +473,8 @@ fail-on-warnings = []
 }
 
 /// Test that feature propagation to dev-dependencies is correctly validated
-#[test]
-fn test_dev_dependency_feature_propagation() {
+#[switchy_async::test]
+async fn test_dev_dependency_feature_propagation() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root_path = temp_dir.path();
 

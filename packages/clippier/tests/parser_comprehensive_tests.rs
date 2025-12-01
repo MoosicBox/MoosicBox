@@ -16,8 +16,8 @@ use parser_test_helpers::*;
 // Parse Tree Structure Validation
 // ============================================================================
 
-#[test]
-fn test_and_node_has_two_children() {
+#[switchy_async::test]
+async fn test_and_node_has_two_children() {
     let expr = parse_expression("a=1 AND b=2").unwrap();
     match expr {
         FilterExpression::And(children) => {
@@ -27,8 +27,8 @@ fn test_and_node_has_two_children() {
     }
 }
 
-#[test]
-fn test_or_node_has_two_children() {
+#[switchy_async::test]
+async fn test_or_node_has_two_children() {
     let expr = parse_expression("a=1 OR b=2").unwrap();
     match expr {
         FilterExpression::Or(children) => {
@@ -38,8 +38,8 @@ fn test_or_node_has_two_children() {
     }
 }
 
-#[test]
-fn test_not_node_has_one_child() {
+#[switchy_async::test]
+async fn test_not_node_has_one_child() {
     let expr = parse_expression("NOT a=1").unwrap();
     match expr {
         FilterExpression::Not(child) => {
@@ -49,8 +49,8 @@ fn test_not_node_has_one_child() {
     }
 }
 
-#[test]
-fn test_nested_and_structure() {
+#[switchy_async::test]
+async fn test_nested_and_structure() {
     let expr = parse_expression("(a=1 AND b=2) AND c=3").unwrap();
     match expr {
         FilterExpression::And(children) => {
@@ -60,8 +60,8 @@ fn test_nested_and_structure() {
     }
 }
 
-#[test]
-fn test_nested_or_structure() {
+#[switchy_async::test]
+async fn test_nested_or_structure() {
     let expr = parse_expression("(a=1 OR b=2) OR c=3").unwrap();
     match expr {
         FilterExpression::Or(children) => {
@@ -71,8 +71,8 @@ fn test_nested_or_structure() {
     }
 }
 
-#[test]
-fn test_mixed_and_or_not_flattened() {
+#[switchy_async::test]
+async fn test_mixed_and_or_not_flattened() {
     let expr = parse_expression("a=1 AND b=2 AND c=3").unwrap();
     match expr {
         FilterExpression::And(children) => {
@@ -82,8 +82,8 @@ fn test_mixed_and_or_not_flattened() {
     }
 }
 
-#[test]
-fn test_grouping_with_same_operator() {
+#[switchy_async::test]
+async fn test_grouping_with_same_operator() {
     let expr = parse_expression("a=1 AND (b=2 AND c=3)").unwrap();
     match expr {
         FilterExpression::And(children) => {
@@ -99,8 +99,8 @@ fn test_grouping_with_same_operator() {
 // Operator Precedence Testing
 // ============================================================================
 
-#[test]
-fn test_precedence_not_and_or() {
+#[switchy_async::test]
+async fn test_precedence_not_and_or() {
     // NOT a=1 AND b=2 OR c=3 should parse as ((NOT a=1) AND b=2) OR c=3
     let expr = parse_expression("NOT a=1 AND b=2 OR c=3").unwrap();
 
@@ -121,8 +121,8 @@ fn test_precedence_not_and_or() {
     assert_condition(&or_children[1], &["c"], FilterOperator::Equals, "3");
 }
 
-#[test]
-fn test_precedence_and_or() {
+#[switchy_async::test]
+async fn test_precedence_and_or() {
     // a=1 AND b=2 OR c=3 should parse as (a=1 AND b=2) OR c=3
     let expr = parse_expression("a=1 AND b=2 OR c=3").unwrap();
 
@@ -136,8 +136,8 @@ fn test_precedence_and_or() {
     assert_condition(&or_children[1], &["c"], FilterOperator::Equals, "3");
 }
 
-#[test]
-fn test_precedence_overridden_by_parens() {
+#[switchy_async::test]
+async fn test_precedence_overridden_by_parens() {
     // a=1 AND (b=2 OR c=3) should parse as AND(a=1, OR(b=2, c=3))
     let expr = parse_expression("a=1 AND (b=2 OR c=3)").unwrap();
 
@@ -151,8 +151,8 @@ fn test_precedence_overridden_by_parens() {
     assert_or_with_conditions(&and_children[1], &[("b", "2"), ("c", "3")]);
 }
 
-#[test]
-fn test_multiple_nots() {
+#[switchy_async::test]
+async fn test_multiple_nots() {
     // NOT NOT a=1 should parse as NOT(NOT(a=1))
     let expr = parse_expression("NOT NOT a=1").unwrap();
 
@@ -166,8 +166,8 @@ fn test_multiple_nots() {
     assert_condition(second_not_child, &["a"], FilterOperator::Equals, "1");
 }
 
-#[test]
-fn test_complex_precedence_4_operators() {
+#[switchy_async::test]
+async fn test_complex_precedence_4_operators() {
     // NOT a=1 AND b=2 OR c=3 AND NOT d=4
     // Should parse as: (NOT a=1 AND b=2) OR (c=3 AND NOT d=4)
     let expr = parse_expression("NOT a=1 AND b=2 OR c=3 AND NOT d=4").unwrap();
@@ -192,8 +192,8 @@ fn test_complex_precedence_4_operators() {
 // Error Recovery
 // ============================================================================
 
-#[test]
-fn test_missing_closing_paren() {
+#[switchy_async::test]
+async fn test_missing_closing_paren() {
     let result = parse_expression("(a=1 AND b=2");
     assert_error_type(
         result,
@@ -202,16 +202,16 @@ fn test_missing_closing_paren() {
     );
 }
 
-#[test]
-fn test_missing_opening_paren() {
+#[switchy_async::test]
+async fn test_missing_opening_paren() {
     let result = parse_expression("a=1 AND b=2)");
     // Parser consumes all tokens then succeeds, ignoring trailing )
     // This is acceptable behavior - the expression is valid up to that point
     assert!(result.is_ok(), "Extra closing paren should be ignored");
 }
 
-#[test]
-fn test_empty_expression() {
+#[switchy_async::test]
+async fn test_empty_expression() {
     let result = parse_expression("");
     assert_error_type(
         result,
@@ -220,8 +220,8 @@ fn test_empty_expression() {
     );
 }
 
-#[test]
-fn test_expression_with_only_not() {
+#[switchy_async::test]
+async fn test_expression_with_only_not() {
     let result = parse_expression("NOT");
     assert_error_type(
         result,
@@ -230,8 +230,8 @@ fn test_expression_with_only_not() {
     );
 }
 
-#[test]
-fn test_expression_with_trailing_and() {
+#[switchy_async::test]
+async fn test_expression_with_trailing_and() {
     let result = parse_expression("a=1 AND");
     assert_error_type(
         result,
@@ -240,8 +240,8 @@ fn test_expression_with_trailing_and() {
     );
 }
 
-#[test]
-fn test_expression_with_trailing_or() {
+#[switchy_async::test]
+async fn test_expression_with_trailing_or() {
     let result = parse_expression("a=1 OR");
     assert_error_type(
         result,
@@ -250,8 +250,8 @@ fn test_expression_with_trailing_or() {
     );
 }
 
-#[test]
-fn test_double_and() {
+#[switchy_async::test]
+async fn test_double_and() {
     let result = parse_expression("a=1 AND AND b=2");
     assert_error_type(
         result,
@@ -260,8 +260,8 @@ fn test_double_and() {
     );
 }
 
-#[test]
-fn test_double_or() {
+#[switchy_async::test]
+async fn test_double_or() {
     let result = parse_expression("a=1 OR OR b=2");
     assert_error_type(
         result,
@@ -270,8 +270,8 @@ fn test_double_or() {
     );
 }
 
-#[test]
-fn test_and_without_left_operand() {
+#[switchy_async::test]
+async fn test_and_without_left_operand() {
     let result = parse_expression("AND b=2");
     assert_error_type(
         result,
@@ -280,8 +280,8 @@ fn test_and_without_left_operand() {
     );
 }
 
-#[test]
-fn test_or_without_left_operand() {
+#[switchy_async::test]
+async fn test_or_without_left_operand() {
     let result = parse_expression("OR b=2");
     assert_error_type(
         result,
@@ -294,8 +294,8 @@ fn test_or_without_left_operand() {
 // Complex Scenarios
 // ============================================================================
 
-#[test]
-fn test_deeply_nested_ands_and_ors() {
+#[switchy_async::test]
+async fn test_deeply_nested_ands_and_ors() {
     // (a=1 AND (b=2 OR (c=3 AND (d=4 OR e=5))))
     let expr = parse_expression("(a=1 AND (b=2 OR (c=3 AND (d=4 OR e=5))))").unwrap();
 
@@ -315,8 +315,8 @@ fn test_deeply_nested_ands_and_ors() {
     assert_or_with_conditions(&inner_and_children[1], &[("d", "4"), ("e", "5")]);
 }
 
-#[test]
-fn test_alternating_and_or_chain() {
+#[switchy_async::test]
+async fn test_alternating_and_or_chain() {
     // a=1 AND b=2 OR c=3 AND d=4 OR e=5
     // Should parse as: (a=1 AND b=2) OR (c=3 AND d=4) OR e=5
     let expr = parse_expression("a=1 AND b=2 OR c=3 AND d=4 OR e=5").unwrap();
@@ -334,8 +334,8 @@ fn test_alternating_and_or_chain() {
     assert_condition(&or_children[2], &["e"], FilterOperator::Equals, "5");
 }
 
-#[test]
-fn test_multiple_nots_at_various_positions() {
+#[switchy_async::test]
+async fn test_multiple_nots_at_various_positions() {
     // NOT a=1 AND NOT b=2 OR NOT c=3
     // Should parse as: (NOT a=1 AND NOT b=2) OR NOT c=3
     let expr = parse_expression("NOT a=1 AND NOT b=2 OR NOT c=3").unwrap();
@@ -355,8 +355,8 @@ fn test_multiple_nots_at_various_positions() {
     assert_condition(third_not, &["c"], FilterOperator::Equals, "3");
 }
 
-#[test]
-fn test_grouped_nots() {
+#[switchy_async::test]
+async fn test_grouped_nots() {
     let expr = parse_expression("NOT (a=1 AND b=2)").unwrap();
     match expr {
         FilterExpression::Not(child) => {
@@ -366,8 +366,8 @@ fn test_grouped_nots() {
     }
 }
 
-#[test]
-fn test_all_17_operators_in_expressions() {
+#[switchy_async::test]
+async fn test_all_17_operators_in_expressions() {
     // Test that all operator types can be parsed in expressions
     let operators = vec![
         "a=1", "a!=1", "a^=1", "a$=1", "a*=1", "a~=1", "a@=1", "a@*=1", "a@^=1", "a@~=1", "a@!",
@@ -381,8 +381,8 @@ fn test_all_17_operators_in_expressions() {
     }
 }
 
-#[test]
-fn test_nested_properties_in_expressions() {
+#[switchy_async::test]
+async fn test_nested_properties_in_expressions() {
     let expr =
         parse_expression("package.metadata.workspaces.independent=true AND name=test").unwrap();
     match expr {
@@ -393,8 +393,8 @@ fn test_nested_properties_in_expressions() {
     }
 }
 
-#[test]
-fn test_quoted_values_in_complex_expressions() {
+#[switchy_async::test]
+async fn test_quoted_values_in_complex_expressions() {
     let expr = parse_expression(
         r#"package.name="test pkg" AND (package.desc="A OR B" OR package.version^="0.1")"#,
     )
@@ -407,20 +407,20 @@ fn test_quoted_values_in_complex_expressions() {
 // Backward Compatibility
 // ============================================================================
 
-#[test]
-fn test_simple_filter_parses_as_condition() {
+#[switchy_async::test]
+async fn test_simple_filter_parses_as_condition() {
     let expr = parse_expression("package.publish=false").unwrap();
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 
-#[test]
-fn test_filter_with_dots_in_path() {
+#[switchy_async::test]
+async fn test_filter_with_dots_in_path() {
     let expr = parse_expression("package.metadata.ci.skip=true").unwrap();
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 
-#[test]
-fn test_all_operator_types_as_simple_filters() {
+#[switchy_async::test]
+async fn test_all_operator_types_as_simple_filters() {
     let filters = vec![
         "name=test",
         "name!=test",
@@ -452,22 +452,22 @@ fn test_all_operator_types_as_simple_filters() {
 // Special Cases
 // ============================================================================
 
-#[test]
-fn test_single_condition_in_parens() {
+#[switchy_async::test]
+async fn test_single_condition_in_parens() {
     let expr = parse_expression("(name=test)").unwrap();
     // Should simplify to just the condition, not wrapped in parens
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 
-#[test]
-fn test_multiple_levels_of_grouping() {
+#[switchy_async::test]
+async fn test_multiple_levels_of_grouping() {
     let expr = parse_expression("((((name=test))))").unwrap();
     // All parens should be stripped, leaving just the condition
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 
-#[test]
-fn test_whitespace_only_between_tokens() {
+#[switchy_async::test]
+async fn test_whitespace_only_between_tokens() {
     let expr = parse_expression("   a=1    AND    b=2   ").unwrap();
     match expr {
         FilterExpression::And(children) => {
@@ -477,14 +477,14 @@ fn test_whitespace_only_between_tokens() {
     }
 }
 
-#[test]
-fn test_newlines_between_tokens() {
+#[switchy_async::test]
+async fn test_newlines_between_tokens() {
     let expr = parse_expression("a=1\nAND\nb=2\nOR\nc=3").unwrap();
     assert!(matches!(expr, FilterExpression::Or(_)));
 }
 
-#[test]
-fn test_very_long_and_chain() {
+#[switchy_async::test]
+async fn test_very_long_and_chain() {
     let conditions: Vec<String> = (0..50).map(|i| format!("f{i}=v{i}")).collect();
     let expr_str = conditions.join(" AND ");
     let expr = parse_expression(&expr_str).unwrap();
@@ -496,8 +496,8 @@ fn test_very_long_and_chain() {
     }
 }
 
-#[test]
-fn test_very_long_or_chain() {
+#[switchy_async::test]
+async fn test_very_long_or_chain() {
     let conditions: Vec<String> = (0..50).map(|i| format!("f{i}=v{i}")).collect();
     let expr_str = conditions.join(" OR ");
     let expr = parse_expression(&expr_str).unwrap();

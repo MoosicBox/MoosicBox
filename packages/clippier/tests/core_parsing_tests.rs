@@ -1,8 +1,8 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
 use toml::Value;
 
-#[test]
-fn test_parse_dependency_name_variations() {
+#[switchy_async::test]
+async fn test_parse_dependency_name_variations() {
     // Test different dependency name formats
     assert_eq!(clippier::parse_dependency_name("serde"), "serde");
     assert_eq!(clippier::parse_dependency_name("serde 1.0.195"), "serde");
@@ -26,8 +26,8 @@ fn test_parse_dependency_name_variations() {
     );
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_single() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_single() {
     let changes = vec![
         (' ', "[[package]]\n".to_string()),
         (' ', "name = \"serde\"\n".to_string()),
@@ -39,8 +39,8 @@ fn test_parse_cargo_lock_changes_single() {
     assert!(result.contains(&"serde".to_string()));
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_multiple() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_multiple() {
     // Test multiple package changes
     let changes = vec![
         (' ', "[[package]]\n".to_string()),
@@ -59,8 +59,8 @@ fn test_parse_cargo_lock_changes_multiple() {
     assert!(result.contains(&"tokio".to_string()));
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_no_changes() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_no_changes() {
     // Test with no relevant changes
     let changes = vec![];
 
@@ -68,8 +68,8 @@ fn test_parse_cargo_lock_changes_no_changes() {
     assert!(result.is_empty());
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_new_package() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_new_package() {
     // Test addition of new package
     let changes = vec![('+', "new-crate 0.1.0".to_string())];
 
@@ -78,8 +78,8 @@ fn test_parse_cargo_lock_changes_new_package() {
     assert!(result.is_empty());
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_removed_package() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_removed_package() {
     // Test removal of package
     let changes = vec![('-', "removed-crate 0.5.0".to_string())];
 
@@ -88,8 +88,8 @@ fn test_parse_cargo_lock_changes_removed_package() {
     assert!(result.is_empty());
 }
 
-#[test]
-fn test_parse_cargo_lock_toml_structure() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_toml_structure() {
     let cargo_lock_toml = r#"
 version = 3
 
@@ -143,8 +143,8 @@ dependencies = [
     assert!(tokio_deps.contains(&"pin-project-lite".to_string()));
 }
 
-#[test]
-fn test_split_utility() {
+#[switchy_async::test]
+async fn test_split_utility() {
     let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     // Test splitting into 3 groups
@@ -160,8 +160,8 @@ fn test_split_utility() {
     assert_eq!(chunks[2], &[5, 6]);
 }
 
-#[test]
-fn test_split_edge_cases() {
+#[switchy_async::test]
+async fn test_split_edge_cases() {
     let data = vec![1, 2, 3, 4, 5];
 
     // Test with more chunks than elements
@@ -179,8 +179,8 @@ fn test_split_edge_cases() {
     assert_eq!(chunks.len(), 0);
 }
 
-#[test]
-fn test_process_features_chunked() {
+#[switchy_async::test]
+async fn test_process_features_chunked() {
     let features = vec![
         "feat1".to_string(),
         "feat2".to_string(),
@@ -199,8 +199,8 @@ fn test_process_features_chunked() {
     }
 }
 
-#[test]
-fn test_process_features_spread() {
+#[switchy_async::test]
+async fn test_process_features_spread() {
     let features = vec!["feat1".to_string(), "feat2".to_string()];
 
     let spread_result = clippier::process_features(features.clone(), Some(2), true, false, None);
@@ -213,8 +213,8 @@ fn test_process_features_spread() {
     }
 }
 
-#[test]
-fn test_process_features_not_chunked() {
+#[switchy_async::test]
+async fn test_process_features_not_chunked() {
     let features = vec!["feat1".to_string(), "feat2".to_string()];
 
     let result = clippier::process_features(features.clone(), None, false, false, None);
@@ -226,8 +226,8 @@ fn test_process_features_not_chunked() {
     }
 }
 
-#[test]
-fn test_fetch_features_basic() {
+#[switchy_async::test]
+async fn test_fetch_features_basic() {
     let cargo_toml = toml::from_str::<Value>(
         r#"
         [features]
@@ -246,8 +246,8 @@ fn test_fetch_features_basic() {
     assert!(features.contains(&"async".to_string()));
 }
 
-#[test]
-fn test_process_features_randomize() {
+#[switchy_async::test]
+async fn test_process_features_randomize() {
     let features = vec![
         "feat1".to_string(),
         "feat2".to_string(),
@@ -295,8 +295,8 @@ fn test_process_features_randomize() {
     }
 }
 
-#[test]
-fn test_fetch_features_filtering() {
+#[switchy_async::test]
+async fn test_fetch_features_filtering() {
     let cargo_toml = toml::from_str::<Value>(
         r#"
         [features]
@@ -328,22 +328,22 @@ fn test_fetch_features_filtering() {
     assert!(features.len() <= 2);
 }
 
-#[test]
-fn test_clipper_env_variants() {
+#[switchy_async::test]
+async fn test_clipper_env_variants() {
     // Test that we can work with different ClippierEnv variants
     // This is mainly a compilation test
     // assert!(true);
 }
 
-#[test]
-fn test_vec_or_item_conversion() {
+#[switchy_async::test]
+async fn test_vec_or_item_conversion() {
     // Test that VecOrItem works correctly
     // This is mainly a compilation test
     // assert!(true);
 }
 
-#[test]
-fn test_workspace_dependency_detection() {
+#[switchy_async::test]
+async fn test_workspace_dependency_detection() {
     let workspace_dep_table = toml::from_str::<Value>(
         r#"
         workspace = true
@@ -397,8 +397,8 @@ fn test_workspace_dependency_detection() {
     ));
 }
 
-#[test]
-fn test_get_dependency_default_features() {
+#[switchy_async::test]
+async fn test_get_dependency_default_features() {
     let dep_with_default_false = toml::from_str::<Value>(
         r#"
         workspace = true
@@ -448,8 +448,8 @@ fn test_get_dependency_default_features() {
     );
 }
 
-#[test]
-fn test_collect_system_dependencies() {
+#[switchy_async::test]
+async fn test_collect_system_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test basic system dependency collection
@@ -459,7 +459,7 @@ fn test_collect_system_dependencies() {
     ];
 
     let ubuntu_deps =
-        clippier::collect_system_dependencies(temp_dir.path(), &dependencies, None, "ubuntu");
+        clippier::collect_system_dependencies(temp_dir.path(), &dependencies, None, "ubuntu").await;
     assert!(ubuntu_deps.is_ok());
 
     // Test with TLS feature
@@ -469,17 +469,18 @@ fn test_collect_system_dependencies() {
         &dependencies,
         Some(&features),
         "ubuntu",
-    );
+    )
+    .await;
     assert!(ubuntu_deps_with_tls.is_ok());
 
     // Test with different OS
     let alpine_deps =
-        clippier::collect_system_dependencies(temp_dir.path(), &dependencies, None, "alpine");
+        clippier::collect_system_dependencies(temp_dir.path(), &dependencies, None, "alpine").await;
     assert!(alpine_deps.is_ok());
 }
 
-#[test]
-fn test_binary_name_detection() {
+#[switchy_async::test]
+async fn test_binary_name_detection() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test custom binary name detection
@@ -493,8 +494,8 @@ fn test_binary_name_detection() {
     assert_eq!(binary_name, "default_package");
 }
 
-#[test]
-fn test_output_type_enum() {
+#[switchy_async::test]
+async fn test_output_type_enum() {
     // Test that OutputType enum works correctly
     use clippier::OutputType;
     let json_type = OutputType::Json;
@@ -506,8 +507,8 @@ fn test_output_type_enum() {
 }
 
 // Snapshot tests with proper JSON serialization
-#[test]
-fn test_cargo_lock_parsing_snapshot() {
+#[switchy_async::test]
+async fn test_cargo_lock_parsing_snapshot() {
     let test_data = serde_json::json!({
         "version_updates": {
             "serde": {
@@ -527,8 +528,8 @@ fn test_cargo_lock_parsing_snapshot() {
     insta::assert_yaml_snapshot!("cargo_lock_parsing", test_data);
 }
 
-#[test]
-fn test_toml_structure_parsing_snapshot() {
+#[switchy_async::test]
+async fn test_toml_structure_parsing_snapshot() {
     let test_data = serde_json::json!({
         "package_section": {
             "name": "test-package",
@@ -549,8 +550,8 @@ fn test_toml_structure_parsing_snapshot() {
     insta::assert_yaml_snapshot!("toml_structure_parsing", test_data);
 }
 
-#[test]
-fn test_feature_filtering_snapshot() {
+#[switchy_async::test]
+async fn test_feature_filtering_snapshot() {
     let test_data = serde_json::json!({
         "all_features": ["default", "json", "async", "database", "server", "frontend"],
         "skip_features": {
@@ -570,8 +571,8 @@ fn test_feature_filtering_snapshot() {
     insta::assert_yaml_snapshot!("feature_filtering", test_data);
 }
 
-#[test]
-fn test_process_features_seed_deterministic() {
+#[switchy_async::test]
+async fn test_process_features_seed_deterministic() {
     // Test that same seed produces same randomized output
     let features = vec![
         "feature1".to_string(),
@@ -628,8 +629,8 @@ fn test_process_features_seed_deterministic() {
     }
 }
 
-#[test]
-fn test_process_features_seed_with_spread() {
+#[switchy_async::test]
+async fn test_process_features_seed_with_spread() {
     // Test that seed works with spreading as well
     let features = vec![
         "feature1".to_string(),
@@ -658,8 +659,8 @@ fn test_process_features_seed_with_spread() {
         _ => panic!("Expected chunked features"),
     }
 }
-#[test]
-fn test_clippier_conf_git_submodules_deserialization() {
+#[switchy_async::test]
+async fn test_clippier_conf_git_submodules_deserialization() {
     let toml_str = r#"
         git-submodules = true
 
@@ -671,8 +672,8 @@ fn test_clippier_conf_git_submodules_deserialization() {
     assert_eq!(conf.git_submodules, Some(true));
 }
 
-#[test]
-fn test_clippier_configuration_git_submodules_deserialization() {
+#[switchy_async::test]
+async fn test_clippier_configuration_git_submodules_deserialization() {
     let toml_str = r#"
         [[config]]
         os = "ubuntu"
@@ -683,8 +684,8 @@ fn test_clippier_configuration_git_submodules_deserialization() {
     assert_eq!(conf.config.as_ref().unwrap()[0].git_submodules, Some(true));
 }
 
-#[test]
-fn test_git_submodules_optional_field() {
+#[switchy_async::test]
+async fn test_git_submodules_optional_field() {
     let toml_str = r#"
         [[config]]
         os = "ubuntu"
@@ -695,8 +696,8 @@ fn test_git_submodules_optional_field() {
     assert_eq!(conf.config.as_ref().unwrap()[0].git_submodules, None);
 }
 
-#[test]
-fn test_git_submodules_false_value() {
+#[switchy_async::test]
+async fn test_git_submodules_false_value() {
     let toml_str = r#"
         git-submodules = false
 

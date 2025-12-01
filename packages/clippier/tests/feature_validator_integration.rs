@@ -281,8 +281,8 @@ fn create_package(workspace_root: &Path, name: &str, cargo_content: &str) {
     fs::write(src_dir.join("lib.rs"), "// Auto-generated for testing\n").unwrap();
 }
 
-#[test]
-fn test_complex_workspace_validation_success() {
+#[switchy_async::test]
+async fn test_complex_workspace_validation_success() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -313,8 +313,8 @@ fn test_complex_workspace_validation_success() {
     assert_eq!(result.total_packages, result.valid_packages);
 }
 
-#[test]
-fn test_complex_workspace_all_features() {
+#[switchy_async::test]
+async fn test_complex_workspace_all_features() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -349,8 +349,8 @@ fn test_complex_workspace_all_features() {
     }
 }
 
-#[test]
-fn test_workspace_with_errors() {
+#[switchy_async::test]
+async fn test_workspace_with_errors() {
     let workspace = create_error_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -407,8 +407,8 @@ fn test_workspace_with_errors() {
     }
 }
 
-#[test]
-fn test_single_package_project() {
+#[switchy_async::test]
+async fn test_single_package_project() {
     let project = create_single_package_project();
     let root_path = project.path().to_path_buf();
 
@@ -430,8 +430,8 @@ fn test_single_package_project() {
     assert_eq!(result.valid_packages, 1);
 }
 
-#[test]
-fn test_workspace_only_vs_all_packages() {
+#[switchy_async::test]
+async fn test_workspace_only_vs_all_packages() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -474,8 +474,8 @@ fn test_workspace_only_vs_all_packages() {
     assert!(result_all.total_packages >= result_workspace.total_packages);
 }
 
-#[test]
-fn test_json_output_format() {
+#[switchy_async::test]
+async fn test_json_output_format() {
     let workspace = create_error_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -510,8 +510,8 @@ fn test_json_output_format() {
     }
 }
 
-#[test]
-fn test_specific_features_validation() {
+#[switchy_async::test]
+async fn test_specific_features_validation() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -536,8 +536,8 @@ fn test_specific_features_validation() {
     assert!(result.total_packages > 0);
 }
 
-#[test]
-fn test_validator_with_nonexistent_feature() {
+#[switchy_async::test]
+async fn test_validator_with_nonexistent_feature() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -562,8 +562,8 @@ fn test_validator_with_nonexistent_feature() {
     assert_eq!(result.valid_packages, result.total_packages);
 }
 
-#[test]
-fn test_optional_dependency_handling() {
+#[switchy_async::test]
+async fn test_optional_dependency_handling() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -590,8 +590,8 @@ fn test_optional_dependency_handling() {
     );
 }
 
-#[test]
-fn test_workspace_root_discovery_from_subdirectory() {
+#[switchy_async::test]
+async fn test_workspace_root_discovery_from_subdirectory() {
     let workspace = create_complex_workspace();
     let core_path = workspace.path().join("core");
 
@@ -617,8 +617,8 @@ fn test_workspace_root_discovery_from_subdirectory() {
     assert_eq!(result.errors.len(), 0);
 }
 
-#[test]
-fn test_validation_summary_with_errors() {
+#[switchy_async::test]
+async fn test_validation_summary_with_errors() {
     let workspace = create_error_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -647,8 +647,8 @@ fn test_validation_summary_with_errors() {
     );
 }
 
-#[test]
-fn test_validation_summary_with_no_errors() {
+#[switchy_async::test]
+async fn test_validation_summary_with_no_errors() {
     let workspace = create_complex_workspace();
     let root_path = workspace.path().to_path_buf();
 
@@ -670,8 +670,8 @@ fn test_validation_summary_with_no_errors() {
     assert_eq!(result.total_packages, result.valid_packages);
 }
 
-#[test]
-fn test_validation_result_json_serialization() {
+#[switchy_async::test]
+async fn test_validation_result_json_serialization() {
     use clippier::feature_validator::{
         FeatureError, IncorrectPropagation, MissingPropagation, PackageValidationError,
         ValidationResult,
@@ -713,8 +713,8 @@ fn test_validation_result_json_serialization() {
     let _parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 }
 
-#[test]
-fn test_validation_summary_pluralization() {
+#[switchy_async::test]
+async fn test_validation_summary_pluralization() {
     use clippier::feature_validator::{PackageValidationError, ValidationResult};
 
     // Test with 1 error

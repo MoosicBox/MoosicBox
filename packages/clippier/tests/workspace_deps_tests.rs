@@ -1,7 +1,7 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_simple_workspace_dependencies() {
+#[switchy_async::test]
+async fn test_simple_workspace_dependencies() {
     let (_temp_dir, _) = load_test_workspace("basic");
 
     // Test that the basic workspace dependency structure is correct
@@ -13,8 +13,8 @@ fn test_simple_workspace_dependencies() {
     insta::assert_yaml_snapshot!("basic_workspace_deps", test_data);
 }
 
-#[test]
-fn test_workspace_dependency_resolution() {
+#[switchy_async::test]
+async fn test_workspace_dependency_resolution() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test simple dependency resolution
@@ -22,8 +22,8 @@ fn test_workspace_dependency_resolution() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_transitive_dependencies() {
+#[switchy_async::test]
+async fn test_transitive_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test transitive dependency chain
@@ -31,8 +31,8 @@ fn test_transitive_dependencies() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_feature_conditional_deps() {
+#[switchy_async::test]
+async fn test_feature_conditional_deps() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test feature-conditional dependencies
@@ -45,8 +45,8 @@ fn test_feature_conditional_deps() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_all_potential_dependencies() {
+#[switchy_async::test]
+async fn test_all_potential_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test all potential dependencies mode
@@ -59,8 +59,8 @@ fn test_all_potential_dependencies() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_dev_build_dependencies() {
+#[switchy_async::test]
+async fn test_dev_build_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test inclusion of dev and build dependencies
@@ -68,8 +68,8 @@ fn test_dev_build_dependencies() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_circular_dependency_detection() {
+#[switchy_async::test]
+async fn test_circular_dependency_detection() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test circular dependency handling
@@ -83,8 +83,8 @@ fn test_circular_dependency_detection() {
     insta::assert_yaml_snapshot!("circular_deps", test_data);
 }
 
-#[test]
-fn test_optional_dependency_activation() {
+#[switchy_async::test]
+async fn test_optional_dependency_activation() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test optional dependency activation via features
@@ -97,8 +97,8 @@ fn test_optional_dependency_activation() {
     insta::assert_yaml_snapshot!("optional_deps", test_data);
 }
 
-#[test]
-fn test_default_features_disabled() {
+#[switchy_async::test]
+async fn test_default_features_disabled() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test when default features are disabled
@@ -111,8 +111,8 @@ fn test_default_features_disabled() {
     insta::assert_yaml_snapshot!("default_features_disabled", test_data);
 }
 
-#[test]
-fn test_workspace_paths() {
+#[switchy_async::test]
+async fn test_workspace_paths() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace path resolution
@@ -129,8 +129,8 @@ fn test_workspace_paths() {
     insta::assert_yaml_snapshot!("workspace_paths", test_data);
 }
 
-#[test]
-fn test_nonexistent_package_error() {
+#[switchy_async::test]
+async fn test_nonexistent_package_error() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test error handling for nonexistent packages

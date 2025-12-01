@@ -1,7 +1,13 @@
 use std::path::PathBuf;
 
-#[test]
-fn test_workspace_config_defaults() {
+fn setup() {
+    clippier_test_utilities::seed_clippier_test_resources();
+}
+
+#[switchy_async::test]
+async fn test_workspace_config_defaults() {
+    setup();
+
     // Test pkg1 which has no package-level config - should use workspace defaults
     let workspace_path =
         PathBuf::from("test-resources/workspaces/workspace-config-test/packages/pkg1");
@@ -18,6 +24,7 @@ fn test_workspace_config_defaults() {
         None,
         None,
     )
+    .await
     .expect("Failed to process configs");
 
     assert_eq!(result.len(), 1);
@@ -44,8 +51,10 @@ fn test_workspace_config_defaults() {
     assert!(deps.contains("apt-get install workspace-dep"));
 }
 
-#[test]
-fn test_workspace_config_with_package_overrides() {
+#[switchy_async::test]
+async fn test_workspace_config_with_package_overrides() {
+    setup();
+
     // Test pkg2 which has package-level config - should merge with workspace defaults
     let workspace_path =
         PathBuf::from("test-resources/workspaces/workspace-config-test/packages/pkg2");
@@ -62,6 +71,7 @@ fn test_workspace_config_with_package_overrides() {
         None,
         None,
     )
+    .await
     .expect("Failed to process configs");
 
     assert_eq!(result.len(), 1);
@@ -90,8 +100,10 @@ fn test_workspace_config_with_package_overrides() {
     assert!(deps.contains("apt-get install package-dep"));
 }
 
-#[test]
-fn test_backward_compatibility_no_workspace_config() {
+#[switchy_async::test]
+async fn test_backward_compatibility_no_workspace_config() {
+    setup();
+
     // Test that workspaces without workspace-level config still work
     let workspace_path = PathBuf::from("test-resources/workspaces/propagation/root");
 
@@ -107,6 +119,7 @@ fn test_backward_compatibility_no_workspace_config() {
         None,
         None,
     )
+    .await
     .expect("Failed to process configs");
 
     assert_eq!(result.len(), 1);

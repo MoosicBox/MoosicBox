@@ -3,8 +3,8 @@
 use clippier::{OutputType, handle_workspace_toolchains_command};
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_workspace_toolchains_aggregates_all_packages() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_aggregates_all_packages() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -34,8 +34,8 @@ fn test_workspace_toolchains_aggregates_all_packages() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_tracks_nightly_packages() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_tracks_nightly_packages() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -77,8 +77,8 @@ fn test_workspace_toolchains_tracks_nightly_packages() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_git_submodules() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_git_submodules() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -95,8 +95,8 @@ fn test_workspace_toolchains_git_submodules() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_os_filtering() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_os_filtering() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     // Test ubuntu
@@ -142,8 +142,8 @@ fn test_workspace_toolchains_os_filtering() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_env_vars() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_env_vars() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -176,8 +176,8 @@ fn test_workspace_toolchains_env_vars() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_ci_steps() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_ci_steps() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -208,8 +208,8 @@ fn test_workspace_toolchains_ci_steps() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_no_workspace_config() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_no_workspace_config() {
     // Use the 'basic' workspace which has no root clippier.toml
     let (temp_dir, _) = load_test_workspace("basic");
 
@@ -225,8 +225,8 @@ fn test_workspace_toolchains_no_workspace_config() {
     assert!(parsed["nightly_packages"].is_array());
 }
 
-#[test]
-fn test_workspace_toolchains_extracts_package_names() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_extracts_package_names() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -250,8 +250,8 @@ fn test_workspace_toolchains_extracts_package_names() {
     }
 }
 
-#[test]
-fn test_workspace_toolchains_os_specific_nightly() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_os_specific_nightly() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     // On ubuntu, pkg-os-nightly should be in nightly_packages
@@ -299,8 +299,8 @@ fn test_workspace_toolchains_os_specific_nightly() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_raw_output() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_raw_output() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Raw)
@@ -326,8 +326,8 @@ fn test_workspace_toolchains_raw_output() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_json_output_structure() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_json_output_structure() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -357,8 +357,8 @@ fn test_workspace_toolchains_json_output_structure() {
     );
 }
 
-#[test]
-fn test_workspace_toolchains_snapshot_ubuntu() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_snapshot_ubuntu() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "ubuntu", OutputType::Json)
@@ -370,8 +370,8 @@ fn test_workspace_toolchains_snapshot_ubuntu() {
     insta::assert_json_snapshot!("workspace_toolchains_ubuntu", parsed);
 }
 
-#[test]
-fn test_workspace_toolchains_snapshot_windows() {
+#[switchy_async::test]
+async fn test_workspace_toolchains_snapshot_windows() {
     let (temp_dir, _) = load_test_workspace("workspace-toolchains-test");
 
     let result = handle_workspace_toolchains_command(temp_dir.path(), "windows", OutputType::Json)

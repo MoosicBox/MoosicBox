@@ -27,14 +27,18 @@ required-features = []
 
 [dependencies]
 moosicbox_logging = { workspace = true, features = ["free_log"] }
+switchy_async     = { workspace = true, features = ["macros", "process", "tokio"] }
+switchy_fs        = { workspace = true, features = ["async", "std", "sync", "tokio"] }
 switchy_random    = { workspace = true, features = ["rand"] }
 
 anyhow     = { workspace = true }
 chrono     = { workspace = true }
 clap       = { workspace = true }
+futures    = { workspace = true }
 globset    = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }
+rayon      = { workspace = true, optional = true }
 regex      = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
@@ -44,9 +48,8 @@ toml       = { workspace = true }
 walkdir    = { workspace = true }
 which      = { workspace = true, optional = true, features = ["real-sys"] }
 
-git2  = { workspace = true, optional = true }
-mlua  = { workspace = true, optional = true, features = ["lua54", "serialize"] }
-rayon = { workspace = true, optional = true }
+git2 = { workspace = true, optional = true }
+mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
 
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
@@ -58,6 +61,8 @@ default = ["check", "format", "git-diff", "transforms-vendored"]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
 

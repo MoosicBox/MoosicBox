@@ -7,8 +7,8 @@ use clippier::git_diff::{
 use clippier::test_utils::test_resources::{load_cargo_lock_for_git_diff, load_test_workspace};
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_build_external_dependency_map() {
+#[switchy_async::test]
+async fn test_build_external_dependency_map() {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     let external_dep_map = build_external_dependency_map(temp_dir.path(), &workspace_members)
@@ -32,8 +32,8 @@ fn test_build_external_dependency_map() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_end_to_end_external_dependency_analysis() {
+#[switchy_async::test]
+async fn test_end_to_end_external_dependency_analysis() {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load the comprehensive Cargo.lock from test resources
@@ -71,8 +71,8 @@ fn test_end_to_end_external_dependency_analysis() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_deep_transitive_dependency_change() {
+#[switchy_async::test]
+async fn test_deep_transitive_dependency_change() {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load the complex deep dependencies Cargo.lock from test resources
@@ -112,8 +112,8 @@ fn test_deep_transitive_dependency_change() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_multiple_level_dependency_changes() {
+#[switchy_async::test]
+async fn test_multiple_level_dependency_changes() {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load comprehensive Cargo.lock that includes multiple-level dependencies
@@ -154,8 +154,8 @@ fn test_multiple_level_dependency_changes() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_no_transitive_impact() {
+#[switchy_async::test]
+async fn test_no_transitive_impact() {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Create a test scenario where a dependency changes but doesn't affect workspace packages
@@ -185,8 +185,8 @@ fn test_no_transitive_impact() {
     insta::assert_debug_snapshot!(affected_workspace_packages, @"[]");
 }
 
-#[test]
-fn test_git_submodules_with_chunking_and_spreading() {
+#[switchy_async::test]
+async fn test_git_submodules_with_chunking_and_spreading() {
     use clippier::{OutputType, handle_features_command};
     use clippier_test_utilities::test_resources::load_test_workspace;
 
@@ -221,6 +221,7 @@ fn test_git_submodules_with_chunking_and_spreading() {
         false,
         OutputType::Json,
     )
+    .await
     .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();

@@ -26,6 +26,8 @@ use clippier::handle_fmt_command;
 #[cfg(feature = "_tools")]
 use clippier::tools::ToolsConfig;
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -478,7 +480,8 @@ enum Commands {
 }
 
 #[allow(clippy::too_many_lines)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[switchy_async::main]
+async fn main() -> Result<(), BoxError> {
     moosicbox_logging::init(None, None).expect("Failed to initialize logging");
 
     let args = Args::parse();
@@ -489,19 +492,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             os,
             features,
             output,
-        } => handle_dependencies_command(&file, os.as_deref(), features.as_deref(), output)?,
+        } => handle_dependencies_command(&file, os.as_deref(), features.as_deref(), output).await?,
         Commands::Environment {
             file,
             os,
             features,
             output,
-        } => handle_environment_command(&file, os.as_deref(), features.as_deref(), output)?,
+        } => handle_environment_command(&file, os.as_deref(), features.as_deref(), output).await?,
         Commands::CiSteps {
             file,
             os,
             features,
             output,
-        } => handle_ci_steps_command(&file, os.as_deref(), features.as_deref(), output)?,
+        } => handle_ci_steps_command(&file, os.as_deref(), features.as_deref(), output).await?,
         Commands::Features {
             file,
             os,
@@ -530,39 +533,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "_transforms")]
             transform_trace,
             output,
-        } => handle_features_command(
-            &file,
-            os.as_deref(),
-            offset,
-            max,
-            max_parallel,
-            chunked,
-            spread,
-            randomize,
-            seed,
-            features.as_deref(),
-            skip_features.as_deref(),
-            required_features.as_deref(),
-            packages.as_deref(),
-            changed_files.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_base.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_head.as_deref(),
-            include_reasoning,
-            if ignore.is_empty() {
-                None
-            } else {
-                Some(&ignore)
-            },
-            &skip_if,
-            &include_if,
-            #[cfg(feature = "_transforms")]
-            &transform_scripts,
-            #[cfg(feature = "_transforms")]
-            transform_trace,
-            output,
-        )?,
+        } => {
+            handle_features_command(
+                &file,
+                os.as_deref(),
+                offset,
+                max,
+                max_parallel,
+                chunked,
+                spread,
+                randomize,
+                seed,
+                features.as_deref(),
+                skip_features.as_deref(),
+                required_features.as_deref(),
+                packages.as_deref(),
+                changed_files.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_base.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_head.as_deref(),
+                include_reasoning,
+                if ignore.is_empty() {
+                    None
+                } else {
+                    Some(&ignore)
+                },
+                &skip_if,
+                &include_if,
+                #[cfg(feature = "_transforms")]
+                &transform_scripts,
+                #[cfg(feature = "_transforms")]
+                transform_trace,
+                output,
+            )
+            .await?
+        }
         Commands::WorkspaceDeps {
             workspace_root,
             package,
@@ -591,22 +597,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             env,
             build_env,
             bin,
-        } => handle_generate_dockerfile_command(
-            &workspace_root,
-            &package,
-            &git_ref,
-            features.as_deref(),
-            no_default_features,
-            &output,
-            &base_image,
-            &final_image,
-            &arg,
-            build_args.as_deref(),
-            generate_dockerignore,
-            &env,
-            &build_env,
-            bin.as_deref(),
-        )?,
+        } => {
+            handle_generate_dockerfile_command(
+                &workspace_root,
+                &package,
+                &git_ref,
+                features.as_deref(),
+                no_default_features,
+                &output,
+                &base_image,
+                &final_image,
+                &arg,
+                build_args.as_deref(),
+                generate_dockerignore,
+                &env,
+                &build_env,
+                bin.as_deref(),
+            )
+            .await?
+        }
         Commands::AffectedPackages {
             workspace_root,
             changed_files,
@@ -618,22 +627,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             include_reasoning,
             ignore,
             output,
-        } => handle_affected_packages_command(
-            &workspace_root,
-            &changed_files,
-            target_package.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_base.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_head.as_deref(),
-            include_reasoning,
-            if ignore.is_empty() {
-                None
-            } else {
-                Some(&ignore)
-            },
-            output,
-        )?,
+        } => {
+            handle_affected_packages_command(
+                &workspace_root,
+                &changed_files,
+                target_package.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_base.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_head.as_deref(),
+                include_reasoning,
+                if ignore.is_empty() {
+                    None
+                } else {
+                    Some(&ignore)
+                },
+                output,
+            )
+            .await?
+        }
         Commands::ValidateFeaturePropagation {
             features,
             skip_features,
@@ -711,8 +723,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_base,
             #[cfg(feature = "git-diff")]
             git_head,
+            #[cfg(feature = "git-diff")]
             include_reasoning,
             max_parallel,
+            #[cfg(feature = "git-diff")]
             ignore,
             skip_if,
             include_if,
@@ -726,8 +740,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_base.as_deref(),
             #[cfg(feature = "git-diff")]
             git_head.as_deref(),
+            #[cfg(feature = "git-diff")]
             include_reasoning,
             max_parallel,
+            #[cfg(feature = "git-diff")]
             Some(&ignore),
             &skip_if,
             &include_if,

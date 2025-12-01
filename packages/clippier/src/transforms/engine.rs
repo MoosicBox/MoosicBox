@@ -7,6 +7,8 @@ use serde_json::Value;
 
 use super::context::{DependencyInfo, PackageInfo, TransformContext};
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 /// Lua engine for running transform scripts
 pub struct TransformEngine {
     lua: Lua,
@@ -21,7 +23,7 @@ impl TransformEngine {
     /// * Failed to create Lua engine
     /// * Failed to load workspace context
     /// * Failed to register API functions
-    pub fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(workspace_root: &Path) -> Result<Self, BoxError> {
         Self::with_trace(workspace_root, false)
     }
 
@@ -32,10 +34,7 @@ impl TransformEngine {
     /// * Failed to create Lua engine
     /// * Failed to load workspace context
     /// * Failed to register API functions
-    pub fn with_trace(
-        workspace_root: &Path,
-        trace_mode: bool,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn with_trace(workspace_root: &Path, trace_mode: bool) -> Result<Self, BoxError> {
         let lua = Lua::new();
         let context = TransformContext::new(workspace_root)?;
 
@@ -59,7 +58,7 @@ impl TransformEngine {
         &self,
         matrix: &mut Vec<serde_json::Map<String, Value>>,
         script: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), BoxError> {
         let original_len = matrix.len();
         let original_matrix = if self.trace_mode {
             Some(matrix.clone())
@@ -93,7 +92,11 @@ impl TransformEngine {
             .map_err(|e| format!("Transform script must define a 'transform' function: {e}"))?;
 
         // Get context table
-        let context_table: Table = self.lua.globals().get("context")?;
+        let context_table: Table = self
+            .lua
+            .globals()
+            .get("context")
+            .map_err(|e| format!("Failed to get context table: {e}"))?;
 
         // Call transform(context, matrix) and get result
         let result: LuaValue = transform_fn
@@ -150,7 +153,7 @@ impl TransformEngine {
 }
 
 /// Register helper functions in Lua
-fn register_helpers(lua: &Lua) -> Result<(), Box<dyn std::error::Error>> {
+fn register_helpers(lua: &Lua) -> Result<(), BoxError> {
     lua.load(
         r"
         -- table.filter: filter elements based on predicate
@@ -194,9 +197,15 @@ fn register_helpers(lua: &Lua) -> Result<(), Box<dyn std::error::Error>> {
         end
     ",
     )
-    .exec()?;
+    .exec()
+    .map_err(|e| format!("Failed to register helpers: {e}"))?;
 
     Ok(())
+}
+
+/// Convert `mlua::Error` to `BoxError`
+fn lua_err(e: &mlua::Error) -> BoxError {
+    format!("{e}").into()
 }
 
 /// Register context API functions
@@ -205,161 +214,193 @@ fn register_context_api(
     lua: &Lua,
     context: &TransformContext,
     trace_mode: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     let globals = lua.globals();
 
     // Create context table
-    let context_table = lua.create_table()?;
+    let context_table = lua.create_table().map_err(|e| lua_err(&e))?;
 
     // Register get_package
     let ctx = context.clone();
-    context_table.set(
-        "get_package",
-        lua.create_function(move |lua, (_self, name): (mlua::Value, String)| {
-            let Some(pkg) = ctx.get_package(&name) else {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "Package not found: {name}"
-                )));
-            };
+    context_table
+        .set(
+            "get_package",
+            lua.create_function(move |lua, (_self, name): (mlua::Value, String)| {
+                let Some(pkg) = ctx.get_package(&name) else {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "Package not found: {name}"
+                    )));
+                };
 
-            create_package_table(lua, pkg)
-        })?,
-    )?;
+                create_package_table(lua, pkg)
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register is_workspace_member
     let ctx = context.clone();
-    context_table.set(
-        "is_workspace_member",
-        lua.create_function(move |_lua, (_self, name): (mlua::Value, String)| {
-            Ok(ctx.is_workspace_member(&name))
-        })?,
-    )?;
+    context_table
+        .set(
+            "is_workspace_member",
+            lua.create_function(move |_lua, (_self, name): (mlua::Value, String)| {
+                Ok(ctx.is_workspace_member(&name))
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register get_all_packages
     let ctx = context.clone();
-    context_table.set(
-        "get_all_packages",
-        lua.create_function(move |_lua, _self: mlua::Value| Ok(ctx.get_all_packages()))?,
-    )?;
+    context_table
+        .set(
+            "get_all_packages",
+            lua.create_function(move |_lua, _self: mlua::Value| Ok(ctx.get_all_packages()))
+                .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register package_depends_on
     let ctx = context.clone();
-    context_table.set(
-        "package_depends_on",
-        lua.create_function(
-            move |_lua, (_self, pkg, dep): (mlua::Value, String, String)| {
-                Ok(ctx.package_depends_on(&pkg, &dep))
-            },
-        )?,
-    )?;
+    context_table
+        .set(
+            "package_depends_on",
+            lua.create_function(
+                move |_lua, (_self, pkg, dep): (mlua::Value, String, String)| {
+                    Ok(ctx.package_depends_on(&pkg, &dep))
+                },
+            )
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register feature_exists
     let ctx = context.clone();
-    context_table.set(
-        "feature_exists",
-        lua.create_function(
-            move |_lua, (_self, pkg, feat): (mlua::Value, String, String)| {
-                Ok(ctx.feature_exists(&pkg, &feat))
-            },
-        )?,
-    )?;
+    context_table
+        .set(
+            "feature_exists",
+            lua.create_function(
+                move |_lua, (_self, pkg, feat): (mlua::Value, String, String)| {
+                    Ok(ctx.feature_exists(&pkg, &feat))
+                },
+            )
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register log function
-    context_table.set(
-        "log",
-        lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
-            log::info!("[Transform] {message}");
-            Ok(())
-        })?,
-    )?;
+    context_table
+        .set(
+            "log",
+            lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
+                log::info!("[Transform] {message}");
+                Ok(())
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register warn function
-    context_table.set(
-        "warn",
-        lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
-            log::warn!("[Transform] {message}");
-            Ok(())
-        })?,
-    )?;
+    context_table
+        .set(
+            "warn",
+            lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
+                log::warn!("[Transform] {message}");
+                Ok(())
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register error function
-    context_table.set(
-        "error",
-        lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
-            log::error!("[Transform] {message}");
-            Ok(())
-        })?,
-    )?;
+    context_table
+        .set(
+            "error",
+            lua.create_function(|_lua, (_self, message): (mlua::Value, String)| {
+                log::error!("[Transform] {message}");
+                Ok(())
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register debug function for structured logging
-    context_table.set(
-        "debug",
-        lua.create_function(move |lua, (_self, data): (mlua::Value, mlua::Value)| {
-            // Try to convert to JSON for pretty printing
-            let debug_str = lua
-                .from_value::<serde_json::Value>(data.clone())
-                .map_or_else(
-                    |_| format!("{data:?}"),
-                    |json_val| {
-                        serde_json::to_string_pretty(&json_val)
-                            .unwrap_or_else(|_| format!("{data:?}"))
-                    },
-                );
+    context_table
+        .set(
+            "debug",
+            lua.create_function(move |lua, (_self, data): (mlua::Value, mlua::Value)| {
+                // Try to convert to JSON for pretty printing
+                let debug_str = lua
+                    .from_value::<serde_json::Value>(data.clone())
+                    .map_or_else(
+                        |_| format!("{data:?}"),
+                        |json_val| {
+                            serde_json::to_string_pretty(&json_val)
+                                .unwrap_or_else(|_| format!("{data:?}"))
+                        },
+                    );
 
-            if trace_mode {
-                log::debug!("[Transform Debug]\n{debug_str}");
-            } else {
-                log::trace!("[Transform Debug]\n{debug_str}");
-            }
-            Ok(())
-        })?,
-    )?;
+                if trace_mode {
+                    log::debug!("[Transform Debug]\n{debug_str}");
+                } else {
+                    log::trace!("[Transform Debug]\n{debug_str}");
+                }
+                Ok(())
+            })
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
 
     // Register inspect function for dependency visualization
     let ctx = context.clone();
-    context_table.set(
-        "inspect",
-        lua.create_function(
-            move |_lua, (_self, pkg_name, feature): (mlua::Value, String, String)| {
-                let Some(pkg) = ctx.get_package(&pkg_name) else {
-                    return Ok(format!("Package '{pkg_name}' not found"));
-                };
+    context_table
+        .set(
+            "inspect",
+            lua.create_function(
+                move |_lua, (_self, pkg_name, feature): (mlua::Value, String, String)| {
+                    let Some(pkg) = ctx.get_package(&pkg_name) else {
+                        return Ok(format!("Package '{pkg_name}' not found"));
+                    };
 
-                let mut output = format!("Inspecting {pkg_name}:{feature}\n");
+                    let mut output = format!("Inspecting {pkg_name}:{feature}\n");
 
-                if !pkg.has_feature(&feature) {
-                    use std::fmt::Write;
-                    writeln!(&mut output, "  ⚠ Feature '{feature}' does not exist").unwrap();
-                    return Ok(output);
-                }
-
-                let deps = pkg.feature_activates_dependencies(&feature);
-                if deps.is_empty() {
-                    output.push_str("  No dependencies activated\n");
-                } else {
-                    output.push_str("  Activates dependencies:\n");
-                    for dep in deps {
+                    if !pkg.has_feature(&feature) {
                         use std::fmt::Write;
-                        writeln!(
-                            &mut output,
-                            "    → {}{}",
-                            dep.name,
-                            if dep.features.is_empty() {
-                                String::new()
-                            } else {
-                                format!("/{}", dep.features.join(","))
-                            }
-                        )
-                        .unwrap();
+                        writeln!(&mut output, "  ⚠ Feature '{feature}' does not exist").unwrap();
+                        return Ok(output);
                     }
-                }
 
-                Ok(output)
-            },
-        )?,
-    )?;
+                    let deps = pkg.feature_activates_dependencies(&feature);
+                    if deps.is_empty() {
+                        output.push_str("  No dependencies activated\n");
+                    } else {
+                        output.push_str("  Activates dependencies:\n");
+                        for dep in deps {
+                            use std::fmt::Write;
+                            writeln!(
+                                &mut output,
+                                "    → {}{}",
+                                dep.name,
+                                if dep.features.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("/{}", dep.features.join(","))
+                                }
+                            )
+                            .unwrap();
+                        }
+                    }
 
-    globals.set("context", context_table)?;
+                    Ok(output)
+                },
+            )
+            .map_err(|e| lua_err(&e))?,
+        )
+        .map_err(|e| lua_err(&e))?;
+
+    globals
+        .set("context", context_table)
+        .map_err(|e| lua_err(&e))?;
 
     Ok(())
 }

@@ -12,8 +12,14 @@ use clippier::feature_validator::{
 };
 use insta::assert_snapshot;
 
+/// Seed the test resources into the simulator if enabled
+fn setup() {
+    clippier_test_utilities::seed_clippier_test_resources();
+}
+
 /// Get the path to the parent-validation-test workspace
 fn get_test_workspace_path() -> PathBuf {
+    setup();
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("test-resources")
         .join("workspaces")
@@ -47,8 +53,8 @@ fn create_parent_config(
     }
 }
 
-#[test]
-fn test_parent_validation_detects_missing_features() {
+#[switchy_async::test]
+async fn test_parent_validation_detects_missing_features() {
     let workspace_path = get_test_workspace_path();
 
     let config = create_parent_config(vec!["parent".to_string()], None, vec![], vec![]);
@@ -80,8 +86,8 @@ fn test_parent_validation_detects_missing_features() {
     assert_snapshot!("parent_validation_missing_features", json);
 }
 
-#[test]
-fn test_parent_validation_with_depth_limit() {
+#[switchy_async::test]
+async fn test_parent_validation_with_depth_limit() {
     let workspace_path = get_test_workspace_path();
 
     // Test with depth = 1 (only direct dependencies)
@@ -118,8 +124,8 @@ fn test_parent_validation_with_depth_limit() {
     assert_snapshot!("parent_validation_depth_1", json);
 }
 
-#[test]
-fn test_parent_validation_with_depth_2() {
+#[switchy_async::test]
+async fn test_parent_validation_with_depth_2() {
     let workspace_path = get_test_workspace_path();
 
     // Test with depth = 2 (includes transitive dependencies one level deep)
@@ -151,8 +157,8 @@ fn test_parent_validation_with_depth_2() {
     assert_snapshot!("parent_validation_depth_2", json);
 }
 
-#[test]
-fn test_parent_validation_with_custom_prefix() {
+#[switchy_async::test]
+async fn test_parent_validation_with_custom_prefix() {
     let workspace_path = get_test_workspace_path();
 
     // Test with custom prefix overrides
@@ -201,8 +207,8 @@ fn test_parent_validation_with_custom_prefix() {
     assert_snapshot!("parent_validation_custom_prefix", json);
 }
 
-#[test]
-fn test_parent_validation_with_skip_features() {
+#[switchy_async::test]
+async fn test_parent_validation_with_skip_features() {
     let workspace_path = get_test_workspace_path();
 
     // Test skipping features matching a pattern
@@ -242,8 +248,8 @@ fn test_parent_validation_with_skip_features() {
     assert_snapshot!("parent_validation_skip_features", json);
 }
 
-#[test]
-fn test_parent_validation_no_missing_when_all_exposed() {
+#[switchy_async::test]
+async fn test_parent_validation_no_missing_when_all_exposed() {
     let workspace_path = get_test_workspace_path();
 
     // Test child_b which has all features correctly exposed
@@ -279,8 +285,8 @@ fn test_parent_validation_no_missing_when_all_exposed() {
     );
 }
 
-#[test]
-fn test_parent_validation_json_output_structure() {
+#[switchy_async::test]
+async fn test_parent_validation_json_output_structure() {
     let workspace_path = get_test_workspace_path();
 
     let config = create_parent_config(
@@ -306,8 +312,8 @@ fn test_parent_validation_json_output_structure() {
     assert_snapshot!("parent_validation_full_json_output", json);
 }
 
-#[test]
-fn test_parent_validation_with_no_parent_packages() {
+#[switchy_async::test]
+async fn test_parent_validation_with_no_parent_packages() {
     let workspace_path = get_test_workspace_path();
 
     // Test when no parent packages are specified
@@ -323,8 +329,8 @@ fn test_parent_validation_with_no_parent_packages() {
     );
 }
 
-#[test]
-fn test_parent_validation_nonexistent_package() {
+#[switchy_async::test]
+async fn test_parent_validation_nonexistent_package() {
     let workspace_path = get_test_workspace_path();
 
     // Test with a package that doesn't exist

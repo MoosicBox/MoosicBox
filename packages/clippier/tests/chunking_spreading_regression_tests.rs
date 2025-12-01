@@ -1,12 +1,9 @@
-use std::fs;
-
 use clippier::{OutputType, handle_features_command};
 use clippier_test_utilities::test_resources::create_simple_workspace;
-use tempfile::TempDir;
 
 /// Helper function to create a test workspace with many packages and features
-fn create_feature_rich_workspace() -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+fn create_feature_rich_workspace() -> switchy_fs::TempDir {
+    let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
 
     // Create a workspace with multiple packages, each with many features
     let packages = vec![
@@ -39,12 +36,12 @@ tokio = "1.0"
             .collect::<Vec<_>>()
             .join(", ")
     );
-    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
     // Create packages with many features each
     for package in packages {
         let pkg_dir = temp_dir.path().join("packages").join(package);
-        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        switchy_fs::sync::create_dir_all(pkg_dir.join("src")).unwrap();
 
         // Create Cargo.toml with many features
         let cargo_toml = format!(
@@ -81,8 +78,8 @@ serde = {{ workspace = true }}
 tokio = {{ workspace = true }}
 "#
         );
-        fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
+        switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
 
         // Create clippier.toml
         let clippier_toml = format!(
@@ -100,15 +97,15 @@ dependencies = [
 ]
 "#
         );
-        fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
     }
 
     temp_dir
 }
 
 /// Test basic chunking functionality - ensure no chunk exceeds the limit
-#[test]
-fn test_basic_chunking_respects_limit() {
+#[switchy_async::test]
+async fn test_basic_chunking_respects_limit() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking with limit of 5 features per package
@@ -140,7 +137,8 @@ fn test_basic_chunking_respects_limit() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -185,7 +183,8 @@ fn test_basic_chunking_respects_limit() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -203,8 +202,8 @@ fn test_basic_chunking_respects_limit() {
 }
 
 /// Test basic spreading functionality - ensure features are distributed across chunks
-#[test]
-fn test_basic_spreading_distributes_features() {
+#[switchy_async::test]
+async fn test_basic_spreading_distributes_features() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test spreading without chunking - should create many packages with different features
@@ -236,7 +235,8 @@ fn test_basic_spreading_distributes_features() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -257,8 +257,8 @@ fn test_basic_spreading_distributes_features() {
 }
 
 /// Test chunking + spreading combination - the main regression test
-#[test]
-fn test_chunking_and_spreading_combination() {
+#[switchy_async::test]
+async fn test_chunking_and_spreading_combination() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking with spreading - should distribute features while respecting chunk limits
@@ -290,7 +290,8 @@ fn test_chunking_and_spreading_combination() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -314,8 +315,8 @@ fn test_chunking_and_spreading_combination() {
 }
 
 /// Test max-parallel interaction with chunking - should respect both limits
-#[test]
-fn test_max_parallel_with_chunking() {
+#[switchy_async::test]
+async fn test_max_parallel_with_chunking() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test max-parallel with chunking - should limit total results while respecting chunk size
@@ -347,7 +348,8 @@ fn test_max_parallel_with_chunking() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -368,8 +370,8 @@ fn test_max_parallel_with_chunking() {
 }
 
 /// Test the main regression case - simulate changed-files scenario with chunking and spreading
-#[test]
-fn test_changed_files_respects_chunking_and_spreading() {
+#[switchy_async::test]
+async fn test_changed_files_respects_chunking_and_spreading() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test the core regression case: chunking and spreading together
@@ -403,7 +405,8 @@ fn test_changed_files_respects_chunking_and_spreading() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -433,8 +436,8 @@ fn test_changed_files_respects_chunking_and_spreading() {
 }
 
 /// Test edge case - chunking with very small limit
-#[test]
-fn test_chunking_with_small_limit() {
+#[switchy_async::test]
+async fn test_chunking_with_small_limit() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test with chunk size of 1 - should create many small packages
@@ -466,7 +469,8 @@ fn test_chunking_with_small_limit() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -485,8 +489,8 @@ fn test_chunking_with_small_limit() {
 }
 
 /// Test edge case - empty workspace with chunking/spreading
-#[test]
-fn test_empty_workspace_with_chunking_spreading() {
+#[switchy_async::test]
+async fn test_empty_workspace_with_chunking_spreading() {
     let (temp_dir, _) = create_simple_workspace(&[], &[], &[]);
 
     let result = handle_features_command(
@@ -517,7 +521,8 @@ fn test_empty_workspace_with_chunking_spreading() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -530,13 +535,13 @@ fn test_empty_workspace_with_chunking_spreading() {
 }
 
 /// Test edge case - single package with chunking/spreading
-#[test]
-fn test_single_package_with_chunking_spreading() {
-    let temp_dir = TempDir::new().unwrap();
+#[switchy_async::test]
+async fn test_single_package_with_chunking_spreading() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
 
     // Create a single package with many features
     let package_dir = temp_dir.path().join("packages/single");
-    fs::create_dir_all(package_dir.join("src")).unwrap();
+    switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
 
     let cargo_toml = r#"
 [package]
@@ -560,8 +565,8 @@ feature10 = []
 [dependencies]
 serde = "1.0"
 "#;
-    fs::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
-    fs::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+    switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+    switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
 
     let clippier_toml = r#"
 [[config]]
@@ -570,7 +575,7 @@ dependencies = [
     { command = "apt-get install -y build-essential" }
 ]
 "#;
-    fs::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
 
     let workspace_toml = r#"
 [workspace]
@@ -579,7 +584,7 @@ members = ["packages/single"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
     // Test chunking with spreading on single package
     let result = handle_features_command(
@@ -610,7 +615,8 @@ serde = "1.0"
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -633,8 +639,8 @@ serde = "1.0"
 }
 
 /// Test complex scenario - max-parallel + chunking + spreading
-#[test]
-fn test_complex_scenario_all_flags() {
+#[switchy_async::test]
+async fn test_complex_scenario_all_flags() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test with all flags combined (without changed files since that's not working)
@@ -666,7 +672,8 @@ fn test_complex_scenario_all_flags() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -687,8 +694,8 @@ fn test_complex_scenario_all_flags() {
 }
 
 /// Test that chunking without spreading still works correctly
-#[test]
-fn test_chunking_without_spreading() {
+#[switchy_async::test]
+async fn test_chunking_without_spreading() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking without spreading - should limit features but not spread
@@ -720,7 +727,8 @@ fn test_chunking_without_spreading() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -745,8 +753,8 @@ fn test_chunking_without_spreading() {
 }
 
 /// Test that spreading without chunking still works correctly
-#[test]
-fn test_spreading_without_chunking() {
+#[switchy_async::test]
+async fn test_spreading_without_chunking() {
     let temp_dir = create_feature_rich_workspace();
 
     // Test spreading without chunking - should distribute all features
@@ -778,7 +786,8 @@ fn test_spreading_without_chunking() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();

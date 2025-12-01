@@ -528,7 +528,9 @@ pub fn print_summary(results: &AggregatedResults) {
 /// # Errors
 ///
 /// Returns an error if JSON serialization fails.
-pub fn results_to_json(results: &AggregatedResults) -> Result<String, Box<dyn std::error::Error>> {
+pub fn results_to_json(
+    results: &AggregatedResults,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let json_results: Vec<BTreeMap<String, serde_json::Value>> = results
         .results
         .iter()

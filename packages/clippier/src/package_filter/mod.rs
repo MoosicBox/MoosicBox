@@ -197,7 +197,7 @@ pub fn apply_filters(
         })?;
 
         let cargo_path = workspace_root.join(package_path).join("Cargo.toml");
-        let cargo_content = std::fs::read_to_string(&cargo_path)
+        let cargo_content = switchy_fs::sync::read_to_string(&cargo_path)
             .map_err(|e| FilterError::IoError(e.to_string()))?;
         let cargo_toml: Value =
             toml::from_str(&cargo_content).map_err(|e| FilterError::TomlError(e.to_string()))?;
@@ -236,17 +236,16 @@ pub fn apply_filters(
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use tempfile::TempDir;
 
     #[test]
     fn test_apply_skip_filter() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         // Create test package
         let pkg_dir = temp_path.join("test_package");
-        std::fs::create_dir(&pkg_dir).unwrap();
-        std::fs::write(
+        switchy_fs::sync::create_dir_all(&pkg_dir).unwrap();
+        switchy_fs::sync::write(
             pkg_dir.join("Cargo.toml"),
             r#"
             [package]
@@ -271,13 +270,13 @@ mod tests {
 
     #[test]
     fn test_apply_include_filter() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         // Create test package
         let pkg_dir = temp_path.join("test_package");
-        std::fs::create_dir(&pkg_dir).unwrap();
-        std::fs::write(
+        switchy_fs::sync::create_dir_all(&pkg_dir).unwrap();
+        switchy_fs::sync::write(
             pkg_dir.join("Cargo.toml"),
             r#"
             [package]

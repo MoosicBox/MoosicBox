@@ -9,8 +9,8 @@ use clippier::package_filter::{FilterError, Token, tokenize};
 // Whitespace Variations
 // ============================================================================
 
-#[test]
-fn test_multiple_spaces_between_tokens() {
+#[switchy_async::test]
+async fn test_multiple_spaces_between_tokens() {
     let tokens = tokenize("package.publish=false     AND     package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -22,8 +22,8 @@ fn test_multiple_spaces_between_tokens() {
     );
 }
 
-#[test]
-fn test_tabs_instead_of_spaces() {
+#[switchy_async::test]
+async fn test_tabs_instead_of_spaces() {
     let tokens = tokenize("package.publish=false\tAND\tpackage.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -35,8 +35,8 @@ fn test_tabs_instead_of_spaces() {
     );
 }
 
-#[test]
-fn test_mixed_tabs_and_spaces() {
+#[switchy_async::test]
+async fn test_mixed_tabs_and_spaces() {
     let tokens = tokenize("package.publish=false \t AND  \t package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -48,8 +48,8 @@ fn test_mixed_tabs_and_spaces() {
     );
 }
 
-#[test]
-fn test_newlines_as_separators() {
+#[switchy_async::test]
+async fn test_newlines_as_separators() {
     let tokens = tokenize("package.publish=false\nAND\npackage.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -61,8 +61,8 @@ fn test_newlines_as_separators() {
     );
 }
 
-#[test]
-fn test_leading_whitespace() {
+#[switchy_async::test]
+async fn test_leading_whitespace() {
     let tokens = tokenize("   package.publish=false AND package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -74,8 +74,8 @@ fn test_leading_whitespace() {
     );
 }
 
-#[test]
-fn test_trailing_whitespace() {
+#[switchy_async::test]
+async fn test_trailing_whitespace() {
     let tokens = tokenize("package.publish=false AND package.version^=0.1   ").unwrap();
     assert_eq!(
         tokens,
@@ -87,8 +87,8 @@ fn test_trailing_whitespace() {
     );
 }
 
-#[test]
-fn test_whitespace_inside_parentheses() {
+#[switchy_async::test]
+async fn test_whitespace_inside_parentheses() {
     let tokens = tokenize("(  package.publish=false  OR  package.version^=0.1  )").unwrap();
     assert_eq!(
         tokens,
@@ -102,8 +102,8 @@ fn test_whitespace_inside_parentheses() {
     );
 }
 
-#[test]
-fn test_no_spaces_around_operators() {
+#[switchy_async::test]
+async fn test_no_spaces_around_operators() {
     let tokens = tokenize("package.publish=false AND package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
@@ -115,8 +115,8 @@ fn test_no_spaces_around_operators() {
     );
 }
 
-#[test]
-fn test_only_whitespace() {
+#[switchy_async::test]
+async fn test_only_whitespace() {
     let tokens = tokenize("   \t  \n  ").unwrap();
     assert_eq!(tokens, vec![]);
 }
@@ -125,26 +125,26 @@ fn test_only_whitespace() {
 // Empty and Malformed Input
 // ============================================================================
 
-#[test]
-fn test_empty_input() {
+#[switchy_async::test]
+async fn test_empty_input() {
     let tokens = tokenize("").unwrap();
     assert_eq!(tokens, vec![]);
 }
 
-#[test]
-fn test_only_operators() {
+#[switchy_async::test]
+async fn test_only_operators() {
     let tokens = tokenize("AND OR NOT").unwrap();
     assert_eq!(tokens, vec![Token::And, Token::Or, Token::Not]);
 }
 
-#[test]
-fn test_only_parentheses() {
+#[switchy_async::test]
+async fn test_only_parentheses() {
     let tokens = tokenize("()").unwrap();
     assert_eq!(tokens, vec![Token::LeftParen, Token::RightParen]);
 }
 
-#[test]
-fn test_empty_parentheses_with_spaces() {
+#[switchy_async::test]
+async fn test_empty_parentheses_with_spaces() {
     let tokens = tokenize("(   )").unwrap();
     assert_eq!(tokens, vec![Token::LeftParen, Token::RightParen]);
 }
@@ -153,32 +153,32 @@ fn test_empty_parentheses_with_spaces() {
 // Quote Edge Cases
 // ============================================================================
 
-#[test]
-fn test_unclosed_quote_at_end() {
+#[switchy_async::test]
+async fn test_unclosed_quote_at_end() {
     let result = tokenize(r#"name="unclosed"#);
     assert!(matches!(result, Err(FilterError::UnclosedQuote(_))));
 }
 
-#[test]
-fn test_unclosed_quote_in_middle() {
+#[switchy_async::test]
+async fn test_unclosed_quote_in_middle() {
     let result = tokenize(r#"name="unclosed AND version=0.1.0"#);
     assert!(matches!(result, Err(FilterError::UnclosedQuote(_))));
 }
 
-#[test]
-fn test_quote_at_start_only() {
+#[switchy_async::test]
+async fn test_quote_at_start_only() {
     let result = tokenize(r#""name=test"#);
     assert!(matches!(result, Err(FilterError::UnclosedQuote(_))));
 }
 
-#[test]
-fn test_escaped_quote_at_end() {
+#[switchy_async::test]
+async fn test_escaped_quote_at_end() {
     let tokens = tokenize(r#"name="test\"""#).unwrap();
     assert_eq!(tokens, vec![Token::Filter(r#"name="test\"""#.to_string())]);
 }
 
-#[test]
-fn test_multiple_quotes_in_value() {
+#[switchy_async::test]
+async fn test_multiple_quotes_in_value() {
     let tokens = tokenize(r#"desc="She said \"hello\" today""#).unwrap();
     assert_eq!(
         tokens,
@@ -188,9 +188,9 @@ fn test_multiple_quotes_in_value() {
     );
 }
 
-#[test]
+#[switchy_async::test]
 #[ignore] // TODO: This currently succeeds but should probably fail
-fn test_quotes_in_property_name_fails() {
+async fn test_quotes_in_property_name_fails() {
     // Property names can't have quotes
     let result = tokenize(r#""name"=test"#);
     // This should fail to parse as a filter
@@ -201,8 +201,8 @@ fn test_quotes_in_property_name_fails() {
 // Escape Sequences
 // ============================================================================
 
-#[test]
-fn test_backslash_escape() {
+#[switchy_async::test]
+async fn test_backslash_escape() {
     let tokens = tokenize(r#"path="C:\\Users\\test""#).unwrap();
     assert_eq!(
         tokens,
@@ -210,8 +210,8 @@ fn test_backslash_escape() {
     );
 }
 
-#[test]
-fn test_newline_escape() {
+#[switchy_async::test]
+async fn test_newline_escape() {
     let tokens = tokenize(r#"text="line1\nline2""#).unwrap();
     assert_eq!(
         tokens,
@@ -219,8 +219,8 @@ fn test_newline_escape() {
     );
 }
 
-#[test]
-fn test_tab_escape() {
+#[switchy_async::test]
+async fn test_tab_escape() {
     let tokens = tokenize(r#"text="col1\tcol2""#).unwrap();
     assert_eq!(
         tokens,
@@ -228,8 +228,8 @@ fn test_tab_escape() {
     );
 }
 
-#[test]
-fn test_carriage_return_escape() {
+#[switchy_async::test]
+async fn test_carriage_return_escape() {
     let tokens = tokenize(r#"text="line\r\n""#).unwrap();
     assert_eq!(
         tokens,
@@ -237,8 +237,8 @@ fn test_carriage_return_escape() {
     );
 }
 
-#[test]
-fn test_backslash_at_end() {
+#[switchy_async::test]
+async fn test_backslash_at_end() {
     let result = tokenize(r#"text="test\"#);
     // Backslash at end should cause unclosed quote
     assert!(matches!(result, Err(FilterError::UnclosedQuote(_))));
@@ -248,44 +248,44 @@ fn test_backslash_at_end() {
 // Keywords as Values and Properties
 // ============================================================================
 
-#[test]
-fn test_keyword_and_as_property() {
+#[switchy_async::test]
+async fn test_keyword_and_as_property() {
     let tokens = tokenize("and=true").unwrap();
     assert_eq!(tokens, vec![Token::Filter("and=true".to_string())]);
 }
 
-#[test]
-fn test_keyword_or_as_property() {
+#[switchy_async::test]
+async fn test_keyword_or_as_property() {
     let tokens = tokenize("or=false").unwrap();
     assert_eq!(tokens, vec![Token::Filter("or=false".to_string())]);
 }
 
-#[test]
-fn test_keyword_not_as_property() {
+#[switchy_async::test]
+async fn test_keyword_not_as_property() {
     let tokens = tokenize("not=value").unwrap();
     assert_eq!(tokens, vec![Token::Filter("not=value".to_string())]);
 }
 
-#[test]
-fn test_keyword_in_compound_word_android() {
+#[switchy_async::test]
+async fn test_keyword_in_compound_word_android() {
     let tokens = tokenize("platform=ANDROID").unwrap();
     assert_eq!(tokens, vec![Token::Filter("platform=ANDROID".to_string())]);
 }
 
-#[test]
-fn test_keyword_in_compound_word_fork() {
+#[switchy_async::test]
+async fn test_keyword_in_compound_word_fork() {
     let tokens = tokenize("action=FORK").unwrap();
     assert_eq!(tokens, vec![Token::Filter("action=FORK".to_string())]);
 }
 
-#[test]
-fn test_keyword_in_compound_word_notification() {
+#[switchy_async::test]
+async fn test_keyword_in_compound_word_notification() {
     let tokens = tokenize("type=NOTIFICATION").unwrap();
     assert_eq!(tokens, vec![Token::Filter("type=NOTIFICATION".to_string())]);
 }
 
-#[test]
-fn test_mixed_case_keywords_in_expression() {
+#[switchy_async::test]
+async fn test_mixed_case_keywords_in_expression() {
     let tokens = tokenize("a=1 And b=2 oR c=3 NOT d=4").unwrap();
     assert_eq!(
         tokens,
@@ -305,8 +305,8 @@ fn test_mixed_case_keywords_in_expression() {
 // Complex Nesting
 // ============================================================================
 
-#[test]
-fn test_deeply_nested_parentheses_5_levels() {
+#[switchy_async::test]
+async fn test_deeply_nested_parentheses_5_levels() {
     let tokens = tokenize("(((((package.name=test)))))").unwrap();
     assert_eq!(
         tokens,
@@ -326,8 +326,8 @@ fn test_deeply_nested_parentheses_5_levels() {
     );
 }
 
-#[test]
-fn test_adjacent_parentheses() {
+#[switchy_async::test]
+async fn test_adjacent_parentheses() {
     let tokens = tokenize("((package.name=test))").unwrap();
     assert_eq!(
         tokens,
@@ -341,8 +341,8 @@ fn test_adjacent_parentheses() {
     );
 }
 
-#[test]
-fn test_nested_with_operators() {
+#[switchy_async::test]
+async fn test_nested_with_operators() {
     let tokens = tokenize("(a=1 AND (b=2 OR (c=3 AND d=4)))").unwrap();
     assert_eq!(
         tokens,
@@ -368,8 +368,8 @@ fn test_nested_with_operators() {
 // Special Characters in Values
 // ============================================================================
 
-#[test]
-fn test_dots_in_unquoted_filter() {
+#[switchy_async::test]
+async fn test_dots_in_unquoted_filter() {
     let tokens = tokenize("package.version=0.1.0").unwrap();
     assert_eq!(
         tokens,
@@ -377,8 +377,8 @@ fn test_dots_in_unquoted_filter() {
     );
 }
 
-#[test]
-fn test_hyphens_in_filter() {
+#[switchy_async::test]
+async fn test_hyphens_in_filter() {
     let tokens = tokenize("package.name=test-package").unwrap();
     assert_eq!(
         tokens,
@@ -386,8 +386,8 @@ fn test_hyphens_in_filter() {
     );
 }
 
-#[test]
-fn test_underscores_in_filter() {
+#[switchy_async::test]
+async fn test_underscores_in_filter() {
     let tokens = tokenize("package.name=test_package").unwrap();
     assert_eq!(
         tokens,
@@ -395,8 +395,8 @@ fn test_underscores_in_filter() {
     );
 }
 
-#[test]
-fn test_numbers_in_filter() {
+#[switchy_async::test]
+async fn test_numbers_in_filter() {
     let tokens = tokenize("package.version=123.456.789").unwrap();
     assert_eq!(
         tokens,
@@ -404,8 +404,8 @@ fn test_numbers_in_filter() {
     );
 }
 
-#[test]
-fn test_operators_in_quoted_values() {
+#[switchy_async::test]
+async fn test_operators_in_quoted_values() {
     let tokens = tokenize(r#"desc="value with != operator""#).unwrap();
     assert_eq!(
         tokens,
@@ -415,8 +415,8 @@ fn test_operators_in_quoted_values() {
     );
 }
 
-#[test]
-fn test_parentheses_in_quoted_values() {
+#[switchy_async::test]
+async fn test_parentheses_in_quoted_values() {
     let tokens = tokenize(r#"desc="test (with parens)""#).unwrap();
     assert_eq!(
         tokens,
@@ -424,8 +424,8 @@ fn test_parentheses_in_quoted_values() {
     );
 }
 
-#[test]
-fn test_newline_in_quoted_value() {
+#[switchy_async::test]
+async fn test_newline_in_quoted_value() {
     let tokens = tokenize("desc=\"line1\nline2\"").unwrap();
     assert_eq!(
         tokens,
@@ -433,8 +433,8 @@ fn test_newline_in_quoted_value() {
     );
 }
 
-#[test]
-fn test_tab_in_quoted_value() {
+#[switchy_async::test]
+async fn test_tab_in_quoted_value() {
     let tokens = tokenize("desc=\"col1\tcol2\"").unwrap();
     assert_eq!(
         tokens,
@@ -446,8 +446,8 @@ fn test_tab_in_quoted_value() {
 // Long Inputs
 // ============================================================================
 
-#[test]
-fn test_very_long_filter_1000_chars() {
+#[switchy_async::test]
+async fn test_very_long_filter_1000_chars() {
     let long_value = "a".repeat(1000);
     let filter_str = format!("name={long_value}");
     let tokens = tokenize(&filter_str).unwrap();
@@ -465,8 +465,8 @@ fn test_very_long_filter_1000_chars() {
     }
 }
 
-#[test]
-fn test_many_filters_chained() {
+#[switchy_async::test]
+async fn test_many_filters_chained() {
     let filters: Vec<String> = (0..20).map(|i| format!("f{i}=v{i}")).collect();
     let filter_str = filters.join(" AND ");
     let tokens = tokenize(&filter_str).unwrap();
@@ -491,14 +491,14 @@ fn test_many_filters_chained() {
 // Unicode Support
 // ============================================================================
 
-#[test]
-fn test_unicode_in_property_name() {
+#[switchy_async::test]
+async fn test_unicode_in_property_name() {
     let tokens = tokenize("名前=test").unwrap();
     assert_eq!(tokens, vec![Token::Filter("名前=test".to_string())]);
 }
 
-#[test]
-fn test_unicode_in_value() {
+#[switchy_async::test]
+async fn test_unicode_in_value() {
     let tokens = tokenize("package.name=テスト").unwrap();
     assert_eq!(
         tokens,
@@ -506,8 +506,8 @@ fn test_unicode_in_value() {
     );
 }
 
-#[test]
-fn test_unicode_in_quoted_value() {
+#[switchy_async::test]
+async fn test_unicode_in_quoted_value() {
     let tokens = tokenize(r#"desc="音楽プレーヤー""#).unwrap();
     assert_eq!(
         tokens,
@@ -515,8 +515,8 @@ fn test_unicode_in_quoted_value() {
     );
 }
 
-#[test]
-fn test_emoji_in_value() {
+#[switchy_async::test]
+async fn test_emoji_in_value() {
     let tokens = tokenize("icon=🎵").unwrap();
     assert_eq!(tokens, vec![Token::Filter("icon=🎵".to_string())]);
 }
@@ -525,8 +525,8 @@ fn test_emoji_in_value() {
 // Mixed Complex Scenarios
 // ============================================================================
 
-#[test]
-fn test_all_three_operators_with_nesting() {
+#[switchy_async::test]
+async fn test_all_three_operators_with_nesting() {
     let tokens =
         tokenize("NOT (package.publish=false AND package.version^=0.1) OR (package.name$=_example AND package.readme?)").unwrap();
 
@@ -549,8 +549,8 @@ fn test_all_three_operators_with_nesting() {
     );
 }
 
-#[test]
-fn test_complex_expression_with_all_features() {
+#[switchy_async::test]
+async fn test_complex_expression_with_all_features() {
     let input = r#"(package.name^="moosicbox_" AND package.publish=true) AND 
                    (NOT (package.categories@="test" OR package.keywords@!)) AND
                    (package.version~="^\d+\.\d+\.\d+$" OR package.readme?)"#;
@@ -588,8 +588,8 @@ fn test_complex_expression_with_all_features() {
 // Additional Unicode Tests
 // ============================================================================
 
-#[test]
-fn test_unicode_property_with_and() {
+#[switchy_async::test]
+async fn test_unicode_property_with_and() {
     // Japanese property name followed by AND keyword
     let tokens = tokenize("名前=test AND package.version=1.0").unwrap();
     assert_eq!(
@@ -602,8 +602,8 @@ fn test_unicode_property_with_and() {
     );
 }
 
-#[test]
-fn test_emoji_with_or() {
+#[switchy_async::test]
+async fn test_emoji_with_or() {
     // Emoji in value followed by OR keyword
     let tokens = tokenize(r#"icon="🎵" OR icon="🎸""#).unwrap();
     assert_eq!(
@@ -616,8 +616,8 @@ fn test_emoji_with_or() {
     );
 }
 
-#[test]
-fn test_multibyte_before_not() {
+#[switchy_async::test]
+async fn test_multibyte_before_not() {
     // Multibyte chars before NOT keyword
     let tokens = tokenize("名=日本 NOT x=1").unwrap();
     assert_eq!(
@@ -630,8 +630,8 @@ fn test_multibyte_before_not() {
     );
 }
 
-#[test]
-fn test_mixed_unicode_and_keywords() {
+#[switchy_async::test]
+async fn test_mixed_unicode_and_keywords() {
     // Complex expression with Unicode and all keywords
     let tokens = tokenize("(名前=テスト OR icon=🎵) AND NOT package.publish=false").unwrap();
     assert_eq!(tokens.len(), 8); // LeftParen, Filter, Or, Filter, RightParen, And, Not, Filter
@@ -648,16 +648,16 @@ fn test_mixed_unicode_and_keywords() {
     );
 }
 
-#[test]
-fn test_unicode_that_looks_like_keyword() {
+#[switchy_async::test]
+async fn test_unicode_that_looks_like_keyword() {
     // Full-width characters that might be confused with keywords
     // Should NOT be tokenized as keywords
     let tokens = tokenize("ＡＮＤ=value").unwrap();
     assert_eq!(tokens, vec![Token::Filter("ＡＮＤ=value".to_string())]);
 }
 
-#[test]
-fn test_korean_chars_with_parentheses() {
+#[switchy_async::test]
+async fn test_korean_chars_with_parentheses() {
     let tokens = tokenize("(이름=테스트)").unwrap();
     assert_eq!(
         tokens,
@@ -669,8 +669,8 @@ fn test_korean_chars_with_parentheses() {
     );
 }
 
-#[test]
-fn test_arabic_with_operators() {
+#[switchy_async::test]
+async fn test_arabic_with_operators() {
     let tokens = tokenize("اسم=قيمة AND نسخة=١").unwrap();
     assert_eq!(
         tokens,
@@ -682,8 +682,8 @@ fn test_arabic_with_operators() {
     );
 }
 
-#[test]
-fn test_mixed_rtl_ltr() {
+#[switchy_async::test]
+async fn test_mixed_rtl_ltr() {
     // Right-to-left and left-to-right mixed
     let tokens = tokenize("package.name=مرحبا OR שלום=hello").unwrap();
     assert_eq!(tokens.len(), 3);

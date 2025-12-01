@@ -1,8 +1,9 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
 use itertools::Itertools;
+use switchy_fs::exists;
 
-#[test]
-fn test_process_configs_basic() {
+#[switchy_async::test]
+async fn test_process_configs_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
     let result = clippier::process_configs(
         &temp_dir.path().join("packages/cli"),
@@ -15,12 +16,13 @@ fn test_process_configs_basic() {
         None,
         None,
         None,
-    );
+    )
+    .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_process_configs_with_clippier_toml() {
+#[switchy_async::test]
+async fn test_process_configs_with_clippier_toml() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test with API package that has clippier.toml configuration
@@ -34,8 +36,8 @@ fn test_process_configs_with_clippier_toml() {
     insta::assert_yaml_snapshot!("complex_api_config", test_data);
 }
 
-#[test]
-fn test_feature_chunking() {
+#[switchy_async::test]
+async fn test_feature_chunking() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test with web package that has chunked parallelization
@@ -47,8 +49,8 @@ fn test_feature_chunking() {
     insta::assert_yaml_snapshot!("web_chunked_features", test_data);
 }
 
-#[test]
-fn test_feature_filtering() {
+#[switchy_async::test]
+async fn test_feature_filtering() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test CLI package feature filtering
@@ -62,8 +64,8 @@ fn test_feature_filtering() {
     insta::assert_yaml_snapshot!("cli_feature_filtering", test_data);
 }
 
-#[test]
-fn test_multiple_os_configs() {
+#[switchy_async::test]
+async fn test_multiple_os_configs() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test API package OS configurations
@@ -78,8 +80,8 @@ fn test_multiple_os_configs() {
     insta::assert_yaml_snapshot!("multiple_os_configs", test_data);
 }
 
-#[test]
-fn test_environment_variables() {
+#[switchy_async::test]
+async fn test_environment_variables() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test environment variable processing with feature conditions
@@ -97,8 +99,8 @@ fn test_environment_variables() {
     insta::assert_yaml_snapshot!("web_env_vars", test_data);
 }
 
-#[test]
-fn test_workspace_fallback() {
+#[switchy_async::test]
+async fn test_workspace_fallback() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace-level configuration inheritance
@@ -112,22 +114,22 @@ fn test_workspace_fallback() {
     insta::assert_yaml_snapshot!("workspace_fallback", test_data);
 }
 
-#[test]
-fn test_cargo_arguments() {
+#[switchy_async::test]
+async fn test_cargo_arguments() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test cargo argument passing
 }
 
-#[test]
-fn test_nightly_flags() {
+#[switchy_async::test]
+async fn test_nightly_flags() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test nightly Rust flags
 }
 
-#[test]
-fn test_feature_limits() {
+#[switchy_async::test]
+async fn test_feature_limits() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test offset and max feature limits
@@ -141,8 +143,8 @@ fn test_feature_limits() {
     insta::assert_yaml_snapshot!("feature_limits", test_data);
 }
 
-#[test]
-fn test_spread_distribution() {
+#[switchy_async::test]
+async fn test_spread_distribution() {
     let (_temp_dir, _) = load_test_workspace("complex");
 
     // Test spread feature distribution
@@ -157,55 +159,58 @@ fn test_spread_distribution() {
     insta::assert_yaml_snapshot!("spread_distribution", test_data);
 }
 
-#[test]
-fn test_workspace_loads_successfully() {
+#[switchy_async::test]
+async fn test_workspace_loads_successfully() {
     let (temp_dir, _) = load_test_workspace("basic");
 
     // Verify the basic workspace structure exists
-    assert!(temp_dir.path().join("Cargo.toml").exists());
-    assert!(temp_dir.path().join("packages/api/Cargo.toml").exists());
-    assert!(temp_dir.path().join("packages/models/Cargo.toml").exists());
+    assert!(exists(temp_dir.path().join("Cargo.toml")));
+    assert!(exists(temp_dir.path().join("packages/api/Cargo.toml")));
+    assert!(exists(temp_dir.path().join("packages/models/Cargo.toml")));
 
     insta::assert_snapshot!(
         "basic_workspace_structure",
         format!(
             "{:?}",
-            std::fs::read_dir(temp_dir.path().join("packages"))
+            switchy_fs::sync::read_dir_sorted(temp_dir.path().join("packages"))
                 .unwrap()
-                .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+                .iter()
+                .map(|entry| entry.file_name().to_string_lossy().to_string())
                 .sorted()
                 .collect::<Vec<_>>()
         )
     );
 }
 
-#[test]
-fn test_complex_workspace_loads_successfully() {
+#[switchy_async::test]
+async fn test_complex_workspace_loads_successfully() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Verify the complex workspace structure exists
-    assert!(temp_dir.path().join("Cargo.toml").exists());
-    assert!(temp_dir.path().join("packages/core/Cargo.toml").exists());
-    assert!(temp_dir.path().join("packages/api/clippier.toml").exists());
-    assert!(temp_dir.path().join("packages/web/clippier.toml").exists());
+    assert!(exists(temp_dir.path().join("Cargo.toml")));
+    assert!(exists(temp_dir.path().join("packages/core/Cargo.toml")));
+    assert!(exists(temp_dir.path().join("packages/api/clippier.toml")));
+    assert!(exists(temp_dir.path().join("packages/web/clippier.toml")));
 
-    let mut packages: Vec<String> = std::fs::read_dir(temp_dir.path().join("packages"))
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
-        .sorted()
-        .collect();
+    let mut packages: Vec<String> =
+        switchy_fs::sync::read_dir_sorted(temp_dir.path().join("packages"))
+            .unwrap()
+            .iter()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .sorted()
+            .collect();
 
     packages.sort();
 
     insta::assert_yaml_snapshot!("complex_workspace_packages", packages);
 }
 
-#[test]
-fn test_api_package_has_correct_structure() {
+#[switchy_async::test]
+async fn test_api_package_has_correct_structure() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let api_cargo =
-        std::fs::read_to_string(temp_dir.path().join("packages/api/Cargo.toml")).unwrap();
+        switchy_fs::sync::read_to_string(temp_dir.path().join("packages/api/Cargo.toml")).unwrap();
 
     // Verify key aspects of the API package configuration
     assert!(api_cargo.contains("name    = \"api\""));
@@ -215,12 +220,13 @@ fn test_api_package_has_correct_structure() {
     insta::assert_snapshot!("api_cargo_toml", api_cargo);
 }
 
-#[test]
-fn test_clippier_config_exists_for_api() {
+#[switchy_async::test]
+async fn test_clippier_config_exists_for_api() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let api_clippier =
-        std::fs::read_to_string(temp_dir.path().join("packages/api/clippier.toml")).unwrap();
+        switchy_fs::sync::read_to_string(temp_dir.path().join("packages/api/clippier.toml"))
+            .unwrap();
 
     // Verify clippier configuration has expected sections
     assert!(api_clippier.contains("[env]"));
@@ -230,8 +236,8 @@ fn test_clippier_config_exists_for_api() {
     insta::assert_snapshot!("api_clippier_toml", api_clippier);
 }
 
-#[test]
-fn test_git_submodules_enabled() {
+#[switchy_async::test]
+async fn test_git_submodules_enabled() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let submodules_pkg = temp_dir.path().join("packages/with-submodules");
 
@@ -247,6 +253,7 @@ fn test_git_submodules_enabled() {
         None,
         None,
     )
+    .await
     .unwrap();
 
     let json = serde_json::to_value(&result).unwrap();
@@ -254,22 +261,23 @@ fn test_git_submodules_enabled() {
     assert_eq!(git_submodules, Some(true));
 }
 
-#[test]
-fn test_git_submodules_disabled_by_default() {
+#[switchy_async::test]
+async fn test_git_submodules_disabled_by_default() {
     let (temp_dir, _) = load_test_workspace("complex");
     let api_path = temp_dir.path().join("packages/api");
 
     let result = clippier::process_configs(
         &api_path, None, None, None, false, false, None, None, None, None,
     )
+    .await
     .unwrap();
 
     let json = serde_json::to_value(&result).unwrap();
     assert!(json[0].get("gitSubmodules").is_none() || json[0]["gitSubmodules"].is_null());
 }
 
-#[test]
-fn test_git_submodules_multiple_os() {
+#[switchy_async::test]
+async fn test_git_submodules_multiple_os() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let submodules_pkg = temp_dir.path().join("packages/with-submodules");
 
@@ -285,6 +293,7 @@ fn test_git_submodules_multiple_os() {
         None,
         None,
     )
+    .await
     .unwrap();
 
     assert_eq!(result.len(), 3);
@@ -301,8 +310,8 @@ fn test_git_submodules_multiple_os() {
     });
 }
 
-#[test]
-fn test_git_submodules_not_present_without_config() {
+#[switchy_async::test]
+async fn test_git_submodules_not_present_without_config() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let without_submodules_pkg = temp_dir.path().join("packages/without-submodules");
 
@@ -318,6 +327,7 @@ fn test_git_submodules_not_present_without_config() {
         None,
         None,
     )
+    .await
     .unwrap();
 
     for config in &result {

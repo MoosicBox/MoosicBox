@@ -1,8 +1,8 @@
 use clippier::{find_affected_packages, find_affected_packages_with_reasoning};
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_ignore_markdown_files_single_pattern() {
+#[switchy_async::test]
+async fn test_ignore_markdown_files_single_pattern() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/README.md".to_string()];
     let ignore_patterns = vec!["**/*.md".to_string()];
@@ -18,8 +18,8 @@ fn test_ignore_markdown_files_single_pattern() {
     );
 }
 
-#[test]
-fn test_ignore_multiple_file_types() {
+#[switchy_async::test]
+async fn test_ignore_multiple_file_types() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/api/README.md".to_string(),
@@ -39,8 +39,8 @@ fn test_ignore_multiple_file_types() {
     );
 }
 
-#[test]
-fn test_ignore_patterns_dont_affect_code_files() {
+#[switchy_async::test]
+async fn test_ignore_patterns_dont_affect_code_files() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -59,8 +59,8 @@ fn test_ignore_patterns_dont_affect_code_files() {
     );
 }
 
-#[test]
-fn test_ignore_with_negation_pattern() {
+#[switchy_async::test]
+async fn test_ignore_with_negation_pattern() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -79,8 +79,8 @@ fn test_ignore_with_negation_pattern() {
     );
 }
 
-#[test]
-fn test_ignore_nested_directory_files() {
+#[switchy_async::test]
+async fn test_ignore_nested_directory_files() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/docs/api.md".to_string(),
@@ -99,8 +99,8 @@ fn test_ignore_nested_directory_files() {
     );
 }
 
-#[test]
-fn test_empty_ignore_patterns_detects_all() {
+#[switchy_async::test]
+async fn test_empty_ignore_patterns_detects_all() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/README.md".to_string()];
     let ignore_patterns: Vec<String> = vec![];
@@ -116,8 +116,8 @@ fn test_empty_ignore_patterns_detects_all() {
     );
 }
 
-#[test]
-fn test_mixed_ignored_and_detected_files() {
+#[switchy_async::test]
+async fn test_mixed_ignored_and_detected_files() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -138,8 +138,8 @@ fn test_mixed_ignored_and_detected_files() {
     );
 }
 
-#[test]
-fn test_ignore_patterns_with_reasoning() {
+#[switchy_async::test]
+async fn test_ignore_patterns_with_reasoning() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -168,8 +168,8 @@ fn test_ignore_patterns_with_reasoning() {
     }
 }
 
-#[test]
-fn test_ignore_pattern_evaluation_order() {
+#[switchy_async::test]
+async fn test_ignore_pattern_evaluation_order() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/CRITICAL.md".to_string()];
     let ignore_patterns = vec!["!**/CRITICAL.md".to_string(), "**/*.md".to_string()];
@@ -185,8 +185,8 @@ fn test_ignore_pattern_evaluation_order() {
     );
 }
 
-#[test]
-fn test_ignore_specific_extensions() {
+#[switchy_async::test]
+async fn test_ignore_specific_extensions() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/Dockerfile".to_string(),
@@ -210,8 +210,8 @@ fn test_ignore_specific_extensions() {
     );
 }
 
-#[test]
-fn test_ignore_workflow_patterns() {
+#[switchy_async::test]
+async fn test_ignore_workflow_patterns() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -241,8 +241,8 @@ fn test_ignore_workflow_patterns() {
     );
 }
 
-#[test]
-fn test_ignore_only_some_packages() {
+#[switchy_async::test]
+async fn test_ignore_only_some_packages() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -262,8 +262,8 @@ fn test_ignore_only_some_packages() {
     );
 }
 
-#[test]
-fn test_ignore_with_code_and_docs_mixed() {
+#[switchy_async::test]
+async fn test_ignore_with_code_and_docs_mixed() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/src/lib.rs".to_string(),
@@ -283,8 +283,8 @@ fn test_ignore_with_code_and_docs_mixed() {
     );
 }
 
-#[test]
-fn test_negation_pattern_with_specific_file() {
+#[switchy_async::test]
+async fn test_negation_pattern_with_specific_file() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),
@@ -307,8 +307,8 @@ fn test_negation_pattern_with_specific_file() {
     );
 }
 
-#[test]
-fn test_multiple_negation_patterns() {
+#[switchy_async::test]
+async fn test_multiple_negation_patterns() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec![
         "packages/core/README.md".to_string(),

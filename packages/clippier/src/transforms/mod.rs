@@ -20,6 +20,8 @@ pub use engine::TransformEngine;
 
 use std::path::Path;
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 /// Result of a dry-run transform showing what would change
 #[derive(Debug, Clone)]
 pub struct TransformReport {
@@ -69,7 +71,7 @@ pub fn apply_transforms_with_trace(
     transform_specs: &[String],
     workspace_root: &Path,
     trace_mode: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     if transform_specs.is_empty() {
         return Ok(());
     }
@@ -95,7 +97,7 @@ pub fn dry_run_transforms(
     matrix: &[serde_json::Map<String, serde_json::Value>],
     transform_specs: &[String],
     workspace_root: &Path,
-) -> Result<TransformReport, Box<dyn std::error::Error>> {
+) -> Result<TransformReport, BoxError> {
     let before = matrix.to_vec();
     let mut after = matrix.to_vec();
 
@@ -147,7 +149,7 @@ pub fn apply_transforms(
     matrix: &mut Vec<serde_json::Map<String, serde_json::Value>>,
     transform_specs: &[String],
     workspace_root: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     if transform_specs.is_empty() {
         return Ok(());
     }
@@ -168,10 +170,7 @@ pub fn apply_transforms(
 /// - Inline Lua code
 /// - File paths (.lua extension)
 /// - Named transforms from .clippier/clippier.toml
-fn load_transform_script(
-    spec: &str,
-    workspace_root: &Path,
-) -> Result<String, Box<dyn std::error::Error>> {
+fn load_transform_script(spec: &str, workspace_root: &Path) -> Result<String, BoxError> {
     let spec = spec.trim();
 
     // Check if it's a file path

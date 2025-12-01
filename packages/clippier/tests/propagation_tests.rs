@@ -1,8 +1,8 @@
 use clippier::{OutputType, handle_features_command};
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_git_submodules_propagates_through_build_deps() {
+#[switchy_async::test]
+async fn test_git_submodules_propagates_through_build_deps() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -32,7 +32,8 @@ fn test_git_submodules_propagates_through_build_deps() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -51,8 +52,8 @@ fn test_git_submodules_propagates_through_build_deps() {
     );
 }
 
-#[test]
-fn test_git_submodules_propagates_through_dev_and_regular_deps() {
+#[switchy_async::test]
+async fn test_git_submodules_propagates_through_dev_and_regular_deps() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -82,7 +83,8 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -101,8 +103,8 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
     );
 }
 
-#[test]
-fn test_dependencies_propagate_and_merge() {
+#[switchy_async::test]
+async fn test_dependencies_propagate_and_merge() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -132,7 +134,8 @@ fn test_dependencies_propagate_and_merge() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -163,8 +166,8 @@ fn test_dependencies_propagate_and_merge() {
     );
 }
 
-#[test]
-fn test_dependencies_propagate_to_root() {
+#[switchy_async::test]
+async fn test_dependencies_propagate_to_root() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -194,7 +197,8 @@ fn test_dependencies_propagate_to_root() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -225,8 +229,8 @@ fn test_dependencies_propagate_to_root() {
     );
 }
 
-#[test]
-fn test_ci_steps_propagate_and_preserve_order() {
+#[switchy_async::test]
+async fn test_ci_steps_propagate_and_preserve_order() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -256,7 +260,8 @@ fn test_ci_steps_propagate_and_preserve_order() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -291,8 +296,8 @@ fn test_ci_steps_propagate_and_preserve_order() {
     );
 }
 
-#[test]
-fn test_env_vars_propagate_with_overlay() {
+#[switchy_async::test]
+async fn test_env_vars_propagate_with_overlay() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -322,7 +327,8 @@ fn test_env_vars_propagate_with_overlay() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -358,8 +364,8 @@ fn test_env_vars_propagate_with_overlay() {
     );
 }
 
-#[test]
-fn test_nightly_does_not_propagate() {
+#[switchy_async::test]
+async fn test_nightly_does_not_propagate() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -389,7 +395,8 @@ fn test_nightly_does_not_propagate() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -405,8 +412,8 @@ fn test_nightly_does_not_propagate() {
     assert_eq!(leaf["nightly"], false, "leaf should not be nightly");
 }
 
-#[test]
-fn test_propagation_with_all_workspace_packages() {
+#[switchy_async::test]
+async fn test_propagation_with_all_workspace_packages() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -436,7 +443,8 @@ fn test_propagation_with_all_workspace_packages() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok(), "Command failed: {:?}", result.err());
     let output = result.unwrap();
@@ -455,8 +463,8 @@ fn test_propagation_with_all_workspace_packages() {
     }
 }
 
-#[test]
-fn test_external_deps_dont_break_propagation() {
+#[switchy_async::test]
+async fn test_external_deps_dont_break_propagation() {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -486,7 +494,8 @@ fn test_external_deps_dont_break_propagation() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(
         result.is_ok(),

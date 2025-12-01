@@ -8,8 +8,8 @@ use clippier::git_diff::find_transitively_affected_external_deps;
 
 use clippier::test_utils::test_resources::{create_simple_workspace, load_cargo_lock_for_git_diff};
 
-#[test]
-fn test_parse_dependency_name() {
+#[switchy_async::test]
+async fn test_parse_dependency_name() {
     insta::assert_debug_snapshot!(parse_dependency_name("serde"), @r###""serde""###);
     insta::assert_debug_snapshot!(parse_dependency_name("serde 1.0.0"), @r###""serde""###);
     insta::assert_debug_snapshot!(
@@ -19,8 +19,8 @@ fn test_parse_dependency_name() {
     insta::assert_debug_snapshot!(parse_dependency_name("serde_json 1.0.0"), @r###""serde_json""###);
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_simple() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_simple() {
     let changes = vec![
         (' ', "[[package]]\n".to_string()),
         (' ', "name = \"serde\"\n".to_string()),
@@ -33,8 +33,8 @@ fn test_parse_cargo_lock_changes_simple() {
     assert!(result.contains(&"serde".to_string()));
 }
 
-#[test]
-fn test_parse_cargo_lock_changes_multiple() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_changes_multiple() {
     let changes = vec![
         (' ', "[[package]]\n".to_string()),
         (' ', "name = \"serde\"\n".to_string()),
@@ -53,8 +53,8 @@ fn test_parse_cargo_lock_changes_multiple() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_simple_transitive_dependencies() {
+#[switchy_async::test]
+async fn test_simple_transitive_dependencies() {
     // Load a simple Cargo.lock from test resources
     let cargo_lock = load_cargo_lock_for_git_diff("basic", "simple");
 
@@ -71,8 +71,8 @@ fn test_simple_transitive_dependencies() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_complex_transitive_dependencies() {
+#[switchy_async::test]
+async fn test_complex_transitive_dependencies() {
     // Load the complex deep dependencies Cargo.lock from test resources
     let cargo_lock = load_cargo_lock_for_git_diff("deep-deps", "complex");
 
@@ -91,8 +91,8 @@ fn test_complex_transitive_dependencies() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_multiple_changed_dependencies() {
+#[switchy_async::test]
+async fn test_multiple_changed_dependencies() {
     // Create a simple test scenario using the utility function
     let (_temp_dir, _workspace_members) = create_simple_workspace(
         &["app", "utils"],
@@ -123,8 +123,8 @@ fn test_multiple_changed_dependencies() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_no_dependencies() {
+#[switchy_async::test]
+async fn test_no_dependencies() {
     // Create a minimal workspace for testing isolated packages
     let (_temp_dir, _workspace_members) =
         create_simple_workspace(&["standalone"], &[], &[("standalone", &[])]);
@@ -144,8 +144,8 @@ fn test_no_dependencies() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_circular_dependencies() {
+#[switchy_async::test]
+async fn test_circular_dependencies() {
     // This test checks that the algorithm handles potential circular references gracefully
     // In practice, Cargo.lock shouldn't have circular deps, but we test for robustness
     let cargo_lock = load_cargo_lock_for_git_diff("basic", "simple");
@@ -162,8 +162,8 @@ fn test_circular_dependencies() {
     "###);
 }
 
-#[test]
-fn test_parse_cargo_lock_toml() {
+#[switchy_async::test]
+async fn test_parse_cargo_lock_toml() {
     // Test parsing a simple TOML Cargo.lock structure
     let cargo_lock_toml = r#"
 version = 3

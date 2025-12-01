@@ -63,8 +63,8 @@ test-feature = []
     temp_dir
 }
 
-#[test]
-fn test_workspace_clippier_toml_array_expansion() {
+#[switchy_async::test]
+async fn test_workspace_clippier_toml_array_expansion() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -104,8 +104,8 @@ reason = "Testing array expansion in workspace config"
     );
 }
 
-#[test]
-fn test_package_clippier_toml_array_expansion() {
+#[switchy_async::test]
+async fn test_package_clippier_toml_array_expansion() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -149,8 +149,8 @@ reason = "Testing array expansion in package config"
     );
 }
 
-#[test]
-fn test_cargo_metadata_array_expansion() {
+#[switchy_async::test]
+async fn test_cargo_metadata_array_expansion() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -199,8 +199,8 @@ test-feature = []
     );
 }
 
-#[test]
-fn test_single_vs_array_equivalence() {
+#[switchy_async::test]
+async fn test_single_vs_array_equivalence() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -261,8 +261,8 @@ reason = "Array syntax"
     assert_eq!(result1.valid_packages, result2.valid_packages);
 }
 
-#[test]
-fn test_array_with_wildcards() {
+#[switchy_async::test]
+async fn test_array_with_wildcards() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -295,8 +295,8 @@ reason = "Wildcard pattern in array"
     );
 }
 
-#[test]
-fn test_mixed_array_and_single_entries() {
+#[switchy_async::test]
+async fn test_mixed_array_and_single_entries() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -326,8 +326,8 @@ reason = "Array syntax"
     assert_eq!(summary.total_applied, 2);
 }
 
-#[test]
-fn test_empty_array_handling() {
+#[switchy_async::test]
+async fn test_empty_array_handling() {
     // Test that empty arrays don't cause crashes (though they're not useful)
     let toml_str = r#"
 feature = "test-feature"
@@ -348,8 +348,8 @@ reason = "Empty array test"
     );
 }
 
-#[test]
-fn test_validation_without_overrides() {
+#[switchy_async::test]
+async fn test_validation_without_overrides() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 
@@ -388,8 +388,8 @@ fn test_validation_without_overrides() {
     assert_eq!(missing.len(), 2, "Should have 2 missing propagations");
 }
 
-#[test]
-fn test_validation_with_overrides_enabled() {
+#[switchy_async::test]
+async fn test_validation_with_overrides_enabled() {
     let temp_dir = create_override_test_workspace();
     let root_path = temp_dir.path();
 

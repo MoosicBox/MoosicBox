@@ -1,8 +1,72 @@
-use std::path::Path;
-use tempfile::TempDir;
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
+use std::path::{Path, PathBuf};
+
+// Re-export TempDir - use switchy_fs version which adapts based on whether simulator is compiled in
+pub use switchy_fs::TempDir;
+
+/// Seeds the simulator filesystem with the clippier test-resources directory.
+///
+/// This function copies all test resources from the real filesystem into the
+/// simulator at the same path, allowing tests that use relative or absolute
+/// paths to `test-resources/` to work correctly in simulator mode.
+///
+/// In non-simulator mode, this is a no-op since files are already accessible.
+///
+/// # Arguments
+/// * `manifest_dir` - The `CARGO_MANIFEST_DIR` of the calling crate (use `env!("CARGO_MANIFEST_DIR")`)
+///
+/// # Panics
+///
+/// * If seeding the simulator filesystem fails
+///
+/// # Example
+///
+/// ```ignore
+/// // Call at the start of tests that use relative paths to test-resources
+/// clippier_test_utilities::seed_test_resources(env!("CARGO_MANIFEST_DIR"));
+/// ```
+pub fn seed_test_resources(manifest_dir: &str) {
+    let test_resources_path = PathBuf::from(manifest_dir).join("test-resources");
+
+    // Seed at the absolute path (no-op if simulator disabled or path doesn't exist)
+    let _ = switchy_fs::seed_from_real_fs_same_path(&test_resources_path);
+
+    // Also seed at the relative path for tests using relative paths
+    let _ = switchy_fs::seed_from_real_fs(&test_resources_path, "test-resources");
+}
+
+/// Returns the path to the clippier package directory.
+///
+/// This is useful for getting the base path where test-resources are located.
+///
+/// # Panics
+///
+/// * If the clippier package directory cannot be found
+#[must_use]
+pub fn clippier_manifest_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent() // go up from test_utilities to clippier
+        .expect("Failed to get clippier directory")
+        .to_path_buf()
+}
+
+/// Seeds the simulator filesystem with clippier's test-resources directory.
+///
+/// This is a convenience function that seeds using clippier's manifest directory.
+///
+/// # Panics
+///
+/// * If seeding the simulator filesystem fails
+pub fn seed_clippier_test_resources() {
+    let clippier_dir = clippier_manifest_dir();
+    seed_test_resources(clippier_dir.to_str().expect("Invalid path"));
+}
 
 pub mod test_resources {
-    use super::*;
+    use super::{Path, TempDir};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,15 +107,19 @@ pub mod test_resources {
             .join("workspaces")
             .join(workspace_name);
 
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
-
-        // Copy workspace files to temp directory
-        copy_dir_recursive(&test_resources_path, temp_dir.path())
-            .expect("Failed to copy test workspace");
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
+        if switchy_fs::is_simulator_enabled() {
+            switchy_fs::seed_from_real_fs(&test_resources_path, temp_dir.path())
+                .expect("Failed to seed simulator filesystem");
+        } else {
+            copy_dir_recursive(&test_resources_path, temp_dir.path())
+                .expect("Failed to copy test workspace");
+        }
 
         // Get workspace members from the workspace Cargo.toml
         let workspace_cargo_toml = temp_dir.path().join("Cargo.toml");
-        let workspace_content = std::fs::read_to_string(&workspace_cargo_toml)
+
+        let workspace_content = switchy_fs::sync::read_to_string(&workspace_cargo_toml)
             .expect("Failed to read workspace Cargo.toml");
 
         let workspace_toml: toml::Value =
@@ -73,6 +141,9 @@ pub mod test_resources {
 
     /// Load a Cargo.lock file from the test resources
     ///
+    /// Note: This reads directly from the real filesystem since the cargo lock
+    /// files are only used for in-memory parsing, not for clippier's fs operations.
+    ///
     /// # Panics
     ///
     /// * If fails to read the Cargo.lock file
@@ -87,13 +158,18 @@ pub mod test_resources {
             .join("cargo-locks")
             .join(format!("{cargo_lock_name}.json"));
 
-        let cargo_lock_content = std::fs::read_to_string(&cargo_lock_path).unwrap_or_else(|e| {
-            panic!(
-                "Failed to read cargo lock file {}: {}",
-                cargo_lock_path.display(),
-                e
-            )
-        });
+        // Read from real filesystem - this file is only used for in-memory parsing,
+        // not for clippier's fs operations that need to go through the simulator
+        let cargo_lock_content =
+            switchy_fs::with_real_fs(|| std::fs::read_to_string(&cargo_lock_path)).unwrap_or_else(
+                |e| {
+                    panic!(
+                        "Failed to read cargo lock file {}: {}",
+                        cargo_lock_path.display(),
+                        e
+                    )
+                },
+            );
 
         let cargo_lock: CargoLock = serde_json::from_str(&cargo_lock_content).unwrap_or_else(|e| {
             panic!(
@@ -145,7 +221,7 @@ pub mod test_resources {
     ) -> (TempDir, Vec<String>) {
         use std::fmt::Write;
 
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
 
         // Create workspace root Cargo.toml
         let mut workspace_toml = String::new();
@@ -158,13 +234,14 @@ pub mod test_resources {
             writeln!(workspace_toml, "{dep} = \"1.0\"").unwrap();
         }
 
-        std::fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
+        switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), &workspace_toml)
             .expect("Failed to write workspace Cargo.toml");
 
         // Create package directories and Cargo.toml files
         for (package_name, dependencies) in package_configs {
             let package_path = temp_dir.path().join("packages").join(package_name);
-            std::fs::create_dir_all(package_path.join("src"))
+
+            switchy_fs::sync::create_dir_all(package_path.join("src"))
                 .expect("Failed to create package directory");
 
             let mut package_toml = format!(
@@ -175,10 +252,10 @@ pub mod test_resources {
                 writeln!(package_toml, "{dep} = {{ workspace = true }}").unwrap();
             }
 
-            std::fs::write(package_path.join("Cargo.toml"), package_toml)
+            switchy_fs::sync::write(package_path.join("Cargo.toml"), &package_toml)
                 .expect("Failed to write package Cargo.toml");
 
-            std::fs::write(package_path.join("src/lib.rs"), "// test lib")
+            switchy_fs::sync::write(package_path.join("src/lib.rs"), "// test lib")
                 .expect("Failed to write package lib.rs");
         }
 
@@ -187,19 +264,25 @@ pub mod test_resources {
     }
 
     fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(dst)?;
+        switchy_fs::sync::create_dir_all(dst)?;
 
-        let mut entries: Vec<_> = std::fs::read_dir(src)?.collect::<Result<Vec<_>, _>>()?;
-        entries.sort_by_key(std::fs::DirEntry::file_name);
+        let entries = switchy_fs::with_real_fs(|| {
+            let mut entries: Vec<_> = std::fs::read_dir(src)?.collect::<Result<Vec<_>, _>>()?;
+            entries.sort_by_key(std::fs::DirEntry::file_name);
+            Ok::<_, std::io::Error>(entries)
+        })?;
 
         for entry in entries {
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
 
-            if src_path.is_dir() {
+            let file_type = switchy_fs::with_real_fs(|| entry.file_type())?;
+            if file_type.is_dir() {
                 copy_dir_recursive(&src_path, &dst_path)?;
             } else {
-                std::fs::copy(&src_path, &dst_path)?;
+                // Read from real fs, write to switchy_fs (which may be simulator)
+                let content = switchy_fs::with_real_fs(|| std::fs::read(&src_path))?;
+                switchy_fs::sync::write(&dst_path, content)?;
             }
         }
 

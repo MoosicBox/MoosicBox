@@ -7,8 +7,8 @@ use clippier::test_utils::test_resources::load_cargo_lock_for_git_diff;
 use std::path::Path;
 
 #[cfg(feature = "git-diff")]
-#[test_log::test]
-fn test_real_world_tokio_update() {
+#[test_log::test(switchy_async::test)]
+async fn test_real_world_tokio_update() {
     // Simulate a real git diff where tokio was updated from 1.35.0 to 1.36.0
     let cargo_lock_changes = vec![
         (' ', "[[package]]".to_string()),
@@ -47,8 +47,8 @@ fn test_real_world_tokio_update() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test_log::test]
-fn test_real_world_cargo_lock_changes() {
+#[test_log::test(switchy_async::test)]
+async fn test_real_world_cargo_lock_changes() {
     // This test uses the actual git commits mentioned in the issue
     let workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
     let mut workspace_root = workspace_root.clone();
@@ -101,8 +101,8 @@ fn test_real_world_cargo_lock_changes() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test_log::test]
-fn test_debug_cargo_lock_parsing() {
+#[test_log::test(switchy_async::test)]
+async fn test_debug_cargo_lock_parsing() {
     use clippier::git_diff::extract_changed_dependencies_from_git;
     use std::path::Path;
 
@@ -156,8 +156,8 @@ fn test_debug_cargo_lock_parsing() {
 }
 
 #[cfg(feature = "git-diff")]
-#[test_log::test]
-fn test_debug_raw_diff_lines() {
+#[test_log::test(switchy_async::test)]
+async fn test_debug_raw_diff_lines() {
     use git2::Repository;
     use std::path::Path;
 

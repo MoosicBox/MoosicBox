@@ -1,12 +1,10 @@
-use std::fs;
-
 use clippier::{
     OutputType, handle_ci_steps_command, handle_dependencies_command, handle_environment_command,
     handle_features_command, handle_packages_command, handle_workspace_deps_command,
     process_workspace_configs,
 };
+use clippier_test_utilities::TempDir;
 use clippier_test_utilities::test_resources::{create_simple_workspace, load_test_workspace};
-use tempfile::TempDir;
 
 /// Helper function to normalize paths in test results for consistent snapshots
 fn normalize_paths(mut parsed: serde_json::Value) -> serde_json::Value {
@@ -27,8 +25,8 @@ fn normalize_paths(mut parsed: serde_json::Value) -> serde_json::Value {
 }
 
 /// Test the handle_dependencies_command function with various scenarios
-#[test]
-fn test_handle_dependencies_command_basic() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_dependencies_command(
@@ -36,7 +34,8 @@ fn test_handle_dependencies_command_basic() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -44,8 +43,8 @@ fn test_handle_dependencies_command_basic() {
     insta::assert_snapshot!("dependencies_command_complex_ubuntu", dependencies);
 }
 
-#[test]
-fn test_handle_dependencies_command_json_output() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_json_output() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_dependencies_command(
@@ -53,7 +52,8 @@ fn test_handle_dependencies_command_json_output() {
         Some("ubuntu"),
         None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies_json = result.unwrap();
@@ -63,8 +63,8 @@ fn test_handle_dependencies_command_json_output() {
     insta::assert_yaml_snapshot!("dependencies_command_json_output", parsed);
 }
 
-#[test]
-fn test_handle_dependencies_command_with_features() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_with_features() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_dependencies_command(
@@ -72,7 +72,8 @@ fn test_handle_dependencies_command_with_features() {
         Some("ubuntu"),
         Some("frontend,ssr"),
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -80,8 +81,8 @@ fn test_handle_dependencies_command_with_features() {
     insta::assert_snapshot!("dependencies_command_with_features", dependencies);
 }
 
-#[test]
-fn test_handle_dependencies_command_no_os_filter() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_no_os_filter() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_dependencies_command(
@@ -89,7 +90,8 @@ fn test_handle_dependencies_command_no_os_filter() {
         None,
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -97,8 +99,8 @@ fn test_handle_dependencies_command_no_os_filter() {
     insta::assert_snapshot!("dependencies_command_all_os", dependencies);
 }
 
-#[test]
-fn test_handle_dependencies_command_single_package() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_single_package() {
     let (temp_dir, _) = load_test_workspace("complex");
     let api_path = temp_dir.path().join("packages/api");
 
@@ -107,7 +109,8 @@ fn test_handle_dependencies_command_single_package() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -115,8 +118,8 @@ fn test_handle_dependencies_command_single_package() {
     insta::assert_snapshot!("dependencies_command_single_package", dependencies);
 }
 
-#[test]
-fn test_handle_dependencies_command_empty_result() {
+#[switchy_async::test]
+async fn test_handle_dependencies_command_empty_result() {
     let (temp_dir, _) =
         create_simple_workspace(&["package1"], &["serde"], &[("package1", &["serde"])]);
 
@@ -125,7 +128,8 @@ fn test_handle_dependencies_command_empty_result() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -135,8 +139,8 @@ fn test_handle_dependencies_command_empty_result() {
 }
 
 /// Test the handle_environment_command function
-#[test]
-fn test_handle_environment_command_basic() {
+#[switchy_async::test]
+async fn test_handle_environment_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_environment_command(
@@ -144,7 +148,8 @@ fn test_handle_environment_command_basic() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let env_vars = result.unwrap();
@@ -152,8 +157,8 @@ fn test_handle_environment_command_basic() {
     insta::assert_snapshot!("environment_command_complex_ubuntu", env_vars);
 }
 
-#[test]
-fn test_handle_environment_command_json_output() {
+#[switchy_async::test]
+async fn test_handle_environment_command_json_output() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_environment_command(
@@ -161,7 +166,8 @@ fn test_handle_environment_command_json_output() {
         Some("ubuntu"),
         None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let env_vars_json = result.unwrap();
@@ -170,8 +176,8 @@ fn test_handle_environment_command_json_output() {
     insta::assert_yaml_snapshot!("environment_command_json_output", parsed);
 }
 
-#[test]
-fn test_handle_environment_command_with_features() {
+#[switchy_async::test]
+async fn test_handle_environment_command_with_features() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_environment_command(
@@ -179,7 +185,8 @@ fn test_handle_environment_command_with_features() {
         Some("ubuntu"),
         Some("frontend"),
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let env_vars = result.unwrap();
@@ -188,8 +195,8 @@ fn test_handle_environment_command_with_features() {
 }
 
 /// Test the handle_ci_steps_command function
-#[test]
-fn test_handle_ci_steps_command_basic() {
+#[switchy_async::test]
+async fn test_handle_ci_steps_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_ci_steps_command(
@@ -197,7 +204,8 @@ fn test_handle_ci_steps_command_basic() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let ci_steps = result.unwrap();
@@ -205,8 +213,8 @@ fn test_handle_ci_steps_command_basic() {
     insta::assert_snapshot!("ci_steps_command_complex_ubuntu", ci_steps);
 }
 
-#[test]
-fn test_handle_ci_steps_command_json_output() {
+#[switchy_async::test]
+async fn test_handle_ci_steps_command_json_output() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_ci_steps_command(
@@ -214,7 +222,8 @@ fn test_handle_ci_steps_command_json_output() {
         Some("ubuntu"),
         None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let ci_steps_json = result.unwrap();
@@ -226,8 +235,8 @@ fn test_handle_ci_steps_command_json_output() {
 /// Regression test for ci-steps with both command and toolchain
 /// This reproduces the bug where ci-steps with both command and toolchain
 /// would not properly export ciToolchains in the matrix output
-#[test]
-fn test_ci_steps_with_command_and_toolchain() {
+#[switchy_async::test]
+async fn test_ci_steps_with_command_and_toolchain() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with features command to get the full matrix output
@@ -259,7 +268,8 @@ fn test_ci_steps_with_command_and_toolchain() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -301,8 +311,8 @@ fn test_ci_steps_with_command_and_toolchain() {
 }
 
 /// Test ci-steps with mixed entry types (command-only, toolchain-only, both)
-#[test]
-fn test_ci_steps_mixed_entries() {
+#[switchy_async::test]
+async fn test_ci_steps_mixed_entries() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with features that match different ci-steps entries
@@ -334,7 +344,8 @@ fn test_ci_steps_mixed_entries() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -367,8 +378,8 @@ fn test_ci_steps_mixed_entries() {
 }
 
 /// Test ci-steps with feature filtering
-#[test]
-fn test_ci_steps_with_features() {
+#[switchy_async::test]
+async fn test_ci_steps_with_features() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with tauri features - should match entries with frontend and tauri features
@@ -400,7 +411,8 @@ fn test_ci_steps_with_features() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -425,8 +437,8 @@ fn test_ci_steps_with_features() {
 }
 
 /// Test JSON output structure for ci-steps
-#[test]
-fn test_ci_steps_json_output_structure() {
+#[switchy_async::test]
+async fn test_ci_steps_json_output_structure() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     let result = handle_features_command(
@@ -457,7 +469,8 @@ fn test_ci_steps_json_output_structure() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -525,8 +538,8 @@ fn test_ci_steps_json_output_structure() {
 }
 
 /// Test the handle_features_command function
-#[test]
-fn test_handle_features_command_basic() {
+#[switchy_async::test]
+async fn test_handle_features_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_features_command(
@@ -557,7 +570,8 @@ fn test_handle_features_command_basic() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features = result.unwrap();
@@ -566,8 +580,8 @@ fn test_handle_features_command_basic() {
 }
 
 /// Test the handle_workspace_deps_command function
-#[test]
-fn test_handle_workspace_deps_command_basic() {
+#[switchy_async::test]
+async fn test_handle_workspace_deps_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_workspace_deps_command(temp_dir.path(), "api", None, "text", false);
@@ -579,8 +593,8 @@ fn test_handle_workspace_deps_command_basic() {
 }
 
 /// Test the process_workspace_configs function
-#[test]
-fn test_process_workspace_configs_workspace_root() {
+#[switchy_async::test]
+async fn test_process_workspace_configs_workspace_root() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = process_workspace_configs(
@@ -594,7 +608,8 @@ fn test_process_workspace_configs_workspace_root() {
         None,
         None,
         None,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs = result.unwrap();
@@ -635,8 +650,8 @@ fn test_process_workspace_configs_workspace_root() {
 }
 
 /// Test deduplication behavior specifically
-#[test]
-fn test_dependencies_deduplication() {
+#[switchy_async::test]
+async fn test_dependencies_deduplication() {
     // Create a workspace with duplicate dependencies across packages
     let temp_dir = create_test_workspace_with_duplicate_deps();
 
@@ -645,7 +660,8 @@ fn test_dependencies_deduplication() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -655,9 +671,7 @@ fn test_dependencies_deduplication() {
 
 /// Helper function to create a test workspace with duplicate dependencies
 fn create_test_workspace_with_duplicate_deps() -> TempDir {
-    use std::fs;
-
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
 
     // Create workspace Cargo.toml
     let workspace_toml = r#"
@@ -667,12 +681,12 @@ members = ["packages/pkg1", "packages/pkg2", "packages/pkg3"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
     // Create packages with clippier.toml files containing duplicate dependencies
     for (i, pkg) in ["pkg1", "pkg2", "pkg3"].iter().enumerate() {
         let pkg_dir = temp_dir.path().join("packages").join(pkg);
-        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        switchy_fs::sync::create_dir_all(pkg_dir.join("src")).unwrap();
 
         let cargo_toml = format!(
             r#"
@@ -685,8 +699,8 @@ edition = "2021"
 serde = {{ workspace = true }}
 "#
         );
-        fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
+        switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
 
         // Create clippier.toml with same dependencies (should be deduplicated)
         let clippier_toml = if i == 0 {
@@ -708,15 +722,15 @@ dependencies = [
 ]
 "#
         };
-        fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
     }
 
     temp_dir
 }
 
 /// Test comprehensive scenario with multiple features and chunking
-#[test]
-fn test_handle_features_command_comprehensive() {
+#[switchy_async::test]
+async fn test_handle_features_command_comprehensive() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_features_command(
@@ -747,7 +761,8 @@ fn test_handle_features_command_comprehensive() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -795,15 +810,15 @@ fn test_handle_features_command_comprehensive() {
     );
 }
 
-#[test]
-fn test_handle_features_command_max_parallel_limits_results() {
-    let temp_dir = tempfile::tempdir().unwrap();
+#[switchy_async::test]
+async fn test_handle_features_command_max_parallel_limits_results() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
 
     // Create workspace with multiple packages to generate many results
     for i in 1..=20 {
         let pkg = format!("package{i}");
         let pkg_dir = temp_dir.path().join("packages").join(&pkg);
-        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        switchy_fs::sync::create_dir_all(pkg_dir.join("src")).unwrap();
 
         let cargo_toml = format!(
             r#"
@@ -823,8 +838,8 @@ feature5 = []
 serde = {{ workspace = true }}
 "#
         );
-        fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
+        switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
 
         // Create clippier.toml for each package
         let clippier_toml = r#"
@@ -834,7 +849,7 @@ dependencies = [
     { command = "apt-get install -y build-essential" }
 ]
 "#;
-        fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
     }
 
     // Create workspace Cargo.toml
@@ -853,7 +868,7 @@ serde = "1.0"
             .collect::<Vec<_>>()
             .join(", ")
     );
-    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
     // Test with both chunked and max_parallel
     let result = handle_features_command(
@@ -884,7 +899,8 @@ serde = "1.0"
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -935,7 +951,8 @@ serde = "1.0"
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -962,15 +979,16 @@ serde = "1.0"
 }
 
 /// Test error handling and edge cases
-#[test]
-fn test_handle_commands_error_handling() {
+#[switchy_async::test]
+async fn test_handle_commands_error_handling() {
     // Test with completely invalid path
     let result = handle_dependencies_command(
         "/this/path/definitely/does/not/exist",
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
     assert!(result.is_err());
 
     // Test with empty workspace
@@ -981,22 +999,23 @@ fn test_handle_commands_error_handling() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
     assert!(result.is_ok());
     assert!(result.unwrap().is_empty());
 }
 
 /// Test output format consistency across different commands
-#[test]
-fn test_output_format_consistency() {
+#[switchy_async::test]
+async fn test_output_format_consistency() {
     let (temp_dir, _) = load_test_workspace("complex");
     let path = temp_dir.path().to_str().unwrap();
 
     // Test dependencies command
-    let deps_raw = handle_dependencies_command(path, Some("ubuntu"), None, OutputType::Raw);
+    let deps_raw = handle_dependencies_command(path, Some("ubuntu"), None, OutputType::Raw).await;
     assert!(deps_raw.is_ok(), "Dependencies raw output failed");
 
-    let deps_json = handle_dependencies_command(path, Some("ubuntu"), None, OutputType::Json);
+    let deps_json = handle_dependencies_command(path, Some("ubuntu"), None, OutputType::Json).await;
     assert!(deps_json.is_ok(), "Dependencies JSON output failed");
 
     let deps_json_str = deps_json.unwrap();
@@ -1006,10 +1025,10 @@ fn test_output_format_consistency() {
     }
 
     // Test environment command
-    let env_raw = handle_environment_command(path, Some("ubuntu"), None, OutputType::Raw);
+    let env_raw = handle_environment_command(path, Some("ubuntu"), None, OutputType::Raw).await;
     assert!(env_raw.is_ok(), "Environment raw output failed");
 
-    let env_json = handle_environment_command(path, Some("ubuntu"), None, OutputType::Json);
+    let env_json = handle_environment_command(path, Some("ubuntu"), None, OutputType::Json).await;
     assert!(env_json.is_ok(), "Environment JSON output failed");
 
     let env_json_str = env_json.unwrap();
@@ -1019,10 +1038,10 @@ fn test_output_format_consistency() {
     }
 
     // Test CI steps command
-    let ci_raw = handle_ci_steps_command(path, Some("ubuntu"), None, OutputType::Raw);
+    let ci_raw = handle_ci_steps_command(path, Some("ubuntu"), None, OutputType::Raw).await;
     assert!(ci_raw.is_ok(), "CI steps raw output failed");
 
-    let ci_json = handle_ci_steps_command(path, Some("ubuntu"), None, OutputType::Json);
+    let ci_json = handle_ci_steps_command(path, Some("ubuntu"), None, OutputType::Json).await;
     assert!(ci_json.is_ok(), "CI steps JSON output failed");
 
     let ci_json_str = ci_json.unwrap();
@@ -1033,8 +1052,8 @@ fn test_output_format_consistency() {
 }
 
 /// Test that deduplication works correctly with identical multiline blocks
-#[test]
-fn test_exact_deduplication_behavior() {
+#[switchy_async::test]
+async fn test_exact_deduplication_behavior() {
     let temp_dir = create_test_workspace_with_exact_duplicates();
 
     let result = handle_dependencies_command(
@@ -1042,7 +1061,8 @@ fn test_exact_deduplication_behavior() {
         Some("ubuntu"),
         None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let dependencies = result.unwrap();
@@ -1063,9 +1083,7 @@ fn test_exact_deduplication_behavior() {
 
 /// Helper function to create exact duplicates for testing deduplication
 fn create_test_workspace_with_exact_duplicates() -> TempDir {
-    use std::fs;
-
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
 
     // Create workspace Cargo.toml
     let workspace_toml = r#"
@@ -1075,12 +1093,12 @@ members = ["packages/pkg1", "packages/pkg2"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
     // Create packages with EXACTLY the same dependencies (should be deduplicated)
     for pkg in ["pkg1", "pkg2"] {
         let pkg_dir = temp_dir.path().join("packages").join(pkg);
-        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        switchy_fs::sync::create_dir_all(pkg_dir.join("src")).unwrap();
 
         let cargo_toml = format!(
             r#"
@@ -1093,8 +1111,8 @@ edition = "2021"
 serde = {{ workspace = true }}
 "#
         );
-        fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
+        switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
 
         // Create clippier.toml with EXACTLY the same dependencies
         let clippier_toml = r#"
@@ -1105,14 +1123,14 @@ dependencies = [
     { command = "apt-get update && apt-get install -y libssl-dev" }
 ]
 "#;
-        fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
     }
 
     temp_dir
 }
 
-#[test]
-fn test_handle_features_command_with_git_submodules() {
+#[switchy_async::test]
+async fn test_handle_features_command_with_git_submodules() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
 
     let result = handle_features_command(
@@ -1143,7 +1161,8 @@ fn test_handle_features_command_with_git_submodules() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json_output = result.unwrap();
@@ -1177,8 +1196,8 @@ fn test_handle_features_command_with_git_submodules() {
     });
 }
 
-#[test]
-fn test_git_submodules_inheritance() {
+#[switchy_async::test]
+async fn test_git_submodules_inheritance() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let inherited_pkg = temp_dir.path().join("packages/inherited-submodules");
 
@@ -1194,6 +1213,7 @@ fn test_git_submodules_inheritance() {
         None,
         None,
     )
+    .await
     .unwrap();
 
     for config in &result {
@@ -1202,14 +1222,12 @@ fn test_git_submodules_inheritance() {
     }
 }
 
-#[test]
-fn test_git_submodules_override() {
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().unwrap();
+#[switchy_async::test]
+async fn test_git_submodules_override() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
 
     let pkg_dir = temp_dir.path().join("packages/override-test");
-    std::fs::create_dir_all(pkg_dir.join("src")).unwrap();
+    switchy_fs::sync::create_dir_all(pkg_dir.join("src")).unwrap();
 
     let cargo_toml = r#"
 [package]
@@ -1220,8 +1238,8 @@ edition = "2021"
 [features]
 default = []
     "#;
-    std::fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
-    std::fs::write(pkg_dir.join("src/lib.rs"), "// test").unwrap();
+    switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+    switchy_fs::sync::write(pkg_dir.join("src/lib.rs"), "// test").unwrap();
 
     let clippier_toml = r#"
 git-submodules = false
@@ -1233,11 +1251,12 @@ git-submodules = true
 [[config]]
 os = "macos"
     "#;
-    std::fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+    switchy_fs::sync::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
 
     let result = clippier::process_configs(
         &pkg_dir, None, None, None, false, false, None, None, None, None,
     )
+    .await
     .unwrap();
 
     let ubuntu = result
@@ -1265,8 +1284,8 @@ os = "macos"
     );
 }
 
-#[test]
-fn test_handle_packages_command_basic() {
+#[switchy_async::test]
+async fn test_handle_packages_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1278,8 +1297,10 @@ fn test_handle_packages_command_basic() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1304,8 +1325,8 @@ fn test_handle_packages_command_basic() {
     insta::assert_yaml_snapshot!("packages_command_basic", parsed);
 }
 
-#[test]
-fn test_handle_packages_command_json_output() {
+#[switchy_async::test]
+async fn test_handle_packages_command_json_output() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1317,8 +1338,10 @@ fn test_handle_packages_command_json_output() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1334,8 +1357,8 @@ fn test_handle_packages_command_json_output() {
     insta::assert_yaml_snapshot!("packages_command_json_output", parsed);
 }
 
-#[test]
-fn test_handle_packages_command_raw_output() {
+#[switchy_async::test]
+async fn test_handle_packages_command_raw_output() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1347,8 +1370,10 @@ fn test_handle_packages_command_raw_output() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1369,8 +1394,8 @@ fn test_handle_packages_command_raw_output() {
     insta::assert_snapshot!("packages_command_raw_output", packages_raw);
 }
 
-#[test]
-fn test_handle_packages_command_with_specific_packages() {
+#[switchy_async::test]
+async fn test_handle_packages_command_with_specific_packages() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1382,8 +1407,10 @@ fn test_handle_packages_command_with_specific_packages() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1408,8 +1435,8 @@ fn test_handle_packages_command_with_specific_packages() {
     insta::assert_yaml_snapshot!("packages_command_specific_packages", parsed);
 }
 
-#[test]
-fn test_handle_packages_command_with_max_parallel() {
+#[switchy_async::test]
+async fn test_handle_packages_command_with_max_parallel() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1421,8 +1448,10 @@ fn test_handle_packages_command_with_max_parallel() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         Some(3),
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1439,8 +1468,8 @@ fn test_handle_packages_command_with_max_parallel() {
     insta::assert_yaml_snapshot!("packages_command_max_parallel", parsed);
 }
 
-#[test]
-fn test_handle_packages_command_no_os_filter() {
+#[switchy_async::test]
+async fn test_handle_packages_command_no_os_filter() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1452,8 +1481,10 @@ fn test_handle_packages_command_no_os_filter() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1476,8 +1507,8 @@ fn test_handle_packages_command_no_os_filter() {
     }
 }
 
-#[test]
-fn test_handle_packages_command_nonexistent_package() {
+#[switchy_async::test]
+async fn test_handle_packages_command_nonexistent_package() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_packages_command(
@@ -1489,8 +1520,10 @@ fn test_handle_packages_command_nonexistent_package() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1509,14 +1542,14 @@ fn test_handle_packages_command_nonexistent_package() {
     );
 }
 
-#[test]
-fn test_handle_packages_command_empty_workspace() {
-    let temp_dir = TempDir::new().unwrap();
+#[switchy_async::test]
+async fn test_handle_packages_command_empty_workspace() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let workspace_cargo = r#"
 [workspace]
 members = []
 "#;
-    std::fs::write(temp_dir.path().join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_cargo).unwrap();
 
     let result = handle_packages_command(
         temp_dir.path().to_str().unwrap(),
@@ -1527,8 +1560,10 @@ members = []
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1547,9 +1582,9 @@ members = []
     );
 }
 
-#[test]
+#[switchy_async::test]
 #[cfg(feature = "git-diff")]
-fn test_handle_packages_command_with_changed_files() {
+async fn test_handle_packages_command_with_changed_files() {
     use std::collections::HashSet;
 
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1593,9 +1628,9 @@ fn test_handle_packages_command_with_changed_files() {
     );
 }
 
-#[test]
+#[switchy_async::test]
 #[cfg(feature = "git-diff")]
-fn test_handle_packages_command_changed_files_with_dependencies() {
+async fn test_handle_packages_command_changed_files_with_dependencies() {
     use std::collections::HashSet;
 
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1635,9 +1670,9 @@ fn test_handle_packages_command_changed_files_with_dependencies() {
     );
 }
 
-#[test]
+#[switchy_async::test]
 #[cfg(feature = "git-diff")]
-fn test_handle_packages_command_with_include_reasoning() {
+async fn test_handle_packages_command_with_include_reasoning() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let changed_files = vec!["packages/api/src/lib.rs".to_string()];
@@ -1665,8 +1700,8 @@ fn test_handle_packages_command_with_include_reasoning() {
     assert!(!packages.is_empty());
 }
 
-#[test]
-fn test_handle_packages_command_mixed_valid_invalid() {
+#[switchy_async::test]
+async fn test_handle_packages_command_mixed_valid_invalid() {
     use std::collections::HashSet;
 
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1684,8 +1719,10 @@ fn test_handle_packages_command_mixed_valid_invalid() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],
@@ -1709,8 +1746,8 @@ fn test_handle_packages_command_mixed_valid_invalid() {
     assert!(!package_names.contains("nonexistent"));
 }
 
-#[test]
-fn test_handle_packages_command_all_packages() {
+#[switchy_async::test]
+async fn test_handle_packages_command_all_packages() {
     use std::collections::HashSet;
 
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1724,8 +1761,10 @@ fn test_handle_packages_command_all_packages() {
         None,
         #[cfg(feature = "git-diff")]
         None,
+        #[cfg(feature = "git-diff")]
         false,
         None,
+        #[cfg(feature = "git-diff")]
         None,
         &[],
         &[],

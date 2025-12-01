@@ -21,7 +21,8 @@
 //! ```rust
 //! use clippier::{FeatureValidator, ValidatorConfig, OutputType};
 //!
-//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! type BoxError = Box<dyn std::error::Error + Send + Sync>;
+//! # fn example() -> Result<(), BoxError> {
 //! // Validate feature propagation across workspace
 //! let config = ValidatorConfig {
 //!     features: Some(vec!["fail-on-warnings".to_string()]),
@@ -80,6 +81,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 /// Git diff analysis for detecting external dependency changes.
 ///
 /// This module provides functionality for analyzing git diffs to detect changes in
@@ -100,7 +103,8 @@ pub mod git_diff;
 /// ```rust
 /// use clippier::{FeatureValidator, ValidatorConfig, OutputType};
 ///
-/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// type BoxError = Box<dyn std::error::Error + Send + Sync>;
+/// # fn example() -> Result<(), BoxError> {
 /// let config = ValidatorConfig {
 ///     features: Some(vec!["fail-on-warnings".to_string()]),
 ///     output_format: OutputType::Json,
@@ -461,9 +465,9 @@ pub struct WorkspaceContext {
 }
 
 impl WorkspaceContext {
-    fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    fn new(workspace_root: &Path) -> Result<Self, BoxError> {
         let workspace_cargo = workspace_root.join("Cargo.toml");
-        let content = std::fs::read_to_string(&workspace_cargo)?;
+        let content = switchy_fs::sync::read_to_string(&workspace_cargo)?;
         let root_toml: Value = toml::from_str(&content)?;
 
         let mut member_patterns = Vec::new();
@@ -489,7 +493,7 @@ impl WorkspaceContext {
     }
 
     fn is_member_by_path(&self, path: &Path) -> bool {
-        let Ok(canonical) = path.canonicalize() else {
+        let Ok(canonical) = switchy_fs::sync::canonicalize(path) else {
             return false;
         };
 
@@ -499,7 +503,7 @@ impl WorkspaceContext {
 
         for pattern in &self.member_patterns {
             let member_path = self.root.join(pattern);
-            if let Ok(member_canonical) = member_path.canonicalize()
+            if let Ok(member_canonical) = switchy_fs::sync::canonicalize(&member_path)
                 && member_canonical == canonical
             {
                 self.path_cache.borrow_mut().insert(canonical.clone());
@@ -528,8 +532,8 @@ impl WorkspaceContext {
 
         for pattern in &self.member_patterns {
             let member_path = self.root.join(pattern);
-            if member_path.exists()
-                && let Ok(canonical) = member_path.canonicalize()
+            if switchy_fs::exists(&member_path)
+                && let Ok(canonical) = switchy_fs::sync::canonicalize(&member_path)
                 && !self.path_cache.borrow().contains(&canonical)
                 && let Some(actual_name) = Self::read_package_name(&canonical)
             {
@@ -567,15 +571,13 @@ impl WorkspaceContext {
 
     fn read_package_name(package_path: &Path) -> Option<String> {
         let cargo_toml_path = package_path.join("Cargo.toml");
-        let content = std::fs::read_to_string(cargo_toml_path).ok()?;
+        let content = switchy_fs::sync::read_to_string(cargo_toml_path).ok()?;
         let toml: Value = toml::from_str(&content).ok()?;
         toml.get("package")?.get("name")?.as_str().map(String::from)
     }
 
     /// Get workspace-level configuration, loading it if necessary
-    fn workspace_config(
-        &self,
-    ) -> Result<Option<WorkspaceClippierConf>, Box<dyn std::error::Error>> {
+    fn workspace_config(&self) -> Result<Option<WorkspaceClippierConf>, BoxError> {
         // Check if we've already tried to load the config
         if let Some(cached) = self.workspace_config.borrow().as_ref() {
             return Ok(cached.clone());
@@ -584,12 +586,12 @@ impl WorkspaceContext {
         // Try to load workspace config
         let workspace_conf_path = self.root.join("clippier.toml");
 
-        let result = if workspace_conf_path.exists() {
+        let result = if switchy_fs::exists(&workspace_conf_path) {
             log::trace!(
                 "Loading workspace config from: {}",
                 workspace_conf_path.display()
             );
-            let content = std::fs::read_to_string(&workspace_conf_path)?;
+            let content = switchy_fs::sync::read_to_string(&workspace_conf_path)?;
             let conf: WorkspaceClippierConf = toml::from_str(&content)?;
             Some(conf)
         } else {
@@ -733,7 +735,7 @@ fn collect_propagated_config(
     os_filter: Option<&str>,
     visited: &mut BTreeSet<String>,
     cache: &mut BTreeMap<String, PropagatedConfig>,
-) -> Result<PropagatedConfig, Box<dyn std::error::Error>> {
+) -> Result<PropagatedConfig, BoxError> {
     if let Some(cached) = cache.get(package_name) {
         return Ok(cached.clone());
     }
@@ -752,18 +754,18 @@ fn collect_propagated_config(
         .ok_or_else(|| format!("Package {package_name} not found in workspace"))?;
     let cargo_toml_path = package_path.join("Cargo.toml");
 
-    if !cargo_toml_path.exists() {
+    if !switchy_fs::exists(&cargo_toml_path) {
         log::trace!("⚠️ No Cargo.toml found for {package_name}, skipping");
         visited.remove(package_name);
         return Ok(PropagatedConfig::default());
     }
 
-    let cargo_toml_content = std::fs::read_to_string(&cargo_toml_path)?;
+    let cargo_toml_content = switchy_fs::sync::read_to_string(&cargo_toml_path)?;
     let cargo_toml: Value = toml::from_str(&cargo_toml_content)?;
 
     let clippier_toml_path = package_path.join("clippier.toml");
-    let own_config = if clippier_toml_path.exists() {
-        let content = std::fs::read_to_string(&clippier_toml_path)?;
+    let own_config = if switchy_fs::exists(&clippier_toml_path) {
+        let content = switchy_fs::sync::read_to_string(&clippier_toml_path)?;
         let conf: ClippierConf = toml::from_str(&content)?;
 
         let mut prop = PropagatedConfig {
@@ -839,15 +841,13 @@ fn collect_propagated_config(
     Ok(merged)
 }
 
-fn find_workspace_root_from_package(
-    package_path: &Path,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+fn find_workspace_root_from_package(package_path: &Path) -> Result<std::path::PathBuf, BoxError> {
     let mut current = package_path.to_path_buf();
 
     while let Some(parent) = current.parent() {
         let cargo_toml = parent.join("Cargo.toml");
-        if cargo_toml.exists() {
-            let content = std::fs::read_to_string(&cargo_toml)?;
+        if switchy_fs::exists(&cargo_toml) {
+            let content = switchy_fs::sync::read_to_string(&cargo_toml)?;
             let toml_value: Value = toml::from_str(&content)?;
 
             if toml_value.get("workspace").is_some() {
@@ -1182,7 +1182,7 @@ pub fn get_binary_name(
     // Try to read the target package's Cargo.toml to get the correct binary name
     let cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
 
-    if let Ok(source) = std::fs::read_to_string(&cargo_path)
+    if let Ok(source) = switchy_fs::sync::read_to_string(&cargo_path)
         && let Ok(value) = toml::from_str::<Value>(&source)
     {
         // Check for explicit binary definitions
@@ -1219,7 +1219,7 @@ pub fn get_binary_name(
 ///
 /// * If the `path` argument cannot be converted to a string
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn process_configs(
+pub async fn process_configs(
     path: &Path,
     offset: Option<u16>,
     max: Option<u16>,
@@ -1230,15 +1230,15 @@ pub fn process_configs(
     specific_features: Option<&[String]>,
     skip_features_override: Option<&[String]>,
     required_features_override: Option<&[String]>,
-) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, BoxError> {
     log::debug!("Loading file '{}'", path.display());
     let cargo_path = path.join("Cargo.toml");
-    let source = std::fs::read_to_string(cargo_path)?;
+    let source = switchy_fs::unsync::read_to_string(cargo_path).await?;
     let value: Value = toml::from_str(&source)?;
 
     let conf_path = path.join("clippier.toml");
-    let conf = if conf_path.is_file() {
-        let source = std::fs::read_to_string(conf_path)?;
+    let conf = if switchy_fs::unsync::is_file(&conf_path).await {
+        let source = switchy_fs::unsync::read_to_string(conf_path).await?;
         let value: ClippierConf = toml::from_str(&source)?;
         Some(value)
     } else {
@@ -1367,7 +1367,7 @@ pub fn apply_max_parallel_rechunking(
     packages: Vec<serde_json::Map<String, serde_json::Value>>,
     max_parallel: usize,
     chunked: Option<u16>,
-) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, BoxError> {
     if packages.len() <= max_parallel {
         // Already within limit, no need to re-chunk
         return Ok(packages);
@@ -1469,7 +1469,7 @@ pub fn create_map(
     name: &str,
     required_features: Option<&[String]>,
     features: &[String],
-) -> Result<serde_json::Map<String, serde_json::Value>, Box<dyn std::error::Error>> {
+) -> Result<serde_json::Map<String, serde_json::Value>, BoxError> {
     let mut visited = BTreeSet::new();
     let mut cache = BTreeMap::new();
     let propagated = collect_propagated_config(
@@ -1710,7 +1710,7 @@ pub fn find_workspace_dependencies(
     target_package: &str,
     enabled_features: Option<&[String]>,
     all_potential_deps: bool,
-) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(String, String)>, BoxError> {
     log::trace!("🔍 Finding workspace dependencies for package: {target_package}");
     if let Some(features) = enabled_features {
         log::trace!("📋 Enabled features: {features:?}");
@@ -1726,7 +1726,7 @@ pub fn find_workspace_dependencies(
         "📂 Loading workspace from: {}",
         workspace_cargo_path.display()
     );
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     let workspace_members = workspace_value
@@ -1747,13 +1747,13 @@ pub fn find_workspace_dependencies(
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
-        if !cargo_path.exists() {
+        if !switchy_fs::exists(&cargo_path) {
             log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
             continue;
         }
 
         log::trace!("📄 Processing package: {member_path}");
-        let source = std::fs::read_to_string(&cargo_path)?;
+        let source = switchy_fs::sync::read_to_string(&cargo_path)?;
         let value: Value = toml::from_str(&source)?;
 
         // Get package name
@@ -2014,7 +2014,7 @@ pub fn get_feature_dependencies(
 /// * If fails to generate the dockerfile content
 /// * If fails to write the dockerfile to the specified path
 #[allow(clippy::too_many_arguments)]
-pub fn generate_dockerfile(
+pub async fn generate_dockerfile(
     workspace_root: &Path,
     target_package: &str,
     enabled_features: Option<&[String]>,
@@ -2028,7 +2028,7 @@ pub fn generate_dockerfile(
     custom_env_vars: &[String],
     build_env_vars: &[String],
     bin: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     // Get all potential dependencies for the target package (needed for Docker build compatibility)
     // Docker builds require all possible dependencies to ensure proper layer caching
     let mut dependencies =
@@ -2066,16 +2066,17 @@ pub fn generate_dockerfile(
         custom_env_vars,
         build_env_vars,
         bin,
-    )?;
+    )
+    .await?;
 
     // Write the Dockerfile
-    std::fs::write(dockerfile_path, dockerfile_content)?;
+    switchy_fs::sync::write(dockerfile_path, dockerfile_content)?;
 
     if generate_dockerignore {
         let dockerignore_content =
             generate_dockerignore_content(&dependencies, target_package, enabled_features)?;
         let dockerignore_path = dockerfile_path.with_extension("dockerignore");
-        std::fs::write(dockerignore_path, dockerignore_content)?;
+        switchy_fs::sync::write(dockerignore_path, dockerignore_content)?;
     }
 
     Ok(())
@@ -2103,7 +2104,7 @@ pub fn generate_dockerfile_from_git(
     custom_env_vars: &[String],
     build_env_vars: &[String],
     bin: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), BoxError> {
     // Create the Dockerfile content
     let dockerfile_content = generate_dockerfile_content_from_git(
         git_url,
@@ -2121,13 +2122,13 @@ pub fn generate_dockerfile_from_git(
     )?;
 
     // Write the Dockerfile
-    std::fs::write(dockerfile_path, dockerfile_content)?;
+    switchy_fs::sync::write(dockerfile_path, dockerfile_content)?;
 
     if generate_dockerignore {
         // For git mode, create a minimal dockerignore
         let dockerignore_content = generate_dockerignore_content_for_git()?;
         let dockerignore_path = dockerfile_path.with_extension("dockerignore");
-        std::fs::write(dockerignore_path, dockerignore_content)?;
+        switchy_fs::sync::write(dockerignore_path, dockerignore_content)?;
     }
 
     Ok(())
@@ -2173,7 +2174,7 @@ pub fn generate_dockerfile_content_from_git(
     custom_env_vars: &[String],
     build_env_vars: &[String],
     bin: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::fmt::Write as _;
 
     let mut content = String::new();
@@ -2296,7 +2297,7 @@ pub fn generate_dockerfile_content_from_git(
 /// # Errors
 ///
 /// * `std::fmt::Error` - If writing to the string fails
-pub fn generate_dockerignore_content_for_git() -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_dockerignore_content_for_git() -> Result<String, BoxError> {
     use std::fmt::Write as _;
 
     let mut content = String::new();
@@ -2338,7 +2339,7 @@ pub fn generate_dockerignore_content_for_git() -> Result<String, Box<dyn std::er
     clippy::too_many_arguments,
     clippy::cognitive_complexity
 )]
-pub fn generate_dockerfile_content(
+pub async fn generate_dockerfile_content(
     dependencies: &[(String, String)],
     target_package: &str,
     enabled_features: Option<&[String]>,
@@ -2352,7 +2353,7 @@ pub fn generate_dockerfile_content(
     custom_env_vars: &[String],
     build_env_vars: &[String],
     bin: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::fmt::Write as _;
 
     let mut content = String::new();
@@ -2364,7 +2365,8 @@ pub fn generate_dockerfile_content(
         target_package_path,
         enabled_features,
         "ubuntu",
-    )?;
+    )
+    .await?;
 
     // Builder stage
     writeln!(
@@ -2384,7 +2386,8 @@ pub fn generate_dockerfile_content(
 
     // Collect and install system dependencies early for better caching
     let system_deps =
-        collect_system_dependencies(workspace_root, dependencies, enabled_features, "ubuntu")?;
+        collect_system_dependencies(workspace_root, dependencies, enabled_features, "ubuntu")
+            .await?;
 
     // Always ensure essential build tools are available
     writeln!(
@@ -2500,16 +2503,13 @@ pub fn generate_dockerfile_content(
         "# Create stub for target package to prevent premature build"
     )?;
     let target_cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
-    if target_cargo_path.exists() {
-        let target_source = std::fs::read_to_string(&target_cargo_path)?;
+    if switchy_fs::exists(&target_cargo_path) {
+        let target_source = switchy_fs::sync::read_to_string(&target_cargo_path)?;
         let target_value: Value = toml::from_str(&target_source)?;
 
         // Check if this package has a binary target
         let has_binary = target_value.get("bin").is_some()
-            || workspace_root
-                .join(target_package_path)
-                .join("src/main.rs")
-                .exists();
+            || switchy_fs::exists(workspace_root.join(target_package_path).join("src/main.rs"));
 
         if has_binary {
             writeln!(
@@ -2656,7 +2656,7 @@ pub fn generate_dockerignore_content(
     dependencies: &[(String, String)],
     _target_package: &str,
     _enabled_features: Option<&[String]>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::fmt::Write as _;
 
     let mut content = String::new();
@@ -2682,10 +2682,7 @@ pub fn generate_dockerignore_content(
 /// # Errors
 ///
 /// * If glob pattern compilation fails
-fn should_ignore_file(
-    file_path: &str,
-    ignore_patterns: &[String],
-) -> Result<bool, Box<dyn std::error::Error>> {
+fn should_ignore_file(file_path: &str, ignore_patterns: &[String]) -> Result<bool, BoxError> {
     if ignore_patterns.is_empty() {
         return Ok(false);
     }
@@ -2718,12 +2715,12 @@ pub fn find_affected_packages(
     workspace_root: &Path,
     changed_files: &[String],
     ignore_patterns: &[String],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, BoxError> {
     log::trace!("🔍 Finding affected packages for changed files: {changed_files:?}");
 
     // First, load the workspace and get all members
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     let workspace_members = workspace_value
@@ -2743,13 +2740,13 @@ pub fn find_affected_packages(
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
-        if !cargo_path.exists() {
+        if !switchy_fs::exists(&cargo_path) {
             log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
             continue;
         }
 
         log::trace!("📄 Processing package: {member_path}");
-        let source = std::fs::read_to_string(&cargo_path)?;
+        let source = switchy_fs::sync::read_to_string(&cargo_path)?;
         let value: Value = toml::from_str(&source)?;
 
         // Get package name
@@ -2895,12 +2892,12 @@ pub fn find_affected_packages_with_reasoning(
     workspace_root: &Path,
     changed_files: &[String],
     ignore_patterns: &[String],
-) -> Result<Vec<AffectedPackageInfo>, Box<dyn std::error::Error>> {
+) -> Result<Vec<AffectedPackageInfo>, BoxError> {
     log::trace!("🔍 Finding affected packages with reasoning for changed files: {changed_files:?}");
 
     // First, load the workspace and get all members
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     let workspace_members = workspace_value
@@ -2920,13 +2917,13 @@ pub fn find_affected_packages_with_reasoning(
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
-        if !cargo_path.exists() {
+        if !switchy_fs::exists(&cargo_path) {
             log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
             continue;
         }
 
         log::trace!("📄 Processing package: {member_path}");
-        let source = std::fs::read_to_string(&cargo_path)?;
+        let source = switchy_fs::sync::read_to_string(&cargo_path)?;
         let value: Value = toml::from_str(&source)?;
 
         // Get package name
@@ -3089,18 +3086,18 @@ pub fn find_affected_packages_with_reasoning(
 /// # Errors
 ///
 /// * If fails to process configs
-pub fn collect_environment_variables(
+pub async fn collect_environment_variables(
     workspace_root: &Path,
     _target_package: &str,
     target_package_path: &str,
     enabled_features: Option<&[String]>,
     target_os: &str,
-) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(String, String)>, BoxError> {
     let path = workspace_root.join(target_package_path);
 
     // Skip if no clippier.toml exists for this package
     let clippier_path = path.join("clippier.toml");
-    if !clippier_path.exists() {
+    if !switchy_fs::exists(&clippier_path) {
         return Ok(Vec::new());
     }
 
@@ -3128,7 +3125,8 @@ pub fn collect_environment_variables(
         specific_features.as_deref(),
         None,
         None,
-    )?;
+    )
+    .await?;
 
     let mut env_vars = Vec::new();
 
@@ -3154,12 +3152,12 @@ pub fn collect_environment_variables(
 /// # Errors
 ///
 /// * If fails to process configs
-pub fn collect_system_dependencies(
+pub async fn collect_system_dependencies(
     workspace_root: &Path,
     dependencies: &[(String, String)],
     enabled_features: Option<&[String]>,
     target_os: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, BoxError> {
     let mut all_deps = BTreeSet::new();
 
     // Convert features to comma-separated string for the dependencies command
@@ -3170,7 +3168,7 @@ pub fn collect_system_dependencies(
 
         // Skip if no clippier.toml exists for this package
         let clippier_path = path.join("clippier.toml");
-        if !clippier_path.exists() {
+        if !switchy_fs::exists(&clippier_path) {
             continue;
         }
 
@@ -3197,7 +3195,8 @@ pub fn collect_system_dependencies(
             specific_features.as_deref(),
             None,
             None,
-        )?;
+        )
+        .await?;
 
         // Extract system dependencies
         for package in packages {
@@ -3275,12 +3274,12 @@ pub struct SinglePackageResult {
 /// # Errors
 ///
 /// * If fails to process configs or output results
-pub fn handle_dependencies_command(
+pub async fn handle_dependencies_command(
     file: &str,
     os: Option<&str>,
     features: Option<&str>,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::str::FromStr;
 
     let path = std::path::PathBuf::from_str(file)?;
@@ -3297,7 +3296,8 @@ pub fn handle_dependencies_command(
         specific_features.as_deref(),
         None,
         None,
-    )?;
+    )
+    .await?;
 
     let dependencies: Vec<String> = packages
         .iter()
@@ -3327,12 +3327,12 @@ pub fn handle_dependencies_command(
 /// # Errors
 ///
 /// * If fails to process configs or output results
-pub fn handle_environment_command(
+pub async fn handle_environment_command(
     file: &str,
     os: Option<&str>,
     features: Option<&str>,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::str::FromStr;
 
     let path = std::path::PathBuf::from_str(file)?;
@@ -3349,7 +3349,8 @@ pub fn handle_environment_command(
         specific_features.as_deref(),
         None,
         None,
-    )?;
+    )
+    .await?;
 
     let environment_vars = packages
         .iter()
@@ -3379,12 +3380,12 @@ pub fn handle_environment_command(
 /// # Errors
 ///
 /// * If fails to process configs or output results
-pub fn handle_ci_steps_command(
+pub async fn handle_ci_steps_command(
     file: &str,
     os: Option<&str>,
     features: Option<&str>,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::str::FromStr;
 
     let path = std::path::PathBuf::from_str(file)?;
@@ -3401,7 +3402,8 @@ pub fn handle_ci_steps_command(
         specific_features.as_deref(),
         None,
         None,
-    )?;
+    )
+    .await?;
 
     let ci_steps = packages
         .iter()
@@ -3458,8 +3460,8 @@ pub fn handle_ci_steps_command(
     clippy::too_many_lines,
     clippy::cognitive_complexity
 )]
-#[allow(clippy::fn_params_excessive_bools)]
-pub fn handle_features_command(
+#[allow(clippy::fn_params_excessive_bools, clippy::future_not_send)]
+pub async fn handle_features_command(
     file: &str,
     os: Option<&str>,
     offset: Option<u16>,
@@ -3483,7 +3485,7 @@ pub fn handle_features_command(
     #[cfg(feature = "_transforms")] transform_scripts: &[std::path::PathBuf],
     #[cfg(feature = "_transforms")] transform_trace: bool,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::str::FromStr;
 
     let path = std::path::PathBuf::from_str(file)?;
@@ -3501,7 +3503,7 @@ pub fn handle_features_command(
 
         // Get workspace members
         let workspace_cargo_path = path.join("Cargo.toml");
-        let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+        let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
         let workspace_value: Value = toml::from_str(&workspace_source)?;
 
         let workspace_members = workspace_value
@@ -3517,8 +3519,8 @@ pub fn handle_features_command(
             let full_path = path.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
-            if cargo_path.exists() {
-                let source = std::fs::read_to_string(&cargo_path)?;
+            if switchy_fs::unsync::exists(&cargo_path).await {
+                let source = switchy_fs::unsync::read_to_string(&cargo_path).await?;
                 let value: Value = toml::from_str(&source)?;
 
                 if let Some(package_name) = value
@@ -3567,7 +3569,8 @@ pub fn handle_features_command(
                     specific_features.as_deref(),
                     skip_features_list.as_deref(),
                     required_features_list.as_deref(),
-                )?;
+                )
+                .await?;
 
                 all_filtered_packages.extend(packages);
             } else {
@@ -3667,7 +3670,8 @@ pub fn handle_features_command(
                 if !changed_external_deps.is_empty() {
                     // Get workspace members for building external dependency map
                     let workspace_cargo_path = path.join("Cargo.toml");
-                    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+                    let workspace_source =
+                        switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
                     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
                     if let Some(workspace_members) = workspace_value
@@ -3767,7 +3771,7 @@ pub fn handle_features_command(
         let affected_with_reasoning = updated_reasoning;
 
         let workspace_cargo_path = path.join("Cargo.toml");
-        let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+        let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
         let workspace_value: Value = toml::from_str(&workspace_source)?;
 
         let workspace_members = workspace_value
@@ -3782,8 +3786,8 @@ pub fn handle_features_command(
             let full_path = path.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
-            if cargo_path.exists() {
-                let source = std::fs::read_to_string(&cargo_path)?;
+            if switchy_fs::unsync::exists(&cargo_path).await {
+                let source = switchy_fs::unsync::read_to_string(&cargo_path).await?;
                 let value: Value = toml::from_str(&source)?;
 
                 if let Some(package_name) = value
@@ -3813,7 +3817,8 @@ pub fn handle_features_command(
                     specific_features.as_deref(),
                     skip_features_list.as_deref(),
                     required_features_list.as_deref(),
-                )?;
+                )
+                .await?;
 
                 // Add reasoning to packages if include_reasoning is true
                 if let Some(ref reasoning_data) = affected_with_reasoning
@@ -3879,7 +3884,8 @@ pub fn handle_features_command(
         specific_features.as_deref(),
         skip_features_list.as_deref(),
         required_features_list.as_deref(),
-    )?;
+    )
+    .await?;
 
     // Filter by OS if specified
     if let Some(target_os) = os {
@@ -3909,7 +3915,7 @@ pub fn handle_features_command(
 
         for script_path in transform_scripts {
             log::info!("Applying transform: {}", script_path.display());
-            let script = std::fs::read_to_string(script_path)?;
+            let script = switchy_fs::unsync::read_to_string(script_path).await?;
             engine.apply_transform(&mut packages, &script)?;
         }
 
@@ -3946,7 +3952,7 @@ pub fn handle_workspace_deps_command(
     features: Option<&[String]>,
     format: &str,
     all_potential_deps: bool,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     let deps = find_workspace_dependencies(workspace_root, package, features, all_potential_deps)?;
 
     let result = if format == "json" {
@@ -3974,7 +3980,7 @@ pub fn handle_workspace_deps_command(
 ///
 /// * If fails to generate dockerfile
 #[allow(clippy::too_many_arguments)]
-pub fn handle_generate_dockerfile_command(
+pub async fn handle_generate_dockerfile_command(
     workspace_root: &Path,
     package: &str,
     git_ref: &str,
@@ -3989,7 +3995,7 @@ pub fn handle_generate_dockerfile_command(
     env: &[String],
     build_env: &[String],
     bin: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     let workspace_root_str = workspace_root.to_string_lossy();
 
     if is_git_url(&workspace_root_str) {
@@ -4026,7 +4032,8 @@ pub fn handle_generate_dockerfile_command(
             env,
             build_env,
             bin,
-        )?;
+        )
+        .await?;
     }
 
     Ok(format!("Generated Dockerfile at: {}", output.display()))
@@ -4038,7 +4045,7 @@ pub fn handle_generate_dockerfile_command(
 ///
 /// * If fails to find affected packages
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn handle_affected_packages_command(
+pub async fn handle_affected_packages_command(
     workspace_root: &Path,
     changed_files: &[String],
     target_package: Option<&str>,
@@ -4047,7 +4054,7 @@ pub fn handle_affected_packages_command(
     include_reasoning: bool,
     ignore_patterns: Option<&[String]>,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     #[cfg(feature = "git-diff")]
     use crate::git_diff::{
         build_external_dependency_map, extract_changed_dependencies_from_git,
@@ -4076,7 +4083,8 @@ pub fn handle_affected_packages_command(
             if !changed_external_deps.is_empty() {
                 // Get workspace members for building external dependency map
                 let workspace_cargo_path = workspace_root.join("Cargo.toml");
-                let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+                let workspace_source =
+                    switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
                 let workspace_value: Value = toml::from_str(&workspace_source)?;
 
                 if let Some(workspace_members) = workspace_value
@@ -4199,7 +4207,7 @@ pub fn handle_affected_packages_command(
 /// * If workspace member directories cannot be processed
 /// * If any workspace member has invalid configuration
 #[allow(clippy::too_many_arguments)]
-pub fn process_workspace_configs(
+pub async fn process_workspace_configs(
     workspace_path: &Path,
     offset: Option<u16>,
     max: Option<u16>,
@@ -4210,7 +4218,7 @@ pub fn process_workspace_configs(
     specific_features: Option<&[String]>,
     skip_features_override: Option<&[String]>,
     required_features_override: Option<&[String]>,
-) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, BoxError> {
     log::debug!(
         "Processing workspace configs from '{}'",
         workspace_path.display()
@@ -4218,7 +4226,7 @@ pub fn process_workspace_configs(
 
     // First, check if this is a workspace root
     let workspace_cargo_path = workspace_path.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     let workspace_members = workspace_value
@@ -4227,8 +4235,8 @@ pub fn process_workspace_configs(
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>());
 
-    workspace_members.map_or_else(
-        || {
+    match workspace_members {
+        None => {
             process_configs(
                 workspace_path,
                 offset,
@@ -4241,8 +4249,9 @@ pub fn process_workspace_configs(
                 skip_features_override,
                 required_features_override,
             )
-        },
-        |members| {
+            .await
+        }
+        Some(members) => {
             // This is a workspace root, process all members
             let mut all_packages = Vec::new();
 
@@ -4251,7 +4260,7 @@ pub fn process_workspace_configs(
 
                 // Check if this member has a Cargo.toml file (basic validation)
                 let cargo_path = full_path.join("Cargo.toml");
-                if !cargo_path.exists() {
+                if !switchy_fs::unsync::exists(&cargo_path).await {
                     log::trace!("Skipping workspace member {member_path} (no Cargo.toml)");
                     continue;
                 }
@@ -4270,7 +4279,9 @@ pub fn process_workspace_configs(
                     specific_features,
                     skip_features_override,
                     required_features_override,
-                ) {
+                )
+                .await
+                {
                     Ok(mut packages) => {
                         all_packages.append(&mut packages);
                     }
@@ -4282,8 +4293,8 @@ pub fn process_workspace_configs(
             }
 
             Ok(all_packages)
-        },
-    )
+        }
+    }
 }
 
 /// Handles the validate feature propagation command
@@ -4313,7 +4324,7 @@ pub fn handle_validate_feature_propagation_command(
     parent_skip_features: Option<Vec<String>>,
     parent_prefix: &[String],
     no_parent_config: bool,
-) -> Result<ValidationResult, Box<dyn std::error::Error>> {
+) -> Result<ValidationResult, BoxError> {
     use crate::feature_validator::{
         OverrideOptions, OverrideSource, OverrideType, ParentValidationConfig, PrefixOverride,
         ValidationOverride,
@@ -4427,19 +4438,19 @@ pub fn handle_packages_command(
     changed_files: Option<&[String]>,
     #[cfg(feature = "git-diff")] git_base: Option<&str>,
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
-    include_reasoning: bool,
+    #[cfg(feature = "git-diff")] include_reasoning: bool,
     max_parallel: Option<u16>,
-    ignore_patterns: Option<&[String]>,
+    #[cfg(feature = "git-diff")] ignore_patterns: Option<&[String]>,
     skip_if: &[String],
     include_if: &[String],
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use std::str::FromStr;
 
     let path = std::path::PathBuf::from_str(file)?;
 
     let workspace_cargo_path = path.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     let workspace_members = workspace_value
@@ -4455,8 +4466,8 @@ pub fn handle_packages_command(
         let full_path = path.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
-        if cargo_path.exists() {
-            let source = std::fs::read_to_string(&cargo_path)?;
+        if switchy_fs::exists(&cargo_path) {
+            let source = switchy_fs::sync::read_to_string(&cargo_path)?;
             let value: Value = toml::from_str(&source)?;
 
             if let Some(package_name) = value
@@ -4581,12 +4592,12 @@ pub fn handle_packages_command(
         }
 
         // Find packages affected by file changes
-        let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
         let mut file_affected_packages = if all_changed_files.is_empty() {
             Vec::new()
         } else {
             #[cfg(feature = "git-diff")]
             {
+                let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
                 if include_reasoning {
                     let with_reasoning = find_affected_packages_with_reasoning(
                         &path,
@@ -4696,7 +4707,7 @@ pub fn handle_workspace_toolchains_command(
     workspace_root: &Path,
     os: &str,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     let mut all_dependencies: BTreeSet<String> = BTreeSet::new();
     let mut all_toolchains: BTreeSet<String> = BTreeSet::new();
     let mut all_ci_steps: BTreeSet<String> = BTreeSet::new();
@@ -4706,8 +4717,8 @@ pub fn handle_workspace_toolchains_command(
 
     // First check for workspace-level clippier.toml
     let workspace_clippier_path = workspace_root.join("clippier.toml");
-    if workspace_clippier_path.exists() {
-        let content = std::fs::read_to_string(&workspace_clippier_path)?;
+    if switchy_fs::exists(&workspace_clippier_path) {
+        let content = switchy_fs::sync::read_to_string(&workspace_clippier_path)?;
         if let Ok(conf) = toml::from_str::<WorkspaceClippierConf>(&content) {
             log::debug!("Found workspace-level clippier.toml");
 
@@ -4757,25 +4768,20 @@ pub fn handle_workspace_toolchains_command(
 
     // Scan all packages in the workspace
     let packages_dir = workspace_root.join("packages");
-    if packages_dir.exists() {
-        for entry in walkdir::WalkDir::new(&packages_dir)
-            .min_depth(1)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
-            let clippier_path = entry.path().join("clippier.toml");
-            if !clippier_path.exists() {
+    if switchy_fs::exists(&packages_dir) {
+        for entry in switchy_fs::sync::walk_dir_sorted(&packages_dir)? {
+            let entry_path = entry.path();
+            let clippier_path = entry_path.join("clippier.toml");
+            if !switchy_fs::exists(&clippier_path) {
                 continue;
             }
 
             log::debug!("Processing clippier.toml at: {}", clippier_path.display());
 
             // Try to get package name from Cargo.toml in the same directory
-            let entry_path = entry.path();
             let cargo_toml_path = entry_path.join("Cargo.toml");
-            let package_name = if cargo_toml_path.exists() {
-                std::fs::read_to_string(&cargo_toml_path)
+            let package_name = if switchy_fs::exists(&cargo_toml_path) {
+                switchy_fs::sync::read_to_string(&cargo_toml_path)
                     .ok()
                     .and_then(|content| toml::from_str::<Value>(&content).ok())
                     .and_then(|value| {
@@ -4798,7 +4804,7 @@ pub fn handle_workspace_toolchains_command(
                     .to_string()
             });
 
-            let content = std::fs::read_to_string(&clippier_path)?;
+            let content = switchy_fs::sync::read_to_string(&clippier_path)?;
             let conf: ClippierConf = match toml::from_str(&content) {
                 Ok(c) => c,
                 Err(e) => {
@@ -4957,7 +4963,7 @@ pub fn handle_check_command(
     list_tools: bool,
     config: tools::ToolsConfig,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
     let registry = ToolRegistry::new(config)?;
@@ -5054,7 +5060,7 @@ pub fn handle_fmt_command(
     list_tools: bool,
     config: tools::ToolsConfig,
     output: OutputType,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
     let registry = ToolRegistry::new(config)?;
@@ -5128,12 +5134,11 @@ pub fn handle_fmt_command(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
-    #[test]
-    fn test_skip_features_combination() {
+    #[switchy_async::test]
+    async fn test_skip_features_combination() {
         // Create a temporary directory for testing
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         // Create a simple Cargo.toml with features
@@ -5149,7 +5154,7 @@ feature2 = []
 simd = []
 fail-on-warnings = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         // Create a clippier.toml with skip_features
         let clippier_toml = r#"
@@ -5157,7 +5162,7 @@ fail-on-warnings = []
 os = "ubuntu"
 skip-features = ["simd"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test the combination: command line skip_features + config skip_features
         let result = process_configs(
@@ -5172,6 +5177,7 @@ skip-features = ["simd"]
             Some(&["fail-on-warnings".to_string()]), // Command line skip_features
             None,
         )
+        .await
         .unwrap();
 
         // Verify that both "simd" and "fail-on-warnings" are skipped
@@ -5191,10 +5197,10 @@ skip-features = ["simd"]
         assert!(feature_names.contains(&"feature2".to_string()));
     }
 
-    #[test]
-    fn test_wildcard_skip_features_suffix() {
+    #[switchy_async::test]
+    async fn test_wildcard_skip_features_suffix() {
         // Test wildcard pattern matching with *-default
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5211,18 +5217,19 @@ feature1 = []
 feature2 = []
 enable-bob = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["*-default"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5244,10 +5251,10 @@ skip-features = ["*-default"]
         assert!(feature_names.contains(&"enable-bob".to_string()));
     }
 
-    #[test]
-    fn test_wildcard_skip_features_prefix() {
+    #[switchy_async::test]
+    async fn test_wildcard_skip_features_prefix() {
         // Test wildcard pattern matching with test-*
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5263,18 +5270,19 @@ test-e2e = []
 feature1 = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["test-*"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5295,10 +5303,10 @@ skip-features = ["test-*"]
         assert!(feature_names.contains(&"production".to_string()));
     }
 
-    #[test]
-    fn test_wildcard_skip_features_single_char() {
+    #[switchy_async::test]
+    async fn test_wildcard_skip_features_single_char() {
         // Test single character wildcard with ?
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5314,18 +5322,19 @@ v3 = []
 v10 = []
 version = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["v?"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5346,10 +5355,10 @@ skip-features = ["v?"]
         assert!(feature_names.contains(&"default".to_string()));
     }
 
-    #[test]
-    fn test_negation_skip_all_except_one() {
+    #[switchy_async::test]
+    async fn test_negation_skip_all_except_one() {
         // Test negation pattern: skip all except enable-bob
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5364,18 +5373,19 @@ feature2 = []
 enable-bob = []
 enable-sally = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["*", "!enable-bob"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5395,10 +5405,10 @@ skip-features = ["*", "!enable-bob"]
         assert!(!feature_names.contains(&"enable-sally".to_string()));
     }
 
-    #[test]
-    fn test_negation_skip_all_except_pattern() {
+    #[switchy_async::test]
+    async fn test_negation_skip_all_except_pattern() {
         // Test negation with wildcard: skip all except enable-*
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5414,18 +5424,19 @@ enable-sally = []
 enable-feature = []
 disable-test = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["*", "!enable-*"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5446,10 +5457,10 @@ skip-features = ["*", "!enable-*"]
         assert!(!feature_names.contains(&"disable-test".to_string()));
     }
 
-    #[test]
-    fn test_complex_combined_patterns() {
+    #[switchy_async::test]
+    async fn test_complex_combined_patterns() {
         // Test complex combination: skip *-default and test-*, but keep test-utils
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5467,18 +5478,19 @@ test-utils = []
 feature1 = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["*-default", "test-*", "!test-utils"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None, None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5503,10 +5515,10 @@ skip-features = ["*-default", "test-*", "!test-utils"]
         assert!(feature_names.contains(&"production".to_string()));
     }
 
-    #[test]
-    fn test_command_line_wildcard_override() {
+    #[switchy_async::test]
+    async fn test_command_line_wildcard_override() {
         // Test combining command line wildcards with config file patterns
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5522,14 +5534,14 @@ test-e2e = []
 feature1 = []
 simd = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 skip-features = ["*-default"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path,
@@ -5543,6 +5555,7 @@ skip-features = ["*-default"]
             Some(&["test-*".to_string()]), // Command line wildcard
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5563,8 +5576,8 @@ skip-features = ["*-default"]
         assert!(feature_names.contains(&"simd".to_string()));
     }
 
-    #[test]
-    fn test_changed_files_deduplication() {
+    #[switchy_async::test]
+    async fn test_changed_files_deduplication() {
         let mut files = vec![
             "packages/api/src/lib.rs".to_string(),
             "packages/core/src/lib.rs".to_string(),
@@ -5586,8 +5599,8 @@ skip-features = ["*-default"]
         );
     }
 
-    #[test]
-    fn test_package_list_merging() {
+    #[switchy_async::test]
+    async fn test_package_list_merging() {
         let mut file_affected = vec!["api".to_string(), "core".to_string()];
         let external_affected = vec!["models".to_string(), "api".to_string()];
 
@@ -5599,8 +5612,8 @@ skip-features = ["*-default"]
         assert_eq!(file_affected, vec!["api", "core", "models"]);
     }
 
-    #[test]
-    fn test_package_filtering_intersection() {
+    #[switchy_async::test]
+    async fn test_package_filtering_intersection() {
         use std::collections::HashSet;
 
         let selected: HashSet<String> = ["api", "web", "cli", "core"]
@@ -5627,16 +5640,16 @@ skip-features = ["*-default"]
         assert!(!result.contains(&"models".to_string()));
     }
 
-    #[test]
-    fn test_empty_changed_files_deduplication() {
+    #[switchy_async::test]
+    async fn test_empty_changed_files_deduplication() {
         let mut files: Vec<String> = vec![];
         files.sort();
         files.dedup();
         assert_eq!(files.len(), 0);
     }
 
-    #[test]
-    fn test_all_duplicate_files() {
+    #[switchy_async::test]
+    async fn test_all_duplicate_files() {
         let mut files = vec![
             "packages/api/src/lib.rs".to_string(),
             "packages/api/src/lib.rs".to_string(),
@@ -5650,8 +5663,8 @@ skip-features = ["*-default"]
         assert_eq!(files[0], "packages/api/src/lib.rs");
     }
 
-    #[test]
-    fn test_package_filtering_no_overlap() {
+    #[switchy_async::test]
+    async fn test_package_filtering_no_overlap() {
         use std::collections::HashSet;
 
         let selected: HashSet<String> = ["api", "web"].iter().map(|s| (*s).to_string()).collect();
@@ -5669,8 +5682,8 @@ skip-features = ["*-default"]
         assert_eq!(count, 0);
     }
 
-    #[test]
-    fn test_package_filtering_all_selected_affected() {
+    #[switchy_async::test]
+    async fn test_package_filtering_all_selected_affected() {
         use std::collections::HashSet;
 
         let selected: HashSet<String> = ["api", "web"].iter().map(|s| (*s).to_string()).collect();
@@ -5692,10 +5705,10 @@ skip-features = ["*-default"]
         assert!(result.contains(&"web".to_string()));
     }
 
-    #[test]
-    fn test_features_wildcard_expansion() {
+    #[switchy_async::test]
+    async fn test_features_wildcard_expansion() {
         // Test that --features supports wildcard expansion
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5711,13 +5724,13 @@ enable-feature = []
 disable-test = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test with wildcard pattern in specific_features
         let result = process_configs(
@@ -5732,6 +5745,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5752,10 +5766,10 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"production".to_string()));
     }
 
-    #[test]
-    fn test_features_multiple_wildcard_patterns() {
+    #[switchy_async::test]
+    async fn test_features_multiple_wildcard_patterns() {
         // Test that --features supports multiple wildcard patterns
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5772,13 +5786,13 @@ test-integration = []
 production = []
 development = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test with multiple wildcard patterns
         let result = process_configs(
@@ -5793,6 +5807,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5814,10 +5829,10 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"development".to_string()));
     }
 
-    #[test]
-    fn test_features_mixed_exact_and_wildcard() {
+    #[switchy_async::test]
+    async fn test_features_mixed_exact_and_wildcard() {
         // Test mixing exact feature names with wildcard patterns
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5832,13 +5847,13 @@ enable-sally = []
 production = []
 development = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test with mix of exact and wildcard
         let result = process_configs(
@@ -5853,6 +5868,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5872,8 +5888,8 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"development".to_string()));
     }
 
-    #[test]
-    fn test_matches_pattern_helper() {
+    #[switchy_async::test]
+    async fn test_matches_pattern_helper() {
         // Test the matches_pattern helper function
         assert!(matches_pattern("bob-default", "*-default"));
         assert!(matches_pattern("sally-default", "*-default"));
@@ -5891,8 +5907,8 @@ os = "ubuntu"
         assert!(!matches_pattern("exact", "exac"));
     }
 
-    #[test]
-    fn test_expand_pattern_list_helper() {
+    #[switchy_async::test]
+    async fn test_expand_pattern_list_helper() {
         // Test the expand_pattern_list helper function
         let available = vec![
             "default".to_string(),
@@ -5924,10 +5940,10 @@ os = "ubuntu"
         assert!(expanded.contains(&"nonexistent".to_string()));
     }
 
-    #[test]
-    fn test_required_features_wildcard_expansion() {
+    #[switchy_async::test]
+    async fn test_required_features_wildcard_expansion() {
         // Test that --required-features wildcards are expanded in the output
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -5943,13 +5959,13 @@ enable-feature = []
 production = []
 development = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test with wildcard pattern in required_features
         let result = process_configs(
@@ -5964,6 +5980,7 @@ os = "ubuntu"
             None,                                                      // skip_features
             Some(&["enable-*".to_string(), "production".to_string()]), // required_features
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -5991,10 +6008,10 @@ os = "ubuntu"
         assert!(!required_feature_names.contains(&"development".to_string()));
     }
 
-    #[test]
-    fn test_required_features_from_config_file() {
+    #[switchy_async::test]
+    async fn test_required_features_from_config_file() {
         // Test that required-features in config file also get expanded
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -6009,19 +6026,20 @@ test-integration = []
 test-e2e = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 required-features = ["test-*"]
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         let result = process_configs(
             temp_path, None, None, None, false, false, None, None, None,
             None, // No command line override
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -6048,8 +6066,8 @@ required-features = ["test-*"]
         assert!(!required_feature_names.contains(&"production".to_string()));
     }
 
-    #[test]
-    fn test_expand_features_from_cargo_toml_helper() {
+    #[switchy_async::test]
+    async fn test_expand_features_from_cargo_toml_helper() {
         // Test the expand_features_from_cargo_toml helper function
         let cargo_toml_str = r"
 [features]
@@ -6076,10 +6094,10 @@ production = []
         assert!(expanded.contains(&"production".to_string()));
     }
 
-    #[test]
-    fn test_features_negation_all_except_one() {
+    #[switchy_async::test]
+    async fn test_features_negation_all_except_one() {
         // Test --features with negation: include all except one specific feature
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -6094,13 +6112,13 @@ enable-sally = []
 enable-experimental = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test: --features "*,!enable-experimental"
         let result = process_configs(
@@ -6115,6 +6133,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -6134,10 +6153,10 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"enable-experimental".to_string()));
     }
 
-    #[test]
-    fn test_features_negation_wildcard() {
+    #[switchy_async::test]
+    async fn test_features_negation_wildcard() {
         // Test --features with wildcard negation: include all except test-*
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -6153,13 +6172,13 @@ test-integration = []
 test-e2e = []
 enable-bob = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test: --features "*,!test-*"
         let result = process_configs(
@@ -6174,6 +6193,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -6194,10 +6214,10 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"test-e2e".to_string()));
     }
 
-    #[test]
-    fn test_features_negation_complex() {
+    #[switchy_async::test]
+    async fn test_features_negation_complex() {
         // Test complex negation: enable-* except enable-experimental
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -6213,13 +6233,13 @@ enable-experimental = []
 production = []
 test-utils = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test: --features "enable-*,!enable-experimental,production"
         let result = process_configs(
@@ -6238,6 +6258,7 @@ os = "ubuntu"
             None,
             None,
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -6258,10 +6279,10 @@ os = "ubuntu"
         assert!(!feature_names.contains(&"test-utils".to_string()));
     }
 
-    #[test]
-    fn test_required_features_negation() {
+    #[switchy_async::test]
+    async fn test_required_features_negation() {
         // Test that --required-features also supports negation
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let cargo_toml = r#"
@@ -6276,13 +6297,13 @@ enable-sally = []
 enable-experimental = []
 production = []
 "#;
-        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
 "#;
-        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test: --required-features "enable-*,!enable-experimental"
         let result = process_configs(
@@ -6297,6 +6318,7 @@ os = "ubuntu"
             None,
             Some(&["enable-*".to_string(), "!enable-experimental".to_string()]),
         )
+        .await
         .unwrap();
 
         assert!(!result.is_empty());
@@ -6318,8 +6340,8 @@ os = "ubuntu"
         assert!(!required_feature_names.contains(&"enable-experimental".to_string()));
     }
 
-    #[test]
-    fn test_expand_pattern_list_with_negation() {
+    #[switchy_async::test]
+    async fn test_expand_pattern_list_with_negation() {
         // Test the expand_pattern_list helper with negation
         let available = vec![
             "default".to_string(),
@@ -6349,28 +6371,28 @@ os = "ubuntu"
     }
 
     // Tests for should_skip_feature glob pattern matching
-    #[test]
-    fn test_should_skip_feature_exact_match() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_exact_match() {
         assert!(should_skip_feature("default", &["default".to_string()]));
         assert!(!should_skip_feature("test-utils", &["default".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_wildcard_suffix() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_wildcard_suffix() {
         assert!(should_skip_feature("test-utils", &["test-*".to_string()]));
         assert!(should_skip_feature("test-foo", &["test-*".to_string()]));
         assert!(!should_skip_feature("utils-test", &["test-*".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_wildcard_prefix() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_wildcard_prefix() {
         assert!(should_skip_feature("mp3-codec", &["*-codec".to_string()]));
         assert!(should_skip_feature("flac-codec", &["*-codec".to_string()]));
         assert!(!should_skip_feature("codec-mp3", &["*-codec".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_wildcard_anywhere() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_wildcard_anywhere() {
         assert!(should_skip_feature(
             "test_foo_bar",
             &["*_foo_*".to_string()]
@@ -6385,23 +6407,23 @@ os = "ubuntu"
         ));
     }
 
-    #[test]
-    fn test_should_skip_feature_question_mark_single_char() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_question_mark_single_char() {
         assert!(should_skip_feature("test1", &["test?".to_string()]));
         assert!(should_skip_feature("testX", &["test?".to_string()]));
         assert!(!should_skip_feature("test12", &["test?".to_string()]));
         assert!(!should_skip_feature("test", &["test?".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_skip_all_with_asterisk() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_skip_all_with_asterisk() {
         assert!(should_skip_feature("anything", &["*".to_string()]));
         assert!(should_skip_feature("default", &["*".to_string()]));
         assert!(should_skip_feature("fail-on-warnings", &["*".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_negation_basic() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_negation_basic() {
         // Negation with ! prefix should NOT skip the matched item
         assert!(!should_skip_feature(
             "keep-this",
@@ -6414,8 +6436,8 @@ os = "ubuntu"
         ));
     }
 
-    #[test]
-    fn test_should_skip_feature_negation_overrides_wildcard() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_negation_overrides_wildcard() {
         // "*" skips all, but "!fail-on-warnings" keeps it
         let patterns = vec!["*".to_string(), "!fail-on-warnings".to_string()];
 
@@ -6424,8 +6446,8 @@ os = "ubuntu"
         assert!(should_skip_feature("test-utils", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_negation_with_glob_pattern() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_negation_with_glob_pattern() {
         // Skip all test-* features except test-important
         let patterns = vec!["test-*".to_string(), "!test-important".to_string()];
 
@@ -6435,8 +6457,8 @@ os = "ubuntu"
         assert!(!should_skip_feature("production", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_multiple_patterns_no_overlap() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_multiple_patterns_no_overlap() {
         let patterns = vec!["test-*".to_string(), "*-codec".to_string()];
 
         assert!(should_skip_feature("test-utils", &patterns));
@@ -6444,8 +6466,8 @@ os = "ubuntu"
         assert!(!should_skip_feature("fail-on-warnings", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_order_matters_for_negation() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_order_matters_for_negation() {
         // Last pattern wins
         let patterns1 = vec!["*".to_string(), "!keep".to_string()];
         let patterns2 = vec!["!keep".to_string(), "*".to_string()];
@@ -6454,13 +6476,13 @@ os = "ubuntu"
         assert!(should_skip_feature("keep", &patterns2)); // Skipped by wildcard
     }
 
-    #[test]
-    fn test_should_skip_feature_empty_pattern_list() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_empty_pattern_list() {
         assert!(!should_skip_feature("anything", &[]));
     }
 
-    #[test]
-    fn test_should_skip_feature_complex_real_world_scenario() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_complex_real_world_scenario() {
         // Skip all codecs except opus, skip all test features except test-integration
         let patterns = vec![
             "*-codec".to_string(),
@@ -6483,16 +6505,16 @@ os = "ubuntu"
         assert!(!should_skip_feature("fail-on-warnings", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_case_sensitivity() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_case_sensitivity() {
         // Patterns should be case-sensitive (Rust convention)
         assert!(should_skip_feature("Test", &["Test".to_string()]));
         assert!(!should_skip_feature("test", &["Test".to_string()]));
         assert!(should_skip_feature("test", &["test".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_multiple_negations() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_multiple_negations() {
         let patterns = vec!["*".to_string(), "!keep1".to_string(), "!keep2".to_string()];
 
         assert!(!should_skip_feature("keep1", &patterns));
@@ -6500,8 +6522,8 @@ os = "ubuntu"
         assert!(should_skip_feature("skip-this", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_overlapping_patterns() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_overlapping_patterns() {
         // Multiple patterns that could match the same feature
         let patterns = vec!["test-*".to_string(), "*-utils".to_string()];
 
@@ -6511,8 +6533,8 @@ os = "ubuntu"
         assert!(!should_skip_feature("production", &patterns)); // Matches neither
     }
 
-    #[test]
-    fn test_should_skip_feature_special_characters() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_special_characters() {
         // Test patterns with hyphens, underscores, numbers
         assert!(should_skip_feature(
             "test-2024-feature",
@@ -6528,15 +6550,15 @@ os = "ubuntu"
         ));
     }
 
-    #[test]
-    fn test_should_skip_feature_empty_string() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_empty_string() {
         // Edge case: empty string feature name
         assert!(!should_skip_feature("", &["test-*".to_string()]));
         assert!(should_skip_feature("", &["*".to_string()]));
     }
 
-    #[test]
-    fn test_should_skip_feature_negation_without_match() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_negation_without_match() {
         // Negation pattern that doesn't match anything shouldn't affect results
         let patterns = vec!["test-*".to_string(), "!nonexistent".to_string()];
 
@@ -6544,8 +6566,8 @@ os = "ubuntu"
         assert!(!should_skip_feature("production", &patterns));
     }
 
-    #[test]
-    fn test_should_skip_feature_complex_wildcards() {
+    #[switchy_async::test]
+    async fn test_should_skip_feature_complex_wildcards() {
         // Test multiple wildcards in one pattern
         assert!(should_skip_feature(
             "prefix-middle-suffix",

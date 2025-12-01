@@ -30,6 +30,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 // Local definitions to avoid import issues
 fn parse_dependency_name(dep_spec: &str) -> String {
     // Parse dependency name (remove version constraints, features, etc.)
@@ -127,7 +129,7 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
 ///
 /// * If the Cargo.lock content is not valid TOML
 /// * If the version is not a valid `u32`
-pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
+pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, BoxError> {
     let toml_value: toml::Value = toml::from_str(content)?;
 
     #[allow(clippy::cast_sign_loss)]
@@ -188,7 +190,7 @@ pub fn get_changed_files_from_git(
     workspace_root: &Path,
     base_commit: &str,
     head_commit: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, BoxError> {
     let repo = Repository::open(workspace_root)?;
     let base_oid = repo.revparse_single(base_commit)?.id();
     let head_oid = repo.revparse_single(head_commit)?.id();
@@ -244,7 +246,7 @@ pub fn extract_changed_dependencies_from_git(
     base_commit: &str,
     head_commit: &str,
     _changed_files: &[String],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, BoxError> {
     let repo = Repository::open(workspace_root)?;
     let base_oid = repo.revparse_single(base_commit)?.id();
     let head_oid = repo.revparse_single(head_commit)?.id();
@@ -350,7 +352,7 @@ pub fn extract_changed_dependencies_from_git(
 pub fn get_cargo_lock_from_commit(
     repo: &Repository,
     commit_oid: git2::Oid,
-) -> Result<Option<CargoLock>, Box<dyn std::error::Error>> {
+) -> Result<Option<CargoLock>, BoxError> {
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
 
@@ -581,7 +583,7 @@ fn find_recursive_dependents(
 pub fn build_external_dependency_map(
     workspace_root: &std::path::Path,
     workspace_members: &[String],
-) -> Result<BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
+) -> Result<BTreeMap<String, Vec<String>>, BoxError> {
     let mut external_dep_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // First, parse workspace-level Cargo.toml to get workspace dependencies

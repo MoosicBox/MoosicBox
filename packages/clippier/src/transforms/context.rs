@@ -8,6 +8,8 @@ use toml::Value;
 
 use crate::WorkspaceContext;
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 /// Context available to transform scripts
 #[derive(Clone)]
 pub struct TransformContext {
@@ -47,7 +49,7 @@ impl TransformContext {
     /// * Workspace root not found
     /// * Failed to read package metadata
     /// * Invalid Cargo.toml files
-    pub fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(workspace_root: &Path) -> Result<Self, BoxError> {
         let workspace = WorkspaceContext::new(workspace_root)?;
 
         // Load all package metadata
@@ -59,11 +61,12 @@ impl TransformContext {
 
         for (name, path) in members {
             let cargo_path = path.join("Cargo.toml");
-            if !cargo_path.exists() {
+            if !switchy_fs::exists(&cargo_path) {
                 continue;
             }
 
-            let cargo_toml: Value = toml::from_str(&std::fs::read_to_string(&cargo_path)?)?;
+            let cargo_toml: Value =
+                toml::from_str(&switchy_fs::sync::read_to_string(&cargo_path)?)?;
 
             let features = extract_features(&cargo_toml);
             let dependencies = extract_dependencies(&cargo_toml, &workspace, &path);
@@ -168,7 +171,7 @@ impl PackageInfo {
     #[must_use]
     pub fn skips_feature_on_os(&self, feature: &str, os: &str) -> bool {
         let clippier_path = self.path.join("clippier.toml");
-        let Ok(content) = std::fs::read_to_string(clippier_path) else {
+        let Ok(content) = switchy_fs::sync::read_to_string(clippier_path) else {
             return false;
         };
 
@@ -277,11 +280,11 @@ fn extract_dependencies(
 fn get_workspace_members(
     _workspace: &WorkspaceContext,
     workspace_root: &Path,
-) -> Result<BTreeMap<String, PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<BTreeMap<String, PathBuf>, BoxError> {
     let mut members = BTreeMap::new();
 
     let workspace_cargo = workspace_root.join("Cargo.toml");
-    let content = std::fs::read_to_string(workspace_cargo)?;
+    let content = switchy_fs::sync::read_to_string(workspace_cargo)?;
     let workspace_toml: Value = toml::from_str(&content)?;
 
     if let Some(member_patterns) = workspace_toml
@@ -304,14 +307,14 @@ fn get_workspace_members(
                         };
 
                         // Scan directories in the base path
-                        if base_path.exists()
-                            && let Ok(entries) = std::fs::read_dir(&base_path)
+                        if switchy_fs::exists(&base_path)
+                            && let Ok(entries) = switchy_fs::sync::read_dir_sorted(&base_path)
                         {
-                            for entry in entries.flatten() {
+                            for entry in entries {
                                 if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
                                     let member_path = entry.path();
                                     let cargo_path = member_path.join("Cargo.toml");
-                                    if cargo_path.exists()
+                                    if switchy_fs::exists(&cargo_path)
                                         && let Some(name) =
                                             WorkspaceContext::read_package_name(&member_path)
                                     {
@@ -323,7 +326,7 @@ fn get_workspace_members(
                     }
                 } else {
                     let member_path = workspace_root.join(pattern_str);
-                    if member_path.exists()
+                    if switchy_fs::exists(&member_path)
                         && let Some(name) = WorkspaceContext::read_package_name(&member_path)
                     {
                         members.insert(name, member_path);
@@ -339,7 +342,6 @@ fn get_workspace_members(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_extract_features_with_valid_features() {
@@ -561,7 +563,7 @@ invalid = "string_value"
 
     #[test]
     fn test_skips_feature_on_os_no_clippier_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let pkg_info = PackageInfo {
             name: "test_pkg".to_string(),
             path: temp_dir.path().to_path_buf(),
@@ -575,7 +577,7 @@ invalid = "string_value"
 
     #[test]
     fn test_skips_feature_on_os_with_config() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let clippier_toml = r#"
 [[config]]
 os = "windows"
@@ -585,7 +587,7 @@ skip-features = ["windows_only_feature"]
 os = "linux"
 skip-features = ["linux_only_feature"]
 "#;
-        fs::write(temp_dir.path().join("clippier.toml"), clippier_toml).unwrap();
+        switchy_fs::sync::write(temp_dir.path().join("clippier.toml"), clippier_toml).unwrap();
 
         let pkg_info = PackageInfo {
             name: "test_pkg".to_string(),
@@ -603,8 +605,8 @@ skip-features = ["linux_only_feature"]
 
     #[test]
     fn test_skips_feature_on_os_malformed_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        fs::write(
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        switchy_fs::sync::write(
             temp_dir.path().join("clippier.toml"),
             "invalid toml content [[[",
         )
@@ -663,8 +665,8 @@ build_dep = { version = "3.0", features = ["build_feature"] }
         )
         .unwrap();
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        fs::write(
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        switchy_fs::sync::write(
             temp_dir.path().join("Cargo.toml"),
             "[workspace]\nmembers = []",
         )
@@ -694,8 +696,8 @@ build_dep = { version = "3.0", features = ["build_feature"] }
     fn test_extract_dependencies_empty() {
         let cargo_toml = toml::from_str::<Value>("[package]\nname = \"test_pkg\"").unwrap();
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        fs::write(
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        switchy_fs::sync::write(
             temp_dir.path().join("Cargo.toml"),
             "[workspace]\nmembers = []",
         )
@@ -709,11 +711,11 @@ build_dep = { version = "3.0", features = ["build_feature"] }
 
     #[test]
     fn test_get_workspace_members_simple() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root = temp_dir.path();
 
         // Create workspace
-        fs::write(
+        switchy_fs::sync::write(
             root.join("Cargo.toml"),
             r#"
 [workspace]
@@ -724,13 +726,13 @@ members = ["pkg1", "pkg2"]
 
         // Create pkg1
         let pkg1 = root.join("pkg1");
-        fs::create_dir(&pkg1).unwrap();
-        fs::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
+        switchy_fs::sync::create_dir_all(&pkg1).unwrap();
+        switchy_fs::sync::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
 
         // Create pkg2
         let pkg2 = root.join("pkg2");
-        fs::create_dir(&pkg2).unwrap();
-        fs::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
+        switchy_fs::sync::create_dir_all(&pkg2).unwrap();
+        switchy_fs::sync::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
 
         let workspace = WorkspaceContext::new(root).unwrap();
         let members = get_workspace_members(&workspace, root).unwrap();
@@ -742,11 +744,11 @@ members = ["pkg1", "pkg2"]
 
     #[test]
     fn test_get_workspace_members_with_glob() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root = temp_dir.path();
 
         // Create workspace with glob pattern
-        fs::write(
+        switchy_fs::sync::write(
             root.join("Cargo.toml"),
             r#"
 [workspace]
@@ -757,17 +759,17 @@ members = ["packages/*"]
 
         // Create packages directory
         let packages_dir = root.join("packages");
-        fs::create_dir(&packages_dir).unwrap();
+        switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
 
         // Create pkg1
         let pkg1 = packages_dir.join("pkg1");
-        fs::create_dir(&pkg1).unwrap();
-        fs::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
+        switchy_fs::sync::create_dir_all(&pkg1).unwrap();
+        switchy_fs::sync::write(pkg1.join("Cargo.toml"), "[package]\nname = \"pkg1\"").unwrap();
 
         // Create pkg2
         let pkg2 = packages_dir.join("pkg2");
-        fs::create_dir(&pkg2).unwrap();
-        fs::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
+        switchy_fs::sync::create_dir_all(&pkg2).unwrap();
+        switchy_fs::sync::write(pkg2.join("Cargo.toml"), "[package]\nname = \"pkg2\"").unwrap();
 
         let workspace = WorkspaceContext::new(root).unwrap();
         let members = get_workspace_members(&workspace, root).unwrap();
@@ -779,10 +781,10 @@ members = ["packages/*"]
 
     #[test]
     fn test_get_workspace_members_missing_cargo_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root = temp_dir.path();
 
-        fs::write(
+        switchy_fs::sync::write(
             root.join("Cargo.toml"),
             r#"
 [workspace]
@@ -792,7 +794,7 @@ members = ["pkg1"]
         .unwrap();
 
         // Create directory without Cargo.toml
-        fs::create_dir(root.join("pkg1")).unwrap();
+        switchy_fs::sync::create_dir_all(root.join("pkg1")).unwrap();
 
         let workspace = WorkspaceContext::new(root).unwrap();
         let members = get_workspace_members(&workspace, root).unwrap();

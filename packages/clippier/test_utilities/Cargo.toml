@@ -15,13 +15,17 @@ examples = false
 tests    = false
 
 [dependencies]
-clippier   = { workspace = true, features = ["test-utils"] }
-serde      = { workspace = true }
+clippier = { workspace = true, features = ["test-utils"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
-tempfile   = { workspace = true }
-toml       = { workspace = true }
+switchy_fs = { workspace = true, features = [
+    "simulator-real-fs",
+    "std",
+    "sync",
+] }
+toml = { workspace = true }
 
 [features]
 default          = []
-fail-on-warnings = ["clippier/fail-on-warnings"]
+fail-on-warnings = ["clippier/fail-on-warnings", "switchy_fs/fail-on-warnings"]
 git-diff         = ["clippier/git-diff"]

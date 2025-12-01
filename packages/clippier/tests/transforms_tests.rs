@@ -3,8 +3,18 @@
 use clippier::transforms::{TransformContext, TransformEngine};
 use serde_json::json;
 
+/// Seed the test fixtures into the simulator if enabled
+fn setup() {
+    switchy_fs::seed_relative_to(
+        env!("CARGO_MANIFEST_DIR"),
+        ["tests/transforms/fixtures", "tests/transforms/scripts"],
+    )
+    .expect("Failed to seed test fixtures into simulator");
+}
+
 /// Helper to get the path to test fixtures
 fn fixture_path(name: &str) -> std::path::PathBuf {
+    setup();
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/transforms/fixtures")
         .join(name)
@@ -12,6 +22,7 @@ fn fixture_path(name: &str) -> std::path::PathBuf {
 
 /// Helper to get the path to test scripts
 fn script_path(name: &str) -> std::path::PathBuf {
+    setup();
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/transforms/scripts")
         .join(name)
@@ -113,8 +124,8 @@ fn count_matrix_entries(
         .count()
 }
 
-#[test]
-fn test_transform_context_new() {
+#[switchy_async::test]
+async fn test_transform_context_new() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -126,8 +137,8 @@ fn test_transform_context_new() {
     assert!(packages.contains(&"client".to_string()));
 }
 
-#[test]
-fn test_context_get_package() {
+#[switchy_async::test]
+async fn test_context_get_package() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -142,8 +153,8 @@ fn test_context_get_package() {
     assert!(missing.is_none());
 }
 
-#[test]
-fn test_context_is_workspace_member() {
+#[switchy_async::test]
+async fn test_context_is_workspace_member() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -154,8 +165,8 @@ fn test_context_is_workspace_member() {
     assert!(!context.is_workspace_member("tokio"));
 }
 
-#[test]
-fn test_context_package_depends_on() {
+#[switchy_async::test]
+async fn test_context_package_depends_on() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -173,8 +184,8 @@ fn test_context_package_depends_on() {
     assert!(context.package_depends_on("api", "tokio"));
 }
 
-#[test]
-fn test_context_feature_exists() {
+#[switchy_async::test]
+async fn test_context_feature_exists() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -184,8 +195,8 @@ fn test_context_feature_exists() {
     assert!(!context.feature_exists("api", "nonexistent"));
 }
 
-#[test]
-fn test_package_info_depends_on() {
+#[switchy_async::test]
+async fn test_package_info_depends_on() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -196,8 +207,8 @@ fn test_package_info_depends_on() {
     assert!(!api.depends_on("reqwest"));
 }
 
-#[test]
-fn test_package_info_has_feature() {
+#[switchy_async::test]
+async fn test_package_info_has_feature() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -208,8 +219,8 @@ fn test_package_info_has_feature() {
     assert!(!api.has_feature("nonexistent"));
 }
 
-#[test]
-fn test_package_info_get_all_features() {
+#[switchy_async::test]
+async fn test_package_info_get_all_features() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -221,8 +232,8 @@ fn test_package_info_get_all_features() {
     assert!(features.contains(&"default".to_string()));
 }
 
-#[test]
-fn test_package_info_feature_activates_dependencies() {
+#[switchy_async::test]
+async fn test_package_info_feature_activates_dependencies() {
     let workspace_root = fixture_path("basic");
     let context = TransformContext::new(&workspace_root).expect("Failed to create context");
 
@@ -241,8 +252,8 @@ fn test_package_info_feature_activates_dependencies() {
     assert_eq!(json_deps[0].features, vec!["derive"]);
 }
 
-#[test]
-fn test_package_info_skips_feature_on_os() {
+#[switchy_async::test]
+async fn test_package_info_skips_feature_on_os() {
     // Note: The asio-example fixture no longer uses clippier.toml for skip-features
     // because the transform handles it via dependency graph analysis.
     // This test now verifies that skips_feature_on_os returns false when no config exists
@@ -265,8 +276,8 @@ fn test_package_info_skips_feature_on_os() {
     assert!(!api.skips_feature_on_os("async", "windows"));
 }
 
-#[test]
-fn test_transform_engine_new() {
+#[switchy_async::test]
+async fn test_transform_engine_new() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -290,8 +301,8 @@ fn test_transform_engine_new() {
     assert_eq!(matrix.len(), 1);
 }
 
-#[test]
-fn test_apply_transform_basic() {
+#[switchy_async::test]
+async fn test_apply_transform_basic() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -322,8 +333,8 @@ fn test_apply_transform_basic() {
     assert_eq!(matrix[0].get("package").unwrap(), "models");
 }
 
-#[test]
-fn test_lua_helper_table_filter() {
+#[switchy_async::test]
+async fn test_lua_helper_table_filter() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -350,8 +361,8 @@ fn test_lua_helper_table_filter() {
     assert_eq!(matrix[1].get("value").unwrap(), 4);
 }
 
-#[test]
-fn test_lua_helper_table_map() {
+#[switchy_async::test]
+async fn test_lua_helper_table_map() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -377,8 +388,8 @@ fn test_lua_helper_table_map() {
     assert_eq!(matrix[1].get("doubled").unwrap(), 4);
 }
 
-#[test]
-fn test_lua_helper_table_contains() {
+#[switchy_async::test]
+async fn test_lua_helper_table_contains() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -406,8 +417,8 @@ fn test_lua_helper_table_contains() {
     assert_eq!(matrix[0].get("has_missing").unwrap(), false);
 }
 
-#[test]
-fn test_lua_helper_table_find() {
+#[switchy_async::test]
+async fn test_lua_helper_table_find() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -434,8 +445,8 @@ fn test_lua_helper_table_find() {
     assert_eq!(matrix[0].get("value").unwrap(), 2);
 }
 
-#[test]
-fn test_lua_context_api_get_package() {
+#[switchy_async::test]
+async fn test_lua_context_api_get_package() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -460,8 +471,8 @@ fn test_lua_context_api_get_package() {
     assert_eq!(matrix[0].get("has_async").unwrap(), true);
 }
 
-#[test]
-fn test_lua_context_api_is_workspace_member() {
+#[switchy_async::test]
+async fn test_lua_context_api_is_workspace_member() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -485,8 +496,8 @@ fn test_lua_context_api_is_workspace_member() {
     assert_eq!(matrix[0].get("serde_is_member").unwrap(), false);
 }
 
-#[test]
-fn test_lua_context_api_package_depends_on() {
+#[switchy_async::test]
+async fn test_lua_context_api_package_depends_on() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -510,8 +521,8 @@ fn test_lua_context_api_package_depends_on() {
     assert_eq!(matrix[0].get("models_depends_api").unwrap(), false);
 }
 
-#[test]
-fn test_lua_context_api_feature_exists() {
+#[switchy_async::test]
+async fn test_lua_context_api_feature_exists() {
     let workspace_root = fixture_path("basic");
     let engine = TransformEngine::new(&workspace_root).expect("Failed to create engine");
 
@@ -535,8 +546,8 @@ fn test_lua_context_api_feature_exists() {
     assert_eq!(matrix[0].get("missing_exists").unwrap(), false);
 }
 
-#[test]
-fn test_inline_script_loading() {
+#[switchy_async::test]
+async fn test_inline_script_loading() {
     let workspace_root = fixture_path("basic");
     let mut matrix = vec![serde_json::Map::from_iter(vec![(
         "value".to_string(),
@@ -560,8 +571,8 @@ fn test_inline_script_loading() {
     assert_eq!(matrix[0].get("doubled").unwrap(), 2);
 }
 
-#[test]
-fn test_file_script_loading() {
+#[switchy_async::test]
+async fn test_file_script_loading() {
     let workspace_root = fixture_path("basic");
     let script_file = script_path("platform-filter.lua");
 
@@ -588,8 +599,8 @@ fn test_file_script_loading() {
     assert_eq!(matrix[0].get("os").unwrap(), "linux");
 }
 
-#[test]
-fn test_multiple_transforms_in_sequence() {
+#[switchy_async::test]
+async fn test_multiple_transforms_in_sequence() {
     let workspace_root = fixture_path("basic");
 
     let mut matrix = vec![
@@ -627,8 +638,8 @@ fn test_multiple_transforms_in_sequence() {
     assert_eq!(matrix[1].get("doubled").unwrap(), 6);
 }
 
-#[test]
-fn test_error_script_compilation() {
+#[switchy_async::test]
+async fn test_error_script_compilation() {
     let workspace_root = fixture_path("basic");
     let mut matrix = vec![];
 
@@ -647,8 +658,8 @@ fn test_error_script_compilation() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_error_script_runtime() {
+#[switchy_async::test]
+async fn test_error_script_runtime() {
     let workspace_root = fixture_path("basic");
     let mut matrix = vec![];
 
@@ -667,8 +678,8 @@ fn test_error_script_runtime() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_error_missing_transform_function() {
+#[switchy_async::test]
+async fn test_error_missing_transform_function() {
     let workspace_root = fixture_path("basic");
     let mut matrix = vec![];
 
@@ -686,8 +697,8 @@ fn test_error_missing_transform_function() {
     assert!(result.is_err());
 }
 
-#[test]
-fn test_asio_platform_compat_real_world() {
+#[switchy_async::test]
+async fn test_asio_platform_compat_real_world() {
     let workspace_root = fixture_path("asio-example");
     let script_file = script_path("asio-compat.lua");
 
@@ -772,8 +783,8 @@ fn test_asio_platform_compat_real_world() {
     );
 }
 
-#[test]
-fn test_asio_compat_single_feature_legacy() {
+#[switchy_async::test]
+async fn test_asio_compat_single_feature_legacy() {
     let workspace_root = fixture_path("asio-example");
     let script_file = script_path("asio-compat.lua");
 
@@ -833,8 +844,8 @@ fn test_asio_compat_single_feature_legacy() {
     }
 }
 
-#[test]
-fn test_asio_compat_all_features_filtered() {
+#[switchy_async::test]
+async fn test_asio_compat_all_features_filtered() {
     let workspace_root = fixture_path("asio-example");
     let script_file = script_path("asio-compat.lua");
 
@@ -925,8 +936,8 @@ fn test_asio_compat_all_features_filtered() {
     );
 }
 
-#[test]
-fn test_platform_filter_multi_features() {
+#[switchy_async::test]
+async fn test_platform_filter_multi_features() {
     let workspace_root = fixture_path("basic");
     let script_file = script_path("platform-filter.lua");
 
@@ -962,8 +973,8 @@ fn test_platform_filter_multi_features() {
     );
 }
 
-#[test]
-fn test_empty_transform_list() {
+#[switchy_async::test]
+async fn test_empty_transform_list() {
     let workspace_root = fixture_path("basic");
     let mut matrix = vec![serde_json::Map::from_iter(vec![(
         "value".to_string(),

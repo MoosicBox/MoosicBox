@@ -2,8 +2,8 @@ use clippier::{OutputType, handle_features_command};
 use clippier_test_utilities::test_resources::load_test_workspace;
 use std::collections::HashSet;
 
-#[test]
-fn test_packages_filter_single_package() {
+#[switchy_async::test]
+async fn test_packages_filter_single_package() {
     // Test filtering to a single package
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -34,7 +34,8 @@ fn test_packages_filter_single_package() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -49,8 +50,8 @@ fn test_packages_filter_single_package() {
     );
 }
 
-#[test]
-fn test_packages_filter_multiple_packages() {
+#[switchy_async::test]
+async fn test_packages_filter_multiple_packages() {
     // Test filtering to multiple packages
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -81,7 +82,8 @@ fn test_packages_filter_multiple_packages() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -103,8 +105,8 @@ fn test_packages_filter_multiple_packages() {
     assert!(!package_names.contains("shared-utils"));
 }
 
-#[test]
-fn test_packages_filter_empty_list() {
+#[switchy_async::test]
+async fn test_packages_filter_empty_list() {
     // Test with empty packages list (should process all packages)
     let (temp_dir, _) = load_test_workspace("complex");
     let result_empty = handle_features_command(
@@ -135,7 +137,8 @@ fn test_packages_filter_empty_list() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     let result_none = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -165,7 +168,8 @@ fn test_packages_filter_empty_list() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     // Both should process all packages
     assert!(result_empty.is_ok());
@@ -185,8 +189,8 @@ fn test_packages_filter_empty_list() {
     assert_eq!(json_empty.len(), json_none.len());
 }
 
-#[test]
-fn test_packages_with_os_filter() {
+#[switchy_async::test]
+async fn test_packages_with_os_filter() {
     // Test combining --packages with --os
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -217,7 +221,8 @@ fn test_packages_with_os_filter() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -230,8 +235,8 @@ fn test_packages_with_os_filter() {
     }
 }
 
-#[test]
-fn test_packages_with_chunking() {
+#[switchy_async::test]
+async fn test_packages_with_chunking() {
     // Test combining --packages with --chunked
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -262,7 +267,8 @@ fn test_packages_with_chunking() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -284,8 +290,8 @@ fn test_packages_with_chunking() {
     }
 }
 
-#[test]
-fn test_packages_with_features_filter() {
+#[switchy_async::test]
+async fn test_packages_with_features_filter() {
     // Test combining --packages with --features and --skip-features
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -316,7 +322,8 @@ fn test_packages_with_features_filter() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -335,8 +342,8 @@ fn test_packages_with_features_filter() {
     }
 }
 
-#[test]
-fn test_packages_nonexistent_package() {
+#[switchy_async::test]
+async fn test_packages_nonexistent_package() {
     // Test with package name that doesn't exist
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -367,7 +374,8 @@ fn test_packages_nonexistent_package() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -376,8 +384,8 @@ fn test_packages_nonexistent_package() {
     assert_eq!(json.len(), 0);
 }
 
-#[test]
-fn test_packages_mixed_valid_invalid() {
+#[switchy_async::test]
+async fn test_packages_mixed_valid_invalid() {
     // Test with mix of valid and invalid package names
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -413,7 +421,8 @@ fn test_packages_mixed_valid_invalid() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -431,8 +440,8 @@ fn test_packages_mixed_valid_invalid() {
     assert!(package_names.len() >= 2); // At least api + web configs
 }
 
-#[test]
-fn test_packages_case_sensitivity() {
+#[switchy_async::test]
+async fn test_packages_case_sensitivity() {
     // Test that package names are case-sensitive
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -463,7 +472,8 @@ fn test_packages_case_sensitivity() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -472,8 +482,8 @@ fn test_packages_case_sensitivity() {
     assert_eq!(json.len(), 0);
 }
 
-#[test]
-fn test_packages_raw_output_format() {
+#[switchy_async::test]
+async fn test_packages_raw_output_format() {
     // Test that --packages works with Raw output format
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -504,7 +514,8 @@ fn test_packages_raw_output_format() {
         #[cfg(feature = "_transforms")]
         false,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let output = result.unwrap();
