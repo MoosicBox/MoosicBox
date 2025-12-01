@@ -2081,4 +2081,157 @@ mod tests {
             "Unknown \"connection dropped unexpectedly\""
         );
     }
+
+    #[cfg(feature = "base64")]
+    mod base64_tests {
+        use super::{BTreeMap, TunnelSender};
+        use base64::{Engine as _, engine::general_purpose};
+        use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        fn test_init_base64_request_buffer_first_packet_builds_correct_prefix() {
+            let request_id = 12345_u64;
+            let packet_id = 1_u32;
+            let status = 200_u16;
+            let mut headers = BTreeMap::new();
+            headers.insert("content-type".to_string(), "application/json".to_string());
+
+            let mut buf = String::new();
+            let mut overflow_buf = String::new();
+
+            let prefix = TunnelSender::init_base64_request_buffer(
+                request_id,
+                packet_id,
+                status,
+                &headers,
+                &mut buf,
+                &mut overflow_buf,
+            );
+
+            // First packet should include request_id, packet_id, status, and base64 headers
+            assert!(prefix.starts_with("12345|1|"));
+            assert!(prefix.contains("200")); // status
+
+            // Verify headers are base64 encoded and wrapped with {}
+            let parts: Vec<&str> = prefix.split("200").collect();
+            assert_eq!(parts.len(), 2);
+            let encoded_headers = parts[1];
+            assert!(encoded_headers.starts_with('{'));
+            assert!(encoded_headers.ends_with('}'));
+
+            // Decode and verify headers
+            let inner = &encoded_headers[1..encoded_headers.len() - 1];
+            let decoded = general_purpose::STANDARD.decode(inner).unwrap();
+            let decoded_str = String::from_utf8(decoded).unwrap();
+            assert!(decoded_str.contains("content-type"));
+            assert!(decoded_str.contains("application/json"));
+        }
+
+        #[test_log::test]
+        fn test_init_base64_request_buffer_subsequent_packet_has_simple_prefix() {
+            let request_id = 67890_u64;
+            let packet_id = 5_u32; // Not first packet
+            let status = 200_u16;
+            let headers = BTreeMap::new();
+
+            let mut buf = String::new();
+            let mut overflow_buf = String::new();
+
+            let prefix = TunnelSender::init_base64_request_buffer(
+                request_id,
+                packet_id,
+                status,
+                &headers,
+                &mut buf,
+                &mut overflow_buf,
+            );
+
+            // Subsequent packets should only have request_id|packet_id|
+            assert_eq!(prefix, "67890|5|");
+            // Should NOT contain status or headers
+            assert!(!prefix.contains("200"));
+            assert!(!prefix.contains('{'));
+        }
+
+        #[test_log::test]
+        fn test_init_base64_request_buffer_handles_overflow_buffer() {
+            let request_id = 11111_u64;
+            let packet_id = 2_u32;
+            let status = 200_u16;
+            let headers = BTreeMap::new();
+
+            let mut buf = "existing_content".to_string();
+            let mut overflow_buf = "overflow_data_".to_string();
+
+            let prefix = TunnelSender::init_base64_request_buffer(
+                request_id,
+                packet_id,
+                status,
+                &headers,
+                &mut buf,
+                &mut overflow_buf,
+            );
+
+            // When overflow_buf is not empty, it should prepend to buf and clear overflow_buf
+            assert!(overflow_buf.is_empty());
+            assert_eq!(buf, "overflow_data_existing_content");
+            assert_eq!(prefix, "11111|2|");
+        }
+
+        #[test_log::test]
+        fn test_init_base64_request_buffer_with_empty_headers() {
+            let request_id = 1_u64;
+            let packet_id = 1_u32;
+            let status = 404_u16;
+            let headers = BTreeMap::new();
+
+            let mut buf = String::new();
+            let mut overflow_buf = String::new();
+
+            let prefix = TunnelSender::init_base64_request_buffer(
+                request_id,
+                packet_id,
+                status,
+                &headers,
+                &mut buf,
+                &mut overflow_buf,
+            );
+
+            // Should still include status and base64-encoded empty headers "{}"
+            assert!(prefix.starts_with("1|1|"));
+            assert!(prefix.contains("404"));
+
+            // Find and decode the empty headers
+            let parts: Vec<&str> = prefix.split("404").collect();
+            let encoded_headers = parts[1];
+            let inner = &encoded_headers[1..encoded_headers.len() - 1];
+            let decoded = general_purpose::STANDARD.decode(inner).unwrap();
+            let decoded_str = String::from_utf8(decoded).unwrap();
+            assert_eq!(decoded_str, "{}");
+        }
+
+        #[test_log::test]
+        fn test_init_base64_request_buffer_preserves_empty_overflow_and_buf() {
+            let request_id = 999_u64;
+            let packet_id = 3_u32;
+            let status = 200_u16;
+            let headers = BTreeMap::new();
+
+            let mut buf = String::new();
+            let mut overflow_buf = String::new();
+
+            let _prefix = TunnelSender::init_base64_request_buffer(
+                request_id,
+                packet_id,
+                status,
+                &headers,
+                &mut buf,
+                &mut overflow_buf,
+            );
+
+            // When both are empty, they should remain empty
+            assert!(buf.is_empty());
+            assert!(overflow_buf.is_empty());
+        }
+    }
 }
