@@ -89,6 +89,16 @@ pub enum Markup<E> {
 }
 
 impl<E: MaybeElement> Markup<E> {
+    /// Parses a single markup node within a block context.
+    ///
+    /// This method handles the full range of markup syntax including literals,
+    /// expressions, elements, control flow, and special syntax like hex colors
+    /// and CSS units. It differs from direct [`DiagnosticParse`] in that
+    /// it allows `@let` bindings and processes elements with full context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the token stream cannot be parsed as valid markup.
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn diagnostic_parse_in_block(
         input: ParseStream,
