@@ -516,4 +516,64 @@ mod tests {
         let header = Header::new("test_value".to_string());
         assert_eq!(header.into_inner(), "test_value");
     }
+
+    #[test]
+    fn test_header_error_display_invalid_header_value() {
+        let error = HeaderError::InvalidHeaderValue {
+            name: "x-custom-header".to_string(),
+            value: "invalid\x00value".to_string(),
+            reason: "contains null byte".to_string(),
+        };
+        let display = error.to_string();
+        assert_eq!(
+            display,
+            "Header 'x-custom-header' has invalid value 'invalid\x00value': contains null byte"
+        );
+    }
+
+    #[test]
+    fn test_header_error_display_deserialization_error() {
+        let mut headers = BTreeMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        headers.insert("authorization".to_string(), "Bearer token".to_string());
+
+        let error = HeaderError::DeserializationError {
+            source: "missing field `user_agent`".to_string(),
+            headers,
+            target_type: "RequestHeaders",
+        };
+        let display = error.to_string();
+
+        assert!(display.contains("Failed to deserialize headers into type 'RequestHeaders'"));
+        assert!(display.contains("missing field `user_agent`"));
+        assert!(display.contains("authorization"));
+        assert!(display.contains("content-type"));
+    }
+
+    #[test]
+    fn test_header_error_into_handler_error() {
+        let error = HeaderError::MissingHeader {
+            name: "x-api-key".to_string(),
+        };
+        let handler_error = error.into_handler_error();
+
+        // Verify it converts to a BadRequest HTTP error
+        match handler_error {
+            crate::Error::Http { status_code, .. } => {
+                assert_eq!(status_code, switchy_http_models::StatusCode::BadRequest);
+            }
+        }
+    }
+
+    #[test]
+    fn test_header_error_is_std_error() {
+        // Verify HeaderError implements std::error::Error
+        let error: &dyn std::error::Error = &HeaderError::MissingHeader {
+            name: "test".to_string(),
+        };
+        // Error should have no source
+        assert!(error.source().is_none());
+        // Display should work
+        assert!(!error.to_string().is_empty());
+    }
 }

@@ -615,4 +615,119 @@ mod tests {
         let path = Path::new("test".to_string());
         assert_eq!(path.len(), 4); // String::len() via Deref
     }
+
+    #[test]
+    fn test_validate_segment_with_null_character() {
+        // Test that validate_segment rejects segments containing null characters
+        let result = validate_segment("hello\0world", 0);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            PathError::InvalidSegment {
+                segment,
+                position,
+                reason,
+            } => {
+                assert_eq!(segment, "hello\0world");
+                assert_eq!(position, 0);
+                assert_eq!(reason, "segment contains null character");
+            }
+            _ => panic!("Expected InvalidSegment error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_segment_empty() {
+        // Test that validate_segment rejects empty segments
+        let result = validate_segment("", 2);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            PathError::InvalidSegment {
+                segment,
+                position,
+                reason,
+            } => {
+                assert!(segment.is_empty());
+                assert_eq!(position, 2);
+                assert_eq!(reason, "segment is empty after URL decoding");
+            }
+            _ => panic!("Expected InvalidSegment error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_segment_valid() {
+        // Test that validate_segment accepts valid segments
+        assert!(validate_segment("hello", 0).is_ok());
+        assert!(validate_segment("hello-world", 1).is_ok());
+        assert!(validate_segment("hello_world", 2).is_ok());
+        assert!(validate_segment("123", 3).is_ok());
+        assert!(validate_segment("hello world", 4).is_ok()); // spaces are valid
+    }
+
+    #[test]
+    fn test_path_error_display_invalid_segment() {
+        let error = PathError::InvalidSegment {
+            segment: "bad\0segment".to_string(),
+            position: 3,
+            reason: "segment contains null character".to_string(),
+        };
+        assert_eq!(
+            error.to_string(),
+            "Invalid path segment 'bad\0segment' at position 3: segment contains null character"
+        );
+    }
+
+    #[test]
+    fn test_path_error_display_deserialization_error() {
+        let error = PathError::DeserializationError {
+            source: "expected a number".to_string(),
+            segments: vec!["abc".to_string(), "def".to_string()],
+            target_type: "(u32, u32)",
+        };
+        let display = error.to_string();
+        assert!(display.contains("Failed to deserialize path segments"));
+        assert!(display.contains("[\"abc\", \"def\"]"));
+        assert!(display.contains("(u32, u32)"));
+        assert!(display.contains("expected a number"));
+    }
+
+    #[test]
+    fn test_path_deref_mut() {
+        let mut path = Path::new(vec![1, 2, 3]);
+        path.push(4); // Vec::push() via DerefMut
+        assert_eq!(*path, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_extract_path_segments_multiple_slashes() {
+        // Test that multiple consecutive slashes result in no empty segments
+        let segments = extract_path_segments("//api//users//123//");
+        assert_eq!(segments, vec!["api", "users", "123"]);
+    }
+
+    #[test]
+    fn test_extract_path_segments_url_encoded_special_chars() {
+        // Test URL decoding of special characters
+        let segments = extract_path_segments("/users/hello%20world");
+        assert_eq!(segments, vec!["users", "hello world"]);
+
+        let segments = extract_path_segments("/search/foo%26bar");
+        assert_eq!(segments, vec!["search", "foo&bar"]);
+    }
+
+    #[test]
+    fn test_path_error_source() {
+        // Test that PathError::source returns None (as documented)
+        let error = PathError::EmptyPath;
+        assert!(std::error::Error::source(&error).is_none());
+
+        let error = PathError::DeserializationError {
+            source: "test".to_string(),
+            segments: vec![],
+            target_type: "Test",
+        };
+        assert!(std::error::Error::source(&error).is_none());
+    }
 }
