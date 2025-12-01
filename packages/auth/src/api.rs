@@ -102,7 +102,10 @@ pub async fn get_magic_token_endpoint(
     if let Some((client_id, access_token)) =
         get_credentials_from_magic_token(&db, &query.magic_token)
             .await
-            .map_err(|e| ErrorInternalServerError(format!("Failed to get magic token: {e:?}")))?
+            .map_err(|e| {
+                log::error!("Failed to get magic token: {e:?}");
+                ErrorInternalServerError("Failed to get magic token")
+            })?
     {
         Ok(Json(
             json!({"clientId": client_id, "accessToken": access_token}),
@@ -155,7 +158,10 @@ pub async fn create_magic_token_endpoint(
 ) -> Result<Json<Value>> {
     let token = create_magic_token(&db, tunnel_info.host.as_ref().clone())
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
+        .map_err(|e| {
+            log::error!("Failed to create magic token: {e:?}");
+            ErrorInternalServerError("Failed to create magic token")
+        })?;
 
     let mut query_string = form_urlencoded::Serializer::new(String::new());
 
