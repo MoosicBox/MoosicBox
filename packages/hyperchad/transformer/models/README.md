@@ -273,7 +273,7 @@ Core dependencies:
 Optional dependencies:
 
 - **serde**: Serialization/deserialization support (with `serde` feature)
-- **moosicbox_arb**: Arbitrary data generation (with `arb` feature)
+- **test-strategy**: Arbitrary derive macro support (with `arb` feature)
 - **proptest**: Property-based testing support (with `arb` feature)
 
 ## Integration
