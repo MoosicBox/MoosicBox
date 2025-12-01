@@ -467,3 +467,37 @@ pub async fn register_connection_endpoint(
 
     Ok(Json(registered))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::http::StatusCode;
+    use moosicbox_json_utils::database::DatabaseFetchError;
+
+    #[test_log::test]
+    fn test_create_players_error_db_maps_to_internal_server_error() {
+        let db_err = DatabaseFetchError::InvalidRequest;
+        let create_err = CreatePlayersError::Db(db_err);
+        let actix_err: actix_web::Error = create_err.into();
+
+        let response = actix_err.error_response();
+        assert_eq!(
+            response.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Database errors should map to 500 Internal Server Error"
+        );
+    }
+
+    #[test_log::test]
+    fn test_create_players_error_invalid_connection_maps_to_not_found() {
+        let create_err = CreatePlayersError::InvalidConnection;
+        let actix_err: actix_web::Error = create_err.into();
+
+        let response = actix_err.error_response();
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "InvalidConnection should map to 404 Not Found"
+        );
+    }
+}
