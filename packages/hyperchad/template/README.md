@@ -228,7 +228,7 @@ use hyperchad_color::Color;
 
 let template = container! {
     div
-        border-top=("red", 2)          // Red 2px border
+        border-top=("#ff0000", 2)      // Red 2px border
         border-left=(Color::BLACK, 1)  // Black 1px border
         border-radius=5
     {
