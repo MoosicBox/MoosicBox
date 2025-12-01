@@ -38,11 +38,9 @@ All algorithms are independently implemented based on the RFC 6716 specification
 - [x] **Phase 1**: Range Decoder (RFC Section 4.1)
 - [x] **Phase 2**: SILK Decoder - Basic Framework (RFC Section 4.2)
 - [x] **Phase 3**: SILK Decoder - LSF/LTP/Excitation (RFC Section 4.2)
-- [x] **Phase 4.1**: CELT Decoder - Framework & Constants (RFC Section 4.3)
-- [x] **Phase 4.2**: CELT Decoder - Energy Envelope Decoding (RFC Section 4.3.2)
-- [ ] **Phase 4.3**: CELT Decoder - Bit Allocation (RFC Section 4.3.3)
-- [ ] **Phase 4.4-4.6**: CELT Decoder - PVQ/Stereo/MDCT
-- [ ] **Phase 5-10**: Mode Integration, PLC, Testing, Optimization
+- [x] **Phase 4**: CELT Decoder (RFC Section 4.3)
+- [x] **Phase 5**: Mode Integration & Hybrid
+- [ ] **Phase 6-10**: PLC, Backend Integration, Testing, Optimization, Documentation
 
 See `../../spec/opus-native/plan.md` for detailed implementation roadmap.
 
