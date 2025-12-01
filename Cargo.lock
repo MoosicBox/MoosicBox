@@ -5962,6 +5962,7 @@ dependencies = [
  "pretty_assertions",
  "serde_json",
  "switchy",
+ "switchy_async",
  "switchy_env",
  "test-log",
  "thiserror 2.0.17",
