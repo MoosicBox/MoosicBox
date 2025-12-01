@@ -340,6 +340,62 @@ pub fn init_user_home(username: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Seeds the simulator filesystem from a real filesystem path.
+///
+/// This function reads all files and directories from the real filesystem
+/// at `real_path` and populates them into the simulator at `sim_path`.
+///
+/// This is useful for tests that need to load test fixtures from the real
+/// filesystem into the simulator before running.
+///
+/// # Arguments
+/// * `real_path` - Path on the real filesystem to read from
+/// * `sim_path` - Path in the simulator where contents will be placed
+///
+/// # Errors
+///
+/// * If reading from the real filesystem fails
+/// * If writing to the simulator fails
+///
+/// # Panics
+///
+/// * If the real filesystem path cannot be read
+#[cfg(all(feature = "simulator-real-fs", feature = "sync", feature = "std"))]
+pub fn seed_from_real_fs<P: AsRef<std::path::Path>, Q: AsRef<std::path::Path>>(
+    real_path: P,
+    sim_path: Q,
+) -> std::io::Result<()> {
+    seed_recursive(real_path.as_ref(), sim_path.as_ref())
+}
+
+#[cfg(all(feature = "simulator-real-fs", feature = "sync", feature = "std"))]
+fn seed_recursive(real_path: &std::path::Path, sim_path: &std::path::Path) -> std::io::Result<()> {
+    // Create the directory in simulator (outside of with_real_fs)
+    sync::create_dir_all(sim_path)?;
+
+    // Read entries from real filesystem
+    let entries = with_real_fs(|| crate::standard::sync::read_dir_sorted(real_path))?;
+
+    for entry in entries {
+        let entry_name = entry.file_name();
+        let real_entry_path = real_path.join(&entry_name);
+        let sim_entry_path = sim_path.join(&entry_name);
+
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            seed_recursive(&real_entry_path, &sim_entry_path)?;
+        } else if file_type.is_file() {
+            // Read file content from real FS
+            let content = with_real_fs(|| std::fs::read(&real_entry_path))?;
+            // Write to simulator (outside of with_real_fs)
+            sync::write(&sim_entry_path, content)?;
+        }
+        // Skip symlinks and other special files for now
+    }
+
+    Ok(())
+}
+
 macro_rules! path_to_str {
     ($path:expr) => {{
         $path.as_ref().to_str().ok_or_else(|| {
@@ -1897,6 +1953,64 @@ pub mod unsync {
         super::sync::read_to_string(path)
     }
 
+    /// Checks if a path exists asynchronously
+    ///
+    /// Returns `true` if the path exists, `false` otherwise.
+    #[allow(clippy::unused_async)]
+    pub async fn exists<P: AsRef<Path>>(path: P) -> bool {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || path.exists())
+                .await
+                .unwrap_or(false);
+        }
+
+        super::exists(path)
+    }
+
+    /// Checks if a path is a file asynchronously
+    ///
+    /// Returns `true` if the path exists and is a file, `false` otherwise.
+    ///
+    /// # Panics
+    ///
+    /// * If the `FILES` `RwLock` fails to read from
+    #[allow(clippy::unused_async)]
+    pub async fn is_file<P: AsRef<Path>>(path: P) -> bool {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || path.is_file())
+                .await
+                .unwrap_or(false);
+        }
+
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        super::FILES.with_borrow(|files| files.read().unwrap().contains_key(&path_str))
+    }
+
+    /// Checks if a path is a directory asynchronously
+    ///
+    /// Returns `true` if the path exists and is a directory, `false` otherwise.
+    ///
+    /// # Panics
+    ///
+    /// * If the `DIRECTORIES` `RwLock` fails to read from
+    #[allow(clippy::unused_async)]
+    pub async fn is_dir<P: AsRef<Path>>(path: P) -> bool {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || path.is_dir())
+                .await
+                .unwrap_or(false);
+        }
+
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        super::DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(&path_str))
+    }
+
     /// Writes a slice as the entire contents of a file
     ///
     /// # Errors
@@ -2296,44 +2410,6 @@ pub mod unsync {
                 file_type_info: e.file_type().unwrap(),
             })
             .collect())
-    }
-
-    /// Checks if a path exists asynchronously
-    ///
-    /// Returns `true` if the path exists, `false` otherwise.
-    #[allow(clippy::unused_async)]
-    pub async fn exists<P: AsRef<Path>>(path: P) -> bool {
-        super::exists(path)
-    }
-
-    /// Checks if a path is a file asynchronously
-    ///
-    /// Returns `true` if the path exists and is a file, `false` otherwise.
-    ///
-    /// # Panics
-    ///
-    /// * If the `FILES` `RwLock` is poisoned
-    #[allow(clippy::unused_async)]
-    pub async fn is_file<P: AsRef<Path>>(path: P) -> bool {
-        let Some(path_str) = path.as_ref().to_str() else {
-            return false;
-        };
-        super::FILES.with_borrow(|files| files.read().unwrap().contains_key(path_str))
-    }
-
-    /// Checks if a path is a directory asynchronously
-    ///
-    /// Returns `true` if the path exists and is a directory, `false` otherwise.
-    ///
-    /// # Panics
-    ///
-    /// * If the `DIRECTORIES` `RwLock` is poisoned
-    #[allow(clippy::unused_async)]
-    pub async fn is_dir<P: AsRef<Path>>(path: P) -> bool {
-        let Some(path_str) = path.as_ref().to_str() else {
-            return false;
-        };
-        super::DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path_str))
     }
 
     #[cfg(test)]

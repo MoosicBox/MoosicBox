@@ -280,6 +280,125 @@ pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// Returns `true` if the simulator feature is compiled in.
+///
+/// This function can be used at runtime to determine whether file operations
+/// will go through the in-memory simulator or the real filesystem.
+#[must_use]
+pub const fn is_simulator_enabled() -> bool {
+    cfg!(feature = "simulator")
+}
+
+/// Seeds the simulator filesystem from a real filesystem path.
+///
+/// This function reads all files and directories from the real filesystem
+/// at `real_path` and populates them into the simulator at `sim_path`.
+///
+/// When the `simulator` feature is not enabled, this is a no-op.
+///
+/// # Arguments
+/// * `real_path` - Path on the real filesystem to read from
+/// * `sim_path` - Path in the simulator where contents will be placed
+///
+/// # Errors
+///
+/// * If reading from the real filesystem fails
+/// * If writing to the simulator fails
+#[cfg(all(
+    feature = "simulator-real-fs",
+    feature = "simulator",
+    feature = "sync",
+    feature = "std"
+))]
+pub fn seed_from_real_fs<P: AsRef<std::path::Path>, Q: AsRef<std::path::Path>>(
+    real_path: P,
+    sim_path: Q,
+) -> std::io::Result<()> {
+    simulator::seed_from_real_fs(real_path, sim_path)
+}
+
+/// Seeds the simulator filesystem from a real filesystem path.
+///
+/// When the `simulator` feature is not enabled, this is a no-op.
+///
+/// # Errors
+///
+/// This function always returns `Ok(())` when the simulator feature is disabled.
+#[cfg(not(all(
+    feature = "simulator-real-fs",
+    feature = "simulator",
+    feature = "sync",
+    feature = "std"
+)))]
+#[allow(unused_variables)]
+pub fn seed_from_real_fs<P: AsRef<std::path::Path>, Q: AsRef<std::path::Path>>(
+    real_path: P,
+    sim_path: Q,
+) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Seeds the simulator filesystem from a real filesystem path, using the same path
+/// in the simulator as the source path.
+///
+/// This is a convenience wrapper around [`seed_from_real_fs`] for the common case
+/// where you want the simulator path to match the real path.
+///
+/// When the `simulator` feature is not enabled, this is a no-op.
+///
+/// # Arguments
+/// * `path` - Path on the real filesystem to read from (also used as the simulator path)
+///
+/// # Errors
+///
+/// * If reading from the real filesystem fails
+/// * If writing to the simulator fails
+pub fn seed_from_real_fs_same_path<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
+    seed_from_real_fs(path.as_ref(), path.as_ref())
+}
+
+/// Seeds multiple paths from the real filesystem into the simulator, using paths
+/// relative to a base directory.
+///
+/// Each relative path is joined with the base to form the full path, and that full
+/// path is used as both the source (real filesystem) and destination (simulator).
+///
+/// This is useful for seeding test fixtures that live in a known directory structure.
+///
+/// When the `simulator` feature is not enabled, this is a no-op.
+///
+/// # Arguments
+/// * `base` - Base directory path (e.g., from `env!("CARGO_MANIFEST_DIR")`)
+/// * `relative_paths` - Paths relative to the base directory to seed
+///
+/// # Errors
+///
+/// * If reading from any real filesystem path fails
+/// * If writing to the simulator fails
+///
+/// # Example
+///
+/// ```ignore
+/// // Seeds tests/fixtures and tests/scripts into the simulator
+/// switchy_fs::seed_relative_to(
+///     env!("CARGO_MANIFEST_DIR"),
+///     ["tests/fixtures", "tests/scripts"],
+/// )?;
+/// ```
+pub fn seed_relative_to<B, P, I>(base: B, relative_paths: I) -> std::io::Result<()>
+where
+    B: AsRef<std::path::Path>,
+    P: AsRef<std::path::Path>,
+    I: IntoIterator<Item = P>,
+{
+    let base = base.as_ref();
+    for rel in relative_paths {
+        let full = base.join(rel.as_ref());
+        seed_from_real_fs(&full, &full)?;
+    }
+    Ok(())
+}
+
 #[cfg(any(feature = "simulator", feature = "std"))]
 #[cfg(test)]
 mod temp_dir_tests {
