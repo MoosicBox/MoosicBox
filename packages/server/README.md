@@ -179,7 +179,7 @@ When running with the `openapi` feature, API documentation is available at:
 - ReDoc: `http://localhost:8001/openapi/redoc/`
 - RapiDoc: `http://localhost:8001/openapi/rapidoc/`
 - Scalar: `http://localhost:8001/openapi/scalar/`
-- OpenAPI JSON: `http://localhost:8001/openapi/api-docs/openapi.json`
+- OpenAPI JSON: `http://localhost:8001/openapi/swagger-ui/api-docs/openapi.json`
 
 ## Library Scanning
 
