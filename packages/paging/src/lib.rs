@@ -3103,4 +3103,378 @@ mod tests {
         assert_eq!(req2.offset, 10);
         assert_eq!(req2.limit, 20);
     }
+
+    // ===== Additional Edge Case Tests for Remaining Calculation =====
+
+    #[test_log::test]
+    fn test_page_remaining_when_items_fewer_than_limit() {
+        // Test case where we received fewer items than the limit
+        // This is the typical case for the last page of results
+        let page = Page::WithTotal {
+            items: vec![8, 9, 10],
+            offset: 7,
+            limit: 3, // Limit matches actual items received
+            total: 10,
+        };
+
+        // When offset + limit == total, remaining should be 0
+        assert_eq!(page.remaining(), Some(0));
+        assert!(!page.has_more());
+    }
+
+    #[test_log::test]
+    fn test_page_remaining_zero_at_exact_boundary() {
+        // Last page where offset + limit exactly equals total
+        let page = Page::WithTotal {
+            items: vec![6, 7, 8, 9, 10],
+            offset: 5,
+            limit: 5,
+            total: 10,
+        };
+
+        assert_eq!(page.remaining(), Some(0));
+        assert!(!page.has_more());
+    }
+
+    // ===== PagingResponse map_err Transformation Chain Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_map_err_transforms_subsequent_page_inner_errors() {
+        // Test that map_err correctly transforms errors that come from
+        // the INNER response (after fetching), not just fetch errors
+        #[derive(Debug, PartialEq, Clone)]
+        struct OriginalError(String);
+        #[derive(Debug, PartialEq)]
+        struct MappedError(String);
+
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, OriginalError> =
+            PagingResponse::new(page, |offset, _limit| {
+                Box::pin(async move {
+                    if offset == 2 {
+                        // Return a successful page that will return an error on next fetch
+                        Ok(PagingResponse::new(
+                            Page::WithTotal {
+                                items: vec![3, 4],
+                                offset: 2,
+                                limit: 2,
+                                total: 6,
+                            },
+                            |_, _| {
+                                Box::pin(async {
+                                    Err(OriginalError("nested fetch error".to_string()))
+                                })
+                            },
+                        ))
+                    } else if offset == 4 {
+                        Err(OriginalError("direct fetch error".to_string()))
+                    } else {
+                        Ok(PagingResponse::empty())
+                    }
+                })
+            });
+
+        let mapped = response.map_err(|e| MappedError(format!("wrapped: {}", e.0)));
+
+        // Fetch pages sequentially to trigger the nested error
+        let result = mapped.rest_of_pages().await;
+        assert!(result.is_err());
+        // The error should be wrapped by our map_err function
+        let err = result.unwrap_err();
+        assert!(err.0.starts_with("wrapped: "));
+    }
+
+    // ===== Serialization Roundtrip Tests =====
+
+    #[test_log::test]
+    fn test_page_serialization_roundtrip_with_total() {
+        let original = Page::WithTotal {
+            items: vec![1, 2, 3, 4, 5],
+            offset: 10,
+            limit: 5,
+            total: 100,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Page<i32> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(original.items(), deserialized.items());
+        assert_eq!(original.offset(), deserialized.offset());
+        assert_eq!(original.limit(), deserialized.limit());
+        assert_eq!(original.total(), deserialized.total());
+        assert_eq!(original.has_more(), deserialized.has_more());
+    }
+
+    #[test_log::test]
+    fn test_page_serialization_roundtrip_with_has_more() {
+        let original = Page::WithHasMore {
+            items: vec!["alpha", "beta", "gamma"],
+            offset: 20,
+            limit: 3,
+            has_more: true,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Page<&str> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(original.items(), deserialized.items());
+        assert_eq!(original.offset(), deserialized.offset());
+        assert_eq!(original.limit(), deserialized.limit());
+        assert_eq!(original.total(), deserialized.total()); // Both None
+        assert_eq!(original.has_more(), deserialized.has_more());
+    }
+
+    // ===== Dynamic Limit Update Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_sequential_uses_updated_limit_from_responses() {
+        // Test that rest_of_pages_inner correctly uses the limit from each response
+        // rather than the initial limit, as the server may adjust page sizes
+        let page = Page::WithHasMore {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2, // Initial limit is 2
+            has_more: true,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, limit| {
+            Box::pin(async move {
+                // Server responds with different limit (3 instead of 2)
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![3, 4, 5],
+                            offset: 2,
+                            limit: 3, // Server changed limit to 3
+                            has_more: true,
+                        },
+                        |off, lim| {
+                            Box::pin(async move {
+                                // Verify that subsequent request uses the NEW limit (3)
+                                // offset should be 2 + 3 = 5
+                                if off == 5 && lim == 3 {
+                                    Ok(PagingResponse::new(
+                                        Page::WithHasMore {
+                                            items: vec![6, 7, 8],
+                                            offset: 5,
+                                            limit: 3,
+                                            has_more: false,
+                                        },
+                                        |_, _| {
+                                            Box::pin(async {
+                                                Ok(PagingResponse::<i32, String>::empty())
+                                            })
+                                        },
+                                    ))
+                                } else {
+                                    // Fail if offset/limit don't match expected
+                                    Err(format!(
+                                        "Unexpected offset={off} limit={lim}, expected offset=5 limit=3"
+                                    ))
+                                }
+                            })
+                        },
+                    )),
+                    5 => Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![6, 7, 8],
+                            offset: 5,
+                            limit: 3,
+                            has_more: false,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Err(format!("Unexpected offset={offset} limit={limit}")),
+                }
+            })
+        });
+
+        let all_items = response.with_rest_of_items().await.unwrap();
+        assert_eq!(all_items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    // ===== Additional Map Tests for Complete Transformation Chain =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_chained_map_operations() {
+        // Test that multiple map operations are correctly composed
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![3, 4],
+                        offset: 2,
+                        limit: 2,
+                        total: 4,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        // Chain two map operations: multiply by 2, then add 1
+        let mapped = response.map(|x| x * 2).map(|x| x + 1);
+
+        // Items should be: (1*2+1, 2*2+1) = (3, 5) and (3*2+1, 4*2+1) = (7, 9)
+        assert_eq!(mapped.items(), &[3, 5]);
+
+        let all = mapped.with_rest_of_items().await.unwrap();
+        assert_eq!(all, vec![3, 5, 7, 9]);
+    }
+
+    // ===== Empty Results Edge Cases =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_empty_items_with_has_more_true() {
+        // Edge case: server returns empty page but says has_more is true
+        // This is unusual but should be handled gracefully
+        let page = Page::WithHasMore {
+            items: Vec::<i32>::new(),
+            offset: 0,
+            limit: 10,
+            has_more: true,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 10 {
+                    Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![1, 2, 3],
+                            offset: 10,
+                            limit: 10,
+                            has_more: false,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                } else {
+                    Ok(PagingResponse::empty())
+                }
+            })
+        });
+
+        // Initial page is empty but has_more is true
+        assert!(response.items().is_empty());
+        assert!(response.has_more());
+
+        // Fetching rest should get the actual data
+        let rest = response.rest_of_items().await.unwrap();
+        assert_eq!(rest, vec![1, 2, 3]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_pages_always_fetches_at_least_once() {
+        // rest_of_pages_inner always enters the loop at least once to check has_more
+        // from the response. This is intentional behavior - we need to ask the server
+        // if there's more data, even if we think there might not be.
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 10,
+            total: 3,
+        };
+
+        let fetch_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let fetch_called_clone = fetch_called.clone();
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, move |_, _| {
+            fetch_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![],
+                        offset: 10,
+                        limit: 10,
+                        total: 3,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        // Sequential fetch always calls fetch function at least once
+        let pages = response.rest_of_pages().await.unwrap();
+        // The fetch function returns an empty page, which is included in results
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].items().is_empty());
+        assert!(fetch_called.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_with_rest_of_pages_single_page() {
+        // Single page should return just that page
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 3,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_, _| {
+            Box::pin(async { panic!("Should not fetch when only one page exists") })
+        });
+
+        // Use batch mode which correctly avoids fetch when no more pages
+        let pages = response.with_rest_of_pages_in_batches().await.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].items(), &[1, 2, 3]);
+    }
+
+    // ===== ok_into Subsequent Page Transformation =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_into_transforms_subsequent_pages() {
+        #[derive(Debug, PartialEq)]
+        struct From(i32);
+        #[derive(Debug, PartialEq)]
+        struct To(i32);
+
+        impl std::convert::From<From> for To {
+            fn from(f: From) -> Self {
+                Self(f.0 * 100)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![From(1), From(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<From, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![From(3), From(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let converted: PagingResponse<To, String> = response.ok_into();
+        assert_eq!(converted.items(), &[To(100), To(200)]);
+
+        // Verify subsequent pages are also converted
+        let all = converted.with_rest_of_items().await.unwrap();
+        assert_eq!(all, vec![To(100), To(200), To(300), To(400)]);
+    }
 }
