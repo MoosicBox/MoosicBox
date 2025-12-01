@@ -2710,4 +2710,203 @@ mod test {
 
         assert_eq!(filter_albums(&albums, &qobuz_request).count(), 1);
     }
+
+    #[test_log::test]
+    fn library_track_directory_returns_parent_directory() {
+        let track = LibraryTrack {
+            id: 1,
+            file: Some("/music/artist/album/track.flac".to_string()),
+            ..Default::default()
+        };
+
+        let directory = track.directory();
+
+        assert_eq!(directory, Some("/music/artist/album".to_string()));
+    }
+
+    #[test_log::test]
+    fn library_track_directory_returns_none_when_no_file() {
+        let track = LibraryTrack {
+            id: 1,
+            file: None,
+            ..Default::default()
+        };
+
+        let directory = track.directory();
+
+        assert!(directory.is_none());
+    }
+
+    #[test_log::test]
+    fn library_track_directory_handles_nested_paths() {
+        let track = LibraryTrack {
+            id: 1,
+            file: Some("/a/b/c/d/e/song.mp3".to_string()),
+            ..Default::default()
+        };
+
+        let directory = track.directory();
+
+        assert_eq!(directory, Some("/a/b/c/d/e".to_string()));
+    }
+
+    #[test_log::test]
+    fn library_track_directory_handles_relative_paths() {
+        let track = LibraryTrack {
+            id: 1,
+            file: Some("music/album/track.flac".to_string()),
+            ..Default::default()
+        };
+
+        let directory = track.directory();
+
+        assert_eq!(directory, Some("music/album".to_string()));
+    }
+
+    // Tests for models::sort_album_versions (AlbumVersionQuality variant)
+    #[test_log::test]
+    fn models_sort_album_versions_by_sample_rate() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(192_000),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(96000),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        models::sort_album_versions(&mut versions);
+
+        // Should be sorted by sample rate descending (highest first)
+        assert_eq!(versions[0].sample_rate, Some(192_000));
+        assert_eq!(versions[1].sample_rate, Some(96_000));
+        assert_eq!(versions[2].sample_rate, Some(44_100));
+    }
+
+    #[test_log::test]
+    fn models_sort_album_versions_by_bit_depth_when_sample_rate_equal() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(32),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        models::sort_album_versions(&mut versions);
+
+        // Should be sorted by bit depth descending (highest first) when sample rate is equal
+        assert_eq!(versions[0].bit_depth, Some(32));
+        assert_eq!(versions[1].bit_depth, Some(24));
+        assert_eq!(versions[2].bit_depth, Some(16));
+    }
+
+    #[test_log::test]
+    fn models_sort_album_versions_by_source_as_final_tie_breaker() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let tidal_source = TrackApiSource::Api(ApiSource::register("Tidal", "Tidal"));
+
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: tidal_source.clone(),
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        models::sort_album_versions(&mut versions);
+
+        // Local should come before API sources when sample rate and bit depth are equal
+        assert_eq!(versions[0].source, TrackApiSource::Local);
+        assert_eq!(versions[1].source, tidal_source);
+    }
+
+    #[test_log::test]
+    fn models_sort_album_versions_combined_sorting_criteria() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        // Test that sorting is stable across all three criteria
+        // Higher sample rate and bit depth should come first, with source as tie-breaker
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(96000),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        models::sort_album_versions(&mut versions);
+
+        // First: 96000 sample rate, 24-bit (highest sample rate)
+        assert_eq!(versions[0].sample_rate, Some(96000));
+        assert_eq!(versions[0].bit_depth, Some(24));
+
+        // Second and third should have 44100 sample rate, sorted by bit depth
+        assert_eq!(versions[1].sample_rate, Some(44100));
+        assert_eq!(versions[1].bit_depth, Some(24));
+
+        assert_eq!(versions[2].sample_rate, Some(44100));
+        assert_eq!(versions[2].bit_depth, Some(16));
+    }
 }
