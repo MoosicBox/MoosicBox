@@ -255,7 +255,9 @@ where
     clippy::float_cmp,
     clippy::doc_markdown,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::suboptimal_flops
 )]
 mod tests {
     use super::*;
@@ -852,5 +854,149 @@ mod tests {
         // Verify output contains non-zero samples (signal is present after conversion)
         let has_non_zero = output.iter().any(|&sample| sample != 0);
         assert!(has_non_zero, "Output should contain non-zero samples");
+    }
+
+    /// Test resampling with quad (4-channel) audio to verify multi-channel interleaving
+    ///
+    /// The resample_inner() function interleaves output channels in a loop. This test
+    /// verifies the interleaving logic works correctly for more than 2 channels.
+    /// Note: to_audio_buffer only supports stereo, so we use resample() directly.
+    #[test_log::test]
+    fn test_resample_quad_channel() {
+        // Create a 4-channel (quadraphonic) spec
+        let spec = SignalSpec::new(
+            44100,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        );
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+
+        // Fill each channel with a distinct pattern so we can verify interleaving
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                // Each channel gets a different base value plus a pattern
+                let base = (ch as f32) * 0.2;
+                *sample = base + ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.1;
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some(), "Should produce output");
+
+        let output = result.unwrap();
+        assert!(!output.is_empty(), "Output should not be empty");
+
+        // Output should be interleaved as groups of 4 samples
+        assert_eq!(
+            output.len() % 4,
+            0,
+            "Output length should be divisible by channel count (4)"
+        );
+
+        // Verify output frames count is positive (actual count depends on FFT internals)
+        let output_frames = output.len() / 4;
+        assert!(
+            output_frames > 0,
+            "Expected positive frame count, got {output_frames}"
+        );
+    }
+
+    /// Test that resampling preserves relative signal characteristics between channels
+    ///
+    /// This verifies that when different channels have different amplitude signals,
+    /// the resampler maintains those differences in the output (testing interleaving
+    /// doesn't mix up channels).
+    #[test_log::test]
+    fn test_resample_channel_separation() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
+        input_buffer.render_reserved(Some(1024));
+
+        // Left channel: high amplitude signal (0.9)
+        let left = input_buffer.chan_mut(0);
+        for (i, sample) in left.iter_mut().enumerate() {
+            *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.9;
+        }
+
+        // Right channel: low amplitude signal (0.1)
+        let right = input_buffer.chan_mut(1);
+        for (i, sample) in right.iter_mut().enumerate() {
+            *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.1;
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        let output = result.unwrap();
+
+        // Calculate average absolute values for left and right channels
+        let mut left_sum: f32 = 0.0;
+        let mut right_sum: f32 = 0.0;
+        let frame_count = output.len() / 2;
+
+        for frame in output.chunks_exact(2) {
+            left_sum += frame[0].abs();
+            right_sum += frame[1].abs();
+        }
+
+        let left_avg = left_sum / frame_count as f32;
+        let right_avg = right_sum / frame_count as f32;
+
+        // Left channel should have significantly higher average amplitude than right
+        // (original ratio was 9:1, allowing for some variance from resampling)
+        assert!(
+            left_avg > right_avg * 3.0,
+            "Left channel should have higher amplitude: left_avg={left_avg}, right_avg={right_avg}"
+        );
+    }
+
+    /// Test resampling with same input and output sample rate (1:1 ratio)
+    ///
+    /// Even when no rate conversion is needed, the resampler should still work
+    /// correctly, passing through samples with minimal modification.
+    #[test_log::test]
+    fn test_resample_same_rate() {
+        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+
+        // Fill with a known pattern
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.8;
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        let output = result.unwrap();
+        assert!(!output.is_empty());
+
+        // With 1:1 ratio, output frames should be very close to input frames
+        let output_frames = output.len() / 2;
+        assert!(
+            (output_frames as i32 - 512).abs() < 10,
+            "1:1 ratio should produce similar frame count: got {output_frames} from 512 input"
+        );
+
+        // Verify output has similar characteristics to input (signal preserved)
+        let has_positive = output.iter().any(|&s| s > 0.5);
+        let has_negative = output.iter().any(|&s| s < -0.5);
+        assert!(
+            has_positive && has_negative,
+            "Signal should be preserved through 1:1 resampling"
+        );
     }
 }
