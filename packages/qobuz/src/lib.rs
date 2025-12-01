@@ -540,6 +540,15 @@ fn attach_query_string(value: &str, query: &[(&str, &str)]) -> String {
     format!("{}?{}", value, &query_string.finish())
 }
 
+/// Constructs Qobuz API endpoint URLs with path parameters and query strings.
+///
+/// This macro provides a convenient way to build API URLs for Qobuz endpoints.
+///
+/// # Usage
+///
+/// - `qobuz_api_endpoint!(Endpoint)` - Returns the base URL for the endpoint
+/// - `qobuz_api_endpoint!(Endpoint, &[("param", "value")])` - Replaces path parameters
+/// - `qobuz_api_endpoint!(Endpoint, &[], &[("key", "value")])` - Adds query string parameters
 #[macro_export]
 macro_rules! qobuz_api_endpoint {
     ($name:ident $(,)?) => {
