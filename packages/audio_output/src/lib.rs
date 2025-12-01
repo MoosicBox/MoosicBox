@@ -1577,4 +1577,198 @@ mod tests {
         let result = AudioDecode::flush(&mut boxed_writer);
         assert!(result.is_err());
     }
+
+    #[test_log::test]
+    fn test_audio_output_factory_try_into_output_success() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Ok(Box::new(MockAudioWrite::new())),
+        );
+
+        let result = factory.try_into_output();
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert_eq!(output.id, "test-id");
+        assert_eq!(output.name, "Test Output");
+        assert_eq!(output.spec.rate, 44100);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_factory_try_from_success() {
+        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "factory-id".to_string(),
+            "Factory Output".to_string(),
+            spec,
+            || Ok(Box::new(MockAudioWrite::new())),
+        );
+
+        let result: Result<AudioOutput, _> = factory.try_into();
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert_eq!(output.id, "factory-id");
+        assert_eq!(output.name, "Factory Output");
+        assert_eq!(output.spec.rate, 48000);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_factory_try_from_ref_success() {
+        let spec = SignalSpec::new(96000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "ref-factory-id".to_string(),
+            "Ref Factory Output".to_string(),
+            spec,
+            || Ok(Box::new(MockAudioWrite::new())),
+        );
+
+        let result: Result<AudioOutput, _> = (&factory).try_into();
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert_eq!(output.id, "ref-factory-id");
+        assert_eq!(output.name, "Ref Factory Output");
+        assert_eq!(output.spec.rate, 96000);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_write_underlying_writer_error() {
+        use symphonia::core::audio::Signal;
+
+        struct FailingWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingWriter {
+            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Err(AudioOutputError::StreamClosed)
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an audio buffer with matching sample rate
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
+        buffer.render_reserved(Some(10));
+
+        // Write through AudioWrite trait - should propagate the error
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            AudioOutputError::StreamClosed
+        ));
+    }
+
+    #[test_log::test]
+    fn test_audio_output_flush_underlying_writer_error() {
+        struct FailingFlushWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingFlushWriter {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Err(AudioOutputError::Interrupt)
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingFlushWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Flush should propagate the error
+        let result = AudioWrite::flush(&mut output);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AudioOutputError::Interrupt));
+    }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_decoded_writer_error() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        struct FailingWriter {
+            handle: AudioHandle,
+        }
+
+        impl AudioWrite for FailingWriter {
+            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Err(AudioOutputError::OpenStream)
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = FailingWriter {
+            handle: AudioHandle::new(tx),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an audio buffer
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
+        buffer.render_reserved(Some(10));
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded - should convert AudioOutputError to AudioDecodeError
+        let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
+        assert!(result.is_err());
+    }
 }
