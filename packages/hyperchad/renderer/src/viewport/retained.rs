@@ -684,4 +684,140 @@ mod tests {
         // Distance should be > 0 indicating how far outside the visible area
         assert!(dist > 0);
     }
+
+    #[test_log::test]
+    fn test_viewport_listener_debug_format() {
+        let widget = TestWidget {
+            x: 10,
+            y: 20,
+            w: 30,
+            h: 40,
+        };
+
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 800,
+                h: 600,
+            },
+        );
+
+        let listener = ViewportListener::new(widget, Some(viewport), |_, _| {});
+        let debug_str = format!("{listener:?}");
+
+        assert!(debug_str.contains("ViewportListener"));
+        assert!(debug_str.contains("widget"));
+        assert!(debug_str.contains("viewport"));
+        assert!(debug_str.contains("visible"));
+    }
+
+    #[test_log::test]
+    fn test_viewport_debug_format() {
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 50,
+                y: 60,
+                w: 200,
+                h: 300,
+            },
+        );
+
+        let debug_str = format!("{viewport:?}");
+
+        assert!(debug_str.contains("Viewport"));
+        assert!(debug_str.contains("50"));
+        assert!(debug_str.contains("60"));
+        assert!(debug_str.contains("200"));
+        assert!(debug_str.contains("300"));
+    }
+
+    #[test_log::test]
+    fn test_viewport_debug_format_with_parent() {
+        let parent = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 1000,
+                h: 1000,
+            },
+        );
+
+        let child = Viewport::new(
+            Some(parent),
+            TestViewportPosition {
+                x: 100,
+                y: 100,
+                w: 400,
+                h: 300,
+            },
+        );
+
+        let debug_str = format!("{child:?}");
+
+        assert!(debug_str.contains("Viewport"));
+        assert!(debug_str.contains("parent"));
+    }
+
+    #[test_log::test]
+    fn test_boxed_viewport_position_debug_format() {
+        let vp = TestViewportPosition {
+            x: 15,
+            y: 25,
+            w: 35,
+            h: 45,
+        };
+
+        let boxed: Box<dyn ViewportPosition + Send + Sync> = Box::new(vp);
+        let debug_str = format!("{boxed:?}");
+
+        assert!(debug_str.contains("ViewportPosition"));
+        assert!(debug_str.contains("15"));
+        assert!(debug_str.contains("25"));
+        assert!(debug_str.contains("35"));
+        assert!(debug_str.contains("45"));
+    }
+
+    #[test_log::test]
+    fn test_viewport_is_widget_visible_when_not_visible_skips_parent_check() {
+        // Create a grandparent viewport that should NOT be checked if child is not visible
+        let grandparent = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 2000,
+                h: 2000,
+            },
+        );
+
+        // Parent with small viewport
+        let parent = Viewport::new(
+            Some(grandparent),
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 100,
+                h: 100,
+            },
+        );
+
+        // Widget far outside the parent viewport
+        let widget = TestWidget {
+            x: 500,
+            y: 500,
+            w: 50,
+            h: 50,
+        };
+
+        let (visible, dist) = parent.is_widget_visible(&widget);
+
+        // Widget is not visible in parent, so result should be false
+        // The grandparent check should be skipped (early return in is_widget_visible)
+        assert!(!visible);
+        assert!(dist > 0);
+    }
 }

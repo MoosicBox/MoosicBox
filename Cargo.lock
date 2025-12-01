@@ -6061,6 +6061,7 @@ dependencies = [
  "serde",
  "serde_json",
  "switchy_async",
+ "tempfile",
  "test-log",
 ]
 
