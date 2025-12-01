@@ -308,7 +308,7 @@ mod tests {
     use serial_test::serial;
     use switchy_fs::sync;
 
-    #[test]
+    #[test_log::test]
     fn test_parse_global_config_json5() {
         let json5_content = r#"{
             // Global server configuration
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(config.backup.as_ref().unwrap().enabled, Some(true));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_profile_config_json5() {
         let json5_content = r#"{
             // Profile-specific configuration
@@ -368,7 +368,7 @@ mod tests {
     }
 
     // Tests for get_config_file_path()
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_prefers_json5() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -383,7 +383,7 @@ mod tests {
         assert_eq!(result, Some(json5_path));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_falls_back_to_json() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(result, Some(json_path));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_returns_none_when_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -406,7 +406,7 @@ mod tests {
     }
 
     // Tests for load_config_file()
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_success() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(result.unwrap().default_profile, Some("test".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_read_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -438,7 +438,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ConfigError::ReadError(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -453,7 +453,7 @@ mod tests {
 
     // Tests for load_global_config()
     // Tests that modify ROOT_DIR must run serially to avoid interference
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_with_json5_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(config.server.as_ref().unwrap().port, Some(9090));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_with_json_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(result.unwrap().default_profile, Some("staging".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_returns_default_when_file_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -529,7 +529,7 @@ mod tests {
         assert_eq!(config.server, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -549,7 +549,7 @@ mod tests {
     }
 
     // Tests for load_profile_config()
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_with_json5_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -582,7 +582,7 @@ mod tests {
         assert_eq!(config.playback.as_ref().unwrap().gapless, Some(true));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_returns_default_when_file_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -603,7 +603,7 @@ mod tests {
         assert_eq!(config.playback, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -626,7 +626,7 @@ mod tests {
     }
 
     // Tests for load_merged_config()
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_combines_global_and_profile() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -689,7 +689,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_with_missing_files() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -710,7 +710,7 @@ mod tests {
         assert_eq!(merged.profile.library_paths, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_global_parse_error_propagates() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -731,7 +731,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_profile_parse_error_propagates() {
         let temp_dir = switchy_fs::tempdir().unwrap();
