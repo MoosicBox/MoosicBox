@@ -532,29 +532,28 @@ mod tests {
         assert!(total_output > 0, "Total output should be non-zero");
     }
 
-    #[test_log::test]
-    #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
-    fn test_opus_write_creation() {
-        let temp_file = "/tmp/test_opus_write.ogg";
-        let writer = OpusWrite::new(temp_file);
+    #[test_log::test(switchy_async::test(real_fs))]
+    async fn test_opus_write_creation() {
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
+        let temp_file = temp_dir.path().join("test_opus_write.ogg");
+        let temp_file_str = temp_file.to_string_lossy();
+        let writer = OpusWrite::new(&temp_file_str);
 
         assert_eq!(writer.serial, 2_873_470_314, "Serial should be initialized");
         assert_eq!(writer.absgp, 0, "Initial absgp should be 0");
         assert_eq!(writer.packet_num, 0, "Initial packet_num should be 0");
         assert_eq!(writer.page_num, 0, "Initial page_num should be 0");
         assert!(writer.packet.is_none(), "Initial packet should be None");
-
-        // Cleanup
-        let _ = std::fs::remove_file(temp_file);
     }
 
-    #[test_log::test]
-    #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
-    fn test_opus_write_buffering_behavior() {
+    #[test_log::test(switchy_async::test(real_fs))]
+    async fn test_opus_write_buffering_behavior() {
         use std::io::Write;
 
-        let temp_file = "/tmp/test_opus_buffering.ogg";
-        let mut writer = OpusWrite::new(temp_file);
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
+        let temp_file = temp_dir.path().join("test_opus_buffering.ogg");
+        let temp_file_str = temp_file.to_string_lossy();
+        let mut writer = OpusWrite::new(&temp_file_str);
 
         // First write should buffer the packet
         let data1 = vec![1u8; 100];
@@ -574,8 +573,5 @@ mod tests {
         let flush_result = writer.flush();
         assert!(flush_result.is_ok());
         assert!(writer.packet.is_none(), "Packet should be written on flush");
-
-        // Cleanup
-        let _ = std::fs::remove_file(temp_file);
     }
 }

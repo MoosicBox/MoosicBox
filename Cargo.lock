@@ -8443,6 +8443,7 @@ dependencies = [
  "mp3lame-encoder",
  "ogg",
  "opus",
+ "switchy_async",
  "switchy_fs",
  "test-log",
  "thiserror 2.0.17",

@@ -33,7 +33,8 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]
