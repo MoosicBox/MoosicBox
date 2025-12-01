@@ -648,4 +648,83 @@ mod test {
             -9_223_372_036_854_775_807
         );
     }
+
+    #[test_log::test]
+    fn parse_usize_rejects_explicit_positive_sign() {
+        // Unlike isize, usize should not accept a leading + sign
+        assert!(matches!(
+            parse_usize("+123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_rejects_multiple_signs() {
+        // Multiple signs should be rejected
+        assert!(matches!(
+            parse_isize("++5"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("--5"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("+-5"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("-+5"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_rejects_boundary_ascii_characters() {
+        // Test characters just outside the '0'-'9' range
+        // '/' is ASCII 47 (one before '0')
+        // ':' is ASCII 58 (one after '9')
+        assert!(matches!(parse_usize("/"), Err(ParseIntError::InvalidDigit)));
+        assert!(matches!(parse_usize(":"), Err(ParseIntError::InvalidDigit)));
+        assert!(matches!(
+            parse_usize("12/34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("12:34"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_rejects_trailing_sign() {
+        // Sign at the end should be rejected
+        assert!(matches!(
+            parse_isize("123+"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("123-"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_handles_max_pow10_length() {
+        // POW10 supports up to 20 digits (10^19)
+        // Test a 19-digit number (max for u64 is ~18.4 digits)
+        assert_eq!(
+            parse_usize("1000000000000000000").unwrap(),
+            1_000_000_000_000_000_000
+        );
+    }
+
+    #[test_log::test]
+    fn parse_isize_handles_multi_digit_with_signs() {
+        // Test various multi-digit numbers with explicit signs
+        assert_eq!(parse_isize("+12345").unwrap(), 12345);
+        assert_eq!(parse_isize("-12345").unwrap(), -12345);
+        assert_eq!(parse_isize("+999999").unwrap(), 999_999);
+        assert_eq!(parse_isize("-999999").unwrap(), -999_999);
+    }
 }
