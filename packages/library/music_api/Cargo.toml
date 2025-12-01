@@ -35,10 +35,13 @@ log         = { workspace = true }
 regex       = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+switchy_database = { workspace = true, features = ["simulator"] }
+test-log         = { workspace = true }
 
 [features]
 default = ["all-encoders", "api"]
+
+simulator = ["switchy_database/simulator"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",

@@ -124,14 +124,135 @@ pub mod api {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "simulator"))]
 mod tests {
-    // Note: Comprehensive profile management tests require database setup and are
-    // better suited for integration tests. The profile management code is relatively
-    // straightforward (add/get/remove operations on a BTreeMap) and is well-tested
-    // through the application's usage and integration tests.
-    //
-    // Unit tests here would require mocking or creating actual database instances,
-    // which adds complexity without providing significant additional value over the
-    // integration test coverage that already exists.
+    use std::sync::Arc;
+
+    use moosicbox_music_api::MusicApi;
+    use switchy_database::{Database, profiles::LibraryDatabase, simulator::SimulationDatabase};
+
+    use super::*;
+
+    /// Creates a test `LibraryDatabase` using a simulation database.
+    fn create_test_db() -> LibraryDatabase {
+        let db = Arc::new(Box::new(SimulationDatabase::new().unwrap()) as Box<dyn Database>);
+        LibraryDatabase::from(db)
+    }
+
+    /// Tests that adding and retrieving a profile works correctly.
+    /// Verifies that after adding a profile, it can be retrieved with `get()`.
+    #[test_log::test]
+    fn test_library_music_api_profiles_add_and_get() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let db = create_test_db();
+
+        profiles.add("test_profile".to_string(), db);
+
+        let retrieved = profiles.get("test_profile");
+        assert!(retrieved.is_some());
+    }
+
+    /// Tests that getting a non-existent profile returns `None`.
+    #[test_log::test]
+    fn test_library_music_api_profiles_get_nonexistent() {
+        let profiles = LibraryMusicApiProfiles::default();
+
+        let retrieved = profiles.get("nonexistent_profile");
+        assert!(retrieved.is_none());
+    }
+
+    /// Tests that removing a profile works correctly.
+    /// Verifies that after removal, the profile is no longer accessible.
+    #[test_log::test]
+    fn test_library_music_api_profiles_remove() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let db = create_test_db();
+
+        profiles.add("test_profile".to_string(), db);
+        assert!(profiles.get("test_profile").is_some());
+
+        profiles.remove("test_profile");
+        assert!(profiles.get("test_profile").is_none());
+    }
+
+    /// Tests that removing a non-existent profile does not panic.
+    #[test_log::test]
+    fn test_library_music_api_profiles_remove_nonexistent() {
+        let profiles = LibraryMusicApiProfiles::default();
+
+        // Should not panic when removing nonexistent profile
+        profiles.remove("nonexistent_profile");
+    }
+
+    /// Tests that `add_fetch` both adds the profile and returns the API instance.
+    #[test_log::test]
+    fn test_library_music_api_profiles_add_fetch() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let db = create_test_db();
+
+        let api = profiles.add_fetch("test_profile", db);
+
+        // Should return a valid library API
+        assert!(api.source().is_library());
+
+        // Profile should be retrievable
+        let retrieved = profiles.get("test_profile");
+        assert!(retrieved.is_some());
+    }
+
+    /// Tests that `names()` returns all registered profile names.
+    #[test_log::test]
+    fn test_library_music_api_profiles_names() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let db1 = create_test_db();
+        let db2 = create_test_db();
+
+        profiles.add("profile_alpha".to_string(), db1);
+        profiles.add("profile_beta".to_string(), db2);
+
+        let names = profiles.names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"profile_alpha".to_string()));
+        assert!(names.contains(&"profile_beta".to_string()));
+    }
+
+    /// Tests that `names()` returns an empty vector when no profiles exist.
+    #[test_log::test]
+    fn test_library_music_api_profiles_names_empty() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let names = profiles.names();
+        assert!(names.is_empty());
+    }
+
+    /// Tests that adding a profile with the same name replaces the existing one.
+    #[test_log::test]
+    fn test_library_music_api_profiles_replace_existing() {
+        let profiles = LibraryMusicApiProfiles::default();
+        let db1 = create_test_db();
+        let db2 = create_test_db();
+
+        profiles.add("test_profile".to_string(), db1);
+        let _first = profiles.get("test_profile").unwrap();
+
+        profiles.add("test_profile".to_string(), db2);
+        let _second = profiles.get("test_profile").unwrap();
+
+        // Should still only have one profile with this name
+        let names = profiles.names();
+        assert_eq!(names.iter().filter(|n| *n == "test_profile").count(), 1);
+    }
+
+    /// Tests that profile names are returned in sorted order (`BTreeMap` behavior).
+    #[test_log::test]
+    fn test_library_music_api_profiles_names_sorted() {
+        let profiles = LibraryMusicApiProfiles::default();
+
+        // Add profiles in non-alphabetical order
+        profiles.add("zebra".to_string(), create_test_db());
+        profiles.add("apple".to_string(), create_test_db());
+        profiles.add("mango".to_string(), create_test_db());
+
+        let names = profiles.names();
+        assert_eq!(names, vec!["apple", "mango", "zebra"]);
+    }
 }
