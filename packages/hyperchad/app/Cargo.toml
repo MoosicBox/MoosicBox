@@ -47,6 +47,7 @@ thiserror   = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+switchy_async     = { workspace = true, features = ["macros", "tokio"] }
 test-log          = { workspace = true }
 
 [features]
