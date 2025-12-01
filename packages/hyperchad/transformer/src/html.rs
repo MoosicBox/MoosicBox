@@ -2336,4 +2336,434 @@ Line 3</textarea>"#;
             panic!("Expected Textarea element, got: {:?}", child.element);
         }
     }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_full_shorthand_with_multiple_lines_style_color_and_thickness() {
+        use crate::TextDecoration;
+        use hyperchad_color::Color;
+        use hyperchad_transformer_models::{TextDecorationLine, TextDecorationStyle};
+
+        let html = r#"<div sx-text-decoration="underline overline solid #ff0000 2">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline, TextDecorationLine::Overline],
+                style: Some(TextDecorationStyle::Solid),
+                color: Some(Color::from_hex("#ff0000")),
+                thickness: Some(crate::Number::Integer(2)),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_only() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="line-through">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::LineThrough],
+                style: None,
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_flex_with_single_value_sets_grow_only() {
+        use crate::{Flex, Number};
+
+        let html = r#"<div sx-flex="2">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.flex,
+            Some(Flex {
+                grow: Number::Integer(2),
+                shrink: Number::Integer(1),
+                basis: Number::IntegerPercent(0),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_flex_with_two_values_sets_grow_and_shrink() {
+        use crate::{Flex, Number};
+
+        let html = r#"<div sx-flex="2 3">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.flex,
+            Some(Flex {
+                grow: Number::Integer(2),
+                shrink: Number::Integer(3),
+                basis: Number::IntegerPercent(0),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_flex_with_three_values_sets_all_properties() {
+        use crate::{Flex, Number};
+
+        let html = r#"<div sx-flex="1 2 100">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.flex,
+            Some(Flex {
+                grow: Number::Integer(1),
+                shrink: Number::Integer(2),
+                basis: Number::Integer(100),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_border_parses_size_and_color() {
+        use hyperchad_color::Color;
+
+        let html = r#"<div sx-border="2, #ff0000">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.border_top,
+            Some((Color::from_hex("#ff0000"), crate::Number::Integer(2)))
+        );
+        assert_eq!(
+            child.border_right,
+            Some((Color::from_hex("#ff0000"), crate::Number::Integer(2)))
+        );
+        assert_eq!(
+            child.border_bottom,
+            Some((Color::from_hex("#ff0000"), crate::Number::Integer(2)))
+        );
+        assert_eq!(
+            child.border_left,
+            Some((Color::from_hex("#ff0000"), crate::Number::Integer(2)))
+        );
+    }
+
+    #[test_log::test]
+    fn parse_border_x_sets_only_horizontal_borders() {
+        use hyperchad_color::Color;
+
+        let html = r#"<div sx-border-x="1, #00ff00">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.border_right,
+            Some((Color::from_hex("#00ff00"), crate::Number::Integer(1)))
+        );
+        assert_eq!(
+            child.border_left,
+            Some((Color::from_hex("#00ff00"), crate::Number::Integer(1)))
+        );
+        assert_eq!(child.border_top, None);
+        assert_eq!(child.border_bottom, None);
+    }
+
+    #[test_log::test]
+    fn parse_border_y_sets_only_vertical_borders() {
+        use hyperchad_color::Color;
+
+        let html = r#"<div sx-border-y="3, #0000ff">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.border_top,
+            Some((Color::from_hex("#0000ff"), crate::Number::Integer(3)))
+        );
+        assert_eq!(
+            child.border_bottom,
+            Some((Color::from_hex("#0000ff"), crate::Number::Integer(3)))
+        );
+        assert_eq!(child.border_right, None);
+        assert_eq!(child.border_left, None);
+    }
+
+    #[test_log::test]
+    fn parse_individual_border_overrides_shorthand() {
+        use hyperchad_color::Color;
+
+        let html = r#"<div sx-border="1, #000000" sx-border-top="5, #ffffff">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        // Individual border-top should override the shorthand
+        assert_eq!(
+            child.border_top,
+            Some((Color::from_hex("#ffffff"), crate::Number::Integer(5)))
+        );
+        // Other borders should have the shorthand value
+        assert_eq!(
+            child.border_right,
+            Some((Color::from_hex("#000000"), crate::Number::Integer(1)))
+        );
+    }
+
+    #[test_log::test]
+    fn parse_target_selector_parses_various_formats() {
+        use hyperchad_transformer_models::{Route, Selector};
+
+        let html = r##"<div hx-get="/api" hx-target="#my-id">content</div>"##;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let Some(Route::Get { target, .. }) = &child.route {
+            assert_eq!(*target, Selector::Id("my-id".to_string()));
+        } else {
+            panic!("Expected Get route");
+        }
+
+        let html = r#"<div hx-get="/api" hx-target=".my-class">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let Some(Route::Get { target, .. }) = &child.route {
+            assert_eq!(*target, Selector::Class("my-class".to_string()));
+        } else {
+            panic!("Expected Get route");
+        }
+
+        let html = r#"<div hx-get="/api" hx-target="> .child-class">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let Some(Route::Get { target, .. }) = &child.route {
+            assert_eq!(*target, Selector::ChildClass("child-class".to_string()));
+        } else {
+            panic!("Expected Get route");
+        }
+
+        let html = r#"<div hx-get="/api" hx-target="this">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let Some(Route::Get { target, .. }) = &child.route {
+            assert_eq!(*target, Selector::SelfTarget);
+        } else {
+            panic!("Expected Get route");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_hx_swap_strategies() {
+        use hyperchad_transformer_models::{Route, SwapStrategy};
+
+        let strategies = [
+            ("children", SwapStrategy::Children),
+            ("this", SwapStrategy::This),
+            ("beforebegin", SwapStrategy::BeforeBegin),
+            ("afterbegin", SwapStrategy::AfterBegin),
+            ("beforeend", SwapStrategy::BeforeEnd),
+            ("afterend", SwapStrategy::AfterEnd),
+            ("delete", SwapStrategy::Delete),
+            ("none", SwapStrategy::None),
+        ];
+
+        for (value, expected) in strategies {
+            let html = format!(r#"<div hx-get="/api" hx-swap="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+
+            if let Some(Route::Get { strategy, .. }) = &child.route {
+                assert_eq!(*strategy, expected, "Failed for strategy value '{value}'");
+            } else {
+                panic!("Expected Get route for strategy '{value}'");
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn parse_various_http_methods() {
+        use hyperchad_transformer_models::Route;
+
+        let html = r#"<div hx-post="/api/submit">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert!(matches!(child.route, Some(Route::Post { .. })));
+
+        let html = r#"<div hx-put="/api/update">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert!(matches!(child.route, Some(Route::Put { .. })));
+
+        let html = r#"<div hx-delete="/api/delete">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert!(matches!(child.route, Some(Route::Delete { .. })));
+
+        let html = r#"<div hx-patch="/api/patch">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert!(matches!(child.route, Some(Route::Patch { .. })));
+    }
+
+    #[test_log::test]
+    fn parse_input_checkbox_checked_states() {
+        use crate::Input;
+
+        // Test checked="checked" style
+        let html = r#"<input type="checkbox" checked="checked">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Input {
+            input: Input::Checkbox { checked },
+            ..
+        } = &child.element
+        {
+            assert_eq!(*checked, Some(true));
+        } else {
+            panic!("Expected Checkbox input");
+        }
+
+        // Test checked="true" style
+        let html = r#"<input type="checkbox" checked="true">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Input {
+            input: Input::Checkbox { checked },
+            ..
+        } = &child.element
+        {
+            assert_eq!(*checked, Some(true));
+        } else {
+            panic!("Expected Checkbox input");
+        }
+
+        // Test unchecked checkbox (no checked attribute)
+        let html = r#"<input type="checkbox">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Input {
+            input: Input::Checkbox { checked },
+            ..
+        } = &child.element
+        {
+            assert_eq!(*checked, None);
+        } else {
+            panic!("Expected Checkbox input");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_data_attributes_decodes_html_entities() {
+        let html =
+            r#"<div data-value="test &amp; value" data-url="/path?a=1&amp;b=2">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.data.get("value"), Some(&"test & value".to_string()));
+        assert_eq!(child.data.get("url"), Some(&"/path?a=1&b=2".to_string()));
+    }
+
+    #[test_log::test]
+    fn parse_details_open_attribute() {
+        // Test open="open" style (explicit value)
+        let html = r#"<details open="open"><summary>Title</summary>Content</details>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Details { open } = &child.element {
+            assert_eq!(*open, Some(true));
+        } else {
+            panic!("Expected Details element");
+        }
+
+        // Test without open attribute
+        let html = r"<details><summary>Title</summary>Content</details>";
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Details { open } = &child.element {
+            assert_eq!(*open, None);
+        } else {
+            panic!("Expected Details element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_image_with_loading_and_fit_attributes() {
+        use hyperchad_transformer_models::{ImageFit, ImageLoading};
+
+        let html = r#"<img src="/test.jpg" loading="lazy" sx-fit="cover">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Image {
+            source,
+            loading,
+            fit,
+            ..
+        } = &child.element
+        {
+            assert_eq!(source.as_deref(), Some("/test.jpg"));
+            assert_eq!(*loading, Some(ImageLoading::Lazy));
+            assert_eq!(*fit, Some(ImageFit::Cover));
+        } else {
+            panic!("Expected Image element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_table_row_sets_row_direction() {
+        use hyperchad_transformer_models::LayoutDirection;
+
+        let html = r"<table><tr><td>Cell</td></tr></table>";
+        let container: Container = html.try_into().unwrap();
+        let table = &container.children[0];
+        let tr = &table.children[0];
+
+        // TR elements should default to row direction
+        assert_eq!(tr.direction, LayoutDirection::Row);
+    }
+
+    #[test_log::test]
+    fn parse_anchor_with_target_attribute() {
+        use hyperchad_transformer_models::LinkTarget;
+
+        let html = r#"<a href="/page" target="_blank">Link</a>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Anchor { target, href } = &child.element {
+            assert_eq!(*target, Some(LinkTarget::Blank));
+            assert_eq!(href.as_deref(), Some("/page"));
+        } else {
+            panic!("Expected Anchor element");
+        }
+
+        let html = r#"<a href="/page" target="custom-frame">Link</a>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Anchor { target, .. } = &child.element {
+            assert_eq!(
+                *target,
+                Some(LinkTarget::Custom("custom-frame".to_string()))
+            );
+        } else {
+            panic!("Expected Anchor element");
+        }
+    }
 }
