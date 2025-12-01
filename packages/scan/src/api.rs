@@ -22,6 +22,43 @@ use switchy_database::profiles::LibraryDatabase;
 
 use crate::{ScanError, ScanOrigin, disable_scan_origin, enable_scan_origin, run_scan};
 
+/// Validates a path to prevent path traversal attacks.
+///
+/// This function canonicalizes the path and checks for common path traversal patterns.
+/// Returns the canonicalized path string if valid, or an error if the path is unsafe.
+///
+/// # Errors
+///
+/// * If the path contains traversal sequences like `..`
+/// * If the path cannot be canonicalized (doesn't exist or isn't accessible)
+#[cfg(feature = "local")]
+fn validate_path(path: &str) -> Result<String, actix_web::Error> {
+    // Check for obvious path traversal patterns in the raw input
+    if path.contains("..") {
+        return Err(ErrorBadRequest("Path traversal detected: '..' not allowed"));
+    }
+
+    // Canonicalize the path to resolve symlinks and normalize the path
+    let path_buf = std::path::Path::new(path);
+    let canonical = path_buf
+        .canonicalize()
+        .map_err(|e| ErrorBadRequest(format!("Invalid path: {e}")))?;
+
+    // Convert back to string and verify no traversal occurred
+    let canonical_str = canonical
+        .to_str()
+        .ok_or_else(|| ErrorBadRequest("Path contains invalid UTF-8"))?;
+
+    // Double-check the canonicalized path doesn't contain traversal patterns
+    if canonical_str.contains("..") {
+        return Err(ErrorBadRequest(
+            "Path traversal detected after canonicalization",
+        ));
+    }
+
+    Ok(canonical_str.to_string())
+}
+
 /// Binds all scan-related API endpoints to an Actix-Web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -118,9 +155,10 @@ pub async fn run_scan_endpoint(
         })
         .transpose()?;
 
-    run_scan(origins, &db, music_apis)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+    run_scan(origins, &db, music_apis).await.map_err(|e| {
+        log::error!("Failed to scan: {e:?}");
+        ErrorInternalServerError("Failed to scan")
+    })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -216,18 +254,29 @@ pub async fn run_scan_path_endpoint(
     music_apis: MusicApis,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
+    // Validate and canonicalize the path to prevent path traversal attacks
+    let validated_path = validate_path(&query.path)?;
+
     let scanner = crate::Scanner::new(crate::event::ScanTask::Local {
-        paths: vec![query.path.clone()],
+        paths: vec![validated_path.clone()],
     });
 
     scanner
         .scan(music_apis, &db)
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+        .map_err(|_| ErrorInternalServerError("Failed to scan"))?;
 
-    crate::local::scan(&query.path, &db, crate::CANCELLATION_TOKEN.clone(), scanner)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to scan: {e:?}")))?;
+    crate::local::scan(
+        &validated_path,
+        &db,
+        crate::CANCELLATION_TOKEN.clone(),
+        scanner,
+    )
+    .await
+    .map_err(|e| {
+        log::error!("Scan failed: {e:?}");
+        ErrorInternalServerError("Failed to scan")
+    })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -263,9 +312,10 @@ pub async fn get_scan_origins_endpoint(
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let origins = crate::get_scan_origins(&db)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get scan origins: {e:?}")))?;
+    let origins = crate::get_scan_origins(&db).await.map_err(|e| {
+        log::error!("Failed to get scan origins: {e:?}");
+        ErrorInternalServerError("Failed to get scan origins")
+    })?;
 
     Ok(Json(serde_json::json!({"origins": origins})))
 }
@@ -304,9 +354,10 @@ pub async fn enable_scan_origin_endpoint(
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    enable_scan_origin(&db, &query.origin)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to enable scan origin: {e:?}")))?;
+    enable_scan_origin(&db, &query.origin).await.map_err(|e| {
+        log::error!("Failed to enable scan origin: {e:?}");
+        ErrorInternalServerError("Failed to enable scan origin")
+    })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -345,9 +396,10 @@ pub async fn disable_scan_origin_endpoint(
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    disable_scan_origin(&db, &query.origin)
-        .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to disable scan origin: {e:?}")))?;
+    disable_scan_origin(&db, &query.origin).await.map_err(|e| {
+        log::error!("Failed to disable scan origin: {e:?}");
+        ErrorInternalServerError("Failed to disable scan origin")
+    })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -386,7 +438,10 @@ pub async fn get_scan_paths_endpoint(
 ) -> Result<Json<Vec<crate::models::api::ApiScanPath>>> {
     let paths = crate::get_scan_paths(&db)
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?
+        .map_err(|e| {
+            log::error!("Failed to get scan paths: {e:?}");
+            ErrorInternalServerError("Failed to get scan paths")
+        })?
         .into_iter()
         .map(|x| crate::models::api::ApiScanPath { path: x })
         .collect();
@@ -443,9 +498,15 @@ pub async fn add_scan_path_endpoint(
         query.path.clone()
     };
 
-    crate::add_scan_path(&db, &path)
+    // Validate and canonicalize the path to prevent path traversal attacks
+    let validated_path = validate_path(&path)?;
+
+    crate::add_scan_path(&db, &validated_path)
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to add scan path: {e:?}")))?;
+        .map_err(|e| {
+            log::error!("Failed to add scan path: {e:?}");
+            ErrorInternalServerError("Failed to add scan path")
+        })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -488,7 +549,10 @@ pub async fn remove_scan_path_endpoint(
 ) -> Result<Json<Value>> {
     crate::remove_scan_path(&db, &query.path)
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to remove scan path: {e:?}")))?;
+        .map_err(|e| {
+            log::error!("Failed to remove scan path: {e:?}");
+            ErrorInternalServerError("Failed to remove scan path")
+        })?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }

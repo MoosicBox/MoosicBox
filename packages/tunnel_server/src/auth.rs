@@ -51,7 +51,9 @@ fn is_authorized(req: &HttpRequest) -> bool {
     if let Some(auth) = req.headers().get(http::header::AUTHORIZATION)
         && let Ok(auth) = auth.to_str()
     {
-        let token = if auth.to_lowercase().starts_with("bearer") {
+        let token = if auth.to_lowercase().starts_with("bearer ") && auth.len() > 7 {
+            auth[7..].trim_start()
+        } else if auth.to_lowercase().starts_with("bearer") && auth.len() > 6 {
             auth[6..].trim_start()
         } else {
             auth
@@ -108,7 +110,9 @@ async fn client_is_authorized(
     if let Some(client_id) = client_id {
         if let Some(auth) = auth_header {
             if let Ok(auth) = auth.to_str() {
-                let token = if auth.to_lowercase().starts_with("bearer") {
+                let token = if auth.to_lowercase().starts_with("bearer ") && auth.len() > 7 {
+                    auth[7..].trim_start()
+                } else if auth.to_lowercase().starts_with("bearer") && auth.len() > 6 {
                     auth[6..].trim_start()
                 } else {
                     auth

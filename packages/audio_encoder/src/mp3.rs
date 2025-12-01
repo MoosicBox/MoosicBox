@@ -105,13 +105,18 @@ pub fn encode_mp3(
         interleaved.0.len(),
     ));
     let encoded_size = encoder.encode(interleaved, mp3_out_buffer.spare_capacity_mut())?;
+    // SAFETY: The encoder writes to spare_capacity_mut() and returns the number of bytes
+    // written. We use saturating_add to prevent integer overflow - the encoded_size cannot
+    // exceed spare capacity, so overflow is not expected, but saturating protects against
+    // potential edge cases.
     unsafe {
-        mp3_out_buffer.set_len(mp3_out_buffer.len().wrapping_add(encoded_size));
+        mp3_out_buffer.set_len(mp3_out_buffer.len().saturating_add(encoded_size));
     }
 
     let encoded_size = encoder.flush::<FlushNoGap>(mp3_out_buffer.spare_capacity_mut())?;
+    // SAFETY: Same as above - flush writes to spare capacity and returns bytes written.
     unsafe {
-        mp3_out_buffer.set_len(mp3_out_buffer.len().wrapping_add(encoded_size));
+        mp3_out_buffer.set_len(mp3_out_buffer.len().saturating_add(encoded_size));
     }
 
     Ok((
