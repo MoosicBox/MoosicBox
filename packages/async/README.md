@@ -223,6 +223,7 @@ match handle.await {
 - **`fs`**: Enable Tokio file system support when using Tokio backend
 - **`io`**: Async I/O operations
 - **`net`**: Enable Tokio networking support when using Tokio backend
+- **`process`**: Enable Tokio process support when using Tokio backend
 - **`sync`**: Synchronization primitives (includes channels)
 - **`time`**: Timing utilities
 - **`util`**: Additional utilities
