@@ -36,6 +36,12 @@ The MoosicBox Async Macros package provides:
 - **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
 - **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper (always available)
 
+#### Main Macros
+
+- **`#[main]`**: Main function macro for `switchy_async` runtime (simulator feature only)
+- **`#[unsync_main]`**: Main function macro for `switchy::unsync` runtime (simulator feature only)
+- **`#[tokio_main_wrapper]`**: Tokio-compatible main wrapper (always available)
+
 ### AST Transformation
 
 - **Await Wrapping**: Wraps `.await` expressions with yield points
@@ -124,25 +130,13 @@ impl MyStruct {
 ```rust
 use switchy_async_macros::inject_yields_mod;
 
-// Transform entire module
+// Transform entire module (reads from src/my_module.rs)
 inject_yields_mod! {
-    mod my_module {
-        async fn function1() {
-            operation1().await;
-        }
-
-        async fn function2() {
-            operation2().await;
-        }
-
-        impl SomeStruct {
-            async fn method(&self) {
-                self.operation().await;
-            }
-        }
-    }
+    mod my_module;
 }
 ```
+
+The macro reads the module source from `src/{module_name}.rs`, transforms all async functions within, and emits the transformed module.
 
 ### Feature-Gated Behavior
 
@@ -224,6 +218,24 @@ pub async fn library_function() -> Result<Data, Error> {
     let data = fetch_data().await?;
     let processed = process_data(data).await?;
     Ok(processed)
+}
+```
+
+### Async Main Functions
+
+```rust
+use switchy_async_macros::main;
+
+#[main]
+async fn main() {
+    // Async main using switchy_async runtime
+    println!("Hello from async main!");
+}
+
+// With Result return type
+#[main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
 }
 ```
 
