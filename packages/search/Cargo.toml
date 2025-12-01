@@ -34,7 +34,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 moosicbox_config = { workspace = true }
-switchy_async    = { workspace = true, features = ["macros"] }
+switchy_async    = { workspace = true, features = ["macros", "tokio"] }
 switchy_fs       = { workspace = true, features = ["simulator", "simulator-real-fs"] }
 
 chrono            = { workspace = true }
