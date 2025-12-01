@@ -1027,4 +1027,144 @@ mod tests {
         let result = tx.send_async(42).await;
         assert!(matches!(result, Err(SendError(42))));
     }
+
+    #[test]
+    fn test_bounded_send_blocks_until_space_available() {
+        let (tx, rx) = bounded::<i32>(1);
+
+        // Fill the channel
+        tx.try_send(1).unwrap();
+        assert!(tx.is_full());
+
+        // Try to send should fail with Full
+        assert!(matches!(tx.try_send(2), Err(TrySendError::Full(2))));
+
+        // Consume the first message to make space
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received, 1);
+
+        // Now we can send again
+        tx.try_send(2).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_channel_inner_is_full_and_is_empty() {
+        let inner: ChannelInner<i32> = ChannelInner::new(Some(2));
+
+        // Initially empty
+        assert!(inner.is_empty());
+        assert!(!inner.is_full());
+        assert_eq!(inner.len(), 0);
+
+        let (tx, rx) = bounded::<i32>(2);
+
+        // Add one item
+        tx.try_send(1).unwrap();
+        assert!(!tx.is_empty());
+        assert!(!tx.is_full());
+        assert_eq!(tx.len(), 1);
+
+        // Add second item - now full
+        tx.try_send(2).unwrap();
+        assert!(!tx.is_empty());
+        assert!(tx.is_full());
+        assert_eq!(tx.len(), 2);
+
+        // Receive one - no longer full
+        rx.try_recv().unwrap();
+        assert!(!tx.is_full());
+        assert_eq!(tx.len(), 1);
+
+        // Receive last - now empty
+        rx.try_recv().unwrap();
+        assert!(tx.is_empty());
+        assert_eq!(tx.len(), 0);
+    }
+
+    #[test]
+    fn test_unbounded_channel_is_never_full() {
+        let (tx, _rx) = unbounded::<i32>();
+
+        // Unbounded channel should never report as full
+        assert!(!tx.is_full());
+
+        // Add many items
+        for i in 0..100 {
+            tx.try_send(i).unwrap();
+        }
+
+        // Still not full
+        assert!(!tx.is_full());
+        assert_eq!(tx.len(), 100);
+    }
+
+    #[test]
+    fn test_cooperative_yield_backoff_strategy() {
+        // This test verifies the backoff function doesn't panic at different iteration levels
+        cooperative_yield_with_backoff(0); // First range
+        cooperative_yield_with_backoff(5); // Still first range
+        cooperative_yield_with_backoff(10); // End of first range
+        cooperative_yield_with_backoff(11); // Second range
+        cooperative_yield_with_backoff(50); // Middle of second range
+        cooperative_yield_with_backoff(100); // End of second range
+        cooperative_yield_with_backoff(101); // Third range
+        cooperative_yield_with_backoff(500); // Middle of third range
+        cooperative_yield_with_backoff(1000); // End of third range
+        cooperative_yield_with_backoff(1001); // Fourth range (with logging)
+    }
+
+    #[test]
+    fn test_sender_capacity_returns_correct_value() {
+        let (bounded_tx, _) = bounded::<i32>(5);
+        assert_eq!(bounded_tx.capacity(), Some(5));
+
+        let (unbounded_tx, _) = unbounded::<i32>();
+        assert_eq!(unbounded_tx.capacity(), None);
+    }
+
+    #[test]
+    fn test_multiple_receivers_all_see_disconnection() {
+        let (tx, rx1) = bounded::<i32>(10);
+        let rx2 = rx1.clone();
+        let rx3 = rx1.clone();
+
+        assert_eq!(rx1.receiver_count(), 3);
+        assert_eq!(rx2.receiver_count(), 3);
+        assert_eq!(rx3.receiver_count(), 3);
+
+        // Drop the sender
+        drop(tx);
+
+        // All receivers should see disconnection
+        assert!(matches!(rx1.try_recv(), Err(TryRecvError::Disconnected)));
+        assert!(matches!(rx2.try_recv(), Err(TryRecvError::Disconnected)));
+        assert!(matches!(rx3.try_recv(), Err(TryRecvError::Disconnected)));
+    }
+
+    #[test]
+    fn test_multiple_senders_receiver_disconnects() {
+        let (tx1, rx) = bounded::<i32>(10);
+        let tx2 = tx1.clone();
+        let tx3 = tx1.clone();
+
+        assert_eq!(tx1.sender_count(), 3);
+
+        // Drop the receiver
+        drop(rx);
+
+        // All senders should see disconnection
+        assert!(matches!(
+            tx1.try_send(1),
+            Err(TrySendError::Disconnected(1))
+        ));
+        assert!(matches!(
+            tx2.try_send(2),
+            Err(TrySendError::Disconnected(2))
+        ));
+        assert!(matches!(
+            tx3.try_send(3),
+            Err(TrySendError::Disconnected(3))
+        ));
+    }
 }

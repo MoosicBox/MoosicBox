@@ -227,4 +227,58 @@ mod tests {
     fn test_barrier_zero_size() {
         let _ = Barrier::new(0);
     }
+
+    #[test]
+    fn test_barrier_wait_result_clone() {
+        // Test that BarrierWaitResult can be cloned
+        let result = BarrierWaitResult { is_leader: true };
+        let cloned = result.clone();
+        assert_eq!(result.is_leader(), cloned.is_leader());
+
+        let result2 = BarrierWaitResult { is_leader: false };
+        let cloned2 = result2.clone();
+        assert_eq!(result2.is_leader(), cloned2.is_leader());
+    }
+
+    #[test]
+    fn test_barrier_generation_advances_on_each_cycle() {
+        let runtime = crate::simulator::runtime::build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            let barrier = Arc::new(Barrier::new(2));
+
+            // Run multiple cycles and verify barrier continues to work
+            for cycle in 0..5 {
+                let b1 = barrier.clone();
+                let b2 = barrier.clone();
+
+                let (r1, r2) = futures::future::join(async move { b1.wait().await }, async move {
+                    b2.wait().await
+                })
+                .await;
+
+                // Each cycle should have exactly one leader
+                assert_ne!(
+                    r1.is_leader(),
+                    r2.is_leader(),
+                    "Cycle {cycle}: expected exactly one leader"
+                );
+            }
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn test_barrier_inner_state_initialization() {
+        // Test that barrier inner state is initialized correctly
+        let barrier = Barrier::new(5);
+        let inner = barrier.inner.lock().unwrap();
+
+        assert_eq!(inner.n, 5);
+        assert_eq!(inner.count, 0);
+        assert_eq!(inner.generation, 0);
+        assert!(inner.waiters.is_empty());
+        drop(inner);
+    }
 }

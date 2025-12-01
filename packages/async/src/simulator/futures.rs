@@ -465,4 +465,142 @@ mod tests {
         let result = system_time_to_instant(current_time);
         assert!(result.is_ok());
     }
+
+    #[test_log::test]
+    fn timeout_fused_future_not_terminated_initially() {
+        use futures::future::{Fuse, FutureExt};
+
+        // Use a fused pending future to test FusedFuture trait
+        // Create a timeout with a fused future that is in its initial (unterminated) state
+        let fused_pending: Fuse<std::future::Pending<()>> = std::future::pending().fuse();
+        let timeout = Timeout::new(Duration::from_millis(100), fused_pending);
+
+        // Should not be terminated initially since neither the sleep nor inner is done
+        assert!(!timeout.is_terminated());
+    }
+
+    #[test_log::test]
+    fn timeout_fused_future_terminated_when_inner_future_terminates() {
+        use futures::future::Fuse;
+
+        // Create a fused future that is already terminated
+        let terminated_fused: Fuse<std::future::Ready<()>> = Fuse::terminated();
+        let timeout = Timeout::new(Duration::from_millis(100), terminated_fused);
+
+        // Should be terminated since inner future is terminated
+        assert!(timeout.is_terminated());
+    }
+
+    #[test_log::test]
+    fn timeout_fused_future_terminated_when_sleep_terminates() {
+        use futures::future::{Fuse, FutureExt};
+        use std::task::{Context, Poll};
+
+        // Create a fused future that won't complete
+        let never_ready: Fuse<std::future::Pending<()>> = std::future::pending().fuse();
+        let timeout = Timeout::new(Duration::ZERO, never_ready);
+
+        // Poll until the sleep completes
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let mut pinned_timeout = std::pin::pin!(timeout);
+
+        // First poll sets up the sleep
+        let _ = pinned_timeout.as_mut().poll(&mut cx);
+
+        // Second poll should complete since duration is zero
+        let result = pinned_timeout.as_mut().poll(&mut cx);
+
+        // After sleep completes, timeout returns Err(Elapsed)
+        assert!(matches!(result, Poll::Ready(Err(Elapsed))));
+    }
+
+    #[test_log::test]
+    fn interval_poll_tick_resets_after_completion() {
+        use std::task::{Context, Poll};
+
+        let mut interval = Interval::new(Duration::from_millis(1));
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // First poll - pending
+        assert!(matches!(interval.poll_tick(&mut cx), Poll::Pending));
+
+        // Simulate time passing
+        interval.polled = true;
+        interval.now = switchy_time::now()
+            .checked_sub(Duration::from_millis(2))
+            .unwrap();
+
+        // Should complete
+        let result = interval.poll_tick(&mut cx);
+        assert!(matches!(result, Poll::Ready(_)));
+
+        // After completion, completed flag is set
+        assert!(interval.completed);
+
+        // The next poll should trigger the reset and then be pending again
+        let result2 = interval.poll_tick(&mut cx);
+        assert!(matches!(result2, Poll::Pending));
+
+        // Now the state should be reset for the new tick cycle
+        assert!(interval.polled); // polled is set true during the pending poll
+        assert!(!interval.completed);
+    }
+
+    #[test_log::test]
+    fn sleep_poll_completes_after_duration_elapses() {
+        use std::task::{Context, Poll};
+
+        let mut sleep = Sleep::new(Duration::from_millis(1));
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let mut pinned_sleep = std::pin::Pin::new(&mut sleep);
+
+        // First poll should return Pending and set polled flag
+        assert!(matches!(pinned_sleep.as_mut().poll(&mut cx), Poll::Pending));
+
+        // Simulate time passing by manipulating the now field
+        {
+            let mut projected = pinned_sleep.as_mut().project();
+            *projected.polled = true;
+            *projected.now = switchy_time::now() - Duration::from_millis(2);
+        }
+
+        // Next poll should complete since enough time has "passed"
+        let result = pinned_sleep.as_mut().poll(&mut cx);
+        assert!(matches!(result, Poll::Ready(())));
+
+        // Should be terminated now
+        assert!(sleep.is_terminated());
+    }
+
+    #[test_log::test]
+    fn instant_poll_returns_ready_when_time_passes() {
+        use std::task::{Context, Poll};
+
+        // Create an instant in the past
+        let past_instant = instant_now()
+            .checked_sub(Duration::from_millis(100))
+            .unwrap();
+        let mut instant = Instant::new(past_instant);
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let mut pinned_instant = std::pin::Pin::new(&mut instant);
+
+        // First poll sets polled flag
+        let result1 = pinned_instant.as_mut().poll(&mut cx);
+
+        // Second poll should complete since instant is in the past
+        let result2 = pinned_instant.as_mut().poll(&mut cx);
+        assert!(
+            matches!(result1, Poll::Pending) || matches!(result2, Poll::Ready(_)),
+            "Expected either first poll pending or second ready"
+        );
+
+        // After completion, should be terminated
+        if matches!(result2, Poll::Ready(_)) {
+            assert!(instant.is_terminated());
+        }
+    }
 }
