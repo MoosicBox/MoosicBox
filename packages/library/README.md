@@ -247,16 +247,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  {} ({})", album.title, album.date_released.unwrap_or_default());
     }
 
-    // Get only studio albums
-    let studio_albums = artist_albums(
+    // Get only LP albums
+    let lp_albums = artist_albums(
         &db,
         &artist_id,
         Some(0),
         Some(10),
-        Some(LibraryAlbumType::Studio),
+        Some(LibraryAlbumType::Lp),
     ).await?;
 
-    println!("Studio albums: {}", studio_albums.page.items().len());
+    println!("LP albums: {}", lp_albums.page.items().len());
 
     Ok(())
 }
