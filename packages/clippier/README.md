@@ -11,6 +11,8 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 - **Feature Management**: Generate feature combinations for comprehensive testing
 - **Selective Package Processing**: Filter operations to specific packages for targeted analysis
 - **Feature Propagation Validation**: Ensure features are correctly propagated across workspace dependencies
+- **Parent Package Validation**: Validate that parent packages expose all features from their workspace dependencies
+- **Unified Linting & Formatting**: Auto-detect and run multiple linters and formatters with `check` and `fmt` commands
 - **Docker Integration**: Generate optimized Dockerfiles for workspace packages
 - **Change Impact Analysis**: Determine which packages are affected by file changes
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
@@ -27,7 +29,11 @@ cargo install --path packages/clippier
 
 Clippier supports optional features:
 
+- **`check`** (default): Enable the `check` command for running linters
+- **`format`** (default): Enable the `fmt` command for running formatters
 - **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
+- **`transforms-vendored`** (default): Enable Lua transform scripts with vendored Lua runtime
+- **`transforms-system`**: Enable Lua transform scripts using system Lua installation
 - **`fail-on-warnings`**: Fail build on warnings
 
 ## Usage
@@ -712,6 +718,291 @@ clippier validate-feature-propagation . \
   --verbose-overrides
 ```
 
+#### Parent Package Validation
+
+Parent packages are packages that aggregate and re-export features from their workspace dependencies. The validator can ensure that parent packages correctly expose all features from their dependencies with appropriate naming conventions.
+
+**What is a Parent Package?**
+
+A parent package typically:
+
+- Depends on multiple workspace packages
+- Re-exports features from those dependencies using a prefix pattern
+- Acts as a facade for a subsystem of the workspace
+
+For example, if `moosicbox_app` depends on `moosicbox_audio` which has features `mp3`, `flac`, and `aac`, the parent should expose them as `audio-mp3`, `audio-flac`, and `audio-aac`.
+
+**CLI Usage:**
+
+```bash
+# Validate specific packages as parent packages
+clippier validate-feature-propagation . \
+  --parent-packages "moosicbox_app,moosicbox_server"
+
+# Limit depth of dependency chain checking
+clippier validate-feature-propagation . \
+  --parent-packages "moosicbox_app" \
+  --parent-depth 2
+
+# Skip additional features during parent validation
+clippier validate-feature-propagation . \
+  --parent-packages "moosicbox_app" \
+  --parent-skip-features "unstable,experimental"
+
+# Override prefix for specific dependencies
+clippier validate-feature-propagation . \
+  --parent-packages "moosicbox_app" \
+  --parent-prefix "moosicbox_audio:audio" \
+  --parent-prefix "moosicbox_video:vid"
+
+# Disable loading parent config from clippier.toml
+clippier validate-feature-propagation . \
+  --parent-packages "moosicbox_app" \
+  --no-parent-config
+```
+
+**Package-Level Configuration (clippier.toml):**
+
+```toml
+# packages/moosicbox_app/clippier.toml
+[feature-validation]
+
+# Declare this package as a parent package
+[feature-validation.parent]
+enabled = true
+depth = 2  # Only check direct deps and their deps (optional)
+skip-features = ["internal-*", "test-*"]  # Additional features to skip
+
+# Override prefixes for specific dependencies
+[[feature-validation.parent.prefix]]
+dependency = "moosicbox_audio"
+prefix = "audio"
+
+[[feature-validation.parent.prefix]]
+dependency = "moosicbox_video"
+prefix = "video"
+```
+
+**Workspace-Level Configuration (clippier.toml):**
+
+```toml
+# {workspace_root}/clippier.toml
+[feature-validation]
+
+# Declare parent packages at workspace level
+[[feature-validation.parent-packages]]
+package = "moosicbox_app"
+depth = 2
+
+[[feature-validation.parent-packages]]
+package = "moosicbox_server"
+
+# Global prefix overrides
+[[feature-validation.parent-prefix]]
+dependency = "moosicbox_audio"
+prefix = "audio"
+```
+
+**Understanding Prefix Inference:**
+
+By default, the validator infers the prefix from the dependency name:
+
+- `moosicbox_audio` → `audio`
+- `switchy_database` → `database`
+- `my_lib` → `lib`
+
+The prefix is derived by taking the last segment after underscores. You can override this with explicit prefix configuration.
+
+**Validation Output:**
+
+```
+🔍 Feature Propagation Validation Results
+=========================================
+Total packages checked: 147
+Valid packages: 147
+
+📦 Parent Package Validation
+=============================
+
+📦 Package: moosicbox_app
+  Dependencies checked: 5
+  Features checked: 42
+  Features correctly exposed: 40
+
+  ❌ Missing Feature Exposures:
+    Dependency: moosicbox_audio
+      Feature: experimental-codec
+      Expected parent feature: audio-experimental-codec
+      Expected propagation: moosicbox_audio?/experimental-codec
+      Depth: 1
+
+    Dependency: moosicbox_video (via moosicbox_media)
+      Feature: av1
+      Expected parent feature: video-av1
+      Expected propagation: moosicbox_video?/av1
+      Depth: 2
+      Chain: moosicbox_app -> moosicbox_media -> moosicbox_video
+```
+
+**Parent Validation Options:**
+
+| Option                   | Description                                           | Default             |
+| ------------------------ | ----------------------------------------------------- | ------------------- |
+| `--parent-packages`      | Packages to validate as parent packages               | From config         |
+| `--parent-depth`         | Max depth for nested dependency checking (None = all) | None (unlimited)    |
+| `--parent-skip-features` | Additional features to skip                           | `["default", "_*"]` |
+| `--parent-prefix`        | Override prefix for dependencies (`dep:prefix`)       | Auto-inferred       |
+| `--no-parent-config`     | Disable loading parent config from clippier.toml      | false               |
+
+### Check Command (Linting)
+
+Run all available linters in your workspace with automatic tool detection:
+
+```bash
+# Run all detected linters
+clippier check
+
+# Run in a specific directory
+clippier check --working-dir /path/to/project
+
+# Run only specific tools
+clippier check --tools "clippy,eslint"
+
+# List available tools without running them
+clippier check --list
+
+# Require specific tools (fail if not installed)
+clippier check --required "clippy,prettier"
+
+# Skip specific tools
+clippier check --skip "shellcheck"
+
+# JSON output for CI integration
+clippier check --output json
+```
+
+The `check` command automatically detects and runs:
+
+- **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
+- **TOML**: `taplo fmt --check`
+- **JavaScript/TypeScript**: `prettier --check`, `biome check`, `eslint`
+- **Python**: `ruff check`, `black --check`
+- **Go**: `gofmt -l`
+- **Shell**: `shfmt -d`, `shellcheck`
+
+Tools run in parallel by default for maximum performance.
+
+### Fmt Command (Formatting)
+
+Run all available formatters to fix formatting issues:
+
+```bash
+# Format all files
+clippier fmt
+
+# Check formatting without modifying files
+clippier fmt --check
+
+# Run in a specific directory
+clippier fmt --working-dir /path/to/project
+
+# Run only specific formatters
+clippier fmt --tools "rustfmt,prettier"
+
+# List available formatters without running them
+clippier fmt --list
+
+# Require specific formatters (fail if not installed)
+clippier fmt --required "rustfmt"
+
+# Skip specific formatters
+clippier fmt --skip "gofmt"
+
+# JSON output for CI integration
+clippier fmt --output json
+```
+
+The `fmt` command automatically detects and runs:
+
+- **Rust**: `cargo fmt`
+- **TOML**: `taplo fmt`
+- **JavaScript/TypeScript**: `prettier --write`, `biome format --write`
+- **Python**: `ruff format`, `black`
+- **Go**: `gofmt -w`
+- **Shell**: `shfmt -w`
+
+#### Supported Tools
+
+| Tool         | Language/Format         | Capabilities | Detection           |
+| ------------ | ----------------------- | ------------ | ------------------- |
+| `rustfmt`    | Rust                    | Format       | `cargo` in PATH     |
+| `clippy`     | Rust                    | Lint         | `cargo` in PATH     |
+| `taplo`      | TOML                    | Format, Lint | `taplo` binary      |
+| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` binary   |
+| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary      |
+| `eslint`     | JS/TS                   | Lint         | `eslint` binary     |
+| `ruff`       | Python                  | Format, Lint | `ruff` binary       |
+| `black`      | Python                  | Format       | `black` binary      |
+| `gofmt`      | Go                      | Format       | `gofmt` binary      |
+| `shfmt`      | Shell                   | Format       | `shfmt` binary      |
+| `shellcheck` | Shell                   | Lint         | `shellcheck` binary |
+
+#### Output Format (JSON)
+
+```json
+{
+    "success": false,
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "duration_ms": 2345,
+    "results": [
+        {
+            "name": "rustfmt",
+            "display_name": "Rust Formatter",
+            "success": true,
+            "exit_code": 0,
+            "duration_ms": 1234
+        },
+        {
+            "name": "clippy",
+            "display_name": "Rust Linter",
+            "success": false,
+            "exit_code": 1,
+            "duration_ms": 567,
+            "stderr": "error: unused variable..."
+        }
+    ]
+}
+```
+
+#### CI Integration Example
+
+```yaml
+name: Lint & Format Check
+on: [push, pull_request]
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install tools
+              run: |
+                  cargo install taplo-cli
+                  npm install -g prettier
+
+            - name: Build clippier
+              run: cargo build --release --package clippier
+
+            - name: Check formatting
+              run: ./target/release/clippier fmt --check
+
+            - name: Run linters
+              run: ./target/release/clippier check
+```
+
 ### Docker Deployment
 
 Generate production-ready Dockerfiles with comprehensive dependency analysis:
@@ -828,13 +1119,52 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Feature Validation Options
 
-| Option             | Description                                  | Default           |
-| ------------------ | -------------------------------------------- | ----------------- |
-| `--features`       | Comma-separated list of features to validate | Auto-detect       |
-| `--workspace-only` | Only validate workspace packages             | true              |
-| `--output`         | Output format: `json`, `raw`                 | `raw`             |
-| `--path`           | Workspace root path                          | Current directory |
-| `--fail-on-error`  | Exit with error code if validation fails     | true              |
+| Option                           | Description                                             | Default             |
+| -------------------------------- | ------------------------------------------------------- | ------------------- |
+| `--features`                     | Comma-separated list of features to validate            | Auto-detect         |
+| `--skip-features`                | Features to skip during validation (supports wildcards) | `["default", "_*"]` |
+| `--workspace-only`               | Only validate workspace packages                        | true                |
+| `--output`                       | Output format: `json`, `raw`                            | `raw`               |
+| `--path`                         | Workspace root path                                     | Current directory   |
+| `--fail-on-error`                | Exit with error code if validation fails                | true                |
+| `--strict-optional`              | Require `dep?/feature` syntax for optional deps         | false               |
+| `--allow-missing`                | Allow specific missing propagations                     | -                   |
+| `--allow-incorrect`              | Allow specific incorrect propagations                   | -                   |
+| `--ignore-package`               | Suppress validation for specific packages               | -                   |
+| `--ignore-feature`               | Suppress validation for specific features               | -                   |
+| `--use-config-overrides`         | Load overrides from clippier.toml files                 | true                |
+| `--use-cargo-metadata-overrides` | Load overrides from Cargo.toml metadata                 | true                |
+| `--warn-expired`                 | Warn about expired overrides                            | true                |
+| `--fail-on-expired`              | Fail validation if expired overrides exist              | false               |
+| `--verbose-overrides`            | Show detailed override information                      | false               |
+| `--parent-packages`              | Packages to validate as parent packages                 | From config         |
+| `--parent-depth`                 | Max depth for nested dependency checking                | None (unlimited)    |
+| `--parent-skip-features`         | Additional features to skip for parent validation       | -                   |
+| `--parent-prefix`                | Override prefix for dependencies (`dep:prefix`)         | Auto-inferred       |
+| `--no-parent-config`             | Disable loading parent config from clippier.toml        | false               |
+
+### Check Command Options
+
+| Option          | Description                                     | Default           |
+| --------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir` | Working directory to run in                     | Current directory |
+| `--tools`       | Specific tools to run (comma-separated)         | All detected      |
+| `--list`        | List available tools instead of running them    | false             |
+| `--required`    | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`        | Tools to skip even if detected                  | -                 |
+| `--output`      | Output format: `json`, `raw`                    | `raw`             |
+
+### Fmt Command Options
+
+| Option          | Description                                     | Default           |
+| --------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir` | Working directory to run in                     | Current directory |
+| `--check`       | Only check formatting without modifying files   | false             |
+| `--tools`       | Specific tools to run (comma-separated)         | All detected      |
+| `--list`        | List available tools instead of running them    | false             |
+| `--required`    | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`        | Tools to skip even if detected                  | -                 |
+| `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration
 
