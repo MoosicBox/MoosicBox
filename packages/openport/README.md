@@ -267,11 +267,6 @@ fn start_dev_server() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## See Also
-
-- [MoosicBox Server](../server/README.md) - Uses openport for server startup
-- [MoosicBox Web Server](../web_server/README.md) - Web server utilities
-
 ## License
 
 openport is provided under the MPL v2.0 license. Please refer to the LICENSE file for more details.
