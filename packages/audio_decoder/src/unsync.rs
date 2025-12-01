@@ -282,4 +282,45 @@ mod tests {
         let result = ignore_end_of_stream_error(Err(decode_error));
         assert!(result.is_err());
     }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_audio_decode_error() {
+        // Test that non-Symphonia DecodeError variants pass through unchanged
+        let audio_decode_error = DecodeError::AudioDecode(AudioDecodeError::StreamEnd);
+        let result = ignore_end_of_stream_error(Err(audio_decode_error));
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(DecodeError::AudioDecode(AudioDecodeError::StreamEnd))
+        ));
+    }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_no_audio_outputs() {
+        let error = DecodeError::NoAudioOutputs;
+        let result = ignore_end_of_stream_error(Err(error));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(DecodeError::NoAudioOutputs)));
+    }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_invalid_source() {
+        let error = DecodeError::InvalidSource;
+        let result = ignore_end_of_stream_error(Err(error));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(DecodeError::InvalidSource)));
+    }
+
+    #[test_log::test]
+    fn test_first_supported_track_first_track_is_supported() {
+        use symphonia::core::codecs::CODEC_TYPE_FLAC;
+
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+        ];
+        let result = first_supported_track(&tracks);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 0);
+    }
 }

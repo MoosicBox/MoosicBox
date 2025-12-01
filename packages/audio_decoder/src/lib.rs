@@ -1464,4 +1464,236 @@ mod tests {
         let decode_error: DecodeError = audio_error.into();
         assert!(matches!(decode_error, DecodeError::AudioDecode(_)));
     }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_write_with_no_outputs() {
+        // When there are no outputs, write should succeed without doing anything
+        let mut handler = AudioDecodeHandler::new();
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        // The write loop will not execute at all with zero outputs
+        let result = handler.write(buffer, &packet, &track);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_multiple_filters_early_error_stops_subsequent() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct DummyOutput;
+        impl AudioDecode for DummyOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        let filter2_called = Arc::new(AtomicBool::new(false));
+        let filter2_called_clone = filter2_called.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_filter(Box::new(|_buf, _packet, _track| {
+                // First filter fails
+                Err(AudioDecodeError::Interrupt)
+            }))
+            .with_filter(Box::new(move |_buf, _packet, _track| {
+                // Second filter should never be called
+                filter2_called_clone.store(true, Ordering::SeqCst);
+                Ok(())
+            }))
+            .with_output(Box::new(|_spec, _duration| {
+                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+
+        // Should error from first filter
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AudioDecodeError::Interrupt)));
+        // Second filter should not have been called
+        assert!(
+            !filter2_called.load(Ordering::SeqCst),
+            "Second filter should not have been called after first filter error"
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_try_open_error_on_second_output() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct DummyOutput;
+        impl AudioDecode for DummyOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Ok(())
+            }
+        }
+
+        let open_count = Arc::new(AtomicUsize::new(0));
+        let open_count_1 = open_count.clone();
+        let open_count_2 = open_count.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_output(Box::new(move |_spec, _duration| {
+                open_count_1.fetch_add(1, Ordering::SeqCst);
+                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                open_count_2.fetch_add(1, Ordering::SeqCst);
+                Err(AudioDecodeError::OpenStream)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        let result = handler.try_open(spec, 1024);
+
+        // Result should be an error
+        assert!(result.is_err());
+        // Both handlers were attempted (open_count should be 2)
+        assert_eq!(open_count.load(Ordering::SeqCst), 2);
+        // First output should have been added before error
+        assert_eq!(handler.outputs.len(), 1);
+    }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_audio_decode_error() {
+        // Test that non-Symphonia errors pass through unchanged
+        let audio_decode_error = DecodeError::AudioDecode(AudioDecodeError::StreamEnd);
+        let result = ignore_end_of_stream_error(Err(audio_decode_error));
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(DecodeError::AudioDecode(AudioDecodeError::StreamEnd))
+        ));
+    }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_no_audio_outputs() {
+        let error = DecodeError::NoAudioOutputs;
+        let result = ignore_end_of_stream_error(Err(error));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(DecodeError::NoAudioOutputs)));
+    }
+
+    #[test_log::test]
+    fn test_ignore_end_of_stream_error_invalid_source() {
+        let error = DecodeError::InvalidSource;
+        let result = ignore_end_of_stream_error(Err(error));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(DecodeError::InvalidSource)));
+    }
+
+    #[test_log::test]
+    fn test_audio_decode_handler_multiple_outputs_first_error_stops_subsequent() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct FailingOutput;
+        impl AudioDecode for FailingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                Err(AudioDecodeError::StreamClosed)
+            }
+        }
+
+        struct TrackingOutput {
+            called: Arc<AtomicBool>,
+        }
+        impl AudioDecode for TrackingOutput {
+            fn decoded(
+                &mut self,
+                _decoded: AudioBuffer<f32>,
+                _packet: &Packet,
+                _track: &Track,
+            ) -> Result<(), AudioDecodeError> {
+                self.called.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let second_output_called = Arc::new(AtomicBool::new(false));
+        let second_output_called_clone = second_output_called.clone();
+
+        let mut handler = AudioDecodeHandler::new()
+            .with_output(Box::new(|_spec, _duration| {
+                Ok(Box::new(FailingOutput) as Box<dyn AudioDecode>)
+            }))
+            .with_output(Box::new(move |_spec, _duration| {
+                Ok(Box::new(TrackingOutput {
+                    called: second_output_called_clone.clone(),
+                }) as Box<dyn AudioDecode>)
+            }));
+
+        let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
+        handler.try_open(spec, 1024).unwrap();
+        assert_eq!(handler.outputs.len(), 2);
+
+        let buffer = create_test_audio_buffer();
+        let packet = create_test_packet();
+        let track = create_test_track();
+
+        let result = handler.write(buffer, &packet, &track);
+
+        // Should error from first output
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AudioDecodeError::StreamClosed)));
+        // Second output should not have been called
+        assert!(
+            !second_output_called.load(Ordering::SeqCst),
+            "Second output should not have been called after first output error"
+        );
+    }
+
+    #[test_log::test]
+    fn test_cancellation_token_is_cancelled_detection() {
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+
+        let handler = AudioDecodeHandler::new().with_cancellation_token(token);
+
+        // Initially not cancelled
+        assert!(!handler.cancellation_token.as_ref().unwrap().is_cancelled());
+
+        // Cancel the token
+        token_clone.cancel();
+
+        // Now should be cancelled
+        assert!(handler.cancellation_token.as_ref().unwrap().is_cancelled());
+    }
+
+    #[test_log::test]
+    fn test_first_supported_track_first_track_is_supported() {
+        use symphonia::core::codecs::CODEC_TYPE_FLAC;
+
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+        ];
+        let result = first_supported_track(&tracks);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 0);
+    }
 }
