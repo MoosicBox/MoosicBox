@@ -44,7 +44,6 @@ The simulation can be configured by modifying the `BasicWebServerBootstrap`:
 - `server_port`: Port for the web server (default: 8080)
 - `client_count`: Number of client actors (default: 3)
 - `request_interval`: Time between client requests (default: 500ms)
-- `duration`: Total simulation time (default: 10 seconds)
 
 ## Expected Output
 
