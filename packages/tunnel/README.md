@@ -90,12 +90,12 @@ use moosicbox_tunnel::TunnelResponse;
 
 ```rust
 use moosicbox_tunnel::TunnelStream;
-use tokio::sync::mpsc::unbounded_channel;
+use switchy_async::sync::mpsc;
 use switchy_async::util::CancellationToken;
 use futures_util::StreamExt;
 
 async fn handle_tunnel_stream() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = unbounded_channel();
+    let (tx, rx) = mpsc::unbounded();
     let request_id = 123;
     let abort_token = CancellationToken::new();
 
