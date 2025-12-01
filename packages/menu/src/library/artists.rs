@@ -386,4 +386,236 @@ mod tests {
         assert_eq!(sorted[1].title, "Middle Band");
         assert_eq!(sorted[2].title, "Zebra Band");
     }
+
+    #[test_log::test]
+    fn test_filter_artists_with_unicode_characters() {
+        let artists = vec![
+            create_test_artist(1, "东方神起"),       // TVXQ in Chinese
+            create_test_artist(2, "東方神起"),       // TVXQ in Japanese
+            create_test_artist(3, "BTS 방탄소년단"), // BTS in Korean
+            create_test_artist(4, "Björk"),          // Icelandic artist
+            create_test_artist(5, "Motörhead"),      // Umlaut
+        ];
+
+        // Test filtering with Unicode in search term
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("神起".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|a| a.title == "东方神起"));
+        assert!(filtered.iter().any(|a| a.title == "東方神起"));
+    }
+
+    #[test_log::test]
+    fn test_filter_artists_with_accented_characters() {
+        let artists = vec![
+            create_test_artist(1, "Björk"),
+            create_test_artist(2, "bjork"),
+            create_test_artist(3, "BJORK"),
+        ];
+
+        // Lowercase 'björk' should only match exact lowercase (after lowercasing)
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("björk".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+        // Only "Björk" matches because the filter uses exact lowercase comparison
+        assert_eq!(filtered.len(), 1);
+        assert!(filtered.iter().any(|a| a.title == "Björk"));
+    }
+
+    #[test_log::test]
+    fn test_filter_artists_empty_artist_name() {
+        let artists = vec![
+            create_test_artist(1, ""),            // Empty name
+            create_test_artist(2, "Some Artist"), // Non-empty
+            create_test_artist(3, " "),           // Whitespace only
+        ];
+
+        // Empty filter matches all
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some(String::new()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+        // Empty string filter should match all artist names (all contain "")
+        assert_eq!(filtered.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_filter_artists_whitespace_filter() {
+        let artists = vec![
+            create_test_artist(1, "The Beatles"),
+            create_test_artist(2, "Metallica"),
+            create_test_artist(3, "AC/DC"),
+        ];
+
+        // Space in filter
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some(" ".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+        // Only "The Beatles" contains a space
+        assert_eq!(filtered.len(), 1);
+        assert!(filtered.iter().any(|a| a.title == "The Beatles"));
+    }
+
+    #[test_log::test]
+    fn test_sort_artists_unicode_ordering() {
+        let artists = vec![
+            create_test_artist(1, "Zebra"),
+            create_test_artist(2, "东方神起"), // Chinese characters
+            create_test_artist(3, "Apple"),
+            create_test_artist(4, "日本"), // Japanese characters
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        // ASCII characters should come before CJK characters in standard Unicode ordering
+        // "Apple" < "Zebra" < CJK characters
+        assert_eq!(sorted.len(), 4);
+        assert_eq!(sorted[0].title, "Apple");
+        assert_eq!(sorted[1].title, "Zebra");
+        // CJK characters are sorted after ASCII
+    }
+
+    #[test_log::test]
+    fn test_sort_artists_empty_names() {
+        let artists = vec![
+            create_test_artist(1, "Beta"),
+            create_test_artist(2, ""),
+            create_test_artist(3, "Alpha"),
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        // Empty string should sort before non-empty strings
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].title, "");
+        assert_eq!(sorted[1].title, "Alpha");
+        assert_eq!(sorted[2].title, "Beta");
+    }
+
+    #[test_log::test]
+    fn test_sort_artists_mixed_leading_whitespace() {
+        let artists = vec![
+            create_test_artist(1, " Alpha"), // Leading space
+            create_test_artist(2, "Beta"),
+            create_test_artist(3, "  Charlie"), // Two leading spaces
+        ];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        // Spaces sort before letters in ASCII/Unicode
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].title, "  Charlie"); // Most spaces first
+        assert_eq!(sorted[1].title, " Alpha");
+        assert_eq!(sorted[2].title, "Beta");
+    }
+
+    #[test_log::test]
+    fn test_sort_artists_single_element() {
+        let artists = vec![create_test_artist(1, "Solo Artist")];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        assert_eq!(sorted.len(), 1);
+        assert_eq!(sorted[0].title, "Solo Artist");
+    }
+
+    #[test_log::test]
+    fn test_sort_artists_empty_list() {
+        let artists: Vec<LibraryArtist> = vec![];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: Some(ArtistSort::NameAsc),
+            filters: ArtistFilters {
+                name: None,
+                search: None,
+            },
+        };
+
+        let sorted = sort_artists(artists, &request);
+
+        assert!(sorted.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_filter_artists_empty_list() {
+        let artists: Vec<LibraryArtist> = vec![];
+
+        let request = ArtistsRequest {
+            sources: None,
+            sort: None,
+            filters: ArtistFilters {
+                name: Some("test".to_string()),
+                search: None,
+            },
+        };
+
+        let filtered = filter_artists(artists, &request);
+
+        assert!(filtered.is_empty());
+    }
 }

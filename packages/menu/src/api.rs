@@ -185,6 +185,76 @@ mod tests {
             actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
         );
     }
+
+    #[test_log::test]
+    fn test_album_id_for_source_library_negative_number() {
+        let source = ApiSource::library();
+        let result = album_id_for_source("-42", &source);
+        // Negative numbers are valid i32 values and will be cast to u64
+        assert!(result.is_ok());
+        #[allow(clippy::cast_sign_loss)]
+        let expected = -42i32 as u64;
+        assert_eq!(result.unwrap(), Id::Number(expected));
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_library_max_i32() {
+        let source = ApiSource::library();
+        let result = album_id_for_source("2147483647", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::Number(i32::MAX as u64));
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_library_overflow() {
+        let source = ApiSource::library();
+        // i32::MAX + 1 should fail to parse
+        let result = album_id_for_source("2147483648", &source);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_library_with_whitespace() {
+        let source = ApiSource::library();
+        // Whitespace should cause parse failure
+        let result = album_id_for_source(" 123 ", &source);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_library_float() {
+        let source = ApiSource::library();
+        // Float should cause parse failure for library source
+        let result = album_id_for_source("123.45", &source);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_external_with_special_characters() {
+        let source = ApiSource::register("Tidal", "Tidal");
+        let result = album_id_for_source("album:123/456?test=true", &source);
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Id::String("album:123/456?test=true".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_external_with_unicode() {
+        let source = ApiSource::register("Qobuz", "Qobuz");
+        let result = album_id_for_source("アルバム123", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::String("アルバム123".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_album_id_for_source_external_empty_string() {
+        let source = ApiSource::register("Tidal", "Tidal");
+        let result = album_id_for_source("", &source);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Id::String(String::new()));
+    }
 }
 
 /// Error types that can occur during menu API operations.
