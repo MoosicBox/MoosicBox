@@ -2336,6 +2336,29 @@ mod tests {
             let nav: Navigation = req.into();
             assert_eq!(original.0, nav.0);
         }
+
+        #[test_log::test]
+        fn test_navigation_from_route_request_without_query() {
+            let req = RouteRequest::from_path("/page", RequestInfo::default());
+            // Query map is empty
+            assert!(req.query.is_empty());
+
+            let nav: Navigation = req.into();
+            // Path should NOT contain '?' when query is empty
+            assert_eq!(nav.0, "/page");
+            assert!(!nav.0.contains('?'));
+        }
+
+        #[test_log::test]
+        fn test_navigation_from_route_request_with_single_query_param() {
+            let mut req = RouteRequest::from_path("/search", RequestInfo::default());
+            req.query.insert("q".to_string(), "rust".to_string());
+
+            let nav: Navigation = req.into();
+            // Should have exactly one '?' and the parameter
+            assert_eq!(nav.0.matches('?').count(), 1);
+            assert!(nav.0.contains("q=rust"));
+        }
     }
 
     mod client_info_tests {
@@ -2964,6 +2987,120 @@ mod tests {
             let deserializer = form_deserializer::FormDataDeserializer::new(data);
             let result = deserializer.deserialize_enum("Test", &["A", "B"], EnumVisitor);
             assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_deserialize_newtype_struct() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct UserId(u64);
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct TestForm {
+                user_id: UserId,
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("user_id".to_string(), "12345".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.user_id, UserId(12345));
+        }
+
+        #[test_log::test]
+        fn test_deserialize_newtype_string_wrapper() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Email(String);
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct TestForm {
+                email: Email,
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("email".to_string(), "test@example.com".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.email, Email("test@example.com".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_unit_struct() {
+            use serde::de::Deserializer;
+
+            struct UnitVisitor;
+            impl serde::de::Visitor<'_> for UnitVisitor {
+                type Value = ();
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "unit")
+                }
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_unit_struct("TestUnit", UnitVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_ignored_any() {
+            use serde::de::Deserializer;
+
+            struct IgnoredVisitor;
+            impl serde::de::Visitor<'_> for IgnoredVisitor {
+                type Value = ();
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "ignored")
+                }
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("field1".to_string(), "value1".to_string());
+            data.insert("field2".to_string(), "value2".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_ignored_any(IgnoredVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_option_visits_some() {
+            use serde::de::Deserializer;
+
+            struct OptionVisitor;
+            impl<'de> serde::de::Visitor<'de> for OptionVisitor {
+                type Value = Option<BTreeMap<String, String>>;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "option")
+                }
+                fn visit_some<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
+                where
+                    D: serde::de::Deserializer<'de>,
+                {
+                    Ok(Some(BTreeMap::new()))
+                }
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("field".to_string(), "value".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_option(OptionVisitor);
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_some());
         }
     }
 
