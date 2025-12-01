@@ -183,7 +183,7 @@ assert_eq!(data.method, Method::Get);
 // Test invalid number parsing
 let result = u32::from_request_sync(&invalid_req);
 assert!(result.is_err());
-assert!(result.unwrap_err().to_string().contains("invalid"));
+assert!(result.unwrap_err().to_string().contains("Failed to parse"));
 ```
 
 ## Test Quality Features
