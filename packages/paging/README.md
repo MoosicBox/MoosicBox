@@ -236,7 +236,7 @@ Simple struct for pagination parameters (offset and limit).
 
 - `serde`: Serialization and deserialization support
 - `futures`: Async utilities for pagination
-- `tokio`: Async runtime support (with `macros` and `sync` features)
+- `switchy_async`: Async utilities with tokio runtime support
 - `log`: Logging support for batch operations
 - `utoipa`: OpenAPI schema generation (optional, enabled by default)
 
