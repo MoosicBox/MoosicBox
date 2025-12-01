@@ -4043,8 +4043,14 @@ mod read_dir_sorted_sync_tests {
         assert_eq!(entries.len(), 3, "should have 2 files and 1 directory");
 
         // Verify we have both files and directory
-        let file_count = entries.iter().filter(|e| e.file_type().is_file()).count();
-        let dir_count = entries.iter().filter(|e| e.file_type().is_dir()).count();
+        let file_count = entries
+            .iter()
+            .filter(|e| e.file_type().unwrap().is_file())
+            .count();
+        let dir_count = entries
+            .iter()
+            .filter(|e| e.file_type().unwrap().is_dir())
+            .count();
 
         assert_eq!(file_count, 2, "should have 2 files");
         assert_eq!(dir_count, 1, "should have 1 directory");
@@ -4258,8 +4264,8 @@ mod dir_entry_sync_tests {
 
         assert_eq!(entry.path(), std::path::PathBuf::from("/path/to/file.txt"));
         assert_eq!(entry.file_name(), std::ffi::OsString::from("file.txt"));
-        assert!(entry.file_type().is_file());
-        assert!(!entry.file_type().is_dir());
+        assert!(entry.file_type().unwrap().is_file());
+        assert!(!entry.file_type().unwrap().is_dir());
     }
 
     #[test_log::test]
@@ -4268,8 +4274,8 @@ mod dir_entry_sync_tests {
 
         assert_eq!(entry.path(), std::path::PathBuf::from("/path/to/dir"));
         assert_eq!(entry.file_name(), std::ffi::OsString::from("dir"));
-        assert!(entry.file_type().is_dir());
-        assert!(!entry.file_type().is_file());
+        assert!(entry.file_type().unwrap().is_dir());
+        assert!(!entry.file_type().unwrap().is_file());
     }
 
     #[test_log::test]
@@ -4281,7 +4287,7 @@ mod dir_entry_sync_tests {
         let entries = sync::read_dir_sorted("/entry_test").unwrap();
 
         for entry in entries {
-            let file_type = entry.file_type();
+            let file_type = entry.file_type().unwrap();
             // Each entry should have exactly one type set
             let type_count = [
                 file_type.is_file(),
