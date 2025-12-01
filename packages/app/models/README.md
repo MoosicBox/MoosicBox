@@ -83,10 +83,7 @@ let tidal_settings = MusicApiSettings {
     scan_enabled: false,
     run_scan_endpoint: None,
     #[cfg(feature = "music-api-api")]
-    auth_method: Some(AuthMethod::UsernamePassword {
-        username: "user".to_string(),
-        password: "pass".to_string(),
-    }),
+    auth_method: Some(AuthMethod::UsernamePassword),
 };
 ```
 
