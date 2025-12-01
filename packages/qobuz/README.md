@@ -360,8 +360,7 @@ Key dependencies (from `Cargo.toml`):
 - `moosicbox_paging` - Pagination support
 - `actix-web` - Web framework (optional, with `api` feature)
 - `serde` / `serde_json` - Serialization
-- `tokio` - Async runtime
-- `switchy` - HTTP client and database abstractions
+- `switchy` - HTTP client, database, and async runtime abstractions
 
 ## Notes
 
