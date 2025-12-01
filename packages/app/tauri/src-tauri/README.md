@@ -186,45 +186,32 @@ cargo tauri build --bundles rpm  # Linux RPM
 ```json
 {
     "build": {
-        "beforeDevCommand": "npm run dev",
-        "beforeBuildCommand": "npm run build",
-        "devPath": "http://localhost:1420",
-        "distDir": "../dist"
+        "beforeDevCommand": "pnpm dev",
+        "beforeBuildCommand": "pnpm build",
+        "devUrl": "http://localhost:1420",
+        "frontendDist": "../dist"
     },
-    "package": {
-        "productName": "MoosicBox",
-        "version": "0.1.0"
+    "identifier": "com.moosicbox",
+    "productName": "MoosicBox",
+    "version": "0.16.1",
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
     },
-    "tauri": {
-        "allowlist": {
-            "all": false,
-            "shell": {
-                "all": false,
-                "open": true
-            },
-            "fs": {
-                "all": true,
-                "scope": ["$APPDATA/*", "$AUDIO/*", "$DOWNLOAD/*"]
-            }
-        },
-        "bundle": {
-            "active": true,
-            "targets": "all",
-            "identifier": "com.moosicbox.app",
-            "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.icns", "icons/icon.ico"]
-        },
-        "security": {
-            "csp": null
-        },
+    "app": {
         "windows": [
             {
                 "fullscreen": false,
                 "resizable": true,
                 "title": "MoosicBox",
-                "width": 1200,
-                "height": 800
+                "width": 800,
+                "height": 600
             }
-        ]
+        ],
+        "security": {
+            "csp": null
+        }
     }
 }
 ```
