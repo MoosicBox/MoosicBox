@@ -183,6 +183,7 @@ The library uses compile-time macros that panic on errors rather than returning 
 - **`env_usize!`** - Panics if the environment variable is not set at compile time
 - **`option_env_*!` macros** - Panic if the environment variable is set but contains an invalid value
 - **`ParseIntError`** - Error type for const parsing functions (`parse_usize`, `parse_isize`)
+    - `Empty` - The input string was empty
     - `InvalidDigit` - Invalid digit encountered during parsing
 
 Note: Because these are compile-time macros, errors are caught during compilation rather than at runtime.
