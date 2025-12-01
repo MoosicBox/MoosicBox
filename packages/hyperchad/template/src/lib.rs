@@ -142,6 +142,9 @@ pub use hyperchad_transformer_models as transformer_models;
 ///
 /// This module is automatically imported when you use `hyperchad_template::container`,
 /// so you don't need to manually import these traits.
+///
+/// This module is designed to be imported via `use hyperchad_template::prelude::*`
+/// to bring all commonly needed traits and types into scope.
 pub mod prelude {
     pub use crate::{
         self as hyperchad_template, ContainerVecExt, ContainerVecMethods, IntoActionEffect,
