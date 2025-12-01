@@ -1189,4 +1189,145 @@ mod test {
         handle.shutdown().unwrap();
         join.await.unwrap().unwrap();
     }
+
+    #[allow(dead_code)]
+    mod on_start_error_example {
+        use super::*;
+        use std::sync::atomic::AtomicBool;
+
+        #[derive(Debug, thiserror::Error)]
+        pub enum ProcessError {
+            #[error("Startup failed")]
+            StartupFailed,
+        }
+
+        pub struct OnStartErrorContext {
+            pub should_fail_start: Arc<AtomicBool>,
+        }
+
+        async_service!(super::ExampleCommand, OnStartErrorContext, ProcessError);
+    }
+
+    #[async_trait]
+    impl on_start_error_example::Processor for on_start_error_example::Service {
+        type Error = on_start_error_example::Error;
+
+        async fn on_start(&mut self) -> Result<(), Self::Error> {
+            if self
+                .ctx
+                .read()
+                .await
+                .should_fail_start
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(on_start_error_example::ProcessError::StartupFailed.into());
+            }
+            Ok(())
+        }
+
+        async fn process_command(
+            _ctx: Arc<RwLock<on_start_error_example::OnStartErrorContext>>,
+            _command: ExampleCommand,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn service_propagates_on_start_error() {
+        use std::sync::atomic::AtomicBool;
+
+        let should_fail_start = Arc::new(AtomicBool::new(true));
+
+        let ctx = on_start_error_example::OnStartErrorContext {
+            should_fail_start: should_fail_start.clone(),
+        };
+
+        let service = on_start_error_example::Service::new(ctx);
+        let join = service.with_name("on_start_error_test").start();
+
+        // The service should return an error because on_start failed
+        let result = join.await.unwrap();
+        assert!(
+            result.is_err(),
+            "Service should return error when on_start fails"
+        );
+    }
+
+    mod on_shutdown_error_example {
+        use super::*;
+        use std::sync::atomic::AtomicBool;
+
+        #[derive(Debug, thiserror::Error)]
+        pub enum ProcessError {
+            #[error("Shutdown failed")]
+            ShutdownFailed,
+        }
+
+        pub struct OnShutdownErrorContext {
+            pub should_fail_shutdown: Arc<AtomicBool>,
+        }
+
+        async_service_sequential!(super::ExampleCommand, OnShutdownErrorContext, ProcessError);
+    }
+
+    #[async_trait]
+    impl on_shutdown_error_example::Processor for on_shutdown_error_example::Service {
+        type Error = on_shutdown_error_example::Error;
+
+        async fn on_shutdown(
+            ctx: Arc<RwLock<on_shutdown_error_example::OnShutdownErrorContext>>,
+        ) -> Result<(), Self::Error> {
+            if ctx
+                .read()
+                .await
+                .should_fail_shutdown
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(on_shutdown_error_example::ProcessError::ShutdownFailed.into());
+            }
+            Ok(())
+        }
+
+        async fn process_command(
+            _ctx: Arc<RwLock<on_shutdown_error_example::OnShutdownErrorContext>>,
+            _command: ExampleCommand,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn service_propagates_on_shutdown_error() {
+        use on_shutdown_error_example::Commander;
+        use std::sync::atomic::AtomicBool;
+
+        let should_fail_shutdown = Arc::new(AtomicBool::new(true));
+
+        let ctx = on_shutdown_error_example::OnShutdownErrorContext {
+            should_fail_shutdown: should_fail_shutdown.clone(),
+        };
+
+        let service = on_shutdown_error_example::Service::new(ctx);
+        let handle = service.handle();
+        let join = service.with_name("on_shutdown_error_test").start();
+
+        // Process a command to ensure service is running
+        handle
+            .send_command_and_wait_async(ExampleCommand::TestCommand {
+                value: "test".into(),
+            })
+            .await
+            .unwrap();
+
+        // Shutdown the service
+        handle.shutdown().unwrap();
+
+        // The service should return an error because on_shutdown failed
+        let result = join.await.unwrap();
+        assert!(
+            result.is_err(),
+            "Service should return error when on_shutdown fails"
+        );
+    }
 }
