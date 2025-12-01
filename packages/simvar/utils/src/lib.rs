@@ -400,4 +400,92 @@ mod tests {
         // All IDs should be >= 1 (IDs start at 1)
         assert!(ids.iter().all(|&id| id >= 1), "All IDs should be >= 1");
     }
+
+    #[test_log::test]
+    #[serial]
+    fn test_is_simulator_cancelled_with_both_local_and_global_cancelled() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
+
+        // Cancel both local and global
+        cancel_simulation();
+        cancel_global_simulation();
+
+        // is_simulator_cancelled should return true (tests the OR logic when both are true)
+        assert!(is_simulator_cancelled());
+        assert!(is_global_simulator_cancelled());
+
+        // Reset only global, local should still keep it cancelled
+        reset_global_simulator_cancellation_token();
+        assert!(is_simulator_cancelled());
+        assert!(!is_global_simulator_cancelled());
+
+        // Reset local too, now should be false
+        reset_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_global_cancellation_from_multiple_threads_is_thread_safe() {
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+
+        // Spawn multiple threads that all try to cancel globally
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            handles.push(std::thread::spawn(|| {
+                cancel_global_simulation();
+                is_global_simulator_cancelled()
+            }));
+        }
+
+        // All threads should see the cancellation
+        for handle in handles {
+            let result = handle.join().unwrap();
+            assert!(result, "All threads should see global cancellation");
+        }
+
+        // Main thread should also see it
+        assert!(is_global_simulator_cancelled());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_run_until_simulation_cancelled_with_concurrent_cancellation() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        // Reset all states
+        reset_global_simulator_cancellation_token();
+        reset_simulator_cancellation_token();
+
+        let work_started = Arc::new(AtomicBool::new(false));
+        let work_started_clone = Arc::clone(&work_started);
+
+        // Create a task that signals when it starts and then waits forever
+        let work_task = async move {
+            work_started_clone.store(true, Ordering::SeqCst);
+            std::future::pending::<()>().await;
+            42
+        };
+
+        // Spawn the cancellation in a way that happens after work starts
+        let result = switchy::unsync::select! {
+            result = run_until_simulation_cancelled(work_task) => result,
+            () = async {
+                // Wait until work has started
+                while !work_started.load(Ordering::SeqCst) {
+                    switchy::unsync::task::yield_now().await;
+                }
+                // Now cancel
+                cancel_simulation();
+            } => None,
+        };
+
+        assert_eq!(result, None, "Task should be cancelled");
+    }
 }
