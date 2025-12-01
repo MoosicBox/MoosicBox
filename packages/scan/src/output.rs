@@ -2427,6 +2427,119 @@ mod test {
         assert_eq!(tracks.len(), 2);
     }
 
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_album_add_track_creates_new_for_different_source_when_no_path() {
+        let api_source1 = ApiSource::register("TestApiSource1", "TestApiSource1");
+        let api_source2 = ApiSource::register("TestApiSource2", "TestApiSource2");
+        let artist = ScanArtist::new("Test Artist", &None, api_source1.clone());
+        let mut album = ScanAlbum::new(
+            artist,
+            "Test Album",
+            &None,
+            None,
+            &None,
+            api_source1.clone(),
+        );
+
+        // Add track without path with source1
+        let track1 = album
+            .add_track(
+                &None,
+                1,
+                "Track Name",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source1.clone().into(),
+                &None,
+                api_source1.clone(),
+            )
+            .await;
+        // Add track with same name/number but different source
+        let track2 = album
+            .add_track(
+                &None,
+                1,
+                "Track Name",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source2.clone().into(),
+                &None,
+                api_source2.clone(),
+            )
+            .await;
+
+        // Should be different tracks because source differs
+        assert!(!Arc::ptr_eq(&track1, &track2));
+
+        // Should have two tracks
+        let tracks = album.tracks.read().await;
+        assert_eq!(tracks.len(), 2);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_scan_album_add_track_creates_new_for_different_name_when_no_path() {
+        let api_source = ApiSource::register("TestApiNameDiff", "TestApiNameDiff");
+        let artist = ScanArtist::new("Test Artist", &None, api_source.clone());
+        let mut album =
+            ScanAlbum::new(artist, "Test Album", &None, None, &None, api_source.clone());
+
+        let track1 = album
+            .add_track(
+                &None,
+                1,
+                "Track One",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+        let track2 = album
+            .add_track(
+                &None,
+                1,
+                "Track Two",
+                180.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &None,
+                api_source.clone(),
+            )
+            .await;
+
+        // Should be different tracks because name differs
+        assert!(!Arc::ptr_eq(&track1, &track2));
+
+        // Should have two tracks
+        let tracks = album.tracks.read().await;
+        assert_eq!(tracks.len(), 2);
+    }
+
     #[cfg(feature = "mp3")]
     #[test_log::test]
     fn test_scan_track_to_api_source_sqlite_values_returns_none_for_library() {
