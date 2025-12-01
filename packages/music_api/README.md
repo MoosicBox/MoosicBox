@@ -9,7 +9,7 @@ A unified API abstraction layer for music services in the MoosicBox ecosystem. T
 - **Caching Support**: Built-in `CachedMusicApi` wrapper with cascade delete options
 - **Profile Integration**: Multi-profile support for different user configurations
 - **Pagination Support**: Efficient handling of large result sets using `moosicbox_paging`
-- **Async/Await Support**: Non-blocking operations with Tokio async runtime
+- **Async/Await Support**: Non-blocking operations using async/await
 - **Error Handling**: Comprehensive error types with detailed context
 
 ## Installation
@@ -344,7 +344,7 @@ This package depends on:
 - `moosicbox_paging` - Pagination utilities
 - `moosicbox_profiles` - Profile management
 - `async-trait` - Async trait support
-- `tokio` - Async runtime
+- `switchy_async` - Async utilities
 - `thiserror` - Error derivation
 
 ## See Also
