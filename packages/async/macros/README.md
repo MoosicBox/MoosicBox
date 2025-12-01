@@ -39,8 +39,6 @@ The MoosicBox Async Macros package provides:
 #### Main Macros
 
 - **`#[main]`**: Main function macro for `switchy_async` runtime (simulator feature only)
-- **`#[unsync_main]`**: Main function macro for `switchy::unsync` runtime (simulator feature only)
-- **`#[tokio_main_wrapper]`**: Tokio-compatible main wrapper (always available)
 
 ### AST Transformation
 
