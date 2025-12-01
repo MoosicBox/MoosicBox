@@ -37,7 +37,7 @@ impl TcpListener {
     ///
     /// # Errors
     ///
-    /// * If the `tokio::new::TcpListener` fails to bind the address
+    /// * If the `tokio::net::TcpListener` fails to bind the address
     pub async fn bind(addr: &str) -> Result<Self, crate::Error> {
         Ok(Self(tokio::net::TcpListener::bind(addr).await?))
     }
