@@ -266,7 +266,6 @@ Core dependencies from Cargo.toml (packages/tidal/Cargo.toml):
 - `moosicbox_music_models` - Common music data models
 - `switchy` - HTTP client and database abstractions
 - `serde` / `serde_json` - Serialization
-- `tokio` - Async runtime
 - `actix-web` - Web framework (optional, with `api` feature)
 - `utoipa` - OpenAPI documentation (optional, with `openapi` feature)
 
