@@ -233,6 +233,5 @@ Optional dependencies:
 - `actix-web`: Web framework for API endpoints (feature: `api`)
 - `moosicbox_paging`: Pagination support (feature: `api`)
 - `utoipa`: OpenAPI documentation (feature: `openapi`)
-- `tokio`: Event system runtime (feature: `events`)
 
 This library provides the foundation for managing user sessions and playback state in the MoosicBox ecosystem.
