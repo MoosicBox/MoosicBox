@@ -217,13 +217,13 @@ match handle.await {
 - **`tokio`**: Enable Tokio async runtime
 - **`simulator`**: Enable simulation runtime for testing
 
-### Tokio Features
+### Runtime Features
 
-- **`rt-multi-thread`**: Multi-threaded Tokio runtime
-- **`fs`**: Enable Tokio file system support when using Tokio backend
+- **`rt-multi-thread`**: Multi-threaded runtime support
+- **`fs`**: File system operations
 - **`io`**: Async I/O operations
-- **`net`**: Enable Tokio networking support when using Tokio backend
-- **`process`**: Enable Tokio process support when using Tokio backend
+- **`net`**: Networking support
+- **`process`**: Process management
 - **`sync`**: Synchronization primitives (includes channels)
 - **`time`**: Timing utilities
 - **`util`**: Additional utilities
