@@ -200,6 +200,7 @@ mod form_deserializer {
 
     impl FormDataDeserializer {
         /// Create a new form data deserializer from a map of field names to values.
+        #[must_use]
         pub fn new(data: BTreeMap<String, String>) -> Self {
             Self {
                 fields: data.into_iter(),
@@ -217,6 +218,7 @@ mod form_deserializer {
 
     impl StringValueDeserializer {
         /// Create a new string value deserializer.
+        #[must_use]
         #[allow(clippy::missing_const_for_fn)]
         pub fn new(value: String) -> Self {
             Self { value }
