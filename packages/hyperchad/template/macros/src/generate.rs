@@ -4480,4 +4480,185 @@ mod tests {
         assert!(constraint_three.validate(3));
         assert!(!constraint_three.validate(4));
     }
+
+    mod extract_field_name_from_assignment_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn extracts_field_name_with_colon_separator() {
+            let assignment = quote! { padding_top: Some(value) };
+            assert_eq!(
+                Generator::extract_field_name_from_assignment(&assignment),
+                "padding_top"
+            );
+        }
+
+        #[test_log::test]
+        fn extracts_field_name_with_whitespace() {
+            let assignment = quote! { margin_left   : Some(10) };
+            assert_eq!(
+                Generator::extract_field_name_from_assignment(&assignment),
+                "margin_left"
+            );
+        }
+
+        #[test_log::test]
+        fn extracts_first_word_without_colon() {
+            let assignment = quote! { field_name };
+            assert_eq!(
+                Generator::extract_field_name_from_assignment(&assignment),
+                "field_name"
+            );
+        }
+
+        #[test_log::test]
+        fn handles_complex_assignment_values() {
+            let assignment = quote! { width: Some(hyperchad_transformer::Number::Integer(100)) };
+            assert_eq!(
+                Generator::extract_field_name_from_assignment(&assignment),
+                "width"
+            );
+        }
+
+        #[test_log::test]
+        fn handles_snake_case_field_names() {
+            let assignment = quote! { border_top_left_radius: Some(value) };
+            assert_eq!(
+                Generator::extract_field_name_from_assignment(&assignment),
+                "border_top_left_radius"
+            );
+        }
+    }
+
+    mod font_weight_str_to_variant_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn converts_numeric_weight_100() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("100").to_string(),
+                "Weight100"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_numeric_weight_400() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("400").to_string(),
+                "Weight400"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_numeric_weight_700() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("700").to_string(),
+                "Weight700"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_numeric_weight_900() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("900").to_string(),
+                "Weight900"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_thin() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("thin").to_string(),
+                "Thin"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_extra_light() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("extra-light").to_string(),
+                "ExtraLight"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_light() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("light").to_string(),
+                "Light"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_normal() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("normal").to_string(),
+                "Normal"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_medium() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("medium").to_string(),
+                "Medium"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_semi_bold() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("semi-bold").to_string(),
+                "SemiBold"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_bold() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("bold").to_string(),
+                "Bold"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_extra_bold() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("extra-bold").to_string(),
+                "ExtraBold"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_black() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("black").to_string(),
+                "Black"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_lighter() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("lighter").to_string(),
+                "Lighter"
+            );
+        }
+
+        #[test_log::test]
+        fn converts_named_bolder() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("bolder").to_string(),
+                "Bolder"
+            );
+        }
+
+        #[test_log::test]
+        fn uses_kebab_to_pascal_for_unknown() {
+            assert_eq!(
+                Generator::font_weight_str_to_variant("custom-weight").to_string(),
+                "CustomWeight"
+            );
+        }
+    }
 }
