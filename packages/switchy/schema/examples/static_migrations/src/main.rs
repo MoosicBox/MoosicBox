@@ -3,6 +3,10 @@
 //! This example demonstrates the most common usage patterns with static lifetimes,
 //! covering all three discovery methods: embedded, directory, and code-based migrations.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -156,7 +160,7 @@ async fn main() -> Result<()> {
     for migration in &custom_migrations {
         println!("  - Migration: {}", migration.id());
         if let Some(desc) = migration.description() {
-            println!("    Description: {}", desc);
+            println!("    Description: {desc}");
         }
     }
 
