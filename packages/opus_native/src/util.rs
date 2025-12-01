@@ -34,12 +34,12 @@ pub const fn ilog(x: u32) -> u32 {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_ilog_zero() {
         assert_eq!(ilog(0), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ilog_powers_of_two() {
         assert_eq!(ilog(1), 1); // floor(log2(1)) + 1 = 0 + 1
         assert_eq!(ilog(2), 2); // floor(log2(2)) + 1 = 1 + 1
@@ -50,7 +50,7 @@ mod tests {
         assert_eq!(ilog(1024), 11);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ilog_non_powers() {
         assert_eq!(ilog(3), 2); // floor(log2(3)) + 1 = 1 + 1
         assert_eq!(ilog(5), 3); // floor(log2(5)) + 1 = 2 + 1
