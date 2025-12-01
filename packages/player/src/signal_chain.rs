@@ -660,4 +660,134 @@ mod tests {
         });
         assert_eq!(chain.steps.len(), 1);
     }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_seek_returns_error() {
+        use std::io::{Seek, SeekFrom};
+
+        // Create a processor with a channel that will never receive
+        let (_tx, rx) = flume::unbounded();
+        let mut processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![],
+        };
+
+        // Seeking should always return an error
+        let result = processor.seek(SeekFrom::Start(0));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::Other);
+        assert!(err.to_string().contains("does not support seeking"));
+    }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_is_not_seekable() {
+        use symphonia::core::io::MediaSource;
+
+        // Create a processor with a channel that will never receive
+        let (_tx, rx) = flume::unbounded();
+        let processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![],
+        };
+
+        // MediaSource should report as not seekable
+        assert!(!processor.is_seekable());
+    }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_byte_len_returns_none() {
+        use symphonia::core::io::MediaSource;
+
+        // Create a processor with a channel that will never receive
+        let (_tx, rx) = flume::unbounded();
+        let processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![],
+        };
+
+        // MediaSource should report unknown byte length
+        assert!(processor.byte_len().is_none());
+    }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_read_from_overflow() {
+        use std::io::Read;
+
+        // Create a processor with pre-populated overflow
+        let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+        let mut processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![1, 2, 3, 4, 5, 6, 7, 8],
+        };
+
+        // Read should pull from overflow first
+        let mut buf = [0u8; 4];
+        let result = processor.read(&mut buf);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 4);
+        assert_eq!(&buf, &[1, 2, 3, 4]);
+
+        // Overflow should have remaining bytes
+        assert_eq!(processor.overflow, vec![5, 6, 7, 8]);
+    }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_read_entire_overflow() {
+        use std::io::Read;
+
+        // Create a processor with pre-populated overflow
+        let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+        let mut processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![10, 20, 30],
+        };
+
+        // Read buffer larger than overflow
+        let mut buf = [0u8; 10];
+        let result = processor.read(&mut buf);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+        assert_eq!(&buf[..3], &[10, 20, 30]);
+
+        // Overflow should be empty
+        assert!(processor.overflow.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_signal_chain_step_processor_read_timeout_when_no_data() {
+        use std::io::Read;
+
+        // Create a processor with empty overflow and a receiver that won't receive
+        let (tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+        let mut processor = SignalChainStepProcessor {
+            encoder: None,
+            resampler: None,
+            receiver: rx,
+            overflow: vec![],
+        };
+
+        // Drop the sender so receiver will timeout immediately
+        drop(tx);
+
+        // Read should timeout and return an error
+        let mut buf = [0u8; 10];
+        let result = processor.read(&mut buf);
+        assert!(result.is_err());
+        // The error should be a timeout or disconnected channel error
+        let err = result.unwrap_err();
+        assert!(
+            err.kind() == std::io::ErrorKind::TimedOut || err.to_string().contains("Disconnected")
+        );
+    }
 }
