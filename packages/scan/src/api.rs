@@ -261,10 +261,10 @@ pub async fn run_scan_path_endpoint(
         paths: vec![validated_path.clone()],
     });
 
-    scanner
-        .scan(music_apis, &db)
-        .await
-        .map_err(|_| ErrorInternalServerError("Failed to scan"))?;
+    scanner.scan(music_apis, &db).await.map_err(|e| {
+        log::error!("Failed to scan: {e:?}");
+        ErrorInternalServerError("Failed to scan")
+    })?;
 
     crate::local::scan(
         &validated_path,
