@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stream = writer.stream();
 
     // Add stalled read monitoring with timeout and optional throttle
-    let monitored_stream = stream
+    let mut monitored_stream = stream
         .stalled_monitor()
         .with_timeout(Duration::from_secs(5))
         .with_throttle(Duration::from_millis(100));
