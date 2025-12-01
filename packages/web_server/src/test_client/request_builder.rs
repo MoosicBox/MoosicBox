@@ -1,3 +1,41 @@
+//! Fluent request builder for constructing test HTTP requests.
+//!
+//! This module provides [`TestRequestBuilder`], a builder pattern implementation for
+//! constructing HTTP requests in tests. It supports setting headers, body content,
+//! query parameters, and various authentication methods.
+//!
+//! # Overview
+//!
+//! The request builder is typically obtained from a `TestClient` method like `get()`,
+//! `post()`, etc. It provides a fluent API for configuring all aspects of an HTTP request
+//! before sending it.
+//!
+//! # Examples
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::test_client::{ConcreteTestClient, TestClient};
+//!
+//! let client = ConcreteTestClient::new_with_test_routes();
+//!
+//! // Simple GET request
+//! let response = client.get("/api/users").send().unwrap();
+//!
+//! // POST with JSON body and headers
+//! let response = client
+//!     .post("/api/users")
+//!     .header("X-Custom", "value")
+//!     .json(&serde_json::json!({"name": "John"}))
+//!     .send()
+//!     .unwrap();
+//!
+//! // GET with query parameters
+//! let response = client
+//!     .get("/api/search")
+//!     .query([("q", "rust"), ("limit", "10")])
+//!     .send()
+//!     .unwrap();
+//! ```
+
 use std::collections::BTreeMap;
 
 use base64::Engine;
