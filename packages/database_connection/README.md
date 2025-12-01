@@ -6,7 +6,7 @@ Database connection initialization and management with support for multiple data
 
 The Database Connection package provides:
 
-- **Multi-backend Support**: PostgreSQL and SQLite database connections
+- **Multi-backend Support**: PostgreSQL, MySQL, and SQLite database connections
 - **Feature-gated Backends**: Choose specific database implementations
 - **TLS Support**: Native TLS and OpenSSL options for PostgreSQL
 - **Connection Management**: Unified connection initialization interface
@@ -18,6 +18,7 @@ The Database Connection package provides:
 ### Database Backends
 
 - **PostgreSQL**: Raw tokio-postgres and SQLx implementations
+- **MySQL**: SQLx implementation
 - **SQLite**: Rusqlite and SQLx implementations
 - **Turso**: Turso database support (libSQL-compatible)
 - **Simulator**: Mock database for testing and development
@@ -27,6 +28,11 @@ The Database Connection package provides:
 - **Raw Implementation**: Direct tokio-postgres with connection pooling
 - **SQLx Implementation**: SQLx-based PostgreSQL connections
 - **TLS Support**: Native TLS, OpenSSL, or no TLS options
+- **Connection Pooling**: Managed connection pools
+
+### MySQL Options
+
+- **SQLx Implementation**: SQLx-based MySQL connections
 - **Connection Pooling**: Managed connection pools
 
 ### SQLite Options
@@ -249,6 +255,22 @@ let creds = Credentials::new(
 let db = init_postgres_sqlx(creds).await?;
 ```
 
+### MySQL with SQLx
+
+```rust
+// Feature: mysql-sqlx
+use switchy_database_connection::{init_mysql_sqlx, Credentials};
+
+let creds = Credentials::new(
+    "localhost".to_string(),
+    "mydb".to_string(),
+    "user".to_string(),
+    Some("password".to_string()),
+);
+
+let db = init_mysql_sqlx(creds).await?;
+```
+
 ### SQLite with Rusqlite
 
 ```rust
@@ -374,6 +396,11 @@ match init(None, None).await {
 - **`postgres-native-tls`**: Native TLS support for PostgreSQL
 - **`postgres-openssl`**: OpenSSL support for PostgreSQL
 
+### MySQL Features
+
+- **`mysql`**: Enable MySQL support
+- **`mysql-sqlx`**: SQLx MySQL implementation
+
 ### SQLite Features
 
 - **`sqlite`**: Enable SQLite support
@@ -401,14 +428,13 @@ The `Credentials::from_url()` function supports the following URL formats:
 postgres://user:password@host:port/database
 postgresql://user:password@host:port/database
 
-# MySQL (URL parsing only - no MySQL implementation currently)
+# MySQL
 mysql://user:password@host:port/database
 
 # Examples
 DATABASE_URL="postgres://myuser:mypass@localhost:5432/mydb"
+DATABASE_URL="mysql://root:secret@127.0.0.1:3306/app_db"
 ```
-
-**Note**: While the URL parser supports MySQL connection strings, there is currently no MySQL database implementation in this package.
 
 ### Individual Environment Variables
 
