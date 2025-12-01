@@ -1,6 +1,6 @@
 # Switchy P2P
 
-P2P communication abstraction system - enables direct device-to-device connections with automatic NAT traversal.
+P2P communication abstraction system - enables direct device-to-device connections.
 
 ## Features
 
