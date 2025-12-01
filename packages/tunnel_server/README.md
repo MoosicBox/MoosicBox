@@ -112,15 +112,13 @@ ws.onmessage = (event) => console.log('Message:', event.data);
 ### Client Authentication
 
 ```bash
-# Register client
-curl -X POST http://localhost:8000/auth/register-client \
-  -H "Content-Type: application/json" \
-  -d '{"client_id": "my-client"}'
+# Register client (requires TUNNEL_ACCESS_TOKEN in Authorization header)
+curl -X POST "http://localhost:8000/auth/register-client?clientId=my-client" \
+  -H "Authorization: Bearer your-tunnel-access-token"
 
-# Get authentication token
-curl -X POST http://localhost:8000/auth/signature-token \
-  -H "Content-Type: application/json" \
-  -d '{"client_id": "my-client", "signature": "..."}'
+# Get signature token (requires client access token in Authorization header)
+curl -X POST "http://localhost:8000/auth/signature-token?clientId=my-client" \
+  -H "Authorization: Bearer your-client-access-token"
 ```
 
 ## Configuration
