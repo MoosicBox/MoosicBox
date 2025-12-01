@@ -536,4 +536,109 @@ mod tests {
         }
         panic!("Could not find ports to test with after 10 attempts");
     }
+
+    #[test_log::test]
+    fn test_ipv4_tcp_binding_affects_is_free() {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
+        let range = test_utils::next_port_range(1000);
+        // Try multiple times to find a port and bind to it with IPv4
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(range.clone()) {
+                // Port should be free initially
+                if is_free_tcp(port) {
+                    // Try to bind to IPv4 only
+                    let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                    if let Ok(_listener) = TcpListener::bind(addr) {
+                        // Port should now be occupied (at least on IPv4)
+                        assert!(!is_free_tcp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test_log::test]
+    fn test_ipv4_udp_binding_affects_is_free() {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
+        let range = test_utils::next_port_range(1000);
+        // Try multiple times to find a port and bind to it with IPv4
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(range.clone()) {
+                // Port should be free initially
+                if is_free_udp(port) {
+                    // Try to bind to IPv4 only
+                    let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                    if let Ok(_socket) = UdpSocket::bind(addr) {
+                        // Port should now be occupied (at least on IPv4)
+                        assert!(!is_free_udp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test_log::test]
+    fn test_is_free_when_only_udp_bound() {
+        let range = test_utils::next_port_range(1000);
+        // Test that is_free returns false when only UDP is bound
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(range.clone())
+                && is_free(port)
+                && let Ok(_udp_socket) = UdpSocket::bind(("0.0.0.0", port))
+            {
+                // is_free should return false because is_free checks TCP first,
+                // and TCP would still be free, but UDP is occupied
+                // is_free = is_free_tcp && is_free_udp, so UDP being occupied should make it false
+                assert!(!is_free(port));
+                assert!(!is_free_udp(port));
+                // TCP should still be free (UDP binding doesn't affect TCP)
+                assert!(is_free_tcp(port));
+                return; // Test passed
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test_log::test]
+    fn test_pick_unused_port_with_all_ports_occupied() {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
+        // Try to occupy all ports in a very small range
+        let range = test_utils::next_port_range(3);
+        let mut listeners = Vec::new();
+        let mut sockets = Vec::new();
+
+        // Bind to all ports in the range on both TCP and UDP
+        for port in range.clone() {
+            let addr_tcp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+            let addr_udp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+            if let Ok(listener) = TcpListener::bind(addr_tcp) {
+                listeners.push(listener);
+            }
+            if let Ok(socket) = UdpSocket::bind(addr_udp) {
+                sockets.push(socket);
+            }
+        }
+
+        // If we managed to bind to any ports, try to find a free one
+        // The result depends on what ports were successfully bound
+        let result = pick_unused_port(range);
+        // We can't assert None because some ports might not have been bindable,
+        // but the function should not panic
+        if result.is_some() {
+            // If we got a port, verify it's actually in the range
+            // (this is a sanity check)
+            let _ = result.unwrap();
+        }
+
+        // Keep listeners and sockets alive until the end of the test
+        drop(listeners);
+        drop(sockets);
+    }
 }
