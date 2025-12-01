@@ -26,6 +26,6 @@ cargo run --package http_simple_get -- "https://example.com"
 ## Dependencies
 
 - switchy_http - HTTP client
-- tokio - Async runtime
+- switchy_async - Async runtime (with tokio feature)
 - thiserror - Error handling
 - log & pretty_env_logger - Logging
