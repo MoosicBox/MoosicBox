@@ -69,7 +69,6 @@ Based on `Cargo.toml`:
 - `switchy_database` for query builders
 - `switchy_async` with `macros` and `tokio` features
 - `async-trait` for async trait implementations
-- `tokio` with full features
 
 ## Use Cases
 
