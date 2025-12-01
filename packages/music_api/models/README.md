@@ -30,7 +30,6 @@ The MoosicBox Music API Models package provides:
 
 - **TrackAudioQuality**: Audio quality levels (Low, FlacLossless, FlacHiRes, FlacHighestRes)
 - **AudioFormat**: Supported audio formats integration
-- **Quality Mapping**: Quality to format conversion
 
 ### Source Types
 
