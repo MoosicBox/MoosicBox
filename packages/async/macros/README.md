@@ -136,6 +136,8 @@ inject_yields_mod! {
 
 The macro reads the module source from `src/{module_name}.rs`, transforms all async functions within, and emits the transformed module.
 
+**Note:** This approach has limited LSP integration. Since the module is transformed at compile time, IDE features like "go to definition" may not work correctly for items defined within `inject_yields_mod!` blocks.
+
 ### Feature-Gated Behavior
 
 ```rust
