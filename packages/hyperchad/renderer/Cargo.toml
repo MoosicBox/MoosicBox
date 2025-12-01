@@ -28,6 +28,7 @@ serde       = { workspace = true, optional = true }
 serde_json  = { workspace = true, optional = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 test-log = { workspace = true }
 
 [features]
