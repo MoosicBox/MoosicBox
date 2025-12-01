@@ -61,6 +61,7 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
 /// Creates a button that demonstrates HTTP event handlers for a normal task creation request.
 ///
 /// The button includes handlers for all 6 HTTP lifecycle events and sends a POST request to `/api/tasks`.
+#[must_use]
 fn create_add_task_button() -> Containers {
     container! {
         button
@@ -112,6 +113,7 @@ fn create_add_task_button() -> Containers {
 /// Creates a button that demonstrates HTTP error event handling.
 ///
 /// This button sends a POST request to `/api/tasks/error`, which always returns an error response.
+#[must_use]
 fn create_error_button() -> Containers {
     container! {
         button
@@ -148,6 +150,7 @@ fn create_error_button() -> Containers {
 /// Creates a button that demonstrates handling of slow HTTP requests.
 ///
 /// This button sends a POST request to `/api/tasks/slow`, which has a 3-second delay.
+#[must_use]
 fn create_slow_button() -> Containers {
     container! {
         button
@@ -183,6 +186,7 @@ fn create_slow_button() -> Containers {
 }
 
 /// Creates a text input field for task name entry.
+#[must_use]
 fn task_input() -> Containers {
     container! {
         input
@@ -200,6 +204,7 @@ fn task_input() -> Containers {
 /// Creates the main page layout with all example components.
 ///
 /// The page includes test buttons, status messages, event explanations, and developer info.
+#[must_use]
 #[allow(clippy::too_many_lines)]
 fn create_main_page() -> Container {
     container! {
@@ -380,6 +385,7 @@ fn create_main_page() -> Container {
 /// * `/api/tasks` - Normal task creation (500ms delay)
 /// * `/api/tasks/error` - Error testing endpoint (always fails)
 /// * `/api/tasks/slow` - Slow request testing (3s delay)
+#[must_use]
 fn create_router() -> Router {
     Router::new()
         // Main page
