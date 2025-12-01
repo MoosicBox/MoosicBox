@@ -255,7 +255,7 @@ async fn update_handler() -> Content {
     Content::View(Box::new(View {
         primary: None,
         fragments: vec![ReplaceContainer {
-            selector: Selector::from("#content"),
+            selector: "#content".try_into().unwrap(),
             container: updated_content,
         }],
         delete_selectors: vec![],
