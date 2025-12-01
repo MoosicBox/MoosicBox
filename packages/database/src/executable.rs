@@ -1,3 +1,36 @@
+//! Trait for executing database operations
+//!
+//! This module provides the [`Executable`] trait that allows various types of SQL operations
+//! (raw SQL strings, query builders, schema statements) to be executed against a database
+//! through a unified interface.
+//!
+//! # Supported Types
+//!
+//! The `Executable` trait is implemented for:
+//! * **Raw SQL**: `String` and `&str` execute as raw SQL statements
+//! * **Query builders**: `InsertStatement`, `UpdateStatement`, `DeleteStatement`, `UpsertStatement`
+//! * **Schema statements**: `CreateTableStatement`, `DropTableStatement`, `CreateIndexStatement`,
+//!   `DropIndexStatement`, `AlterTableStatement`
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use switchy_database::{Database, Executable};
+//!
+//! async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+//!     // Execute raw SQL
+//!     "CREATE TABLE temp (id INT)".execute(db).await?;
+//!
+//!     // Execute query builder
+//!     db.insert("temp")
+//!         .value("id", 1)
+//!         .execute(db)
+//!         .await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use crate::{Database, DatabaseError};
 use async_trait::async_trait;
 
