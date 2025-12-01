@@ -864,3 +864,226 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::id::Id;
+
+    mod action_serialization_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_toggle_playback_roundtrip() {
+            let action = Action::TogglePlayback;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::TogglePlayback));
+        }
+
+        #[test_log::test]
+        fn test_previous_track_roundtrip() {
+            let action = Action::PreviousTrack;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::PreviousTrack));
+        }
+
+        #[test_log::test]
+        fn test_next_track_roundtrip() {
+            let action = Action::NextTrack;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::NextTrack));
+        }
+
+        #[test_log::test]
+        fn test_set_volume_roundtrip() {
+            let action = Action::SetVolume;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::SetVolume));
+        }
+
+        #[test_log::test]
+        fn test_refresh_visualization_roundtrip() {
+            let action = Action::RefreshVisualization;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::RefreshVisualization));
+        }
+
+        #[test_log::test]
+        fn test_seek_current_track_percent_roundtrip() {
+            let action = Action::SeekCurrentTrackPercent;
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+            assert!(matches!(parsed, Action::SeekCurrentTrackPercent));
+        }
+
+        #[test_log::test]
+        fn test_filter_albums_roundtrip() {
+            let action = Action::FilterAlbums {
+                filtered_sources: vec![TrackApiSource::Local],
+                sort: AlbumSort::ArtistAsc,
+            };
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+
+            match parsed {
+                Action::FilterAlbums {
+                    filtered_sources,
+                    sort,
+                } => {
+                    assert_eq!(filtered_sources.len(), 1);
+                    assert!(matches!(filtered_sources[0], TrackApiSource::Local));
+                    assert_eq!(sort, AlbumSort::ArtistAsc);
+                }
+                _ => panic!("Expected FilterAlbums action"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_play_album_roundtrip() {
+            let action = Action::PlayAlbum {
+                album_id: Id::Number(123),
+                api_source: ApiSource::library(),
+                version_source: Some(TrackApiSource::Local),
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+            };
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+
+            match parsed {
+                Action::PlayAlbum {
+                    album_id,
+                    api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
+                } => {
+                    assert_eq!(album_id, Id::Number(123));
+                    assert!(api_source.is_library());
+                    assert!(matches!(version_source, Some(TrackApiSource::Local)));
+                    assert_eq!(sample_rate, Some(44100));
+                    assert_eq!(bit_depth, Some(16));
+                }
+                _ => panic!("Expected PlayAlbum action"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_add_album_to_queue_roundtrip() {
+            let action = Action::AddAlbumToQueue {
+                album_id: Id::String("abc-123".to_string()),
+                api_source: ApiSource::library(),
+                version_source: None,
+                sample_rate: None,
+                bit_depth: None,
+            };
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+
+            match parsed {
+                Action::AddAlbumToQueue {
+                    album_id,
+                    api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
+                } => {
+                    assert_eq!(album_id, Id::String("abc-123".to_string()));
+                    assert!(api_source.is_library());
+                    assert!(version_source.is_none());
+                    assert!(sample_rate.is_none());
+                    assert!(bit_depth.is_none());
+                }
+                _ => panic!("Expected AddAlbumToQueue action"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_play_album_starting_at_track_id_roundtrip() {
+            let action = Action::PlayAlbumStartingAtTrackId {
+                album_id: Id::Number(456),
+                start_track_id: Id::Number(789),
+                api_source: ApiSource::library(),
+                version_source: Some(TrackApiSource::Local),
+                sample_rate: Some(96000),
+                bit_depth: Some(24),
+            };
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+
+            match parsed {
+                Action::PlayAlbumStartingAtTrackId {
+                    album_id,
+                    start_track_id,
+                    api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
+                } => {
+                    assert_eq!(album_id, Id::Number(456));
+                    assert_eq!(start_track_id, Id::Number(789));
+                    assert!(api_source.is_library());
+                    assert!(matches!(version_source, Some(TrackApiSource::Local)));
+                    assert_eq!(sample_rate, Some(96000));
+                    assert_eq!(bit_depth, Some(24));
+                }
+                _ => panic!("Expected PlayAlbumStartingAtTrackId action"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_play_tracks_roundtrip() {
+            let action = Action::PlayTracks {
+                track_ids: vec![Id::Number(1), Id::Number(2), Id::Number(3)],
+                api_source: ApiSource::library(),
+            };
+            let json = action.to_string();
+            let parsed: Action = json.as_str().try_into().unwrap();
+
+            match parsed {
+                Action::PlayTracks {
+                    track_ids,
+                    api_source,
+                } => {
+                    assert_eq!(track_ids.len(), 3);
+                    assert_eq!(track_ids[0], Id::Number(1));
+                    assert_eq!(track_ids[1], Id::Number(2));
+                    assert_eq!(track_ids[2], Id::Number(3));
+                    assert!(api_source.is_library());
+                }
+                _ => panic!("Expected PlayTracks action"),
+            }
+        }
+
+        #[test_log::test]
+        fn test_invalid_json_returns_error() {
+            let result: Result<Action, _> = "not valid json".try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_unknown_action_type_returns_error() {
+            let result: Result<Action, _> = r#"{"type":"UnknownAction"}"#.try_into();
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_try_from_string_reference() {
+            let json = r#"{"type":"TogglePlayback"}"#.to_string();
+            let parsed: Action = (&json).try_into().unwrap();
+            assert!(matches!(parsed, Action::TogglePlayback));
+        }
+
+        #[test_log::test]
+        fn test_try_from_owned_string() {
+            let json = r#"{"type":"NextTrack"}"#.to_string();
+            let parsed: Action = json.try_into().unwrap();
+            assert!(matches!(parsed, Action::NextTrack));
+        }
+    }
+}
