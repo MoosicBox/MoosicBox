@@ -351,6 +351,28 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_is_authorized_with_non_utf8_user_agent() {
+        // Test that non-UTF8 User-Agent headers are treated as authorized
+        // (the code returns true when to_str() fails)
+        let req = TestRequest::default()
+            .insert_header((
+                actix_web::http::header::USER_AGENT,
+                actix_web::http::header::HeaderValue::from_bytes(&[0x80, 0x81, 0x82]).unwrap(),
+            ))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test_log::test]
+    fn test_is_authorized_with_prefix_only() {
+        // Test that a prefix of the blocked User-Agent is authorized
+        let req = TestRequest::default()
+            .insert_header(("User-Agent", "MOOSICBOX_TUNNE"))
+            .to_http_request();
+        assert!(is_authorized(&req));
+    }
+
+    #[test_log::test]
     fn test_non_tunnel_request_authorized_blocks_tunnel() {
         let req = TestRequest::default()
             .insert_header(("User-Agent", "MOOSICBOX_TUNNEL"))
