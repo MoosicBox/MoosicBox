@@ -67,27 +67,29 @@ The `TunnelSender` is the main component for establishing and managing tunnel co
 use moosicbox_tunnel_sender::sender::TunnelSender;
 use switchy_database::config::ConfigDatabase;
 
-let config_db = ConfigDatabase::new();
+// ConfigDatabase is typically obtained from dependency injection
+// or created from an Arc<Box<dyn Database>>
+fn setup_tunnel(config_db: ConfigDatabase) {
+    // Create a tunnel sender and get a handle for control
+    let (sender, handle) = TunnelSender::new(
+        "https://example.com".to_string(),
+        "wss://example.com/tunnel".to_string(),
+        "client-id".to_string(),
+        "access-token".to_string(),
+        config_db,
+    );
 
-// Create a tunnel sender and get a handle for control
-let (sender, handle) = TunnelSender::new(
-    "https://example.com".to_string(),
-    "wss://example.com/tunnel".to_string(),
-    "client-id".to_string(),
-    "access-token".to_string(),
-    config_db,
-);
+    // Start receiving messages from the tunnel
+    let mut receiver = sender.start();
 
-// Start receiving messages from the tunnel
-let mut receiver = sender.start();
+    // Process incoming messages (in an async context)
+    // while let Some(message) = receiver.recv().await {
+    //     // Handle tunnel messages
+    // }
 
-// Process incoming messages
-while let Some(message) = receiver.recv().await {
-    // Handle tunnel messages
+    // Close the tunnel when done
+    handle.close();
 }
-
-// Close the tunnel when done
-handle.close();
 ```
 
 The library also provides:
