@@ -1681,4 +1681,378 @@ mod tests {
 
         assert_eq!(artist.picture_url(TidalArtistImageSize::Max), None);
     }
+
+    // JSON parsing tests for model structs from API responses
+
+    #[test_log::test]
+    fn test_tidal_artist_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 12345,
+            "picture": "abc-def-ghi",
+            "popularity": 85,
+            "name": "Test Artist"
+        });
+
+        let artist: TidalArtist = json.as_model().unwrap();
+        assert_eq!(artist.id, 12345);
+        assert_eq!(artist.picture, Some("abc-def-ghi".to_string()));
+        assert!(artist.contains_cover);
+        assert_eq!(artist.popularity, 85);
+        assert_eq!(artist.name, "Test Artist");
+    }
+
+    #[test_log::test]
+    fn test_tidal_artist_json_parsing_without_picture() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 12345,
+            "picture": null,
+            "popularity": 85,
+            "name": "Test Artist"
+        });
+
+        let artist: TidalArtist = json.as_model().unwrap();
+        assert_eq!(artist.id, 12345);
+        assert_eq!(artist.picture, None);
+        assert!(!artist.contains_cover);
+        assert_eq!(artist.popularity, 85);
+        assert_eq!(artist.name, "Test Artist");
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_artist_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 67890,
+            "picture": "xyz-abc-123",
+            "type": "MAIN",
+            "name": "Search Artist"
+        });
+
+        let artist: TidalSearchArtist = json.as_model().unwrap();
+        assert_eq!(artist.id, 67890);
+        assert_eq!(artist.picture, Some("xyz-abc-123".to_string()));
+        assert!(artist.contains_cover);
+        assert_eq!(artist.r#type, "MAIN");
+        assert_eq!(artist.name, "Search Artist");
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 55555,
+            "artist": { "name": "Album Artist", "id": 11111 },
+            "type": "LP",
+            "audioQuality": "LOSSLESS",
+            "copyright": "2024 Test Records",
+            "cover": "cover-hash-123",
+            "duration": 3600,
+            "explicit": true,
+            "numberOfTracks": 12,
+            "popularity": 92,
+            "releaseDate": "2024-06-15",
+            "title": "Amazing Album",
+            "mediaMetadata": { "tags": ["LOSSLESS", "HIRES_LOSSLESS"] }
+        });
+
+        let album: TidalAlbum = json.as_model().unwrap();
+        assert_eq!(album.id, 55555);
+        assert_eq!(album.artist, "Album Artist");
+        assert_eq!(album.artist_id, 11111);
+        assert_eq!(album.album_type, crate::TidalAlbumType::Lp);
+        assert!(album.contains_cover);
+        assert_eq!(album.audio_quality, "LOSSLESS");
+        assert_eq!(album.copyright, Some("2024 Test Records".to_string()));
+        assert_eq!(album.cover, Some("cover-hash-123".to_string()));
+        assert_eq!(album.duration, 3600);
+        assert!(album.explicit);
+        assert_eq!(album.number_of_tracks, 12);
+        assert_eq!(album.popularity, 92);
+        assert_eq!(album.release_date, Some("2024-06-15".to_string()));
+        assert_eq!(album.title, "Amazing Album");
+        assert_eq!(
+            album.media_metadata_tags,
+            vec!["LOSSLESS".to_string(), "HIRES_LOSSLESS".to_string()]
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_album_json_parsing_with_ep_type() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 55555,
+            "artist": { "name": "Album Artist", "id": 11111 },
+            "type": "EP",
+            "audioQuality": "HIGH",
+            "copyright": null,
+            "cover": null,
+            "duration": 1200,
+            "explicit": false,
+            "numberOfTracks": 4,
+            "popularity": 50,
+            "releaseDate": null,
+            "title": "Short EP",
+            "mediaMetadata": { "tags": [] }
+        });
+
+        let album: TidalAlbum = json.as_model().unwrap();
+        assert_eq!(album.id, 55555);
+        assert_eq!(album.album_type, crate::TidalAlbumType::EpsAndSingles);
+        assert!(album.contains_cover); // Note: as_model sets this to true regardless
+        assert_eq!(album.copyright, None);
+        assert_eq!(album.cover, None);
+        assert!(!album.explicit);
+        assert_eq!(album.release_date, None);
+        assert!(album.media_metadata_tags.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 99999,
+            "trackNumber": 5,
+            "artist": { "name": "Track Artist", "id": 22222, "picture": "artist-pic" },
+            "album": { "id": 44444, "title": "Track Album", "type": "LP", "cover": "album-cover" },
+            "audioQuality": "HI_RES_LOSSLESS",
+            "copyright": "2024 Music Inc",
+            "duration": 245,
+            "explicit": true,
+            "isrc": "USRC12345678",
+            "popularity": 88,
+            "title": "Amazing Track",
+            "mediaMetadata": { "tags": ["HIRES_LOSSLESS"] }
+        });
+
+        let track: TidalTrack = json.as_model().unwrap();
+        assert_eq!(track.id, 99999);
+        assert_eq!(track.track_number, 5);
+        assert_eq!(track.artist, "Track Artist");
+        assert_eq!(track.artist_id, 22222);
+        assert_eq!(track.artist_cover, Some("artist-pic".to_string()));
+        assert_eq!(track.album, "Track Album");
+        assert_eq!(track.album_id, 44444);
+        assert_eq!(track.album_type, crate::TidalAlbumType::Lp);
+        assert_eq!(track.album_cover, Some("album-cover".to_string()));
+        assert_eq!(track.audio_quality, "HI_RES_LOSSLESS");
+        assert_eq!(track.copyright, Some("2024 Music Inc".to_string()));
+        assert_eq!(track.duration, 245);
+        assert!(track.explicit);
+        assert_eq!(track.isrc, "USRC12345678");
+        assert_eq!(track.popularity, 88);
+        assert_eq!(track.title, "Amazing Track");
+        assert_eq!(
+            track.media_metadata_tags,
+            vec!["HIRES_LOSSLESS".to_string()]
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_json_parsing_without_album_type() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 99999,
+            "trackNumber": 1,
+            "artist": { "name": "Artist", "id": 11111, "picture": null },
+            "album": { "id": 22222, "title": "Album", "cover": null },
+            "audioQuality": "HIGH",
+            "copyright": null,
+            "duration": 180,
+            "explicit": false,
+            "isrc": "USRC87654321",
+            "popularity": 50,
+            "title": "Track Title",
+            "mediaMetadata": { "tags": [] }
+        });
+
+        let track: TidalTrack = json.as_model().unwrap();
+        assert_eq!(track.album_type, crate::TidalAlbumType::default()); // Should use default
+        assert_eq!(track.artist_cover, None);
+        assert_eq!(track.album_cover, None);
+        assert_eq!(track.copyright, None);
+        assert!(!track.explicit);
+        assert!(track.media_metadata_tags.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_album_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 77777,
+            "artists": [
+                { "id": 11111, "name": "Artist One", "picture": null, "type": "MAIN" },
+                { "id": 22222, "name": "Artist Two", "picture": "pic-hash", "type": "FEATURED" }
+            ],
+            "audioQuality": "LOSSLESS",
+            "copyright": "2024 Label",
+            "cover": "search-album-cover",
+            "duration": 2700,
+            "explicit": false,
+            "numberOfTracks": 9,
+            "popularity": 75,
+            "releaseDate": "2024-03-01",
+            "title": "Search Album",
+            "mediaMetadata": { "tags": ["LOSSLESS"] }
+        });
+
+        let album: TidalSearchAlbum = json.as_model().unwrap();
+        assert_eq!(album.id, 77777);
+        assert_eq!(album.artists.len(), 2);
+        assert_eq!(album.artists[0].id, 11111);
+        assert_eq!(album.artists[0].name, "Artist One");
+        assert_eq!(album.artists[1].id, 22222);
+        assert_eq!(album.artists[1].name, "Artist Two");
+        assert!(album.contains_cover);
+        assert_eq!(album.audio_quality, "LOSSLESS");
+        assert_eq!(album.copyright, Some("2024 Label".to_string()));
+        assert_eq!(album.cover, Some("search-album-cover".to_string()));
+        assert_eq!(album.duration, 2700);
+        assert!(!album.explicit);
+        assert_eq!(album.number_of_tracks, 9);
+        assert_eq!(album.popularity, 75);
+        assert_eq!(album.release_date, Some("2024-03-01".to_string()));
+        assert_eq!(album.title, "Search Album");
+        assert_eq!(album.media_metadata_tags, vec!["LOSSLESS".to_string()]);
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_track_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 88888,
+            "trackNumber": 3,
+            "artists": [
+                { "id": 33333, "name": "Track Artist", "picture": null, "type": "MAIN" }
+            ],
+            "artist": { "picture": "artist-search-pic" },
+            "album": { "id": 44444, "title": "Search Track Album", "cover": "track-album-cover" },
+            "audioQuality": "LOSSLESS",
+            "copyright": "2024 Records",
+            "duration": 210,
+            "explicit": true,
+            "isrc": "TEST12345678",
+            "popularity": 95,
+            "title": "Search Track",
+            "mediaMetadata": { "tags": ["LOSSLESS", "DOLBY_ATMOS"] }
+        });
+
+        let track: TidalSearchTrack = json.as_model().unwrap();
+        assert_eq!(track.id, 88888);
+        assert_eq!(track.track_number, 3);
+        assert_eq!(track.artists.len(), 1);
+        assert_eq!(track.artists[0].id, 33333);
+        assert_eq!(track.artists[0].name, "Track Artist");
+        assert_eq!(track.artist_cover, Some("artist-search-pic".to_string()));
+        assert_eq!(track.album_id, 44444);
+        assert_eq!(track.album, "Search Track Album");
+        assert_eq!(track.album_cover, Some("track-album-cover".to_string()));
+        assert_eq!(track.audio_quality, "LOSSLESS");
+        assert_eq!(track.copyright, Some("2024 Records".to_string()));
+        assert_eq!(track.duration, 210);
+        assert!(track.explicit);
+        assert_eq!(track.isrc, "TEST12345678");
+        assert_eq!(track.popularity, 95);
+        assert_eq!(track.title, "Search Track");
+        assert_eq!(
+            track.media_metadata_tags,
+            vec!["LOSSLESS".to_string(), "DOLBY_ATMOS".to_string()]
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_search_results_json_parsing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "albums": {
+                "items": [
+                    {
+                        "id": 1,
+                        "artists": [{ "id": 100, "name": "Artist", "picture": null, "type": "MAIN" }],
+                        "audioQuality": "LOSSLESS",
+                        "copyright": null,
+                        "cover": null,
+                        "duration": 3600,
+                        "explicit": false,
+                        "numberOfTracks": 10,
+                        "popularity": 80,
+                        "releaseDate": "2024-01-01",
+                        "title": "Test Album",
+                        "mediaMetadata": { "tags": [] }
+                    }
+                ],
+                "offset": 0,
+                "limit": 10,
+                "totalNumberOfItems": 1
+            },
+            "artists": {
+                "items": [
+                    {
+                        "id": 200,
+                        "picture": "artist-pic",
+                        "popularity": 70,
+                        "name": "Test Artist"
+                    }
+                ],
+                "offset": 0,
+                "limit": 10,
+                "totalNumberOfItems": 1
+            },
+            "tracks": {
+                "items": [
+                    {
+                        "id": 300,
+                        "trackNumber": 1,
+                        "artists": [{ "id": 100, "name": "Artist", "picture": null, "type": "MAIN" }],
+                        "artist": { "picture": null },
+                        "album": { "id": 1, "title": "Album", "cover": null },
+                        "audioQuality": "HIGH",
+                        "copyright": null,
+                        "duration": 200,
+                        "explicit": false,
+                        "isrc": "TEST00000000",
+                        "popularity": 60,
+                        "title": "Test Track",
+                        "mediaMetadata": { "tags": [] }
+                    }
+                ],
+                "offset": 0,
+                "limit": 10,
+                "totalNumberOfItems": 1
+            }
+        });
+
+        let results: TidalSearchResults = json.as_model().unwrap();
+        assert_eq!(results.albums.items.len(), 1);
+        assert_eq!(results.albums.items[0].id, 1);
+        assert_eq!(results.albums.offset, 0);
+        assert_eq!(results.albums.limit, 10);
+        assert_eq!(results.albums.total, 1);
+
+        assert_eq!(results.artists.items.len(), 1);
+        assert_eq!(results.artists.items[0].id, 200);
+        assert_eq!(results.artists.offset, 0);
+        assert_eq!(results.artists.limit, 10);
+        assert_eq!(results.artists.total, 1);
+
+        assert_eq!(results.tracks.items.len(), 1);
+        assert_eq!(results.tracks.items[0].id, 300);
+        assert_eq!(results.tracks.offset, 0);
+        assert_eq!(results.tracks.limit, 10);
+        assert_eq!(results.tracks.total, 1);
+
+        assert_eq!(results.offset, 0);
+        assert_eq!(results.limit, 10);
+    }
 }
