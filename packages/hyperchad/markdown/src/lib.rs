@@ -1925,4 +1925,79 @@ mod tests {
         assert_eq!(checkbox.margin_right, Some(Number::from(8)));
         assert_eq!(checkbox.user_select, Some(UserSelect::None));
     }
+
+    #[test_log::test]
+    fn test_dangerous_url_passes_through_when_xss_disabled() {
+        // When XSS protection is disabled, dangerous URLs should pass through unchanged
+        let md = "[Click](javascript:alert('test'))";
+        let options = MarkdownOptions {
+            xss_protection: false,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first() {
+            let link = paragraph
+                .children
+                .iter()
+                .find(|c| matches!(c.element, Element::Anchor { .. }));
+            assert!(link.is_some());
+            if let Element::Anchor { href, .. } = &link.unwrap().element {
+                // URL should pass through unchanged when XSS protection is off
+                assert_eq!(href, &Some("javascript:alert('test')".to_string()));
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_footnote_syntax_with_footnotes_enabled() {
+        // Test that footnote syntax is parsed when footnotes are enabled
+        // Note: pulldown-cmark parses footnotes but our converter ignores them
+        // This test verifies no crash occurs and basic content is preserved
+        let md = "Text with footnote[^1].\n\n[^1]: Footnote content.";
+        let options = MarkdownOptions {
+            enable_footnotes: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        // The main text paragraph should still be rendered
+        assert!(!container.children.is_empty());
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_mixed_case_data_url() {
+        // Test case-insensitive detection of data: URLs
+        let md = "[Click](DATA:text/html,<script>alert('xss')</script>)";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first()
+            && let Some(link) = paragraph.children.first()
+            && let Element::Anchor { href, .. } = &link.element
+        {
+            // Mixed case data URLs should be filtered to "#"
+            assert_eq!(href, &Some("#".to_string()));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_mixed_case_vbscript_url() {
+        // Test case-insensitive detection of vbscript: URLs
+        let md = "[Click](VBSCRIPT:msgbox('xss'))";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(paragraph) = container.children.first()
+            && let Some(link) = paragraph.children.first()
+            && let Element::Anchor { href, .. } = &link.element
+        {
+            // Mixed case vbscript URLs should be filtered to "#"
+            assert_eq!(href, &Some("#".to_string()));
+        }
+    }
 }
