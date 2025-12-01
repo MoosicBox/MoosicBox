@@ -667,4 +667,44 @@ mod tests {
         assert_eq!(simulator.mock_data.database_state.len(), 2);
         assert!(simulator.mock_data.database_state.contains_key("users:1"));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_start_simulation_server_without_web_server() {
+        let simulator = HyperChadSimulator::new();
+
+        // When no web server is configured, start_simulation_server should succeed
+        // without doing anything (no-op path)
+        let result = simulator.start_simulation_server().await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_start_simulation_server_with_web_server() {
+        let web_server = Arc::new(SimulationWebServer::new());
+        let simulator = HyperChadSimulator::new().with_web_server(Arc::clone(&web_server));
+
+        // Before starting, server should not be running
+        assert!(!web_server.is_running().await);
+
+        // Start the simulation server
+        let result = simulator.start_simulation_server().await;
+        assert!(result.is_ok());
+
+        // After starting, the web server should be running
+        assert!(web_server.is_running().await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_clone_shares_web_server() {
+        let web_server = Arc::new(SimulationWebServer::new());
+        let simulator = HyperChadSimulator::new().with_web_server(Arc::clone(&web_server));
+        let cloned = simulator.clone();
+
+        // Start simulation on the cloned simulator
+        cloned.start_simulation_server().await.unwrap();
+
+        // The original simulator's web server reference should also see it as running
+        // since they share the same Arc
+        assert!(web_server.is_running().await);
+    }
 }
