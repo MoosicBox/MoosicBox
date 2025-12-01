@@ -82,10 +82,14 @@ use moosicbox_profiles::events::{on_profiles_updated_event, trigger_profiles_upd
 #[tokio::main]
 async fn main() {
     // Subscribe to profile update events
-    on_profiles_updated_event(|added, removed| async move {
-        println!("Profiles added: {:?}", added);
-        println!("Profiles removed: {:?}", removed);
-        Ok(())
+    on_profiles_updated_event(|added, removed| {
+        let added = added.to_vec();
+        let removed = removed.to_vec();
+        async move {
+            println!("Profiles added: {:?}", added);
+            println!("Profiles removed: {:?}", removed);
+            Ok(())
+        }
     }).await;
 
     // Trigger an event manually
@@ -121,4 +125,4 @@ Profile names are extracted in this order of precedence:
 All operations are thread-safe:
 
 - Profile storage uses `std::sync::RwLock` for concurrent access
-- Event listeners (with `events` feature) use `tokio::sync::RwLock` for async-safe access
+- Event listeners (with `events` feature) use `switchy_async::sync::RwLock` for async-safe access
