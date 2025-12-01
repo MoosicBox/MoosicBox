@@ -2676,4 +2676,777 @@ mod tests {
             );
         }
     }
+
+    // Tests for anchor with all target types
+    #[test_log::test]
+    fn test_element_to_html_anchor_all_target_types() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LinkTarget;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        for (target, expected) in [
+            (LinkTarget::SelfTarget, "_self"),
+            (LinkTarget::Blank, "_blank"),
+            (LinkTarget::Parent, "_parent"),
+            (LinkTarget::Top, "_top"),
+        ] {
+            let container = Container {
+                element: hyperchad_transformer::Element::Anchor {
+                    href: Some("/page".to_string()),
+                    target: Some(target),
+                },
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+            let html = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                html.contains(&format!("target=\"{expected}\"")),
+                "Expected target=\"{expected}\", got: {html}"
+            );
+        }
+    }
+
+    // Test image with eager loading
+    #[test_log::test]
+    fn test_element_to_html_image_with_eager_loading() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::ImageLoading;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Image {
+                source: Some("/priority-img.jpg".to_string()),
+                alt: Some("Important image".to_string()),
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: Some(ImageLoading::Eager),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("loading=\"eager\""));
+    }
+
+    // Test image fit modes
+    #[test_log::test]
+    fn test_element_style_to_html_image_fit_modes() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::ImageFit;
+
+        for (fit, expected_css) in [
+            (ImageFit::Default, "object-fit:unset"),
+            (ImageFit::Contain, "object-fit:contain"),
+            (ImageFit::Cover, "object-fit:cover"),
+            (ImageFit::Fill, "object-fit:fill"),
+            (ImageFit::None, "object-fit:none"),
+        ] {
+            let container = Container {
+                element: hyperchad_transformer::Element::Image {
+                    source: Some("/img.jpg".to_string()),
+                    alt: None,
+                    fit: Some(fit),
+                    source_set: None,
+                    sizes: None,
+                    loading: None,
+                },
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}' for ImageFit::{fit:?}, got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with user_select
+    #[test_log::test]
+    fn test_element_style_to_html_user_select() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::UserSelect;
+
+        for (user_select, expected_css) in [
+            (UserSelect::Auto, "user-select:auto"),
+            (UserSelect::None, "user-select:none"),
+            (UserSelect::Text, "user-select:text"),
+            (UserSelect::All, "user-select:all"),
+        ] {
+            let container = Container {
+                user_select: Some(user_select),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with overflow_wrap
+    #[test_log::test]
+    fn test_element_style_to_html_overflow_wrap() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::OverflowWrap;
+
+        for (overflow_wrap, expected_css) in [
+            (OverflowWrap::Normal, "overflow-wrap:normal"),
+            (OverflowWrap::BreakWord, "overflow-wrap:break-word"),
+            (OverflowWrap::Anywhere, "overflow-wrap:anywhere"),
+        ] {
+            let container = Container {
+                overflow_wrap: Some(overflow_wrap),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with text_overflow
+    #[test_log::test]
+    fn test_element_style_to_html_text_overflow() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::TextOverflow;
+
+        for (text_overflow, expected_css) in [
+            (TextOverflow::Clip, "text-overflow:clip"),
+            (TextOverflow::Ellipsis, "text-overflow:ellipsis"),
+        ] {
+            let container = Container {
+                text_overflow: Some(text_overflow),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with font_family
+    #[test_log::test]
+    fn test_element_style_to_html_font_family() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            font_family: Some(vec![
+                "Arial".to_string(),
+                "Helvetica".to_string(),
+                "sans-serif".to_string(),
+            ]),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("font-family:Arial,Helvetica,sans-serif"));
+    }
+
+    // Test element_style_to_html with font_weight
+    #[test_log::test]
+    fn test_element_style_to_html_font_weight() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::FontWeight;
+
+        for (weight, expected) in [
+            (FontWeight::Thin, "font-weight:thin"),
+            (FontWeight::Normal, "font-weight:normal"),
+            (FontWeight::Bold, "font-weight:bold"),
+            (FontWeight::Black, "font-weight:black"),
+            (FontWeight::Lighter, "font-weight:lighter"),
+            (FontWeight::Bolder, "font-weight:bolder"),
+            (FontWeight::Weight100, "font-weight:100"),
+            (FontWeight::Weight700, "font-weight:700"),
+        ] {
+            let container = Container {
+                font_weight: Some(weight),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected '{expected}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with all text_align values
+    #[test_log::test]
+    fn test_element_style_to_html_text_align_all() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::TextAlign;
+
+        for (text_align, expected_css) in [
+            (TextAlign::Start, "text-align:start"),
+            (TextAlign::Center, "text-align:center"),
+            (TextAlign::End, "text-align:end"),
+            (TextAlign::Justify, "text-align:justify"),
+        ] {
+            let container = Container {
+                text_align: Some(text_align),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with all white_space values
+    #[test_log::test]
+    fn test_element_style_to_html_white_space_all() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::WhiteSpace;
+
+        for (white_space, expected_css) in [
+            (WhiteSpace::Normal, "white-space:normal"),
+            (WhiteSpace::Preserve, "white-space:pre"),
+            (WhiteSpace::PreserveWrap, "white-space:pre-wrap"),
+        ] {
+            let container = Container {
+                white_space: Some(white_space),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with scroll overflow
+    #[test_log::test]
+    fn test_element_style_to_html_overflow_scroll() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Scroll,
+            overflow_y: LayoutOverflow::Scroll,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("overflow-x:scroll"));
+        assert!(style.contains("overflow-y:scroll"));
+    }
+
+    // Test element_style_to_html with flex wrap (non-grid)
+    #[test_log::test]
+    fn test_element_style_to_html_flex_wrap() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Wrap { grid: false },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("flex-wrap:wrap"));
+    }
+
+    // Test element_style_to_html with justify_content all values
+    #[test_log::test]
+    fn test_element_style_to_html_justify_content_all() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::JustifyContent;
+
+        for (justify_content, expected_css) in [
+            (JustifyContent::Start, "justify-content:start"),
+            (JustifyContent::Center, "justify-content:center"),
+            (JustifyContent::End, "justify-content:end"),
+            (
+                JustifyContent::SpaceBetween,
+                "justify-content:space-between",
+            ),
+            (JustifyContent::SpaceEvenly, "justify-content:space-evenly"),
+        ] {
+            let container = Container {
+                justify_content: Some(justify_content),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test element_style_to_html with align_items all values
+    #[test_log::test]
+    fn test_element_style_to_html_align_items_all() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::AlignItems;
+
+        for (align_items, expected_css) in [
+            (AlignItems::Start, "align-items:start"),
+            (AlignItems::Center, "align-items:center"),
+            (AlignItems::End, "align-items:end"),
+        ] {
+            let container = Container {
+                align_items: Some(align_items),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected_css),
+                "Expected '{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test container_element_to_html_response
+    #[test_log::test]
+    fn test_container_element_to_html_response() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_renderer::Color;
+        use hyperchad_router::Container;
+        use std::collections::BTreeMap;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let headers = BTreeMap::new();
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Div,
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Raw {
+                    value: "Hello World".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let result = container_element_to_html_response(
+            &headers,
+            &container,
+            Some("width=device-width, initial-scale=1"),
+            Some(Color {
+                r: 240,
+                g: 240,
+                b: 240,
+                a: None,
+            }),
+            Some("Test Page"),
+            Some("A test page description"),
+            &tag_renderer,
+            &["https://cdn.example.com/style.css".to_string()],
+            &["/static/main.css".to_string()],
+            &["body { font-size: 16px; }".to_string()],
+        )
+        .unwrap();
+
+        assert!(result.contains("<!DOCTYPE html>"));
+        assert!(result.contains("<title>Test Page</title>"));
+        assert!(result.contains("A test page description"));
+        assert!(result.contains("Hello World"));
+        assert!(result.contains("background:rgb(240,240,240)"));
+        assert!(result.contains("https://cdn.example.com/style.css"));
+        assert!(result.contains("/static/main.css"));
+        assert!(result.contains("body { font-size: 16px; }"));
+        assert!(result.contains("width=device-width, initial-scale=1"));
+    }
+
+    // Test text_decoration with single line style
+    #[test_log::test]
+    fn test_element_style_to_html_text_decoration_single_line() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::TextDecoration;
+        use hyperchad_transformer::models::TextDecorationLine;
+
+        let container = Container {
+            text_decoration: Some(TextDecoration {
+                color: None,
+                line: vec![TextDecorationLine::LineThrough],
+                style: None,
+                thickness: None,
+            }),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("text-decoration-line:line-through"));
+    }
+
+    // Test text_decoration with all line styles
+    #[test_log::test]
+    fn test_element_style_to_html_text_decoration_line_inherit_none() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::TextDecoration;
+        use hyperchad_transformer::models::TextDecorationLine;
+
+        for (line, expected) in [
+            (TextDecorationLine::Inherit, "inherit"),
+            (TextDecorationLine::None, "none"),
+        ] {
+            let container = Container {
+                text_decoration: Some(TextDecoration {
+                    color: None,
+                    line: vec![line],
+                    style: None,
+                    thickness: None,
+                }),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(&format!("text-decoration-line:{expected}")),
+                "Expected 'text-decoration-line:{expected}', got: {style}"
+            );
+        }
+    }
+
+    // Test text_decoration_style all values
+    #[test_log::test]
+    fn test_element_style_to_html_text_decoration_style_all() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::TextDecoration;
+        use hyperchad_transformer::models::{TextDecorationLine, TextDecorationStyle};
+
+        for (style, expected) in [
+            (TextDecorationStyle::Inherit, "inherit"),
+            (TextDecorationStyle::Solid, "solid"),
+            (TextDecorationStyle::Double, "double"),
+            (TextDecorationStyle::Dotted, "dotted"),
+            (TextDecorationStyle::Dashed, "dashed"),
+        ] {
+            let container = Container {
+                text_decoration: Some(TextDecoration {
+                    color: None,
+                    line: vec![TextDecorationLine::Underline],
+                    style: Some(style),
+                    thickness: None,
+                }),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style_str = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style_str.contains(&format!("text-decoration-style:{expected}")),
+                "Expected 'text-decoration-style:{expected}', got: {style_str}"
+            );
+        }
+    }
+
+    // Test all cursor types
+    #[test_log::test]
+    fn test_element_style_to_html_cursor_all_types() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Cursor;
+
+        for (cursor, expected_css) in [
+            (Cursor::Auto, "auto"),
+            (Cursor::Crosshair, "crosshair"),
+            (Cursor::NoDrop, "no-drop"),
+            (Cursor::Grabbing, "grabbing"),
+            (Cursor::AllScroll, "all-scroll"),
+            (Cursor::ColResize, "col-resize"),
+            (Cursor::RowResize, "row-resize"),
+            (Cursor::NResize, "n-resize"),
+            (Cursor::EResize, "e-resize"),
+            (Cursor::SResize, "s-resize"),
+            (Cursor::WResize, "w-resize"),
+            (Cursor::NeResize, "ne-resize"),
+            (Cursor::NwResize, "nw-resize"),
+            (Cursor::SeResize, "se-resize"),
+            (Cursor::SwResize, "sw-resize"),
+            (Cursor::EwResize, "ew-resize"),
+            (Cursor::NsResize, "ns-resize"),
+            (Cursor::NeswResize, "nesw-resize"),
+            (Cursor::ZoomIn, "zoom-in"),
+            (Cursor::ZoomOut, "zoom-out"),
+        ] {
+            let container = Container {
+                cursor: Some(cursor),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(&format!("cursor:{expected_css}")),
+                "Expected 'cursor:{expected_css}', got: {style}"
+            );
+        }
+    }
+
+    // Test borders for all sides
+    #[test_log::test]
+    fn test_element_style_to_html_borders_all_sides() {
+        use hyperchad_router::Container;
+
+        let color = hyperchad_renderer::Color {
+            r: 128,
+            g: 128,
+            b: 128,
+            a: None,
+        };
+
+        let container = Container {
+            border_right: Some((color, Number::Integer(1))),
+            border_bottom: Some((color, Number::Integer(2))),
+            border_left: Some((color, Number::Integer(3))),
+            border_top_right_radius: Some(Number::Integer(10)),
+            border_bottom_left_radius: Some(Number::Integer(15)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("border-right:1px solid rgb(128,128,128)"));
+        assert!(style.contains("border-bottom:2px solid rgb(128,128,128)"));
+        assert!(style.contains("border-left:3px solid rgb(128,128,128)"));
+        assert!(style.contains("border-top-right-radius:10px"));
+        assert!(style.contains("border-bottom-left-radius:15px"));
+    }
+
+    // Test canvas element
+    #[test_log::test]
+    fn test_element_to_html_canvas() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Canvas,
+            str_id: Some("my-canvas".to_string()),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<canvas"));
+        assert!(html.contains("id=\"my-canvas\""));
+        assert!(html.ends_with("</canvas>"));
+    }
+
+    // Test table elements (THead, TBody, TR)
+    #[test_log::test]
+    fn test_element_to_html_table_elements() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        for (element, expected_tag) in [
+            (hyperchad_transformer::Element::Table, "table"),
+            (hyperchad_transformer::Element::THead, "thead"),
+            (hyperchad_transformer::Element::TBody, "tbody"),
+            (hyperchad_transformer::Element::TR, "tr"),
+        ] {
+            let container = Container {
+                element,
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+            let html = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                html.starts_with(&format!("<{expected_tag}")),
+                "Expected <{expected_tag}, got: {html}"
+            );
+            assert!(
+                html.ends_with(&format!("</{expected_tag}>")),
+                "Expected </{expected_tag}>, got: {html}"
+            );
+        }
+    }
+
+    // Test flex container detection with row direction
+    #[test_log::test]
+    fn test_element_style_to_html_flex_row_direction() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutDirection;
+
+        let container = Container {
+            direction: LayoutDirection::Row,
+            justify_content: Some(hyperchad_transformer::models::JustifyContent::Start),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("display:flex"));
+        // Row is default, so flex-direction should not be specified
+        assert!(!style.contains("flex-direction"));
+    }
+
+    // Test position fixed default top/left
+    #[test_log::test]
+    fn test_element_style_to_html_position_fixed_defaults() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        let container = Container {
+            position: Some(Position::Fixed),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("position:fixed"));
+        assert!(style.contains("top:0"));
+        assert!(style.contains("left:0"));
+    }
+
+    // Test position fixed with bottom/right (should not add top/left defaults)
+    #[test_log::test]
+    fn test_element_style_to_html_position_fixed_with_bottom_right() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        let container = Container {
+            position: Some(Position::Fixed),
+            bottom: Some(Number::Integer(20)),
+            right: Some(Number::Integer(20)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("position:fixed"));
+        assert!(style.contains("bottom:20px"));
+        assert!(style.contains("right:20px"));
+        // Should NOT add default top/left since bottom/right are specified
+        assert!(!style.contains("top:0"));
+        assert!(!style.contains("left:0"));
+    }
+
+    // Test input checkbox unchecked
+    #[test_log::test]
+    fn test_element_to_html_input_checkbox_unchecked() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Checkbox {
+                    checked: Some(false),
+                },
+                name: Some("mybox".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"checkbox\""));
+        // checked="checked" attribute should NOT be present
+        assert!(!html.contains("checked=\"checked\""));
+    }
+
+    // Test details element without open attribute
+    #[test_log::test]
+    fn test_element_to_html_details_none_open() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Details { open: None },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<details"));
+        assert!(!html.contains(" open"));
+        assert!(html.ends_with("</details>"));
+    }
 }
