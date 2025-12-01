@@ -5,6 +5,10 @@
 //! real-world scenarios where data is being modified while migrations are running,
 //! or where you need to test how migrations handle specific data patterns.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -23,7 +27,7 @@ struct CreateUsersTable;
 
 #[async_trait]
 impl Migration<'static> for CreateUsersTable {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "001_create_users"
     }
 
@@ -99,13 +103,13 @@ impl Migration<'static> for CreateUsersTable {
 
 /// Migration that creates a posts table
 ///
-/// Creates a table for blog posts with columns for id, user_id (foreign key),
+/// Creates a table for blog posts with columns for id, `user_id` (foreign key),
 /// title, content, published status, and creation timestamp.
 struct CreatePostsTable;
 
 #[async_trait]
 impl Migration<'static> for CreatePostsTable {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "002_create_posts"
     }
 
@@ -182,13 +186,13 @@ impl Migration<'static> for CreatePostsTable {
 
 /// Migration that adds an analytics table
 ///
-/// Creates a table for tracking user events with columns for id, user_id (optional),
-/// event_type, event_data (JSON), and timestamp.
+/// Creates a table for tracking user events with columns for id, `user_id` (optional),
+/// `event_type`, `event_data` (JSON), and timestamp.
 struct CreateAnalyticsTable;
 
 #[async_trait]
 impl Migration<'static> for CreateAnalyticsTable {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "003_create_analytics"
     }
 
@@ -264,7 +268,7 @@ struct AddPerformanceIndexes;
 
 #[async_trait]
 impl Migration<'static> for AddPerformanceIndexes {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "004_add_performance_indexes"
     }
 
@@ -532,7 +536,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("   • Foreign key constraints maintained throughout");
         }
         Err(e) => {
-            println!("❌ Mutation migration testing failed: {}", e);
+            println!("❌ Mutation migration testing failed: {e}");
             return Err(e.into());
         }
     }
@@ -582,7 +586,7 @@ mod tests {
 
     /// Tests foreign key constraints work correctly.
     ///
-    /// Verifies that posts can be inserted with valid user_id references.
+    /// Verifies that posts can be inserted with valid `user_id` references.
     #[switchy_async::test]
     async fn test_foreign_key_constraints() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
