@@ -551,9 +551,8 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ### Runtime Dependencies
 
 - **image**: Image processing and format support
-- **tokio**: Async runtime for image loading (with sync feature)
+- **switchy_async**: Async runtime and task utilities (with sync and tokio features)
 - **switchy_http**: HTTP client for remote image loading (reqwest backend)
-- **switchy_async**: Async task utilities (tokio backend)
 - **flume**: Multi-producer, multi-consumer channels
 - **bytes**: Byte buffer utilities
 
