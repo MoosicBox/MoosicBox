@@ -1770,4 +1770,233 @@ mod tests {
 
         assert!(results.is_empty());
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_explicit_offset_and_limit() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Test with explicit offset and limit using raw search
+        let results = crate::search_global_search_index("elder", 0, 5).unwrap();
+
+        // Should return results with explicit pagination
+        assert!(!results.is_empty());
+        assert!(results.len() <= 5);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_pagination_position_tracking() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Get first page
+        let results1 = crate::search_global_search_index("elder", 0, 2).unwrap();
+        let first_page_len = results1.len();
+
+        // Get second page
+        let results2 = crate::search_global_search_index("elder", 2, 2).unwrap();
+
+        // If we had results on first page and have total > 2, second page should also have results
+        // (there are 9 test data entries with "Elder")
+        assert!(first_page_len <= 2);
+        if first_page_len == 2 {
+            // There should be more results on the second page
+            assert!(!results2.is_empty());
+        }
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_from_global_search_index_with_bool_data_type() {
+        before_each();
+
+        // Create test data with blur=true
+        let blurred_track: Vec<(&str, DataValue)> = vec![
+            ("artist_title", DataValue::String("Blur Artist".into())),
+            ("artist_id", DataValue::Number(100)),
+            ("album_title", DataValue::String("Blur Album".into())),
+            ("album_id", DataValue::Number(100)),
+            ("track_title", DataValue::String("Blurred Track".into())),
+            ("track_id", DataValue::Number(100)),
+            ("blur", DataValue::Bool(true)),
+        ];
+
+        crate::populate_global_search_index_sync(&[blurred_track], true).unwrap();
+
+        // Verify the track is searchable
+        let results_before = crate::search_global_search_index("blurred", 0, 10).unwrap();
+        assert!(!results_before.is_empty());
+
+        // Delete using boolean data type - this tests the Term::from_field_bool path
+        let result = crate::delete_from_global_search_index(&[("blur", DataValue::Bool(true))]);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_from_global_search_index_with_number_data_type() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Delete using number data type - this tests the Term::from_field_u64 path
+        // Note: This deletes by the artist_id field which is stored as a Number
+        let result =
+            crate::delete_from_global_search_index(&[("artist_id", DataValue::Number(51))]);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_by_artist_name() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search by artist name should find the artist entry and related albums/tracks
+        let results = crate::search_global_search_index("elder", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Check that we get results with "Elder" in the artist_title
+        let has_elder_artist = results.iter().any(|doc| {
+            doc.0
+                .get("artist_title")
+                .and_then(|v| v.first())
+                .is_some_and(
+                    |v| matches!(v, OwnedValue::Str(s) if s.to_lowercase().contains("elder")),
+                )
+        });
+        assert!(has_elder_artist);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_by_album_title() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search by album title
+        let results = crate::search_global_search_index("omens", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Check that we get results with "Omens" in the album_title
+        let has_omens_album = results.iter().any(|doc| {
+            doc.0
+                .get("album_title")
+                .and_then(|v| v.first())
+                .is_some_and(
+                    |v| matches!(v, OwnedValue::Str(s) if s.to_lowercase().contains("omens")),
+                )
+        });
+        assert!(has_omens_album);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_by_track_title() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search by track title
+        let results = crate::search_global_search_index("halcyon", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Check that we get results with "Halcyon" in the track_title
+        let has_halcyon_track = results.iter().any(|doc| {
+            doc.0
+                .get("track_title")
+                .and_then(|v| v.first())
+                .is_some_and(
+                    |v| matches!(v, OwnedValue::Str(s) if s.to_lowercase().contains("halcyon")),
+                )
+        });
+        assert!(has_halcyon_track);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_fuzzy_matching() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with a slight typo - fuzzy matching should still find results
+        // "eldr" is close to "elder"
+        let results = crate::search_global_search_index("eldr", 0, 10).unwrap();
+
+        // Fuzzy matching with edit distance 1 should find "Elder"
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_case_insensitivity() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with different cases - should find same results
+        let results_lower = crate::search_global_search_index("elder", 0, 10).unwrap();
+        let results_upper = crate::search_global_search_index("ELDER", 0, 10).unwrap();
+        let results_mixed = crate::search_global_search_index("ElDeR", 0, 10).unwrap();
+
+        // All should find results (case insensitive search)
+        assert!(!results_lower.is_empty());
+        assert!(!results_upper.is_empty());
+        assert!(!results_mixed.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_deduplication() {
+        before_each();
+
+        // Create duplicate-ish data that might produce similar results
+        // Include document_type for global_search to parse correctly
+        let track1: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Unique Artist".into())),
+            ("artist_id", DataValue::String("200".into())),
+            ("album_title", DataValue::String("Same Album".into())),
+            ("album_id", DataValue::String("200".into())),
+            ("track_title", DataValue::String("Track One".into())),
+            ("track_id", DataValue::String("200".into())),
+        ];
+        let track2: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Unique Artist".into())),
+            ("artist_id", DataValue::String("200".into())),
+            ("album_title", DataValue::String("Same Album".into())),
+            ("album_id", DataValue::String("200".into())),
+            ("track_title", DataValue::String("Track Two".into())),
+            ("track_id", DataValue::String("201".into())),
+        ];
+
+        crate::populate_global_search_index_sync(&[track1, track2], true).unwrap();
+
+        // Search for "unique" - should find results and deduplicate
+        let response = crate::global_search("unique artist", None, None).unwrap();
+
+        // Verify results don't have duplicate keys
+        let keys: Vec<_> = response
+            .results
+            .iter()
+            .map(moosicbox_music_api_models::search::api::ApiGlobalSearchResult::to_key)
+            .collect();
+        let unique_keys: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(
+            keys.len(),
+            unique_keys.len(),
+            "Results should be deduplicated"
+        );
+    }
 }
