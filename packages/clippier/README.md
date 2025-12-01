@@ -990,17 +990,14 @@ jobs:
 
             - name: Install tools
               run: |
-                  cargo install taplo-cli
+                  cargo install clippier taplo-cli
                   npm install -g prettier
 
-            - name: Build clippier
-              run: cargo build --release --package clippier
-
             - name: Check formatting
-              run: ./target/release/clippier fmt --check
+              run: clippier fmt --check
 
             - name: Run linters
-              run: ./target/release/clippier check
+              run: clippier check
 ```
 
 ### Docker Deployment
