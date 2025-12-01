@@ -1,3 +1,36 @@
+//! # Digest Trait
+//!
+//! This module defines the [`Digest`] trait used for checksum computation in
+//! the migration system. Types implementing this trait can contribute to a
+//! SHA-256 hash in a deterministic way.
+//!
+//! ## Usage
+//!
+//! The `Digest` trait is used internally by the migration system to compute
+//! checksums for database operations. It ensures that the same sequence of
+//! operations always produces the same checksum.
+//!
+//! ## Implementing Digest
+//!
+//! Custom types can implement `Digest` to participate in checksum computation:
+//!
+//! ```rust
+//! use sha2::Sha256;
+//! use sha2::Digest as _;
+//! use switchy_schema::Digest as DigestTrait;
+//!
+//! struct MyType {
+//!     value: String,
+//! }
+//!
+//! impl DigestTrait for MyType {
+//!     fn update_digest(&self, hasher: &mut Sha256) {
+//!         hasher.update(b"MYTYPE:");
+//!         hasher.update(self.value.as_bytes());
+//!     }
+//! }
+//! ```
+
 use sha2::Sha256;
 
 /// Trait for types that can contribute to a checksum digest

@@ -1,3 +1,29 @@
+//! # Test Utilities
+//!
+//! This module provides utilities for testing database migrations. It includes
+//! helper types for creating test databases and building test migrations.
+//!
+//! ## Available Types
+//!
+//! * [`TestDatabase`] - Test database instance for migration validation
+//! * [`TestMigrationBuilder`] - Builder for creating test migrations
+//!
+//! ## Feature Gate
+//!
+//! This module is only available when the `test-utils` feature is enabled.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "test-utils")]
+//! # {
+//! use switchy_schema::test_utils::{TestDatabase, TestMigrationBuilder};
+//!
+//! let db = TestDatabase::new();
+//! let builder = TestMigrationBuilder::new();
+//! # }
+//! ```
+
 /// Test database implementation for migration testing
 ///
 /// This type provides a test database instance for validating migrations

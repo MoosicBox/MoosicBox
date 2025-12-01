@@ -1,3 +1,28 @@
+//! # Migration Validation
+//!
+//! This module provides validation functionality for database migrations.
+//! It can verify migration integrity, check for conflicts, and validate
+//! migration dependencies.
+//!
+//! ## Available Types
+//!
+//! * [`MigrationValidator`] - Validator for migration integrity checking
+//!
+//! ## Feature Gate
+//!
+//! This module is only available when the `validation` feature is enabled.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "validation")]
+//! # {
+//! use switchy_schema::validation::MigrationValidator;
+//!
+//! let validator = MigrationValidator::new();
+//! # }
+//! ```
+
 /// Migration validator for verifying migration integrity and consistency
 ///
 /// This type provides validation functionality for database migrations.
