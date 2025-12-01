@@ -850,15 +850,13 @@ fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
     Ok(Expression::RawRust(raw_code))
 }
 
-/// Fallback parsing function that wraps complex expressions as raw Rust code
+/// Fallback parsing function that wraps complex expressions as raw Rust code.
 ///
 /// This function checks if the input starts with a known DSL function or keyword.
 /// If so, it attempts to parse with argument-level fallback. Otherwise, it wraps
 /// the entire input as raw Rust code.
 ///
-/// # Must use
-///
-/// The returned `Dsl` structure should be used for code generation
+/// The returned `Dsl` structure should be used for code generation.
 #[must_use]
 pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
     // Check if the input starts with a known DSL function or control flow construct
