@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Basic usage example for Turso Database backend.
 //!
 //! This example demonstrates the fundamental operations available with the Turso database
@@ -60,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let name = name_val.as_str().unwrap();
         let email_val = row.get("email").unwrap();
         let email = email_val.as_str().unwrap();
-        println!("  * {} - {} ({})", id, name, email);
+        println!("  * {id} - {name} ({email})");
     }
     println!();
 
@@ -93,14 +97,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Final user count:");
     let final_rows = db.query_raw("SELECT COUNT(*) as count FROM users").await?;
     let count = final_rows[0].get("count").unwrap().as_i64().unwrap();
-    println!("  {} users remaining\n", count);
+    println!("  {count} users remaining\n");
 
     println!("Checking table existence...");
     let db_trait: &dyn Database = &db;
     let users_exists = db_trait.table_exists("users").await?;
     let posts_exists = db_trait.table_exists("posts").await?;
-    println!("  * 'users' table exists: {}", users_exists);
-    println!("  * 'posts' table exists: {}", posts_exists);
+    println!("  * 'users' table exists: {users_exists}");
+    println!("  * 'posts' table exists: {posts_exists}");
     println!();
 
     println!("Getting table columns...");
