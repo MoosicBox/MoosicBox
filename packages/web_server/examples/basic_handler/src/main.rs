@@ -127,9 +127,10 @@ fn run_actix_example() {
 ///
 /// # Errors
 ///
-/// * Request data extraction fails
-/// * Route creation fails
-/// * Backend initialization fails
+/// This function returns an error if:
+///
+/// * Request data extraction fails when parsing the simulated request
+/// * The `SimulationStub` cannot be properly initialized
 #[cfg(any(feature = "simulator", not(feature = "actix")))]
 fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
@@ -189,8 +190,9 @@ fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// # Errors
 ///
-/// * Backend example execution fails
-/// * No backend features are enabled
+/// This function returns an error if:
+///
+/// * The simulator backend example fails during execution
 #[cfg_attr(
     all(
         feature = "actix",
