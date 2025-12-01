@@ -66,3 +66,129 @@ where
     /// Adds an interaction to the plan.
     fn add_interaction(&mut self, interaction: T);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test implementation of `InteractionPlan` for verification.
+    struct TestPlan {
+        interactions: Vec<String>,
+        index: usize,
+    }
+
+    impl TestPlan {
+        fn new() -> Self {
+            Self {
+                interactions: vec![],
+                index: 0,
+            }
+        }
+    }
+
+    impl InteractionPlan<String> for TestPlan {
+        fn step(&mut self) -> Option<&String> {
+            let result = self.interactions.get(self.index);
+            if result.is_some() {
+                self.index += 1;
+            }
+            result
+        }
+
+        fn gen_interactions(&mut self, count: u64) {
+            for i in 0..count {
+                self.interactions.push(format!("gen-{i}"));
+            }
+        }
+
+        fn add_interaction(&mut self, interaction: String) {
+            self.interactions.push(interaction);
+        }
+    }
+
+    #[test_log::test]
+    fn test_step_returns_interactions_in_order() {
+        let mut plan = TestPlan::new();
+        plan.add_interaction("first".to_string());
+        plan.add_interaction("second".to_string());
+        plan.add_interaction("third".to_string());
+
+        assert_eq!(plan.step(), Some(&"first".to_string()));
+        assert_eq!(plan.step(), Some(&"second".to_string()));
+        assert_eq!(plan.step(), Some(&"third".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_step_returns_none_when_exhausted() {
+        let mut plan = TestPlan::new();
+        plan.add_interaction("only".to_string());
+
+        assert_eq!(plan.step(), Some(&"only".to_string()));
+        assert_eq!(plan.step(), None);
+        // Multiple calls to step after exhaustion should still return None
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_step_on_empty_plan_returns_none() {
+        let mut plan = TestPlan::new();
+
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_with_interaction_builder_chaining() {
+        let mut plan = TestPlan::new()
+            .with_interaction("a".to_string())
+            .with_interaction("b".to_string())
+            .with_interaction("c".to_string());
+
+        assert_eq!(plan.step(), Some(&"a".to_string()));
+        assert_eq!(plan.step(), Some(&"b".to_string()));
+        assert_eq!(plan.step(), Some(&"c".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_with_gen_interactions_builder() {
+        let mut plan = TestPlan::new().with_gen_interactions(3);
+
+        assert_eq!(plan.step(), Some(&"gen-0".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-1".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-2".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_with_gen_interactions_zero_count() {
+        let mut plan = TestPlan::new().with_gen_interactions(0);
+
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_mixed_builder_and_manual_additions() {
+        let mut plan = TestPlan::new()
+            .with_interaction("manual-1".to_string())
+            .with_gen_interactions(2)
+            .with_interaction("manual-2".to_string());
+
+        assert_eq!(plan.step(), Some(&"manual-1".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-0".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-1".to_string()));
+        assert_eq!(plan.step(), Some(&"manual-2".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+
+    #[test_log::test]
+    fn test_gen_interactions_appends_to_existing() {
+        let mut plan = TestPlan::new();
+        plan.add_interaction("existing".to_string());
+        plan.gen_interactions(2);
+
+        assert_eq!(plan.step(), Some(&"existing".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-0".to_string()));
+        assert_eq!(plan.step(), Some(&"gen-1".to_string()));
+        assert_eq!(plan.step(), None);
+    }
+}
