@@ -840,6 +840,23 @@ mod tests {
         }
 
         #[test_log::test(switchy_async::test)]
+        async fn test_process_route_returning_none_returns_204() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            // Use with_no_content_result to create a route that returns None on success
+            let router = Router::new().with_no_content_result("/no-content", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>(())
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/no-content");
+            let response = app.process(&req).await.unwrap();
+
+            // Router returning None should produce a 204 No Content response
+            assert_eq!(response.status(), 204);
+            assert!(response.body().is_empty());
+        }
+
+        #[test_log::test(switchy_async::test)]
         async fn test_process_includes_css_urls_in_response() {
             use hyperchad_router::{Container, Element};
 
