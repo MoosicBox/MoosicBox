@@ -528,4 +528,156 @@ mod tests {
             assert_eq!(result, "A (+1)");
         }
     }
+
+    mod album_version_quality_format_local_tests {
+        use super::*;
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_with_format_sample_rate_and_bit_depth() {
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(44_100),
+                bit_depth: Some(16),
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 44.1 kHz 16-bit");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_with_format_only() {
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: None,
+                bit_depth: None,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_with_format_and_sample_rate() {
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(96_000),
+                bit_depth: None,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 96 kHz");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_with_format_and_bit_depth() {
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: None,
+                bit_depth: Some(24),
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 24-bit");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_sample_rate_decimal_normalization() {
+            // 48000 Hz = 48 kHz (should normalize to "48" not "48.00")
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(48_000),
+                bit_depth: None,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 48 kHz");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_high_resolution_sample_rate() {
+            // 192000 Hz = 192 kHz
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(192_000),
+                bit_depth: Some(32),
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 192 kHz 32-bit");
+        }
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_local_source_non_standard_sample_rate() {
+            // 88200 Hz = 88.2 kHz
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(88_200),
+                bit_depth: None,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 88.2 kHz");
+        }
+
+        #[test_log::test]
+        fn test_api_source_formats_as_source_name() {
+            let quality = AlbumVersionQuality {
+                source: TrackApiSource::Api(ApiSource::library()),
+                format: None,
+                sample_rate: None,
+                bit_depth: None,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            // API sources delegate to the source's format, not the audio format
+            assert_eq!(result, "API:Library");
+        }
+    }
+
+    mod audio_format_format_tests {
+        use super::*;
+
+        #[cfg(feature = "flac")]
+        #[test_log::test]
+        fn test_flac_format() {
+            assert_eq!(AudioFormat::Flac.into_formatted(), "FLAC");
+        }
+
+        #[cfg(feature = "mp3")]
+        #[test_log::test]
+        fn test_mp3_format() {
+            assert_eq!(AudioFormat::Mp3.into_formatted(), "MP3");
+        }
+
+        #[cfg(feature = "aac")]
+        #[test_log::test]
+        fn test_aac_format() {
+            assert_eq!(AudioFormat::Aac.into_formatted(), "AAC");
+        }
+
+        #[cfg(feature = "opus")]
+        #[test_log::test]
+        fn test_opus_format() {
+            assert_eq!(AudioFormat::Opus.into_formatted(), "OPUS");
+        }
+
+        #[test_log::test]
+        fn test_source_format() {
+            assert_eq!(AudioFormat::Source.into_formatted(), "N/A");
+        }
+    }
 }
