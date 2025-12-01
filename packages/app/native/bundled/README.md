@@ -55,38 +55,47 @@ moosicbox_app_native_bundled = { path = "../app/native/bundled" }
 
 ```rust
 use moosicbox_app_native_bundled::{service, Command, Context};
+use moosicbox_app_native_bundled::service::Commander;
 use moosicbox_async_service::runtime::Handle;
 
 // Create service context
-let handle = Handle::current();
-let context = Context::new(&handle);
+let runtime_handle = Handle::current();
+let context = Context::new(&runtime_handle);
 
-// Create and start service
+// Create service and get handle before starting
 let service = service::Service::new(context);
-service.start().await?;
+let handle = service.handle();
 
-// Send commands
-service.send(Command::WaitForStartup { sender }).await?;
+// Start service (returns JoinHandle)
+let join_handle = service.start();
+
+// Send commands via handle
+let (sender, receiver) = switchy_async::sync::oneshot::channel();
+handle.send_command(Command::WaitForStartup { sender })?;
 ```
 
 ### Event Handling
 
 ```rust
 use moosicbox_app_native_bundled::Command;
+use moosicbox_app_native_bundled::service::Commander;
 use tauri::RunEvent;
 use std::sync::Arc;
 
-// Handle Tauri events
+// Handle Tauri events (via service handle)
 let event = Arc::new(RunEvent::ExitRequested { api: exit_api });
-service.send(Command::RunEvent { event }).await?;
+handle.send_command(Command::RunEvent { event })?;
 ```
 
 ### Startup Synchronization
 
 ```rust
-// Wait for server startup
+use moosicbox_app_native_bundled::Command;
+use moosicbox_app_native_bundled::service::Commander;
+
+// Wait for server startup (via service handle)
 let (sender, receiver) = switchy_async::sync::oneshot::channel();
-service.send(Command::WaitForStartup { sender }).await?;
+handle.send_command(Command::WaitForStartup { sender })?;
 
 // Wait for startup completion
 receiver.await?;
@@ -96,12 +105,14 @@ println!("Server is ready!");
 ### Shutdown Coordination
 
 ```rust
-// Wait for clean shutdown
-let (sender, receiver) = switchy_async::sync::oneshot::channel();
-service.send(Command::WaitForShutdown { sender }).await?;
+use moosicbox_app_native_bundled::Command;
+use moosicbox_app_native_bundled::service::Commander;
 
-// Wait for shutdown completion
-receiver.await?;
+// Shutdown the service
+handle.shutdown()?;
+
+// Wait for service to complete
+join_handle.await??;
 println!("Application shutdown complete");
 ```
 
