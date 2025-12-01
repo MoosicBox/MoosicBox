@@ -1135,4 +1135,217 @@ mod tests {
         let bool_lit = Literal::bool(true);
         assert_eq!(bool_lit, Literal::Bool(true));
     }
+
+    // ============================================
+    // ElementVariable logic feature method tests
+    // ============================================
+    //
+    // These methods are only available when the "logic" feature is enabled.
+    // They create CalcValue instances that use Target::Ref to enable
+    // runtime resolution of element names from variables.
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_toggle_visibility() {
+        let element_var = ElementVariable {
+            name: "toggle-element".to_string(),
+        };
+
+        let action = element_var.toggle_visibility();
+
+        // toggle_visibility creates a Logic action with If condition
+        match action {
+            ActionType::Logic(if_action) => {
+                // The condition should check visibility of the element
+                match &if_action.condition {
+                    crate::logic::Condition::Eq(left, _) => match left {
+                        crate::logic::Value::Calc(crate::logic::CalcValue::Visibility {
+                            target,
+                        }) => match target {
+                            ElementTarget::StrId(target_ref) => {
+                                assert!(
+                                    matches!(target_ref, Target::Ref(name) if name == "toggle-element"),
+                                    "Expected Target::Ref for variable, got {target_ref:?}",
+                                );
+                            }
+                            _ => panic!("Expected ElementTarget::StrId"),
+                        },
+                        _ => panic!("Expected CalcValue::Visibility"),
+                    },
+                    crate::logic::Condition::Bool(_) => panic!("Expected Eq condition"),
+                }
+            }
+            _ => panic!("Expected Logic action type"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_visibility_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "visibility-var".to_string(),
+        };
+
+        let calc_value = element_var.visibility();
+
+        match calc_value {
+            crate::logic::CalcValue::Visibility { target } => match target {
+                ElementTarget::StrId(target_ref) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "visibility-var"),
+                        "Expected Target::Ref for variable, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected ElementTarget::StrId"),
+            },
+            _ => panic!("Expected CalcValue::Visibility"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_toggle_display() {
+        let element_var = ElementVariable {
+            name: "display-toggle".to_string(),
+        };
+
+        let action = element_var.toggle_display();
+
+        // toggle_display creates a Logic action
+        match action {
+            ActionType::Logic(if_action) => match &if_action.condition {
+                crate::logic::Condition::Eq(left, _) => match left {
+                    crate::logic::Value::Calc(crate::logic::CalcValue::Display { target }) => {
+                        match target {
+                            ElementTarget::StrId(target_ref) => {
+                                assert!(
+                                    matches!(target_ref, Target::Ref(name) if name == "display-toggle"),
+                                    "Expected Target::Ref, got {target_ref:?}",
+                                );
+                            }
+                            _ => panic!("Expected ElementTarget::StrId"),
+                        }
+                    }
+                    _ => panic!("Expected CalcValue::Display"),
+                },
+                crate::logic::Condition::Bool(_) => panic!("Expected Eq condition"),
+            },
+            _ => panic!("Expected Logic action type"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_get_display_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "get-display-var".to_string(),
+        };
+
+        let calc_value = element_var.get_display();
+
+        match calc_value {
+            crate::logic::CalcValue::Display { target } => match target {
+                ElementTarget::StrId(target_ref) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "get-display-var"),
+                        "Expected Target::Ref, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected ElementTarget::StrId"),
+            },
+            _ => panic!("Expected CalcValue::Display"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_get_width_px_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "width-element".to_string(),
+        };
+
+        let calc_value = element_var.get_width_px();
+
+        match calc_value {
+            crate::logic::CalcValue::WidthPx { target } => match target {
+                ElementTarget::StrId(target_ref) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "width-element"),
+                        "Expected Target::Ref, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected ElementTarget::StrId"),
+            },
+            _ => panic!("Expected CalcValue::WidthPx"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_get_height_px_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "height-element".to_string(),
+        };
+
+        let calc_value = element_var.get_height_px();
+
+        match calc_value {
+            crate::logic::CalcValue::HeightPx { target } => match target {
+                ElementTarget::StrId(target_ref) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "height-element"),
+                        "Expected Target::Ref, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected ElementTarget::StrId"),
+            },
+            _ => panic!("Expected CalcValue::HeightPx"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_get_mouse_x_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "mouse-x-element".to_string(),
+        };
+
+        let calc_value = element_var.get_mouse_x();
+
+        match calc_value {
+            crate::logic::CalcValue::MouseX { target } => match target {
+                Some(ElementTarget::StrId(target_ref)) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "mouse-x-element"),
+                        "Expected Target::Ref, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected Some(ElementTarget::StrId)"),
+            },
+            _ => panic!("Expected CalcValue::MouseX"),
+        }
+    }
+
+    #[cfg(feature = "logic")]
+    #[test_log::test]
+    fn test_element_variable_get_mouse_y_returns_calc_value() {
+        let element_var = ElementVariable {
+            name: "mouse-y-element".to_string(),
+        };
+
+        let calc_value = element_var.get_mouse_y();
+
+        match calc_value {
+            crate::logic::CalcValue::MouseY { target } => match target {
+                Some(ElementTarget::StrId(target_ref)) => {
+                    assert!(
+                        matches!(&target_ref, Target::Ref(name) if name == "mouse-y-element"),
+                        "Expected Target::Ref, got {target_ref:?}",
+                    );
+                }
+                _ => panic!("Expected Some(ElementTarget::StrId)"),
+            },
+            _ => panic!("Expected CalcValue::MouseY"),
+        }
+    }
 }

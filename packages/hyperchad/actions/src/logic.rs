@@ -1902,4 +1902,136 @@ mod tests {
         let result = grouped.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(5.0));
     }
+
+    // ============================================
+    // Value serde deserialization tests
+    // ============================================
+    //
+    // The custom Deserialize impl for Value converts raw JSON numbers
+    // directly to Value::Real(f32) for ergonomic deserialization from
+    // JSON payloads that include numeric literals.
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_i64_to_real() {
+        // JSON integers should deserialize directly to Value::Real
+        let json = "42";
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Real(42.0));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_negative_i64_to_real() {
+        // Negative integers should also deserialize to Value::Real
+        let json = "-123";
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Real(-123.0));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_f64_to_real() {
+        // Floating point numbers should deserialize to Value::Real
+        let json = "42.5";
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Real(42.5));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_large_u64_to_real() {
+        // Large unsigned integers should deserialize to Value::Real
+        // (with potential precision loss for very large values)
+        let json = "999999";
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Real(999_999.0));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_zero_to_real() {
+        let json = "0";
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Real(0.0));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_visibility_variant() {
+        // Visibility uses internally tagged enum format (serde(tag = "type"))
+        // so the JSON must contain the "type" field inside the nested object
+        let json = r#"{"Visibility": {"type": "Hidden"}}"#;
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Visibility(Visibility::Hidden));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_display_variant() {
+        let json = r#"{"Display": true}"#;
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::Display(true));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_string_variant() {
+        let json = r#"{"String": "hello world"}"#;
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        assert_eq!(value, Value::String("hello world".to_string()));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_deserialize_real_variant() {
+        // Explicit Real variant should also work
+        let json = r#"{"Real": 2.71}"#;
+        let value: Value = serde_json::from_str(json).unwrap();
+
+        // Should be close to 2.71 (within f32 precision)
+        match value {
+            Value::Real(v) => assert!((v - 2.71).abs() < 0.001),
+            _ => panic!("Expected Value::Real"),
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_serialize_roundtrip() {
+        // Test that values can be serialized and deserialized consistently
+        let original = Value::Visibility(Visibility::Visible);
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized, original);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_serialize_roundtrip_string() {
+        let original = Value::String("test-string".to_string());
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized, original);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_value_serialize_roundtrip_layout_direction() {
+        let original = Value::LayoutDirection(LayoutDirection::Column);
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized, original);
+    }
 }
