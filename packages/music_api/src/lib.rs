@@ -107,6 +107,8 @@ impl SourceToMusicApi for MusicApis {
 }
 
 /// Iterator over music API implementations.
+///
+/// Created by [`MusicApis::iter`] or by calling [`IntoIterator::into_iter`] on `&MusicApis`.
 pub struct MusicApisIter<'a> {
     inner: std::collections::btree_map::Iter<'a, ApiSource, Arc<Box<dyn MusicApi>>>,
 }
