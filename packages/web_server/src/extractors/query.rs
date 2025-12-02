@@ -1,3 +1,34 @@
+//! Query parameter extractor for HTTP requests.
+//!
+//! This module provides the [`Query<T>`] extractor for parsing URL query parameters
+//! into typed Rust structs using `serde_querystring`.
+//!
+//! # Overview
+//!
+//! The query extractor parses the URL query string and deserializes it into the
+//! target type. It supports both simple key-value pairs and more complex structures
+//! including optional fields and arrays.
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::Query;
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct SearchParams {
+//!     q: String,
+//!     limit: Option<u32>,
+//!     page: Option<u32>,
+//! }
+//!
+//! async fn search(Query(params): Query<SearchParams>) -> Result<HttpResponse, Error> {
+//!     // For URL: /search?q=rust&limit=10
+//!     println!("Searching for: {}", params.q);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
