@@ -2371,6 +2371,131 @@ mod tests {
                 None
             );
         }
+
+        #[test_log::test]
+        fn test_as_i8_extraction() {
+            // Direct Int8
+            assert_eq!(DatabaseValue::Int8(42).as_i8(), Some(42));
+            assert_eq!(DatabaseValue::Int8(-100).as_i8(), Some(-100));
+            assert_eq!(DatabaseValue::Int8Opt(Some(10)).as_i8(), Some(10));
+            assert_eq!(DatabaseValue::Int8Opt(None).as_i8(), None);
+
+            // Non-i8 types return None
+            assert_eq!(DatabaseValue::Int16(100).as_i8(), None);
+            assert_eq!(DatabaseValue::Int32(100).as_i8(), None);
+            assert_eq!(DatabaseValue::String("test".to_string()).as_i8(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_i16_coercion() {
+            // Direct Int16
+            assert_eq!(DatabaseValue::Int16(1000).as_i16(), Some(1000));
+            assert_eq!(DatabaseValue::Int16(-500).as_i16(), Some(-500));
+            assert_eq!(DatabaseValue::Int16Opt(Some(200)).as_i16(), Some(200));
+            assert_eq!(DatabaseValue::Int16Opt(None).as_i16(), None);
+
+            // Coercion from Int8
+            assert_eq!(DatabaseValue::Int8(50).as_i16(), Some(50));
+            assert_eq!(DatabaseValue::Int8(-50).as_i16(), Some(-50));
+            assert_eq!(DatabaseValue::Int8Opt(Some(10)).as_i16(), Some(10));
+
+            // Non-integer types return None
+            assert_eq!(DatabaseValue::Int32(100).as_i16(), None);
+            assert_eq!(DatabaseValue::String("test".to_string()).as_i16(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_i32_coercion() {
+            // Direct Int32
+            assert_eq!(DatabaseValue::Int32(50_000).as_i32(), Some(50_000));
+            assert_eq!(DatabaseValue::Int32(-25_000).as_i32(), Some(-25_000));
+            assert_eq!(DatabaseValue::Int32Opt(Some(123)).as_i32(), Some(123));
+            assert_eq!(DatabaseValue::Int32Opt(None).as_i32(), None);
+
+            // Coercion from smaller types
+            assert_eq!(DatabaseValue::Int8(100).as_i32(), Some(100));
+            assert_eq!(DatabaseValue::Int8Opt(Some(-50)).as_i32(), Some(-50));
+            assert_eq!(DatabaseValue::Int16(5000).as_i32(), Some(5000));
+            assert_eq!(DatabaseValue::Int16Opt(Some(-1000)).as_i32(), Some(-1000));
+
+            // Non-integer types return None
+            assert_eq!(DatabaseValue::Int64(100).as_i32(), None);
+            assert_eq!(DatabaseValue::Real64(1.5).as_i32(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_u8_extraction() {
+            // Direct UInt8
+            assert_eq!(DatabaseValue::UInt8(200).as_u8(), Some(200));
+            assert_eq!(DatabaseValue::UInt8Opt(Some(50)).as_u8(), Some(50));
+            assert_eq!(DatabaseValue::UInt8Opt(None).as_u8(), None);
+
+            // Non-u8 types return None
+            assert_eq!(DatabaseValue::UInt16(100).as_u8(), None);
+            assert_eq!(DatabaseValue::UInt32(100).as_u8(), None);
+            assert_eq!(DatabaseValue::Int8(10).as_u8(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_u16_coercion() {
+            // Direct UInt16
+            assert_eq!(DatabaseValue::UInt16(50_000).as_u16(), Some(50_000));
+            assert_eq!(DatabaseValue::UInt16Opt(Some(1000)).as_u16(), Some(1000));
+            assert_eq!(DatabaseValue::UInt16Opt(None).as_u16(), None);
+
+            // Coercion from UInt8
+            assert_eq!(DatabaseValue::UInt8(200).as_u16(), Some(200));
+            assert_eq!(DatabaseValue::UInt8Opt(Some(100)).as_u16(), Some(100));
+
+            // Non-unsigned types return None
+            assert_eq!(DatabaseValue::UInt32(100).as_u16(), None);
+            assert_eq!(DatabaseValue::Int16(100).as_u16(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_u32_coercion() {
+            // Direct UInt32
+            assert_eq!(DatabaseValue::UInt32(1_000_000).as_u32(), Some(1_000_000));
+            assert_eq!(DatabaseValue::UInt32Opt(Some(500)).as_u32(), Some(500));
+            assert_eq!(DatabaseValue::UInt32Opt(None).as_u32(), None);
+
+            // Coercion from smaller types
+            assert_eq!(DatabaseValue::UInt8(255).as_u32(), Some(255));
+            assert_eq!(DatabaseValue::UInt8Opt(Some(100)).as_u32(), Some(100));
+            assert_eq!(DatabaseValue::UInt16(60_000).as_u32(), Some(60_000));
+            assert_eq!(DatabaseValue::UInt16Opt(Some(5000)).as_u32(), Some(5000));
+
+            // Non-unsigned types return None
+            assert_eq!(DatabaseValue::UInt64(100).as_u32(), None);
+            assert_eq!(DatabaseValue::Int32(100).as_u32(), None);
+        }
+
+        #[test_log::test]
+        fn test_as_f32_extraction() {
+            // Direct Real32
+            let val = DatabaseValue::Real32(12.375f32);
+            let result = val.as_f32().unwrap();
+            assert!((result - 12.375).abs() < 0.001);
+
+            assert_eq!(
+                DatabaseValue::Real32Opt(Some(2.5f32)).as_f32(),
+                Some(2.5f32)
+            );
+            assert_eq!(DatabaseValue::Real32Opt(None).as_f32(), None);
+
+            // Non-f32 types return None (Real64 does not coerce to f32 via as_f32)
+            assert_eq!(DatabaseValue::Real64(1.5).as_f32(), None);
+            assert_eq!(DatabaseValue::Int32(100).as_f32(), None);
+            assert_eq!(DatabaseValue::String("12.375".to_string()).as_f32(), None);
+        }
+
+        #[test_log::test]
+        fn test_is_null_for_real32_opt_variants() {
+            // Real32Opt(None) should be null
+            assert!(DatabaseValue::Real32Opt(None).is_null());
+            // Real32Opt(Some) should NOT be null
+            assert!(!DatabaseValue::Real32Opt(Some(1.5f32)).is_null());
+        }
     }
 
     mod try_from_database_value_tests {
