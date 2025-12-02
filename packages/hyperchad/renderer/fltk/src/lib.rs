@@ -1295,7 +1295,6 @@ impl FltkRenderer {
     ///
     /// This method blocks until a navigation event occurs in the UI, then returns the
     /// destination URL.
-    #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
