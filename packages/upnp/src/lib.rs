@@ -1445,6 +1445,38 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_parse_track_metadata_duration_parsing() {
+        // Tests various duration formats in metadata res elements
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+                <res duration="01:30:45">http://example.com/long_track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata with duration");
+        assert_eq!(result.items.len(), 1);
+        // 1:30:45 = 1*3600 + 30*60 + 45 = 3600 + 1800 + 45 = 5445 seconds
+        assert_eq!(result.items[0].res.duration, Some(5445));
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_with_special_characters_in_url() {
+        // Tests URL with query parameters and special characters (common in streaming APIs)
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+            <item id="0" parentID="-1" restricted="false">
+                <res>http://192.168.1.100:8001/track?trackId=12911&amp;source=LIBRARY&amp;quality=HIGH</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata with special URL");
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(
+            result.items[0].res.source,
+            "http://192.168.1.100:8001/track?trackId=12911&source=LIBRARY&quality=HIGH"
+        );
+    }
+
+    #[test_log::test]
     fn test_str_to_duration_boundary_values() {
         // Test boundary between time units
         assert_eq!(str_to_duration("00:00:59"), 59);
@@ -1591,6 +1623,21 @@ mod tests {
         fn test_scanner_new_creates_default_state() {
             let scanner = UpnpDeviceScanner::new();
             assert!(!scanner.scanning);
+            assert!(scanner.devices.is_empty());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_scanner_scan_completes_with_empty_device_list() {
+            // Tests the scan path when no devices are found (simulator returns empty stream)
+            let mut scanner = UpnpDeviceScanner::new();
+            assert!(!scanner.scanning);
+            assert!(scanner.devices.is_empty());
+
+            let result = scanner.scan().await;
+            assert!(result.is_ok());
+            // After scan completes, scanning flag should be reset to false
+            assert!(!scanner.scanning);
+            // Devices list should still be empty (no devices discovered in simulator mode)
             assert!(scanner.devices.is_empty());
         }
     }
