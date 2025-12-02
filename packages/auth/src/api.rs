@@ -120,7 +120,10 @@ pub async fn get_magic_token_endpoint(
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateMagicTokenQuery {
-    /// Optional host URL to generate a complete link with the magic token.
+    /// Host URL to generate a complete link with the magic token.
+    ///
+    /// When provided, the response includes a `url` field containing the
+    /// full URL with the magic token appended as a query parameter.
     host: Option<String>,
 }
 
