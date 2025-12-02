@@ -205,6 +205,7 @@ pub fn var(name: &str) -> Result<String> {
 }
 
 /// Get an environment variable with a default value
+#[must_use]
 pub fn var_or(name: &str, default: &str) -> String {
     PROVIDER.var_or(name, default)
 }
@@ -252,6 +253,7 @@ where
 }
 
 /// Check if an environment variable exists
+#[must_use]
 pub fn var_exists(name: &str) -> bool {
     PROVIDER.var_exists(name)
 }
@@ -261,6 +263,7 @@ pub fn var_exists(name: &str) -> bool {
 /// # Panics
 ///
 /// * If the internal `RwLock` is poisoned
+#[must_use]
 pub fn vars() -> BTreeMap<String, String> {
     PROVIDER.vars()
 }
