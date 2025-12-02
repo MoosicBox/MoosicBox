@@ -347,6 +347,7 @@ spec:
           served: true
           storage: true
 
+
 # END crd
 ---
 # Source: cert-manager/templates/crds.yaml
@@ -1119,6 +1120,7 @@ spec:
                                   type: integer
           served: true
           storage: true
+
 
 # END crd
 ---
@@ -3201,6 +3203,7 @@ spec:
           storage: true
           subresources:
               status: {}
+
 
 # END crd
 ---
@@ -5795,6 +5798,7 @@ spec:
           served: true
           storage: true
 
+
 # END crd
 ---
 # Source: cert-manager/templates/crds.yaml
@@ -8388,6 +8392,7 @@ spec:
           served: true
           storage: true
 
+
 # END crd
 ---
 # Source: cert-manager/templates/crds.yaml
@@ -8656,6 +8661,7 @@ spec:
                                   type: string
           served: true
           storage: true
+
 
 # END crd
 
