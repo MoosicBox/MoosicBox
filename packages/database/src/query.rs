@@ -1536,6 +1536,9 @@ impl<'a> UpsertStatement<'a> {
         self
     }
 
+    /// Sets a column-value pair only if the value is `Some`
+    ///
+    /// This is useful for conditional updates where a value should only be set if present.
     #[must_use]
     pub fn value_opt<T: Into<Box<dyn Expression>>>(
         mut self,
@@ -1548,12 +1551,16 @@ impl<'a> UpsertStatement<'a> {
         self
     }
 
+    /// Specifies unique columns that identify conflicts
+    ///
+    /// These columns determine when to update instead of insert.
     #[must_use]
     pub const fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
+    /// Limits the number of rows affected by the upsert
     #[must_use]
     pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
@@ -1632,6 +1639,7 @@ impl FilterableQuery for DeleteStatement<'_> {
 }
 
 impl DeleteStatement<'_> {
+    /// Limits the number of rows to delete
     #[must_use]
     pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);

@@ -169,13 +169,13 @@ impl SimulationDatabase {
         Ok(db)
     }
 
+    /// Creates a new simulation database with a unique in-memory database
+    ///
+    /// Each call creates a completely isolated database instance.
+    ///
     /// # Errors
     ///
     /// * If the database connection fails to open in memory
-    ///
-    /// # Panics
-    ///
-    /// * If time goes backwards
     pub fn new() -> Result<Self, DatabaseError> {
         // For backwards compatibility, create a unique database each time
         // when no path is specified
