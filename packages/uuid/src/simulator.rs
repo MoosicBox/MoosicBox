@@ -213,4 +213,70 @@ mod tests {
             byte8_lower_bits
         );
     }
+
+    #[test_log::test]
+    fn test_concurrent_uuid_generation_produces_unique_uuids() {
+        use std::collections::BTreeSet;
+        use std::sync::Arc;
+
+        // Generate UUIDs from multiple threads concurrently and verify uniqueness
+        let num_threads = 4;
+        let uuids_per_thread = 50;
+
+        let all_uuids: Arc<std::sync::Mutex<BTreeSet<Uuid>>> =
+            Arc::new(std::sync::Mutex::new(BTreeSet::new()));
+
+        std::thread::scope(|s| {
+            for _ in 0..num_threads {
+                let uuids_clone = Arc::clone(&all_uuids);
+                s.spawn(move || {
+                    for _ in 0..uuids_per_thread {
+                        let uuid = new_v4();
+                        let was_inserted = uuids_clone.lock().unwrap().insert(uuid);
+                        assert!(
+                            was_inserted,
+                            "Concurrent UUID generation produced duplicate: {uuid}"
+                        );
+                    }
+                });
+            }
+        });
+
+        let final_count = all_uuids.lock().unwrap().len();
+        assert_eq!(
+            final_count,
+            num_threads * uuids_per_thread,
+            "Expected {} unique UUIDs from concurrent generation, got {}",
+            num_threads * uuids_per_thread,
+            final_count
+        );
+    }
+
+    #[test_log::test]
+    fn test_all_uuid_bytes_are_populated() {
+        use std::collections::BTreeSet;
+
+        // Verify that all 16 bytes of the generated UUID contain meaningful data
+        // from the RNG, not just the version/variant bytes.
+        // Generate multiple UUIDs and collect unique values seen at each byte position.
+        let mut byte_variations: [BTreeSet<u8>; 16] = Default::default();
+
+        for _ in 0..100 {
+            let uuid = new_v4();
+            let bytes = uuid.as_bytes();
+            for (i, &byte) in bytes.iter().enumerate() {
+                byte_variations[i].insert(byte);
+            }
+        }
+
+        // Each byte position should show variation across 100 UUIDs.
+        // Bytes 6 and 8 have some bits fixed, but should still show variation
+        // in their non-fixed bits.
+        for (i, variations) in byte_variations.iter().enumerate() {
+            assert!(
+                variations.len() >= 2,
+                "Byte position {i} shows no variation across 100 UUIDs: {variations:?}"
+            );
+        }
+    }
 }
