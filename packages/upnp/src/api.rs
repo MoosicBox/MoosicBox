@@ -25,6 +25,9 @@ use crate::{
 };
 
 /// Binds all `UPnP` API endpoints to the provided Actix-web scope.
+///
+/// This function registers all `UPnP` control endpoints (scan, transport info, media info,
+/// position info, volume control, subscriptions, and playback control) to the given scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -130,8 +133,11 @@ pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransportInfoQuery {
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -176,8 +182,11 @@ pub async fn get_transport_info_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetMediaInfoQuery {
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -222,8 +231,11 @@ pub async fn get_media_info_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPositionInfoQuery {
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -268,9 +280,13 @@ pub async fn get_position_info_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetVolumeQuery {
+    /// Audio channel to get volume for (defaults to "Master").
     channel: Option<String>,
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -322,10 +338,15 @@ pub async fn get_volume_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetVolumeQuery {
+    /// Audio channel to set volume for (defaults to "Master").
     channel: Option<String>,
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
+    /// Volume level to set (0-100).
     value: u8,
 }
 
@@ -379,8 +400,11 @@ pub async fn set_volume_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeQuery {
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// Service ID to subscribe to (e.g., "urn:upnp-org:serviceId:AVTransport").
     service_id: String,
 }
 
@@ -436,8 +460,11 @@ pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Jso
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PauseQuery {
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -482,9 +509,13 @@ pub async fn pause_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayQuery {
+    /// Playback speed multiplier (defaults to 1.0).
     speed: Option<f64>,
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
 }
 
@@ -534,10 +565,15 @@ pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<BTreeMap
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekQuery {
+    /// Target position in seconds.
     position: f64,
+    /// Unique device name of the `UPnP` device.
     device_udn: Option<String>,
+    /// URL of the `UPnP` device.
     device_url: Option<String>,
+    /// `UPnP` instance ID.
     instance_id: u32,
+    /// Seek unit type (defaults to `ABS_TIME`).
     unit: Option<String>,
 }
 
