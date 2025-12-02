@@ -483,36 +483,42 @@ pub const fn create_table(table_name: &str) -> CreateTableStatement<'_> {
 }
 
 impl<'a> CreateTableStatement<'a> {
+    /// Sets the IF NOT EXISTS clause for the CREATE TABLE statement
     #[must_use]
     pub const fn if_not_exists(mut self, if_not_exists: bool) -> Self {
         self.if_not_exists = if_not_exists;
         self
     }
 
+    /// Adds a single column to the table definition
     #[must_use]
     pub fn column(mut self, column: Column) -> Self {
         self.columns.push(column);
         self
     }
 
+    /// Adds multiple columns to the table definition
     #[must_use]
     pub fn columns(mut self, columns: Vec<Column>) -> Self {
         self.columns.extend(columns);
         self
     }
 
+    /// Sets the primary key column for the table
     #[must_use]
     pub const fn primary_key(mut self, primary_key: &'a str) -> Self {
         self.primary_key = Some(primary_key);
         self
     }
 
+    /// Adds a foreign key constraint (column, `referenced_table.column`)
     #[must_use]
     pub fn foreign_key(mut self, foreign_key: (&'a str, &'a str)) -> Self {
         self.foreign_keys.push(foreign_key);
         self
     }
 
+    /// Sets all foreign key constraints for the table
     #[must_use]
     pub fn foreign_keys(mut self, foreign_keys: Vec<(&'a str, &'a str)>) -> Self {
         self.foreign_keys = foreign_keys;
@@ -628,13 +634,14 @@ pub fn drop_table(table_name: &str) -> DropTableStatement<'_> {
 }
 
 impl DropTableStatement<'_> {
+    /// Sets the IF EXISTS clause for the DROP TABLE statement
     #[must_use]
     pub const fn if_exists(mut self, if_exists: bool) -> Self {
         self.if_exists = if_exists;
         self
     }
 
-    /// Set CASCADE behavior
+    /// Sets CASCADE behavior to drop all dependent objects recursively
     #[cfg(feature = "cascade")]
     #[must_use]
     pub const fn cascade(mut self) -> Self {
@@ -642,7 +649,7 @@ impl DropTableStatement<'_> {
         self
     }
 
-    /// Set RESTRICT behavior
+    /// Sets RESTRICT behavior to fail if any dependencies exist
     #[cfg(feature = "cascade")]
     #[must_use]
     pub const fn restrict(mut self) -> Self {
@@ -720,24 +727,28 @@ pub const fn create_index(index_name: &str) -> CreateIndexStatement<'_> {
 }
 
 impl<'a> CreateIndexStatement<'a> {
+    /// Sets the table name for the index
     #[must_use]
     pub const fn table(mut self, table_name: &'a str) -> Self {
         self.table_name = table_name;
         self
     }
 
+    /// Adds a single column to the index
     #[must_use]
     pub fn column(mut self, column: &'a str) -> Self {
         self.columns.push(column);
         self
     }
 
+    /// Sets all columns for the index
     #[must_use]
     pub fn columns(mut self, columns: Vec<&'a str>) -> Self {
         self.columns = columns;
         self
     }
 
+    /// Sets whether the index should enforce uniqueness
     #[must_use]
     pub const fn unique(mut self, unique: bool) -> Self {
         self.unique = unique;
@@ -824,6 +835,7 @@ pub const fn drop_index<'a>(index_name: &'a str, table_name: &'a str) -> DropInd
 }
 
 impl DropIndexStatement<'_> {
+    /// Sets the IF EXISTS clause to avoid errors if the index doesn't exist
     #[must_use]
     pub const fn if_exists(mut self) -> Self {
         self.if_exists = true;
@@ -958,6 +970,7 @@ pub const fn alter_table(table_name: &str) -> AlterTableStatement<'_> {
 }
 
 impl AlterTableStatement<'_> {
+    /// Adds a new column to the table
     #[must_use]
     pub fn add_column(
         mut self,
@@ -975,6 +988,7 @@ impl AlterTableStatement<'_> {
         self
     }
 
+    /// Removes a column from the table
     #[must_use]
     pub fn drop_column(mut self, name: String) -> Self {
         self.operations.push(AlterOperation::DropColumn {
@@ -985,6 +999,7 @@ impl AlterTableStatement<'_> {
         self
     }
 
+    /// Removes a column and all dependent objects recursively
     #[cfg(feature = "cascade")]
     #[must_use]
     pub fn drop_column_cascade(mut self, name: String) -> Self {
@@ -995,6 +1010,7 @@ impl AlterTableStatement<'_> {
         self
     }
 
+    /// Removes a column, failing if any dependencies exist
     #[cfg(feature = "cascade")]
     #[must_use]
     pub fn drop_column_restrict(mut self, name: String) -> Self {
@@ -1005,6 +1021,7 @@ impl AlterTableStatement<'_> {
         self
     }
 
+    /// Renames an existing column
     #[must_use]
     pub fn rename_column(mut self, old_name: String, new_name: String) -> Self {
         self.operations
@@ -1012,6 +1029,7 @@ impl AlterTableStatement<'_> {
         self
     }
 
+    /// Modifies a column's data type, nullability, or default value
     #[must_use]
     pub fn modify_column(
         mut self,

@@ -1,3 +1,8 @@
+//! Native PostgreSQL database backend using tokio-postgres
+//!
+//! This module implements the [`Database`](crate::Database) trait for PostgreSQL
+//! using the `tokio-postgres` driver with connection pooling via `deadpool-postgres`.
+
 use std::{
     ops::Deref,
     sync::{Arc, atomic::AtomicU16},
