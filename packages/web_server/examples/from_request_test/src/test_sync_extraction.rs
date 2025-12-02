@@ -5,6 +5,10 @@
 //! It uses the simulator stub to create test HTTP requests and verifies that extraction
 //! works correctly for both valid and invalid inputs.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 
 /// Creates a test `HttpRequest` with predefined headers and query parameters.
@@ -81,7 +85,7 @@ fn test_request_data_sync_extraction() -> Result<(), Box<dyn std::error::Error>>
             println!("✅ All RequestData fields extracted correctly");
         }
         Err(e) => {
-            println!("❌ RequestData extraction failed: {}", e);
+            println!("❌ RequestData extraction failed: {e}");
             return Err(e.into());
         }
     }
@@ -107,11 +111,11 @@ fn test_string_extraction() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(value) => {
-            println!("✅ String extracted: '{}'", value);
+            println!("✅ String extracted: '{value}'");
             assert_eq!(value, "hello world");
         }
         Err(e) => {
-            println!("❌ String extraction failed: {}", e);
+            println!("❌ String extraction failed: {e}");
             return Err(e.into());
         }
     }
@@ -138,11 +142,11 @@ fn test_u32_extraction() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(value) => {
-            println!("✅ u32 extracted: {}", value);
+            println!("✅ u32 extracted: {value}");
             assert_eq!(value, 42);
         }
         Err(e) => {
-            println!("❌ u32 extraction failed: {}", e);
+            println!("❌ u32 extraction failed: {e}");
             return Err(e.into());
         }
     }
@@ -157,7 +161,7 @@ fn test_u32_extraction() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Expected error for invalid u32".into());
         }
         Err(e) => {
-            println!("✅ u32 extraction properly failed for invalid input: {}", e);
+            println!("✅ u32 extraction properly failed for invalid input: {e}");
             assert!(e.to_string().contains("Failed to parse"));
         }
     }
@@ -178,7 +182,7 @@ fn test_u32_extraction() -> Result<(), Box<dyn std::error::Error>> {
 fn test_bool_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing bool extraction...");
 
-    let test_cases = vec![
+    let test_cases = [
         ("true", true),
         ("1", true),
         ("yes", true),
@@ -196,11 +200,11 @@ fn test_bool_extraction() -> Result<(), Box<dyn std::error::Error>> {
 
         match result {
             Ok(value) => {
-                println!("✅ bool('{}') = {}", input, value);
-                assert_eq!(value, expected, "Failed for input '{}'", input);
+                println!("✅ bool('{input}') = {value}");
+                assert_eq!(value, expected, "Failed for input '{input}'");
             }
             Err(e) => {
-                println!("❌ bool extraction failed for '{}': {}", input, e);
+                println!("❌ bool extraction failed for '{input}': {e}");
                 return Err(e.into());
             }
         }

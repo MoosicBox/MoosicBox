@@ -238,6 +238,9 @@ pub enum LibraryAlbumOrderDirection {
 }
 
 /// Filters albums based on the provided request criteria.
+///
+/// Returns an iterator over albums that match the filters specified in the request,
+/// including artist ID, album type, name, and search terms.
 pub fn filter_albums<'a>(
     albums: &'a [LibraryAlbum],
     request: &'a AlbumsRequest,
@@ -781,7 +784,10 @@ pub async fn album(
     Ok(db::get_album(db, ApiSource::library_ref(), album_id).await?)
 }
 
-/// Sorts album versions by audio quality metrics in descending order of sample rate, bit depth, and source.
+/// Sorts album versions by audio quality metrics.
+///
+/// Sorts in descending order of sample rate, then bit depth, then by source.
+/// This places higher quality versions first.
 pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| {
         b.sample_rate

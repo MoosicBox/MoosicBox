@@ -308,13 +308,16 @@ impl<R: PortRange> PortReservation<R> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust
     /// # #[cfg(feature = "reservation")]
     /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
-    /// let port = reservation.reserve_port();
-    /// assert!(reservation.is_free(port.unwrap()));
+    /// // Port 15500 is not reserved yet, so it's free
+    /// assert!(reservation.is_free(15500));
+    /// let port = reservation.reserve_port().unwrap();
+    /// // After reserving, the port is no longer free
+    /// assert!(!reservation.is_free(port));
     /// # }
     /// ```
     #[must_use]

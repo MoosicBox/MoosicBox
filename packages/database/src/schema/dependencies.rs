@@ -17,6 +17,7 @@ pub struct DependencyGraph {
 }
 
 impl DependencyGraph {
+    /// Creates a new empty dependency graph
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -25,6 +26,7 @@ impl DependencyGraph {
         }
     }
 
+    /// Adds a dependency relationship between two tables
     pub fn add_dependency(&mut self, dependent: String, depends_on: String) {
         self.dependents
             .entry(depends_on.clone())
@@ -36,16 +38,19 @@ impl DependencyGraph {
             .insert(depends_on);
     }
 
+    /// Returns the set of tables that depend on the given table
     #[must_use]
     pub fn get_dependents(&self, table: &str) -> Option<&BTreeSet<String>> {
         self.dependents.get(table)
     }
 
+    /// Returns the set of tables that the given table depends on
     #[must_use]
     pub fn get_dependencies(&self, table: &str) -> Option<&BTreeSet<String>> {
         self.dependencies.get(table)
     }
 
+    /// Checks if any tables depend on the given table
     #[must_use]
     pub fn has_dependents(&self, table: &str) -> bool {
         self.dependents

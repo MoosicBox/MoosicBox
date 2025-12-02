@@ -392,7 +392,9 @@ pub async fn get_artist_albums(
         .as_model_mapped()
 }
 
-/// Parameters for setting track size information.
+/// Parameters for creating or updating track size information in the database.
+///
+/// Contains all the audio quality metadata for a track at a specific playback quality level.
 #[derive(Debug, Clone)]
 pub struct SetTrackSize {
     /// Track ID.
@@ -860,7 +862,9 @@ pub async fn add_album_maps_and_get_albums(
         .to_value_type()?)
 }
 
-/// Parameters for inserting a track into the database.
+/// Parameters for inserting a new track into the database.
+///
+/// Contains the track data along with album association and optional file path.
 #[derive(Debug, Clone, Default)]
 pub struct InsertTrack {
     /// Track to insert.
@@ -933,6 +937,8 @@ pub async fn add_tracks(
 }
 
 /// Parameters for inserting an API source mapping into the database.
+///
+/// Links a library entity (artist, album, or track) to an external API source.
 #[derive(Debug, Clone, Default)]
 pub struct InsertApiSource {
     /// Entity type.
@@ -946,6 +952,9 @@ pub struct InsertApiSource {
 }
 
 /// API source mapping between library entities and external API sources.
+///
+/// Represents the relationship between a local library entity and its corresponding
+/// identifier in an external music API.
 pub struct ApiSourceMapping {
     /// Entity type (e.g., "artists", "albums", "tracks").
     pub entity_type: String,
@@ -1005,7 +1014,9 @@ pub async fn add_api_sources(
         .to_value_type()?)
 }
 
-/// Parameters for updating an API source mapping.
+/// Parameters for updating an existing API source mapping.
+///
+/// Used to modify the external API source identifier for a library entity.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateApiSource {
     /// Entity ID.

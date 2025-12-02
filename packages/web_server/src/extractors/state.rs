@@ -1,3 +1,33 @@
+//! Application state extractor for HTTP handlers.
+//!
+//! This module provides the [`State<T>`] extractor for accessing shared application
+//! state within request handlers, along with [`StateContainer`] for managing state
+//! in the simulator backend.
+//!
+//! # Overview
+//!
+//! The state extractor provides thread-safe access to application-wide state that
+//! is shared across all request handlers. State is stored as `Arc<T>` for efficient
+//! sharing.
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::State;
+//! use std::sync::Arc;
+//!
+//! #[derive(Clone)]
+//! struct AppConfig {
+//!     database_url: String,
+//!     api_key: String,
+//! }
+//!
+//! async fn handler(State(config): State<AppConfig>) -> Result<HttpResponse, Error> {
+//!     println!("Database: {}", config.database_url);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 

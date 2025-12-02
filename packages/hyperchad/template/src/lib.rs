@@ -186,9 +186,11 @@ pub trait ContainerVecMethods {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
-    /// Convert the containers to an HTML string
+    /// Convert the containers to an HTML string.
+    #[must_use]
     fn to_string(&self) -> String;
-    /// Convert the containers to an HTML string, consuming self
+    /// Convert the containers to an HTML string, consuming self.
+    #[must_use]
     fn into_string(self) -> String;
 }
 
@@ -288,9 +290,11 @@ pub trait ContainerVecExt {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
-    /// Convert the containers to an HTML string, consuming self
+    /// Convert the containers to an HTML string, consuming self.
+    #[must_use]
     fn into_string(self) -> String;
-    /// Convert the containers to an HTML string
+    /// Convert the containers to an HTML string.
+    #[must_use]
     fn to_string(&self) -> String;
 }
 
@@ -1042,13 +1046,19 @@ impl IntoBorder for (String, f64) {
 pub mod calc {
     use hyperchad_transformer::Number;
 
-    /// Convert any type that can be converted to Number into a Number
+    /// Converts any type that can be converted to `Number` into a `Number`.
+    ///
+    /// This is a convenience function for explicit type conversion when the
+    /// automatic `Into<Number>` conversion is not sufficient.
     #[must_use]
     pub fn to_number<T: Into<Number>>(value: T) -> Number {
         value.into()
     }
 
-    /// Convert a value to a percentage Number variant
+    /// Converts a value to a percentage `Number` variant.
+    ///
+    /// Integer values become `IntegerPercent`, real values become `RealPercent`.
+    /// Values that are already percentage types are returned unchanged.
     #[must_use]
     pub fn to_percent_number<T>(value: T) -> Number
     where
@@ -1069,7 +1079,10 @@ pub mod calc {
         }
     }
 
-    /// Convert a value to a viewport width Number variant
+    /// Converts a value to a viewport width `Number` variant.
+    ///
+    /// Integer values become `IntegerVw`, real values become `RealVw`.
+    /// Values that are already vw types are returned unchanged.
     #[must_use]
     pub fn to_vw_number<T>(value: T) -> Number
     where
@@ -1089,7 +1102,10 @@ pub mod calc {
         }
     }
 
-    /// Convert a value to a viewport height Number variant
+    /// Converts a value to a viewport height `Number` variant.
+    ///
+    /// Integer values become `IntegerVh`, real values become `RealVh`.
+    /// Values that are already vh types are returned unchanged.
     #[must_use]
     pub fn to_vh_number<T>(value: T) -> Number
     where
@@ -1109,7 +1125,10 @@ pub mod calc {
         }
     }
 
-    /// Convert a value to a dynamic viewport width Number variant
+    /// Converts a value to a dynamic viewport width `Number` variant.
+    ///
+    /// Integer values become `IntegerDvw`, real values become `RealDvw`.
+    /// Values that are already dvw types are returned unchanged.
     #[must_use]
     pub fn to_dvw_number<T>(value: T) -> Number
     where
@@ -1129,7 +1148,10 @@ pub mod calc {
         }
     }
 
-    /// Convert a value to a dynamic viewport height Number variant
+    /// Converts a value to a dynamic viewport height `Number` variant.
+    ///
+    /// Integer values become `IntegerDvh`, real values become `RealDvh`.
+    /// Values that are already dvh types are returned unchanged.
     #[must_use]
     pub fn to_dvh_number<T>(value: T) -> Number
     where
@@ -1149,7 +1171,11 @@ pub mod calc {
         }
     }
 
-    /// Add two Number values, handling different Number types appropriately
+    /// Adds two `Number` values, handling different unit types appropriately.
+    ///
+    /// When both operands have the same unit type (e.g., both `IntegerPercent`),
+    /// the result preserves that unit. For mixed units, values are converted
+    /// to pixels using dummy viewport dimensions before adding.
     #[must_use]
     pub fn add_numbers(left: &Number, right: &Number) -> Number {
         // For now, use a simple approach that converts both to common units if possible
@@ -1200,7 +1226,10 @@ pub mod calc {
         }
     }
 
-    /// Subtract two Number values
+    /// Subtracts two `Number` values, handling different unit types appropriately.
+    ///
+    /// When both operands have the same unit type, the result preserves that unit.
+    /// For mixed units, values are converted to pixels before subtracting.
     #[must_use]
     pub fn subtract_numbers(left: &Number, right: &Number) -> Number {
         #[allow(clippy::cast_precision_loss)]
@@ -1246,7 +1275,11 @@ pub mod calc {
         }
     }
 
-    /// Multiply two Number values
+    /// Multiplies two `Number` values, handling different unit types appropriately.
+    ///
+    /// When multiplying, typically one operand should be unitless. If one operand
+    /// is unitless, the result preserves the unit of the other operand.
+    /// For more complex cases, values are converted to pixels before multiplying.
     #[must_use]
     pub fn multiply_numbers(left: &Number, right: &Number) -> Number {
         #[allow(clippy::cast_precision_loss)]
@@ -1272,7 +1305,10 @@ pub mod calc {
         }
     }
 
-    /// Divide two Number values
+    /// Divides two `Number` values, handling different unit types appropriately.
+    ///
+    /// If the divisor is unitless, the result preserves the unit of the dividend.
+    /// For more complex cases, values are converted to pixels before dividing.
     ///
     /// # Panics
     ///

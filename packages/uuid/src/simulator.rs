@@ -17,7 +17,21 @@ static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(|| {
     Rng::from_seed(seed)
 });
 
-/// Generate a deterministic UUID v4 for simulation
+/// Generates a deterministic UUID v4 for simulation purposes.
+///
+/// This function uses a seeded random number generator to produce UUIDs that
+/// are reproducible across runs with the same seed. The seed can be configured
+/// via the `SIMULATOR_UUID_SEED` environment variable (defaults to 12345).
+///
+/// The generated UUID is compliant with RFC 4122 version 4 format, with the
+/// version and variant bits correctly set.
+///
+/// # Examples
+///
+/// ```
+/// let uuid = switchy_uuid::simulator::new_v4();
+/// assert_eq!(uuid.get_version_num(), 4);
+/// ```
 #[must_use]
 pub fn new_v4() -> Uuid {
     let mut bytes = [0u8; 16];
@@ -30,7 +44,18 @@ pub fn new_v4() -> Uuid {
     Uuid::from_bytes(bytes)
 }
 
-/// Generate a deterministic UUID v4 as a string for simulation
+/// Generates a deterministic UUID v4 as a hyphenated string.
+///
+/// This is a convenience function that generates a UUID using [`new_v4`] and
+/// converts it to the standard hyphenated string format (8-4-4-4-12).
+///
+/// # Examples
+///
+/// ```
+/// let uuid_string = switchy_uuid::simulator::new_v4_string();
+/// assert_eq!(uuid_string.len(), 36);
+/// assert!(uuid_string.chars().filter(|c| *c == '-').count() == 4);
+/// ```
 #[must_use]
 pub fn new_v4_string() -> String {
     new_v4().to_string()

@@ -43,28 +43,40 @@ static CLIENT: LazyLock<switchy::http::Client> =
 /// Errors that can occur during route handling.
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
+    /// A required query parameter is missing from the request.
     #[error("Missing query param: '{0}'")]
     MissingQueryParam(&'static str),
+    /// No server connection is configured.
     #[error("Missing connection")]
     MissingConnection,
+    /// The HTTP method is not supported for this route.
     #[error("Unsupported method")]
     UnsupportedMethod,
+    /// Failed to parse the request body.
     #[error("Failed to parse body")]
     ParseBody(#[from] hyperchad::router::ParseError),
+    /// Failed to parse an enum value from a string.
     #[error(transparent)]
     StrumParse(#[from] strum::ParseError),
+    /// Failed to parse an integer from a string.
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    /// An HTTP request to the backend server failed.
     #[error(transparent)]
     Reqwest(#[from] switchy::http::Error),
+    /// A generic route failure with a boxed error.
     #[error("Route failed: {0:?}")]
     RouteFailed(Box<dyn std::error::Error>),
+    /// Failed to parse HTML content.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// An error occurred in the music API.
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// An error occurred in the application state.
     #[error(transparent)]
     AppState(#[from] AppStateError),
+    /// Failed to parse a track API source from a string.
     #[error(transparent)]
     TryFromStringTrackApiSource(#[from] TryFromStringTrackApiSourceError),
 }
