@@ -2723,4 +2723,60 @@ mod tests {
             "Should have dash after day"
         );
     }
+
+    #[test_log::test]
+    fn test_create_migration_preserves_existing_migrations() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let migrations_dir = temp_dir.path().to_path_buf();
+
+        // Create first migration
+        let result1 = create_migration("first_migration", &migrations_dir);
+        assert!(
+            result1.is_ok(),
+            "First migration should succeed: {:?}",
+            result1.err()
+        );
+
+        // Read the first migration's content
+        let first_entries: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        assert_eq!(first_entries.len(), 1, "Should have one migration");
+
+        let first_migration_dir = first_entries[0].path();
+        let first_up_content = switchy_fs::sync::read_to_string(first_migration_dir.join("up.sql"))
+            .expect("Failed to read first up.sql");
+
+        // Create second migration
+        let result2 = create_migration("second_migration", &migrations_dir);
+        assert!(
+            result2.is_ok(),
+            "Second migration should succeed: {:?}",
+            result2.err()
+        );
+
+        // Verify first migration's content is preserved
+        let first_up_content_after =
+            switchy_fs::sync::read_to_string(first_migration_dir.join("up.sql"))
+                .expect("Failed to read first up.sql after second migration");
+
+        assert_eq!(
+            first_up_content, first_up_content_after,
+            "First migration content should be preserved after creating second migration"
+        );
+
+        // Verify we now have two migrations
+        let entries_after: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+            .expect("Failed to read migrations directory")
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            entries_after.len(),
+            2,
+            "Should have two migrations after creating second"
+        );
+    }
 }
