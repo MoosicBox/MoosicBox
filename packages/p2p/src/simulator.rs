@@ -1007,6 +1007,48 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_network_graph_heal_partition_multiple_nodes() {
+        // Test heal_partition with multiple nodes in each group
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("heal_alice");
+        let bob = test_node_id("heal_bob");
+        let charlie = test_node_id("heal_charlie");
+        let dave = test_node_id("heal_dave");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+        graph.add_node(charlie.clone());
+        graph.add_node(dave.clone());
+
+        // Initially partitioned: {alice, bob} vs {charlie, dave}
+        // No links between groups
+        let group_a = vec![alice.clone(), bob.clone()];
+        let group_b = vec![charlie.clone(), dave.clone()];
+
+        // Heal partition
+        graph.heal_partition(&group_a, &group_b);
+
+        // Should create links from each node in group_a to each node in group_b
+        // Total 4 links (bidirectional, so 8 entries in the links map)
+        assert!(graph.links.contains_key(&(alice.clone(), charlie.clone())));
+        assert!(graph.links.contains_key(&(alice.clone(), dave.clone())));
+        assert!(graph.links.contains_key(&(bob.clone(), charlie.clone())));
+        assert!(graph.links.contains_key(&(bob.clone(), dave.clone())));
+
+        // Reverse links should also exist
+        assert!(graph.links.contains_key(&(charlie.clone(), alice.clone())));
+        assert!(graph.links.contains_key(&(dave.clone(), alice.clone())));
+        assert!(graph.links.contains_key(&(charlie.clone(), bob.clone())));
+        assert!(graph.links.contains_key(&(dave.clone(), bob.clone())));
+
+        // All cross-group paths should now exist
+        assert!(graph.find_path(alice.clone(), charlie.clone()).is_some());
+        assert!(graph.find_path(alice, dave.clone()).is_some());
+        assert!(graph.find_path(bob.clone(), charlie).is_some());
+        assert!(graph.find_path(bob, dave).is_some());
+    }
+
+    #[test_log::test]
     fn test_network_graph_get_node_mut() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -1027,7 +1069,14 @@ mod tests {
         let alice = test_node_id("alice");
 
         assert!(graph.get_node(&alice).is_none());
-        assert!(graph.get_node(&alice).is_none());
+    }
+
+    #[test_log::test]
+    fn test_network_graph_get_node_mut_nonexistent() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+
+        assert!(graph.get_node_mut(&alice).is_none());
     }
 
     // === SimulatorP2P Tests ===
@@ -1182,6 +1231,28 @@ mod tests {
         // Close again - should succeed
         conn.close().unwrap();
         assert!(!conn.is_connected());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_reconnect_after_close() {
+        let (alice, _alice_id, bob_id) = SimulatorP2P::test_setup();
+
+        // First connection
+        let mut conn1 = alice.connect(bob_id.clone()).await.unwrap();
+        assert!(conn1.is_connected());
+        assert_eq!(conn1.remote_node_id(), &bob_id);
+
+        // Close the first connection
+        conn1.close().unwrap();
+        assert!(!conn1.is_connected());
+
+        // Re-connect to the same peer
+        let conn2 = alice.connect(bob_id.clone()).await.unwrap();
+        assert!(conn2.is_connected());
+        assert_eq!(conn2.remote_node_id(), &bob_id);
+
+        // First connection should still be closed
+        assert!(!conn1.is_connected());
     }
 
     #[test_log::test]
@@ -1430,6 +1501,52 @@ mod tests {
         assert_eq!(path.len(), 2);
         assert_eq!(path[0], a);
         assert_eq!(path[1], d);
+    }
+
+    #[test_log::test]
+    fn test_network_graph_find_path_cyclic_graph() {
+        // Test that BFS correctly handles graphs with cycles without infinite loops
+        let mut graph = NetworkGraph::new();
+        let a = test_node_id("cycle_a");
+        let b = test_node_id("cycle_b");
+        let c = test_node_id("cycle_c");
+        let d = test_node_id("cycle_d");
+
+        graph.add_node(a.clone());
+        graph.add_node(b.clone());
+        graph.add_node(c.clone());
+        graph.add_node(d.clone());
+
+        let link = LinkInfo {
+            latency: Duration::from_millis(10),
+            packet_loss: 0.0,
+            bandwidth_limit: None,
+            is_active: true,
+        };
+
+        // Create a graph with a cycle: a -> b -> c -> a (cycle) and c -> d
+        // Note: connect_nodes creates bidirectional links, so c->a also means a->c
+        graph.connect_nodes(a.clone(), b.clone(), link.clone());
+        graph.connect_nodes(b, c.clone(), link.clone());
+        graph.connect_nodes(c.clone(), a.clone(), link.clone()); // Creates cycle (but also a->c link)
+        graph.connect_nodes(c, d.clone(), link); // Path to destination
+
+        // Path should still be found despite cycle - BFS finds shortest path
+        // Due to bidirectional links, a->c is direct, so shortest path is a -> c -> d (length 3)
+        let path = graph.find_path(a.clone(), d.clone()).unwrap();
+
+        // BFS should find shortest path through the cycle graph
+        assert_eq!(path.len(), 3, "BFS should find shortest path a -> c -> d");
+        assert_eq!(path[0], a);
+        assert_eq!(path[2], d);
+
+        // Verify path doesn't contain duplicates (no infinite loop in BFS)
+        let unique_nodes: std::collections::BTreeSet<_> = path.iter().collect();
+        assert_eq!(
+            unique_nodes.len(),
+            path.len(),
+            "Path should not contain duplicate nodes"
+        );
     }
 
     #[test_log::test]
