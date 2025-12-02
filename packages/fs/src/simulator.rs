@@ -4451,3 +4451,361 @@ mod file_create_and_open_tests {
         let _ = options.read(true).write(true).create(true);
     }
 }
+
+#[cfg(test)]
+mod normalize_path_tests {
+    use super::normalize_path;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_normalize_absolute_path_with_single_dot() {
+        // Single dot should be removed
+        assert_eq!(normalize_path("/a/./b"), "/a/b");
+        assert_eq!(normalize_path("/./a"), "/a");
+        assert_eq!(normalize_path("/a/."), "/a");
+        assert_eq!(normalize_path("/././."), "/");
+    }
+
+    #[test_log::test]
+    fn test_normalize_absolute_path_with_double_dots() {
+        // Double dots should go up one directory
+        assert_eq!(normalize_path("/a/b/../c"), "/a/c");
+        assert_eq!(normalize_path("/a/b/c/../../d"), "/a/d");
+        assert_eq!(normalize_path("/a/../b"), "/b");
+    }
+
+    #[test_log::test]
+    fn test_normalize_absolute_path_double_dots_at_root() {
+        // Double dots at root should be ignored for absolute paths
+        assert_eq!(normalize_path("/.."), "/");
+        assert_eq!(normalize_path("/../a"), "/a");
+        assert_eq!(normalize_path("/../../a/b"), "/a/b");
+    }
+
+    #[test_log::test]
+    fn test_normalize_absolute_path_with_trailing_slashes() {
+        // Trailing slashes should be handled (empty components ignored)
+        assert_eq!(normalize_path("/a/b/"), "/a/b");
+        assert_eq!(normalize_path("/a//b"), "/a/b");
+        assert_eq!(normalize_path("///a///b///"), "/a/b");
+    }
+
+    #[test_log::test]
+    fn test_normalize_relative_path_with_single_dot() {
+        assert_eq!(normalize_path("./a"), "a");
+        assert_eq!(normalize_path("a/./b"), "a/b");
+        assert_eq!(normalize_path("."), ".");
+    }
+
+    #[test_log::test]
+    fn test_normalize_relative_path_with_double_dots() {
+        // For relative paths, .. at the start should be preserved
+        assert_eq!(normalize_path("../a"), "../a");
+        assert_eq!(normalize_path("../../a"), "../../a");
+        assert_eq!(normalize_path("a/b/../../c"), "c");
+        assert_eq!(normalize_path("a/../b"), "b");
+    }
+
+    #[test_log::test]
+    fn test_normalize_relative_path_double_dots_preserved() {
+        // Double dots that can't go further up should be preserved for relative paths
+        assert_eq!(normalize_path("a/../../b"), "../b");
+        assert_eq!(normalize_path("../.."), "../..");
+    }
+
+    #[test_log::test]
+    fn test_normalize_empty_path() {
+        // Empty path should become "."
+        assert_eq!(normalize_path(""), ".");
+    }
+
+    #[test_log::test]
+    fn test_normalize_root_path() {
+        assert_eq!(normalize_path("/"), "/");
+    }
+
+    #[test_log::test]
+    fn test_normalize_mixed_dots() {
+        // Complex combinations of . and ..
+        assert_eq!(normalize_path("/a/./b/../c/./d"), "/a/c/d");
+        assert_eq!(normalize_path("./a/./b/../c"), "a/c");
+    }
+}
+
+#[cfg(test)]
+mod canonicalize_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_canonicalize_existing_directory() {
+        reset_fs();
+        sync::create_dir_all("/test/path/to/dir").unwrap();
+
+        let result = sync::canonicalize("/test/path/to/dir").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/test/path/to/dir");
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_existing_file() {
+        reset_fs();
+        sync::create_dir_all("/test").unwrap();
+        sync::write("/test/file.txt", b"content").unwrap();
+
+        let result = sync::canonicalize("/test/file.txt").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/test/file.txt");
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_path_with_dots() {
+        reset_fs();
+        sync::create_dir_all("/a/b/c").unwrap();
+
+        // Path with . and .. should be normalized
+        let result = sync::canonicalize("/a/b/../b/./c").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/a/b/c");
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_path_with_double_slashes() {
+        reset_fs();
+        sync::create_dir_all("/test/dir").unwrap();
+
+        let result = sync::canonicalize("/test//dir").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/test/dir");
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_nonexistent_path_fails() {
+        reset_fs();
+
+        let result = sync::canonicalize("/nonexistent/path");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_root() {
+        reset_fs();
+        sync::create_dir_all("/").unwrap();
+
+        let result = sync::canonicalize("/").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/");
+    }
+
+    #[test_log::test]
+    fn test_canonicalize_double_dots_past_root() {
+        reset_fs();
+        sync::create_dir_all("/existing").unwrap();
+
+        // Even if we try to go above root with .., the result should stay at root level
+        let result = sync::canonicalize("/../existing").unwrap();
+        assert_eq!(result.to_str().unwrap(), "/existing");
+    }
+}
+
+#[cfg(test)]
+mod create_dir_tests {
+    use super::{exists, reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_create_dir_single_level() {
+        reset_fs();
+        sync::create_dir_all("/").unwrap();
+
+        sync::create_dir("/toplevel").unwrap();
+        assert!(exists("/toplevel"));
+    }
+
+    #[test_log::test]
+    fn test_create_dir_with_existing_parent() {
+        reset_fs();
+        sync::create_dir_all("/parent").unwrap();
+
+        sync::create_dir("/parent/child").unwrap();
+        assert!(exists("/parent/child"));
+    }
+
+    #[test_log::test]
+    fn test_create_dir_without_parent_fails() {
+        reset_fs();
+
+        // Parent doesn't exist
+        let result = sync::create_dir("/missing/child");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_create_dir_nested_without_parent_fails() {
+        reset_fs();
+        sync::create_dir_all("/a").unwrap();
+
+        // /a/b doesn't exist, so creating /a/b/c should fail
+        let result = sync::create_dir("/a/b/c");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test]
+    fn test_create_dir_root() {
+        reset_fs();
+
+        // Creating root should work (no parent check needed)
+        sync::create_dir("/").unwrap();
+        assert!(exists("/"));
+    }
+
+    #[test_log::test]
+    fn test_create_dir_with_trailing_slash() {
+        reset_fs();
+        sync::create_dir_all("/parent").unwrap();
+
+        sync::create_dir("/parent/child/").unwrap();
+        // Should normalize and create the directory
+        assert!(exists("/parent/child"));
+    }
+
+    #[test_log::test]
+    fn test_create_dir_idempotent() {
+        reset_fs();
+        sync::create_dir_all("/parent").unwrap();
+
+        // Creating the same directory twice should work
+        sync::create_dir("/parent/child").unwrap();
+        sync::create_dir("/parent/child").unwrap();
+        assert!(exists("/parent/child"));
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_is_file_is_dir_tests {
+    use super::{reset_fs, sync, unsync};
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_file_returns_true_for_file() {
+        reset_fs();
+        sync::create_dir_all("/test").unwrap();
+        sync::write("/test/file.txt", b"content").unwrap();
+
+        assert!(unsync::is_file("/test/file.txt").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_file_returns_false_for_directory() {
+        reset_fs();
+        sync::create_dir_all("/test/subdir").unwrap();
+
+        assert!(!unsync::is_file("/test/subdir").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_file_returns_false_for_nonexistent() {
+        reset_fs();
+
+        assert!(!unsync::is_file("/nonexistent/file.txt").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_dir_returns_true_for_directory() {
+        reset_fs();
+        sync::create_dir_all("/test/subdir").unwrap();
+
+        assert!(unsync::is_dir("/test/subdir").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_dir_returns_false_for_file() {
+        reset_fs();
+        sync::create_dir_all("/test").unwrap();
+        sync::write("/test/file.txt", b"content").unwrap();
+
+        assert!(!unsync::is_dir("/test/file.txt").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_dir_returns_false_for_nonexistent() {
+        reset_fs();
+
+        assert!(!unsync::is_dir("/nonexistent/dir").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_file_with_invalid_path() {
+        reset_fs();
+
+        // Path that can't be converted to str should return false
+        // (Though this is hard to test directly since most paths are valid utf-8)
+        // We'll just verify that an empty path returns false
+        assert!(!unsync::is_file("").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_is_dir_with_root() {
+        reset_fs();
+        sync::create_dir_all("/").unwrap();
+
+        assert!(unsync::is_dir("/").await);
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_canonicalize_tests {
+    use super::{reset_fs, sync, unsync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_canonicalize_existing_path() {
+        reset_fs();
+        sync::create_dir_all("/async/path/here").unwrap();
+
+        let result = unsync::canonicalize("/async/path/here").await.unwrap();
+        assert_eq!(result.to_str().unwrap(), "/async/path/here");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_canonicalize_with_dots() {
+        reset_fs();
+        sync::create_dir_all("/a/b").unwrap();
+
+        let result = unsync::canonicalize("/a/./b/../b").await.unwrap();
+        assert_eq!(result.to_str().unwrap(), "/a/b");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_canonicalize_nonexistent_fails() {
+        reset_fs();
+
+        let result = unsync::canonicalize("/does/not/exist").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_create_dir_tests {
+    use super::{exists, reset_fs, sync, unsync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_create_dir_with_parent() {
+        reset_fs();
+        sync::create_dir_all("/async_parent").unwrap();
+
+        unsync::create_dir("/async_parent/child").await.unwrap();
+        assert!(exists("/async_parent/child"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_create_dir_without_parent_fails() {
+        reset_fs();
+
+        let result = unsync::create_dir("/no_parent/child").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+}
