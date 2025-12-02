@@ -1,3 +1,32 @@
+//! JSON body extractor for HTTP requests.
+//!
+//! This module provides the [`Json<T>`] extractor for parsing JSON request bodies
+//! into typed Rust structs using `serde_json`.
+//!
+//! # Overview
+//!
+//! The JSON extractor validates the `Content-Type` header, reads the request body,
+//! and deserializes it into the target type. It provides detailed error information
+//! for common failure cases like missing content-type, empty body, or malformed JSON.
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::Json;
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct CreateUser {
+//!     name: String,
+//!     email: String,
+//! }
+//!
+//! async fn create_user(Json(user): Json<CreateUser>) -> Result<HttpResponse, Error> {
+//!     println!("Creating user: {}", user.name);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 

@@ -1,3 +1,34 @@
+//! HTTP header extractor for requests.
+//!
+//! This module provides the [`Header<T>`] extractor for extracting and parsing
+//! HTTP headers from requests with automatic type conversion.
+//!
+//! # Overview
+//!
+//! The header extractor supports multiple extraction strategies:
+//!
+//! * **Single headers**: Extract a single header value with type conversion
+//! * **Tuple headers**: Extract multiple headers as a tuple
+//! * **Struct headers**: Extract headers into a deserializable struct
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::Header;
+//!
+//! // Extract authorization header as String
+//! async fn auth_handler(Header(auth): Header<String>) -> Result<HttpResponse, Error> {
+//!     println!("Authorization: {}", auth);
+//!     Ok(HttpResponse::ok())
+//! }
+//!
+//! // Extract content-length as u64
+//! async fn size_handler(Header(size): Header<u64>) -> Result<HttpResponse, Error> {
+//!     println!("Content-Length: {}", size);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 

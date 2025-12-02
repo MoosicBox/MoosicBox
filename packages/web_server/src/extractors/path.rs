@@ -1,3 +1,34 @@
+//! URL path parameter extractor for HTTP requests.
+//!
+//! This module provides the [`Path<T>`] extractor for extracting and parsing
+//! URL path segments into typed values.
+//!
+//! # Overview
+//!
+//! The path extractor supports multiple extraction strategies:
+//!
+//! * **Single parameter**: Extract the last path segment as a typed value
+//! * **Tuple parameters**: Extract multiple segments as a tuple
+//! * **Struct parameters**: Extract segments into a deserializable struct
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::Path;
+//!
+//! // Extract single parameter from /users/123
+//! async fn get_user(Path(user_id): Path<u32>) -> Result<HttpResponse, Error> {
+//!     println!("User ID: {}", user_id);
+//!     Ok(HttpResponse::ok())
+//! }
+//!
+//! // Extract multiple parameters from /users/john/posts/456
+//! async fn get_post(Path((username, post_id)): Path<(String, u32)>) -> Result<HttpResponse, Error> {
+//!     println!("User: {}, Post: {}", username, post_id);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
