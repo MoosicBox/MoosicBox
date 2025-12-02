@@ -1561,4 +1561,100 @@ mod tests {
             YtAlbumType::Compilations
         );
     }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_unauthorized_returns_401() {
+        let error: actix_web::Error = Error::Unauthorized.into();
+        let response = error.error_response();
+        assert_eq!(response.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_http_404_returns_not_found() {
+        let error: actix_web::Error =
+            Error::HttpRequestFailed(404, "Album not found".to_string()).into();
+        let response = error.error_response();
+        assert_eq!(response.status(), actix_web::http::StatusCode::NOT_FOUND);
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_http_500_returns_internal_server_error() {
+        let error: actix_web::Error =
+            Error::HttpRequestFailed(500, "Server error".to_string()).into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_http_403_returns_internal_server_error() {
+        let error: actix_web::Error = Error::HttpRequestFailed(403, "Forbidden".to_string()).into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_user_id_returns_internal_server_error() {
+        let error: actix_web::Error = Error::NoUserIdAvailable.into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_access_token_returns_internal_server_error() {
+        let error: actix_web::Error = Error::NoAccessTokenAvailable.into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_max_failed_attempts_returns_internal_server_error() {
+        let error: actix_web::Error = Error::MaxFailedAttempts.into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_response_body_returns_internal_server_error() {
+        let error: actix_web::Error = Error::NoResponseBody.into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_empty_response_returns_internal_server_error() {
+        let error: actix_web::Error = Error::EmptyResponse.into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_request_failed_returns_internal_server_error() {
+        let error: actix_web::Error = Error::RequestFailed("Request failed".to_string()).into();
+        let response = error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
 }
