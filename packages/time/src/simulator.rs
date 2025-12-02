@@ -154,7 +154,7 @@ thread_local! {
 /// # Panics
 ///
 /// * If the `STEP` `RwLock` fails to write to
-#[allow(clippy::must_use_candidate)]
+#[must_use]
 pub fn set_step(step: u64) -> u64 {
     log::trace!("set_step to step={step}");
     STEP.with_borrow_mut(|x| *x.write().unwrap() = step);
@@ -168,7 +168,7 @@ pub fn set_step(step: u64) -> u64 {
 /// # Panics
 ///
 /// * If the `STEP` `RwLock` fails to read from or write to
-#[allow(clippy::must_use_candidate)]
+#[must_use]
 pub fn next_step() -> u64 {
     set_step(current_step() + 1)
 }
@@ -179,7 +179,7 @@ pub fn next_step() -> u64 {
 ///
 /// * If the `STEP` `RwLock` fails to write to
 pub fn reset_step() {
-    set_step(0);
+    let _ = set_step(0);
 }
 
 /// Returns the current simulation step.
@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(result, 42);
         assert_eq!(current_step(), 42);
 
-        set_step(100);
+        let _ = set_step(100);
         assert_eq!(current_step(), 100);
     }
 
@@ -439,7 +439,7 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_reset_step() {
-        set_step(100);
+        let _ = set_step(100);
         assert_eq!(current_step(), 100);
 
         reset_step();
@@ -454,9 +454,9 @@ mod tests {
         reset_step();
 
         let time1 = now();
-        next_step();
+        let _ = next_step();
         let time2 = now();
-        next_step();
+        let _ = next_step();
         let time3 = now();
 
         // Time should advance monotonically
@@ -489,7 +489,7 @@ mod tests {
         assert_eq!(duration_since_epoch.as_millis(), u128::from(epoch));
 
         // At step 5
-        set_step(5);
+        let _ = set_step(5);
         let time = now();
         let duration_since_epoch = time.duration_since(UNIX_EPOCH).unwrap();
         let expected_millis = epoch + (5 * multiplier);
@@ -506,9 +506,9 @@ mod tests {
         reset_step();
 
         let instant1 = instant_now();
-        next_step();
+        let _ = next_step();
         let instant2 = instant_now();
-        next_step();
+        let _ = next_step();
         let instant3 = instant_now();
 
         // Instant should advance monotonically
@@ -535,7 +535,7 @@ mod tests {
         let base = instant_now(); // At step 0
 
         // At step 10
-        set_step(10);
+        let _ = set_step(10);
         let instant = instant_now();
         let elapsed = instant - base;
         assert_eq!(elapsed, Duration::from_millis(10 * multiplier));
@@ -584,7 +584,7 @@ mod tests {
         let base_instant = *BASE_INSTANT;
 
         // Get simulated instant
-        set_step(1000);
+        let _ = set_step(1000);
         let sim_instant = instant_now();
 
         // Simulated instant should be far ahead of base
@@ -636,7 +636,7 @@ mod tests {
     #[serial]
     fn test_step_counter_independence_across_resets() {
         // Set up initial state
-        set_step(100);
+        let _ = set_step(100);
         assert_eq!(current_step(), 100);
 
         // Reset should take us back to 0
@@ -644,7 +644,7 @@ mod tests {
         assert_eq!(current_step(), 0);
 
         // Should be able to increment from 0 again
-        next_step();
+        let _ = next_step();
         assert_eq!(current_step(), 1);
     }
 
@@ -660,7 +660,7 @@ mod tests {
         let multiplier = step_multiplier();
 
         // Calculate expected time for step 42
-        set_step(42);
+        let _ = set_step(42);
         let expected_millis = epoch + (42 * multiplier);
         let expected_time = UNIX_EPOCH + Duration::from_millis(expected_millis);
 
@@ -750,7 +750,7 @@ mod tests {
 
         // Test with a large step value
         let large_step = 1_000_000u64;
-        set_step(large_step);
+        let _ = set_step(large_step);
 
         // Should not panic and should calculate correctly
         let time = now();

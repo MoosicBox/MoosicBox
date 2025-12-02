@@ -140,7 +140,7 @@ impl Display for TidalArtistImageSize {
 
 impl TidalArtist {
     /// Returns the full URL for the artist's picture at the specified size.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
         self.picture.as_deref().map(|x| artist_picture_url(x, size))
     }
@@ -201,7 +201,7 @@ impl From<TidalSearchArtist> for ApiGlobalSearchResult {
 
 impl TidalSearchArtist {
     /// Returns the full URL for the artist's picture at the specified size.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
         self.picture.as_ref().map(|picture| {
             let picture_path = picture.replace('-', "/");
@@ -439,7 +439,7 @@ impl From<TidalSearchAlbum> for ApiGlobalSearchResult {
 
 impl TidalSearchAlbum {
     /// Returns the full URL for the album's cover art at the specified size.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn cover_url(&self, size: TidalAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -476,7 +476,7 @@ impl AsModelResult<TidalSearchAlbum, ParseError> for serde_json::Value {
 
 impl TidalAlbum {
     /// Returns the full URL for the album's cover art at the specified size.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn cover_url(&self, size: TidalAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
