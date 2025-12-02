@@ -4,13 +4,35 @@
 
 use uuid::Uuid;
 
-/// Generate a new random UUID v4
+/// Generates a new random UUID v4.
+///
+/// This function produces a cryptographically random UUID compliant with
+/// RFC 4122 version 4. Each call generates a unique identifier suitable
+/// for production use.
+///
+/// # Examples
+///
+/// ```
+/// let uuid = switchy_uuid::uuid::new_v4();
+/// assert_eq!(uuid.get_version_num(), 4);
+/// ```
 #[must_use]
 pub fn new_v4() -> Uuid {
     Uuid::new_v4()
 }
 
-/// Generate a new random UUID v4 as a string
+/// Generates a new random UUID v4 as a hyphenated string.
+///
+/// This is a convenience function that generates a UUID using [`new_v4`] and
+/// converts it to the standard hyphenated string format (8-4-4-4-12).
+///
+/// # Examples
+///
+/// ```
+/// let uuid_string = switchy_uuid::uuid::new_v4_string();
+/// assert_eq!(uuid_string.len(), 36);
+/// assert!(uuid_string.chars().filter(|c| *c == '-').count() == 4);
+/// ```
 #[must_use]
 pub fn new_v4_string() -> String {
     Uuid::new_v4().to_string()
