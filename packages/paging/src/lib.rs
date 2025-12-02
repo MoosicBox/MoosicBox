@@ -300,7 +300,7 @@ impl<T> Page<T> {
     }
 
     /// Returns the total number of items across all pages, if known.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub const fn total(&self) -> Option<u32> {
         match self {
             Self::WithTotal { total, .. } => Some(*total),
@@ -309,7 +309,7 @@ impl<T> Page<T> {
     }
 
     /// Returns the number of remaining items after this page, if the total is known.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub const fn remaining(&self) -> Option<u32> {
         match self {
             Self::WithTotal {
@@ -729,7 +729,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     }
 
     /// Returns the total number of items across all pages, if known.
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub const fn total(&self) -> Option<u32> {
         self.page.total()
     }
