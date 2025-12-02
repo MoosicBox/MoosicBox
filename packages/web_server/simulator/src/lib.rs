@@ -1097,4 +1097,67 @@ mod tests {
         );
         assert_eq!(log[0].path, "/failing");
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handler_processes_request_data() {
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+
+        // Add a handler that inspects request and produces response based on it
+        let handler = RouteHandler::new(HttpMethod::Post, "/echo", |req| async move {
+            // Extract data from request and build a response based on it
+            let method_str = format!("{}", req.method);
+            let path = req.path.clone();
+            let query = req.query_string.clone();
+            let auth_header = req.headers.get("Authorization").cloned();
+            let body_len = req.body.as_ref().map_or(0, Bytes::len);
+
+            let response_text = format!(
+                "method={method_str}, path={path}, query={query}, auth={}, body_len={body_len}",
+                auth_header.unwrap_or_default()
+            );
+
+            Ok(SimulatedResponse::ok().with_text_body(response_text))
+        });
+        server.add_route(handler).await;
+
+        let request = SimulatedRequest::new(HttpMethod::Post, "/echo")
+            .with_query_string("foo=bar")
+            .with_header("Authorization", "Bearer secret")
+            .with_body("request body content");
+
+        let response = server.handle_request(request).await.unwrap();
+
+        let body = response.body.unwrap();
+        let body_str = std::str::from_utf8(&body).unwrap();
+
+        assert!(body_str.contains("method=POST"));
+        assert!(body_str.contains("path=/echo"));
+        assert!(body_str.contains("query=foo=bar"));
+        assert!(body_str.contains("auth=Bearer secret"));
+        assert!(body_str.contains("body_len=20"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_route_handler_can_be_cloned_and_both_work() {
+        let handler = RouteHandler::new(HttpMethod::Get, "/test", |_req| async {
+            Ok(SimulatedResponse::ok().with_text_body("response"))
+        });
+
+        let handler_clone = handler.clone();
+
+        // Both original and clone should match the same requests
+        assert!(handler.matches(&HttpMethod::Get, "/test"));
+        assert!(handler_clone.matches(&HttpMethod::Get, "/test"));
+
+        // Both should handle requests successfully
+        let request1 = SimulatedRequest::new(HttpMethod::Get, "/test");
+        let request2 = SimulatedRequest::new(HttpMethod::Get, "/test");
+
+        let response1 = handler.handle(request1).await.unwrap();
+        let response2 = handler_clone.handle(request2).await.unwrap();
+
+        assert_eq!(response1.body.unwrap(), Bytes::from("response"));
+        assert_eq!(response2.body.unwrap(), Bytes::from("response"));
+    }
 }
