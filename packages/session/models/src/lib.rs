@@ -76,7 +76,6 @@ impl PlaybackTarget {
     /// Returns a default playback target based on the type string.
     ///
     /// Returns `Some(PlaybackTarget)` for recognized type strings, or `None` if the type is unknown.
-    #[must_use]
     pub fn default_from_str(r#type: &str) -> Option<Self> {
         if DEFAULT_AUDIO_ZONE.as_ref() == r#type {
             Some(DEFAULT_AUDIO_ZONE)
