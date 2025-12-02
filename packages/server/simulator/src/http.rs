@@ -82,10 +82,6 @@ pub async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> i
 /// * If no headers on HTTP response
 /// * If invalid status line
 /// * If invalid status code
-///
-/// # Panics
-///
-/// This function does not panic.
 pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static str> {
     // Split the response into headers and body sections
     let parts: Vec<&str> = raw_response.split("\r\n\r\n").collect();
