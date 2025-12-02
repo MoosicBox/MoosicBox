@@ -5,6 +5,10 @@
 //! types including `RequestData`, `String`, and `i32`, and verifies consistency between
 //! synchronous and asynchronous extraction methods.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 
 /// Creates a test `HttpRequest` with predefined headers and query parameters.
@@ -81,7 +85,7 @@ async fn test_request_data_async_extraction() -> Result<(), Box<dyn std::error::
             println!("✅ All RequestData fields extracted correctly via async");
         }
         Err(e) => {
-            println!("❌ RequestData async extraction failed: {}", e);
+            println!("❌ RequestData async extraction failed: {e}");
             return Err(e.into());
         }
     }
@@ -99,6 +103,7 @@ async fn test_request_data_async_extraction() -> Result<(), Box<dyn std::error::
 /// Returns an error if:
 /// * Sync and async extraction produce different results
 /// * One method succeeds while the other fails
+#[allow(clippy::similar_names)]
 async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing async vs sync extraction consistency...");
 
@@ -114,8 +119,8 @@ async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Erro
 
     match (sync_result, async_result) {
         (Ok(sync_value), Ok(async_value)) => {
-            println!("✅ Sync result: '{}'", sync_value);
-            println!("✅ Async result: '{}'", async_value);
+            println!("✅ Sync result: '{sync_value}'");
+            println!("✅ Async result: '{async_value}'");
 
             // Verify they produce identical results
             assert_eq!(
@@ -126,14 +131,14 @@ async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Erro
         }
         (Err(sync_err), Err(async_err)) => {
             println!("✅ Both sync and async failed consistently");
-            println!("  Sync error: {}", sync_err);
-            println!("  Async error: {}", async_err);
+            println!("  Sync error: {sync_err}");
+            println!("  Async error: {async_err}");
             // Both failing is also consistent behavior
         }
         (sync_result, async_result) => {
             println!("❌ Inconsistent results between sync and async:");
-            println!("  Sync: {:?}", sync_result);
-            println!("  Async: {:?}", async_result);
+            println!("  Sync: {sync_result:?}");
+            println!("  Async: {async_result:?}");
             return Err("Sync and async extraction produced different results".into());
         }
     }
@@ -160,11 +165,11 @@ async fn test_async_i32_extraction() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(value) => {
-            println!("✅ i32 extracted asynchronously: {}", value);
+            println!("✅ i32 extracted asynchronously: {value}");
             assert_eq!(value, -42);
         }
         Err(e) => {
-            println!("❌ i32 async extraction failed: {}", e);
+            println!("❌ i32 async extraction failed: {e}");
             return Err(e.into());
         }
     }
@@ -179,10 +184,7 @@ async fn test_async_i32_extraction() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Expected error for invalid i32".into());
         }
         Err(e) => {
-            println!(
-                "✅ i32 async extraction properly failed for invalid input: {}",
-                e
-            );
+            println!("✅ i32 async extraction properly failed for invalid input: {e}");
             assert!(e.to_string().contains("Failed to parse"));
         }
     }
@@ -211,11 +213,11 @@ async fn test_future_types() -> Result<(), Box<dyn std::error::Error>> {
 
     match string_result {
         Ok(value) => {
-            println!("✅ Future<String> resolved correctly: '{}'", value);
+            println!("✅ Future<String> resolved correctly: '{value}'");
             assert_eq!(value, "future_test");
         }
         Err(e) => {
-            println!("❌ Future<String> failed: {}", e);
+            println!("❌ Future<String> failed: {e}");
             return Err(e.into());
         }
     }
@@ -231,7 +233,7 @@ async fn test_future_types() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Method: {:?}", data.method);
         }
         Err(e) => {
-            println!("❌ Future<RequestData> failed: {}", e);
+            println!("❌ Future<RequestData> failed: {e}");
             return Err(e.into());
         }
     }
