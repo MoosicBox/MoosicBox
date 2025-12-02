@@ -76,7 +76,11 @@ enum TestScenario {
     Concurrency,
 }
 
-/// Bootstrap configuration for API testing simulation
+/// Bootstrap configuration for the API testing simulation.
+///
+/// This struct holds the configuration needed to run the API testing simulation,
+/// including the server port, test scenarios to run, and shared test results
+/// for tracking test outcomes across all test clients.
 struct ApiTestingBootstrap {
     server_port: u16,
     test_scenarios: Vec<TestScenario>,
@@ -84,6 +88,12 @@ struct ApiTestingBootstrap {
 }
 
 impl ApiTestingBootstrap {
+    /// Creates a new API testing bootstrap with default configuration.
+    ///
+    /// The default configuration includes:
+    /// * Server port: 8082
+    /// * All test scenarios: `HappyPath`, `ErrorHandling`, `EdgeCases`, `Concurrency`
+    /// * Empty test results tracker
     #[must_use]
     fn new() -> Self {
         Self {
@@ -179,6 +189,7 @@ struct TestDetail {
 }
 
 impl TestResults {
+    /// Creates a new, empty test results tracker.
     #[must_use]
     const fn new() -> Self {
         Self {
@@ -189,6 +200,10 @@ impl TestResults {
         }
     }
 
+    /// Records the result of a test execution.
+    ///
+    /// Updates the total, passed, and failed test counters based on the test
+    /// outcome and stores the detailed test information for later reporting.
     fn record_test(&mut self, detail: TestDetail) {
         self.total_tests += 1;
         if detail.passed {
@@ -201,6 +216,9 @@ impl TestResults {
         self.test_details.insert(key, detail);
     }
 
+    /// Returns a brief summary of test results.
+    ///
+    /// The summary includes total tests, passed count, and failed count.
     #[must_use]
     fn summary(&self) -> String {
         format!(
@@ -209,6 +227,10 @@ impl TestResults {
         )
     }
 
+    /// Returns a detailed report of all test results.
+    ///
+    /// The report includes the summary plus per-test details showing scenario,
+    /// test name, pass/fail status, response time, and any error messages.
     #[must_use]
     fn detailed_report(&self) -> String {
         use std::fmt::Write;
@@ -246,6 +268,7 @@ struct ApiDataStore {
 }
 
 impl ApiDataStore {
+    /// Creates a new, empty data store.
     #[must_use]
     fn new() -> Self {
         Self {
@@ -270,7 +293,15 @@ struct CreateUserRequest {
     email: String,
 }
 
-/// Start the API server with CRUD endpoints
+/// Starts the API server with CRUD endpoints for user management.
+///
+/// Creates and starts a web server on the specified port with endpoints for
+/// creating, reading, updating, and deleting users. The server uses CORS
+/// configuration that allows any origin, method, and header.
+///
+/// # Errors
+///
+/// Returns an error if the server fails to start or encounters a runtime error.
 #[allow(clippy::future_not_send)]
 async fn start_api_server(port: u16) -> HostResult {
     log::info!("Starting API server on port {port}");
@@ -349,7 +380,19 @@ async fn start_api_server(port: u16) -> HostResult {
     Ok(())
 }
 
-/// Run API test scenarios
+/// Runs API test scenarios against the server.
+///
+/// Executes the specified test scenario by making HTTP requests to the API
+/// server and recording the results. Each scenario type tests different aspects
+/// of the API:
+/// * `HappyPath` - Successful CRUD operations
+/// * `ErrorHandling` - Validation and error responses
+/// * `EdgeCases` - Boundary conditions
+/// * `Concurrency` - Concurrent request handling
+///
+/// # Errors
+///
+/// Returns an error if the test scenario encounters an unrecoverable failure.
 async fn run_api_test_scenario(
     scenario: TestScenario,
     server_port: u16,
@@ -380,7 +423,12 @@ async fn run_api_test_scenario(
     Ok(())
 }
 
-/// Test successful CRUD operations
+/// Runs tests for successful CRUD operations.
+///
+/// Tests the happy path scenarios including:
+/// * Creating a new user
+/// * Retrieving a user by ID
+/// * Listing all users
 async fn run_happy_path_tests(
     client: &HttpClient,
     base_url: &str,
@@ -497,7 +545,11 @@ async fn run_happy_path_tests(
     });
 }
 
-/// Test error handling scenarios
+/// Runs tests for error handling scenarios.
+///
+/// Tests that the API correctly handles error conditions including:
+/// * Requesting a non-existent user (expects 404)
+/// * Creating a user with invalid data (expects 400)
 async fn run_error_handling_tests(
     client: &HttpClient,
     base_url: &str,
@@ -570,7 +622,10 @@ async fn run_error_handling_tests(
     });
 }
 
-/// Test edge cases and boundary conditions
+/// Runs tests for edge cases and boundary conditions.
+///
+/// Tests that the API handles edge cases gracefully including:
+/// * Creating a user with a very long name (1000 characters)
 async fn run_edge_case_tests(
     client: &HttpClient,
     base_url: &str,
