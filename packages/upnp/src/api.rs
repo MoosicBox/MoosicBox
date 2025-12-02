@@ -710,4 +710,18 @@ mod tests {
             actix_web::http::StatusCode::FAILED_DEPENDENCY
         );
     }
+
+    #[test_log::test]
+    fn test_action_error_roxml_converts_to_failed_dependency() {
+        // Create an actual roxmltree error by parsing invalid XML
+        let parse_result = roxmltree::Document::parse("<invalid");
+        let roxml_error = parse_result.unwrap_err();
+        let error = ActionError::Roxml(roxml_error);
+        let actix_error: actix_web::Error = error.into();
+        let response = actix_error.error_response();
+        assert_eq!(
+            response.status(),
+            actix_web::http::StatusCode::FAILED_DEPENDENCY
+        );
+    }
 }
