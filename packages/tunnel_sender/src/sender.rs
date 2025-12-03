@@ -2085,7 +2085,7 @@ mod tests {
     #[cfg(feature = "base64")]
     mod base64_tests {
         use super::TunnelSender;
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
         use std::collections::BTreeMap;
 
         #[test_log::test]

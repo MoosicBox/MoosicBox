@@ -128,3 +128,45 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_context() {
+        // When not executing within a client action, current_client should return None
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_sets_context() {
+        // Verify that with_client properly sets the context so current_client returns the name
+        let result = with_client("test-client".to_string(), |name| {
+            let current = current_client();
+            assert!(current.is_some());
+            assert_eq!(current.unwrap(), "test-client");
+            name.to_string()
+        });
+        assert_eq!(result, "test-client");
+
+        // After with_client returns, the context should be cleared
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_nested_calls_use_innermost_context() {
+        // Test nested with_client calls to verify scoped_thread_local behavior
+        with_client("outer-client".to_string(), |_| {
+            assert_eq!(current_client().unwrap(), "outer-client");
+
+            with_client("inner-client".to_string(), |_| {
+                // Inner context should shadow outer
+                assert_eq!(current_client().unwrap(), "inner-client");
+            });
+
+            // After inner returns, outer context should be restored
+            assert_eq!(current_client().unwrap(), "outer-client");
+        });
+    }
+}

@@ -141,3 +141,45 @@ impl Actor for &Host {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_host_returns_none_outside_context() {
+        // When not executing within a host action, current_host should return None
+        assert!(current_host().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_host_sets_context() {
+        // Verify that with_host properly sets the context so current_host returns the name
+        let result = with_host("test-host".to_string(), |name| {
+            let current = current_host();
+            assert!(current.is_some());
+            assert_eq!(current.unwrap(), "test-host");
+            name.to_string()
+        });
+        assert_eq!(result, "test-host");
+
+        // After with_host returns, the context should be cleared
+        assert!(current_host().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_host_nested_calls_use_innermost_context() {
+        // Test nested with_host calls to verify scoped_thread_local behavior
+        with_host("outer-host".to_string(), |_| {
+            assert_eq!(current_host().unwrap(), "outer-host");
+
+            with_host("inner-host".to_string(), |_| {
+                // Inner context should shadow outer
+                assert_eq!(current_host().unwrap(), "inner-host");
+            });
+
+            // After inner returns, outer context should be restored
+            assert_eq!(current_host().unwrap(), "outer-host");
+        });
+    }
+}
