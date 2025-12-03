@@ -1445,6 +1445,112 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_parse_track_metadata_elements_in_wrong_namespace_are_ignored() {
+        // Elements with matching names but wrong namespaces should be ignored
+        // Only dc:title (with DC namespace) should be recognized, not custom:title
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+                               xmlns:dc="http://purl.org/dc/elements/1.1/"
+                               xmlns:custom="http://example.com/custom/">
+            <item id="0" parentID="-1" restricted="false">
+                <custom:title>Wrong Namespace Title</custom:title>
+                <dc:title>Correct Title</dc:title>
+                <res>http://example.com/track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata");
+        assert_eq!(result.items.len(), 1);
+        // Should find the dc:title, not custom:title
+        assert_eq!(result.items[0].dc_title.as_deref(), Some("Correct Title"));
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_elements_without_required_namespace_are_ignored() {
+        // upnp:artist requires the upnp namespace, an artist without namespace should be ignored
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+                               xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+            <item id="0" parentID="-1" restricted="false">
+                <artist>No Namespace Artist</artist>
+                <upnp:artist>Proper Artist</upnp:artist>
+                <res>http://example.com/track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata");
+        assert_eq!(result.items.len(), 1);
+        // Should find the upnp:artist, not the unnamespaced artist
+        assert_eq!(
+            result.items[0].upnp_artist.as_deref(),
+            Some("Proper Artist")
+        );
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_res_element_requires_didl_namespace() {
+        // The res element should only be found with the DIDL-Lite namespace
+        // A res in a different namespace should not be recognized
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+                               xmlns:other="http://example.com/other/">
+            <item id="0" parentID="-1" restricted="false">
+                <other:res>http://wrong-namespace.com/track.mp3</other:res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml);
+        // Should fail because no res element in the correct namespace was found
+        assert!(
+            result.is_err(),
+            "Expected error when res is in wrong namespace"
+        );
+        match result {
+            Err(ActionError::MissingProperty(msg)) => {
+                assert!(
+                    msg.contains("res"),
+                    "Error message should mention res: {msg}"
+                );
+            }
+            _ => panic!("Expected MissingProperty error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_with_whitespace_in_text_content() {
+        // Test that whitespace is preserved in text content
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+                               xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <item id="0" parentID="-1" restricted="false">
+                <dc:title>  Title With Spaces  </dc:title>
+                <res>http://example.com/track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata");
+        assert_eq!(result.items.len(), 1);
+        // Whitespace should be preserved in the title
+        assert_eq!(
+            result.items[0].dc_title.as_deref(),
+            Some("  Title With Spaces  ")
+        );
+    }
+
+    #[test_log::test]
+    fn test_parse_track_metadata_with_empty_text_elements() {
+        // Elements with empty text should result in None (as x.text() returns None for empty text)
+        let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+                               xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <item id="0" parentID="-1" restricted="false">
+                <dc:title></dc:title>
+                <res>http://example.com/track.mp3</res>
+            </item>
+        </DIDL-Lite>"#;
+
+        let result = parse_track_metadata(xml).expect("Failed to parse metadata");
+        assert_eq!(result.items.len(), 1);
+        // Empty text should result in None
+        assert!(result.items[0].dc_title.is_none());
+    }
+
+    #[test_log::test]
     fn test_str_to_duration_boundary_values() {
         // Test boundary between time units
         assert_eq!(str_to_duration("00:00:59"), 59);
