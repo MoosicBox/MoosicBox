@@ -928,7 +928,10 @@ mod tests {
     use super::*;
     use hyperchad_transformer::{
         ConfigOverride, Number, OverrideCondition, OverrideItem,
-        models::{LayoutDirection, Visibility},
+        models::{
+            AlignItems, LayoutDirection, OverflowWrap, TextAlign, TextOverflow, UserSelect,
+            Visibility, WhiteSpace,
+        },
     };
     use std::collections::BTreeMap;
 
@@ -1375,5 +1378,273 @@ mod tests {
         );
 
         assert!(result.contains("background:rgb(255,128,64)"));
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_user_select_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all UserSelect variants
+        for (user_select, expected_css) in [
+            (UserSelect::Auto, "user-select:auto !important;"),
+            (UserSelect::None, "user-select:none !important;"),
+            (UserSelect::Text, "user-select:text !important;"),
+            (UserSelect::All, "user-select:all !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("user-select-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::UserSelect(user_select)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_overflow_wrap_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all OverflowWrap variants
+        for (overflow_wrap, expected_css) in [
+            (OverflowWrap::Normal, "overflow-wrap:normal !important;"),
+            (
+                OverflowWrap::BreakWord,
+                "overflow-wrap:break-word !important;",
+            ),
+            (OverflowWrap::Anywhere, "overflow-wrap:anywhere !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("overflow-wrap-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::OverflowWrap(overflow_wrap)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_text_overflow_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all TextOverflow variants
+        for (text_overflow, expected_css) in [
+            (TextOverflow::Clip, "text-overflow:clip !important;"),
+            (TextOverflow::Ellipsis, "text-overflow:ellipsis !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("text-overflow-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::TextOverflow(text_overflow)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_align_items_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all AlignItems variants
+        for (align_items, expected_css) in [
+            (AlignItems::Start, "align-items:start !important;"),
+            (AlignItems::Center, "align-items:center !important;"),
+            (AlignItems::End, "align-items:end !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("align-items-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::AlignItems(align_items)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_text_align_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all TextAlign variants
+        for (text_align, expected_css) in [
+            (TextAlign::Start, "text-align:start !important;"),
+            (TextAlign::Center, "text-align:center !important;"),
+            (TextAlign::End, "text-align:end !important;"),
+            (TextAlign::Justify, "text-align:justify !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("text-align-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::TextAlign(text_align)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_white_space_overrides() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "mobile".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(768)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        // Test all WhiteSpace variants
+        for (white_space, expected_css) in [
+            (WhiteSpace::Normal, "white-space:normal !important;"),
+            (WhiteSpace::Preserve, "white-space:pre !important;"),
+            (WhiteSpace::PreserveWrap, "white-space:pre-wrap !important;"),
+        ] {
+            let container = Container {
+                str_id: Some("white-space-test".to_string()),
+                element: hyperchad_transformer::Element::Div,
+                overrides: vec![ConfigOverride {
+                    condition: OverrideCondition::ResponsiveTarget {
+                        name: "mobile".to_string(),
+                    },
+                    overrides: vec![OverrideItem::WhiteSpace(white_space)],
+                    default: None,
+                }],
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            tag_renderer
+                .reactive_conditions_to_css(&mut buffer, &container)
+                .unwrap();
+            let css = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                css.contains(expected_css),
+                "Expected CSS to contain '{expected_css}', got: {css}"
+            );
+        }
     }
 }
