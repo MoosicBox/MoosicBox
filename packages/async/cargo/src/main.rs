@@ -957,4 +957,322 @@ mod tests {
         assert!(checker.warnings.iter().any(|w| w.contains("method_c")));
         assert!(!checker.warnings.iter().any(|w| w.contains("method_b")));
     }
+
+    #[test_log::test]
+    fn test_checker_unsafe_async_function() {
+        // Unsafe async functions should still be detected
+        let code = r"
+            async unsafe fn unsafe_async_fn() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("unsafe_async_fn"));
+    }
+
+    #[test_log::test]
+    fn test_checker_unsafe_async_function_with_attribute() {
+        // Unsafe async functions with inject_yields should be exempt
+        let code = r"
+            #[inject_yields]
+            async unsafe fn unsafe_async_fn() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_unsafe_async_method_in_impl() {
+        // Unsafe async methods in impl blocks should be detected
+        let code = r"
+            struct MyStruct;
+            impl MyStruct {
+                async unsafe fn unsafe_method(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("unsafe_method"));
+    }
+
+    #[test_log::test]
+    fn test_checker_extern_block_ignored() {
+        // Extern blocks should not cause any warnings
+        let code = r#"
+            extern "C" {
+                fn external_function();
+            }
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_static_and_const_items_ignored() {
+        // Static and const items at module level should be ignored
+        let code = r#"
+            const CONSTANT: i32 = 42;
+            static STATIC_VALUE: &str = "hello";
+        "#;
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_type_alias_ignored() {
+        // Type aliases should be ignored
+        let code = r"
+            type MyResult<T> = Result<T, std::io::Error>;
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 0);
+    }
+
+    #[test_log::test]
+    fn test_checker_async_fn_with_complex_return_type() {
+        // Async functions with complex return types should be detected
+        let code = r"
+            async fn fetch_data() -> Result<Vec<String>, Box<dyn std::error::Error>> {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("fetch_data"));
+    }
+
+    #[test_log::test]
+    fn test_checker_async_method_different_receivers() {
+        // Async methods with different receiver types should all be detected
+        let code = r"
+            struct MyStruct;
+            impl MyStruct {
+                async fn by_ref(&self) {}
+                async fn by_mut_ref(&mut self) {}
+                async fn by_value(self) {}
+                async fn by_box(self: Box<Self>) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 4);
+        assert!(checker.warnings.iter().any(|w| w.contains("by_ref")));
+        assert!(checker.warnings.iter().any(|w| w.contains("by_mut_ref")));
+        assert!(checker.warnings.iter().any(|w| w.contains("by_value")));
+        assert!(checker.warnings.iter().any(|w| w.contains("by_box")));
+    }
+
+    #[test_log::test]
+    fn test_checker_impl_with_macro_attributes() {
+        // Impl blocks with macro attributes (not inject_yields) should still have methods checked
+        let code = r"
+            struct MyStruct;
+
+            #[derive(Debug)]
+            impl MyStruct {
+                async fn method(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Should be flagged - derive(Debug) is not inject_yields
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("method"));
+    }
+
+    #[test_log::test]
+    fn test_checker_nested_module_inner_exempt() {
+        // Inner module with inject_yields should exempt its contents,
+        // but outer module functions should still be checked
+        let code = r"
+            mod outer {
+                async fn outer_fn() {}
+
+                #[inject_yields]
+                mod inner {
+                    async fn inner_fn() {}
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Only outer_fn should be flagged
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("outer_fn"));
+        assert!(!checker.warnings.iter().any(|w| w.contains("inner_fn")));
+    }
+
+    #[test_log::test]
+    fn test_checker_deeply_nested_modules() {
+        // Deeply nested modules should all be visited
+        let code = r"
+            mod level1 {
+                mod level2 {
+                    mod level3 {
+                        async fn deep_fn() {}
+                    }
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("deep_fn"));
+    }
+
+    #[test_log::test]
+    fn test_checker_multiple_traits_impl_different_attributes() {
+        // Multiple trait implementations with varying attributes
+        let code = r"
+            struct MyStruct;
+
+            impl TraitA for MyStruct {
+                async fn method_a(&self) {}
+            }
+
+            #[inject_yields]
+            impl TraitB for MyStruct {
+                async fn method_b(&self) {}
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        // Only method_a should be flagged
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("method_a"));
+    }
+
+    #[test_log::test]
+    fn test_checker_pub_async_function() {
+        // Public async functions should be detected
+        let code = r"
+            pub async fn public_fn() {}
+            pub(crate) async fn crate_fn() {}
+            pub(super) async fn super_fn() {}
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 3);
+        assert!(checker.warnings.iter().any(|w| w.contains("public_fn")));
+        assert!(checker.warnings.iter().any(|w| w.contains("crate_fn")));
+        assert!(checker.warnings.iter().any(|w| w.contains("super_fn")));
+    }
+
+    #[test_log::test]
+    fn test_checker_impl_for_generic_trait() {
+        // Impl blocks for generic traits should be checked
+        let code = r"
+            struct MyStruct;
+            impl Iterator for MyStruct {
+                type Item = i32;
+
+                async fn next(&mut self) -> Option<Self::Item> {
+                    None
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("next"));
+    }
+
+    #[test_log::test]
+    fn test_checker_impl_trait_with_associated_types() {
+        // Impl blocks with associated types should still check async methods
+        let code = r"
+            struct MyStruct;
+            impl MyTrait for MyStruct {
+                type Output = String;
+                type Error = std::io::Error;
+
+                async fn process(&self) -> Self::Output {
+                    String::new()
+                }
+            }
+        ";
+        let syntax = syn::parse_file(code).unwrap();
+        let mut checker = Checker {
+            file: "test.rs",
+            warnings: Vec::new(),
+        };
+        checker.visit_file(&syntax);
+
+        assert_eq!(checker.warnings.len(), 1);
+        assert!(checker.warnings[0].contains("process"));
+    }
 }
