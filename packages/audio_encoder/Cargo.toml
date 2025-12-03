@@ -34,6 +34,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_fs    = { workspace = true, features = ["simulator-real-fs"] }
 test-log      = { workspace = true }
 
 [features]

@@ -46,13 +46,18 @@ mod real_fs_support {
     pub fn convert_std_file_to_simulator(
         std_file: std::fs::File,
         path: impl AsRef<std::path::Path>,
+        read: bool,
         write: bool,
     ) -> std::io::Result<super::sync::File> {
-        use std::io::Read;
-
-        let mut std_file = std_file;
-        let mut content = Vec::new();
-        std_file.read_to_end(&mut content)?;
+        let content = if read {
+            use std::io::Read;
+            let mut std_file = std_file;
+            let mut content = Vec::new();
+            std_file.read_to_end(&mut content)?;
+            content
+        } else {
+            Vec::new()
+        };
 
         Ok(super::sync::File {
             path: path.as_ref().to_path_buf(),
@@ -67,18 +72,23 @@ mod real_fs_support {
     pub async fn convert_std_file_to_simulator_async(
         std_file: std::fs::File,
         path: impl AsRef<std::path::Path>,
+        read: bool,
         write: bool,
     ) -> std::io::Result<super::unsync::File> {
         let path_buf = path.as_ref().to_path_buf();
-        let content = switchy_async::task::spawn_blocking(move || {
-            use std::io::Read;
-            let mut std_file = std_file;
-            let mut content = Vec::new();
-            std_file.read_to_end(&mut content)?;
-            Ok::<Vec<u8>, std::io::Error>(content)
-        })
-        .await
-        .unwrap()?;
+        let content = if read {
+            switchy_async::task::spawn_blocking(move || {
+                use std::io::Read;
+                let mut std_file = std_file;
+                let mut content = Vec::new();
+                std_file.read_to_end(&mut content)?;
+                Ok::<Vec<u8>, std::io::Error>(content)
+            })
+            .await
+            .unwrap()?
+        } else {
+            Vec::new()
+        };
 
         Ok(super::unsync::File {
             path: path_buf,
@@ -738,7 +748,7 @@ pub mod sync {
                 let std_options: std::fs::OpenOptions = self.clone().into();
                 let std_file = std_options.open(&path)?;
                 return super::real_fs_support::convert_std_file_to_simulator(
-                    std_file, &path, self.write,
+                    std_file, &path, self.read, self.write,
                 );
             }
 
@@ -1919,7 +1929,7 @@ pub mod unsync {
                 .await
                 .unwrap()?;
                 return super::real_fs_support::convert_std_file_to_simulator_async(
-                    std_file, &path, self.write,
+                    std_file, &path, self.read, self.write,
                 )
                 .await;
             }
