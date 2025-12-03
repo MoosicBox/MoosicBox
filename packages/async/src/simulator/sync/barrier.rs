@@ -227,4 +227,69 @@ mod tests {
     fn test_barrier_zero_size() {
         let _ = Barrier::new(0);
     }
+
+    #[test]
+    fn test_barrier_reuse_multiple_generations() {
+        let runtime = crate::simulator::runtime::build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            let barrier = Arc::new(Barrier::new(2));
+
+            // First generation
+            {
+                let b1 = barrier.clone();
+                let b2 = barrier.clone();
+                let (r1, r2) = futures::future::join(async move { b1.wait().await }, async move {
+                    b2.wait().await
+                })
+                .await;
+                assert_ne!(r1.is_leader(), r2.is_leader());
+            }
+
+            // Second generation - reusing the same barrier
+            {
+                let b1 = barrier.clone();
+                let b2 = barrier.clone();
+                let (r1, r2) = futures::future::join(async move { b1.wait().await }, async move {
+                    b2.wait().await
+                })
+                .await;
+                assert_ne!(r1.is_leader(), r2.is_leader());
+            }
+
+            // Third generation
+            {
+                let b1 = barrier.clone();
+                let b2 = barrier.clone();
+                let (r1, r2) = futures::future::join(async move { b1.wait().await }, async move {
+                    b2.wait().await
+                })
+                .await;
+                assert_ne!(r1.is_leader(), r2.is_leader());
+            }
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn test_barrier_wait_result_clone() {
+        let result = BarrierWaitResult { is_leader: true };
+        let cloned = result.clone();
+        assert_eq!(result.is_leader(), cloned.is_leader());
+        assert!(cloned.is_leader());
+
+        let not_leader = BarrierWaitResult { is_leader: false };
+        #[allow(clippy::redundant_clone)]
+        let cloned_not_leader = not_leader.clone();
+        assert!(!cloned_not_leader.is_leader());
+    }
+
+    #[test]
+    fn test_barrier_wait_result_debug() {
+        let result = BarrierWaitResult { is_leader: true };
+        let debug_str = format!("{result:?}");
+        assert!(debug_str.contains("is_leader"));
+        assert!(debug_str.contains("true"));
+    }
 }
