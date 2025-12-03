@@ -428,4 +428,164 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), AudioError::ChannelReceive));
     }
+
+    #[test_log::test]
+    fn test_audio_handle_debug() {
+        let (tx, _rx) = flume::bounded(10);
+        let handle = AudioHandle::new(tx);
+
+        let debug_str = format!("{handle:?}");
+        assert!(debug_str.contains("AudioHandle"));
+        assert!(debug_str.contains("command_sender"));
+    }
+
+    #[test_log::test]
+    fn test_audio_handle_clone() {
+        let (tx, rx) = flume::bounded(10);
+        let handle = AudioHandle::new(tx);
+        let cloned_handle = handle.clone();
+
+        // Both handles should be able to send to the same channel
+        handle.pause_immediate().unwrap();
+        cloned_handle.resume_immediate().unwrap();
+
+        // Verify both messages were received
+        let msg1 = rx.try_recv().unwrap();
+        let msg2 = rx.try_recv().unwrap();
+        assert!(matches!(msg1.command, AudioCommand::Pause));
+        assert!(matches!(msg2.command, AudioCommand::Resume));
+    }
+
+    #[test_log::test]
+    fn test_audio_command_debug() {
+        // Test Debug trait for all AudioCommand variants
+        assert!(format!("{:?}", AudioCommand::SetVolume(0.5)).contains("SetVolume"));
+        assert!(format!("{:?}", AudioCommand::Pause).contains("Pause"));
+        assert!(format!("{:?}", AudioCommand::Resume).contains("Resume"));
+        assert!(format!("{:?}", AudioCommand::Seek(10.0)).contains("Seek"));
+        assert!(format!("{:?}", AudioCommand::Flush).contains("Flush"));
+        assert!(format!("{:?}", AudioCommand::Reset).contains("Reset"));
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_audio_command_clone() {
+        let cmd = AudioCommand::SetVolume(0.75);
+        let cloned = cmd.clone();
+        assert!(matches!(cloned, AudioCommand::SetVolume(v) if (v - 0.75).abs() < f64::EPSILON));
+
+        let cmd = AudioCommand::Seek(30.5);
+        let cloned = cmd.clone();
+        assert!(matches!(cloned, AudioCommand::Seek(v) if (v - 30.5).abs() < f64::EPSILON));
+    }
+
+    #[test_log::test]
+    fn test_audio_response_debug() {
+        let response = AudioResponse::Success;
+        assert!(format!("{response:?}").contains("Success"));
+
+        let response = AudioResponse::Error("test error".to_string());
+        assert!(format!("{response:?}").contains("Error"));
+        assert!(format!("{response:?}").contains("test error"));
+    }
+
+    #[test_log::test]
+    #[allow(clippy::redundant_clone)]
+    fn test_audio_response_clone() {
+        let response = AudioResponse::Success;
+        let cloned = response.clone();
+        assert!(matches!(cloned, AudioResponse::Success));
+
+        let response = AudioResponse::Error("error message".to_string());
+        let cloned = response.clone();
+        assert!(matches!(cloned, AudioResponse::Error(ref msg) if msg == "error message"));
+    }
+
+    #[test_log::test]
+    fn test_command_message_debug() {
+        let (response_tx, _response_rx) = flume::bounded(1);
+        let msg = CommandMessage {
+            command: AudioCommand::Pause,
+            response_sender: Some(response_tx),
+        };
+
+        let debug_str = format!("{msg:?}");
+        assert!(debug_str.contains("CommandMessage"));
+        assert!(debug_str.contains("command"));
+        assert!(debug_str.contains("Pause"));
+        assert!(debug_str.contains("response_sender"));
+    }
+
+    #[test_log::test]
+    fn test_command_message_without_response_sender() {
+        let msg = CommandMessage {
+            command: AudioCommand::Resume,
+            response_sender: None,
+        };
+
+        let debug_str = format!("{msg:?}");
+        assert!(debug_str.contains("Resume"));
+        assert!(debug_str.contains("None"));
+    }
+
+    #[test_log::test]
+    fn test_audio_error_debug() {
+        let err = AudioError::Command("test".to_string());
+        assert!(format!("{err:?}").contains("Command"));
+
+        let err = AudioError::ChannelSend;
+        assert!(format!("{err:?}").contains("ChannelSend"));
+
+        let err = AudioError::ChannelReceive;
+        assert!(format!("{err:?}").contains("ChannelReceive"));
+
+        let err = AudioError::UnexpectedResponse;
+        assert!(format!("{err:?}").contains("UnexpectedResponse"));
+
+        let err = AudioError::HandleNotAvailable;
+        assert!(format!("{err:?}").contains("HandleNotAvailable"));
+    }
+
+    #[test_log::test]
+    fn test_audio_error_display() {
+        let err = AudioError::Command("test error".to_string());
+        assert_eq!(format!("{err}"), "Command error: test error");
+
+        let err = AudioError::ChannelSend;
+        assert_eq!(format!("{err}"), "Channel send error");
+
+        let err = AudioError::ChannelReceive;
+        assert_eq!(format!("{err}"), "Channel receive error");
+
+        let err = AudioError::UnexpectedResponse;
+        assert_eq!(format!("{err}"), "Unexpected response type");
+
+        let err = AudioError::HandleNotAvailable;
+        assert_eq!(format!("{err}"), "Handle not available");
+    }
+
+    #[test_log::test]
+    fn test_audio_error_from_flume_send_error() {
+        let (tx, _rx) = flume::bounded::<CommandMessage>(0);
+        let msg = CommandMessage {
+            command: AudioCommand::Pause,
+            response_sender: None,
+        };
+
+        // Manually trigger the send error conversion
+        let send_err = tx.try_send(msg).unwrap_err();
+        let err: AudioError = send_err.into();
+        assert!(matches!(err, AudioError::ChannelSend));
+    }
+
+    #[test_log::test]
+    fn test_audio_error_from_flume_recv_error() {
+        let (tx, rx) = flume::bounded::<AudioResponse>(0);
+        drop(tx); // Drop sender to cause recv error
+
+        // The recv() returns RecvError which implements Into<AudioError>
+        let recv_err = rx.recv().unwrap_err();
+        let err: AudioError = recv_err.into();
+        assert!(matches!(err, AudioError::ChannelReceive));
+    }
 }
