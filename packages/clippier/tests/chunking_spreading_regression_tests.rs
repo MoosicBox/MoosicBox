@@ -752,6 +752,190 @@ async fn test_chunking_without_spreading() {
     }
 }
 
+/// Regression test: Packages with all features skipped should still generate matrix entries
+/// This tests the fix for the bug where --skip-features that excluded all features
+/// resulted in empty matrix output when chunking was enabled.
+#[switchy_async::test]
+async fn test_skip_all_features_still_generates_matrix_entry() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create a simple workspace with packages that only have fail-on-warnings feature
+    let package_dir = temp_dir.path().join("packages/minimal");
+    switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+    let cargo_toml = r#"
+[package]
+name = "minimal"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+fail-on-warnings = []
+"#;
+    switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+    switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+    let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+    switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/minimal"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Test with chunking enabled and skipping all non-default features
+    // This was the bug: when all features are skipped, the chunked empty vec
+    // caused zero matrix entries to be generated
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,                             // offset
+        None,                             // max
+        None,                             // max_parallel
+        Some(15),                         // chunked - enable chunking
+        true,                             // spread
+        true,                             // randomize
+        Some(42),                         // seed
+        None,                             // features
+        Some("fail-on-warnings,default"), // skip ALL features
+        None,                             // required_features
+        None,                             // packages
+        None,                             // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,                            // include_reasoning
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // CRITICAL: Even with all features skipped, we should still get a matrix entry
+    // for the package so it can be built/tested with no features enabled
+    assert_eq!(
+        configs.len(),
+        1,
+        "Should generate exactly one matrix entry even when all features are skipped"
+    );
+
+    // The matrix entry should have an empty features array
+    let features = configs[0].get("features").unwrap().as_array().unwrap();
+    assert!(
+        features.is_empty(),
+        "Features array should be empty when all features are skipped"
+    );
+
+    // Should still have the package name and path
+    assert_eq!(configs[0].get("name").unwrap().as_str().unwrap(), "minimal");
+    assert!(configs[0].get("path").is_some());
+}
+
+/// Test multiple packages with all features skipped still generates entries for each
+#[switchy_async::test]
+async fn test_skip_all_features_multiple_packages() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with multiple minimal packages
+    for pkg_name in ["pkg_a", "pkg_b", "pkg_c"] {
+        let package_dir = temp_dir.path().join(format!("packages/{pkg_name}"));
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+fail-on-warnings = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/pkg_a", "packages/pkg_b", "packages/pkg_c"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Skip all features with chunking enabled
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,                             // offset
+        None,                             // max
+        None,                             // max_parallel
+        Some(15),                         // chunked
+        true,                             // spread
+        false,                            // randomize
+        None,                             // seed
+        None,                             // features
+        Some("fail-on-warnings,default"), // skip ALL features
+        None,                             // required_features
+        None,                             // packages
+        None,                             // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,                            // include_reasoning
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should have one entry per package (3 packages total)
+    assert_eq!(
+        configs.len(),
+        3,
+        "Should generate matrix entries for all 3 packages even with all features skipped"
+    );
+
+    // All should have empty features
+    for config in &configs {
+        let features = config.get("features").unwrap().as_array().unwrap();
+        assert!(
+            features.is_empty(),
+            "Package {} should have empty features",
+            config.get("name").unwrap().as_str().unwrap()
+        );
+    }
+}
+
 /// Test that spreading without chunking still works correctly
 #[switchy_async::test]
 async fn test_spreading_without_chunking() {

@@ -1321,7 +1321,9 @@ pub async fn process_configs(
 
             match &features {
                 FeaturesList::Chunked(x) => {
-                    for features in x {
+                    if x.is_empty() {
+                        // Even with no features to test, we should still generate one matrix entry
+                        // This handles the case where all features are skipped via --skip-features
                         packages.push(create_map(
                             &workspace_context,
                             &name,
@@ -1330,8 +1332,21 @@ pub async fn process_configs(
                             path.to_str().unwrap(),
                             &name,
                             expanded_required_features.as_deref(),
-                            features,
+                            &[],
                         )?);
+                    } else {
+                        for features in x {
+                            packages.push(create_map(
+                                &workspace_context,
+                                &name,
+                                conf.as_ref(),
+                                &config,
+                                path.to_str().unwrap(),
+                                &name,
+                                expanded_required_features.as_deref(),
+                                features,
+                            )?);
+                        }
                     }
                 }
                 FeaturesList::NotChunked(x) => {
