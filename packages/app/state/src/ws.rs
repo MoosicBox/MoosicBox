@@ -1009,4 +1009,167 @@ mod tests {
         assert_eq!(sessions[2].volume, Some(0.5));
         drop(sessions);
     }
+
+    // Tests for update_playlist
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_returns_early_when_no_current_session_id() {
+        use std::sync::Arc;
+        use switchy_async::sync::Mutex;
+
+        let listener_called = Arc::new(Mutex::new(false));
+        let listener_called_clone = listener_called.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_update_playlist_listener(move |_session| {
+                let listener_called = listener_called_clone.clone();
+                async move {
+                    *listener_called.lock().await = true;
+                }
+            });
+
+        // No current_session_id set (None by default)
+        state.update_playlist().await;
+
+        // Listener should not have been called
+        assert!(!*listener_called.lock().await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_returns_early_when_session_not_found() {
+        use std::sync::Arc;
+        use switchy_async::sync::Mutex;
+
+        let listener_called = Arc::new(Mutex::new(false));
+        let listener_called_clone = listener_called.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_update_playlist_listener(move |_session| {
+                let listener_called = listener_called_clone.clone();
+                async move {
+                    *listener_called.lock().await = true;
+                }
+            });
+
+        // Set a session ID that doesn't exist in current_sessions
+        *state.current_session_id.write().await = Some(999);
+
+        // Add some sessions, but not one with ID 999
+        let session1 = create_test_session(1, "Session 1");
+        *state.current_sessions.write().await = vec![session1];
+
+        state.update_playlist().await;
+
+        // Listener should not have been called
+        assert!(!*listener_called.lock().await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_calls_listeners_with_matching_session() {
+        use std::sync::Arc;
+        use switchy_async::sync::Mutex;
+
+        let received_session = Arc::new(Mutex::new(None));
+        let received_session_clone = received_session.clone();
+
+        let state = crate::AppState::new().with_on_after_update_playlist_listener(move |session| {
+            let received_session = received_session_clone.clone();
+            async move {
+                *received_session.lock().await = Some(session);
+            }
+        });
+
+        let session1 = create_test_session(1, "Session 1");
+        let session2 = create_test_session(2, "Target Session");
+        *state.current_sessions.write().await = vec![session1, session2];
+        *state.current_session_id.write().await = Some(2);
+
+        state.update_playlist().await;
+
+        let received = received_session.lock().await;
+        assert!(received.is_some());
+        let session = received.as_ref().unwrap();
+        assert_eq!(session.session_id, 2);
+        assert_eq!(session.name, "Target Session");
+        drop(received);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playlist_calls_before_listeners() {
+        use std::sync::Arc;
+        use switchy_async::sync::Mutex;
+
+        let before_called = Arc::new(Mutex::new(false));
+        let before_called_clone = before_called.clone();
+
+        let state = crate::AppState::new().with_on_before_update_playlist_listener(move || {
+            let before_called = before_called_clone.clone();
+            async move {
+                *before_called.lock().await = true;
+            }
+        });
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+        *state.current_session_id.write().await = Some(1);
+
+        state.update_playlist().await;
+
+        assert!(*before_called.lock().await);
+    }
+
+    // Tests for queue_ws_message buffering
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_queue_ws_message_buffers_when_no_ws_handle() {
+        let state = crate::AppState::new();
+
+        // No ws_handle is set (None by default)
+        let message = InboundPayload::GetConnectionId(moosicbox_ws::models::EmptyPayload {});
+
+        // This should buffer the message since there's no handle
+        let result = state.queue_ws_message(message.clone(), false).await;
+        assert!(result.is_ok());
+
+        // Verify message was added to buffer
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 1);
+        drop(buffer);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_queue_ws_message_buffers_multiple_messages() {
+        let state = crate::AppState::new();
+
+        // Queue multiple messages without a handle
+        let message1 = InboundPayload::GetConnectionId(moosicbox_ws::models::EmptyPayload {});
+        let message2 = InboundPayload::GetConnectionId(moosicbox_ws::models::EmptyPayload {});
+        let message3 = InboundPayload::GetConnectionId(moosicbox_ws::models::EmptyPayload {});
+
+        state.queue_ws_message(message1, false).await.unwrap();
+        state.queue_ws_message(message2, false).await.unwrap();
+        state.queue_ws_message(message3, false).await.unwrap();
+
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 3);
+        drop(buffer);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_flush_ws_message_buffer_does_nothing_without_handle() {
+        let state = crate::AppState::new();
+
+        // Add messages to buffer
+        let message = InboundPayload::GetConnectionId(moosicbox_ws::models::EmptyPayload {});
+        state.ws_message_buffer.write().await.push(message.clone());
+
+        // flush without handle should not clear buffer
+        let result = state.flush_ws_message_buffer().await;
+        assert!(result.is_ok());
+
+        // Buffer should still have the message
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 1);
+        drop(buffer);
+    }
 }
