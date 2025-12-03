@@ -6320,6 +6320,7 @@ dependencies = [
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "web_server_simulator",
 ]
 

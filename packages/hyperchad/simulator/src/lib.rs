@@ -667,4 +667,29 @@ mod tests {
         assert_eq!(simulator.mock_data.database_state.len(), 2);
         assert!(simulator.mock_data.database_state.contains_key("users:1"));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_start_simulation_server_without_web_server() {
+        let simulator = HyperChadSimulator::new();
+
+        // When no web server is configured, start_simulation_server should succeed immediately
+        let result = simulator.start_simulation_server().await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_start_simulation_server_with_web_server() {
+        let server = Arc::new(SimulationWebServer::new());
+        let simulator = HyperChadSimulator::new().with_web_server(Arc::clone(&server));
+
+        // Server should not be running initially
+        assert!(!server.is_running().await);
+
+        // start_simulation_server should start the web server
+        let result = simulator.start_simulation_server().await;
+        assert!(result.is_ok());
+
+        // Server should now be running
+        assert!(server.is_running().await);
+    }
 }
