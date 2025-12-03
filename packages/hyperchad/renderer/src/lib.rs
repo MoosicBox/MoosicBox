@@ -1111,4 +1111,52 @@ mod tests {
         let replace = ReplaceContainer::from(container_no_id);
         assert!(matches!(replace.selector, Selector::SelfTarget));
     }
+
+    #[cfg(feature = "json")]
+    #[test_log::test]
+    fn test_content_try_from_json_value() {
+        let json = serde_json::json!({"key": "value", "number": 42});
+        let content = Content::try_from(json.clone());
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::Json(value) => {
+                assert_eq!(value, json);
+            }
+            Content::View(_) => panic!("Expected Json, got View"),
+            Content::Raw { .. } => panic!("Expected Json, got Raw"),
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[test_log::test]
+    fn test_content_try_from_json_array() {
+        let json = serde_json::json!([1, 2, 3, "four"]);
+        let content = Content::try_from(json.clone());
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::Json(value) => {
+                assert_eq!(value, json);
+            }
+            Content::View(_) => panic!("Expected Json, got View"),
+            Content::Raw { .. } => panic!("Expected Json, got Raw"),
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[test_log::test]
+    fn test_content_try_from_json_null() {
+        let json = serde_json::Value::Null;
+        let content = Content::try_from(json.clone());
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::Json(value) => {
+                assert!(value.is_null());
+            }
+            Content::View(_) => panic!("Expected Json, got View"),
+            Content::Raw { .. } => panic!("Expected Json, got Raw"),
+        }
+    }
 }
