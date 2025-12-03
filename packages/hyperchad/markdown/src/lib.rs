@@ -1925,4 +1925,89 @@ mod tests {
         assert_eq!(checkbox.margin_right, Some(Number::from(8)));
         assert_eq!(checkbox.user_select, Some(UserSelect::None));
     }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_textarea_tag() {
+        let md = "<textarea>User input</textarea>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify textarea tag is escaped (can be used for XSS via form injection)
+            assert!(value.contains("&amp;lt;textarea"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_xmp_tag() {
+        let md = "<xmp><script>alert('xss')</script></xmp>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify xmp tag is escaped (legacy tag that can bypass sanitizers)
+            assert!(value.contains("&amp;lt;xmp"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noembed_tag() {
+        let md = "<noembed><script>alert('xss')</script></noembed>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noembed tag is escaped (legacy tag for embedding fallback)
+            assert!(value.contains("&amp;lt;noembed"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noframes_tag() {
+        let md = "<noframes><script>alert('xss')</script></noframes>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noframes tag is escaped (legacy tag for frame fallback)
+            assert!(value.contains("&amp;lt;noframes"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_plaintext_tag() {
+        let md = "<plaintext><script>alert('xss')</script>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify plaintext tag is escaped (deprecated tag that renders all following content as text)
+            assert!(value.contains("&amp;lt;plaintext"));
+        }
+    }
 }
