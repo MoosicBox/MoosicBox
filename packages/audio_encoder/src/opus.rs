@@ -496,6 +496,55 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_encode_audiopus_partial_final_frame() {
+        // Test encoding with samples that don't align to frame boundaries.
+        // Frame size at 48kHz stereo with 20ms = 1920 samples per frame.
+        // Using 2.5 frames worth of samples tests the end_buffer padding logic.
+        let frame_size = 1920;
+        let partial_samples = frame_size / 2; // Half a frame extra
+        let total_samples = frame_size * 2 + partial_samples; // 2.5 frames
+        let samples: Vec<f32> = vec![0.3; total_samples];
+
+        let result = encode_audiopus(&samples);
+        assert!(result.is_ok(), "Encoding partial frames should succeed");
+
+        let (sample_rate, output) = result.unwrap();
+        assert_eq!(sample_rate, 48000);
+
+        // Verify the sample count header matches original input
+        let sample_count = u32::from_be_bytes([output[0], output[1], output[2], output[3]]);
+        #[allow(clippy::cast_possible_truncation)]
+        let expected_count = total_samples as u32;
+        assert_eq!(
+            sample_count, expected_count,
+            "Sample count header should reflect original input size"
+        );
+
+        // Parse packets to verify we got 3 packets (frames round up)
+        let mut offset = 4;
+        let mut packet_count = 0;
+
+        while offset + 2 <= output.len() {
+            let packet_len = u16::from_be_bytes([output[offset], output[offset + 1]]) as usize;
+            if packet_len == 0 {
+                break;
+            }
+            offset += 2 + packet_len;
+            packet_count += 1;
+
+            if offset >= output.len() {
+                break;
+            }
+        }
+
+        // Should have 3 packets: 2 full frames + 1 padded partial frame
+        assert_eq!(
+            packet_count, 3,
+            "Should encode 3 packets for 2.5 frames of samples"
+        );
+    }
+
+    #[test_log::test]
     #[allow(clippy::cast_precision_loss)]
     fn test_encode_opus_float_consecutive_calls() {
         let mut encoder = encoder_opus().expect("Failed to create encoder");
