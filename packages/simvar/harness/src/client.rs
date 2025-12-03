@@ -128,3 +128,53 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_context() {
+        // current_client should return None when not inside a with_client scope
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_name_inside_context() {
+        // Test that current_client returns the correct name when inside with_client scope
+        let result = with_client("test-client".to_string(), |_| current_client());
+        assert_eq!(result, Some("test-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_nested_contexts() {
+        // Test nested with_client calls - inner context should take precedence
+        let result = with_client("outer".to_string(), |_| {
+            with_client("inner".to_string(), |_| current_client())
+        });
+        assert_eq!(result, Some("inner".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_restores_after_context() {
+        // After exiting with_client scope, current_client should return None
+        with_client("test".to_string(), |_| {
+            assert!(current_client().is_some());
+        });
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_passes_name_to_closure() {
+        // Verify the name passed to with_client is available in the closure
+        let received_name = with_client("my-client".to_string(), std::string::ToString::to_string);
+        assert_eq!(received_name, "my-client");
+    }
+
+    #[test_log::test]
+    fn test_with_client_returns_closure_result() {
+        // Verify with_client returns the result from the closure
+        let result = with_client("client".to_string(), |_| 42);
+        assert_eq!(result, 42);
+    }
+}
