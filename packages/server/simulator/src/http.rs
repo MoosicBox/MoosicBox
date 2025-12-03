@@ -324,5 +324,45 @@ mod tests {
             let result = parse_http_response(raw).unwrap();
             assert_eq!(result.headers.get("Key"), Some(&"Value".to_string()));
         }
+
+        #[test_log::test]
+        fn does_not_truncate_when_content_length_is_non_numeric() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\nHello World";
+            let result = parse_http_response(raw).unwrap();
+            // Non-numeric Content-Length should be ignored, body returned as-is
+            assert_eq!(result.body, "Hello World");
+        }
+
+        #[test_log::test]
+        fn truncates_body_to_exact_content_length() {
+            // Boundary case: body length equals Content-Length exactly
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Hello");
+        }
+
+        #[test_log::test]
+        fn parses_header_with_empty_value() {
+            let raw = "HTTP/1.1 200 OK\r\nX-Empty:\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.headers.get("X-Empty"), Some(&String::new()));
+        }
+
+        #[test_log::test]
+        fn skips_malformed_header_lines_without_colon() {
+            let raw = "HTTP/1.1 200 OK\r\nMalformed-Header-No-Colon\r\nValid: header\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            // Malformed header without colon should be skipped
+            assert!(!result.headers.contains_key("Malformed-Header-No-Colon"));
+            assert_eq!(result.headers.get("Valid"), Some(&"header".to_string()));
+        }
+
+        #[test_log::test]
+        fn last_duplicate_header_wins() {
+            let raw = "HTTP/1.1 200 OK\r\nX-Dup: first\r\nX-Dup: second\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            // BTreeMap::insert replaces existing values, so second wins
+            assert_eq!(result.headers.get("X-Dup"), Some(&"second".to_string()));
+        }
     }
 }
