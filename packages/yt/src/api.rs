@@ -1561,4 +1561,103 @@ mod tests {
             YtAlbumType::Compilations
         );
     }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_unauthorized() {
+        let error = Error::Unauthorized;
+        let actix_error: actix_web::Error = error.into();
+        // Unauthorized errors should return 401
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_not_found() {
+        let error = Error::HttpRequestFailed(404, "Album not found".to_string());
+        let actix_error: actix_web::Error = error.into();
+        // 404 errors should return NOT_FOUND
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_other_http_status_returns_internal_server_error() {
+        // Non-404 HTTP errors should still return INTERNAL_SERVER_ERROR
+        let error = Error::HttpRequestFailed(500, "Server error".to_string());
+        let actix_error: actix_web::Error = error.into();
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_access_token() {
+        let error = Error::NoAccessTokenAvailable;
+        let actix_error: actix_web::Error = error.into();
+        // NoAccessTokenAvailable should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_empty_response() {
+        let error = Error::EmptyResponse;
+        let actix_error: actix_web::Error = error.into();
+        // EmptyResponse should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_max_failed_attempts() {
+        let error = Error::MaxFailedAttempts;
+        let actix_error: actix_web::Error = error.into();
+        // MaxFailedAttempts should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_request_failed() {
+        let error = Error::RequestFailed("Something went wrong".to_string());
+        let actix_error: actix_web::Error = error.into();
+        // RequestFailed should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_user_id() {
+        let error = Error::NoUserIdAvailable;
+        let actix_error: actix_web::Error = error.into();
+        // NoUserIdAvailable should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test_log::test]
+    fn test_error_to_actix_error_no_response_body() {
+        let error = Error::NoResponseBody;
+        let actix_error: actix_web::Error = error.into();
+        // NoResponseBody should return INTERNAL_SERVER_ERROR
+        assert_eq!(
+            actix_error.as_response_error().status_code(),
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
 }
