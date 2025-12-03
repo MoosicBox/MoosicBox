@@ -8401,6 +8401,7 @@ dependencies = [
  "colored",
  "log 0.4.28",
  "moosicbox_env_utils",
+ "serial_test",
  "test-log",
 ]
 

@@ -19,8 +19,9 @@ moosicbox_env_utils = { workspace = true }
 colored = { workspace = true }
 
 [dev-dependencies]
-log      = { workspace = true }
-test-log = { workspace = true }
+log         = { workspace = true }
+serial_test = { workspace = true }
+test-log    = { workspace = true }
 
 [features]
 default = []
