@@ -2005,6 +2005,7 @@ mod test {
         pub struct TestMusicApiWithData {
             artist: Option<Artist>,
             album: Option<Album>,
+            track: Option<Track>,
         }
 
         impl TestMusicApiWithData {
@@ -2015,6 +2016,11 @@ mod test {
 
             pub fn with_album(mut self, album: Album) -> Self {
                 self.album = Some(album);
+                self
+            }
+
+            pub fn with_track(mut self, track: Track) -> Self {
+                self.track = Some(track);
                 self
             }
         }
@@ -2096,8 +2102,8 @@ mod test {
                 Ok(PagingResponse::empty())
             }
 
-            async fn track(&self, _track_id: &Id) -> Result<Option<Track>, Error> {
-                Ok(None)
+            async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error> {
+                Ok(self.track.as_ref().filter(|t| &t.id == track_id).cloned())
             }
 
             async fn album_tracks(
@@ -2268,6 +2274,112 @@ mod test {
                 .unwrap();
 
             assert!(result.is_none());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn cached_music_api_artist_caches_result_from_inner_api() {
+            use crate::CachedMusicApi;
+
+            let artist = Artist {
+                id: 1.into(),
+                title: "Test Artist".into(),
+                ..Default::default()
+            };
+
+            let inner_api = TestMusicApiWithData::default().with_artist(artist.clone());
+            let cached_api = CachedMusicApi::new(inner_api);
+
+            // First call should fetch from inner API and cache the result
+            let result = cached_api.artist(&1.into()).await.unwrap();
+            assert_eq!(result, Some(artist.clone()));
+
+            // Verify it was cached
+            let cached = cached_api.get_artist_from_cache(&1.into()).await;
+            assert_eq!(cached, Some(Some(artist)));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn cached_music_api_artist_caches_empty_result_when_not_found() {
+            use crate::CachedMusicApi;
+
+            let inner_api = TestMusicApiWithData::default();
+            let cached_api = CachedMusicApi::new(inner_api);
+
+            // First call should return None and cache the empty result
+            let result = cached_api.artist(&99.into()).await.unwrap();
+            assert_eq!(result, None);
+
+            // Verify the empty result was cached (Some(None) means "cached as not existing")
+            let cached = cached_api.get_artist_from_cache(&99.into()).await;
+            assert_eq!(cached, Some(None));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn cached_music_api_track_caches_result_from_inner_api() {
+            use crate::CachedMusicApi;
+
+            let track = Track {
+                id: 1.into(),
+                title: "Test Track".into(),
+                ..Default::default()
+            };
+
+            let inner_api = TestMusicApiWithData::default().with_track(track.clone());
+            let cached_api = CachedMusicApi::new(inner_api);
+
+            // First call should fetch from inner API and cache the result
+            let result = cached_api.track(&1.into()).await.unwrap();
+            assert_eq!(result, Some(track.clone()));
+
+            // Verify it was cached
+            let cached = cached_api.get_track_from_cache(&1.into()).await;
+            assert_eq!(cached, Some(Some(track)));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn cached_music_api_track_caches_empty_result_when_not_found() {
+            use crate::CachedMusicApi;
+
+            let inner_api = TestMusicApiWithData::default();
+            let cached_api = CachedMusicApi::new(inner_api);
+
+            // First call should return None and cache the empty result
+            let result = cached_api.track(&99.into()).await.unwrap();
+            assert_eq!(result, None);
+
+            // Verify the empty result was cached
+            let cached = cached_api.get_track_from_cache(&99.into()).await;
+            assert_eq!(cached, Some(None));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn cached_music_api_album_artist_caches_the_artist() {
+            use crate::CachedMusicApi;
+
+            let artist = Artist {
+                id: 5.into(),
+                title: "Test Artist".into(),
+                ..Default::default()
+            };
+            let album = Album {
+                id: 10.into(),
+                title: "Test Album".into(),
+                artist_id: 5.into(),
+                ..Default::default()
+            };
+
+            let inner_api = TestMusicApiWithData::default()
+                .with_artist(artist.clone())
+                .with_album(album);
+            let cached_api = CachedMusicApi::new(inner_api);
+
+            // Call album_artist which should fetch and cache the artist
+            let result = cached_api.album_artist(&10.into()).await.unwrap();
+            assert_eq!(result, Some(artist.clone()));
+
+            // Verify the artist was cached
+            let cached = cached_api.get_artist_from_cache(&5.into()).await;
+            assert_eq!(cached, Some(Some(artist)));
         }
     }
 
