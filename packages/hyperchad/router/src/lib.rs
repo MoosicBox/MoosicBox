@@ -2965,6 +2965,87 @@ mod tests {
             let result = deserializer.deserialize_enum("Test", &["A", "B"], EnumVisitor);
             assert!(result.is_err());
         }
+
+        #[test_log::test]
+        fn test_deserialize_newtype_struct() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct UserId(u64);
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct TestForm {
+                user_id: UserId,
+                name: String,
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("user_id".to_string(), "12345".to_string());
+            data.insert("name".to_string(), "Alice".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.user_id, UserId(12345));
+            assert_eq!(form.name, "Alice");
+        }
+
+        #[test_log::test]
+        fn test_deserialize_multiple_newtype_structs() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct UserId(u64);
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Email(String);
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct TestForm {
+                user_id: UserId,
+                email: Email,
+                active: bool,
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("user_id".to_string(), "42".to_string());
+            data.insert("email".to_string(), "test@example.com".to_string());
+            data.insert("active".to_string(), "true".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.user_id, UserId(42));
+            assert_eq!(form.email, Email("test@example.com".to_string()));
+            assert!(form.active);
+        }
+
+        #[test_log::test]
+        fn test_deserialize_any_with_case_insensitive_null() {
+            use serde::de::Deserializer;
+
+            struct UnitVisitor;
+            impl serde::de::Visitor<'_> for UnitVisitor {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "null")
+                }
+
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            // Test case-insensitive NULL detection
+            let deserializer = form_deserializer::StringValueDeserializer::new("NULL".to_string());
+            let result = deserializer.deserialize_any(UnitVisitor);
+            assert!(result.is_ok());
+
+            let deserializer = form_deserializer::StringValueDeserializer::new("Null".to_string());
+            let result = deserializer.deserialize_any(UnitVisitor);
+            assert!(result.is_ok());
+        }
     }
 
     mod channel_tests {

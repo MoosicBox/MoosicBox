@@ -410,3 +410,124 @@ struct ArtistCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::{ApiSource, ApiSources};
+
+    fn create_test_artist(cover: Option<String>) -> Artist {
+        Artist {
+            id: moosicbox_music_models::id::Id::Number(1),
+            title: "Test Artist".to_string(),
+            cover,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_cover_path() {
+        let artist = create_test_artist(Some("/music/artist/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("/music/artist".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_deeply_nested_path() {
+        let artist = create_test_artist(Some(
+            "/home/user/music/library/artist/album/cover.png".to_string(),
+        ));
+        let result = get_artist_directory(&artist);
+        assert_eq!(
+            result,
+            Some("/home/user/music/library/artist/album".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_without_cover() {
+        let artist = create_test_artist(None);
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_root_file() {
+        let artist = create_test_artist(Some("/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("/".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_relative_path() {
+        let artist = create_test_artist(Some("music/artist/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("music/artist".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_filename_only() {
+        // When there's only a filename with no directory
+        let artist = create_test_artist(Some("cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        // The parent of a file without directory parts is an empty string
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_cover_path_basic() {
+        let path = get_artist_cover_path("large", "library", "123", "Artist Name");
+
+        // Check that the path ends with the expected filename
+        assert!(path.to_string_lossy().ends_with("artist_123_large.jpg"));
+
+        // Check that the path contains the sanitized artist name
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("Artist_Name"));
+        assert!(path_str.contains("library"));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_cover_path_sanitizes_special_characters() {
+        let path = get_artist_cover_path("max", "tidal", "456", "The Artist's Name!");
+
+        let path_str = path.to_string_lossy();
+        // Apostrophes and special chars should be replaced with underscores
+        assert!(path_str.contains("The_Artist_s_Name_"));
+        assert!(path_str.ends_with("artist_456_max.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_cover_path_different_sizes() {
+        let small_path = get_artist_cover_path("small", "source", "1", "Artist");
+        let medium_path = get_artist_cover_path("medium", "source", "1", "Artist");
+        let large_path = get_artist_cover_path("large", "source", "1", "Artist");
+
+        assert!(small_path.to_string_lossy().ends_with("artist_1_small.jpg"));
+        assert!(
+            medium_path
+                .to_string_lossy()
+                .ends_with("artist_1_medium.jpg")
+        );
+        assert!(large_path.to_string_lossy().ends_with("artist_1_large.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_cover_path_unicode_characters() {
+        let path = get_artist_cover_path("max", "library", "789", "アーティスト");
+
+        // Unicode characters should be sanitized to underscores
+        let path_str = path.to_string_lossy();
+        assert!(path_str.ends_with("artist_789_max.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_cover_path_empty_strings() {
+        let path = get_artist_cover_path("max", "library", "", "");
+
+        // Even with empty strings, the path structure should be valid
+        let path_str = path.to_string_lossy();
+        assert!(path_str.ends_with("artist__max.jpg"));
+    }
+}

@@ -290,6 +290,64 @@ mod tests {
     use super::*;
 
     #[test_log::test]
+    fn test_recv_error_to_try_recv_error_conversion() {
+        let recv_err = RecvError::Disconnected;
+        let try_recv_err: TryRecvError = recv_err.into();
+        assert!(matches!(try_recv_err, TryRecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_error_to_try_recv_error_conversion() {
+        let timeout_err = RecvTimeoutError::Timeout;
+        let try_recv_err: TryRecvError = timeout_err.into();
+        assert!(matches!(try_recv_err, TryRecvError::Disconnected));
+
+        let disconnected_err = RecvTimeoutError::Disconnected;
+        let try_recv_err2: TryRecvError = disconnected_err.into();
+        assert!(matches!(try_recv_err2, TryRecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_error_to_recv_error_conversion() {
+        let timeout_err = RecvTimeoutError::Timeout;
+        let recv_err: RecvError = timeout_err.into();
+        assert!(matches!(recv_err, RecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn test_recv_error_to_recv_timeout_error_conversion() {
+        let recv_err = RecvError::Disconnected;
+        let timeout_err: RecvTimeoutError = recv_err.into();
+        assert!(matches!(timeout_err, RecvTimeoutError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn test_send_error_to_try_send_error_conversion() {
+        let send_err = SendError::Disconnected(42);
+        let try_send_err: TrySendError<i32> = send_err.into();
+        assert!(matches!(try_send_err, TrySendError::Disconnected(42)));
+    }
+
+    #[test_log::test]
+    fn test_send_error_debug_format() {
+        let send_err = SendError::Disconnected(42);
+        let debug_str = format!("{send_err:?}");
+        assert!(debug_str.contains("SendError::Disconnected"));
+    }
+
+    #[test_log::test]
+    fn test_try_send_error_debug_format() {
+        let full_err: TrySendError<i32> = TrySendError::Full(1);
+        let disconnected_err: TrySendError<i32> = TrySendError::Disconnected(2);
+
+        let full_debug = format!("{full_err:?}");
+        let disconnected_debug = format!("{disconnected_err:?}");
+
+        assert!(full_debug.contains("TrySendError::Full"));
+        assert!(disconnected_debug.contains("TrySendError::Disconnected"));
+    }
+
+    #[test_log::test]
     fn test_unbounded_channel_send_and_try_recv() {
         let (tx, mut rx) = unbounded::<i32>();
 

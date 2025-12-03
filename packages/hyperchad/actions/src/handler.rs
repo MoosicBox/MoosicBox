@@ -1510,4 +1510,282 @@ mod tests {
         // Throttle should be cleared
         assert!(!manager.should_throttle(1, 10000));
     }
+
+    // ============================================
+    // ActionHandler tests with mock ElementFinder
+    // ============================================
+
+    /// Mock element finder for testing `ActionHandler`
+    #[derive(Default)]
+    struct MockElementFinder {
+        str_ids: std::collections::BTreeMap<String, usize>,
+        classes: std::collections::BTreeMap<String, usize>,
+        children: std::collections::BTreeMap<usize, Vec<usize>>,
+        dimensions: std::collections::BTreeMap<usize, (f32, f32)>,
+        positions: std::collections::BTreeMap<usize, (f32, f32)>,
+        data_attrs: std::collections::BTreeMap<(usize, String), String>,
+        element_str_ids: std::collections::BTreeMap<usize, String>,
+    }
+
+    impl ElementFinder for MockElementFinder {
+        fn find_by_str_id(&self, str_id: &str) -> Option<usize> {
+            self.str_ids.get(str_id).copied()
+        }
+
+        fn find_by_class(&self, class: &str) -> Option<usize> {
+            self.classes.get(class).copied()
+        }
+
+        fn find_child_by_class(&self, parent_id: usize, class: &str) -> Option<usize> {
+            self.children.get(&parent_id).and_then(|children| {
+                children
+                    .iter()
+                    .find(|&&child_id| {
+                        self.classes
+                            .iter()
+                            .any(|(c, &id)| c == class && id == child_id)
+                    })
+                    .copied()
+            })
+        }
+
+        fn get_last_child(&self, parent_id: usize) -> Option<usize> {
+            self.children
+                .get(&parent_id)
+                .and_then(|c| c.last().copied())
+        }
+
+        fn get_data_attr(&self, element_id: usize, attr: &str) -> Option<String> {
+            self.data_attrs
+                .get(&(element_id, attr.to_string()))
+                .cloned()
+        }
+
+        fn get_str_id(&self, element_id: usize) -> Option<String> {
+            self.element_str_ids.get(&element_id).cloned()
+        }
+
+        fn get_dimensions(&self, element_id: usize) -> Option<(f32, f32)> {
+            self.dimensions.get(&element_id).copied()
+        }
+
+        fn get_position(&self, element_id: usize) -> Option<(f32, f32)> {
+            self.positions.get(&element_id).copied()
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_id() {
+        let finder = MockElementFinder::default();
+        let handler = utils::create_default_handler(finder);
+
+        // ElementTarget::Id should return the ID directly
+        let target = crate::ElementTarget::Id(42);
+        let result = handler.get_element_id(&target, 0);
+        assert_eq!(result, Some(42));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_self_target() {
+        let finder = MockElementFinder::default();
+        let handler = utils::create_default_handler(finder);
+
+        // ElementTarget::SelfTarget should return the self_id
+        let target = crate::ElementTarget::SelfTarget;
+        let result = handler.get_element_id(&target, 123);
+        assert_eq!(result, Some(123));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_str_id() {
+        let mut finder = MockElementFinder::default();
+        finder.str_ids.insert("my-element".to_string(), 42);
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::StrId(crate::Target::Literal("my-element".to_string()));
+        let result = handler.get_element_id(&target, 0);
+        assert_eq!(result, Some(42));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_str_id_not_found() {
+        let finder = MockElementFinder::default();
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::StrId(crate::Target::Literal("nonexistent".to_string()));
+        let result = handler.get_element_id(&target, 0);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_class() {
+        let mut finder = MockElementFinder::default();
+        finder.classes.insert("my-class".to_string(), 99);
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::Class(crate::Target::Literal("my-class".to_string()));
+        let result = handler.get_element_id(&target, 0);
+        assert_eq!(result, Some(99));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_last_child() {
+        let mut finder = MockElementFinder::default();
+        finder.children.insert(1, vec![10, 20, 30]);
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::LastChild;
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, Some(30));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_last_child_no_children() {
+        let finder = MockElementFinder::default();
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::LastChild;
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_set_visibility() {
+        let mut finder = MockElementFinder::default();
+        finder.str_ids.insert("target".to_string(), 42);
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetVisibility(Visibility::Hidden);
+        let target = crate::ElementTarget::StrId(crate::Target::Literal("target".to_string()));
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 0);
+        assert!(result);
+
+        // Verify the override was applied
+        let override_value = handler.get_visibility_override(42);
+        assert_eq!(override_value, Some(&Some(Visibility::Hidden)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_set_display() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetDisplay(true);
+        let target = crate::ElementTarget::Id(10);
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::CustomEvent, 0);
+        assert!(result);
+
+        // Verify the override was applied
+        let override_value = handler.get_display_override(10);
+        assert_eq!(override_value, Some(&true));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_element_not_found() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetVisibility(Visibility::Hidden);
+        let target = crate::ElementTarget::StrId(crate::Target::Literal("nonexistent".to_string()));
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 0);
+        assert!(!result);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_set_background_valid_hex() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetBackground(Some("#ff0000".to_string()));
+        let target = crate::ElementTarget::Id(5);
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 0);
+        assert!(result);
+
+        // Verify the override was applied
+        let override_value = handler.get_background_override(5);
+        assert!(override_value.is_some());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_set_background_invalid_hex() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetBackground(Some("not-a-color".to_string()));
+        let target = crate::ElementTarget::Id(5);
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 0);
+        // Should return false because the color parsing failed
+        assert!(!result);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_style_action_remove_background() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        let action = crate::StyleAction::SetBackground(None);
+        let target = crate::ElementTarget::Id(5);
+
+        let result = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 0);
+        assert!(result);
+
+        // Verify the override was applied (None = remove background)
+        let override_value = handler.get_background_override(5);
+        assert_eq!(override_value, Some(&None));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_clear_element_overrides() {
+        let finder = MockElementFinder::default();
+        let mut handler = utils::create_default_handler(finder);
+
+        // Add some overrides
+        let vis_action = crate::StyleAction::SetVisibility(Visibility::Hidden);
+        let disp_action = crate::StyleAction::SetDisplay(false);
+        let target = crate::ElementTarget::Id(10);
+
+        handler.handle_style_action(&vis_action, &target, StyleTrigger::UiEvent, 0);
+        handler.handle_style_action(&disp_action, &target, StyleTrigger::UiEvent, 0);
+
+        // Verify overrides exist
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(10).is_some());
+
+        // Clear all overrides
+        handler.clear_element_overrides(10);
+
+        // Verify overrides are removed
+        assert!(handler.get_visibility_override(10).is_none());
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_child_class() {
+        let mut finder = MockElementFinder::default();
+        finder.children.insert(1, vec![10, 20, 30]);
+        finder.classes.insert("target-child".to_string(), 20);
+        let handler = utils::create_default_handler(finder);
+
+        let target =
+            crate::ElementTarget::ChildClass(crate::Target::Literal("target-child".to_string()));
+        let result = handler.get_element_id(&target, 1);
+        assert_eq!(result, Some(20));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_get_element_id_by_ref_returns_none() {
+        // When target is a Ref (not Literal), get_element_id should return None
+        // because Ref targets need to be resolved at runtime through a different mechanism
+        let finder = MockElementFinder::default();
+        let handler = utils::create_default_handler(finder);
+
+        let target = crate::ElementTarget::StrId(crate::Target::Ref("variable-name".to_string()));
+        let result = handler.get_element_id(&target, 0);
+        assert_eq!(result, None);
+    }
 }

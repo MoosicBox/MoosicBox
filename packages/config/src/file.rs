@@ -308,7 +308,7 @@ mod tests {
     use serial_test::serial;
     use switchy_fs::sync;
 
-    #[test]
+    #[test_log::test]
     fn test_parse_global_config_json5() {
         let json5_content = r#"{
             // Global server configuration
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(config.backup.as_ref().unwrap().enabled, Some(true));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_profile_config_json5() {
         let json5_content = r#"{
             // Profile-specific configuration
@@ -368,7 +368,7 @@ mod tests {
     }
 
     // Tests for get_config_file_path()
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_prefers_json5() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -383,7 +383,7 @@ mod tests {
         assert_eq!(result, Some(json5_path));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_falls_back_to_json() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(result, Some(json_path));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_config_file_path_returns_none_when_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -406,7 +406,7 @@ mod tests {
     }
 
     // Tests for load_config_file()
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_success() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(result.unwrap().default_profile, Some("test".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_read_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -438,7 +438,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ConfigError::ReadError(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_load_config_file_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -453,7 +453,7 @@ mod tests {
 
     // Tests for load_global_config()
     // Tests that modify ROOT_DIR must run serially to avoid interference
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_with_json5_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(config.server.as_ref().unwrap().port, Some(9090));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_with_json_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(result.unwrap().default_profile, Some("staging".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_returns_default_when_file_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -529,7 +529,7 @@ mod tests {
         assert_eq!(config.server, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_global_config_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -549,7 +549,7 @@ mod tests {
     }
 
     // Tests for load_profile_config()
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_with_json5_file() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -582,7 +582,7 @@ mod tests {
         assert_eq!(config.playback.as_ref().unwrap().gapless, Some(true));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_returns_default_when_file_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -603,7 +603,7 @@ mod tests {
         assert_eq!(config.playback, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_profile_config_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -626,7 +626,7 @@ mod tests {
     }
 
     // Tests for load_merged_config()
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_combines_global_and_profile() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -689,7 +689,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_with_missing_files() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -710,7 +710,7 @@ mod tests {
         assert_eq!(merged.profile.library_paths, None);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_global_parse_error_propagates() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -731,7 +731,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn test_load_merged_config_profile_parse_error_propagates() {
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -754,5 +754,128 @@ mod tests {
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_load_profile_config_with_json_file() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        let profiles_dir = temp_path
+            .join("server")
+            .join("profiles")
+            .join("json_profile");
+        sync::create_dir_all(&profiles_dir).unwrap();
+
+        let config_path = profiles_dir.join("config.json");
+        sync::write(
+            &config_path,
+            r#"{
+            "libraryPaths": ["/music/local"],
+            "playback": {
+                "gapless": false
+            }
+        }"#,
+        )
+        .unwrap();
+
+        crate::set_root_dir(temp_path.to_path_buf());
+        let result = load_profile_config(AppType::Server, "json_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.library_paths, Some(vec!["/music/local".to_string()]));
+        assert_eq!(config.playback.as_ref().unwrap().gapless, Some(false));
+    }
+
+    #[test_log::test]
+    fn test_parse_profile_config_with_qobuz_credentials() {
+        let json5_content = r#"{
+            services: {
+                qobuz: {
+                    appId: "qobuz_app_123",
+                    userAuthToken: "user_token_456",
+                },
+            },
+        }"#;
+
+        let config: ProfileConfig = json5::from_str(json5_content).unwrap();
+        let qobuz = config.services.as_ref().unwrap().qobuz.as_ref().unwrap();
+        assert_eq!(qobuz.app_id, "qobuz_app_123");
+        assert_eq!(qobuz.user_auth_token, "user_token_456");
+    }
+
+    #[test_log::test]
+    fn test_parse_profile_config_with_player_settings() {
+        let json5_content = r"{
+            player: {
+                volume: 0.75,
+                bufferSize: 4096,
+            },
+        }";
+
+        let config: ProfileConfig = json5::from_str(json5_content).unwrap();
+        let player = config.player.as_ref().unwrap();
+        assert_eq!(player.volume, Some(0.75));
+        assert_eq!(player.buffer_size, Some(4096));
+    }
+
+    #[test_log::test]
+    fn test_parse_global_config_with_full_logging() {
+        let json5_content = r#"{
+            logging: {
+                level: "debug",
+                file: "/var/log/moosicbox.log",
+            },
+        }"#;
+
+        let config: GlobalConfig = json5::from_str(json5_content).unwrap();
+        let logging = config.logging.as_ref().unwrap();
+        assert_eq!(logging.level, Some("debug".to_string()));
+        assert_eq!(logging.file, Some("/var/log/moosicbox.log".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_parse_profile_config_with_both_services() {
+        let json5_content = r#"{
+            services: {
+                tidal: {
+                    accessToken: "tidal_access",
+                    refreshToken: "tidal_refresh",
+                },
+                qobuz: {
+                    appId: "qobuz_id",
+                    userAuthToken: "qobuz_token",
+                },
+            },
+        }"#;
+
+        let config: ProfileConfig = json5::from_str(json5_content).unwrap();
+        let services = config.services.as_ref().unwrap();
+
+        let tidal = services.tidal.as_ref().unwrap();
+        assert_eq!(tidal.access_token, "tidal_access");
+        assert_eq!(tidal.refresh_token, Some("tidal_refresh".to_string()));
+
+        let qobuz = services.qobuz.as_ref().unwrap();
+        assert_eq!(qobuz.app_id, "qobuz_id");
+        assert_eq!(qobuz.user_auth_token, "qobuz_token");
+    }
+
+    #[test_log::test]
+    fn test_parse_tidal_credentials_without_refresh_token() {
+        let json5_content = r#"{
+            services: {
+                tidal: {
+                    accessToken: "only_access",
+                },
+            },
+        }"#;
+
+        let config: ProfileConfig = json5::from_str(json5_content).unwrap();
+        let tidal = config.services.as_ref().unwrap().tidal.as_ref().unwrap();
+        assert_eq!(tidal.access_token, "only_access");
+        assert_eq!(tidal.refresh_token, None);
     }
 }

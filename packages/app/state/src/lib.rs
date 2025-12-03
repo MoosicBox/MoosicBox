@@ -2200,7 +2200,25 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use moosicbox_audio_output::{AudioOutputFactory, Channels, SignalSpec};
+    use moosicbox_audio_zone::models::ApiPlayer;
     use moosicbox_session::models::{ApiSession, ApiSessionPlaylist};
+
+    fn create_test_audio_output_factory(id: &str, name: &str) -> AudioOutputFactory {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        AudioOutputFactory::new(id.to_string(), name.to_string(), spec, || {
+            Err(moosicbox_audio_output::AudioOutputError::OpenStream)
+        })
+    }
+
+    fn create_test_api_player(player_id: u64, audio_output_id: &str, name: &str) -> ApiPlayer {
+        ApiPlayer {
+            player_id,
+            audio_output_id: audio_output_id.to_string(),
+            name: name.to_string(),
+            playing: false,
+        }
+    }
 
     fn create_test_session(session_id: u64, name: &str) -> ApiSession {
         ApiSession {
@@ -2335,5 +2353,135 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.session_id, 3);
         assert_eq!(result.name, "Last Session");
+    }
+
+    // Tests for add_players_to_current_players
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_players_to_current_players_adds_to_empty_list() {
+        let state = AppState::new();
+
+        let player = create_test_api_player(1, "output_1", "Player 1");
+        let output = create_test_audio_output_factory("output_1", "Output 1");
+        let players_to_add = vec![(player.clone(), PlayerType::Local, output)];
+
+        state.add_players_to_current_players(players_to_add).await;
+
+        let current_players = state.current_players.read().await;
+        assert_eq!(current_players.len(), 1);
+        assert_eq!(current_players[0].0.player_id, 1);
+        drop(current_players);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_players_to_current_players_filters_duplicates_by_player_id() {
+        let state = AppState::new();
+
+        // Add initial player
+        let player1 = create_test_api_player(1, "output_1", "Player 1");
+        let output1 = create_test_audio_output_factory("output_1", "Output 1");
+        *state.current_players.write().await = vec![(player1, PlayerType::Local, output1)];
+
+        // Try to add a player with the same player_id but different name
+        let duplicate_player = create_test_api_player(1, "output_1", "Player 1 Duplicate");
+        let output_dup = create_test_audio_output_factory("output_1", "Output 1");
+        let players_to_add = vec![(duplicate_player, PlayerType::Local, output_dup)];
+
+        state.add_players_to_current_players(players_to_add).await;
+
+        // Should still have only 1 player (duplicate was filtered)
+        let current_players = state.current_players.read().await;
+        assert_eq!(current_players.len(), 1);
+        assert_eq!(current_players[0].0.name, "Player 1"); // Original name preserved
+        drop(current_players);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_players_to_current_players_adds_non_duplicates() {
+        let state = AppState::new();
+
+        // Add initial player
+        let player1 = create_test_api_player(1, "output_1", "Player 1");
+        let output1 = create_test_audio_output_factory("output_1", "Output 1");
+        *state.current_players.write().await = vec![(player1, PlayerType::Local, output1)];
+
+        // Add player with different player_id
+        let player2 = create_test_api_player(2, "output_2", "Player 2");
+        let output2 = create_test_audio_output_factory("output_2", "Output 2");
+        let players_to_add = vec![(player2, PlayerType::Local, output2)];
+
+        state.add_players_to_current_players(players_to_add).await;
+
+        let current_players = state.current_players.read().await;
+        assert_eq!(current_players.len(), 2);
+        assert_eq!(current_players[0].0.player_id, 1);
+        assert_eq!(current_players[1].0.player_id, 2);
+        drop(current_players);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_players_to_current_players_mixed_duplicates_and_new() {
+        let state = AppState::new();
+
+        // Add initial players
+        let player1 = create_test_api_player(1, "output_1", "Player 1");
+        let output1 = create_test_audio_output_factory("output_1", "Output 1");
+        let player2 = create_test_api_player(2, "output_2", "Player 2");
+        let output2 = create_test_audio_output_factory("output_2", "Output 2");
+        *state.current_players.write().await = vec![
+            (player1, PlayerType::Local, output1),
+            (player2, PlayerType::Local, output2),
+        ];
+
+        // Try to add: one duplicate (player_id 1), one new (player_id 3)
+        let duplicate_player = create_test_api_player(1, "output_1", "Player 1 Dup");
+        let output_dup = create_test_audio_output_factory("output_1", "Output 1");
+        let new_player = create_test_api_player(3, "output_3", "Player 3");
+        let output_new = create_test_audio_output_factory("output_3", "Output 3");
+        let players_to_add = vec![
+            (duplicate_player, PlayerType::Local, output_dup),
+            (new_player, PlayerType::Local, output_new),
+        ];
+
+        state.add_players_to_current_players(players_to_add).await;
+
+        let current_players = state.current_players.read().await;
+        assert_eq!(current_players.len(), 3);
+        // Verify the new player was added
+        assert!(current_players.iter().any(|(p, _, _)| p.player_id == 3));
+        // Verify original player 1 is unchanged
+        let player1_entry = current_players
+            .iter()
+            .find(|(p, _, _)| p.player_id == 1)
+            .unwrap();
+        assert_eq!(player1_entry.0.name, "Player 1");
+        drop(current_players);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_players_to_current_players_all_duplicates() {
+        let state = AppState::new();
+
+        // Add initial player
+        let player1 = create_test_api_player(1, "output_1", "Player 1");
+        let output1 = create_test_audio_output_factory("output_1", "Output 1");
+        *state.current_players.write().await = vec![(player1, PlayerType::Local, output1)];
+
+        // Try to add only duplicates
+        let dup1 = create_test_api_player(1, "output_1_a", "Player 1 Dup A");
+        let out1 = create_test_audio_output_factory("output_1_a", "Output 1 A");
+        let dup2 = create_test_api_player(1, "output_1_b", "Player 1 Dup B");
+        let out2 = create_test_audio_output_factory("output_1_b", "Output 1 B");
+        let players_to_add = vec![
+            (dup1, PlayerType::Local, out1),
+            (dup2, PlayerType::Local, out2),
+        ];
+
+        state.add_players_to_current_players(players_to_add).await;
+
+        // Should still have only 1 player
+        let current_players = state.current_players.read().await;
+        assert_eq!(current_players.len(), 1);
+        drop(current_players);
     }
 }

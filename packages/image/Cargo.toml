@@ -14,7 +14,7 @@ version     = "0.1.4"
 examples = true
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "tokio"]
 
 [[bin]]
 name              = "image_helper"
@@ -40,6 +40,11 @@ webp          = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 libvips = { workspace = true, optional = true }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
 
 [features]
 default = ["image", "libvips"]

@@ -6,7 +6,7 @@ use symphonia::core::{
     codecs::{CODEC_TYPE_OPUS, CodecParameters, Decoder, DecoderOptions},
 };
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_mono() {
     let mut params = CodecParameters::new();
     params
@@ -18,7 +18,7 @@ fn test_decoder_creation_mono() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_stereo() {
     let mut params = CodecParameters::new();
     params
@@ -30,7 +30,7 @@ fn test_decoder_creation_stereo() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_8khz() {
     let mut params = CodecParameters::new();
     params
@@ -42,7 +42,7 @@ fn test_decoder_creation_8khz() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_16khz() {
     let mut params = CodecParameters::new();
     params
@@ -54,7 +54,7 @@ fn test_decoder_creation_16khz() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_24khz() {
     let mut params = CodecParameters::new();
     params
@@ -66,7 +66,7 @@ fn test_decoder_creation_24khz() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_unsupported_sample_rate() {
     let mut params = CodecParameters::new();
     params
@@ -78,14 +78,14 @@ fn test_decoder_creation_unsupported_sample_rate() {
     assert!(decoder.is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_supported_codecs() {
     let codecs = OpusDecoder::supported_codecs();
     assert_eq!(codecs.len(), 1);
     assert_eq!(codecs[0].codec, CODEC_TYPE_OPUS);
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_codec_params() {
     let mut params = CodecParameters::new();
     params

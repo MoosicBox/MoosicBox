@@ -2710,4 +2710,344 @@ mod test {
 
         assert_eq!(filter_albums(&albums, &qobuz_request).count(), 1);
     }
+
+    #[test_log::test]
+    fn filter_albums_with_multiple_sources_returns_albums_matching_any_source() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let local = LibraryAlbum {
+            id: 1,
+            title: "Local Album".to_string(),
+            artist: String::new(),
+            artwork: None,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let tidal = LibraryAlbum {
+            id: 2,
+            title: "Tidal Album".to_string(),
+            artist: String::new(),
+            artwork: None,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Api(tidal_source),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let qobuz_source = ApiSource::register("Qobuz", "Qobuz");
+        let qobuz = LibraryAlbum {
+            id: 3,
+            title: "Qobuz Album".to_string(),
+            artist: String::new(),
+            artwork: None,
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Api(qobuz_source),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let albums = vec![local.clone(), tidal.clone(), qobuz];
+
+        // Filter for both Local and Tidal sources
+        let result = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: Some(vec![
+                    AlbumSource::Local,
+                    AlbumSource::Api(ApiSource::register("Tidal", "Tidal")),
+                ]),
+                sort: None,
+                filters: None,
+                page: None,
+            },
+        )
+        .cloned()
+        .collect::<Vec<_>>();
+
+        // Should return both Local and Tidal albums, but not Qobuz
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], local);
+        assert_eq!(result[1], tidal);
+    }
+
+    #[test_log::test]
+    fn filter_albums_combined_source_and_name_filters() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let local_rock = LibraryAlbum {
+            id: 1,
+            title: "Rock Album".to_string(),
+            artist: String::new(),
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let local_jazz = LibraryAlbum {
+            id: 2,
+            title: "Jazz Album".to_string(),
+            artist: String::new(),
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let tidal_rock = LibraryAlbum {
+            id: 3,
+            title: "Rock Collection".to_string(),
+            artist: String::new(),
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Api(tidal_source),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let albums = vec![local_rock.clone(), local_jazz, tidal_rock];
+
+        // Filter for Local source AND name contains "rock"
+        let result = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: Some(vec![AlbumSource::Local]),
+                sort: None,
+                filters: Some(AlbumFilters {
+                    name: Some("rock".to_string()),
+                    ..Default::default()
+                }),
+                page: None,
+            },
+        )
+        .cloned()
+        .collect::<Vec<_>>();
+
+        // Should only return the local rock album
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], local_rock);
+    }
+
+    #[test_log::test]
+    fn filter_albums_with_no_matching_versions_returns_empty() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Test Album".to_string(),
+            artist: String::new(),
+            versions: vec![AlbumVersionQuality {
+                source: TrackApiSource::Local,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Filter for a source that doesn't exist in the album's versions
+        let result = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: Some(vec![AlbumSource::Api(ApiSource::register(
+                    "Tidal", "Tidal",
+                ))]),
+                sort: None,
+                filters: None,
+                page: None,
+            },
+        )
+        .count();
+
+        assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn filter_albums_album_with_multiple_versions_matches_if_any_version_matches() {
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+
+        // Album has both Local and Tidal versions
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Multi-Version Album".to_string(),
+            artist: String::new(),
+            versions: vec![
+                AlbumVersionQuality {
+                    source: TrackApiSource::Local,
+                    ..Default::default()
+                },
+                AlbumVersionQuality {
+                    source: TrackApiSource::Api(tidal_source),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let albums = vec![album];
+
+        // Filter for Local source - should match
+        let local_result = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: Some(vec![AlbumSource::Local]),
+                sort: None,
+                filters: None,
+                page: None,
+            },
+        )
+        .count();
+        assert_eq!(local_result, 1);
+
+        // Filter for Tidal source - should also match
+        let tidal_result = filter_albums(
+            &albums,
+            &AlbumsRequest {
+                sources: Some(vec![AlbumSource::Api(ApiSource::register(
+                    "Tidal", "Tidal",
+                ))]),
+                sort: None,
+                filters: None,
+                page: None,
+            },
+        )
+        .count();
+        assert_eq!(tidal_result, 1);
+    }
+
+    #[test_log::test]
+    fn sort_albums_empty_list_returns_empty() {
+        let albums: Vec<&LibraryAlbum> = vec![];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::NameAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+        assert!(result.is_empty());
+    }
+
+    #[test_log::test]
+    fn sort_albums_single_element_returns_same_element() {
+        let album = LibraryAlbum {
+            id: 1,
+            title: "Only Album".to_string(),
+            artist: "Artist".to_string(),
+            ..Default::default()
+        };
+
+        let albums = vec![&album];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::NameDesc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, 1);
+    }
+
+    #[test_log::test]
+    fn sort_albums_same_release_date_maintains_relative_order() {
+        let album1 = LibraryAlbum {
+            id: 1,
+            title: "First".to_string(),
+            artist: String::new(),
+            date_released: Some("2023-01-01".to_string()),
+            ..Default::default()
+        };
+        let album2 = LibraryAlbum {
+            id: 2,
+            title: "Second".to_string(),
+            artist: String::new(),
+            date_released: Some("2023-01-01".to_string()),
+            ..Default::default()
+        };
+        let album3 = LibraryAlbum {
+            id: 3,
+            title: "Third".to_string(),
+            artist: String::new(),
+            date_released: Some("2023-01-01".to_string()),
+            ..Default::default()
+        };
+
+        let albums = vec![&album1, &album2, &album3];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ReleaseDateAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // All have the same date - sort should be stable (maintain original order)
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[1].id, 2);
+        assert_eq!(result[2].id, 3);
+    }
+
+    #[test_log::test]
+    fn sort_album_versions_empty_list() {
+        use moosicbox_menu_models::AlbumVersion;
+
+        let mut versions: Vec<AlbumVersion> = vec![];
+        sort_album_versions(&mut versions);
+        assert!(versions.is_empty());
+    }
+
+    #[test_log::test]
+    fn sort_album_versions_single_element() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let mut versions = vec![AlbumVersion {
+            tracks: vec![],
+            format: None,
+            sample_rate: Some(44100),
+            bit_depth: Some(16),
+            channels: None,
+            source: TrackApiSource::Local,
+        }];
+
+        sort_album_versions(&mut versions);
+
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0].sample_rate, Some(44100));
+    }
+
+    #[test_log::test]
+    fn sort_album_versions_all_none_values() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let mut versions = vec![
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: None,
+                bit_depth: None,
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: None,
+                bit_depth: None,
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        // Should not panic with all None values
+        sort_album_versions(&mut versions);
+
+        assert_eq!(versions.len(), 2);
+    }
 }

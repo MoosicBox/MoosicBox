@@ -465,4 +465,99 @@ mod tests {
         let result = system_time_to_instant(current_time);
         assert!(result.is_ok());
     }
+
+    #[test_log::test]
+    fn timeout_fused_future_terminated_when_inner_terminated() {
+        use futures::future::FusedFuture;
+
+        // Create a timeout with a FusedFuture as the inner future
+        let inner_future = futures::future::Fuse::terminated();
+        let timeout: Timeout<futures::future::Fuse<std::future::Ready<i32>>> =
+            Timeout::new(Duration::from_millis(100), inner_future);
+
+        // The timeout should report as terminated since the inner future is terminated
+        assert!(timeout.is_terminated());
+    }
+
+    #[test_log::test]
+    fn timeout_fused_future_not_terminated_when_neither_finished() {
+        use futures::future::FusedFuture;
+        use std::future::pending;
+
+        // Create a pending future wrapped in Fuse
+        let pending_future: std::future::Pending<i32> = pending();
+        let fuse = futures::future::FutureExt::fuse(pending_future);
+
+        let timeout = Timeout::new(Duration::from_millis(100), fuse);
+
+        // Neither is terminated, so timeout should not be terminated
+        assert!(!timeout.is_terminated());
+    }
+
+    #[test_log::test]
+    fn sleep_debug_format() {
+        let sleep = Sleep::new(Duration::from_millis(100));
+        let debug_str = format!("{sleep:?}");
+        assert!(debug_str.contains("Sleep"));
+        assert!(debug_str.contains("duration"));
+    }
+
+    #[test_log::test]
+    fn sleep_clone_produces_independent_copy() {
+        let sleep1 = Sleep::new(Duration::from_millis(100));
+        let sleep2 = sleep1;
+
+        // Both sleeps should have independent state
+        assert_eq!(sleep1.duration, sleep2.duration);
+        assert!(!sleep1.completed);
+        assert!(!sleep2.completed);
+    }
+
+    #[test_log::test]
+    fn instant_debug_format() {
+        let inst = Instant::new(instant_now() + Duration::from_millis(10));
+        let debug_str = format!("{inst:?}");
+        assert!(debug_str.contains("Instant"));
+        assert!(debug_str.contains("polled"));
+    }
+
+    #[test_log::test]
+    fn instant_clone_produces_independent_copy() {
+        let instant1 = Instant::new(instant_now() + Duration::from_millis(100));
+        let instant2 = instant1;
+
+        // Both instants should have independent state
+        assert!(!instant1.completed);
+        assert!(!instant2.completed);
+    }
+
+    #[test_log::test]
+    fn interval_debug_format() {
+        let interval = Interval::new(Duration::from_millis(50));
+        let debug_str = format!("{interval:?}");
+        assert!(debug_str.contains("Interval"));
+        assert!(debug_str.contains("interval"));
+    }
+
+    #[test_log::test]
+    fn elapsed_debug_format() {
+        let err = Elapsed;
+        let debug_str = format!("{err:?}");
+        assert!(debug_str.contains("Elapsed"));
+    }
+
+    #[test_log::test]
+    fn elapsed_implements_std_error() {
+        // Verify Elapsed implements std::error::Error
+        let err: &dyn std::error::Error = &Elapsed;
+        assert!(err.to_string().contains("deadline has elapsed"));
+    }
+
+    #[test_log::test]
+    fn timeout_debug_format() {
+        let timeout = Timeout::new(Duration::from_millis(100), ready(42));
+        let debug_str = format!("{timeout:?}");
+        assert!(debug_str.contains("Timeout"));
+        assert!(debug_str.contains("sleep"));
+    }
 }

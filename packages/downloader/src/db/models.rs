@@ -819,4 +819,85 @@ mod tests {
             _ => panic!("Expected Int64 database value"),
         }
     }
+
+    #[test_log::test]
+    fn test_download_task_state_to_value_type_from_database_value_valid() {
+        let db_value = DatabaseValue::String("PENDING".to_string());
+        let result: DownloadTaskState = db_value.to_value_type().unwrap();
+        assert_eq!(result, DownloadTaskState::Pending);
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_to_value_type_from_database_value_non_string_returns_error() {
+        let db_value = DatabaseValue::Int64(42);
+        let result: Result<DownloadTaskState, moosicbox_json_utils::ParseError> =
+            db_value.to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            moosicbox_json_utils::ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_to_value_type_from_database_value_invalid_string_returns_error() {
+        let db_value = DatabaseValue::String("INVALID_STATE".to_string());
+        let result: Result<DownloadTaskState, moosicbox_json_utils::ParseError> =
+            db_value.to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            moosicbox_json_utils::ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadTaskState"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_api_source_to_value_type_from_database_value_valid() {
+        // Valid JSON for DownloadApiSource::Api
+        let json_str =
+            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let db_value = DatabaseValue::String(json_str);
+        let result: crate::DownloadApiSource = db_value.to_value_type().unwrap();
+
+        assert_eq!(
+            result,
+            crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_api_source_to_value_type_from_database_value_non_string_returns_error() {
+        let db_value = DatabaseValue::Int64(42);
+        let result: Result<crate::DownloadApiSource, moosicbox_json_utils::ParseError> =
+            db_value.to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            moosicbox_json_utils::ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadApiSource"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_api_source_to_value_type_from_database_value_invalid_json_returns_error() {
+        let db_value = DatabaseValue::String("not valid json".to_string());
+        let result: Result<crate::DownloadApiSource, moosicbox_json_utils::ParseError> =
+            db_value.to_value_type();
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            moosicbox_json_utils::ParseError::ConvertType(msg) => {
+                assert!(msg.contains("DownloadApiSource"));
+            }
+            _ => panic!("Expected ConvertType error"),
+        }
+    }
 }

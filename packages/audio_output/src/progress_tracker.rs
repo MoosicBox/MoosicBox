@@ -572,4 +572,101 @@ mod tests {
         // But callback should not be called because position change is below threshold
         assert!(callback_positions.lock().unwrap().is_empty());
     }
+
+    #[test_log::test]
+    fn test_progress_tracker_debug() {
+        let tracker = ProgressTracker::new(Some(0.25));
+        tracker.set_audio_spec(48000, 2);
+        tracker.update_consumed_samples(96000); // 1 second
+
+        let debug_str = format!("{tracker:?}");
+        assert!(debug_str.contains("ProgressTracker"));
+        assert!(debug_str.contains("consumed_samples"));
+        assert!(debug_str.contains("96000"));
+        assert!(debug_str.contains("sample_rate"));
+        assert!(debug_str.contains("48000"));
+        assert!(debug_str.contains("channels"));
+        assert!(debug_str.contains("threshold"));
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_set_consumed_samples_updates_last_position() {
+        let tracker = ProgressTracker::new(Some(0.1));
+        tracker.set_audio_spec(44100, 2);
+
+        // Set to specific position (2 seconds = 176400 samples)
+        tracker.set_consumed_samples(176_400);
+
+        // Verify the last_reported_position was updated
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!((last_pos - 2.0).abs() < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_set_consumed_samples_without_spec() {
+        let tracker = ProgressTracker::new(Some(0.1));
+
+        // Set samples without configuring audio spec
+        tracker.set_consumed_samples(88200);
+
+        // Should still store the samples
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 88200);
+
+        // Position should be None since no spec configured
+        assert_eq!(tracker.get_position(), None);
+
+        // last_reported_position should remain 0 since position can't be calculated
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!(last_pos.abs() < f64::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_clear_callback() {
+        let tracker = ProgressTracker::new(Some(0.1));
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+
+        // Set a callback
+        tracker.set_callback(Some(Box::new(move |pos| {
+            callback_positions_clone.lock().unwrap().push(pos);
+        })));
+
+        // Update to trigger callback
+        tracker.update_consumed_samples(88200); // 1 second
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+
+        // Clear the callback
+        tracker.set_callback(None);
+
+        // Reset and update again - callback should not be called
+        tracker.reset();
+        tracker.update_consumed_samples(88200); // 1 second again
+
+        // Should still only have 1 callback from before
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_get_position_zero_sample_rate() {
+        let tracker = ProgressTracker::new(None);
+        // Set only channels, not sample_rate (which remains 0)
+        tracker.channels.store(2, Ordering::SeqCst);
+        tracker.consumed_samples.store(88200, Ordering::SeqCst);
+
+        // Position should be None due to zero sample rate
+        assert_eq!(tracker.get_position(), None);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_get_position_zero_channels() {
+        let tracker = ProgressTracker::new(None);
+        // Set only sample_rate, not channels (which remains 0)
+        tracker.sample_rate.store(44100, Ordering::SeqCst);
+        tracker.consumed_samples.store(88200, Ordering::SeqCst);
+
+        // Position should be None due to zero channels
+        assert_eq!(tracker.get_position(), None);
+    }
 }

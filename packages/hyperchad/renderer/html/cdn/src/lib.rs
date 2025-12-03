@@ -402,4 +402,69 @@ mod tests {
             "Should fetch from dynamic root endpoint"
         );
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_root_propagates_handler_errors() {
+        use hyperchad_router::RequestInfo;
+        use std::io;
+
+        // Create a router with a dynamic root that always returns an error
+        let router = Router::new()
+            .with_route_result::<Content, Option<Content>, _, _>("/", |_req| async move {
+                Err::<Option<Content>, _>(io::Error::other("Simulated handler error"))
+            });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Navigate to the dynamic endpoint
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        // The error should propagate through the dynamic root endpoint
+        let navigation_result = result.navigate(req).await;
+        assert!(
+            navigation_result.is_err(),
+            "Handler errors should propagate through dynamic root endpoint"
+        );
+
+        let err = navigation_result.unwrap_err();
+        assert!(
+            err.to_string().contains("Simulated handler error"),
+            "Error message should be preserved"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_root_preserves_none_response() {
+        use hyperchad_router::RequestInfo;
+
+        // Create a router with a dynamic root that returns None (no content)
+        let router =
+            Router::new().with_route::<Content, _, _>("/", |_req| async move { None::<Content> });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Navigate to the dynamic endpoint
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let navigation_result = result
+            .navigate(req)
+            .await
+            .expect("Navigation should succeed");
+
+        // None response should be preserved
+        assert!(
+            navigation_result.is_none(),
+            "None response from handler should be preserved"
+        );
+    }
 }

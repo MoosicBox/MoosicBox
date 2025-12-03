@@ -853,4 +853,183 @@ mod tests {
         let has_non_zero = output.iter().any(|&sample| sample != 0);
         assert!(has_non_zero, "Output should contain non-zero samples");
     }
+
+    /// Test resampling with identity sample rate (input rate == output rate)
+    ///
+    /// While unusual, this edge case ensures the resampler handles a 1:1 ratio
+    /// without issues. This exercises the rubato FFT resampler with ratio = 1.0.
+    #[test_log::test]
+    fn test_resample_identity_rate() {
+        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+
+        // Create input buffer with a known pattern
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = (i as f32) / 512.0;
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(
+            result.is_some(),
+            "Should produce output even with identity rate"
+        );
+
+        let output = result.unwrap();
+        assert!(!output.is_empty(), "Output should not be empty");
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+
+        // With identity rate, output frame count should be very close to input frame count
+        let output_frames = output.len() / 2;
+        let diff = output_frames.abs_diff(512);
+        assert!(
+            diff < 50,
+            "Identity rate should produce approximately same frame count: got {output_frames} from 512"
+        );
+    }
+
+    /// Test flush with exactly 2x duration samples remaining
+    ///
+    /// This tests the flush code path when there's more than one duration's worth
+    /// of samples but it's an exact multiple (no padding needed).
+    #[test_log::test]
+    fn test_flush_double_duration_remaining() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let duration = 256;
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, duration);
+
+        // Add 3x duration samples
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(768, spec);
+        input_buffer.render_reserved(Some(768));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = ((i as f32) * std::f32::consts::PI / 96.0).sin() * 0.6;
+            }
+        }
+
+        // First resample consumes 256 samples, leaving 512 (2x duration)
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some());
+
+        // Flush should process the remaining 512 samples (2x duration)
+        // partial_len = 512 % 256 = 0, so no padding needed
+        let flush_result = resampler.flush();
+        assert!(
+            flush_result.is_some(),
+            "Flush should return Some when 2x duration samples remain"
+        );
+        let output = flush_result.unwrap();
+        assert!(!output.is_empty());
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+    }
+
+    /// Test multi-channel resampling with 4 channels (quadraphonic)
+    ///
+    /// Verifies that the resampler correctly handles more than 2 channels.
+    /// The output should be properly interleaved across all channels.
+    #[test_log::test]
+    fn test_resample_quad_channel() {
+        let spec = SignalSpec::new(
+            44100,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        );
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                // Different pattern per channel for verification
+                *sample =
+                    ((ch as f32).mul_add(50.0, i as f32) * std::f32::consts::PI / 64.0).sin() * 0.7;
+            }
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some(), "Should produce output for quad audio");
+
+        let output = result.unwrap();
+        assert!(!output.is_empty(), "Output should not be empty");
+        // Output should have samples for all 4 channels interleaved
+        assert_eq!(output.len() % 4, 0, "Output should be interleaved quad");
+    }
+
+    /// Test resampling with extreme sample values at boundaries
+    ///
+    /// Verifies that the resampler handles samples at the maximum (+1.0)
+    /// and minimum (-1.0) values without overflow or unexpected behavior.
+    #[test_log::test]
+    fn test_resample_boundary_values() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+        input_buffer.render_reserved(Some(512));
+
+        // Left channel: alternating between +1.0 and -1.0 (maximum swing)
+        let left = input_buffer.chan_mut(0);
+        for (i, sample) in left.iter_mut().enumerate() {
+            *sample = if i % 2 == 0 { 1.0 } else { -1.0 };
+        }
+
+        // Right channel: constant at 0.0 (silence) for contrast
+        let right = input_buffer.chan_mut(1);
+        for sample in right.iter_mut() {
+            *sample = 0.0;
+        }
+
+        let result = resampler.resample(&input_buffer);
+        assert!(result.is_some(), "Should handle boundary values");
+
+        let output = result.unwrap();
+        assert!(!output.is_empty(), "Output should not be empty");
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+
+        // Verify no NaN or Inf values in output
+        for &sample in output {
+            assert!(sample.is_finite(), "All samples should be finite values");
+        }
+    }
+
+    /// Test flush when buffer length is just under duration (requires padding)
+    ///
+    /// Tests the padding logic when partial_len is close to duration.
+    #[test_log::test]
+    fn test_flush_just_under_duration() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let duration = 256;
+        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, duration);
+
+        // Add 255 samples (just 1 short of duration)
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(255, spec);
+        input_buffer.render_reserved(Some(255));
+        for ch in 0..spec.channels.count() {
+            let channel = input_buffer.chan_mut(ch);
+            for (i, sample) in channel.iter_mut().enumerate() {
+                *sample = (i as f32) / 255.0 * 0.8;
+            }
+        }
+
+        // Returns None because we have only 255 samples (< duration)
+        assert!(resampler.resample(&input_buffer).is_none());
+
+        // Flush should pad the 255 samples to 256 and process
+        let flush_result = resampler.flush();
+        assert!(
+            flush_result.is_some(),
+            "Flush should pad and process 255 samples"
+        );
+        let output = flush_result.unwrap();
+        assert!(!output.is_empty());
+        assert_eq!(output.len() % 2, 0, "Output should be stereo");
+    }
 }

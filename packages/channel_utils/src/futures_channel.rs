@@ -919,4 +919,351 @@ mod tests {
         // After receiving None, the stream is terminated
         assert!(rx.is_terminated());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_size_hint_reflects_channel_state() {
+        use std::pin::Pin;
+        use std::task::Context;
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Empty channel should have size_hint starting at 0
+        let (lower, _upper) = rx.size_hint();
+        assert_eq!(lower, 0);
+
+        // Send messages directly (no priority function)
+        tx.send(1).unwrap();
+        tx.send(2).unwrap();
+        tx.send(3).unwrap();
+
+        // Size hint should reflect messages in the underlying channel
+        let (lower, _upper) = rx.size_hint();
+        assert_eq!(lower, 3);
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // After receiving one message, size hint should decrease
+        let _ = Pin::new(&mut rx).poll_next(&mut context);
+        let (lower, _upper) = rx.size_hint();
+        assert_eq!(lower, 2);
+
+        // Drain remaining messages
+        let _ = Pin::new(&mut rx).poll_next(&mut context);
+        let _ = Pin::new(&mut rx).poll_next(&mut context);
+
+        // Size hint should be 0 when channel is empty
+        let (lower, _upper) = rx.size_hint();
+        assert_eq!(lower, 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_buffer_insertion_positions() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        #[allow(clippy::cast_sign_loss)]
+        let tx = tx.with_priority(|msg: &i32| *msg as usize);
+
+        // First message goes directly (ready_to_send = true)
+        tx.send(50).unwrap();
+
+        // Now send messages that will test different insertion positions:
+        // Buffer: empty after first direct send
+        tx.send(30).unwrap(); // Pushed to end: [(30)]
+        tx.send(10).unwrap(); // 10 is not > 30, pushed to end: [(30), (10)]
+        tx.send(40).unwrap(); // 40 > 30, insert at 0: [(40), (30), (10)]
+        tx.send(35).unwrap(); // 35 not > 40, 35 > 30, insert at 1: [(40), (35), (30), (10)]
+        tx.send(5).unwrap(); // 5 not > any, pushed to end: [(40), (35), (30), (10), (5)]
+        tx.send(100).unwrap(); // 100 > 40, insert at 0: [(100), (40), (35), (30), (10), (5)]
+        tx.send(20).unwrap(); // 20 not > 100/40/35/30, 20 > 10: insert at 4: [(100), (40), (35), (30), (20), (10), (5)]
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // Receive in expected order
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(50))
+        )); // Direct send
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(100))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(40))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(35))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(30))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(20))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_after_receiver_closed() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        #[allow(clippy::cast_sign_loss)]
+        let tx = tx.with_priority(|msg: &i32| *msg as usize);
+
+        // First send goes directly
+        tx.send(1).unwrap();
+
+        // These get buffered
+        tx.send(10).unwrap();
+        tx.send(5).unwrap();
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // Receive the first message to clear the channel
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+
+        // Now receive the buffered messages (buffer gets flushed on poll)
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+
+        // Drain buffer completely so ready_to_send becomes true
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
+
+        // Drop receiver
+        drop(rx);
+
+        // Now when ready_to_send is true, send() will try unbounded_send and fail
+        let result = tx.send(20);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_disconnected());
+
+        // unbounded_send should also fail
+        let result = tx.unbounded_send(30);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_disconnected());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_close_channel_multiple_times() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.send(1).unwrap();
+
+        // Close channel multiple times should not panic
+        tx.close_channel();
+        tx.close_channel();
+        tx.close_channel();
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // Should still receive the message sent before close
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+
+        // Then stream should end
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(None)
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_maximum_priority_value() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<usize>();
+
+        let tx = tx.with_priority(|msg: &usize| *msg);
+
+        // First message goes directly
+        tx.send(0).unwrap();
+
+        // Send with maximum priority value
+        tx.send(usize::MAX).unwrap();
+        tx.send(usize::MAX / 2).unwrap();
+        tx.send(usize::MAX - 1).unwrap();
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // First is the direct send
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(0))
+        ));
+
+        // Maximum priority should come first from buffer
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(val)) if val == usize::MAX
+        ));
+
+        // Then MAX-1
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(val)) if val == usize::MAX - 1
+        ));
+
+        // Then MAX/2
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(val)) if val == usize::MAX / 2
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_after_buffer_drained_resets_ready_to_send() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        #[allow(clippy::cast_sign_loss)]
+        let tx = tx.with_priority(|msg: &i32| *msg as usize);
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // First send goes directly (ready_to_send starts as true)
+        tx.send(1).unwrap();
+
+        // Second send gets buffered (ready_to_send is now false)
+        tx.send(5).unwrap();
+
+        // Receive first message
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+
+        // Receive buffered message (this should trigger flush which empties buffer)
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+
+        // Poll again with empty buffer - this should set ready_to_send back to true
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Pending
+        ));
+
+        // Now send should go directly again (not buffered)
+        tx.send(10).unwrap();
+
+        // Verify it went directly by receiving immediately
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+
+        // Next send should be buffered again (ready_to_send is false after send)
+        tx.send(20).unwrap();
+        tx.send(15).unwrap();
+
+        // Verify priority ordering in buffer
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(20))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(15))
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_mixed_priority_and_no_priority_senders() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Clone before adding priority - this clone won't have priority function
+        let tx_no_priority = tx.clone();
+
+        // Add priority to original
+        #[allow(clippy::cast_sign_loss)]
+        let tx_with_priority = tx.with_priority(|msg: &i32| *msg as usize);
+
+        let waker = futures_util::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+
+        // First send from priority sender goes directly
+        tx_with_priority.send(1).unwrap();
+
+        // This gets buffered (from priority sender)
+        tx_with_priority.send(10).unwrap();
+
+        // Send from no-priority sender goes directly to channel
+        // Note: it shares the buffer via clone, but won't use priority function
+        tx_no_priority.send(999).unwrap();
+
+        // More buffered sends
+        tx_with_priority.send(5).unwrap();
+
+        // Receive: first the direct sends (1, 999), then from buffer (10, 5)
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(1))
+        ));
+
+        // The no-priority send went directly, should come next
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(999))
+        ));
+
+        // Then buffered messages in priority order
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(10))
+        ));
+        assert!(matches!(
+            Pin::new(&mut rx).poll_next(&mut context),
+            Poll::Ready(Some(5))
+        ));
+    }
 }

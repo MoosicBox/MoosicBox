@@ -1673,4 +1673,21 @@ mod test {
             assert!(path.ends_with("downloads"));
         }
     }
+
+    #[test_log::test]
+    fn test_api_source_from_download_api_source_ref_moosicbox() {
+        let download_source = DownloadApiSource::MoosicBox("http://localhost".to_string());
+        let api_source: ApiSource = (&download_source).into();
+
+        assert_eq!(api_source, ApiSource::library());
+    }
+
+    #[test_log::test]
+    fn test_api_source_from_download_api_source_ref_api() {
+        let original_api_source = TIDAL_API_SOURCE.clone();
+        let download_source = DownloadApiSource::Api(original_api_source.clone());
+        let api_source: ApiSource = (&download_source).into();
+
+        assert_eq!(api_source, original_api_source);
+    }
 }

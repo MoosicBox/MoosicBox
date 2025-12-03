@@ -1146,4 +1146,125 @@ mod test {
         let err2 = err1.clone();
         assert_eq!(err1.to_string(), err2.to_string());
     }
+
+    #[test_log::test]
+    fn handle_spawn_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn_with_name("named_task", async { "named_result" });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "named_result");
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn handle_spawn_blocking_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn_blocking_with_name("blocking_named_task", || 789);
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 789);
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn concurrent_tasks_execute_correctly() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let counter = Arc::new(Mutex::new(0));
+
+        let c1 = Arc::clone(&counter);
+        let c2 = Arc::clone(&counter);
+        let c3 = Arc::clone(&counter);
+
+        runtime.block_on(async {
+            let h1 = crate::task::spawn(async move {
+                *c1.lock().unwrap() += 1;
+            });
+            let h2 = crate::task::spawn(async move {
+                *c2.lock().unwrap() += 10;
+            });
+            let h3 = crate::task::spawn(async move {
+                *c3.lock().unwrap() += 100;
+            });
+
+            h1.await.unwrap();
+            h2.await.unwrap();
+            h3.await.unwrap();
+        });
+
+        assert_eq!(*counter.lock().unwrap(), 111);
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn multiple_block_ons_work_correctly() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let result1 = runtime.block_on(async { 1 });
+        let result2 = runtime.block_on(async { 2 });
+        let result3 = runtime.block_on(async { 3 });
+
+        assert_eq!(result1, 1);
+        assert_eq!(result2, 2);
+        assert_eq!(result3, 3);
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn join_handle_is_finished_cached_result() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let mut join_handle = runtime.spawn(async { 42 });
+
+        // Run to completion
+        runtime.block_on(async {
+            // Force the task to complete
+            crate::task::yield_now().await;
+            crate::task::yield_now().await;
+        });
+
+        // Give it time to complete
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Multiple calls to is_finished should be consistent
+        let finished1 = join_handle.is_finished();
+        let finished2 = join_handle.is_finished();
+
+        // Once finished, should remain finished
+        if finished1 {
+            assert!(finished2);
+        }
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn task_debug_format() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        // Create a task and get its debug representation through Runtime debug
+        let debug_str = format!("{runtime:?}");
+        assert!(debug_str.contains("Runtime"));
+        assert!(debug_str.contains("queue"));
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn handle_debug_format() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let debug_str = format!("{handle:?}");
+        assert!(debug_str.contains("Handle"));
+
+        runtime.wait().unwrap();
+    }
 }

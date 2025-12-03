@@ -2676,4 +2676,274 @@ mod tests {
             );
         }
     }
+
+    // Tests for element_style_to_html with text-related properties
+    #[test_log::test]
+    fn test_element_style_to_html_user_select() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::UserSelect;
+
+        for (user_select, expected) in [
+            (UserSelect::Auto, "user-select:auto"),
+            (UserSelect::None, "user-select:none"),
+            (UserSelect::Text, "user-select:text"),
+            (UserSelect::All, "user-select:all"),
+        ] {
+            let container = Container {
+                user_select: Some(user_select),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_overflow_wrap() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::OverflowWrap;
+
+        for (overflow_wrap, expected) in [
+            (OverflowWrap::Normal, "overflow-wrap:normal"),
+            (OverflowWrap::BreakWord, "overflow-wrap:break-word"),
+            (OverflowWrap::Anywhere, "overflow-wrap:anywhere"),
+        ] {
+            let container = Container {
+                overflow_wrap: Some(overflow_wrap),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_text_overflow() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::TextOverflow;
+
+        for (text_overflow, expected) in [
+            (TextOverflow::Clip, "text-overflow:clip"),
+            (TextOverflow::Ellipsis, "text-overflow:ellipsis"),
+        ] {
+            let container = Container {
+                text_overflow: Some(text_overflow),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_flex_wrap() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        // Test flex-wrap (wrap without grid flag)
+        let container = Container {
+            overflow_x: LayoutOverflow::Wrap { grid: false },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(
+            style.contains("flex-wrap:wrap"),
+            "Expected style to contain 'flex-wrap:wrap', got: {style}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_overflow_scroll() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Scroll,
+            overflow_y: LayoutOverflow::Scroll,
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(
+            style.contains("overflow-x:scroll"),
+            "Expected style to contain 'overflow-x:scroll', got: {style}"
+        );
+        assert!(
+            style.contains("overflow-y:scroll"),
+            "Expected style to contain 'overflow-y:scroll', got: {style}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_justify_content_all_variants() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::JustifyContent;
+
+        for (justify_content, expected) in [
+            (JustifyContent::Start, "justify-content:start"),
+            (JustifyContent::Center, "justify-content:center"),
+            (JustifyContent::End, "justify-content:end"),
+            (
+                JustifyContent::SpaceBetween,
+                "justify-content:space-between",
+            ),
+            (JustifyContent::SpaceEvenly, "justify-content:space-evenly"),
+        ] {
+            let container = Container {
+                justify_content: Some(justify_content),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_align_items_all_variants() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::AlignItems;
+
+        for (align_items, expected) in [
+            (AlignItems::Start, "align-items:start"),
+            (AlignItems::Center, "align-items:center"),
+            (AlignItems::End, "align-items:end"),
+        ] {
+            let container = Container {
+                align_items: Some(align_items),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_image_object_fit() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::ImageFit;
+
+        for (fit, expected) in [
+            (ImageFit::Default, "object-fit:unset"),
+            (ImageFit::Contain, "object-fit:contain"),
+            (ImageFit::Cover, "object-fit:cover"),
+            (ImageFit::Fill, "object-fit:fill"),
+            (ImageFit::None, "object-fit:none"),
+        ] {
+            let container = Container {
+                element: hyperchad_transformer::Element::Image {
+                    source: None,
+                    alt: None,
+                    fit: Some(fit),
+                    source_set: None,
+                    sizes: None,
+                    loading: None,
+                },
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_text_align_all_variants() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::TextAlign;
+
+        for (text_align, expected) in [
+            (TextAlign::Start, "text-align:start"),
+            (TextAlign::Center, "text-align:center"),
+            (TextAlign::End, "text-align:end"),
+            (TextAlign::Justify, "text-align:justify"),
+        ] {
+            let container = Container {
+                text_align: Some(text_align),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_white_space_all_variants() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::WhiteSpace;
+
+        for (white_space, expected) in [
+            (WhiteSpace::Normal, "white-space:normal"),
+            (WhiteSpace::Preserve, "white-space:pre"),
+            (WhiteSpace::PreserveWrap, "white-space:pre-wrap"),
+        ] {
+            let container = Container {
+                white_space: Some(white_space),
+                ..Default::default()
+            };
+
+            let mut buffer = Vec::new();
+            element_style_to_html(&mut buffer, &container, false).unwrap();
+            let style = std::str::from_utf8(&buffer).unwrap();
+
+            assert!(
+                style.contains(expected),
+                "Expected style to contain '{expected}', got: {style}"
+            );
+        }
+    }
 }

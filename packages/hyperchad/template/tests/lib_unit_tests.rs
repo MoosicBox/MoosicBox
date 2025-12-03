@@ -1667,3 +1667,270 @@ fn into_action_effect_from_logic_if_with_actions() {
         _ => panic!("Expected Logic action type"),
     }
 }
+
+// ============================================================================
+// calc::to_number tests
+// ============================================================================
+
+#[test_log::test]
+fn calc_to_number_from_integer() {
+    let result = calc::to_number(42_i64);
+    assert_eq!(result, Number::Integer(42));
+}
+
+#[test_log::test]
+fn calc_to_number_from_float() {
+    let result = calc::to_number(2.75_f32);
+    assert_eq!(result, Number::Real(2.75));
+}
+
+#[test_log::test]
+fn calc_to_number_from_number() {
+    // Passing a Number should return it unchanged
+    let result = calc::to_number(Number::IntegerVw(50));
+    assert_eq!(result, Number::IntegerVw(50));
+}
+
+// ============================================================================
+// calc::multiply_numbers additional tests
+// ============================================================================
+
+#[test_log::test]
+fn calc_multiply_numbers_integer_real_mix() {
+    let result = calc::multiply_numbers(&Number::Integer(5), &Number::Real(2.5));
+    assert_eq!(result, Number::Real(12.5));
+
+    let result = calc::multiply_numbers(&Number::Real(3.0), &Number::Integer(4));
+    assert_eq!(result, Number::Real(12.0));
+}
+
+#[test_log::test]
+fn calc_multiply_numbers_real_percent_scalar() {
+    // RealPercent * Real should preserve percentage
+    let result = calc::multiply_numbers(&Number::RealPercent(50.0), &Number::Real(2.0));
+    assert_eq!(result, Number::RealPercent(100.0));
+
+    // Real * RealPercent should preserve percentage
+    let result = calc::multiply_numbers(&Number::Real(3.0), &Number::RealPercent(25.0));
+    assert_eq!(result, Number::RealPercent(75.0));
+}
+
+#[test_log::test]
+fn calc_multiply_numbers_viewport_units_fallback() {
+    // Multiplying viewport units falls back to pixel conversion
+    let result = calc::multiply_numbers(&Number::IntegerVw(50), &Number::IntegerVh(50));
+    // Result should be Real after pixel conversion
+    assert!(matches!(result, Number::Real(_)));
+}
+
+#[test_log::test]
+fn calc_multiply_numbers_mixed_unit_types() {
+    // Multiplying Vw by percent should fall back to pixel conversion
+    let result = calc::multiply_numbers(&Number::IntegerVw(50), &Number::IntegerPercent(50));
+    assert!(matches!(result, Number::Real(_)));
+
+    // Multiplying different viewport units
+    let result = calc::multiply_numbers(&Number::RealDvw(25.0), &Number::RealDvh(30.0));
+    assert!(matches!(result, Number::Real(_)));
+}
+
+// ============================================================================
+// calc::divide_numbers additional tests
+// ============================================================================
+
+#[test_log::test]
+fn calc_divide_numbers_integer_real_mix() {
+    let result = calc::divide_numbers(&Number::Integer(10), &Number::Real(2.5));
+    assert_eq!(result, Number::Real(4.0));
+
+    let result = calc::divide_numbers(&Number::Real(15.0), &Number::Integer(3));
+    assert_eq!(result, Number::Real(5.0));
+}
+
+#[test_log::test]
+fn calc_divide_numbers_integer_real_by_zero() {
+    // Integer / Real(0.0) should return 0.0
+    let result = calc::divide_numbers(&Number::Integer(10), &Number::Real(0.0));
+    assert_eq!(result, Number::Real(0.0));
+
+    // Real / Integer(0) should return 0.0
+    let result = calc::divide_numbers(&Number::Real(10.0), &Number::Integer(0));
+    assert_eq!(result, Number::Real(0.0));
+}
+
+#[test_log::test]
+fn calc_divide_numbers_integer_percent_by_integer() {
+    let result = calc::divide_numbers(&Number::IntegerPercent(100), &Number::Integer(4));
+    assert_eq!(result, Number::RealPercent(25.0));
+}
+
+#[test_log::test]
+fn calc_divide_numbers_real_percent_by_real_zero() {
+    // Division by zero should return 0.0
+    let result = calc::divide_numbers(&Number::RealPercent(100.0), &Number::Real(0.0));
+    assert_eq!(result, Number::RealPercent(0.0));
+}
+
+#[test_log::test]
+fn calc_divide_numbers_viewport_units_fallback() {
+    // Dividing viewport units by other viewport units falls back to pixel conversion
+    let result = calc::divide_numbers(&Number::IntegerVw(100), &Number::IntegerVh(50));
+    assert!(matches!(result, Number::Real(_)));
+
+    // Non-zero result check
+    if let Number::Real(value) = result {
+        assert!(value != 0.0, "Expected non-zero result for valid division");
+    }
+}
+
+#[test_log::test]
+fn calc_divide_numbers_fallback_by_zero() {
+    // Fallback path division by zero (when units don't match specific patterns)
+    // IntegerVw / IntegerVw(0) will evaluate to 0 via calc
+    let result = calc::divide_numbers(&Number::IntegerVw(100), &Number::IntegerVw(0));
+    // The calc function will return 0 for the second operand, triggering the zero check
+    assert_eq!(result, Number::Real(0.0));
+}
+
+// ============================================================================
+// calc::subtract_numbers additional tests
+// ============================================================================
+
+#[test_log::test]
+fn calc_subtract_numbers_vw_mixed_integer_real() {
+    let result = calc::subtract_numbers(&Number::IntegerVw(100), &Number::RealVw(25.5));
+    assert_eq!(result, Number::RealVw(74.5));
+
+    let result = calc::subtract_numbers(&Number::RealVw(100.0), &Number::IntegerVw(30));
+    assert_eq!(result, Number::RealVw(70.0));
+}
+
+#[test_log::test]
+fn calc_subtract_numbers_vh_mixed_integer_real() {
+    let result = calc::subtract_numbers(&Number::IntegerVh(80), &Number::RealVh(20.5));
+    assert_eq!(result, Number::RealVh(59.5));
+
+    let result = calc::subtract_numbers(&Number::RealVh(90.0), &Number::IntegerVh(40));
+    assert_eq!(result, Number::RealVh(50.0));
+}
+
+#[test_log::test]
+fn calc_subtract_numbers_percent_mixed_integer_real() {
+    let result = calc::subtract_numbers(&Number::IntegerPercent(100), &Number::RealPercent(33.3));
+    // Expected: 100.0 - 33.3 = 66.7
+    if let Number::RealPercent(val) = result {
+        assert!((val - 66.7).abs() < 0.01);
+    } else {
+        panic!("Expected RealPercent, got {:?}", result);
+    }
+
+    let result = calc::subtract_numbers(&Number::RealPercent(75.0), &Number::IntegerPercent(25));
+    assert_eq!(result, Number::RealPercent(50.0));
+}
+
+// ============================================================================
+// fx function runtime tests
+// ============================================================================
+
+#[test_log::test]
+fn fx_with_action_type() {
+    use hyperchad_actions::ActionType;
+    use hyperchad_template::fx;
+
+    let effect = fx(ActionType::NoOp);
+    assert!(matches!(effect.action, ActionType::NoOp));
+}
+
+#[test_log::test]
+fn fx_with_action_effect() {
+    use hyperchad_actions::{ActionEffect, ActionType};
+    use hyperchad_template::fx;
+
+    let input_effect = ActionEffect {
+        action: ActionType::NoOp,
+        ..Default::default()
+    };
+    let result = fx(input_effect);
+    assert!(matches!(result.action, ActionType::NoOp));
+}
+
+#[test_log::test]
+fn fx_with_vec_action_type() {
+    use hyperchad_actions::ActionType;
+    use hyperchad_template::fx;
+
+    let actions = vec![ActionType::NoOp, ActionType::NoOp];
+    let effect = fx(actions);
+
+    match effect.action {
+        ActionType::MultiEffect(effects) => {
+            assert_eq!(effects.len(), 2);
+        }
+        _ => panic!("Expected MultiEffect"),
+    }
+}
+
+// ============================================================================
+// Container RenderContainer tests
+// ============================================================================
+
+#[test_log::test]
+fn render_container_direct_container() {
+    use hyperchad_transformer::{Container, Element};
+
+    let container = Container {
+        element: Element::Raw {
+            value: "Direct Container".to_string(),
+        },
+        ..Default::default()
+    };
+
+    let mut containers = Vec::new();
+    container.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Direct Container"
+    );
+}
+
+#[test_log::test]
+fn render_container_container_with_element() {
+    use hyperchad_transformer::{Container, Element};
+
+    let container = Container {
+        element: Element::Div,
+        ..Default::default()
+    };
+
+    let mut containers = Vec::new();
+    container.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert!(matches!(containers[0].element, Element::Div));
+}
+
+#[test_log::test]
+fn render_container_container_with_children() {
+    use hyperchad_transformer::{Container, Element};
+
+    let child = Container {
+        element: Element::Raw {
+            value: "Child".to_string(),
+        },
+        ..Default::default()
+    };
+
+    let parent = Container {
+        element: Element::Div,
+        children: vec![child],
+        ..Default::default()
+    };
+
+    let mut containers = Vec::new();
+    parent.render_to(&mut containers).unwrap();
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].children.len(), 1);
+}

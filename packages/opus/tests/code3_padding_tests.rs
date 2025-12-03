@@ -3,7 +3,7 @@
 use moosicbox_opus::packet::OpusPacket;
 use pretty_assertions::assert_eq;
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_simple_padding() {
     let packet = vec![
         0x03, 0x83, 5, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0, 0, 0, 0, 0,
@@ -17,7 +17,7 @@ fn test_code_3_cbr_with_simple_padding() {
     assert_eq!(result.padding.len(), 5);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_zero_padding() {
     let packet = vec![
         0x03, 0x83, 0, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33,
@@ -31,7 +31,7 @@ fn test_code_3_cbr_with_zero_padding() {
     assert_eq!(result.padding.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_with_simple_padding() {
     let packet = vec![
         0x03, 0xC3, 3, 2, 3, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0, 0, 0,
@@ -45,7 +45,7 @@ fn test_code_3_vbr_with_simple_padding() {
     assert_eq!(result.padding.len(), 3);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_two_byte_padding() {
     let mut packet = vec![
         0x03, 0x83, 255, 1, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33,
@@ -60,7 +60,7 @@ fn test_code_3_cbr_with_two_byte_padding() {
     assert_eq!(result.padding.len(), 255);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_with_two_byte_padding() {
     let mut packet = vec![0x03, 0xC2, 255, 0, 2];
     packet.extend(vec![0xAA, 0xBB, 0xCC, 0xDD]);
@@ -73,7 +73,7 @@ fn test_code_3_vbr_with_two_byte_padding() {
     assert_eq!(result.padding.len(), 254);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_254_padding() {
     let mut packet = vec![0x03, 0x82, 254, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
     packet.extend(vec![0; 254]);
@@ -85,7 +85,7 @@ fn test_code_3_cbr_with_254_padding() {
     assert_eq!(result.padding.len(), 254);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_chained_255_padding() {
     let mut packet = vec![0x03, 0x82, 255, 255, 2, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
     packet.extend(vec![0; 510]);
@@ -97,7 +97,7 @@ fn test_code_3_cbr_with_chained_255_padding() {
     assert_eq!(result.padding.len(), 510);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_with_chained_255_padding() {
     let mut packet = vec![0x03, 0xC2, 255, 255, 255, 10, 2];
     packet.extend(vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE]);
@@ -110,7 +110,7 @@ fn test_code_3_vbr_with_chained_255_padding() {
     assert_eq!(result.padding.len(), 772);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_no_padding_flag() {
     let packet = vec![
         0x03, 0x03, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33,
@@ -122,7 +122,7 @@ fn test_code_3_cbr_no_padding_flag() {
     assert_eq!(result.padding.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_no_padding_flag() {
     let packet = vec![0x03, 0x43, 2, 3, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -132,19 +132,19 @@ fn test_code_3_vbr_no_padding_flag() {
     assert_eq!(result.padding.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_padding_too_short_fails() {
     let packet = vec![0x03, 0x83, 10];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_two_byte_padding_truncated_fails() {
     let packet = vec![0x03, 0x82, 255, 0xAA, 0xBB];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_with_max_padding_255() {
     let mut packet = vec![0x03, 0x82, 255, 0, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
     packet.extend(vec![0; 254]);

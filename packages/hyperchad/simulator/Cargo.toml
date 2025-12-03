@@ -31,6 +31,10 @@ thiserror  = { workspace = true }
 env_logger    = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
 
 [features]
 default = []

@@ -1902,4 +1902,237 @@ mod tests {
         let result = grouped.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(5.0));
     }
+
+    // ============================================
+    // CalcValue::Key variant tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_calc_value_key() {
+        let calc = CalcValue::Key {
+            key: crate::Key::Enter,
+        };
+
+        match calc {
+            CalcValue::Key { key } => {
+                assert_eq!(key, crate::Key::Enter);
+            }
+            _ => panic!("Expected Key CalcValue"),
+        }
+    }
+
+    // ============================================
+    // get_display_child_class helper test
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_display_child_class() {
+        let calc = get_display_child_class("child-display-class");
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("child-display-class"))
+                );
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    // ============================================
+    // ConditionExpression tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_condition_expression_eq() {
+        let condition = ConditionExpression::Eq(Value::Real(5.0), Value::Real(5.0));
+
+        match condition {
+            ConditionExpression::Eq(left, right) => {
+                assert_eq!(left, Value::Real(5.0));
+                assert_eq!(right, Value::Real(5.0));
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_condition_expression_then() {
+        let condition = ConditionExpression::Eq(Value::Real(1.0), Value::Real(1.0));
+        let if_expr = condition.then(42);
+
+        assert_eq!(if_expr.value, None);
+        assert_eq!(if_expr.default, Some(42));
+    }
+
+    #[test_log::test]
+    fn test_condition_expression_or_else() {
+        let condition = ConditionExpression::Eq(Value::Real(1.0), Value::Real(2.0));
+        let if_expr = condition.or_else(99);
+
+        assert_eq!(if_expr.value, None);
+        assert_eq!(if_expr.default, Some(99));
+    }
+
+    // ============================================
+    // IfExpression chaining tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_if_expression_then() {
+        let condition = ConditionExpression::Eq(Value::Real(1.0), Value::Real(1.0));
+        let if_expr = condition.then(10).then(20);
+
+        // then() replaces the value
+        assert_eq!(if_expr.value, Some(20));
+        assert_eq!(if_expr.default, Some(10));
+    }
+
+    #[test_log::test]
+    fn test_if_expression_or_else_chaining() {
+        let condition = ConditionExpression::Eq(Value::Real(1.0), Value::Real(2.0));
+        let if_expr = condition.or_else(100).or_else(200);
+
+        // or_else() replaces the default
+        assert_eq!(if_expr.default, Some(200));
+    }
+
+    // ============================================
+    // value() helper function test
+    // ============================================
+
+    #[test_log::test]
+    fn test_value_helper_function() {
+        let v = value(42.0f32);
+        assert_eq!(v, Value::Real(42.0));
+
+        let v2 = value(Visibility::Hidden);
+        assert_eq!(v2, Value::Visibility(Visibility::Hidden));
+    }
+
+    // ============================================
+    // Position helpers tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_position_x_self() {
+        let calc = get_position_x_self();
+
+        match calc {
+            CalcValue::PositionX { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected PositionX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_position_y_id() {
+        let calc = get_position_y_id(99);
+
+        match calc {
+            CalcValue::PositionY { target } => {
+                assert_eq!(target, ElementTarget::Id(99));
+            }
+            _ => panic!("Expected PositionY CalcValue"),
+        }
+    }
+
+    // ============================================
+    // Mouse coordinate helpers tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_mouse_x_self() {
+        let calc = get_mouse_x_self();
+
+        match calc {
+            CalcValue::MouseX { target } => {
+                assert_eq!(target, Some(ElementTarget::SelfTarget));
+            }
+            _ => panic!("Expected MouseX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_mouse_y_str_id() {
+        let calc = get_mouse_y_str_id("element-id");
+
+        match calc {
+            CalcValue::MouseY { target } => {
+                assert_eq!(
+                    target,
+                    Some(ElementTarget::StrId(Target::from("element-id")))
+                );
+            }
+            _ => panic!("Expected MouseY CalcValue"),
+        }
+    }
+
+    // ============================================
+    // Dimension helpers tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_height_px_str_id() {
+        let calc = get_height_px_str_id("height-element");
+
+        match calc {
+            CalcValue::HeightPx { target } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("height-element")));
+            }
+            _ => panic!("Expected HeightPx CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_width_px_id() {
+        let calc = get_width_px_id(42);
+
+        match calc {
+            CalcValue::WidthPx { target } => {
+                assert_eq!(target, ElementTarget::Id(42));
+            }
+            _ => panic!("Expected WidthPx CalcValue"),
+        }
+    }
+
+    // ============================================
+    // Arithmetic None result tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_arithmetic_returns_none_when_operand_cannot_convert() {
+        // Arithmetic with a non-numeric Value should return None
+        let arith = Arithmetic::Plus(Value::String("hello".to_string()), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, None);
+
+        let arith2 = Arithmetic::Plus(Value::Real(5.0), Value::Visibility(Visibility::Hidden));
+        let result2 = arith2.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result2, None);
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_divide_returns_none_with_non_numeric() {
+        let arith = Arithmetic::Divide(Value::Key(crate::Key::Enter), Value::Real(2.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, None);
+    }
+
+    // ============================================
+    // Value::as_str tests for non-string types
+    // ============================================
+
+    #[test_log::test]
+    fn test_value_as_str_calc_returns_none() {
+        let value = Value::Calc(CalcValue::EventValue);
+        assert_eq!(value.as_str(), None);
+    }
+
+    #[test_log::test]
+    fn test_value_as_str_layout_direction_returns_none() {
+        let value = Value::LayoutDirection(LayoutDirection::Row);
+        assert_eq!(value.as_str(), None);
+    }
 }

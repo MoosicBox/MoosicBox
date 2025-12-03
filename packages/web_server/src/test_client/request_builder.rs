@@ -238,3 +238,346 @@ impl<T: TestClient + ?Sized> TestRequestBuilder<'_, T> {
         self.authorization(&format!("Basic {encoded}"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simulator::SimulatorWebServer;
+    use crate::test_client::simulator_impl::SimulatorTestClient;
+
+    fn create_test_client() -> SimulatorTestClient {
+        use std::sync::Arc;
+        SimulatorTestClient::new(SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: std::collections::BTreeMap::new(),
+            state: Arc::new(std::sync::RwLock::new(
+                crate::extractors::state::StateContainer::new(),
+            )),
+        })
+    }
+
+    #[test_log::test]
+    fn test_query_appends_to_path_without_existing_query() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .query([("page", "1"), ("limit", "10")]);
+
+        // The path should now have a query string
+        assert!(builder.path.contains('?'));
+        assert!(builder.path.contains("page=1"));
+        assert!(builder.path.contains("limit=10"));
+    }
+
+    #[test_log::test]
+    fn test_query_appends_to_path_with_existing_query() {
+        let client = create_test_client();
+        let builder =
+            TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test?sort=desc".to_string())
+                .query([("page", "1")]);
+
+        // Should append with & instead of ?
+        assert!(builder.path.contains("?sort=desc"));
+        assert!(builder.path.contains("&page=1"));
+        assert!(!builder.path.contains("?page=1"));
+    }
+
+    #[test_log::test]
+    fn test_query_encodes_special_characters() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .query([("search", "hello world"), ("email", "test@example.com")]);
+
+        // Special characters should be URL encoded
+        assert!(builder.path.contains("search=hello%20world"));
+        assert!(builder.path.contains("email=test%40example.com"));
+    }
+
+    #[test_log::test]
+    fn test_query_with_empty_params_does_not_modify_path() {
+        let client = create_test_client();
+        let empty_params: Vec<(&str, &str)> = vec![];
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .query(empty_params);
+
+        // Path should remain unchanged
+        assert_eq!(builder.path, "/api/test");
+    }
+
+    #[test_log::test]
+    fn test_basic_auth_with_password() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .basic_auth("username", Some("password"));
+
+        // Should set authorization header with Base64 encoded credentials
+        let auth_header = builder.headers.get("authorization").unwrap();
+        assert!(auth_header.starts_with("Basic "));
+
+        // Decode and verify the credentials
+        let encoded_part = auth_header.strip_prefix("Basic ").unwrap();
+        let decoded = String::from_utf8(
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded_part)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(decoded, "username:password");
+    }
+
+    #[test_log::test]
+    fn test_basic_auth_without_password() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .basic_auth("username", None);
+
+        // Should set authorization header with just username
+        let auth_header = builder.headers.get("authorization").unwrap();
+        let encoded_part = auth_header.strip_prefix("Basic ").unwrap();
+        let decoded = String::from_utf8(
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded_part)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(decoded, "username");
+    }
+
+    #[test_log::test]
+    fn test_bearer_token() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .bearer_token("my_jwt_token_12345");
+
+        let auth_header = builder.headers.get("authorization").unwrap();
+        assert_eq!(auth_header, "Bearer my_jwt_token_12345");
+    }
+
+    #[test_log::test]
+    fn test_content_type() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .content_type("application/json");
+
+        assert_eq!(
+            builder.headers.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_authorization() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .authorization("Custom auth scheme");
+
+        assert_eq!(
+            builder.headers.get("authorization"),
+            Some(&"Custom auth scheme".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_user_agent() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .user_agent("TestClient/1.0");
+
+        assert_eq!(
+            builder.headers.get("user-agent"),
+            Some(&"TestClient/1.0".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_multiple_headers() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .headers([
+                ("X-Custom-1", "value1"),
+                ("X-Custom-2", "value2"),
+                ("Accept-Language", "en-US"),
+            ]);
+
+        assert_eq!(
+            builder.headers.get("X-Custom-1"),
+            Some(&"value1".to_string())
+        );
+        assert_eq!(
+            builder.headers.get("X-Custom-2"),
+            Some(&"value2".to_string())
+        );
+        assert_eq!(
+            builder.headers.get("Accept-Language"),
+            Some(&"en-US".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_single_header() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .header("X-Request-Id", "req-12345");
+
+        assert_eq!(
+            builder.headers.get("X-Request-Id"),
+            Some(&"req-12345".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_body_bytes() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .body_bytes(vec![1, 2, 3, 4, 5]);
+
+        assert!(builder.body.is_some());
+        match builder.body.unwrap() {
+            RequestBody::Bytes(bytes) => {
+                assert_eq!(bytes, vec![1, 2, 3, 4, 5]);
+            }
+            _ => panic!("Expected Bytes body"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_text_body() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .text("Hello, World!".to_string());
+
+        assert!(builder.body.is_some());
+        match builder.body.unwrap() {
+            RequestBody::Text(text) => {
+                assert_eq!(text, "Hello, World!");
+            }
+            _ => panic!("Expected Text body"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_form_body() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .form([("username", "john"), ("password", "secret")]);
+
+        assert!(builder.body.is_some());
+        match builder.body.unwrap() {
+            RequestBody::Form(form) => {
+                assert_eq!(form.get("username"), Some(&"john".to_string()));
+                assert_eq!(form.get("password"), Some(&"secret".to_string()));
+            }
+            _ => panic!("Expected Form body"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_form_post_convenience() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .form_post([("field", "value")]);
+
+        // Should set content type
+        assert_eq!(
+            builder.headers.get("content-type"),
+            Some(&"application/x-www-form-urlencoded".to_string())
+        );
+
+        // And have form body
+        assert!(builder.body.is_some());
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "serde")]
+    fn test_json_body() {
+        let client = create_test_client();
+        let data = serde_json::json!({"name": "test", "value": 123});
+        let builder =
+            TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string()).json(&data);
+
+        assert!(builder.body.is_some());
+        match builder.body.unwrap() {
+            RequestBody::Json(json_value) => {
+                assert_eq!(json_value["name"], "test");
+                assert_eq!(json_value["value"], 123);
+            }
+            _ => panic!("Expected Json body"),
+        }
+    }
+
+    #[test_log::test]
+    #[cfg(feature = "serde")]
+    fn test_json_post_convenience() {
+        let client = create_test_client();
+        let data = serde_json::json!({"key": "value"});
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string())
+            .json_post(&data);
+
+        // Should set content type
+        assert_eq!(
+            builder.headers.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+
+        // And have JSON body
+        assert!(builder.body.is_some());
+    }
+
+    #[test_log::test]
+    fn test_builder_chaining() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .header("X-Custom", "value")
+            .bearer_token("token123")
+            .user_agent("TestAgent/1.0")
+            .query([("page", "1")]);
+
+        assert_eq!(builder.headers.get("X-Custom"), Some(&"value".to_string()));
+        assert_eq!(
+            builder.headers.get("authorization"),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(
+            builder.headers.get("user-agent"),
+            Some(&"TestAgent/1.0".to_string())
+        );
+        assert!(builder.path.contains("page=1"));
+    }
+
+    #[test_log::test]
+    fn test_method_preserved() {
+        let client = create_test_client();
+
+        let get_builder =
+            TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string());
+        assert_eq!(get_builder.method, HttpMethod::Get);
+
+        let post_builder =
+            TestRequestBuilder::new(&client, HttpMethod::Post, "/api/test".to_string());
+        assert_eq!(post_builder.method, HttpMethod::Post);
+
+        let put_builder =
+            TestRequestBuilder::new(&client, HttpMethod::Put, "/api/test".to_string());
+        assert_eq!(put_builder.method, HttpMethod::Put);
+
+        let delete_builder =
+            TestRequestBuilder::new(&client, HttpMethod::Delete, "/api/test".to_string());
+        assert_eq!(delete_builder.method, HttpMethod::Delete);
+    }
+
+    #[test_log::test]
+    fn test_query_multiple_chained_calls() {
+        let client = create_test_client();
+        let builder = TestRequestBuilder::new(&client, HttpMethod::Get, "/api/test".to_string())
+            .query([("page", "1")])
+            .query([("limit", "10")])
+            .query([("sort", "name")]);
+
+        // All query params should be present, each appended with &
+        assert!(builder.path.contains("page=1"));
+        assert!(builder.path.contains("limit=10"));
+        assert!(builder.path.contains("sort=name"));
+
+        // Should only have one ?
+        assert_eq!(builder.path.matches('?').count(), 1);
+    }
+}

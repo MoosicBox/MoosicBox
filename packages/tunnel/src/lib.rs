@@ -744,6 +744,19 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "base64")]
+    #[test_log::test]
+    fn test_tunnel_response_from_string() {
+        // Test TryFrom<String> which delegates to TryFrom<&str>
+        let invalid = String::from("invalid_without_prefix");
+        let result = TunnelResponse::try_from(invalid);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Base64DecodeError::InvalidContent(_)
+        ));
+    }
+
     #[test_log::test]
     fn test_tunnel_request_http_serialization() {
         let request = TunnelRequest::Http(TunnelHttpRequest {

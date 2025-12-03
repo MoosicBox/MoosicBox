@@ -1628,6 +1628,112 @@ mod tests {
     use moosicbox_music_models::api::ApiTrack;
 
     #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_all_fields_in_some() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: Some("conn-123".to_string()),
+            connection_name: Some("My Server".to_string()),
+            api_url: Some("http://api.example.com".to_string()),
+            client_id: Some("client-456".to_string()),
+            signature_token: Some("sig-789".to_string()),
+            api_token: Some("token-abc".to_string()),
+            profile: Some("default".to_string()),
+            playback_target: None,
+            current_session_id: Some(42),
+        };
+
+        let update_state: UpdateAppState = tauri_state.into();
+
+        // All fields should be wrapped in Some(), preserving the inner value
+        assert_eq!(
+            update_state.connection_id,
+            Some(Some("conn-123".to_string()))
+        );
+        assert_eq!(
+            update_state.connection_name,
+            Some(Some("My Server".to_string()))
+        );
+        assert_eq!(
+            update_state.api_url,
+            Some(Some("http://api.example.com".to_string()))
+        );
+        assert_eq!(update_state.client_id, Some(Some("client-456".to_string())));
+        assert_eq!(
+            update_state.signature_token,
+            Some(Some("sig-789".to_string()))
+        );
+        assert_eq!(update_state.api_token, Some(Some("token-abc".to_string())));
+        assert_eq!(update_state.profile, Some(Some("default".to_string())));
+        assert_eq!(update_state.playback_target, Some(None));
+        assert_eq!(update_state.current_session_id, Some(Some(42)));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_default_converts_to_explicit_none_values() {
+        let tauri_state = TauriUpdateAppState::default();
+
+        let update_state: UpdateAppState = tauri_state.into();
+
+        // Even default/None values should be wrapped in Some() to indicate
+        // "explicitly set to None" rather than "don't modify"
+        assert_eq!(update_state.connection_id, Some(None));
+        assert_eq!(update_state.connection_name, Some(None));
+        assert_eq!(update_state.api_url, Some(None));
+        assert_eq!(update_state.client_id, Some(None));
+        assert_eq!(update_state.signature_token, Some(None));
+        assert_eq!(update_state.api_token, Some(None));
+        assert_eq!(update_state.profile, Some(None));
+        assert_eq!(update_state.playback_target, Some(None));
+        assert_eq!(update_state.current_session_id, Some(None));
+    }
+
+    #[test_log::test]
+    fn test_track_id_library_to_id_conversion() {
+        let track_id = TrackId::Library(12345);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(12345));
+    }
+
+    #[cfg(feature = "tidal")]
+    #[test_log::test]
+    fn test_track_id_tidal_to_id_conversion() {
+        let track_id = TrackId::Tidal(67890);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(67890));
+    }
+
+    #[cfg(feature = "qobuz")]
+    #[test_log::test]
+    fn test_track_id_qobuz_to_id_conversion() {
+        let track_id = TrackId::Qobuz(11111);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(11111));
+    }
+
+    #[test_log::test]
+    fn test_tauri_player_error_from_app_state_error_preserves_message() {
+        let app_state_error = AppStateError::Unknown("Test error message".to_string());
+        let tauri_error: TauriPlayerError = app_state_error.into();
+
+        match tauri_error {
+            TauriPlayerError::Unknown(msg) => {
+                assert!(msg.contains("Test error message"));
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_tauri_player_error_from_action_missing_param() {
+        let app_state_error = AppStateError::ActionMissingParam;
+        let tauri_error: TauriPlayerError = app_state_error.into();
+
+        match tauri_error {
+            TauriPlayerError::Unknown(msg) => {
+                assert!(msg.contains("missing param") || msg.contains("Action"));
+            }
+        }
+    }
+
+    #[test_log::test]
     fn test_album_cover_url_generates_correct_format() {
         let result = album_cover_url("123", &ApiSource::default(), "http://localhost:8080", "");
         assert_eq!(

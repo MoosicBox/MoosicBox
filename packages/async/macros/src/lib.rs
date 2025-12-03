@@ -1995,4 +1995,429 @@ mod tests {
         );
         assert!(output.contains("unsync"), "Should contain unsync: {output}");
     }
+
+    // ============================================================================
+    // MainArgs parsing tests
+    // ============================================================================
+
+    /// Tests parsing of empty `MainArgs`.
+    #[::core::prelude::v1::test]
+    fn main_args_empty() {
+        let input = quote! {};
+        let result = syn::parse2::<MainArgs>(input);
+
+        assert!(result.is_ok(), "Empty MainArgs should parse successfully");
+    }
+
+    /// Tests that `MainArgs` consumes arbitrary tokens for forward compatibility.
+    #[::core::prelude::v1::test]
+    fn main_args_consumes_tokens() {
+        // MainArgs should consume any tokens for forward compatibility
+        let input = quote! { some_future_option };
+        let result = syn::parse2::<MainArgs>(input);
+
+        assert!(
+            result.is_ok(),
+            "MainArgs should consume arbitrary tokens for forward compatibility"
+        );
+    }
+
+    /// Tests that `MainArgs` handles multiple tokens.
+    #[::core::prelude::v1::test]
+    fn main_args_multiple_tokens() {
+        let input = quote! { option1, option2, option3 };
+        let result = syn::parse2::<MainArgs>(input);
+
+        assert!(
+            result.is_ok(),
+            "MainArgs should handle multiple tokens for forward compatibility"
+        );
+    }
+
+    // ============================================================================
+    // YieldInjector control flow tests
+    // ============================================================================
+
+    /// Tests that `YieldInjector` handles await in if expression condition.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_if_condition() {
+        let input: Expr = syn::parse_quote! {
+            if check_condition().await {
+                do_something();
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in if condition should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in if/else branches.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_if_else_branches() {
+        let input: Expr = syn::parse_quote! {
+            if condition {
+                branch_a().await
+            } else {
+                branch_b().await
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "Both if/else branches should have yields: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in match arms.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_match_arms() {
+        let input: Expr = syn::parse_quote! {
+            match value {
+                Some(x) => process(x).await,
+                None => default_value().await,
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "Both match arms should have yields: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in match scrutinee.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_match_scrutinee() {
+        let input: Expr = syn::parse_quote! {
+            match get_value().await {
+                Ok(x) => x,
+                Err(e) => panic!("{}", e),
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in match scrutinee should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in loop body.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_loop() {
+        let input: Expr = syn::parse_quote! {
+            loop {
+                let data = fetch_next().await;
+                if data.is_none() {
+                    break;
+                }
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in loop should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in while loop condition.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_while_condition() {
+        let input: Expr = syn::parse_quote! {
+            while has_more().await {
+                process();
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in while condition should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in for loop iterator.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_for_iterator() {
+        let input: Expr = syn::parse_quote! {
+            for item in get_items().await {
+                process(item);
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in for iterator should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in closure body.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_async_closure() {
+        let input: Expr = syn::parse_quote! {
+            || async {
+                inner_operation().await
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Await in async closure should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in tuple expression.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_tuple() {
+        let input: Expr = syn::parse_quote! {
+            (first().await, second().await, third().await)
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 3,
+            "All awaits in tuple should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in struct field initialization.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_struct_init() {
+        let input: Expr = syn::parse_quote! {
+            MyStruct {
+                field_a: get_a().await,
+                field_b: get_b().await,
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "All awaits in struct init should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles await in binary operation.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_binary_op() {
+        let input: Expr = syn::parse_quote! {
+            left().await + right().await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "Both operands' awaits should be transformed: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles deeply nested await expressions.
+    #[::core::prelude::v1::test]
+    fn yield_injector_deeply_nested_await() {
+        let input: Expr = syn::parse_quote! {
+            outer(middle(inner().await).await).await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 3,
+            "All nested awaits should be transformed: {output}"
+        );
+    }
+
+    // ============================================================================
+    // TestArgs error message validation tests
+    // ============================================================================
+
+    /// Tests that unknown `TestArgs` error message lists valid options.
+    #[::core::prelude::v1::test]
+    fn test_args_error_message_lists_valid_options() {
+        let input = quote! { invalid_option };
+        let result = syn::parse2::<TestArgs>(input);
+
+        let err = result.err().expect("Expected error for invalid option");
+        let err_msg = err.to_string();
+
+        assert!(
+            err_msg.contains("real_time"),
+            "Error should mention 'real_time' as valid option: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("real_fs"),
+            "Error should mention 'real_fs' as valid option: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("no_simulator"),
+            "Error should mention 'no_simulator' as valid option: {err_msg}"
+        );
+    }
+
+    // ============================================================================
+    // TestWithPathInput error handling tests
+    // ============================================================================
+
+    /// Tests that `TestWithPathInput` error includes the invalid flag name.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_error_includes_flag_name() {
+        let input = quote! {
+            @path = crate;
+            some_invalid_flag;
+            async fn my_test() {}
+        };
+        let result = syn::parse2::<TestWithPathInput>(input);
+
+        let err = result.err().expect("Expected error for invalid flag");
+        let err_msg = err.to_string();
+
+        assert!(
+            err_msg.contains("real_time")
+                || err_msg.contains("real_fs")
+                || err_msg.contains("no_simulator"),
+            "Error should mention valid flag options: {err_msg}"
+        );
+    }
+
+    // ============================================================================
+    // inject_item with trait impl blocks
+    // ============================================================================
+
+    /// Tests that `inject_item` handles trait impl blocks with async methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_trait_impl_async_method() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyTrait for MyStruct {
+                async fn trait_method(&self) {
+                    self.async_op().await;
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Async method in trait impl should have yield injected: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` handles impl blocks with associated types (no modification expected).
+    #[::core::prelude::v1::test]
+    fn inject_item_impl_block_with_associated_type() {
+        let mut item: Item = syn::parse_quote! {
+            impl Iterator for MyStruct {
+                type Item = i32;
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    Some(42)
+                }
+            }
+        };
+
+        let original = quote!(#item).to_string();
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert_eq!(
+            output, original,
+            "Impl with only sync methods and associated types should not be modified"
+        );
+    }
+
+    /// Tests that `inject_item` handles impl blocks mixing async and sync with const items.
+    #[::core::prelude::v1::test]
+    fn inject_item_impl_block_mixed_items() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyStruct {
+                const VALUE: i32 = 42;
+
+                async fn async_method(&self) {
+                    operation().await;
+                }
+
+                fn sync_method(&self) -> i32 {
+                    Self::VALUE
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        // Only the async method should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 1,
+            "Only the async method should have yield: {output}"
+        );
+        // Const should be preserved
+        assert!(
+            output.contains("VALUE"),
+            "Const item should be preserved: {output}"
+        );
+    }
 }

@@ -395,6 +395,124 @@ mod tests {
         }
     }
 
+    mod album_version_quality_format_tests {
+        use super::*;
+        use moosicbox_music_models::ApiSource;
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_format_sample_rate_and_bit_depth() {
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 44.1 kHz 16-bit");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_high_resolution_sample_rate() {
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(96000),
+                bit_depth: Some(24),
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 96 kHz 24-bit");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_non_standard_sample_rate() {
+            // Tests that sample rates like 48000 normalize to "48" not "48.00"
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(48000),
+                bit_depth: Some(24),
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 48 kHz 24-bit");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_format_only() {
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: None,
+                bit_depth: None,
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_format_and_sample_rate_only() {
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(192_000),
+                bit_depth: None,
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 192 kHz");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_with_format_and_bit_depth_only() {
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: None,
+                bit_depth: Some(32),
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "FLAC 32-bit");
+        }
+
+        #[test_log::test]
+        #[cfg(feature = "flac")]
+        fn test_local_source_sample_rate_rounds_decimal() {
+            // 44100 Hz = 44.1 kHz (should keep one decimal place since .1 is significant)
+            let quality = AlbumVersionQuality {
+                format: Some(AudioFormat::Flac),
+                sample_rate: Some(44100),
+                bit_depth: None,
+                source: TrackApiSource::Local,
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert!(result.contains("44.1 kHz"));
+        }
+
+        #[test_log::test]
+        fn test_api_source_formats_as_source_string() {
+            let quality = AlbumVersionQuality {
+                format: None,
+                sample_rate: None,
+                bit_depth: None,
+                source: TrackApiSource::Api(ApiSource::library()),
+                channels: None,
+            };
+            let result = quality.into_formatted();
+            assert_eq!(result, "API:Library");
+        }
+    }
+
     mod display_album_version_qualities_tests {
         use super::*;
         use moosicbox_music_models::ApiSource;

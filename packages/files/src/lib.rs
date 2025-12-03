@@ -620,4 +620,123 @@ mod tests {
         assert_eq!(sanitize_filename("!!!???"), "______");
         assert_eq!(sanitize_filename("a!!!b???c"), "a___b___c");
     }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_creates_new_file() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("files_test_save_bytes_new");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        // Remove the file if it exists
+        let _ = std::fs::remove_file(&file_path);
+
+        let bytes = b"hello world";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert_eq!(contents, bytes);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_overwrites_existing_when_start_is_none() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("files_test_save_bytes_overwrite");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"existing content that is longer").unwrap();
+
+        // Overwrite with smaller content (truncation should occur)
+        let bytes = b"new content";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert_eq!(contents, bytes);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_appends_at_start_offset() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("files_test_save_bytes_offset");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"hello world").unwrap();
+
+        // Write new bytes starting at offset 6 (should overwrite "world")
+        let new_bytes = b"rust!";
+        save_bytes_to_file(new_bytes, &file_path, Some(6)).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert_eq!(contents, b"hello rust!");
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_truncates_when_start_is_zero() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("files_test_save_bytes_truncate_zero");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"this is a longer string").unwrap();
+
+        // Write with start=0 (should truncate)
+        let bytes = b"short";
+        save_bytes_to_file(bytes, &file_path, Some(0)).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert_eq!(contents, bytes);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_creates_parent_directories() {
+        let base_test_dir = moosicbox_config::get_tests_dir_path();
+        let test_dir = base_test_dir
+            .join("files_test_parent_dirs")
+            .join("nested")
+            .join("path");
+        let file_path = test_dir.join("test_file.bin");
+
+        let bytes = b"test content";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert_eq!(contents, bytes);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&base_test_dir);
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_empty_bytes() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("files_test_save_bytes_empty");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        // Remove the file if it exists
+        let _ = std::fs::remove_file(&file_path);
+
+        let bytes: &[u8] = b"";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let contents = std::fs::read(&file_path).unwrap();
+        assert!(contents.is_empty());
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
 }

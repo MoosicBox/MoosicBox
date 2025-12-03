@@ -885,6 +885,22 @@ mod tests {
             assert!(body_str.contains("width=device-width"));
         }
 
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_route_returning_none_returns_204() {
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new()
+                .with_route_result::<Content, Option<Content>, _, _>("/no-content", |_req| async {
+                    Ok::<_, Box<dyn std::error::Error>>(None)
+                });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/no-content");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 204);
+            assert!(response.body().is_empty());
+        }
+
         #[cfg(feature = "actions")]
         #[test_log::test(switchy_async::test)]
         async fn test_process_action_route_with_tx_delegates_to_handler() {

@@ -227,5 +227,33 @@ mod tests {
             // but we can verify initial interactions are preserved
             assert_eq!(plan.plan.len(), initial_len);
         }
+
+        #[test_log::test]
+        fn step_continues_from_current_position_after_adding_interactions() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+
+            // Step through first interaction
+            let first = plan.step();
+            assert!(first.is_some());
+            assert!(plan.step().is_none()); // Plan exhausted
+
+            // Add more interactions
+            plan.add_interaction(Interaction::Bounce("new_host".to_string()));
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(200)));
+
+            // Step should continue from where it left off (step counter preserved)
+            let second = plan.step();
+            assert!(second.is_some());
+            assert!(matches!(second.unwrap(), Interaction::Bounce(h) if h == "new_host"));
+
+            let third = plan.step();
+            assert!(third.is_some());
+            assert!(
+                matches!(third.unwrap(), Interaction::Sleep(d) if *d == Duration::from_millis(200))
+            );
+
+            assert!(plan.step().is_none());
+        }
     }
 }

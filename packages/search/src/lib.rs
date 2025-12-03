@@ -1770,4 +1770,269 @@ mod tests {
 
         assert!(results.is_empty());
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_fuzzy_matching_finds_similar_terms() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with a typo - "eldr" instead of "elder"
+        // The fuzzy matching with edit distance 1 should still find results
+        let results = crate::search_global_search_index("eldr", 0, 10).unwrap();
+
+        // Fuzzy matching should find "Elder" artist/album/track results
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_prefix_matching() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with partial term - should find via prefix matching
+        let results = crate::search_global_search_index("eld", 0, 10).unwrap();
+
+        // Prefix matching should find "Elder" results
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_uses_default_limit() {
+        before_each();
+
+        // Create test data with all required fields for global_search parsing
+        let artist_with_type: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("artists".into())),
+            ("artist_title", DataValue::String("Test Artist".into())),
+            ("artist_id", DataValue::String("1".into())),
+            ("album_title", DataValue::String(String::new())),
+            ("track_title", DataValue::String(String::new())),
+            ("cover", DataValue::String(String::new())),
+            ("blur", DataValue::Bool(false)),
+        ];
+
+        crate::populate_global_search_index_sync(&[artist_with_type], true).unwrap();
+
+        // Call global_search with None for limit - should use default of 10
+        let response = crate::global_search("test", None, None).unwrap();
+
+        // Should return results (default limit is 10)
+        assert!(!response.results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_with_explicit_offset_and_limit() {
+        before_each();
+
+        // Create test data with all required fields for global_search parsing
+        let data: Vec<Vec<(&str, DataValue)>> = (1..=10)
+            .map(|i| {
+                vec![
+                    ("document_type", DataValue::String("tracks".into())),
+                    ("artist_title", DataValue::String("Artist".into())),
+                    ("artist_id", DataValue::String("1".into())),
+                    ("album_title", DataValue::String("Album".into())),
+                    ("album_id", DataValue::String("1".into())),
+                    ("track_title", DataValue::String(format!("Track {i}"))),
+                    ("track_id", DataValue::String(format!("{i}"))),
+                    ("cover", DataValue::String(String::new())),
+                    ("blur", DataValue::Bool(false)),
+                    ("date_released", DataValue::String(String::new())),
+                    ("date_added", DataValue::String(String::new())),
+                    ("version_formats", DataValue::String(String::new())),
+                    ("version_sources", DataValue::String("Local".into())),
+                    ("version_bit_depths", DataValue::Number(16)),
+                    ("version_sample_rates", DataValue::Number(44100)),
+                    ("version_channels", DataValue::Number(2)),
+                ]
+            })
+            .collect();
+
+        crate::populate_global_search_index_sync(&data, true).unwrap();
+
+        // Call global_search with explicit offset and limit
+        let response = crate::global_search("track", Some(0), Some(5)).unwrap();
+
+        // Should respect the limit
+        assert!(response.results.len() <= 5);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_delete_from_global_search_index_nonexistent_term() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+        let results_before = crate::search_global_search_index("elder", 0, 10).unwrap();
+
+        // Delete a term that doesn't exist - should succeed without error
+        let result = crate::delete_from_global_search_index(&[(
+            "track_id_string",
+            DataValue::String("nonexistent_id_12345".to_string()),
+        )]);
+
+        // Should succeed even though no matching document exists
+        assert!(result.is_ok());
+
+        // Verify no documents were affected
+        let results_after = crate::search_global_search_index("elder", 0, 10).unwrap();
+        assert_eq!(results_before.len(), results_after.len());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_artist_by_name() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search specifically for the artist name
+        let results = crate::search_global_search_index("elder", 0, 10).unwrap();
+
+        // Should find results - all our test data has "Elder" as artist
+        assert!(!results.is_empty());
+
+        // Verify at least one result has the correct artist_title
+        let has_elder_artist = results.iter().any(|doc| {
+            doc.0
+                .get("artist_title")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, tantivy::schema::OwnedValue::Str(s) if s == "Elder"))
+        });
+        assert!(has_elder_artist);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_album_by_title() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search for album title
+        let results = crate::search_global_search_index("omens", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify at least one result has the correct album_title
+        let has_omens_album = results.iter().any(|doc| {
+            doc.0
+                .get("album_title")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, tantivy::schema::OwnedValue::Str(s) if s == "Omens"))
+        });
+        assert!(has_omens_album);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_track_by_title() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search for a specific track title
+        let results = crate::search_global_search_index("halcyon", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify at least one result has the correct track_title
+        let has_halcyon_track = results.iter().any(|doc| {
+            doc.0
+                .get("track_title")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, tantivy::schema::OwnedValue::Str(s) if s == "Halcyon"))
+        });
+        assert!(has_halcyon_track);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_case_insensitive() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with different cases
+        let results_lower = crate::search_global_search_index("elder", 0, 10).unwrap();
+        let results_upper = crate::search_global_search_index("ELDER", 0, 10).unwrap();
+        let results_mixed = crate::search_global_search_index("ElDeR", 0, 10).unwrap();
+
+        // All should find results (case-insensitive)
+        assert!(!results_lower.is_empty());
+        assert!(!results_upper.is_empty());
+        assert!(!results_mixed.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_populate_with_bool_field() {
+        before_each();
+
+        // Create test data with blur=true
+        let track_with_blur: Vec<(&str, DataValue)> = vec![
+            ("artist_title", DataValue::String("Test Artist".into())),
+            ("artist_id", DataValue::Number(100)),
+            ("album_title", DataValue::String("Test Album".into())),
+            ("album_id", DataValue::Number(200)),
+            ("track_title", DataValue::String("Blurred Track".into())),
+            ("track_id", DataValue::Number(300)),
+            ("blur", DataValue::Bool(true)),
+        ];
+
+        crate::populate_global_search_index_sync(&[track_with_blur], true).unwrap();
+
+        let results = crate::search_global_search_index("blurred", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify the blur field was stored correctly
+        let has_blur = results.iter().any(|doc| {
+            doc.0
+                .get("blur")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, tantivy::schema::OwnedValue::Bool(true)))
+        });
+        assert!(has_blur);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_populate_with_number_fields() {
+        before_each();
+
+        // Create test data with numeric fields
+        let track_with_numbers: Vec<(&str, DataValue)> = vec![
+            ("artist_title", DataValue::String("Numeric Artist".into())),
+            ("artist_id", DataValue::Number(111)),
+            ("album_title", DataValue::String("Numeric Album".into())),
+            ("album_id", DataValue::Number(222)),
+            ("track_title", DataValue::String("Numeric Track".into())),
+            ("track_id", DataValue::Number(333)),
+            ("version_bit_depths", DataValue::Number(24)),
+            ("version_sample_rates", DataValue::Number(96000)),
+            ("version_channels", DataValue::Number(2)),
+        ];
+
+        crate::populate_global_search_index_sync(&[track_with_numbers], true).unwrap();
+
+        let results = crate::search_global_search_index("numeric", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify numeric fields were stored correctly
+        let result = &results[0];
+        let bit_depth = result
+            .0
+            .get("version_bit_depths")
+            .and_then(|v| v.first())
+            .map(|v| matches!(v, tantivy::schema::OwnedValue::U64(24)));
+        assert!(bit_depth.unwrap_or(false));
+    }
 }

@@ -116,3 +116,73 @@ impl TryFrom<String> for AssetPathTarget {
         value.as_str().try_into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn get_test_dir() -> PathBuf {
+        std::env::temp_dir().join("hyperchad_renderer_assets_test")
+    }
+
+    fn setup_test_dir() -> PathBuf {
+        let test_dir = get_test_dir();
+        let _ = fs::remove_dir_all(&test_dir);
+        fs::create_dir_all(&test_dir).expect("Failed to create test directory");
+        test_dir
+    }
+
+    fn cleanup_test_dir() {
+        let test_dir = get_test_dir();
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test_log::test]
+    fn test_asset_path_target_from_directory_path() {
+        let test_dir = setup_test_dir();
+
+        let result = AssetPathTarget::try_from(test_dir.clone());
+
+        assert!(result.is_ok());
+        match result.unwrap() {
+            AssetPathTarget::Directory(path) => {
+                assert_eq!(path, test_dir);
+            }
+            _ => panic!("Expected Directory variant"),
+        }
+
+        cleanup_test_dir();
+    }
+
+    #[test_log::test]
+    fn test_asset_path_target_from_file_path() {
+        let test_dir = setup_test_dir();
+        let test_file = test_dir.join("test_file.txt");
+        fs::write(&test_file, "test content").expect("Failed to create test file");
+
+        let result = AssetPathTarget::try_from(test_file.clone());
+
+        assert!(result.is_ok());
+        match result.unwrap() {
+            AssetPathTarget::File(path) => {
+                assert_eq!(path, test_file);
+            }
+            _ => panic!("Expected File variant"),
+        }
+
+        cleanup_test_dir();
+    }
+
+    #[test_log::test]
+    fn test_asset_path_target_from_nonexistent_path() {
+        let nonexistent = PathBuf::from("/nonexistent/path/that/does/not/exist/abc123xyz");
+
+        let result = AssetPathTarget::try_from(nonexistent);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("doesn't exist"));
+    }
+}
