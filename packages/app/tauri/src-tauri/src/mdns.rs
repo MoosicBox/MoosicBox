@@ -91,3 +91,57 @@ pub fn spawn_mdns_scanner(
 
     (handle, service.start_on(runtime_handle))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use super::*;
+
+    #[test_log::test]
+    fn test_moosicbox_from_mdns_scanner_prepends_http_to_host() {
+        let mdns_moosicbox = switchy::mdns::scanner::MoosicBox {
+            id: "server-1".to_string(),
+            name: "My MoosicBox".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080),
+            dns: "moosicbox.local".to_string(),
+        };
+
+        let result: MoosicBox = mdns_moosicbox.into();
+
+        assert_eq!(result.id, "server-1");
+        assert_eq!(result.name, "My MoosicBox");
+        assert_eq!(result.host, "http://192.168.1.100:8080");
+        assert_eq!(result.dns, "moosicbox.local");
+    }
+
+    #[test_log::test]
+    fn test_moosicbox_from_mdns_scanner_with_different_port() {
+        let mdns_moosicbox = switchy::mdns::scanner::MoosicBox {
+            id: "abc-123".to_string(),
+            name: "Production Server".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 5)), 443),
+            dns: "music.local".to_string(),
+        };
+
+        let result: MoosicBox = mdns_moosicbox.into();
+
+        assert_eq!(result.host, "http://10.0.0.5:443");
+    }
+
+    #[test_log::test]
+    fn test_moosicbox_preserves_all_fields_from_mdns_scanner() {
+        let mdns_moosicbox = switchy::mdns::scanner::MoosicBox {
+            id: "unique-id-456".to_string(),
+            name: "Test Server Name".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 9000),
+            dns: "test.mdns.local".to_string(),
+        };
+
+        let result: MoosicBox = mdns_moosicbox.into();
+
+        assert_eq!(result.id, "unique-id-456");
+        assert_eq!(result.name, "Test Server Name");
+        assert_eq!(result.dns, "test.mdns.local");
+    }
+}
