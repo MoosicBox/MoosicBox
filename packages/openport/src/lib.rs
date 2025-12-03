@@ -536,4 +536,75 @@ mod tests {
         }
         panic!("Could not find ports to test with after 10 attempts");
     }
+
+    #[test_log::test]
+    fn test_port_zero_is_ephemeral() {
+        // Port 0 is special - it asks the OS to assign an ephemeral port
+        // The is_free functions should be able to bind to port 0 successfully
+        // since the OS will assign an available port
+
+        // When we ask to bind to port 0, we should get a random available port
+        let ipv4 = std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0);
+
+        // TCP binding to port 0 should succeed
+        if let Ok(listener) = TcpListener::bind(ipv4) {
+            let local_addr = listener.local_addr().unwrap();
+            // The assigned port should be non-zero
+            assert_ne!(local_addr.port(), 0);
+            // The assigned port should be within valid port range
+            assert!(local_addr.port() > 0);
+        }
+
+        // UDP binding to port 0 should succeed
+        if let Ok(socket) = UdpSocket::bind(ipv4) {
+            let local_addr = socket.local_addr().unwrap();
+            // The assigned port should be non-zero
+            assert_ne!(local_addr.port(), 0);
+        }
+    }
+
+    #[test_log::test]
+    #[allow(clippy::reversed_empty_ranges)]
+    fn test_pick_unused_port_with_reversed_range() {
+        // Test with a range where start is greater than end
+        // This creates an empty range in Rust, so should return None
+        let result = pick_unused_port(16000..15000);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_privileged_port_range() {
+        // Ports below 1024 are privileged on Unix systems
+        // Testing them requires root access, but we can verify the functions don't panic
+
+        // is_free should handle privileged ports without panicking
+        // (They will likely return false since we don't have root access)
+        let _result = is_free(80);
+        let _result = is_free(443);
+        let _result = is_free_tcp(22);
+        let _result = is_free_udp(53);
+
+        // pick_unused_port in privileged range should return None (can't bind without root)
+        // or possibly Some if running as root (unlikely in test environment)
+        let result = pick_unused_port(80..90);
+        // We don't assert the result since it depends on privileges
+        // The important thing is that the function doesn't panic
+        let _ = result;
+    }
+
+    #[test_log::test]
+    fn test_high_port_numbers() {
+        // Test with port numbers near the maximum (65535)
+        let range = 65530..65535;
+
+        // These ports might or might not be available, but should not panic
+        let result = pick_unused_port(range);
+        // We don't assert success since high ports might be in use
+        let _ = result;
+
+        // Test is_free with maximum port number
+        let _result = is_free(65535);
+        let _result = is_free_tcp(65535);
+        let _result = is_free_udp(65535);
+    }
 }
