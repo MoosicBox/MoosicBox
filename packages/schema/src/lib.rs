@@ -890,6 +890,62 @@ mod tests {
             "Migrations should be sorted by ID (timestamp order)"
         );
     }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlite_library_migrations_have_reversible_down_sql() {
+        use sha2::{Digest, Sha256};
+
+        let migrations = get_sqlite_library_migrations().await.unwrap();
+
+        // Empty down.sql produces a hash of empty bytes
+        let mut hasher = Sha256::new();
+        hasher.update(b"");
+        let empty_hash = bytes::Bytes::from(hasher.finalize().to_vec());
+
+        // Count migrations that have non-empty down.sql (reversible)
+        let mut reversible_count = 0;
+        for migration in &migrations {
+            let down_checksum = migration.down_checksum().await.unwrap();
+            if down_checksum != empty_hash {
+                reversible_count += 1;
+            }
+        }
+
+        // Verify that at least some migrations have down.sql loaded (are reversible)
+        assert!(
+            reversible_count > 0,
+            "Expected at least some migrations to have down.sql (reversible), found none"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlite_config_migrations_have_reversible_down_sql() {
+        use sha2::{Digest, Sha256};
+
+        let migrations = get_sqlite_config_migrations().await.unwrap();
+
+        // Empty down.sql produces a hash of empty bytes
+        let mut hasher = Sha256::new();
+        hasher.update(b"");
+        let empty_hash = bytes::Bytes::from(hasher.finalize().to_vec());
+
+        // Count migrations that have non-empty down.sql (reversible)
+        let mut reversible_count = 0;
+        for migration in &migrations {
+            let down_checksum = migration.down_checksum().await.unwrap();
+            if down_checksum != empty_hash {
+                reversible_count += 1;
+            }
+        }
+
+        // Verify that at least some migrations have down.sql loaded (are reversible)
+        assert!(
+            reversible_count > 0,
+            "Expected at least some migrations to have down.sql (reversible), found none"
+        );
+    }
 }
 
 #[cfg(feature = "sqlite")]

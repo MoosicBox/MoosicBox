@@ -9274,6 +9274,7 @@ dependencies = [
 name = "moosicbox_schema"
 version = "0.1.4"
 dependencies = [
+ "bytes",
  "include_dir",
  "log 0.4.28",
  "moosicbox_assert",
@@ -9281,6 +9282,7 @@ dependencies = [
  "moosicbox_music_models",
  "pretty_assertions",
  "serial_test",
+ "sha2",
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",
