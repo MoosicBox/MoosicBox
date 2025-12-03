@@ -133,9 +133,9 @@ checksum = "daa239b93927be1ff123eebada5a3ff23e89f0124ccb8609234e5103d5a5ae6d"
 dependencies = [
  "actix-utils",
  "actix-web",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "smallvec",
 ]
@@ -152,10 +152,10 @@ dependencies = [
  "actix-web",
  "bitflags 2.10.0",
  "bytes",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "futures-core",
  "http-range",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.3.17",
  "mime_guess",
  "percent-encoding 2.3.2",
@@ -172,7 +172,7 @@ dependencies = [
  "actix-web",
  "futures-util",
  "indexmap 2.12.1",
- "log 0.4.28",
+ "log 0.4.29",
  "serde",
  "serde_json",
 ]
@@ -193,7 +193,7 @@ dependencies = [
  "brotli 8.0.2",
  "bytes",
  "bytestring",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "encoding_rs",
  "flate2",
  "foldhash 0.1.5",
@@ -233,7 +233,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "http 0.2.12",
- "log 0.4.28",
+ "log 0.4.29",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -321,7 +321,7 @@ dependencies = [
  "awc",
  "futures-core",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -379,7 +379,7 @@ dependencies = [
  "bytestring",
  "cfg-if 1.0.4",
  "cookie 0.16.2",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "encoding_rs",
  "foldhash 0.1.5",
  "futures-core",
@@ -387,7 +387,7 @@ dependencies = [
  "impl-more",
  "itoa",
  "language-tags 0.3.2",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.3.17",
  "once_cell",
  "pin-project-lite",
@@ -623,7 +623,7 @@ dependencies = [
  "jni",
  "jni-sys",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -651,7 +651,7 @@ checksum = "dbb4e440d04be07da1f1bf44fb4495ebd58669372fe0cffa6e48595ac5bd88a3"
 dependencies = [
  "android_log-sys",
  "env_filter",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -764,7 +764,7 @@ checksum = "0348a1c054491f4bfe6ab86a7b6ab1e44e45d899005de92f58b3df180b36ddaf"
 dependencies = [
  "clipboard-win",
  "image",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -1197,7 +1197,7 @@ version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "927791de46f70facea982dbfaf19719a41ce6064443403be631a85de6a58fff9"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "pkg-config",
 ]
 
@@ -1208,7 +1208,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62314a1546a2064e033665d658e88c620a62904be945f8147e6b16c3db9f8651"
 dependencies = [
  "cmake",
- "log 0.4.28",
+ "log 0.4.29",
  "pkg-config",
 ]
 
@@ -1254,7 +1254,7 @@ dependencies = [
  "anyhow",
  "arg_enum_proc_macro",
  "arrayvec",
- "log 0.4.28",
+ "log 0.4.29",
  "num-rational",
  "num-traits",
  "pastey",
@@ -1272,7 +1272,7 @@ checksum = "8cfddb07216410377231960af4fcab838eaa12e013417781b78bd95ee22077f8"
 dependencies = [
  "anyhow",
  "arrayvec",
- "log 0.4.28",
+ "log 0.4.29",
  "nom 8.0.0",
  "num-rational",
  "v_frame",
@@ -1303,13 +1303,13 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.4",
  "cookie 0.16.2",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "futures-core",
  "futures-util",
  "h2 0.3.27",
  "http 0.2.12",
  "itoa",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.3.17",
  "percent-encoding 2.3.2",
  "pin-project-lite",
@@ -1884,7 +1884,7 @@ dependencies = [
  "itertools 0.12.1",
  "lazy_static",
  "lazycell",
- "log 0.4.28",
+ "log 0.4.29",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1994,7 +1994,7 @@ dependencies = [
  "cargo_metadata 0.23.1",
  "clap 4.5.53",
  "glob",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_env_logger",
  "regex",
  "serde_json",
@@ -2337,7 +2337,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b99da2f8558ca23c71f4fd15dc57c906239752dd27ff3c00a1d56b685b7cbfec"
 dependencies = [
  "bitflags 2.10.0",
- "log 0.4.28",
+ "log 0.4.29",
  "polling",
  "rustix 0.38.44",
  "slab",
@@ -2744,7 +2744,7 @@ dependencies = [
  "globset",
  "insta",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "mlua",
  "moosicbox_logging",
  "rayon",
@@ -2998,15 +2998,6 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
-dependencies = [
- "unicode-segmentation",
-]
 
 [[package]]
 name = "convert_case"
@@ -3307,7 +3298,7 @@ checksum = "d8b9f2e4c67f833b660cdb0a3523065869fb35570177239812ed4c905aeff87b"
 dependencies = [
  "bitflags 2.10.0",
  "crossterm_winapi",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "document-features",
  "mio",
  "parking_lot",
@@ -3647,22 +3638,23 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
 dependencies = [
  "derive_more-impl",
 ]
 
 [[package]]
 name = "derive_more-impl"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
 dependencies = [
- "convert_case 0.7.1",
+ "convert_case 0.10.0",
  "proc-macro2",
  "quote",
+ "rustc_version",
  "syn 2.0.111",
  "unicode-xid",
 ]
@@ -3882,7 +3874,7 @@ dependencies = [
  "glutin-winit",
  "image",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.5.2",
  "objc2-app-kit 0.2.2",
  "objc2-foundation 0.2.2",
@@ -3912,7 +3904,7 @@ dependencies = [
  "bitflags 2.10.0",
  "emath",
  "epaint",
- "log 0.4.28",
+ "log 0.4.29",
  "nohash-hasher",
  "profiling",
  "smallvec",
@@ -3930,7 +3922,7 @@ dependencies = [
  "document-features",
  "egui",
  "epaint",
- "log 0.4.28",
+ "log 0.4.29",
  "profiling",
  "thiserror 2.0.17",
  "type-map",
@@ -3949,7 +3941,7 @@ dependencies = [
  "arboard",
  "bytemuck",
  "egui",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
  "objc2-ui-kit 0.2.2",
@@ -3971,7 +3963,7 @@ dependencies = [
  "egui",
  "enum-map",
  "image",
- "log 0.4.28",
+ "log 0.4.29",
  "profiling",
  "resvg",
 ]
@@ -3985,7 +3977,7 @@ dependencies = [
  "bytemuck",
  "egui",
  "glow",
- "log 0.4.28",
+ "log 0.4.29",
  "memoffset 0.9.1",
  "profiling",
  "wasm-bindgen",
@@ -4175,7 +4167,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bf3c259d255ca70051b30e2e95b5446cdb8949ac4cd22c0d7fd634d89f568e2"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "regex",
 ]
 
@@ -4193,7 +4185,7 @@ checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
 dependencies = [
  "humantime",
  "is-terminal",
- "log 0.4.28",
+ "log 0.4.29",
  "regex",
  "termcolor",
 ]
@@ -4208,7 +4200,7 @@ dependencies = [
  "anstyle",
  "env_filter",
  "jiff",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -4223,7 +4215,7 @@ dependencies = [
  "ecolor",
  "emath",
  "epaint_default_fonts",
- "log 0.4.28",
+ "log 0.4.29",
  "nohash-hasher",
  "parking_lot",
  "profiling",
@@ -4443,7 +4435,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4316185f709b23713e41e3195f90edef7fb00c3ed4adc79769cf09cc762a3b29"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -4500,7 +4492,7 @@ dependencies = [
  "crc 3.4.0",
  "crossbeam-channel",
  "heapless",
- "log 0.4.28",
+ "log 0.4.29",
  "md-5",
  "num-traits",
  "rustversion",
@@ -4666,7 +4658,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d89dab3c7ff6e0a6e93af9cb87b41a98eb1b5635f5fd0d97fe552103f0290367"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "serde",
  "serde_json",
  "strum 0.26.3",
@@ -4970,7 +4962,7 @@ dependencies = [
  "cc",
  "cfg-if 1.0.4",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "rustversion",
  "windows 0.61.3",
 ]
@@ -5110,7 +5102,7 @@ dependencies = [
  "bitflags 2.10.0",
  "libc",
  "libgit2-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "openssl-probe",
  "openssl-sys",
  "url 2.5.7",
@@ -5123,7 +5115,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a95dfc23a2b4a9a2f5ab41d194f8bfda3cabec42af4e39f08c339eb2a0c124d"
 dependencies = [
  "khronos_api",
- "log 0.4.28",
+ "log 0.4.29",
  "xml-rs",
 ]
 
@@ -5323,7 +5315,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "presser",
  "thiserror 1.0.69",
  "windows 0.58.0",
@@ -5658,7 +5650,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b7410cae13cbc75623c98ac4cbfd1f0bedddf3227afc24f370cf0f50a44a11c"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "mac",
  "markup5ever",
  "match_token",
@@ -5745,7 +5737,7 @@ dependencies = [
 name = "http_simple_get"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_env_logger",
  "switchy_async",
  "switchy_http",
@@ -5843,7 +5835,7 @@ dependencies = [
  "futures-util",
  "http 0.2.12",
  "hyper 0.14.32",
- "log 0.4.28",
+ "log 0.4.29",
  "rustls 0.21.12",
  "rustls-native-certs 0.6.3",
  "tokio",
@@ -5940,7 +5932,7 @@ dependencies = [
  "flume",
  "hyperchad_color",
  "hyperchad_transformer_models",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_arb",
  "moosicbox_assert",
  "proptest",
@@ -5964,7 +5956,7 @@ dependencies = [
  "hyperchad_renderer_html",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "pretty_assertions",
@@ -5981,7 +5973,7 @@ version = "0.1.4"
 dependencies = [
  "color-hex",
  "egui",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "pretty_assertions",
  "proptest",
@@ -5996,7 +5988,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "switchy",
 ]
 
@@ -6006,7 +5998,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "switchy",
 ]
 
@@ -6015,7 +6007,7 @@ name = "hyperchad_js_bundler"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "log 0.4.28",
+ "log 0.4.29",
  "swc_bundler",
  "swc_common",
  "swc_ecma_ast",
@@ -6039,7 +6031,7 @@ dependencies = [
  "hyperchad_color",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "pulldown-cmark",
  "test-log",
@@ -6053,7 +6045,7 @@ dependencies = [
  "env_logger 0.11.8",
  "hyperchad",
  "hyperchad_markdown",
- "log 0.4.28",
+ "log 0.4.29",
  "switchy",
 ]
 
@@ -6065,7 +6057,7 @@ dependencies = [
  "bytes",
  "hyperchad_color",
  "hyperchad_transformer",
- "log 0.4.28",
+ "log 0.4.29",
  "serde",
  "serde_json",
  "switchy_async",
@@ -6087,7 +6079,7 @@ dependencies = [
  "hyperchad_transformer",
  "image",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6114,7 +6106,7 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_transformer",
  "image",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6139,7 +6131,7 @@ dependencies = [
  "hyperchad_renderer_html_web_server",
  "hyperchad_router",
  "hyperchad_transformer",
- "log 0.4.28",
+ "log 0.4.29",
  "maud",
  "moosicbox_assert",
  "moosicbox_env_utils",
@@ -6168,7 +6160,7 @@ dependencies = [
  "flume",
  "futures-util",
  "hyperchad_renderer",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -6184,7 +6176,7 @@ version = "0.1.4"
 dependencies = [
  "hyperchad_renderer",
  "hyperchad_router",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "switchy_async",
  "test-log",
@@ -6202,7 +6194,7 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "hyperchad_router",
- "log 0.4.28",
+ "log 0.4.29",
  "mime_guess",
  "moosicbox_assert",
  "moosicbox_env_utils",
@@ -6225,7 +6217,7 @@ dependencies = [
  "hyperchad_renderer",
  "lambda_http",
  "lambda_runtime",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "serde_json",
@@ -6240,7 +6232,7 @@ dependencies = [
  "bytes",
  "flume",
  "hyperchad_renderer",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -6261,7 +6253,7 @@ dependencies = [
  "hyperchad_renderer_html",
  "hyperchad_renderer_vanilla_js_hash",
  "hyperchad_transformer",
- "log 0.4.28",
+ "log 0.4.29",
  "maud",
  "md5",
  "pretty_assertions",
@@ -6289,7 +6281,7 @@ dependencies = [
  "hyper 0.10.16",
  "hyperchad_renderer",
  "hyperchad_transformer",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.2.6",
  "mime_multipart",
  "moosicbox_assert",
@@ -6311,7 +6303,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "hyperchad_test_utils",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "serde",
  "serde_json",
@@ -6327,7 +6319,7 @@ name = "hyperchad_state"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "serde",
  "serde_json",
@@ -6351,7 +6343,7 @@ dependencies = [
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "itoa",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "rustc_version",
  "ryu",
@@ -6364,7 +6356,7 @@ name = "hyperchad_template_actions_dsl"
 version = "0.1.4"
 dependencies = [
  "hyperchad_actions",
- "log 0.4.28",
+ "log 0.4.29",
  "proc-macro2",
  "quote",
  "syn 2.0.111",
@@ -6380,7 +6372,7 @@ dependencies = [
  "hyperchad_template_actions_dsl",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
- "log 0.4.28",
+ "log 0.4.29",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
@@ -6409,7 +6401,7 @@ dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_transformer_models",
- "log 0.4.28",
+ "log 0.4.29",
  "maud",
  "moosicbox_arb",
  "moosicbox_assert",
@@ -6435,7 +6427,7 @@ dependencies = [
 name = "hyperchad_transformer_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "proptest",
  "serde",
@@ -6449,7 +6441,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "serde_json",
  "switchy",
  "switchy_time",
@@ -6474,7 +6466,7 @@ dependencies = [
  "core-foundation-sys",
  "iana-time-zone-haiku",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "wasm-bindgen",
  "windows-core 0.62.2",
 ]
@@ -6950,7 +6942,7 @@ dependencies = [
  "jack-sys",
  "lazy_static",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -6963,7 +6955,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libloading 0.7.4",
- "log 0.4.28",
+ "log 0.4.29",
  "pkg-config",
 ]
 
@@ -6997,7 +6989,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49cce2b81f2098e7e3efc35bc2e0a6b7abec9d34128283d7a26fa8f32a6dbb35"
 dependencies = [
  "jiff-static",
- "log 0.4.28",
+ "log 0.4.29",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
@@ -7024,7 +7016,7 @@ dependencies = [
  "cfg-if 1.0.4",
  "combine",
  "jni-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "thiserror 1.0.69",
  "walkdir",
  "windows-sys 0.45.0",
@@ -7359,7 +7351,7 @@ dependencies = [
  "gtk",
  "gtk-sys",
  "libappindicator-sys",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -7375,9 +7367,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.177"
+version = "0.2.178"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976"
+checksum = "37c93d8daa9d8a012fd8ab92f088405fb202ea0b6ab73ee2482ae66af4f42091"
 
 [[package]]
 name = "libfuzzer-sys"
@@ -7609,14 +7601,14 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
 name = "log"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 dependencies = [
  "value-bag",
 ]
@@ -7753,7 +7745,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7a7213d12e1864c0f002f52c2923d4556935a43dec5e71355c2760e0f6e7a18"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "phf 0.11.3",
  "phf_codegen 0.11.3",
  "string_cache",
@@ -7852,7 +7844,7 @@ dependencies = [
  "fastrand",
  "flume",
  "if-addrs 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "mio",
  "socket-pktinfo",
  "socket2 0.6.1",
@@ -7864,7 +7856,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51c55d61e72fc3ab704396c5fa16f4c184db37978ae4e94ca8959693a235fc0e"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -7916,7 +7908,7 @@ dependencies = [
  "block",
  "core-graphics-types 0.2.0",
  "foreign-types 0.5.0",
- "log 0.4.28",
+ "log 0.4.29",
  "objc",
  "paste",
 ]
@@ -7987,7 +7979,7 @@ dependencies = [
  "encoding",
  "httparse",
  "hyper 0.10.16",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.2.6",
  "tempfile",
  "textnonce",
@@ -8025,7 +8017,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873"
 dependencies = [
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
 ]
@@ -8117,7 +8109,7 @@ version = "0.1.4"
 dependencies = [
  "clap 4.5.53",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audiotags",
  "moosicbox_files",
@@ -8135,7 +8127,7 @@ dependencies = [
  "actix-htmx",
  "actix-web",
  "base64 0.22.1",
- "log 0.4.28",
+ "log 0.4.29",
  "maud",
  "moosicbox_assert",
  "moosicbox_config",
@@ -8163,7 +8155,7 @@ dependencies = [
  "http 1.4.0",
  "hyperchad",
  "kanal",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_client",
  "moosicbox_app_native",
  "moosicbox_app_native_image",
@@ -8199,7 +8191,7 @@ dependencies = [
 name = "moosicbox_app_client"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
 ]
 
@@ -8208,7 +8200,7 @@ name = "moosicbox_app_create_config"
 version = "0.1.4"
 dependencies = [
  "clap 4.5.53",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_logging",
  "serde",
@@ -8220,7 +8212,7 @@ dependencies = [
 name = "moosicbox_app_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_music_api_api",
  "serde",
 ]
@@ -8232,7 +8224,7 @@ dependencies = [
  "console-subscriber",
  "flume",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_models",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_ui",
@@ -8265,7 +8257,7 @@ dependencies = [
 name = "moosicbox_app_native_bundled"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_models",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -8292,7 +8284,7 @@ version = "0.1.4"
 dependencies = [
  "bytesize",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_models",
  "moosicbox_audio_zone_models",
  "moosicbox_date_utils",
@@ -8316,7 +8308,7 @@ name = "moosicbox_app_state"
 version = "0.1.4"
 dependencies = [
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_app_models",
  "moosicbox_app_ws",
  "moosicbox_assert",
@@ -8346,7 +8338,7 @@ dependencies = [
 name = "moosicbox_app_tauri_bundled"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_config",
@@ -8370,7 +8362,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -8385,7 +8377,7 @@ dependencies = [
 name = "moosicbox_arb"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "proptest",
  "serde_json",
@@ -8397,7 +8389,7 @@ name = "moosicbox_assert"
 version = "0.1.4"
 dependencies = [
  "colored",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_env_utils",
  "test-log",
 ]
@@ -8409,7 +8401,7 @@ dependencies = [
  "async-trait",
  "flume",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "switchy_async",
  "test-log",
@@ -8424,7 +8416,7 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_opus",
  "moosicbox_stream_utils",
  "pretty_assertions",
@@ -8445,7 +8437,7 @@ dependencies = [
  "audiopus",
  "fdk-aac",
  "flacenc",
- "log 0.4.28",
+ "log 0.4.29",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -8464,7 +8456,7 @@ dependencies = [
  "cpal",
  "fdk-aac",
  "flume",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
  "moosicbox_audio_encoder",
@@ -8490,7 +8482,7 @@ name = "moosicbox_audio_zone"
 version = "0.1.4"
 dependencies = [
  "actix-web",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_zone_models",
  "moosicbox_json_utils",
@@ -8508,7 +8500,7 @@ dependencies = [
 name = "moosicbox_audio_zone_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "serde",
@@ -8536,7 +8528,7 @@ version = "0.1.4"
 dependencies = [
  "actix-web",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_json_utils",
  "moosicbox_middleware",
  "serde",
@@ -8558,7 +8550,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "switchy_async",
  "test-log",
@@ -8572,7 +8564,7 @@ dependencies = [
  "actix-web",
  "home",
  "json5",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_profiles",
@@ -8592,7 +8584,7 @@ name = "moosicbox_date_utils"
 version = "0.1.4"
 dependencies = [
  "chrono",
- "log 0.4.28",
+ "log 0.4.29",
  "test-log",
 ]
 
@@ -8607,7 +8599,7 @@ dependencies = [
  "futures",
  "hyper 1.6.0",
  "id3",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audiotags",
  "moosicbox_auth",
@@ -8638,7 +8630,7 @@ dependencies = [
 name = "moosicbox_env_utils"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "test-log",
 ]
@@ -8654,7 +8646,7 @@ dependencies = [
  "flume",
  "futures",
  "futures-core",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
@@ -8693,7 +8685,7 @@ dependencies = [
  "clap 4.5.53",
  "image",
  "libvips",
- "log 0.4.28",
+ "log 0.4.29",
  "profiling",
  "strum 0.27.2",
  "strum_macros 0.27.2",
@@ -8709,7 +8701,7 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "chrono",
- "log 0.4.28",
+ "log 0.4.29",
  "rusqlite",
  "serde_json",
  "switchy_database",
@@ -8727,7 +8719,7 @@ dependencies = [
  "async-recursion",
  "enum-as-inner",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_library_models",
@@ -8754,7 +8746,7 @@ name = "moosicbox_library_models"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
@@ -8774,7 +8766,7 @@ dependencies = [
  "actix-web",
  "async-trait",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_output",
  "moosicbox_files",
@@ -8797,7 +8789,7 @@ name = "moosicbox_load_balancer"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_env_utils",
  "moosicbox_logging",
  "pingora",
@@ -8817,7 +8809,7 @@ dependencies = [
  "base64 0.21.7",
  "byteorder",
  "flate2",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_lofty_attr",
  "ogg_pager",
  "once_cell",
@@ -8840,7 +8832,7 @@ name = "moosicbox_logging"
 version = "0.1.4"
 dependencies = [
  "free_log_client",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_config",
  "moosicbox_env_utils",
  "test-log",
@@ -8854,7 +8846,7 @@ dependencies = [
  "chrono",
  "console-subscriber",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -8874,7 +8866,7 @@ dependencies = [
  "bytesize",
  "chrono",
  "hyperchad",
- "log 0.4.28",
+ "log 0.4.29",
  "regex",
  "test-log",
 ]
@@ -8884,7 +8876,7 @@ name = "moosicbox_menu"
 version = "0.1.4"
 dependencies = [
  "actix-web",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
@@ -8911,7 +8903,7 @@ dependencies = [
 name = "moosicbox_menu_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_music_models",
  "serde",
@@ -8926,7 +8918,7 @@ checksum = "8700337684a0d79a367a50f0d90067a96ad927888f1524a624e00b73d48b8d51"
 dependencies = [
  "byteorder",
  "hex",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -8936,7 +8928,7 @@ dependencies = [
  "actix-web",
  "futures",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "switchy_time",
  "test-log",
@@ -8950,7 +8942,7 @@ dependencies = [
  "actix-web",
  "async-trait",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_menu_models",
  "moosicbox_music_api_models",
  "moosicbox_music_models",
@@ -8968,7 +8960,7 @@ version = "0.1.4"
 dependencies = [
  "actix-web",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
@@ -8983,7 +8975,7 @@ dependencies = [
 name = "moosicbox_music_api_helpers"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_music_api",
  "moosicbox_scan",
  "switchy",
@@ -8993,7 +8985,7 @@ dependencies = [
 name = "moosicbox_music_api_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "moosicbox_paging",
@@ -9010,7 +9002,7 @@ dependencies = [
 name = "moosicbox_music_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
@@ -9033,7 +9025,7 @@ version = "0.1.1"
 dependencies = [
  "audiopus",
  "bytes",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "symphonia",
  "test-case",
@@ -9045,7 +9037,7 @@ dependencies = [
 name = "moosicbox_opus_native"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_opus_native_test_vectors",
  "moosicbox_resampler",
  "symphonia",
@@ -9075,7 +9067,7 @@ name = "moosicbox_paging"
 version = "0.1.4"
 dependencies = [
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -9104,7 +9096,7 @@ dependencies = [
  "flume",
  "futures",
  "local-ip-address",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
  "moosicbox_audio_output",
@@ -9157,7 +9149,7 @@ dependencies = [
  "chrono",
  "futures",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "md5",
  "moosicbox_assert",
  "moosicbox_date_utils",
@@ -9202,7 +9194,7 @@ name = "moosicbox_resampler"
 version = "0.1.4"
 dependencies = [
  "arrayvec",
- "log 0.4.28",
+ "log 0.4.29",
  "profiling",
  "rubato",
  "symphonia",
@@ -9216,7 +9208,7 @@ dependencies = [
  "actix-web",
  "async-recursion",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audiotags",
  "moosicbox_auth",
@@ -9257,7 +9249,7 @@ dependencies = [
 name = "moosicbox_scan_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "serde",
  "utoipa",
@@ -9268,7 +9260,7 @@ name = "moosicbox_schema"
 version = "0.1.4"
 dependencies = [
  "include_dir",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_music_models",
@@ -9292,7 +9284,7 @@ dependencies = [
  "actix-web",
  "chrono",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_config",
  "moosicbox_json_utils",
  "moosicbox_music_api_models",
@@ -9321,7 +9313,7 @@ dependencies = [
  "flume",
  "futures-util",
  "local-ip-address",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_admin_htmx",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -9392,7 +9384,7 @@ name = "moosicbox_server_simulator"
 version = "0.1.4"
 dependencies = [
  "actix-web",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_env_utils",
@@ -9416,7 +9408,7 @@ name = "moosicbox_session"
 version = "0.1.4"
 dependencies = [
  "actix-web",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_zone",
  "moosicbox_json_utils",
@@ -9438,7 +9430,7 @@ dependencies = [
 name = "moosicbox_session_models"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_audio_zone_models",
  "moosicbox_json_utils",
  "moosicbox_music_models",
@@ -9456,7 +9448,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "pin-project",
  "switchy_async",
@@ -9476,7 +9468,7 @@ dependencies = [
  "async-trait",
  "futures",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_files",
@@ -9507,7 +9499,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "serde",
  "serde_json",
@@ -9530,7 +9522,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
  "moosicbox_audio_output",
@@ -9573,7 +9565,7 @@ dependencies = [
  "console-subscriber",
  "futures-util",
  "hex",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_env_utils",
@@ -9617,7 +9609,7 @@ dependencies = [
  "bytes",
  "const_format",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_web_server_core",
  "moosicbox_web_server_cors",
@@ -9657,7 +9649,7 @@ name = "moosicbox_ws"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_zone",
  "moosicbox_json_utils",
@@ -9684,7 +9676,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_files",
@@ -9821,7 +9813,7 @@ dependencies = [
  "hexf-parse",
  "indexmap 2.12.1",
  "libm",
- "log 0.4.28",
+ "log 0.4.29",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -9855,7 +9847,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87de3442987e9dbec73158d5c715e7ad9072fda936bb03d19d7fa10e00520f0e"
 dependencies = [
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "openssl",
  "openssl-probe",
  "openssl-sys",
@@ -9873,7 +9865,7 @@ checksum = "c3f42e7bbe13d351b6bead8286a43aac9534b82bd3cc43e47037f012ebfd62d4"
 dependencies = [
  "bitflags 2.10.0",
  "jni-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "ndk-sys",
  "num_enum",
  "raw-window-handle",
@@ -9903,7 +9895,7 @@ checksum = "93062a0dce6da2517ea35f301dfc88184ce18d3601ec786a727a87bf535deca9"
 dependencies = [
  "byteorder",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "neli-proc-macros",
 ]
 
@@ -10034,7 +10026,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6442248665a5aa2514e794af3b39661a8e73033b1cc5e59899e1276117ee4400"
 dependencies = [
  "futures-lite",
- "log 0.4.28",
+ "log 0.4.29",
  "mac-notification-sys",
  "serde",
  "tauri-winrt-notification",
@@ -11026,7 +11018,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c39b5918402d564846d5aba164c09a66cc88d232179dfd3e3c619a25a268392"
 dependencies = [
  "android_system_properties",
- "log 0.4.28",
+ "log 0.4.29",
  "nix 0.30.1",
  "objc2 0.6.3",
  "objc2-foundation 0.3.2",
@@ -11495,7 +11487,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "indexmap 1.9.3",
- "log 0.4.28",
+ "log 0.4.29",
  "lru 0.14.0",
  "once_cell",
  "parking_lot",
@@ -11535,7 +11527,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "nix 0.24.3",
  "once_cell",
  "openssl-probe",
@@ -11617,7 +11609,7 @@ dependencies = [
  "fnv",
  "futures",
  "http 1.4.0",
- "log 0.4.28",
+ "log 0.4.29",
  "pingora-core",
  "pingora-error",
  "pingora-http",
@@ -11659,7 +11651,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "996c574f30a6e1ad10b47ac1626a86e0e47d5075953dd049d60df16ba5f7076e"
 dependencies = [
  "crossbeam-queue",
- "log 0.4.28",
+ "log 0.4.29",
  "lru 0.14.0",
  "parking_lot",
  "pingora-timeout",
@@ -11679,7 +11671,7 @@ dependencies = [
  "futures",
  "h2 0.4.12",
  "http 1.4.0",
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "pingora-cache",
  "pingora-core",
@@ -12005,7 +11997,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
 dependencies = [
  "env_logger 0.10.2",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -12287,7 +12279,7 @@ checksum = "739a3c7f56604713b553d7addd7718c226e88d598979ae3450320800bd0e9810"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
- "log 0.4.28",
+ "log 0.4.29",
  "parking_lot",
  "puffin",
 ]
@@ -12710,7 +12702,7 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "libfuzzer-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "maybe-rayon",
  "new_debug_unreachable",
  "noop_proc_macro",
@@ -12934,7 +12926,7 @@ dependencies = [
  "hyper-rustls 0.27.7",
  "hyper-util",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "percent-encoding 2.3.2",
  "pin-project-lite",
  "quinn",
@@ -12964,7 +12956,7 @@ version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8928798c0a55e03c9ca6c4c6846f76377427d2c1e1f7e6de3c06ae57942df43"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "pico-args",
  "rgb",
  "svgtypes",
@@ -12985,7 +12977,7 @@ dependencies = [
  "gobject-sys",
  "gtk-sys",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -13307,7 +13299,7 @@ version = "0.21.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "ring",
  "rustls-webpki 0.101.7",
  "sct",
@@ -13524,7 +13516,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6277f0217056f77f1d8f49f2950ac6c278c0d607c45f5ee99328d792ede24ec"
 dependencies = [
  "ab_glyph",
- "log 0.4.28",
+ "log 0.4.29",
  "memmap2",
  "smithay-client-toolkit 0.19.2",
  "tiny-skia",
@@ -13588,7 +13580,7 @@ dependencies = [
  "cssparser",
  "derive_more 0.99.20",
  "fxhash",
- "log 0.4.28",
+ "log 0.4.29",
  "phf 0.8.0",
  "phf_codegen 0.8.0",
  "precomputed-hash",
@@ -13825,7 +13817,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b258109f244e1d6891bf1053a55d63a5cd4f8f4c30cf9a1280989f80e7a1fa9"
 dependencies = [
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "parking_lot",
  "scc",
@@ -14023,7 +14015,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -14047,7 +14039,7 @@ dependencies = [
 name = "simvar_api_testing_example"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_web_server",
  "serde",
  "serde_json",
@@ -14063,7 +14055,7 @@ dependencies = [
 name = "simvar_basic_web_server_example"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_web_server",
  "serde",
  "serde_json",
@@ -14081,7 +14073,7 @@ dependencies = [
  "btparse",
  "color-backtrace",
  "ctrlc",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_web_server",
  "oneshot",
  "pretty_env_logger",
@@ -14172,7 +14164,7 @@ dependencies = [
  "calloop-wayland-source 0.3.0",
  "cursor-icon",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "memmap2",
  "rustix 0.38.44",
  "thiserror 1.0.69",
@@ -14197,7 +14189,7 @@ dependencies = [
  "calloop-wayland-source 0.4.1",
  "cursor-icon",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "memmap2",
  "rustix 1.1.2",
  "thiserror 2.0.17",
@@ -14281,7 +14273,7 @@ dependencies = [
  "core-graphics 0.24.0",
  "foreign-types 0.5.0",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
  "objc2-quartz-core 0.2.2",
@@ -14379,7 +14371,7 @@ dependencies = [
  "hashbrown 0.15.5",
  "hashlink 0.10.0",
  "indexmap 2.12.1",
- "log 0.4.28",
+ "log 0.4.29",
  "memchr",
  "once_cell",
  "percent-encoding 2.3.2",
@@ -14461,7 +14453,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "itoa",
- "log 0.4.28",
+ "log 0.4.29",
  "md-5",
  "memchr",
  "once_cell",
@@ -14503,7 +14495,7 @@ dependencies = [
  "hmac",
  "home",
  "itoa",
- "log 0.4.28",
+ "log 0.4.29",
  "md-5",
  "memchr",
  "once_cell",
@@ -14536,7 +14528,7 @@ dependencies = [
  "futures-intrusive",
  "futures-util",
  "libsqlite3-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "percent-encoding 2.3.2",
  "serde",
  "serde_urlencoded",
@@ -14555,7 +14547,7 @@ checksum = "04f4048b05716cdb270e1e5960d9dd4d428e7ceaa939ee5348a84f6e43d52df1"
 dependencies = [
  "futures-core",
  "genawaiter",
- "log 0.4.28",
+ "log 0.4.29",
  "tokio",
 ]
 
@@ -15283,7 +15275,7 @@ version = "0.1.4"
 dependencies = [
  "flume",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "pin-project-lite",
  "pretty_assertions",
  "scoped-tls",
@@ -15301,7 +15293,7 @@ name = "switchy_async_cargo"
 version = "0.1.4"
 dependencies = [
  "clap 4.5.53",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_env_logger",
  "syn 2.0.111",
  "test-log",
@@ -15312,7 +15304,7 @@ dependencies = [
 name = "switchy_async_macros"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "proc-macro2",
  "quote",
  "syn 2.0.111",
@@ -15328,7 +15320,7 @@ dependencies = [
  "criterion",
  "deadpool-postgres",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_profiles",
@@ -15361,7 +15353,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-ssm",
  "deadpool-postgres",
- "log 0.4.28",
+ "log 0.4.29",
  "native-tls",
  "openssl",
  "postgres-native-tls",
@@ -15380,7 +15372,7 @@ dependencies = [
 name = "switchy_env"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "serial_test",
  "test-log",
  "thiserror 2.0.17",
@@ -15391,7 +15383,7 @@ name = "switchy_fs"
 version = "0.1.4"
 dependencies = [
  "bytes",
- "log 0.4.28",
+ "log 0.4.29",
  "pretty_assertions",
  "scoped-tls",
  "switchy_async",
@@ -15408,7 +15400,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "paste",
  "reqwest",
  "serde",
@@ -15439,7 +15431,7 @@ dependencies = [
  "async-trait",
  "hostname",
  "kanal",
- "log 0.4.28",
+ "log 0.4.29",
  "mdns-sd",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -15467,7 +15459,7 @@ dependencies = [
 name = "switchy_random"
 version = "0.1.4"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "rand 0.8.5",
  "test-log",
 ]
@@ -15481,7 +15473,7 @@ dependencies = [
  "chrono",
  "hex",
  "include_dir",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_json_utils",
  "sha2",
  "switchy_async",
@@ -15525,7 +15517,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "insta",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_schema",
  "serde",
  "serde_json",
@@ -15547,7 +15539,7 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "log 0.4.28",
+ "log 0.4.29",
  "paste",
  "pretty_assertions",
  "scoped-tls",
@@ -15565,7 +15557,7 @@ dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -15584,7 +15576,7 @@ name = "switchy_time"
 version = "0.1.4"
 dependencies = [
  "chrono",
- "log 0.4.28",
+ "log 0.4.29",
  "scoped-tls",
  "serial_test",
  "switchy_random",
@@ -15601,7 +15593,7 @@ dependencies = [
  "flume",
  "futures",
  "itertools 0.14.0",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_output",
@@ -15632,7 +15624,7 @@ dependencies = [
 name = "switchy_uuid"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "switchy_env",
  "switchy_random",
  "test-log",
@@ -15668,7 +15660,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c91565e180aea25d9b80a910c546802526ffd0072d0b8974e3ebe59b686c9976"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
  "symphonia-utils-xiph",
@@ -15681,7 +15673,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4872dd6bb56bf5eac799e3e957aa1981086c3e613b27e0ac23b176054f7c57ed"
 dependencies = [
  "lazy_static",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
 ]
@@ -15693,7 +15685,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c263845aa86881416849c1729a54c7f55164f8b96111dba59de46849e73a790"
 dependencies = [
  "lazy_static",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
 ]
 
@@ -15703,7 +15695,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dddc50e2bbea4cfe027441eece77c46b9f319748605ab8f3443350129ddd07f"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
 ]
 
@@ -15713,7 +15705,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8413fa754942ac16a73634c9dfd1500ed5c61430956b33728567f667fdd393ab"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
 ]
 
@@ -15723,7 +15715,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e89d716c01541ad3ebe7c91ce4c8d38a7cf266a3f7b2f090b108fb0cb031d95"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
 ]
 
@@ -15733,7 +15725,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f025837c309cd69ffef572750b4a2257b59552c5399a5e49707cc5b1b85d1c73"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-utils-xiph",
 ]
@@ -15748,7 +15740,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
  "lazy_static",
- "log 0.4.28",
+ "log 0.4.29",
 ]
 
 [[package]]
@@ -15757,7 +15749,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8faf379316b6b6e6bbc274d00e7a592e0d63ff1a7e182ce8ba25e24edd3d096"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
 ]
@@ -15769,7 +15761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "243739585d11f81daf8dac8d9f3d18cc7898f6c09a259675fc364b382c30e0a5"
 dependencies = [
  "encoding_rs",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
  "symphonia-utils-xiph",
@@ -15782,7 +15774,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "122d786d2c43a49beb6f397551b4a050d8229eaa54c7ddf9ee4b98899b8742d0"
 dependencies = [
  "lazy_static",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
  "symphonia-utils-xiph",
@@ -15794,7 +15786,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b4955c67c1ed3aa8ae8428d04ca8397fbef6a19b2b051e73b5da8b1435639cb"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
  "symphonia-utils-xiph",
@@ -15807,7 +15799,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2d7c3df0e7d94efb68401d81906eae73c02b40d5ec1a141962c592d0f11a96f"
 dependencies = [
  "extended",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
  "symphonia-metadata",
 ]
@@ -15820,7 +15812,7 @@ checksum = "36306ff42b9ffe6e5afc99d49e121e0bd62fe79b9db7b9681d48e29fa19e6b16"
 dependencies = [
  "encoding_rs",
  "lazy_static",
- "log 0.4.28",
+ "log 0.4.29",
  "symphonia-core",
 ]
 
@@ -15933,7 +15925,7 @@ dependencies = [
  "hyperloglogplus",
  "itertools 0.14.0",
  "levenshtein_automata",
- "log 0.4.28",
+ "log 0.4.29",
  "lru 0.12.5",
  "lz4_flex",
  "measure_time",
@@ -16076,7 +16068,7 @@ dependencies = [
  "jni",
  "lazy_static",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -16145,7 +16137,7 @@ dependencies = [
  "http-range",
  "jni",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "mime 0.3.17",
  "muda",
  "objc2 0.6.3",
@@ -16263,7 +16255,7 @@ version = "2.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "313f8138692ddc4a2127c4c9607d616a46f5c042e77b3722450866da0aad2f19"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "raw-window-handle",
  "rfd",
  "serde",
@@ -16306,7 +16298,7 @@ dependencies = [
  "android_logger",
  "byte-unit",
  "fern",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.6.3",
  "objc2-foundation 0.3.2",
  "serde",
@@ -16325,7 +16317,7 @@ version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01fc2c5ff41105bd1f7242d8201fdf3efd70749b82fa013a17f2126357d194cc"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "notify-rust",
  "rand 0.9.2",
  "serde",
@@ -16372,7 +16364,7 @@ dependencies = [
  "gtk",
  "http 1.4.0",
  "jni",
- "log 0.4.28",
+ "log 0.4.29",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
@@ -16407,7 +16399,7 @@ dependencies = [
  "infer",
  "json-patch",
  "kuchikiki",
- "log 0.4.28",
+ "log 0.4.29",
  "memchr",
  "phf 0.11.3",
  "proc-macro2",
@@ -16534,7 +16526,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "libc",
- "log 0.4.28",
+ "log 0.4.29",
  "memmem",
  "nix 0.29.0",
  "num-derive",
@@ -16777,7 +16769,7 @@ dependencies = [
  "arrayvec",
  "bytemuck",
  "cfg-if 1.0.4",
- "log 0.4.28",
+ "log 0.4.29",
  "png 0.17.16",
  "tiny-skia-path",
 ]
@@ -16896,7 +16888,7 @@ dependencies = [
  "fallible-iterator 0.2.0",
  "futures-channel",
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "parking_lot",
  "percent-encoding 2.3.2",
  "phf 0.13.1",
@@ -16961,7 +16953,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
 dependencies = [
  "futures-util",
- "log 0.4.28",
+ "log 0.4.29",
  "rustls 0.23.35",
  "rustls-pki-types",
  "tokio",
@@ -17174,7 +17166,7 @@ version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d15d90a0b5c19378952d479dc858407149d7bb45a14de0142f6c534b16fc647"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -17207,7 +17199,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "tracing-core",
 ]
@@ -17388,7 +17380,7 @@ dependencies = [
  "data-encoding",
  "http 1.4.0",
  "httparse",
- "log 0.4.28",
+ "log 0.4.29",
  "rand 0.9.2",
  "rustls 0.23.35",
  "rustls-pki-types",
@@ -17791,7 +17783,7 @@ dependencies = [
  "flate2",
  "imagesize",
  "kurbo",
- "log 0.4.28",
+ "log 0.4.29",
  "pico-args",
  "roxmltree 0.20.0",
  "simplecss",
@@ -18274,7 +18266,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34949b42822155826b41db8e5d0c1be3a2bd296c747577a43a3e6daefc296142"
 dependencies = [
  "dlib",
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "pkg-config",
 ]
@@ -18312,7 +18304,7 @@ dependencies = [
 name = "web_server_openapi"
 version = "0.1.0"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_logging",
  "moosicbox_web_server",
  "switchy_async",
@@ -18332,7 +18324,7 @@ name = "web_server_simulator"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "log 0.4.28",
+ "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_web_server_core",
  "serde",
@@ -18353,7 +18345,7 @@ checksum = "00f1243ef785213e3a32fa0396093424a3a6ea566f9948497e5a2309261a4c97"
 dependencies = [
  "core-foundation 0.10.1",
  "jni",
- "log 0.4.28",
+ "log 0.4.29",
  "ndk-context",
  "objc2 0.6.3",
  "objc2-foundation 0.3.2",
@@ -18481,7 +18473,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c0a6e355560527dd2d1cf7890652f4f09bb3433b6aadade4c9b5ed76de5f3ec"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "wezterm-dynamic",
 ]
 
@@ -18516,7 +18508,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f2ab60e120fd6eaa68d9567f3226e876684639d22a4219b313ff69ec0ccd5ac"
 dependencies = [
- "log 0.4.28",
+ "log 0.4.29",
  "ordered-float 4.6.0",
  "strsim 0.11.1",
  "thiserror 1.0.69",
@@ -18560,7 +18552,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "naga",
  "parking_lot",
  "portable-atomic",
@@ -18591,7 +18583,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "indexmap 2.12.1",
- "log 0.4.28",
+ "log 0.4.29",
  "naga",
  "once_cell",
  "parking_lot",
@@ -18661,7 +18653,7 @@ dependencies = [
  "khronos-egl",
  "libc",
  "libloading 0.8.9",
- "log 0.4.28",
+ "log 0.4.29",
  "metal",
  "naga",
  "ndk-sys",
@@ -18693,7 +18685,7 @@ dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
  "js-sys",
- "log 0.4.28",
+ "log 0.4.29",
  "thiserror 2.0.17",
  "web-sys",
 ]
@@ -19533,7 +19525,7 @@ checksum = "d039de8032a9a8856a6be89cea3e5d12fdd82306ab7c94d74e6deab2460651c5"
 dependencies = [
  "bitflags 2.10.0",
  "dlib",
- "log 0.4.28",
+ "log 0.4.29",
  "once_cell",
  "xkeysym",
 ]
@@ -19828,7 +19820,7 @@ checksum = "f05cd8797d63865425ff89b5c4a48804f35ba0ce8d125800027ad6017d2b5249"
 dependencies = [
  "bumpalo",
  "crc32fast",
- "log 0.4.28",
+ "log 0.4.29",
  "simd-adler32",
 ]
 
