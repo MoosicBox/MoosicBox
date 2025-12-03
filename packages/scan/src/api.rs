@@ -556,3 +556,65 @@ pub async fn remove_scan_path_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(all(test, feature = "local"))]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_validate_path_rejects_double_dot() {
+        let result = validate_path("../etc/passwd");
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_embedded_double_dot() {
+        let result = validate_path("/some/path/../other");
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_double_dot_at_end() {
+        let result = validate_path("/some/path/..");
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_nonexistent_path() {
+        let result = validate_path("/this/path/definitely/does/not/exist/xyz123abc");
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        // The error should be about invalid path since canonicalize fails
+        assert!(err.to_string().contains("Invalid path"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_accepts_existing_valid_path() {
+        // /tmp should exist on all Unix systems
+        let result = validate_path("/tmp");
+        assert!(result.is_ok());
+
+        let validated = result.unwrap();
+        // The validated path should be canonical and not contain ".."
+        assert!(!validated.contains(".."));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_accepts_root() {
+        let result = validate_path("/");
+        assert!(result.is_ok());
+
+        let validated = result.unwrap();
+        assert_eq!(validated, "/");
+    }
+}
