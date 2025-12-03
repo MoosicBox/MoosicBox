@@ -6161,6 +6161,7 @@ version = "0.1.4"
 dependencies = [
  "actix-cors",
  "actix-files",
+ "actix-rt",
  "actix-web",
  "async-trait",
  "bytes",

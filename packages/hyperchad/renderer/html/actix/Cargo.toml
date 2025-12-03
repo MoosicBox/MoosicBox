@@ -13,6 +13,9 @@ version     = "0.1.4"
 [package.metadata]
 examples = false
 
+[package.metadata.cargo-machete]
+ignored = ["actix-rt"]
+
 [package.metadata.workspaces]
 group = "hyperchad"
 
@@ -36,6 +39,7 @@ serde        = { workspace = true, optional = true }
 serde_json   = { workspace = true, optional = true }
 
 [dev-dependencies]
+actix-rt = { workspace = true }
 test-log = { workspace = true }
 
 [features]
