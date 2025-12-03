@@ -684,5 +684,4 @@ mod tests {
         // Distance should be > 0 indicating how far outside the visible area
         assert!(dist > 0);
     }
-
 }
