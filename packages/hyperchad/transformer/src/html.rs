@@ -1930,6 +1930,942 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
 }
 
 #[cfg(test)]
+mod test_parse_helpers {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    // Tests for parse_text_decoration
+    #[test_log::test]
+    fn parse_text_decoration_parses_single_line_type() {
+        let result = parse_text_decoration("underline").unwrap();
+        assert_eq!(result.line, vec![TextDecorationLine::Underline]);
+        assert!(result.style.is_none());
+        assert!(result.color.is_none());
+        assert!(result.thickness.is_none());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_multiple_line_types() {
+        let result = parse_text_decoration("underline overline").unwrap();
+        assert_eq!(
+            result.line,
+            vec![TextDecorationLine::Underline, TextDecorationLine::Overline]
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_with_style() {
+        let result = parse_text_decoration("underline wavy").unwrap();
+        assert_eq!(result.line, vec![TextDecorationLine::Underline]);
+        assert_eq!(result.style, Some(TextDecorationStyle::Wavy));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_with_color() {
+        let result = parse_text_decoration("underline #ff0000").unwrap();
+        assert_eq!(result.line, vec![TextDecorationLine::Underline]);
+        assert!(result.color.is_some());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_style_color() {
+        let result = parse_text_decoration("underline solid #ff0000").unwrap();
+        assert_eq!(result.line, vec![TextDecorationLine::Underline]);
+        assert_eq!(result.style, Some(TextDecorationStyle::Solid));
+        assert!(result.color.is_some());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_style_color_thickness() {
+        let result = parse_text_decoration("underline solid #ff0000 2").unwrap();
+        assert_eq!(result.line, vec![TextDecorationLine::Underline]);
+        assert_eq!(result.style, Some(TextDecorationStyle::Solid));
+        assert!(result.color.is_some());
+        assert!(result.thickness.is_some());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_returns_error_for_empty_string() {
+        let result = parse_text_decoration("");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_returns_error_for_double_thickness() {
+        // After parsing line, style, color, any remaining token is thickness.
+        // A second thickness value should fail.
+        let result = parse_text_decoration("underline solid #ff0000 2 3");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_flex
+    #[test_log::test]
+    fn parse_flex_parses_single_grow_value() {
+        let result = parse_flex("1").unwrap();
+        assert_eq!(result.grow, crate::Number::Integer(1));
+        // shrink and basis should be defaults
+        assert_eq!(result.shrink, Flex::default().shrink);
+        assert_eq!(result.basis, Flex::default().basis);
+    }
+
+    #[test_log::test]
+    fn parse_flex_parses_grow_and_shrink() {
+        let result = parse_flex("2 3").unwrap();
+        assert_eq!(result.grow, crate::Number::Integer(2));
+        assert_eq!(result.shrink, crate::Number::Integer(3));
+        assert_eq!(result.basis, Flex::default().basis);
+    }
+
+    #[test_log::test]
+    fn parse_flex_parses_grow_shrink_and_basis() {
+        let result = parse_flex("1 0 100").unwrap();
+        assert_eq!(result.grow, crate::Number::Integer(1));
+        assert_eq!(result.shrink, crate::Number::Integer(0));
+        assert_eq!(result.basis, crate::Number::Integer(100));
+    }
+
+    #[test_log::test]
+    fn parse_flex_parses_with_percent_basis() {
+        let result = parse_flex("1 1 50%").unwrap();
+        assert_eq!(result.grow, crate::Number::Integer(1));
+        assert_eq!(result.shrink, crate::Number::Integer(1));
+        assert_eq!(result.basis, crate::Number::IntegerPercent(50));
+    }
+
+    #[test_log::test]
+    fn parse_flex_returns_error_for_empty_string() {
+        let result = parse_flex("");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_flex_returns_error_for_too_many_values() {
+        let result = parse_flex("1 2 3 4");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_border
+    #[test_log::test]
+    fn parse_border_parses_size_and_color() {
+        let result = parse_border("2, #ff0000").unwrap();
+        assert_eq!(result.1, crate::Number::Integer(2));
+        // Color should be parsed
+        assert_eq!(result.0, hyperchad_color::Color::from_hex("#ff0000"));
+    }
+
+    #[test_log::test]
+    fn parse_border_returns_error_for_missing_comma() {
+        let result = parse_border("2 #ff0000");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_border_returns_error_for_invalid_color() {
+        let result = parse_border("2, not-a-color");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_classes
+    #[test_log::test]
+    fn parse_classes_parses_single_class() {
+        let result = parse_classes("my-class").unwrap();
+        assert_eq!(result, vec!["my-class".to_string()]);
+    }
+
+    #[test_log::test]
+    fn parse_classes_parses_multiple_classes() {
+        let result = parse_classes("class1 class2 class3").unwrap();
+        assert_eq!(
+            result,
+            vec![
+                "class1".to_string(),
+                "class2".to_string(),
+                "class3".to_string()
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn parse_classes_handles_extra_whitespace() {
+        let result = parse_classes("  class1   class2  ").unwrap();
+        assert_eq!(result, vec!["class1".to_string(), "class2".to_string()]);
+    }
+
+    #[test_log::test]
+    fn parse_classes_returns_empty_vec_for_empty_string() {
+        let result = parse_classes("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    // Tests for parse_link_target
+    #[test_log::test]
+    fn parse_link_target_parses_self_target() {
+        let result = parse_link_target("_self");
+        assert!(matches!(result, LinkTarget::SelfTarget));
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_blank_target() {
+        let result = parse_link_target("_blank");
+        assert!(matches!(result, LinkTarget::Blank));
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_parent_target() {
+        let result = parse_link_target("_parent");
+        assert!(matches!(result, LinkTarget::Parent));
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_top_target() {
+        let result = parse_link_target("_top");
+        assert!(matches!(result, LinkTarget::Top));
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_custom_target() {
+        let result = parse_link_target("my-frame");
+        assert!(matches!(result, LinkTarget::Custom(ref s) if s == "my-frame"));
+    }
+
+    // Tests for parse_target (Selector)
+    #[test_log::test]
+    fn parse_target_parses_self_target() {
+        let result = parse_target("this").unwrap();
+        assert!(matches!(result, Selector::SelfTarget));
+    }
+
+    #[test_log::test]
+    fn parse_target_parses_id_selector() {
+        let result = parse_target("#my-id").unwrap();
+        assert!(matches!(result, Selector::Id(ref id) if id == "my-id"));
+    }
+
+    #[test_log::test]
+    fn parse_target_parses_class_selector() {
+        let result = parse_target(".my-class").unwrap();
+        assert!(matches!(result, Selector::Class(ref class) if class == "my-class"));
+    }
+
+    #[test_log::test]
+    fn parse_target_parses_child_class_selector() {
+        let result = parse_target("> .my-class").unwrap();
+        assert!(matches!(result, Selector::ChildClass(ref class) if class == "my-class"));
+    }
+
+    #[test_log::test]
+    fn parse_target_returns_error_for_invalid_selector() {
+        let result = parse_target("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_strategy (SwapStrategy)
+    #[test_log::test]
+    fn parse_strategy_parses_children() {
+        let result = parse_strategy("children").unwrap();
+        assert!(matches!(result, SwapStrategy::Children));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_parses_this() {
+        let result = parse_strategy("this").unwrap();
+        assert!(matches!(result, SwapStrategy::This));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_parses_beforebegin() {
+        let result = parse_strategy("beforebegin").unwrap();
+        assert!(matches!(result, SwapStrategy::BeforeBegin));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_parses_case_insensitive() {
+        let result = parse_strategy("BEFOREEND").unwrap();
+        assert!(matches!(result, SwapStrategy::BeforeEnd));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_parses_delete() {
+        let result = parse_strategy("delete").unwrap();
+        assert!(matches!(result, SwapStrategy::Delete));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_parses_none() {
+        let result = parse_strategy("none").unwrap();
+        assert!(matches!(result, SwapStrategy::None));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_returns_error_for_invalid() {
+        let result = parse_strategy("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_overflow
+    #[test_log::test]
+    fn parse_overflow_parses_wrap() {
+        let result = parse_overflow("wrap").unwrap();
+        assert!(matches!(result, LayoutOverflow::Wrap { grid: false }));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_wrap_grid() {
+        let result = parse_overflow("wrap-grid").unwrap();
+        assert!(matches!(result, LayoutOverflow::Wrap { grid: true }));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_scroll() {
+        let result = parse_overflow("scroll").unwrap();
+        assert!(matches!(result, LayoutOverflow::Scroll));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_expand() {
+        let result = parse_overflow("expand").unwrap();
+        assert!(matches!(result, LayoutOverflow::Expand));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_squash() {
+        let result = parse_overflow("squash").unwrap();
+        assert!(matches!(result, LayoutOverflow::Squash));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_hidden() {
+        let result = parse_overflow("hidden").unwrap();
+        assert!(matches!(result, LayoutOverflow::Hidden));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_auto() {
+        let result = parse_overflow("auto").unwrap();
+        assert!(matches!(result, LayoutOverflow::Auto));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_returns_error_for_invalid() {
+        let result = parse_overflow("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_image_fit
+    #[test_log::test]
+    fn parse_image_fit_parses_default() {
+        let result = parse_image_fit("default").unwrap();
+        assert!(matches!(result, ImageFit::Default));
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_parses_contain() {
+        let result = parse_image_fit("contain").unwrap();
+        assert!(matches!(result, ImageFit::Contain));
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_parses_cover() {
+        let result = parse_image_fit("cover").unwrap();
+        assert!(matches!(result, ImageFit::Cover));
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_parses_fill() {
+        let result = parse_image_fit("fill").unwrap();
+        assert!(matches!(result, ImageFit::Fill));
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_parses_none() {
+        let result = parse_image_fit("none").unwrap();
+        assert!(matches!(result, ImageFit::None));
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_returns_error_for_invalid() {
+        let result = parse_image_fit("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_image_loading
+    #[test_log::test]
+    fn parse_image_loading_parses_eager() {
+        let result = parse_image_loading("eager").unwrap();
+        assert!(matches!(result, ImageLoading::Eager));
+    }
+
+    #[test_log::test]
+    fn parse_image_loading_parses_lazy() {
+        let result = parse_image_loading("lazy").unwrap();
+        assert!(matches!(result, ImageLoading::Lazy));
+    }
+
+    #[test_log::test]
+    fn parse_image_loading_returns_error_for_invalid() {
+        let result = parse_image_loading("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_bool
+    #[test_log::test]
+    fn parse_bool_parses_true() {
+        let result = parse_bool("true").unwrap();
+        assert!(result);
+    }
+
+    #[test_log::test]
+    fn parse_bool_parses_false() {
+        let result = parse_bool("false").unwrap();
+        assert!(!result);
+    }
+
+    #[test_log::test]
+    fn parse_bool_parses_empty_as_true() {
+        let result = parse_bool("").unwrap();
+        assert!(result);
+    }
+
+    #[test_log::test]
+    fn parse_bool_returns_error_for_invalid() {
+        let result = parse_bool("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_visibility
+    #[test_log::test]
+    fn parse_visibility_parses_visible() {
+        let result = parse_visibility("visible").unwrap();
+        assert!(matches!(result, Visibility::Visible));
+    }
+
+    #[test_log::test]
+    fn parse_visibility_parses_hidden() {
+        let result = parse_visibility("hidden").unwrap();
+        assert!(matches!(result, Visibility::Hidden));
+    }
+
+    #[test_log::test]
+    fn parse_visibility_returns_error_for_invalid() {
+        let result = parse_visibility("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_direction
+    #[test_log::test]
+    fn parse_direction_parses_row() {
+        let result = parse_direction("row").unwrap();
+        assert!(matches!(result, LayoutDirection::Row));
+    }
+
+    #[test_log::test]
+    fn parse_direction_parses_col() {
+        let result = parse_direction("col").unwrap();
+        assert!(matches!(result, LayoutDirection::Column));
+    }
+
+    #[test_log::test]
+    fn parse_direction_returns_error_for_invalid() {
+        let result = parse_direction("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_cursor
+    #[test_log::test]
+    fn parse_cursor_parses_auto() {
+        let result = parse_cursor("auto").unwrap();
+        assert!(matches!(result, Cursor::Auto));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_parses_pointer() {
+        let result = parse_cursor("pointer").unwrap();
+        assert!(matches!(result, Cursor::Pointer));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_parses_grab() {
+        let result = parse_cursor("grab").unwrap();
+        assert!(matches!(result, Cursor::Grab));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_parses_grabbing() {
+        let result = parse_cursor("grabbing").unwrap();
+        assert!(matches!(result, Cursor::Grabbing));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_returns_error_for_invalid() {
+        let result = parse_cursor("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_position
+    #[test_log::test]
+    fn parse_position_parses_static() {
+        let result = parse_position("static").unwrap();
+        assert!(matches!(result, Position::Static));
+    }
+
+    #[test_log::test]
+    fn parse_position_parses_sticky() {
+        let result = parse_position("sticky").unwrap();
+        assert!(matches!(result, Position::Sticky));
+    }
+
+    #[test_log::test]
+    fn parse_position_parses_relative() {
+        let result = parse_position("relative").unwrap();
+        assert!(matches!(result, Position::Relative));
+    }
+
+    #[test_log::test]
+    fn parse_position_parses_absolute() {
+        let result = parse_position("absolute").unwrap();
+        assert!(matches!(result, Position::Absolute));
+    }
+
+    #[test_log::test]
+    fn parse_position_parses_fixed() {
+        let result = parse_position("fixed").unwrap();
+        assert!(matches!(result, Position::Fixed));
+    }
+
+    #[test_log::test]
+    fn parse_position_returns_error_for_invalid() {
+        let result = parse_position("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_text_decoration_line
+    #[test_log::test]
+    fn parse_text_decoration_line_parses_inherit() {
+        let result = parse_text_decoration_line("inherit").unwrap();
+        assert!(matches!(result, TextDecorationLine::Inherit));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_parses_none() {
+        let result = parse_text_decoration_line("none").unwrap();
+        assert!(matches!(result, TextDecorationLine::None));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_parses_underline() {
+        let result = parse_text_decoration_line("underline").unwrap();
+        assert!(matches!(result, TextDecorationLine::Underline));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_parses_overline() {
+        let result = parse_text_decoration_line("overline").unwrap();
+        assert!(matches!(result, TextDecorationLine::Overline));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_parses_line_through() {
+        let result = parse_text_decoration_line("line-through").unwrap();
+        assert!(matches!(result, TextDecorationLine::LineThrough));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_returns_error_for_invalid() {
+        let result = parse_text_decoration_line("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_text_decoration_style
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_inherit() {
+        let result = parse_text_decoration_style("inherit").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Inherit));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_solid() {
+        let result = parse_text_decoration_style("solid").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Solid));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_double() {
+        let result = parse_text_decoration_style("double").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Double));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_dotted() {
+        let result = parse_text_decoration_style("dotted").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Dotted));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_dashed() {
+        let result = parse_text_decoration_style("dashed").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Dashed));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_wavy() {
+        let result = parse_text_decoration_style("wavy").unwrap();
+        assert!(matches!(result, TextDecorationStyle::Wavy));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_returns_error_for_invalid() {
+        let result = parse_text_decoration_style("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_text_decoration_lines
+    #[test_log::test]
+    fn parse_text_decoration_lines_parses_single() {
+        let result = parse_text_decoration_lines("underline").unwrap();
+        assert_eq!(result, vec![TextDecorationLine::Underline]);
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_lines_parses_multiple() {
+        let result = parse_text_decoration_lines("underline overline line-through").unwrap();
+        assert_eq!(
+            result,
+            vec![
+                TextDecorationLine::Underline,
+                TextDecorationLine::Overline,
+                TextDecorationLine::LineThrough
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_lines_returns_error_for_invalid() {
+        let result = parse_text_decoration_lines("underline invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_justify_content
+    #[test_log::test]
+    fn parse_justify_content_parses_start() {
+        let result = parse_justify_content("start").unwrap();
+        assert!(matches!(result, JustifyContent::Start));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_parses_center() {
+        let result = parse_justify_content("center").unwrap();
+        assert!(matches!(result, JustifyContent::Center));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_parses_end() {
+        let result = parse_justify_content("end").unwrap();
+        assert!(matches!(result, JustifyContent::End));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_parses_space_between() {
+        let result = parse_justify_content("space-between").unwrap();
+        assert!(matches!(result, JustifyContent::SpaceBetween));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_parses_space_evenly() {
+        let result = parse_justify_content("space-evenly").unwrap();
+        assert!(matches!(result, JustifyContent::SpaceEvenly));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_returns_error_for_invalid() {
+        let result = parse_justify_content("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_align_items
+    #[test_log::test]
+    fn parse_align_items_parses_start() {
+        let result = parse_align_items("start").unwrap();
+        assert!(matches!(result, AlignItems::Start));
+    }
+
+    #[test_log::test]
+    fn parse_align_items_parses_center() {
+        let result = parse_align_items("center").unwrap();
+        assert!(matches!(result, AlignItems::Center));
+    }
+
+    #[test_log::test]
+    fn parse_align_items_parses_end() {
+        let result = parse_align_items("end").unwrap();
+        assert!(matches!(result, AlignItems::End));
+    }
+
+    #[test_log::test]
+    fn parse_align_items_returns_error_for_invalid() {
+        let result = parse_align_items("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_text_align
+    #[test_log::test]
+    fn parse_text_align_parses_start() {
+        let result = parse_text_align("start").unwrap();
+        assert!(matches!(result, TextAlign::Start));
+    }
+
+    #[test_log::test]
+    fn parse_text_align_parses_center() {
+        let result = parse_text_align("center").unwrap();
+        assert!(matches!(result, TextAlign::Center));
+    }
+
+    #[test_log::test]
+    fn parse_text_align_parses_end() {
+        let result = parse_text_align("end").unwrap();
+        assert!(matches!(result, TextAlign::End));
+    }
+
+    #[test_log::test]
+    fn parse_text_align_parses_justify() {
+        let result = parse_text_align("justify").unwrap();
+        assert!(matches!(result, TextAlign::Justify));
+    }
+
+    #[test_log::test]
+    fn parse_text_align_returns_error_for_invalid() {
+        let result = parse_text_align("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_white_space
+    #[test_log::test]
+    fn parse_white_space_parses_normal() {
+        let result = parse_white_space("normal").unwrap();
+        assert!(matches!(result, WhiteSpace::Normal));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_parses_preserve() {
+        let result = parse_white_space("preserve").unwrap();
+        assert!(matches!(result, WhiteSpace::Preserve));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_parses_pre() {
+        let result = parse_white_space("pre").unwrap();
+        assert!(matches!(result, WhiteSpace::Preserve));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_parses_preserve_wrap() {
+        let result = parse_white_space("preserve-wrap").unwrap();
+        assert!(matches!(result, WhiteSpace::PreserveWrap));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_parses_pre_wrap() {
+        let result = parse_white_space("pre-wrap").unwrap();
+        assert!(matches!(result, WhiteSpace::PreserveWrap));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_returns_error_for_invalid() {
+        let result = parse_white_space("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_user_select
+    #[test_log::test]
+    fn parse_user_select_parses_auto() {
+        let result = parse_user_select("auto").unwrap();
+        assert!(matches!(result, UserSelect::Auto));
+    }
+
+    #[test_log::test]
+    fn parse_user_select_parses_none() {
+        let result = parse_user_select("none").unwrap();
+        assert!(matches!(result, UserSelect::None));
+    }
+
+    #[test_log::test]
+    fn parse_user_select_parses_text() {
+        let result = parse_user_select("text").unwrap();
+        assert!(matches!(result, UserSelect::Text));
+    }
+
+    #[test_log::test]
+    fn parse_user_select_parses_all() {
+        let result = parse_user_select("all").unwrap();
+        assert!(matches!(result, UserSelect::All));
+    }
+
+    #[test_log::test]
+    fn parse_user_select_returns_error_for_invalid() {
+        let result = parse_user_select("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_overflow_wrap
+    #[test_log::test]
+    fn parse_overflow_wrap_parses_normal() {
+        let result = parse_overflow_wrap("normal").unwrap();
+        assert!(matches!(result, OverflowWrap::Normal));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_parses_break_word() {
+        let result = parse_overflow_wrap("break-word").unwrap();
+        assert!(matches!(result, OverflowWrap::BreakWord));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_parses_anywhere() {
+        let result = parse_overflow_wrap("anywhere").unwrap();
+        assert!(matches!(result, OverflowWrap::Anywhere));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_returns_error_for_invalid() {
+        let result = parse_overflow_wrap("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_text_overflow
+    #[test_log::test]
+    fn parse_text_overflow_parses_clip() {
+        let result = parse_text_overflow("clip").unwrap();
+        assert!(matches!(result, TextOverflow::Clip));
+    }
+
+    #[test_log::test]
+    fn parse_text_overflow_parses_ellipsis() {
+        let result = parse_text_overflow("ellipsis").unwrap();
+        assert!(matches!(result, TextOverflow::Ellipsis));
+    }
+
+    #[test_log::test]
+    fn parse_text_overflow_returns_error_for_invalid() {
+        let result = parse_text_overflow("invalid");
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_font_weight
+    #[test_log::test]
+    fn parse_font_weight_parses_normal() {
+        let result = parse_font_weight("normal").unwrap();
+        assert!(matches!(result, FontWeight::Normal));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_bold() {
+        let result = parse_font_weight("bold").unwrap();
+        assert!(matches!(result, FontWeight::Bold));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_lighter() {
+        let result = parse_font_weight("lighter").unwrap();
+        assert!(matches!(result, FontWeight::Lighter));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_bolder() {
+        let result = parse_font_weight("bolder").unwrap();
+        assert!(matches!(result, FontWeight::Bolder));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_numeric_100() {
+        let result = parse_font_weight("100").unwrap();
+        assert!(matches!(result, FontWeight::Weight100));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_numeric_400() {
+        let result = parse_font_weight("400").unwrap();
+        assert!(matches!(result, FontWeight::Weight400));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_numeric_700() {
+        let result = parse_font_weight("700").unwrap();
+        assert!(matches!(result, FontWeight::Weight700));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_numeric_900() {
+        let result = parse_font_weight("900").unwrap();
+        assert!(matches!(result, FontWeight::Weight900));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_thin() {
+        let result = parse_font_weight("thin").unwrap();
+        assert!(matches!(result, FontWeight::Thin));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_extra_light() {
+        let result = parse_font_weight("extra-light").unwrap();
+        assert!(matches!(result, FontWeight::ExtraLight));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_extralight() {
+        let result = parse_font_weight("extralight").unwrap();
+        assert!(matches!(result, FontWeight::ExtraLight));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_light() {
+        let result = parse_font_weight("light").unwrap();
+        assert!(matches!(result, FontWeight::Light));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_medium() {
+        let result = parse_font_weight("medium").unwrap();
+        assert!(matches!(result, FontWeight::Medium));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_semi_bold() {
+        let result = parse_font_weight("semi-bold").unwrap();
+        assert!(matches!(result, FontWeight::SemiBold));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_semibold() {
+        let result = parse_font_weight("semibold").unwrap();
+        assert!(matches!(result, FontWeight::SemiBold));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_extra_bold() {
+        let result = parse_font_weight("extra-bold").unwrap();
+        assert!(matches!(result, FontWeight::ExtraBold));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_extrabold() {
+        let result = parse_font_weight("extrabold").unwrap();
+        assert!(matches!(result, FontWeight::ExtraBold));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_black() {
+        let result = parse_font_weight("black").unwrap();
+        assert!(matches!(result, FontWeight::Black));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_returns_error_for_invalid() {
+        let result = parse_font_weight("invalid");
+        assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
 #[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 mod test {
     use pretty_assertions::assert_eq;
