@@ -4285,4 +4285,344 @@ mod tests {
         assert!((x - 0.0).abs() < f32::EPSILON);
         assert!((y - 0.0).abs() < f32::EPSILON);
     }
+
+    // ==================== map_element_target tests ====================
+
+    #[test_log::test]
+    fn test_map_element_target_str_id_literal_finds_element() {
+        let child = make_container(2, Some("target-id"), vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::StrId(Target::Literal("target-id".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, Some(2));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_str_id_literal_not_found() {
+        let container = make_container(1, Some("other-id"), vec![], vec![]);
+
+        let target = ElementTarget::StrId(Target::Literal("nonexistent".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_str_id_ref_returns_none() {
+        // Ref targets are not yet implemented (FIXME in code)
+        let child = make_container(2, Some("target-id"), vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::StrId(Target::Ref("target-id".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_class_literal_finds_element() {
+        let child = make_container(2, None, vec!["target-class"], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Class(Target::Literal("target-class".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, Some(2));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_class_literal_not_found() {
+        let container = make_container(1, None, vec!["other-class"], vec![]);
+
+        let target = ElementTarget::Class(Target::Literal("nonexistent".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_class_ref_returns_none() {
+        let child = make_container(2, None, vec!["target-class"], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Class(Target::Ref("target-class".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_child_class_finds_child_element() {
+        let grandchild = make_container(3, None, vec!["target-class"], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        // ChildClass looks for a class within the element specified by self_id
+        let target = ElementTarget::ChildClass(Target::Literal("target-class".to_string()));
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, Some(3));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_child_class_not_found() {
+        let child = make_container(2, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::ChildClass(Target::Literal("nonexistent".to_string()));
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_child_class_ref_returns_none() {
+        let grandchild = make_container(3, None, vec!["target-class"], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::ChildClass(Target::Ref("target-class".to_string()));
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_id_finds_element_by_self_id() {
+        // ElementTarget::Id uses self_id to find the element, not the id parameter
+        let child = make_container(2, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Id(999); // The id in the variant is logged but not used for lookup
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, Some(2));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_id_not_found() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let target = ElementTarget::Id(2);
+        let result = map_element_target(&target, 999, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_self_target_finds_element() {
+        let child = make_container(2, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::SelfTarget;
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, Some(2));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_self_target_not_found() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let target = ElementTarget::SelfTarget;
+        let result = map_element_target(&target, 999, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_last_child_finds_last_child() {
+        let grandchild1 = make_container(3, None, vec![], vec![]);
+        let grandchild2 = make_container(4, None, vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild1, grandchild2]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::LastChild;
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, Some(4));
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_last_child_no_children() {
+        let child = make_container(2, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::LastChild;
+        let result = map_element_target(&target, 2, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_last_child_parent_not_found() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let target = ElementTarget::LastChild;
+        let result = map_element_target(&target, 999, &container, |c| c.id);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_applies_func_to_found_element() {
+        let mut child = make_container(2, Some("test"), vec!["class-a", "class-b"], vec![]);
+        child.calculated_width = Some(100.0);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        // Test that the function is actually applied to the found element
+        let target = ElementTarget::SelfTarget;
+        let result = map_element_target(&target, 2, &container, |c| c.calculated_width);
+        assert_eq!(result, Some(Some(100.0)));
+
+        // Test extracting str_id
+        let result = map_element_target(&target, 2, &container, |c| c.str_id.clone());
+        assert_eq!(result, Some(Some("test".to_string())));
+
+        // Test extracting classes count
+        let result = map_element_target(&target, 2, &container, |c| c.classes.len());
+        assert_eq!(result, Some(2));
+    }
+
+    // ==================== get_left_offset tests ====================
+
+    #[test_log::test]
+    fn test_get_left_offset_returns_none_for_zero_offset() {
+        let container = make_container(1, None, vec![], vec![]);
+        let result = get_left_offset(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_left_offset_returns_none_for_small_offset() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_x = Some(0.0005); // Below EPSILON
+        let result = get_left_offset(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_left_offset_returns_offset_x_when_above_epsilon() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_x = Some(10.0);
+        let result = get_left_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_left_offset_combines_offset_x_and_margin_left() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_x = Some(5.0);
+        container.calculated_margin_left = Some(3.0);
+        let result = get_left_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 8.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_left_offset_returns_margin_left_when_offset_x_is_none() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_margin_left = Some(5.0);
+        let result = get_left_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 5.0).abs() < f32::EPSILON);
+    }
+
+    // ==================== get_top_offset tests ====================
+
+    #[test_log::test]
+    fn test_get_top_offset_returns_none_for_zero_offset() {
+        let container = make_container(1, None, vec![], vec![]);
+        let result = get_top_offset(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_top_offset_returns_none_for_small_offset() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_y = Some(0.0005); // Below EPSILON
+        let result = get_top_offset(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_top_offset_returns_offset_y_when_above_epsilon() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_y = Some(15.0);
+        let result = get_top_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 15.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_top_offset_combines_offset_y_and_margin_top() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_offset_y = Some(7.0);
+        container.calculated_margin_top = Some(4.0);
+        let result = get_top_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 11.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_top_offset_returns_margin_top_when_offset_y_is_none() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_margin_top = Some(6.0);
+        let result = get_top_offset(&container);
+        assert!(result.is_some());
+        assert!((result.unwrap() - 6.0).abs() < f32::EPSILON);
+    }
+
+    // ==================== get_remaining_offset_width tests ====================
+
+    #[test_log::test]
+    fn test_get_remaining_offset_width_returns_zero_for_empty_container() {
+        let container = make_container(1, None, vec![], vec![]);
+        let result = get_remaining_offset_width(&container);
+        assert!((result - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_remaining_offset_width_subtracts_margin_left_from_bounding_width() {
+        // get_remaining_offset_width uses bounding_calculated_width which adds margin_x
+        // So: bounding_width = width + padding_x + scrollbar + margin_x
+        // result = bounding_width - margin_left
+        // With width=100, margin_left=10, margin_right=5:
+        // bounding_width = 100 + 0 + 0 + (10 + 5) = 115
+        // result = 115 - 10 = 105
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_width = Some(100.0);
+        container.calculated_margin_left = Some(10.0);
+        container.calculated_margin_right = Some(5.0);
+        let result = get_remaining_offset_width(&container);
+        assert!((result - 105.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_remaining_offset_width_returns_full_width_when_no_margin() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_width = Some(100.0);
+        let result = get_remaining_offset_width(&container);
+        assert!((result - 100.0).abs() < f32::EPSILON);
+    }
+
+    // ==================== get_remaining_offset_height tests ====================
+
+    #[test_log::test]
+    fn test_get_remaining_offset_height_returns_zero_for_empty_container() {
+        let container = make_container(1, None, vec![], vec![]);
+        let result = get_remaining_offset_height(&container);
+        assert!((result - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_remaining_offset_height_subtracts_margin_top_from_bounding_height() {
+        // get_remaining_offset_height uses bounding_calculated_height which adds margin_y
+        // So: bounding_height = height + padding_y + scrollbar + margin_y
+        // result = bounding_height - margin_top
+        // With height=200, margin_top=25, margin_bottom=15:
+        // bounding_height = 200 + 0 + 0 + (25 + 15) = 240
+        // result = 240 - 25 = 215
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_height = Some(200.0);
+        container.calculated_margin_top = Some(25.0);
+        container.calculated_margin_bottom = Some(15.0);
+        let result = get_remaining_offset_height(&container);
+        assert!((result - 215.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_get_remaining_offset_height_returns_full_height_when_no_margin() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_height = Some(150.0);
+        let result = get_remaining_offset_height(&container);
+        assert!((result - 150.0).abs() < f32::EPSILON);
+    }
 }
