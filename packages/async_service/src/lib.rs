@@ -1192,8 +1192,8 @@ mod test {
 
     // Tests for verifying concurrent vs sequential execution behavior
     mod timing_test {
-        use std::sync::atomic::{AtomicU32, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         use async_trait::async_trait;
         use switchy_async::sync::RwLock;

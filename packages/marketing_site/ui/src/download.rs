@@ -254,6 +254,39 @@ mod tests {
         fn handles_leading_and_trailing_whitespace() {
             assert_eq!(format_class_name("  trimmed  "), "trimmed");
         }
+
+        #[test_log::test]
+        fn handles_numeric_only_input() {
+            assert_eq!(format_class_name("12345"), "12345");
+        }
+
+        #[test_log::test]
+        fn handles_consecutive_special_characters() {
+            assert_eq!(format_class_name("v1..2..3"), "v1__2__3");
+            assert_eq!(format_class_name("test///path"), "test___path");
+        }
+
+        #[test_log::test]
+        fn handles_mixed_alphanumeric_and_special() {
+            assert_eq!(format_class_name("app-v2.0.1-rc.1"), "app-v2_0_1-rc_1");
+        }
+
+        #[test_log::test]
+        fn handles_unicode_characters() {
+            // Unicode non-word characters should be replaced with underscores
+            assert_eq!(format_class_name("test—value"), "test_value");
+            assert_eq!(format_class_name("name•item"), "name_item");
+        }
+
+        #[test_log::test]
+        fn handles_tab_characters_as_whitespace() {
+            assert_eq!(format_class_name("hello\tworld"), "hello-world");
+        }
+
+        #[test_log::test]
+        fn handles_newline_characters_as_whitespace() {
+            assert_eq!(format_class_name("hello\nworld"), "hello-world");
+        }
     }
 
     mod get_os_header_tests {
