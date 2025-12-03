@@ -15,14 +15,14 @@ fn test_toc_parsing(byte: u8, config: u8, stereo: bool, code: u8) {
     assert_eq!(toc.frame_code(), code);
 }
 
-#[test]
+#[test_log::test]
 fn test_packet_validation() {
     assert!(OpusPacket::parse(&[]).is_err());
 
     assert!(OpusPacket::parse(&[0x00]).is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_0_single_frame() {
     let packet = vec![0x00, 0x01, 0x02, 0x03];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -32,7 +32,7 @@ fn test_code_0_single_frame() {
     assert!(!result.frames[0].is_dtx);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_0_dtx_frame() {
     let packet = vec![0x00];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -42,7 +42,7 @@ fn test_code_0_dtx_frame() {
     assert!(result.frames[0].data.is_empty());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_1_two_equal_frames() {
     let packet = vec![0x01, 0xAA, 0xBB, 0xCC, 0xDD];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -54,13 +54,13 @@ fn test_code_1_two_equal_frames() {
     assert!(!result.frames[1].is_dtx);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_1_odd_length_fails() {
     let packet = vec![0x01, 0xAA, 0xBB, 0xCC];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_2_two_variable_frames() {
     let packet = vec![0x02, 2, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -70,7 +70,7 @@ fn test_code_2_two_variable_frames() {
     assert_eq!(result.frames[1].data, vec![0xCC, 0xDD, 0xEE]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_mode() {
     let packet = vec![
         0x03, 0x03, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33,
@@ -83,7 +83,7 @@ fn test_code_3_cbr_mode() {
     assert_eq!(result.frames[2].data, vec![0x11, 0x22, 0x33]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_mode() {
     let packet = vec![0x03, 0x43, 2, 3, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11];
     let result = OpusPacket::parse(&packet).unwrap();
@@ -94,13 +94,13 @@ fn test_code_3_vbr_mode() {
     assert_eq!(result.frames[2].data, vec![0xFF, 0x11]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_invalid_frame_count_zero() {
     let packet = vec![0x03, 0x00];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_invalid_frame_count_too_high() {
     let packet = vec![0x03, 0x31];
     assert!(OpusPacket::parse(&packet).is_err());
@@ -118,17 +118,17 @@ fn test_frame_length_decoding(data: &[u8], expected_len: usize, bytes_read: usiz
     assert_eq!(read, bytes_read);
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_empty_fails() {
     assert!(decode_frame_length(&[]).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_two_byte_truncated_fails() {
     assert!(decode_frame_length(&[252]).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_toc_all_configs() {
     for config in 0..=31 {
         for stereo_bit in [0, 1] {
@@ -144,25 +144,25 @@ fn test_toc_all_configs() {
     }
 }
 
-#[test]
+#[test_log::test]
 fn test_packet_too_short_for_code_1() {
     let packet = vec![0x01, 0xAA];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_packet_too_short_for_code_2() {
     let packet = vec![0x02, 10, 0xAA];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_packet_too_short_for_code_3() {
     let packet = vec![0x03, 0x02];
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_not_divisible() {
     let packet = vec![0x03, 0x03, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
     assert!(OpusPacket::parse(&packet).is_err());
