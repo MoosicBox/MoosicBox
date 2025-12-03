@@ -1189,4 +1189,219 @@ mod test {
         handle.shutdown().unwrap();
         join.await.unwrap().unwrap();
     }
+
+    // Tests for verifying concurrent vs sequential execution behavior
+    mod timing_test {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+
+        use async_trait::async_trait;
+        use switchy_async::sync::RwLock;
+
+        pub enum TimingCommand {
+            /// Command that tracks concurrent execution count
+            SlowCommand,
+        }
+
+        pub struct TimingContext {
+            /// Tracks the maximum number of commands executing concurrently
+            pub max_concurrent: Arc<AtomicU32>,
+            /// Tracks current number of commands in flight
+            pub current_concurrent: Arc<AtomicU32>,
+        }
+
+        mod concurrent_timing {
+            async_service!(super::TimingCommand, super::TimingContext);
+        }
+
+        #[async_trait]
+        impl concurrent_timing::Processor for concurrent_timing::Service {
+            type Error = concurrent_timing::Error;
+
+            async fn process_command(
+                ctx: Arc<RwLock<TimingContext>>,
+                command: TimingCommand,
+            ) -> Result<(), Self::Error> {
+                match command {
+                    TimingCommand::SlowCommand => {
+                        let (max_concurrent, current_concurrent) = {
+                            let ctx_read = ctx.read().await;
+                            (
+                                ctx_read.max_concurrent.clone(),
+                                ctx_read.current_concurrent.clone(),
+                            )
+                        };
+
+                        // Increment current concurrent count
+                        let current = current_concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+
+                        // Update max if needed
+                        let mut max = max_concurrent.load(Ordering::SeqCst);
+                        while current > max {
+                            match max_concurrent.compare_exchange_weak(
+                                max,
+                                current,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            ) {
+                                Ok(_) => break,
+                                Err(m) => max = m,
+                            }
+                        }
+
+                        // Simulate work that takes time
+                        switchy_async::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                        // Decrement current concurrent count
+                        current_concurrent.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        mod sequential_timing {
+            async_service_sequential!(super::TimingCommand, super::TimingContext);
+        }
+
+        #[async_trait]
+        impl sequential_timing::Processor for sequential_timing::Service {
+            type Error = sequential_timing::Error;
+
+            async fn process_command(
+                ctx: Arc<RwLock<TimingContext>>,
+                command: TimingCommand,
+            ) -> Result<(), Self::Error> {
+                match command {
+                    TimingCommand::SlowCommand => {
+                        let (max_concurrent, current_concurrent) = {
+                            let ctx_read = ctx.read().await;
+                            (
+                                ctx_read.max_concurrent.clone(),
+                                ctx_read.current_concurrent.clone(),
+                            )
+                        };
+
+                        // Increment current concurrent count
+                        let current = current_concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+
+                        // Update max if needed
+                        let mut max = max_concurrent.load(Ordering::SeqCst);
+                        while current > max {
+                            match max_concurrent.compare_exchange_weak(
+                                max,
+                                current,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            ) {
+                                Ok(_) => break,
+                                Err(m) => max = m,
+                            }
+                        }
+
+                        // Simulate work that takes time
+                        switchy_async::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                        // Decrement current concurrent count
+                        current_concurrent.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        #[test_log::test(switchy_async::test(real_time))]
+        async fn concurrent_service_executes_commands_in_parallel() {
+            use concurrent_timing::Commander;
+
+            let max_concurrent = Arc::new(AtomicU32::new(0));
+            let current_concurrent = Arc::new(AtomicU32::new(0));
+
+            let ctx = TimingContext {
+                max_concurrent: max_concurrent.clone(),
+                current_concurrent: current_concurrent.clone(),
+            };
+
+            let service = concurrent_timing::Service::new(ctx);
+            let handle = service.handle();
+            let join = service.with_name("concurrent_timing_test").start();
+
+            // Send multiple commands without waiting - they should execute in parallel
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+
+            // Wait for all commands to complete
+            handle
+                .send_command_and_wait_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+
+            // In concurrent mode, multiple commands should have been processing simultaneously
+            let max = max_concurrent.load(Ordering::SeqCst);
+            assert!(
+                max > 1,
+                "Concurrent service should have processed multiple commands in parallel, but max concurrent was {max}"
+            );
+
+            handle.shutdown().unwrap();
+            join.await.unwrap().unwrap();
+        }
+
+        #[test_log::test(switchy_async::test(real_time))]
+        async fn sequential_service_executes_commands_one_at_a_time() {
+            use sequential_timing::Commander;
+
+            let max_concurrent = Arc::new(AtomicU32::new(0));
+            let current_concurrent = Arc::new(AtomicU32::new(0));
+
+            let ctx = TimingContext {
+                max_concurrent: max_concurrent.clone(),
+                current_concurrent: current_concurrent.clone(),
+            };
+
+            let service = sequential_timing::Service::new(ctx);
+            let handle = service.handle();
+            let join = service.with_name("sequential_timing_test").start();
+
+            // Send multiple commands without waiting
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+            handle
+                .send_command_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+
+            // Wait for all commands to complete
+            handle
+                .send_command_and_wait_async(TimingCommand::SlowCommand)
+                .await
+                .unwrap();
+
+            // In sequential mode, only one command should have been processing at a time
+            let max = max_concurrent.load(Ordering::SeqCst);
+            assert_eq!(
+                max, 1,
+                "Sequential service should process commands one at a time, but max concurrent was {max}"
+            );
+
+            handle.shutdown().unwrap();
+            join.await.unwrap().unwrap();
+        }
+    }
 }

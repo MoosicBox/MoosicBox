@@ -8415,6 +8415,7 @@ dependencies = [
  "log 0.4.28",
  "pretty_assertions",
  "switchy_async",
+ "switchy_time",
  "test-log",
  "thiserror 2.0.17",
  "tokio",

@@ -14,7 +14,7 @@ version     = "0.1.4"
 examples = true
 
 [package.metadata.cargo-machete]
-ignored = ["tokio"]
+ignored = ["switchy_time", "tokio"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -31,6 +31,8 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+switchy_async     = { workspace = true, features = ["time"] }
+switchy_time      = { workspace = true }
 test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
