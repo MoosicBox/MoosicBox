@@ -2529,6 +2529,56 @@ mod tests {
             assert_eq!(SCRIPT_NAME, "hyperchad.min.js");
         }
 
+        #[cfg(all(feature = "hash", feature = "script"))]
+        #[test_log::test]
+        fn test_script_name_hashed_format() {
+            // SCRIPT_NAME_HASHED should follow the pattern: hyperchad-{10char_hash}.{extension}
+            let hashed = SCRIPT_NAME_HASHED.as_str();
+
+            // Should start with "hyperchad-"
+            assert!(
+                hashed.starts_with("hyperchad-"),
+                "SCRIPT_NAME_HASHED should start with 'hyperchad-', got: {hashed}"
+            );
+
+            // Should end with either .js or .min.js
+            #[cfg(debug_assertions)]
+            assert!(
+                hashed.ends_with(".js"),
+                "In debug mode, should end with '.js', got: {hashed}"
+            );
+            #[cfg(not(debug_assertions))]
+            assert!(
+                hashed.ends_with(".min.js"),
+                "In release mode, should end with '.min.js', got: {hashed}"
+            );
+
+            // The hash portion should be 10 characters (between "hyperchad-" and the extension)
+            let after_prefix = hashed.strip_prefix("hyperchad-").unwrap();
+            let hash_part = after_prefix.split('.').next().unwrap();
+            assert_eq!(
+                hash_part.len(),
+                10,
+                "Hash portion should be 10 characters, got: '{hash_part}' ({})",
+                hash_part.len()
+            );
+
+            // Hash should be lowercase hex
+            assert!(
+                hash_part.chars().all(|c| c.is_ascii_hexdigit()),
+                "Hash should be hex digits, got: {hash_part}"
+            );
+        }
+
+        #[cfg(all(feature = "hash", feature = "script"))]
+        #[test_log::test]
+        fn test_script_name_hashed_is_deterministic() {
+            // Accessing SCRIPT_NAME_HASHED multiple times should return the same value
+            let first = SCRIPT_NAME_HASHED.as_str();
+            let second = SCRIPT_NAME_HASHED.as_str();
+            assert_eq!(first, second, "SCRIPT_NAME_HASHED should be deterministic");
+        }
+
         #[test_log::test]
         fn test_vanilla_js_tag_renderer_default() {
             let renderer = VanillaJsTagRenderer::default();
@@ -3069,6 +3119,328 @@ mod tests {
             assert!(result.contains("&lt;"));
             assert!(result.contains("&gt;"));
             assert!(result.contains("&quot;"));
+        }
+    }
+
+    #[cfg(test)]
+    mod partial_html_tests {
+        use super::*;
+        use hyperchad_renderer::HtmlTagRenderer;
+        use hyperchad_transformer::Container;
+        use std::collections::BTreeMap;
+
+        #[test_log::test]
+        fn test_partial_html_includes_content() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+            let content = "<div>Test Content</div>".to_string();
+
+            let result = renderer.partial_html(&headers, &container, content.clone(), None, None);
+
+            assert!(
+                result.contains(&content),
+                "partial_html should include the content"
+            );
+        }
+
+        #[test_log::test]
+        fn test_partial_html_prepends_style_tag() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+            let content = "<div>Test</div>".to_string();
+
+            let result = renderer.partial_html(&headers, &container, content, None, None);
+
+            // The style tag should come before the content
+            let style_pos = result.find("<style>");
+            let content_pos = result.find("Test");
+            assert!(
+                style_pos.is_some() && content_pos.is_some(),
+                "Both style and content should be present"
+            );
+            assert!(
+                style_pos.unwrap() < content_pos.unwrap(),
+                "Style tag should come before content"
+            );
+        }
+    }
+
+    #[cfg(test)]
+    mod root_html_tests {
+        use super::*;
+        use hyperchad_renderer::{Color, HtmlTagRenderer};
+        use hyperchad_transformer::Container;
+        use std::collections::BTreeMap;
+
+        #[allow(clippy::too_many_arguments)]
+        fn render_root(
+            container: &Container,
+            viewport: Option<&str>,
+            background: Option<Color>,
+            title: Option<&str>,
+            description: Option<&str>,
+            css_urls: &[String],
+            css_paths: &[String],
+            inline_css: &[String],
+        ) -> String {
+            let renderer = VanillaJsTagRenderer::default();
+            let headers = BTreeMap::new();
+            renderer.root_html(
+                &headers,
+                container,
+                "<div>Content</div>".to_string(),
+                viewport,
+                background,
+                title,
+                description,
+                css_urls,
+                css_paths,
+                inline_css,
+            )
+        }
+
+        #[test_log::test]
+        fn test_root_html_has_doctype() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(result.contains("<!DOCTYPE html>"), "Should include DOCTYPE");
+        }
+
+        #[test_log::test]
+        fn test_root_html_has_html_lang() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(
+                result.contains("lang=\"en\""),
+                "Should include lang attribute"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_title() {
+            let container = Container::default();
+            let result = render_root(
+                &container,
+                None,
+                None,
+                Some("My Page Title"),
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(
+                result.contains("<title>My Page Title</title>"),
+                "Should include title"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_description() {
+            let container = Container::default();
+            let result = render_root(
+                &container,
+                None,
+                None,
+                None,
+                Some("Page description here"),
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(
+                result.contains("name=\"description\""),
+                "Should include meta description"
+            );
+            assert!(
+                result.contains("Page description here"),
+                "Should include description content"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_viewport() {
+            let container = Container::default();
+            let result = render_root(
+                &container,
+                Some("width=device-width, initial-scale=1"),
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(
+                result.contains("name=\"viewport\""),
+                "Should include viewport meta"
+            );
+            assert!(
+                result.contains("width=device-width"),
+                "Should include viewport content"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_background_color() {
+            let container = Container::default();
+            let background = Color {
+                r: 255,
+                g: 128,
+                b: 64,
+                a: None,
+            };
+            let result = render_root(
+                &container,
+                None,
+                Some(background),
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(
+                result.contains("background:rgb(255,128,64)"),
+                "Should include background color, got: {result}"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_css_urls() {
+            let container = Container::default();
+            let css_urls = vec![
+                "https://example.com/styles.css".to_string(),
+                "https://cdn.example.com/other.css".to_string(),
+            ];
+            let result = render_root(&container, None, None, None, None, &css_urls, &[], &[]);
+
+            assert!(
+                result.contains("href=\"https://example.com/styles.css\""),
+                "Should include first CSS URL"
+            );
+            assert!(
+                result.contains("href=\"https://cdn.example.com/other.css\""),
+                "Should include second CSS URL"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_css_paths() {
+            let container = Container::default();
+            let css_paths = vec!["/css/main.css".to_string(), "/css/theme.css".to_string()];
+            let result = render_root(&container, None, None, None, None, &[], &css_paths, &[]);
+
+            assert!(
+                result.contains("href=\"/css/main.css\""),
+                "Should include first CSS path"
+            );
+            assert!(
+                result.contains("href=\"/css/theme.css\""),
+                "Should include second CSS path"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_inline_css() {
+            let container = Container::default();
+            let inline_css = vec![
+                ".custom { color: red; }".to_string(),
+                ".other { margin: 0; }".to_string(),
+            ];
+            let result = render_root(&container, None, None, None, None, &[], &[], &inline_css);
+
+            assert!(
+                result.contains(".custom { color: red; }"),
+                "Should include first inline CSS"
+            );
+            assert!(
+                result.contains(".other { margin: 0; }"),
+                "Should include second inline CSS"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_script_reference() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(
+                result.contains("/js/hyperchad"),
+                "Should include script reference"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_content() {
+            let renderer = VanillaJsTagRenderer::default();
+            let container = Container::default();
+            let headers = BTreeMap::new();
+            let content = "<div class=\"my-content\">Hello World</div>".to_string();
+
+            let result = renderer.root_html(
+                &headers,
+                &container,
+                content,
+                None,
+                None,
+                None,
+                None,
+                &[],
+                &[],
+                &[],
+            );
+
+            assert!(
+                result.contains("my-content"),
+                "Should include content class"
+            );
+            assert!(
+                result.contains("Hello World"),
+                "Should include content text"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_has_body_styles() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(result.contains("margin: 0"), "Body should have margin: 0");
+            assert!(
+                result.contains("overflow: hidden"),
+                "Body should have overflow: hidden"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_remove_button_styles() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(
+                result.contains(".remove-button-styles"),
+                "Should include remove-button-styles class"
+            );
+        }
+
+        #[test_log::test]
+        fn test_root_html_includes_remove_table_styles() {
+            let container = Container::default();
+            let result = render_root(&container, None, None, None, None, &[], &[], &[]);
+
+            assert!(
+                result.contains("table.remove-table-styles"),
+                "Should include remove-table-styles class"
+            );
         }
     }
 
