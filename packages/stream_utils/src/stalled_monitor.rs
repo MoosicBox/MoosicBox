@@ -333,4 +333,65 @@ mod tests {
         let end = monitor.next().await;
         assert!(end.is_none());
     }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_timeout_with_immediate_stream_completion() {
+        // Test that when a stream completes immediately after yielding items,
+        // we don't get a spurious timeout error
+        let items = vec![1];
+        let stream = stream::iter(items);
+
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(100));
+
+        // First item should arrive without timeout
+        let result = monitor.next().await.unwrap().unwrap();
+        assert_eq!(result, 1);
+
+        // Stream should end normally, not with a timeout error
+        let end = monitor.next().await;
+        assert!(
+            end.is_none(),
+            "Stream should end normally, not with timeout"
+        );
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_sleeper_is_reset_on_every_data_item() {
+        // Test that timeout is reset when data items are received.
+        // When multiple items arrive quickly (faster than the timeout interval),
+        // the stream should NOT timeout because each item resets the timer.
+        let items = vec![1, 2, 3, 4, 5];
+        let stream = stream::iter(items.clone());
+
+        // Even though we process quickly, with a short timeout
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(500));
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        // All items should be received without timeout errors
+        assert_eq!(
+            results, items,
+            "All items should be received without timeout"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_error_implements_std_error() {
+        // Test that StalledReadMonitorError properly implements std::error::Error
+        let error = StalledReadMonitorError::Stalled;
+
+        // Test Display trait
+        assert_eq!(error.to_string(), "Stalled");
+
+        // Test Debug trait
+        let debug_str = format!("{error:?}");
+        assert!(debug_str.contains("Stalled"));
+
+        // Test std::error::Error trait (source should be None for this error)
+        let std_error: &dyn std::error::Error = &error;
+        assert!(std_error.source().is_none());
+    }
 }

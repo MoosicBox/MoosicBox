@@ -1026,4 +1026,163 @@ mod tests {
         assert_eq!(stream.next().await.unwrap(), Err("error".to_string()));
         assert_eq!(stream.next().await.unwrap(), Ok(100));
     }
+
+    // ===== Large Data and Concurrent Write Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_concurrent_reads() {
+        // Test that multiple streams can read concurrently
+        let mut writer = ByteWriter::default();
+        let mut stream1 = writer.stream();
+        let mut stream2 = writer.stream();
+        let mut stream3 = writer.stream();
+
+        // Write data
+        writer.write_all(b"concurrent test").unwrap();
+        writer.close();
+
+        // All three streams should receive the data concurrently
+        let (r1, r2, r3) = switchy_async::join!(
+            async { stream1.next().await.unwrap().unwrap() },
+            async { stream2.next().await.unwrap().unwrap() },
+            async { stream3.next().await.unwrap().unwrap() }
+        );
+
+        assert_eq!(r1, b"concurrent test"[..]);
+        assert_eq!(r2, b"concurrent test"[..]);
+        assert_eq!(r3, b"concurrent test"[..]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_with_zero_sized_type() {
+        // Test TypedWriter with zero-sized type
+        let writer = TypedWriter::<()>::default();
+        let mut stream = writer.stream();
+
+        writer.write(());
+        writer.write(());
+
+        assert_eq!(stream.next().await.unwrap(), ());
+        assert_eq!(stream.next().await.unwrap(), ());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_writer_interleaved_create_drop_streams() {
+        // Test creating and dropping streams interleaved with writes
+        let mut writer = ByteWriter::default();
+
+        // Create first stream
+        let mut stream1 = writer.stream();
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // Write first chunk
+        writer.write_all(b"first").unwrap();
+
+        // Create second stream before consuming first write
+        let stream2 = writer.stream();
+        assert_eq!(writer.senders.read().unwrap().len(), 2);
+
+        // Write second chunk
+        writer.write_all(b"second").unwrap();
+
+        // Drop stream2 before it reads anything
+        drop(stream2);
+
+        // Write third chunk - should trigger cleanup
+        writer.write_all(b"third").unwrap();
+        assert_eq!(writer.senders.read().unwrap().len(), 1);
+
+        // stream1 should have all three chunks
+        let data1 = stream1.next().await.unwrap().unwrap();
+        let data2 = stream1.next().await.unwrap().unwrap();
+        let data3 = stream1.next().await.unwrap().unwrap();
+
+        assert_eq!(data1, b"first"[..]);
+        assert_eq!(data2, b"second"[..]);
+        assert_eq!(data3, b"third"[..]);
+    }
+
+    #[test_log::test]
+    fn test_byte_writer_write_returns_correct_length() {
+        // Test that write() returns the exact number of bytes written
+        let mut writer = ByteWriter::default();
+        let _stream = writer.stream();
+
+        // Various buffer sizes
+        let result1 = writer.write(b"a").unwrap();
+        assert_eq!(result1, 1);
+
+        let result2 = writer.write(b"hello").unwrap();
+        assert_eq!(result2, 5);
+
+        let result3 = writer.write(&[0u8; 1000]).unwrap();
+        assert_eq!(result3, 1000);
+
+        // Empty write
+        let result4 = writer.write(&[]).unwrap();
+        assert_eq!(result4, 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_writer_many_streams() {
+        // Test TypedWriter with many streams to verify the clone optimization
+        // (last sender doesn't clone the value)
+        let writer = TypedWriter::<Vec<i32>>::default();
+        let mut streams: Vec<_> = (0..10).map(|_| writer.stream()).collect();
+
+        let data = vec![1, 2, 3, 4, 5];
+        writer.write(data.clone());
+
+        // All 10 streams should receive the same data
+        for (i, stream) in streams.iter_mut().enumerate() {
+            let received = stream.next().await.unwrap();
+            assert_eq!(received, data, "Stream {i} should receive correct data");
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_byte_stream_receives_in_order() {
+        // Test that bytes are received in the order they were written
+        let mut writer = ByteWriter::default();
+        let mut stream = writer.stream();
+
+        // Write 10 chunks in order
+        for i in 0..10 {
+            let data = format!("chunk{i}");
+            writer.write_all(data.as_bytes()).unwrap();
+        }
+        writer.close();
+
+        // Receive and verify order
+        for i in 0..10 {
+            let expected = format!("chunk{i}");
+            let received = stream.next().await.unwrap().unwrap();
+            assert_eq!(
+                received,
+                expected.as_bytes()[..],
+                "Chunk {i} should be received in order"
+            );
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_typed_stream_receives_in_order() {
+        // Test that typed values are received in the order they were written
+        let writer = TypedWriter::<usize>::default();
+        let mut stream = writer.stream();
+
+        // Write values in order
+        for i in 0..100 {
+            writer.write(i);
+        }
+
+        // Receive and verify order
+        for expected in 0..100 {
+            let received = stream.next().await.unwrap();
+            assert_eq!(
+                received, expected,
+                "Value {expected} should be received in order"
+            );
+        }
+    }
 }
