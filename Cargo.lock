@@ -8812,6 +8812,7 @@ dependencies = [
  "pingora-load-balancing",
  "pingora-proxy",
  "switchy_env",
+ "test-log",
 ]
 
 [[package]]

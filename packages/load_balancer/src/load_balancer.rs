@@ -14,6 +14,103 @@ use pingora_core::{Result, upstreams::peer::HttpPeer};
 use pingora_load_balancing::{LoadBalancer, selection::RoundRobin};
 use pingora_proxy::{ProxyHttp, Session};
 
+/// A single cluster configuration entry mapping hostnames to upstream addresses.
+///
+/// This represents the parsed result of a cluster entry from the `CLUSTERS` environment variable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterEntry {
+    /// The hostname(s) that route to this cluster
+    pub hostnames: Vec<String>,
+    /// The upstream IP:port addresses for this cluster
+    pub upstreams: Vec<String>,
+}
+
+/// Parses cluster configuration from a configuration string.
+///
+/// The configuration string should contain semicolon-separated entries in the format:
+/// `hostname1,hostname2:ip1:port1,ip2:port2;hostname3:ip3:port3`
+///
+/// Each cluster entry maps one or more hostnames to a list of upstream server addresses.
+///
+/// # Arguments
+///
+/// * `config` - The cluster configuration string to parse
+///
+/// # Returns
+///
+/// A vector of `ClusterEntry` structs, each containing hostnames and their upstream addresses.
+///
+/// # Panics
+///
+/// Panics if any cluster entry is malformed (missing the `:` separator between hostnames and IPs).
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_load_balancer::parse_cluster_config;
+///
+/// let entries = parse_cluster_config("example.com:192.168.1.1:8080");
+/// assert_eq!(entries.len(), 1);
+/// assert_eq!(entries[0].hostnames, vec!["example.com"]);
+/// assert_eq!(entries[0].upstreams, vec!["192.168.1.1:8080"]);
+///
+/// // Multiple hostnames and upstreams
+/// let entries = parse_cluster_config("host1,host2:10.0.0.1:80,10.0.0.2:80");
+/// assert_eq!(entries[0].hostnames, vec!["host1", "host2"]);
+/// assert_eq!(entries[0].upstreams, vec!["10.0.0.1:80", "10.0.0.2:80"]);
+/// ```
+#[must_use]
+pub fn parse_cluster_config(config: &str) -> Vec<ClusterEntry> {
+    config
+        .split(';')
+        .map(str::trim)
+        .filter(|x| !x.is_empty())
+        .map(|entry| {
+            let (names, ips) = entry.split_once(':').expect("Invalid cluster");
+            let hostnames = names.split(',').map(str::to_owned).collect();
+            let upstreams = ips
+                .split(',')
+                .map(|ip| {
+                    // Handle IP:port format - need to reconstruct the full address
+                    // since split_once on ':' consumes the first colon
+                    ip.to_owned()
+                })
+                .collect();
+
+            ClusterEntry {
+                hostnames,
+                upstreams,
+            }
+        })
+        .collect()
+}
+
+/// Checks if a request path is an ACME challenge request.
+///
+/// ACME challenge requests are used during TLS certificate issuance (e.g., Let's Encrypt)
+/// and are identified by paths starting with `/.well-known/acme-challenge/`.
+///
+/// # Arguments
+///
+/// * `path` - The request path to check
+///
+/// # Returns
+///
+/// `true` if the path is an ACME challenge request, `false` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_load_balancer::is_acme_challenge_path;
+///
+/// assert!(is_acme_challenge_path("/.well-known/acme-challenge/token123"));
+/// assert!(!is_acme_challenge_path("/api/users"));
+/// ```
+#[must_use]
+pub fn is_acme_challenge_path(path: &str) -> bool {
+    path.starts_with("/.well-known/acme-challenge/")
+}
+
 /// HTTP port for the load balancer.
 ///
 /// Defaults to 6188, can be overridden via the `PORT` environment variable.
@@ -61,7 +158,7 @@ impl Router {
 impl Router {
     fn is_challenge(session: &Session) -> bool {
         let path = session.req_header().uri.path();
-        path.starts_with("/.well-known/acme-challenge/")
+        is_acme_challenge_path(path)
     }
 }
 
@@ -199,5 +296,214 @@ impl ProxyHttp for Router {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod parse_cluster_config_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn parses_single_host_single_upstream() {
+            let entries = parse_cluster_config("example.com:192.168.1.1:8080");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["example.com"]);
+            assert_eq!(entries[0].upstreams, vec!["192.168.1.1:8080"]);
+        }
+
+        #[test_log::test]
+        fn parses_multiple_hostnames_single_upstream() {
+            let entries = parse_cluster_config("host1,host2,host3:10.0.0.1:80");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["host1", "host2", "host3"]);
+            assert_eq!(entries[0].upstreams, vec!["10.0.0.1:80"]);
+        }
+
+        #[test_log::test]
+        fn parses_single_hostname_multiple_upstreams() {
+            let entries = parse_cluster_config("example.com:10.0.0.1:80,10.0.0.2:80,10.0.0.3:80");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["example.com"]);
+            assert_eq!(
+                entries[0].upstreams,
+                vec!["10.0.0.1:80", "10.0.0.2:80", "10.0.0.3:80"]
+            );
+        }
+
+        #[test_log::test]
+        fn parses_multiple_hostnames_multiple_upstreams() {
+            let entries = parse_cluster_config("host1,host2:10.0.0.1:80,10.0.0.2:80");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["host1", "host2"]);
+            assert_eq!(entries[0].upstreams, vec!["10.0.0.1:80", "10.0.0.2:80"]);
+        }
+
+        #[test_log::test]
+        fn parses_multiple_clusters() {
+            let entries =
+                parse_cluster_config("host1:10.0.0.1:80;host2:10.0.0.2:80;host3:10.0.0.3:80");
+            assert_eq!(entries.len(), 3);
+
+            assert_eq!(entries[0].hostnames, vec!["host1"]);
+            assert_eq!(entries[0].upstreams, vec!["10.0.0.1:80"]);
+
+            assert_eq!(entries[1].hostnames, vec!["host2"]);
+            assert_eq!(entries[1].upstreams, vec!["10.0.0.2:80"]);
+
+            assert_eq!(entries[2].hostnames, vec!["host3"]);
+            assert_eq!(entries[2].upstreams, vec!["10.0.0.3:80"]);
+        }
+
+        #[test_log::test]
+        fn parses_complex_configuration() {
+            let entries = parse_cluster_config(
+                "api.example.com,www.example.com:10.0.0.1:8080,10.0.0.2:8080;\
+                 solver:10.0.1.1:80;\
+                 *:10.0.2.1:80,10.0.2.2:80",
+            );
+            assert_eq!(entries.len(), 3);
+
+            assert_eq!(
+                entries[0].hostnames,
+                vec!["api.example.com", "www.example.com"]
+            );
+            assert_eq!(entries[0].upstreams, vec!["10.0.0.1:8080", "10.0.0.2:8080"]);
+
+            assert_eq!(entries[1].hostnames, vec!["solver"]);
+            assert_eq!(entries[1].upstreams, vec!["10.0.1.1:80"]);
+
+            assert_eq!(entries[2].hostnames, vec!["*"]);
+            assert_eq!(entries[2].upstreams, vec!["10.0.2.1:80", "10.0.2.2:80"]);
+        }
+
+        #[test_log::test]
+        fn handles_whitespace_in_entries() {
+            let entries = parse_cluster_config("  host1:10.0.0.1:80  ; host2:10.0.0.2:80  ");
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].hostnames, vec!["host1"]);
+            assert_eq!(entries[1].hostnames, vec!["host2"]);
+        }
+
+        #[test_log::test]
+        fn filters_empty_entries() {
+            let entries = parse_cluster_config("host1:10.0.0.1:80;;host2:10.0.0.2:80;");
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].hostnames, vec!["host1"]);
+            assert_eq!(entries[1].hostnames, vec!["host2"]);
+        }
+
+        #[test_log::test]
+        fn returns_empty_for_empty_string() {
+            let entries = parse_cluster_config("");
+            assert!(entries.is_empty());
+        }
+
+        #[test_log::test]
+        fn returns_empty_for_whitespace_only() {
+            let entries = parse_cluster_config("   ");
+            assert!(entries.is_empty());
+        }
+
+        #[test_log::test]
+        fn returns_empty_for_only_semicolons() {
+            let entries = parse_cluster_config(";;;");
+            assert!(entries.is_empty());
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "Invalid cluster")]
+        fn panics_on_missing_colon_separator() {
+            let _ = parse_cluster_config("host1-no-colon");
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "Invalid cluster")]
+        fn panics_on_partial_invalid_entry() {
+            let _ = parse_cluster_config("host1:10.0.0.1:80;invalid-entry;host2:10.0.0.2:80");
+        }
+
+        #[test_log::test]
+        fn handles_ipv6_addresses() {
+            // IPv6 addresses contain colons, so the format needs to handle them carefully
+            // Since we use split_once(':'), only the first colon separates hostname from upstreams
+            let entries = parse_cluster_config("host:[::1]:8080");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["host"]);
+            assert_eq!(entries[0].upstreams, vec!["[::1]:8080"]);
+        }
+
+        #[test_log::test]
+        fn handles_wildcard_hostname() {
+            let entries = parse_cluster_config("*:10.0.0.1:80");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].hostnames, vec!["*"]);
+            assert_eq!(entries[0].upstreams, vec!["10.0.0.1:80"]);
+        }
+    }
+
+    mod is_acme_challenge_path_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn returns_true_for_acme_challenge_path() {
+            assert!(is_acme_challenge_path(
+                "/.well-known/acme-challenge/token123"
+            ));
+        }
+
+        #[test_log::test]
+        fn returns_true_for_acme_challenge_with_long_token() {
+            assert!(is_acme_challenge_path(
+                "/.well-known/acme-challenge/abcdefghijklmnopqrstuvwxyz1234567890"
+            ));
+        }
+
+        #[test_log::test]
+        fn returns_true_for_acme_challenge_root() {
+            // Just the path prefix with trailing slash
+            assert!(is_acme_challenge_path("/.well-known/acme-challenge/"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_regular_api_path() {
+            assert!(!is_acme_challenge_path("/api/users"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_root_path() {
+            assert!(!is_acme_challenge_path("/"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_empty_path() {
+            assert!(!is_acme_challenge_path(""));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_similar_but_different_path() {
+            assert!(!is_acme_challenge_path("/.well-known/other-path/token"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_partial_acme_path() {
+            // Missing trailing slash after acme-challenge
+            assert!(!is_acme_challenge_path("/.well-known/acme-challenge"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_path_without_leading_slash() {
+            assert!(!is_acme_challenge_path(".well-known/acme-challenge/token"));
+        }
+
+        #[test_log::test]
+        fn returns_false_for_nested_acme_path() {
+            // The path prefix appears later in the path
+            assert!(!is_acme_challenge_path(
+                "/prefix/.well-known/acme-challenge/token"
+            ));
+        }
     }
 }

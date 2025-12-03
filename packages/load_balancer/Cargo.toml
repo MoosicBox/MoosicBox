@@ -39,6 +39,9 @@ pingora = { workspace = true, features = ["openssl"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 pingora = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 
