@@ -394,3 +394,84 @@ struct AlbumCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_get_album_cover_path_basic() {
+        let path = get_album_cover_path("large", "library", "123", "Artist Name", "Album Title");
+
+        // Check that the path ends with the expected filename
+        assert!(path.to_string_lossy().ends_with("album_123_large.jpg"));
+
+        // Check that the path contains the sanitized artist and album names
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("Artist_Name"));
+        assert!(path_str.contains("Album_Title"));
+        assert!(path_str.contains("library"));
+    }
+
+    #[test_log::test]
+    fn test_get_album_cover_path_sanitizes_special_characters() {
+        let path = get_album_cover_path(
+            "max",
+            "tidal",
+            "456",
+            "The Artist's Name!",
+            "Album: Remastered (2024)",
+        );
+
+        let path_str = path.to_string_lossy();
+        // Apostrophes and special chars should be replaced with underscores
+        assert!(path_str.contains("The_Artist_s_Name_"));
+        assert!(path_str.contains("Album__Remastered__2024_"));
+        assert!(path_str.ends_with("album_456_max.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_album_cover_path_different_sizes() {
+        let small_path = get_album_cover_path("small", "source", "1", "Artist", "Album");
+        let medium_path = get_album_cover_path("medium", "source", "1", "Artist", "Album");
+        let large_path = get_album_cover_path("large", "source", "1", "Artist", "Album");
+
+        assert!(small_path.to_string_lossy().ends_with("album_1_small.jpg"));
+        assert!(
+            medium_path
+                .to_string_lossy()
+                .ends_with("album_1_medium.jpg")
+        );
+        assert!(large_path.to_string_lossy().ends_with("album_1_large.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_album_cover_path_unicode_characters() {
+        let path = get_album_cover_path("max", "library", "789", "アーティスト", "アルバム");
+
+        // Unicode characters should be sanitized to underscores
+        let path_str = path.to_string_lossy();
+        assert!(path_str.ends_with("album_789_max.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_album_cover_path_empty_strings() {
+        let path = get_album_cover_path("max", "library", "", "", "");
+
+        // Even with empty strings, the path structure should be valid
+        let path_str = path.to_string_lossy();
+        assert!(path_str.ends_with("album__max.jpg"));
+    }
+
+    #[test_log::test]
+    fn test_get_album_cover_path_structure() {
+        let path = get_album_cover_path("max", "source_name", "100", "My Artist", "My Album");
+
+        // Check the path contains expected values in the structure
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("source_name"));
+        assert!(path_str.contains("My_Artist"));
+        assert!(path_str.contains("My_Album"));
+        assert!(path_str.contains("album_100_max.jpg"));
+    }
+}
