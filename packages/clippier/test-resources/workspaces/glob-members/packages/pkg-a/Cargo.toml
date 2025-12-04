@@ -1,0 +1,11 @@
+[package]
+edition = "2021"
+name    = "pkg-a"
+version = "0.1.0"
+
+[dependencies]
+pkg-b = { workspace = true }
+
+[features]
+default   = []
+feature-a = []

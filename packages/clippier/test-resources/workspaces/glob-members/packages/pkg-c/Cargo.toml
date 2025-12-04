@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name    = "pkg-c"
+version = "0.1.0"
+
+[dependencies]
+
+[features]
+default   = []
+feature-c = []

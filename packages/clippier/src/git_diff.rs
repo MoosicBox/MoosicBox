@@ -282,7 +282,8 @@ pub fn extract_changed_dependencies_from_git(
     log::debug!("Directly changed dependencies (before filtering): {directly_changed_deps:?}");
 
     // Get the current and previous Cargo.lock
-    let current_cargo_lock_content = std::fs::read_to_string(workspace_root.join("Cargo.lock"))?;
+    let current_cargo_lock_content =
+        switchy_fs::sync::read_to_string(workspace_root.join("Cargo.lock"))?;
     let current_cargo_lock = parse_cargo_lock(&current_cargo_lock_content)?;
 
     let previous_cargo_lock = get_cargo_lock_from_commit(&repo, base_oid)?;
@@ -302,7 +303,7 @@ pub fn extract_changed_dependencies_from_git(
     // Filter out workspace packages - we only want actual external dependencies
     // First, get the list of workspace package names
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: toml::Value = toml::from_str(&workspace_source)?;
 
     let mut workspace_package_names = std::collections::BTreeSet::new();
@@ -317,8 +318,8 @@ pub fn extract_changed_dependencies_from_git(
             let full_path = workspace_root.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
-            if cargo_path.exists()
-                && let Ok(source) = std::fs::read_to_string(&cargo_path)
+            if switchy_fs::exists(&cargo_path)
+                && let Ok(source) = switchy_fs::sync::read_to_string(&cargo_path)
                 && let Ok(value) = toml::from_str::<toml::Value>(&source)
                 && let Some(package_name) = value
                     .get("package")
@@ -588,7 +589,7 @@ pub fn build_external_dependency_map(
 
     // First, parse workspace-level Cargo.toml to get workspace dependencies
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: toml::Value = toml::from_str(&workspace_source)?;
 
     // Get workspace dependencies (these are external packages that can be referenced with workspace = true)
@@ -614,11 +615,11 @@ pub fn build_external_dependency_map(
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
-        if !cargo_path.exists() {
+        if !switchy_fs::exists(&cargo_path) {
             continue;
         }
 
-        let source = std::fs::read_to_string(&cargo_path)?;
+        let source = switchy_fs::sync::read_to_string(&cargo_path)?;
         let value: toml::Value = toml::from_str(&source)?;
 
         // Get package name

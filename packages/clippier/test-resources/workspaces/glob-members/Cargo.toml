@@ -1,0 +1,9 @@
+[workspace]
+members  = ["packages/*"]
+resolver = "2"
+
+[workspace.dependencies]
+pkg-a = { path = "packages/pkg-a" }
+pkg-b = { path = "packages/pkg-b" }
+pkg-c = { path = "packages/pkg-c" }
+serde = "1.0"
