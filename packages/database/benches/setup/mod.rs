@@ -8,7 +8,6 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use switchy_database::Database;
 
@@ -36,8 +35,8 @@ static TABLE_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Generate a unique table name to avoid conflicts between benchmark runs
 #[must_use]
 pub fn unique_table_name(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+    let timestamp = switchy_time::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards")
         .as_millis();
     let counter = TABLE_COUNTER.fetch_add(1, Ordering::SeqCst);

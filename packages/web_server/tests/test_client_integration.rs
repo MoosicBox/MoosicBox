@@ -1096,7 +1096,6 @@ fn test_native_nesting_complex_structure() {
 fn test_performance_comparison_setup_time() {
     use moosicbox_web_server::test_client::actix_impl::ActixWebServer;
     use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
-    use std::time::Instant;
 
     // Create a moderately complex nested structure for performance testing
     let create_test_scopes = || {
@@ -1153,12 +1152,12 @@ fn test_performance_comparison_setup_time() {
     };
 
     // Measure flattening approach setup time
-    let flattening_start = Instant::now();
+    let flattening_start = switchy_time::instant_now();
     let _flattening_server = ActixWebServer::new_with_flattening(create_test_scopes());
     let flattening_duration = flattening_start.elapsed();
 
     // Measure native nesting approach setup time
-    let native_start = Instant::now();
+    let native_start = switchy_time::instant_now();
     let _native_server = ActixWebServer::new_with_native_nesting(create_test_scopes());
     let native_duration = native_start.elapsed();
 

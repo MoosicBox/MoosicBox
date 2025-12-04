@@ -20,7 +20,7 @@ mod rusqlite_data_type_tests {
 
         async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
             let test_id = std::thread::current().id();
-            let timestamp = std::time::SystemTime::now()
+            let timestamp = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();

@@ -208,13 +208,11 @@ mod tests {
     #[test_log::test(switchy_async::test(real_time))]
     async fn test_stalled_monitor_with_throttle() {
         // Test that throttle limits data consumption rate
-        use std::time::Instant;
-
         let data = vec![1, 2, 3];
         let stream = stream::iter(data.clone());
         let mut monitor = StalledReadMonitor::new(stream).with_throttle(Duration::from_millis(50));
 
-        let start = Instant::now();
+        let start = switchy_time::instant_now();
         let mut results = vec![];
         while let Some(item) = monitor.next().await {
             results.push(item.unwrap());

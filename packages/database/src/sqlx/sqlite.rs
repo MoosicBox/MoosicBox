@@ -2209,7 +2209,7 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
     let temp_column = format!(
         "{}_temp_{}",
         column_name,
-        std::time::SystemTime::now()
+        switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
@@ -2569,7 +2569,7 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
 
         // Step 4: Create temporary table name
         let temp_table = format!("{}_temp_{}", table_name,
-            std::time::SystemTime::now()
+            switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
