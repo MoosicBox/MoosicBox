@@ -259,19 +259,27 @@ fs-tokio             = ["fs", "switchy_fs?/tokio"]
 
 all-http = [
     "http",
+    "http-brotli",
+    "http-deflate",
+    "http-gzip",
     "http-json",
     "http-reqwest",
     "http-serde",
     "http-simulator",
     "http-stream",
+    "http-zstd",
 ]
 
 http           = ["dep:switchy_http"]
+http-brotli    = ["http", "switchy_http?/brotli"]
+http-deflate   = ["http", "switchy_http?/deflate"]
+http-gzip      = ["http", "switchy_http?/gzip"]
 http-json      = ["http", "switchy_http?/json"]
 http-reqwest   = ["http", "switchy_http?/reqwest"]
 http-serde     = ["http", "switchy_http?/serde"]
 http-simulator = ["http", "switchy_http?/simulator"]
 http-stream    = ["http", "switchy_http?/stream"]
+http-zstd      = ["http", "switchy_http?/zstd"]
 
 all-http-models = [
     "http-models",

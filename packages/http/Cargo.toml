@@ -51,4 +51,10 @@ simulator = []
 json   = ["dep:serde_json", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]
 
+# Compression (decompression) features
+brotli  = ["reqwest?/brotli"]
+deflate = ["reqwest?/deflate"]
+gzip    = ["reqwest?/gzip"]
+zstd    = ["reqwest?/zstd"]
+
 serde = ["dep:serde", "switchy_http_models/serde"]
