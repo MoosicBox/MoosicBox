@@ -672,6 +672,34 @@ runs:
               ref: ${{ inputs.clippier-version }}
               path: .clippier-source
 
+        - name: Compute clippier source hash
+          id: clippier-hash
+          if: |
+              inputs.command == 'features' ||
+              inputs.command == 'packages' ||
+              inputs.command == 'affected-packages' ||
+              inputs.command == 'workspace-deps' ||
+              inputs.command == 'validate-feature-propagation' ||
+              inputs.command == 'workspace-toolchains' ||
+              (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
+          shell: bash
+          run: |
+              if [[ -d ".clippier-source" ]]; then
+                # External repo: compute hash from checked-out MoosicBox source
+                HASH=$(cd .clippier-source && git rev-parse HEAD:packages/clippier)
+                echo "hash=$HASH" >> $GITHUB_OUTPUT
+                echo "Clippier source hash (from MoosicBox checkout): $HASH"
+              elif [[ -d "packages/clippier" ]]; then
+                # Local repo (MoosicBox itself): compute hash from local source
+                HASH=$(git rev-parse HEAD:packages/clippier)
+                echo "hash=$HASH" >> $GITHUB_OUTPUT
+                echo "Clippier source hash (from local repo): $HASH"
+              else
+                # Fallback: use clippier-version as hash
+                echo "hash=${{ inputs.clippier-version || 'unknown' }}" >> $GITHUB_OUTPUT
+                echo "Clippier source hash (fallback): ${{ inputs.clippier-version || 'unknown' }}"
+              fi
+
         - name: Cache clippier binary
           if: |
               inputs.skip-cache != 'true' && (
@@ -686,7 +714,7 @@ runs:
           uses: actions/cache@v4
           with:
               path: ./target/release/clippier
-              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ hashFiles('packages/clippier/**') }}
+              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}
 
         - name: Build clippier
           if: |

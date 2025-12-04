@@ -874,7 +874,17 @@ run_matrix_single_command_mode() {
     fi
 
     local total_iterations=${#FEATURE_COMBINATIONS[@]}
-    echo "📊 Total iterations: $total_iterations"
+
+    # Handle empty features case: run once with no features
+    # This ensures packages with no testable features still get one run
+    # with --no-default-features and no additional --features flag
+    if [[ $total_iterations -eq 0 ]]; then
+        FEATURE_COMBINATIONS=("")
+        total_iterations=1
+        echo "📊 Total iterations: $total_iterations (no features, running once)"
+    else
+        echo "📊 Total iterations: $total_iterations"
+    fi
 
     # Initialize tracking
     declare -a ALL_FAILURES=()
