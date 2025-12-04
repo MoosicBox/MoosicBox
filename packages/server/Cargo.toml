@@ -542,6 +542,7 @@ profiling-tracy = [
 ]
 
 simulator = [
+    "moosicbox_library_music_api?/simulator",
     "moosicbox_search?/simulator",
     "switchy_async/simulator",
     "switchy_database/simulator",

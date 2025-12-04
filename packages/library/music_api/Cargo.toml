@@ -41,7 +41,7 @@ test-log         = { workspace = true }
 [features]
 default = ["all-encoders", "api"]
 
-simulator = ["switchy_database/simulator"]
+simulator = ["switchy_async/simulator", "switchy_database/simulator"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
