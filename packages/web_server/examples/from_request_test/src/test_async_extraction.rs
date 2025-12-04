@@ -107,14 +107,14 @@ async fn test_request_data_async_extraction() -> Result<(), Box<dyn std::error::
 async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing async vs sync extraction consistency...");
 
-    // Create identical requests for both tests
-    let req_for_sync = create_test_request_with_query("consistency_test=123");
-    let req_for_async = create_test_request_with_query("consistency_test=123");
-
-    // Extract using sync method
-    let sync_result = String::from_request_sync(&req_for_sync);
+    // Extract using sync method (scoped to drop request before await)
+    let sync_result = {
+        let req_for_sync = create_test_request_with_query("consistency_test=123");
+        String::from_request_sync(&req_for_sync)
+    };
 
     // Extract using async method
+    let req_for_async = create_test_request_with_query("consistency_test=123");
     let async_result = String::from_request_async(req_for_async).await;
 
     match (sync_result, async_result) {

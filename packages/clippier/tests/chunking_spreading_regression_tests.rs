@@ -1193,3 +1193,743 @@ os = "ubuntu"
             .collect::<Vec<_>>()
     );
 }
+
+/// Test multiple glob patterns in workspace members
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_multiple_glob_patterns() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with multiple glob patterns
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/*", "crates/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create packages directory
+    let packages_dir = temp_dir.path().join("packages");
+    switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
+
+    for pkg_name in ["alpha", "beta"] {
+        let package_dir = packages_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "pkg_{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    // Create crates directory
+    let crates_dir = temp_dir.path().join("crates");
+    switchy_fs::sync::create_dir_all(&crates_dir).unwrap();
+
+    for pkg_name in ["gamma", "delta"] {
+        let package_dir = crates_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "crate_{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should find all 4 packages from both glob patterns
+    assert_eq!(
+        configs.len(),
+        4,
+        "Should find all 4 packages from multiple glob patterns: {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    let package_names: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("name").unwrap().as_str().unwrap())
+        .collect();
+
+    assert!(package_names.contains(&"pkg_alpha"));
+    assert!(package_names.contains(&"pkg_beta"));
+    assert!(package_names.contains(&"crate_gamma"));
+    assert!(package_names.contains(&"crate_delta"));
+}
+
+/// Test mixed explicit paths and glob patterns
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_mixed_explicit_and_glob() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with mixed explicit and glob patterns
+    let workspace_toml = r#"
+[workspace]
+members = ["core", "packages/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create explicit "core" package
+    let core_dir = temp_dir.path().join("core");
+    switchy_fs::sync::create_dir_all(core_dir.join("src")).unwrap();
+
+    let core_cargo_toml = r#"
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#;
+    switchy_fs::sync::write(core_dir.join("Cargo.toml"), core_cargo_toml).unwrap();
+    switchy_fs::sync::write(core_dir.join("src/lib.rs"), "// core lib").unwrap();
+    switchy_fs::sync::write(
+        core_dir.join("clippier.toml"),
+        r#"
+[[config]]
+os = "ubuntu"
+"#,
+    )
+    .unwrap();
+
+    // Create packages via glob
+    let packages_dir = temp_dir.path().join("packages");
+    switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
+
+    for pkg_name in ["utils", "helpers"] {
+        let package_dir = packages_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should find 3 packages: 1 explicit + 2 from glob
+    assert_eq!(
+        configs.len(),
+        3,
+        "Should find 3 packages (1 explicit + 2 from glob): {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    let package_names: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("name").unwrap().as_str().unwrap())
+        .collect();
+
+    assert!(
+        package_names.contains(&"core"),
+        "Should find explicit 'core' package"
+    );
+    assert!(
+        package_names.contains(&"utils"),
+        "Should find 'utils' from glob"
+    );
+    assert!(
+        package_names.contains(&"helpers"),
+        "Should find 'helpers' from glob"
+    );
+}
+
+/// Test single character wildcard (?) in glob patterns
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_single_char_wildcard() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with single-char wildcard pattern
+    let workspace_toml = r#"
+[workspace]
+members = ["pkg?"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create packages that match pkg? pattern
+    for suffix in ["a", "b", "c"] {
+        let pkg_name = format!("pkg{suffix}");
+        let package_dir = temp_dir.path().join(&pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    // Create a package that should NOT match (pkg_long has more than one char after pkg)
+    let non_matching_dir = temp_dir.path().join("pkg_long");
+    switchy_fs::sync::create_dir_all(non_matching_dir.join("src")).unwrap();
+    switchy_fs::sync::write(
+        non_matching_dir.join("Cargo.toml"),
+        r#"
+[package]
+name = "pkg_long"
+version = "0.1.0"
+edition = "2021"
+"#,
+    )
+    .unwrap();
+    switchy_fs::sync::write(non_matching_dir.join("src/lib.rs"), "// should not match").unwrap();
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should find only 3 packages matching pkg? (not pkg_long)
+    assert_eq!(
+        configs.len(),
+        3,
+        "Should find only 3 packages matching 'pkg?': {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    let package_names: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("name").unwrap().as_str().unwrap())
+        .collect();
+
+    assert!(package_names.contains(&"pkga"));
+    assert!(package_names.contains(&"pkgb"));
+    assert!(package_names.contains(&"pkgc"));
+    assert!(
+        !package_names.contains(&"pkg_long"),
+        "pkg_long should NOT match 'pkg?'"
+    );
+}
+
+/// Test character class patterns [abc] in glob
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_character_class_glob() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with character class pattern
+    let workspace_toml = r#"
+[workspace]
+members = ["pkg_[abc]"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create packages that match pkg_[abc] pattern
+    for suffix in ["a", "b", "c"] {
+        let pkg_name = format!("pkg_{suffix}");
+        let package_dir = temp_dir.path().join(&pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    // Create packages that should NOT match
+    for suffix in ["d", "x", "z"] {
+        let pkg_name = format!("pkg_{suffix}");
+        let package_dir = temp_dir.path().join(&pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// should not match").unwrap();
+    }
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should find only 3 packages matching pkg_[abc]
+    assert_eq!(
+        configs.len(),
+        3,
+        "Should find only 3 packages matching 'pkg_[abc]': {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    let package_names: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("name").unwrap().as_str().unwrap())
+        .collect();
+
+    assert!(package_names.contains(&"pkg_a"));
+    assert!(package_names.contains(&"pkg_b"));
+    assert!(package_names.contains(&"pkg_c"));
+    assert!(
+        !package_names.contains(&"pkg_d"),
+        "pkg_d should NOT match 'pkg_[abc]'"
+    );
+    assert!(
+        !package_names.contains(&"pkg_x"),
+        "pkg_x should NOT match 'pkg_[abc]'"
+    );
+}
+
+/// Test non-matching glob pattern returns empty (not error)
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_non_matching_glob_returns_empty() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with glob pattern that won't match anything
+    let workspace_toml = r#"
+[workspace]
+members = ["nonexistent/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Don't create any packages - the glob should match nothing
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    // Should succeed but return empty array (not error)
+    assert!(result.is_ok(), "Non-matching glob should not cause error");
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    assert!(
+        configs.is_empty(),
+        "Non-matching glob should return empty array, got: {:?}",
+        configs
+    );
+}
+
+/// Test glob only matches directories with Cargo.toml (not random directories)
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_glob_requires_cargo_toml() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with glob pattern
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    let packages_dir = temp_dir.path().join("packages");
+    switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
+
+    // Create a valid package
+    let valid_pkg = packages_dir.join("valid");
+    switchy_fs::sync::create_dir_all(valid_pkg.join("src")).unwrap();
+    switchy_fs::sync::write(
+        valid_pkg.join("Cargo.toml"),
+        r#"
+[package]
+name = "valid"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#,
+    )
+    .unwrap();
+    switchy_fs::sync::write(valid_pkg.join("src/lib.rs"), "// valid lib").unwrap();
+    switchy_fs::sync::write(
+        valid_pkg.join("clippier.toml"),
+        r#"
+[[config]]
+os = "ubuntu"
+"#,
+    )
+    .unwrap();
+
+    // Create directories WITHOUT Cargo.toml (should be ignored)
+    let no_cargo_dir = packages_dir.join("not_a_package");
+    switchy_fs::sync::create_dir_all(no_cargo_dir.join("src")).unwrap();
+    switchy_fs::sync::write(no_cargo_dir.join("src/lib.rs"), "// no cargo.toml").unwrap();
+
+    let empty_dir = packages_dir.join("empty_dir");
+    switchy_fs::sync::create_dir_all(&empty_dir).unwrap();
+
+    // Create a file (not directory) that matches glob pattern
+    switchy_fs::sync::write(packages_dir.join("just_a_file"), "not a directory").unwrap();
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should find only the valid package
+    assert_eq!(
+        configs.len(),
+        1,
+        "Should find only 1 valid package: {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    assert_eq!(
+        configs[0].get("name").unwrap().as_str().unwrap(),
+        "valid",
+        "Should only find 'valid' package"
+    );
+}
+
+/// Test glob expansion results are sorted deterministically
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_glob_results_sorted() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with glob pattern
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    let packages_dir = temp_dir.path().join("packages");
+    switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
+
+    // Create packages in non-alphabetical order
+    for pkg_name in ["zebra", "apple", "mango", "banana"] {
+        let package_dir = packages_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    assert_eq!(configs.len(), 4);
+
+    // Extract paths and verify they're sorted
+    let paths: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("path").unwrap().as_str().unwrap())
+        .collect();
+
+    // Paths should be sorted alphabetically
+    let mut sorted_paths = paths.clone();
+    sorted_paths.sort();
+    assert_eq!(
+        paths, sorted_paths,
+        "Glob expansion results should be sorted deterministically"
+    );
+}

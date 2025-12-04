@@ -2768,14 +2768,12 @@ mod tests {
         );
 
         // Verify we now have two migrations
-        let entries_after: Vec<_> = switchy_fs::sync::read_dir_sorted(&migrations_dir)
+        let entries_count = switchy_fs::sync::read_dir_sorted(&migrations_dir)
             .expect("Failed to read migrations directory")
-            .into_iter()
-            .collect();
+            .len();
 
         assert_eq!(
-            entries_after.len(),
-            2,
+            entries_count, 2,
             "Should have two migrations after creating second"
         );
     }
