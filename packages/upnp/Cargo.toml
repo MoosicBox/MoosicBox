@@ -65,7 +65,7 @@ tokio           = { workspace = true, features = ["macros", "tracing"] }
 xml             = { workspace = true }
 
 [dev-dependencies]
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_async = { workspace = true, features = ["macros", "net", "tokio"] }
 test-log      = { workspace = true }
 tokio         = { workspace = true }
 
