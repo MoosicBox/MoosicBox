@@ -996,3 +996,200 @@ async fn test_spreading_without_chunking() {
         "Total features should be preserved during spreading: got {total_features}"
     );
 }
+
+/// Regression test: Workspace with glob patterns in members should expand correctly
+/// This tests the fix for workspaces using `members = ["packages/*"]` instead of
+/// explicit package paths.
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_glob_members_expansion() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with glob pattern in members (like web2local uses)
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create packages directory with multiple packages
+    let packages_dir = temp_dir.path().join("packages");
+    switchy_fs::sync::create_dir_all(&packages_dir).unwrap();
+
+    for pkg_name in ["alpha", "beta", "gamma"] {
+        let package_dir = packages_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+fail-on-warnings = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        // Create clippier.toml for each package
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    // Test that clippier can find packages via glob expansion
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,                             // offset
+        None,                             // max
+        None,                             // max_parallel
+        Some(5),                          // chunked
+        false,                            // spread
+        false,                            // randomize
+        None,                             // seed
+        None,                             // features
+        Some("fail-on-warnings,default"), // skip features
+        None,                             // required_features
+        None,                             // packages
+        None,                             // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,                            // include_reasoning
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok(), "features command should succeed");
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should have found all 3 packages even with glob pattern
+    assert_eq!(
+        configs.len(),
+        3,
+        "Should find all 3 packages via glob expansion: {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+
+    // Verify all expected packages were found
+    let package_names: Vec<&str> = configs
+        .iter()
+        .map(|c| c.get("name").unwrap().as_str().unwrap())
+        .collect();
+
+    assert!(
+        package_names.contains(&"alpha"),
+        "Should find 'alpha' package"
+    );
+    assert!(
+        package_names.contains(&"beta"),
+        "Should find 'beta' package"
+    );
+    assert!(
+        package_names.contains(&"gamma"),
+        "Should find 'gamma' package"
+    );
+}
+
+/// Test workspace with nested glob patterns like "crates/*/packages/*"
+#[switchy_async::test(no_simulator)]
+async fn test_workspace_nested_glob_patterns() {
+    let temp_dir = switchy_fs::tempdir().unwrap();
+
+    // Create workspace with simple glob pattern
+    let workspace_toml = r#"
+[workspace]
+members = ["crates/*"]
+"#;
+    switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Create crates directory with packages
+    let crates_dir = temp_dir.path().join("crates");
+    switchy_fs::sync::create_dir_all(&crates_dir).unwrap();
+
+    for pkg_name in ["core", "utils"] {
+        let package_dir = crates_dir.join(pkg_name);
+        switchy_fs::sync::create_dir_all(package_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "my_{pkg_name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+"#
+        );
+        switchy_fs::sync::write(package_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(package_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        switchy_fs::sync::write(package_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        Some("default"),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        &[],
+        &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
+        OutputType::Json,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    assert_eq!(
+        configs.len(),
+        2,
+        "Should find both packages via glob: {:?}",
+        configs
+            .iter()
+            .map(|c| c.get("name").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+}

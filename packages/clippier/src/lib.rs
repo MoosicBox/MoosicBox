@@ -1744,12 +1744,15 @@ pub fn find_workspace_dependencies(
     let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    let workspace_members = workspace_value
+    let workspace_members_raw = workspace_value
         .get("workspace")
         .and_then(|x| x.get("members"))
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
         .ok_or("No workspace members found")?;
+
+    // Expand glob patterns in workspace members
+    let workspace_members = expand_workspace_member_globs(workspace_root, &workspace_members_raw);
 
     log::trace!("🏢 Found {} workspace members", workspace_members.len());
 
@@ -1758,7 +1761,7 @@ pub fn find_workspace_dependencies(
     let mut package_dependencies: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut package_cargo_values: BTreeMap<String, Value> = BTreeMap::new();
 
-    for member_path in workspace_members {
+    for member_path in &workspace_members {
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
@@ -1778,7 +1781,7 @@ pub fn find_workspace_dependencies(
             .and_then(|x| x.as_str())
         {
             log::trace!("📦 Package name: {package_name} -> {member_path}");
-            package_paths.insert(package_name.to_string(), member_path.to_string());
+            package_paths.insert(package_name.to_string(), member_path.clone());
             package_cargo_values.insert(package_name.to_string(), value.clone());
 
             // Extract dependencies that are workspace members - we'll resolve them later
@@ -2718,6 +2721,67 @@ fn should_ignore_file(file_path: &str, ignore_patterns: &[String]) -> Result<boo
     Ok(ignored)
 }
 
+/// Expands glob patterns in workspace member paths to actual directory paths.
+///
+/// Cargo supports glob patterns like `packages/*` in workspace members.
+/// This function expands those patterns to actual directory paths.
+///
+/// # Arguments
+///
+/// * `workspace_root` - Path to the workspace root directory
+/// * `members` - List of workspace member paths (may contain globs like `packages/*`)
+///
+/// # Returns
+///
+/// Vector of expanded member paths (without glob patterns)
+///
+/// # Errors
+///
+/// * If glob pattern compilation fails
+/// * If directory reading fails
+fn expand_workspace_member_globs(workspace_root: &Path, members: &[&str]) -> Vec<String> {
+    let mut expanded = Vec::new();
+
+    for member in members {
+        // Check if this member contains glob characters
+        if member.contains('*') || member.contains('?') || member.contains('[') {
+            // Expand the glob pattern using the glob crate for proper pattern matching
+            let full_pattern = workspace_root.join(member);
+            let pattern_str = full_pattern.to_string_lossy();
+
+            // Use glob crate for proper glob expansion
+            if let Ok(paths) = glob::glob(&pattern_str) {
+                for path in paths.flatten() {
+                    if path.is_dir()
+                        && path.join("Cargo.toml").exists()
+                        && let Ok(relative) = path.strip_prefix(workspace_root)
+                    {
+                        let relative_str = relative.to_string_lossy().to_string();
+                        log::trace!("Expanded glob '{member}' -> '{relative_str}'");
+                        expanded.push(relative_str);
+                    }
+                }
+            } else {
+                log::warn!("Failed to expand glob pattern '{member}'");
+            }
+        } else {
+            // Not a glob, use as-is
+            expanded.push((*member).to_string());
+        }
+    }
+
+    // Sort for deterministic output
+    expanded.sort();
+
+    log::debug!(
+        "Expanded {} workspace member patterns to {} paths",
+        members.len(),
+        expanded.len()
+    );
+
+    expanded
+}
+
 /// Finds packages that are affected by changed files
 ///
 /// # Errors
@@ -2738,12 +2802,15 @@ pub fn find_affected_packages(
     let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    let workspace_members = workspace_value
+    let workspace_members_raw = workspace_value
         .get("workspace")
         .and_then(|x| x.get("members"))
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
         .ok_or("No workspace members found")?;
+
+    // Expand glob patterns in workspace members
+    let workspace_members = expand_workspace_member_globs(workspace_root, &workspace_members_raw);
 
     log::trace!("🏢 Found {} workspace members", workspace_members.len());
 
@@ -2751,7 +2818,7 @@ pub fn find_affected_packages(
     let mut package_path_to_name = BTreeMap::new();
     let mut package_dependencies: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
-    for member_path in workspace_members {
+    for member_path in &workspace_members {
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
@@ -2771,7 +2838,7 @@ pub fn find_affected_packages(
             .and_then(|x| x.as_str())
         {
             log::trace!("📦 Package name: {package_name} -> {member_path}");
-            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+            package_path_to_name.insert(member_path.clone(), package_name.to_string());
 
             // Extract dependencies that are workspace members
             let mut deps = Vec::new();
@@ -2915,12 +2982,15 @@ pub fn find_affected_packages_with_reasoning(
     let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    let workspace_members = workspace_value
+    let workspace_members_raw = workspace_value
         .get("workspace")
         .and_then(|x| x.get("members"))
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
         .ok_or("No workspace members found")?;
+
+    // Expand glob patterns in workspace members
+    let workspace_members = expand_workspace_member_globs(workspace_root, &workspace_members_raw);
 
     log::trace!("🏢 Found {} workspace members", workspace_members.len());
 
@@ -2928,7 +2998,7 @@ pub fn find_affected_packages_with_reasoning(
     let mut package_path_to_name = BTreeMap::new();
     let mut package_dependencies: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
-    for member_path in workspace_members {
+    for member_path in &workspace_members {
         let full_path = workspace_root.join(member_path);
         let cargo_path = full_path.join("Cargo.toml");
 
@@ -2948,7 +3018,7 @@ pub fn find_affected_packages_with_reasoning(
             .and_then(|x| x.as_str())
         {
             log::trace!("📦 Package name: {package_name} -> {member_path}");
-            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+            package_path_to_name.insert(member_path.clone(), package_name.to_string());
 
             // Extract dependencies that are workspace members
             let mut deps = Vec::new();
@@ -3521,16 +3591,19 @@ pub async fn handle_features_command(
         let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
         let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-        let workspace_members = workspace_value
+        let workspace_members_raw = workspace_value
             .get("workspace")
             .and_then(|x| x.get("members"))
             .and_then(|x| x.as_array())
             .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
             .unwrap_or_default();
 
+        // Expand glob patterns in workspace members
+        let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
+
         // Map package names to paths
         let mut package_name_to_path = BTreeMap::new();
-        for member_path in workspace_members {
+        for member_path in &workspace_members {
             let full_path = path.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
@@ -3543,7 +3616,7 @@ pub async fn handle_features_command(
                     .and_then(|x| x.get("name"))
                     .and_then(|x| x.as_str())
                 {
-                    package_name_to_path.insert(package_name.to_string(), member_path.to_string());
+                    package_name_to_path.insert(package_name.to_string(), member_path.clone());
                 }
             }
         }
@@ -3689,17 +3762,15 @@ pub async fn handle_features_command(
                         switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
                     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-                    if let Some(workspace_members) = workspace_value
+                    if let Some(workspace_members_raw) = workspace_value
                         .get("workspace")
                         .and_then(|x| x.get("members"))
                         .and_then(|x| x.as_array())
                         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
                     {
-                        // Convert to Vec<String> for build_external_dependency_map
-                        let workspace_members_owned: Vec<String> = workspace_members
-                            .into_iter()
-                            .map(ToString::to_string)
-                            .collect();
+                        // Expand glob patterns and convert to Vec<String> for build_external_dependency_map
+                        let workspace_members_owned =
+                            expand_workspace_member_globs(&path, &workspace_members_raw);
 
                         // Build external dependency map
                         if let Ok(external_dep_map) =
@@ -3789,15 +3860,18 @@ pub async fn handle_features_command(
         let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
         let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-        let workspace_members = workspace_value
+        let workspace_members_raw = workspace_value
             .get("workspace")
             .and_then(|x| x.get("members"))
             .and_then(|x| x.as_array())
             .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
             .unwrap_or_default();
 
+        // Expand glob patterns in workspace members
+        let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
+
         let mut package_name_to_path = BTreeMap::new();
-        for member_path in workspace_members {
+        for member_path in &workspace_members {
             let full_path = path.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
@@ -3810,7 +3884,7 @@ pub async fn handle_features_command(
                     .and_then(|x| x.get("name"))
                     .and_then(|x| x.as_str())
                 {
-                    package_name_to_path.insert(package_name.to_string(), member_path.to_string());
+                    package_name_to_path.insert(package_name.to_string(), member_path.clone());
                 }
             }
         }
@@ -4102,16 +4176,15 @@ pub async fn handle_affected_packages_command(
                     switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
                 let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-                if let Some(workspace_members) = workspace_value
+                if let Some(workspace_members_raw) = workspace_value
                     .get("workspace")
                     .and_then(|x| x.get("members"))
                     .and_then(|x| x.as_array())
                     .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
                 {
-                    let workspace_members_owned: Vec<String> = workspace_members
-                        .into_iter()
-                        .map(ToString::to_string)
-                        .collect();
+                    // Expand glob patterns in workspace members
+                    let workspace_members_owned =
+                        expand_workspace_member_globs(workspace_root, &workspace_members_raw);
 
                     // Build external dependency map and find affected packages
                     if let Ok(external_dep_map) =
@@ -4244,13 +4317,13 @@ pub async fn process_workspace_configs(
     let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    let workspace_members = workspace_value
+    let workspace_members_raw = workspace_value
         .get("workspace")
         .and_then(|x| x.get("members"))
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>());
 
-    match workspace_members {
+    match workspace_members_raw {
         None => {
             process_configs(
                 workspace_path,
@@ -4266,11 +4339,14 @@ pub async fn process_workspace_configs(
             )
             .await
         }
-        Some(members) => {
+        Some(members_raw) => {
+            // Expand glob patterns in workspace members (e.g., "packages/*" -> ["packages/foo", "packages/bar"])
+            let members = expand_workspace_member_globs(workspace_path, &members_raw);
+
             // This is a workspace root, process all members
             let mut all_packages = Vec::new();
 
-            for member_path in members {
+            for member_path in &members {
                 let full_path = workspace_path.join(member_path);
 
                 // Check if this member has a Cargo.toml file (basic validation)
@@ -4468,12 +4544,15 @@ pub fn handle_packages_command(
     let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    let workspace_members = workspace_value
+    let workspace_members_raw = workspace_value
         .get("workspace")
         .and_then(|x| x.get("members"))
         .and_then(|x| x.as_array())
         .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
         .unwrap_or_default();
+
+    // Expand glob patterns in workspace members
+    let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
 
     let mut package_name_to_path = BTreeMap::new();
 
@@ -4490,7 +4569,7 @@ pub fn handle_packages_command(
                 .and_then(|x| x.get("name"))
                 .and_then(|x| x.as_str())
             {
-                package_name_to_path.insert(package_name.to_string(), (*member_path).to_string());
+                package_name_to_path.insert(package_name.to_string(), member_path.clone());
             }
         }
     }
@@ -4582,13 +4661,9 @@ pub fn handle_packages_command(
                 log::debug!("Changed external dependencies: {changed_external_deps:?}");
 
                 if !changed_external_deps.is_empty() {
-                    // Convert workspace members to Vec<String> for build_external_dependency_map
-                    let workspace_members_owned: Vec<String> =
-                        workspace_members.iter().map(|s| (*s).to_string()).collect();
-
                     // Build external dependency map
                     if let Ok(external_dep_map) =
-                        build_external_dependency_map(&path, &workspace_members_owned)
+                        build_external_dependency_map(&path, &workspace_members)
                     {
                         // Find packages affected by external dependency changes
                         let external_affected_mapping =
