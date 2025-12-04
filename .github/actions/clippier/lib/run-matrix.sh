@@ -858,6 +858,14 @@ run_matrix_single_command_mode() {
     echo "$script_template" | sed 's/^/  /' # Indent for display
 
     # Generate feature combinations based on strategy
+    # Capture output and exit code properly (process substitution loses exit codes)
+    local feature_output
+    feature_output=$(generate_feature_combinations "$features" "$strategy")
+    if [[ $? -ne 0 ]]; then
+        echo "❌ Failed to generate feature combinations"
+        exit 1
+    fi
+
     # Use while-read loop for bash 3.2 compatibility (macOS)
     # Manually strip trailing whitespace (newlines and carriage returns)
     FEATURE_COMBINATIONS=()
@@ -866,12 +874,7 @@ run_matrix_single_command_mode() {
         combo="${combo#"${combo%%[![:space:]]*}"}"  # Strip leading
         combo="${combo%"${combo##*[![:space:]]}"}"  # Strip trailing
         [[ -n "$combo" ]] && FEATURE_COMBINATIONS+=("$combo")
-    done < <(generate_feature_combinations "$features" "$strategy")
-
-    if [[ $? -ne 0 ]]; then
-        echo "❌ Failed to generate feature combinations"
-        exit 1
-    fi
+    done <<< "$feature_output"
 
     local total_iterations=${#FEATURE_COMBINATIONS[@]}
 
