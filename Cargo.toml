@@ -537,7 +537,7 @@ strum = "0.27.2"
 strum_macros = "0.27.2"
 subtle = "2.6.1"
 swc_bundler = "36.0.0"
-swc_common = { version = "18.0.0", features = ["tty-emitter"] }
+swc_common = { version = "18.0.1", features = ["tty-emitter"] }
 swc_ecma_ast = "19.0.0"
 swc_ecma_codegen = "21.0.0"
 swc_ecma_loader = { version = "18.0.0", features = ["cache", "node"] }
