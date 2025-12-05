@@ -405,7 +405,7 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
-flate2 = "1.1.5"
+flate2 = "1.1.6"
 fltk = "1.5.22"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
