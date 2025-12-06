@@ -157,6 +157,15 @@ pub mod sync {
         }
     }
 
+    /// Reads the entire contents of a file into a byte vector
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::read` fails
+    pub fn read<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+        ::std::fs::read(path)
+    }
+
     /// Reads the entire contents of a file into a string
     ///
     /// # Errors

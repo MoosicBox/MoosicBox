@@ -807,13 +807,40 @@ pub mod sync {
         }
     }
 
-    /// Reads the entire contents of a file into a string
+    /// Reads the entire contents of a file into a byte vector
     ///
     /// # Errors
     ///
     /// * If the file doesn't exist
-    /// * If the file contents cannot be converted to a UTF-8 encoded `String`
     /// * If the file `Path` cannot be converted to a `str`
+    ///
+    /// # Panics
+    ///
+    /// * If the `FILES` `RwLock` fails to read.
+    pub fn read<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return std::fs::read(path);
+        }
+
+        // Original simulator implementation (fallback)
+        let location = path_to_str!(path)?;
+        let Some(existing) = FILES.with_borrow(|x| x.read().unwrap().get(location).cloned()) else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File not found at path={location}"),
+            ));
+        };
+
+        Ok(existing.lock().unwrap().to_vec())
+    }
+
+    /// Reads the entire contents of a file into a string
+    ///
+    /// # Errors
+    ///
+    /// * Returns `std::io::ErrorKind::NotFound` if the file does not exist.
+    /// * Returns `std::io::ErrorKind::InvalidData` if the file contains invalid UTF-8.
     ///
     /// # Panics
     ///
@@ -1939,13 +1966,35 @@ pub mod unsync {
         }
     }
 
-    /// Reads the entire contents of a file into a string asynchronously
+    /// Reads the entire contents of a file into a byte vector asynchronously
     ///
     /// # Errors
     ///
     /// * If the file doesn't exist
-    /// * If the file contents cannot be converted to a UTF-8 encoded `String`
     /// * If the file `Path` cannot be converted to a `str`
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
+    pub async fn read<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::read(path))
+                .await
+                .unwrap();
+        }
+
+        // Fallback to sync simulator implementation
+        super::sync::read(path)
+    }
+
+    /// Reads the entire contents of a file into a string asynchronously
+    ///
+    /// # Errors
+    ///
+    /// * Returns `std::io::ErrorKind::NotFound` if the file does not exist.
+    /// * Returns `std::io::ErrorKind::InvalidData` if the file contains invalid UTF-8.
     ///
     /// # Panics
     ///

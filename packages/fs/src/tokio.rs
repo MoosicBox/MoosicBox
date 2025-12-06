@@ -267,6 +267,15 @@ pub mod unsync {
         Ok(ReadDir(tokio::fs::read_dir(path).await?))
     }
 
+    /// Reads the entire contents of a file into a byte vector asynchronously
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::read` fails
+    pub async fn read<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+        ::tokio::fs::read(path).await
+    }
+
     /// Reads the entire contents of a file into a string asynchronously
     ///
     /// # Errors
