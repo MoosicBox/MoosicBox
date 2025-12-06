@@ -14,7 +14,7 @@ pub trait DateTimeTestSuite<I: Into<String>> {
 
     /// Generate a unique suffix for this test run
     fn get_unique_suffix(&self) -> String {
-        let nanos = std::time::SystemTime::now()
+        let nanos = switchy_time::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();

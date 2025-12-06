@@ -19,6 +19,7 @@ group = "switchy"
 [dependencies]
 switchy_database = { workspace = true }
 switchy_env      = { workspace = true, features = ["std"] }
+switchy_time     = { workspace = true, features = ["std"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -60,6 +61,7 @@ fail-on-warnings = [
     "switchy_async?/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_env/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
 ]
 
 simulator = [
