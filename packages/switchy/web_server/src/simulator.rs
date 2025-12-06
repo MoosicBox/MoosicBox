@@ -2167,6 +2167,7 @@ mod tests {
     // ==================== Static Files Tests ====================
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_html() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.html"),
@@ -2179,6 +2180,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_css() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.css"),
@@ -2187,6 +2189,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_javascript() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.js"),
@@ -2199,6 +2202,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_json() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.json"),
@@ -2207,6 +2211,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_images() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.png"),
@@ -2239,6 +2244,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_fonts() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.woff"),
@@ -2263,6 +2269,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_other() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.txt"),
@@ -2287,6 +2294,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_unknown() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.unknown"),
@@ -2299,6 +2307,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "simulator")]
     fn test_get_mime_type_case_insensitive() {
         assert_eq!(
             SimulatorWebServer::get_mime_type("/path/file.HTML"),

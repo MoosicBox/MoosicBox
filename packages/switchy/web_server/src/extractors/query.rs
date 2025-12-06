@@ -255,7 +255,6 @@ mod tests {
     fn create_test_request(_query: &str) -> HttpRequest {
         // For actix-only builds, we can't create a proper test request
         // This is a limitation of the current test setup
-        use crate::Stub;
         HttpRequest::new(crate::EmptyRequest)
     }
 
