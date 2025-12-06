@@ -1,0 +1,35 @@
+[package]
+authors     = { workspace = true }
+description = "Switchy Web Server OpenAPI example"
+edition     = { workspace = true }
+license     = { workspace = true }
+name        = "switchy_web_server_example_openapi"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+switchy_web_server = { workspace = true, features = [
+    "actix",
+    "cors",
+    "openapi-all",
+] }
+
+log = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
+]

@@ -1831,20 +1831,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 
 [[package]]
-name = "basic_handler_example"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
-]
-
-[[package]]
-name = "basic_handler_standalone_example"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
-]
-
-[[package]]
 name = "basic_migration_test"
 version = "0.1.0"
 dependencies = [
@@ -2857,15 +2843,6 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "combined_extractors_standalone_example"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4701,14 +4678,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "from_request_test"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
- "switchy_async",
-]
-
-[[package]]
 name = "from_variant"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5475,15 +5444,6 @@ dependencies = [
  "crunchy",
  "num-traits",
  "zerocopy",
-]
-
-[[package]]
-name = "handler_macro_test"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
- "serde",
- "switchy_async",
 ]
 
 [[package]]
@@ -6272,8 +6232,8 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
- "moosicbox_web_server",
  "switchy_env",
+ "switchy_web_server",
 ]
 
 [[package]]
@@ -6345,9 +6305,9 @@ dependencies = [
  "serde_json",
  "simvar",
  "switchy_async",
+ "switchy_web_server_simulator",
  "test-log",
  "thiserror 2.0.17",
- "web_server_simulator",
 ]
 
 [[package]]
@@ -7104,15 +7064,6 @@ checksum = "0dadca0807203e4dad79bc9229663ea382d7e809eeb2213496a1ae4aff0069d6"
 dependencies = [
  "serde",
  "ucd-trie",
-]
-
-[[package]]
-name = "json_extractor_standalone_example"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -9630,77 +9581,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "moosicbox_web_server"
-version = "0.1.4"
-dependencies = [
- "actix-cors",
- "actix-htmx",
- "actix-http",
- "actix-service",
- "actix-test",
- "actix-web",
- "base64 0.22.1",
- "bytes",
- "const_format",
- "futures",
- "log 0.4.29",
- "moosicbox_assert",
- "moosicbox_web_server_core",
- "moosicbox_web_server_cors",
- "paste",
- "serde",
- "serde-querystring",
- "serde_json",
- "switchy",
- "switchy_http_models",
- "test-log",
- "thiserror 2.0.17",
- "urlencoding",
- "utoipa",
- "utoipa-rapidoc",
- "utoipa-redoc",
- "utoipa-scalar",
- "utoipa-swagger-ui",
-]
-
-[[package]]
-name = "moosicbox_web_server_actix"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-files",
- "actix-htmx",
- "actix-http",
- "actix-service",
- "actix-web",
- "bytes",
- "futures",
- "log 0.4.29",
- "moosicbox_assert",
- "moosicbox_web_server",
- "moosicbox_web_server_core",
- "moosicbox_web_server_cors",
- "switchy_http_models",
- "test-log",
-]
-
-[[package]]
-name = "moosicbox_web_server_core"
-version = "0.1.1"
-dependencies = [
- "moosicbox_assert",
-]
-
-[[package]]
-name = "moosicbox_web_server_cors"
-version = "0.1.1"
-dependencies = [
- "moosicbox_assert",
- "switchy_http_models",
- "test-log",
 ]
 
 [[package]]
@@ -12382,14 +12262,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "query_extractor_standalone_example"
-version = "0.1.0"
-dependencies = [
- "moosicbox_web_server",
- "serde",
-]
-
-[[package]]
 name = "query_map"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14100,7 +13972,6 @@ name = "simvar_api_testing_example"
 version = "0.1.0"
 dependencies = [
  "log 0.4.29",
- "moosicbox_web_server",
  "serde",
  "serde_json",
  "simvar",
@@ -14109,6 +13980,7 @@ dependencies = [
  "switchy_http_models",
  "switchy_time",
  "switchy_uuid",
+ "switchy_web_server",
 ]
 
 [[package]]
@@ -14116,7 +13988,6 @@ name = "simvar_basic_web_server_example"
 version = "0.1.0"
 dependencies = [
  "log 0.4.29",
- "moosicbox_web_server",
  "serde",
  "serde_json",
  "simvar",
@@ -14124,6 +13995,7 @@ dependencies = [
  "switchy_http",
  "switchy_http_models",
  "switchy_time",
+ "switchy_web_server",
 ]
 
 [[package]]
@@ -14134,7 +14006,6 @@ dependencies = [
  "color-backtrace",
  "ctrlc",
  "log 0.4.29",
- "moosicbox_web_server",
  "oneshot",
  "pretty_env_logger",
  "ratatui",
@@ -14142,6 +14013,7 @@ dependencies = [
  "shell-words",
  "simvar_utils",
  "switchy",
+ "switchy_web_server",
  "test-log",
  "thiserror 2.0.17",
 ]
@@ -15326,6 +15198,8 @@ dependencies = [
  "switchy_telemetry",
  "switchy_time",
  "switchy_upnp",
+ "switchy_web_server",
+ "switchy_web_server_core",
  "tokio",
 ]
 
@@ -15689,6 +15563,180 @@ dependencies = [
  "switchy_random",
  "test-log",
  "uuid",
+]
+
+[[package]]
+name = "switchy_web_server"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-htmx",
+ "actix-http",
+ "actix-service",
+ "actix-test",
+ "actix-web",
+ "base64 0.22.1",
+ "bytes",
+ "const_format",
+ "futures",
+ "log 0.4.29",
+ "moosicbox_assert",
+ "paste",
+ "serde",
+ "serde-querystring",
+ "serde_json",
+ "switchy_fs",
+ "switchy_http_models",
+ "switchy_web_server_core",
+ "switchy_web_server_cors",
+ "test-log",
+ "thiserror 2.0.17",
+ "urlencoding",
+ "utoipa",
+ "utoipa-rapidoc",
+ "utoipa-redoc",
+ "utoipa-scalar",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
+name = "switchy_web_server_actix"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-htmx",
+ "actix-http",
+ "actix-service",
+ "actix-web",
+ "bytes",
+ "futures",
+ "log 0.4.29",
+ "moosicbox_assert",
+ "switchy_http_models",
+ "switchy_web_server",
+ "switchy_web_server_core",
+ "switchy_web_server_cors",
+ "test-log",
+]
+
+[[package]]
+name = "switchy_web_server_core"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+]
+
+[[package]]
+name = "switchy_web_server_cors"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+ "switchy_http_models",
+ "test-log",
+]
+
+[[package]]
+name = "switchy_web_server_example_basic_handler"
+version = "0.1.0"
+dependencies = [
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_basic_handler_standalone"
+version = "0.1.0"
+dependencies = [
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_combined_extractors_standalone"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_from_request_test"
+version = "0.1.0"
+dependencies = [
+ "switchy_async",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_handler_macro_test"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "switchy_async",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_json_extractor_standalone"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_nested_get"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "switchy_async",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_openapi"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.29",
+ "moosicbox_logging",
+ "switchy_async",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_query_extractor_standalone"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_example_simple_get"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "switchy",
+ "switchy_web_server",
+]
+
+[[package]]
+name = "switchy_web_server_simulator"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "log 0.4.29",
+ "moosicbox_assert",
+ "serde",
+ "serde_json",
+ "switchy",
+ "switchy_async",
+ "switchy_http_models",
+ "switchy_web_server_core",
+ "test-log",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -18349,52 +18397,6 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "web_server_nested_get"
-version = "0.1.0"
-dependencies = [
- "env_logger 0.11.8",
- "moosicbox_web_server",
- "switchy_async",
-]
-
-[[package]]
-name = "web_server_openapi"
-version = "0.1.0"
-dependencies = [
- "log 0.4.29",
- "moosicbox_logging",
- "moosicbox_web_server",
- "switchy_async",
-]
-
-[[package]]
-name = "web_server_simple_get"
-version = "0.1.0"
-dependencies = [
- "env_logger 0.11.8",
- "moosicbox_web_server",
- "switchy",
-]
-
-[[package]]
-name = "web_server_simulator"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "log 0.4.29",
- "moosicbox_assert",
- "moosicbox_web_server_core",
- "serde",
- "serde_json",
- "switchy",
- "switchy_async",
- "switchy_http_models",
- "test-log",
- "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]

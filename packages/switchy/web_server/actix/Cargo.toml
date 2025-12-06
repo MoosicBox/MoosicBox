@@ -1,0 +1,58 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "network-programming"]
+description = "Switchy Web Server Actix Backend package"
+edition     = { workspace = true }
+keywords    = ["actix", "async", "http", "network", "web"]
+license     = { workspace = true }
+name        = "switchy_web_server_actix"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+moosicbox_assert        = { workspace = true }
+switchy_http_models     = { workspace = true, features = ["actix"] }
+switchy_web_server      = { workspace = true }
+switchy_web_server_core = { workspace = true }
+switchy_web_server_cors = { workspace = true, optional = true }
+
+actix-cors    = { workspace = true, optional = true }
+actix-files   = { workspace = true, optional = true }
+actix-htmx    = { workspace = true, optional = true }
+actix-http    = { workspace = true }
+actix-service = { workspace = true }
+actix-web     = { workspace = true }
+
+bytes   = { workspace = true }
+futures = { workspace = true }
+log     = { workspace = true }
+
+[dev-dependencies]
+test-log = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_http_models/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
+    "switchy_web_server_core/fail-on-warnings",
+    "switchy_web_server_cors?/fail-on-warnings",
+]
+
+cors = [
+    "dep:actix-cors",
+    "dep:switchy_web_server_cors",
+    "switchy_web_server/cors",
+]
+htmx = ["dep:actix-htmx", "switchy_web_server/htmx"]
+static-files = ["dep:actix-files"]
+tls = ["actix-web/openssl", "switchy_web_server/tls"]

@@ -135,6 +135,21 @@ members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/web_server",
+    "packages/switchy/web_server/actix",
+    "packages/switchy/web_server/core",
+    "packages/switchy/web_server/cors",
+    "packages/switchy/web_server/examples/basic_handler",
+    "packages/switchy/web_server/examples/basic_handler_standalone",
+    "packages/switchy/web_server/examples/combined_extractors_standalone",
+    "packages/switchy/web_server/examples/from_request_test",
+    "packages/switchy/web_server/examples/handler_macro_test",
+    "packages/switchy/web_server/examples/json_extractor_standalone",
+    "packages/switchy/web_server/examples/nested_get",
+    "packages/switchy/web_server/examples/openapi",
+    "packages/switchy/web_server/examples/query_extractor_standalone",
+    "packages/switchy/web_server/examples/simple_get",
+    "packages/switchy/web_server/simulator",
     "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
@@ -144,21 +159,6 @@ members = [
     "packages/tunnel_server",
     "packages/upnp",
     "packages/uuid",
-    "packages/web_server",
-    "packages/web_server/actix",
-    "packages/web_server/core",
-    "packages/web_server/cors",
-    "packages/web_server/examples/basic_handler",
-    "packages/web_server/examples/basic_handler_standalone",
-    "packages/web_server/examples/combined_extractors_standalone",
-    "packages/web_server/examples/from_request_test",
-    "packages/web_server/examples/handler_macro_test",
-    "packages/web_server/examples/json_extractor_standalone",
-    "packages/web_server/examples/nested_get",
-    "packages/web_server/examples/openapi",
-    "packages/web_server/examples/query_extractor_standalone",
-    "packages/web_server/examples/simple_get",
-    "packages/web_server/simulator",
     "packages/ws",
     "packages/yt",
 ]
@@ -275,12 +275,13 @@ moosicbox_stream_utils             = { version = "0.1.1", default-features = fal
 moosicbox_tidal                    = { version = "0.1.1", default-features = false, path = "packages/tidal" }
 moosicbox_tunnel                   = { version = "0.1.1", default-features = false, path = "packages/tunnel" }
 moosicbox_tunnel_sender            = { version = "0.1.1", default-features = false, path = "packages/tunnel_sender" }
-moosicbox_web_server               = { version = "0.1.1", default-features = false, path = "packages/web_server" }
-moosicbox_web_server_actix         = { version = "0.1.0", default-features = false, path = "packages/web_server/actix" }
-moosicbox_web_server_core          = { version = "0.1.1", default-features = false, path = "packages/web_server/core" }
-moosicbox_web_server_cors          = { version = "0.1.1", default-features = false, path = "packages/web_server/cors" }
 moosicbox_ws                       = { version = "0.1.1", default-features = false, path = "packages/ws" }
 moosicbox_yt                       = { version = "0.1.1", default-features = false, path = "packages/yt" }
+switchy_web_server                 = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server" }
+switchy_web_server_actix           = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server/actix" }
+switchy_web_server_core            = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server/core" }
+switchy_web_server_cors            = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server/cors" }
+switchy_web_server_simulator       = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server/simulator" }
 
 # Internal Switchy
 switchy                     = { version = "0.1.3", default-features = false, path = "packages/switchy" }
@@ -332,7 +333,6 @@ hyperchad_transformer_models       = { version = "0.1.0", default-features = fal
 
 hyperchad_simulator  = { version = "0.1.0", default-features = false, path = "packages/hyperchad/simulator" }
 hyperchad_test_utils = { version = "0.1.0", default-features = false, path = "packages/hyperchad/test_utils" }
-web_server_simulator = { version = "0.1.0", default-features = false, path = "packages/web_server/simulator" }
 
 clippier                = { version = "0.1.0", default-features = false, path = "packages/clippier" }
 clippier_test_utilities = { version = "0.1.0", default-features = false, path = "packages/clippier/test_utilities" }

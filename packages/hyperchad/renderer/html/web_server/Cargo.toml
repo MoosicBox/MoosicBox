@@ -17,12 +17,12 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-hyperchad_renderer   = { workspace = true, features = ["canvas"] }
-moosicbox_assert     = { workspace = true }
-moosicbox_env_utils  = { workspace = true }
-moosicbox_logging    = { workspace = true }
-moosicbox_web_server = { workspace = true, features = ["cors"] }
-switchy_env          = { workspace = true }
+hyperchad_renderer  = { workspace = true, features = ["canvas"] }
+moosicbox_assert    = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_logging   = { workspace = true }
+switchy_env         = { workspace = true }
+switchy_web_server  = { workspace = true, features = ["cors"] }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true }
@@ -37,16 +37,16 @@ fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
-    "moosicbox_web_server/fail-on-warnings",
     "switchy_env/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
 ]
 
 debug = []
 
-# Enable actix backend in moosicbox_web_server
-actix = ["moosicbox_web_server/actix"]
+# Enable actix backend in switchy_web_server
+actix = ["switchy_web_server/actix"]
 
-# Enable simulator feature in moosicbox_web_server
-simulator = ["moosicbox_web_server/simulator", "switchy_env/simulator"]
+# Enable simulator feature in switchy_web_server
+simulator = ["switchy_env/simulator", "switchy_web_server/simulator"]
 
 assets = ["hyperchad_renderer/assets"]

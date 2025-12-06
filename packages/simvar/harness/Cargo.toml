@@ -14,13 +14,12 @@ version     = "0.1.4"
 examples = false
 
 [package.metadata.cargo-machete]
-ignored = ["moosicbox_web_server"]
+ignored = ["switchy_web_server"]
 
 [package.metadata.workspaces]
 group = "simvar"
 
 [dependencies]
-moosicbox_web_server = { workspace = true, optional = true }
 simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
@@ -29,6 +28,7 @@ switchy = { workspace = true, features = [
     "tcp",
     "time",
 ] }
+switchy_web_server = { workspace = true, optional = true }
 
 btparse         = { workspace = true }
 color-backtrace = { workspace = true }
@@ -52,21 +52,25 @@ test-log = { workspace = true }
 default = ["pretty_env_logger", "tui"]
 
 fail-on-warnings = [
-    "moosicbox_web_server?/fail-on-warnings",
     "simvar_utils/fail-on-warnings",
     "switchy/fail-on-warnings",
+    "switchy_web_server?/fail-on-warnings",
 ]
 
-async      = ["switchy/async"]
-database   = ["switchy/database", "switchy/database-connection"]
-fs         = ["switchy/fs", "switchy/fs-tokio"]
-http       = ["switchy/http"]
-mdns       = ["switchy/mdns"]
-random     = ["switchy/random"]
-tcp        = ["switchy/tcp"]
-telemetry  = ["switchy/telemetry"]
-time       = ["switchy/time"]
-upnp       = ["switchy/upnp"]
-web-server = ["dep:moosicbox_web_server", "moosicbox_web_server/simulator"]
+async = ["switchy/async"]
+database = ["switchy/database", "switchy/database-connection"]
+fs = ["switchy/fs", "switchy/fs-tokio"]
+http = ["switchy/http"]
+mdns = ["switchy/mdns"]
+random = ["switchy/random"]
+tcp = ["switchy/tcp"]
+telemetry = ["switchy/telemetry"]
+time = ["switchy/time"]
+upnp = ["switchy/upnp"]
+web-server = [
+    "dep:switchy_web_server",
+    "switchy/web-server",
+    "switchy_web_server/simulator",
+]
 
 tui = ["dep:oneshot", "dep:ratatui"]

@@ -17,10 +17,10 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-hyperchad_test_utils = { workspace = true, optional = true }
-moosicbox_assert     = { workspace = true }
-simvar               = { workspace = true }
-web_server_simulator = { workspace = true }
+hyperchad_test_utils         = { workspace = true, optional = true }
+moosicbox_assert             = { workspace = true }
+simvar                       = { workspace = true }
+switchy_web_server_simulator = { workspace = true }
 
 log        = { workspace = true }
 serde      = { workspace = true }
@@ -39,7 +39,7 @@ fail-on-warnings = [
     "hyperchad_test_utils?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "simvar/fail-on-warnings",
-    "web_server_simulator/fail-on-warnings",
+    "switchy_web_server_simulator/fail-on-warnings",
 ]
 
 # Renderer simulation features

@@ -1,7 +1,7 @@
 [package]
 authors     = { workspace = true }
 categories  = ["development-tools"]
-description = "Basic web server simulation example using simvar and moosicbox_web_server"
+description = "Basic web server simulation example using simvar and switchy_web_server"
 edition     = { workspace = true }
 keywords    = ["simulation", "simvar", "web-server"]
 license     = { workspace = true }
@@ -15,16 +15,12 @@ version     = "0.1.0"
 tests = false
 
 [dependencies]
-moosicbox_web_server = { workspace = true, features = [
-    "actix",
-    "cors",
-    "serde",
-] }
-simvar = { workspace = true, features = ["http", "tcp", "time", "web-server"] }
-switchy_async = { workspace = true, features = ["simulator", "tokio"] }
-switchy_http = { workspace = true, features = ["simulator"] }
+simvar              = { workspace = true, features = ["http", "tcp", "time", "web-server"] }
+switchy_async       = { workspace = true, features = ["simulator", "tokio"] }
+switchy_http        = { workspace = true, features = ["simulator"] }
 switchy_http_models = { workspace = true }
-switchy_time = { workspace = true, features = ["simulator"] }
+switchy_time        = { workspace = true, features = ["simulator"] }
+switchy_web_server  = { workspace = true, features = ["actix", "cors", "serde"] }
 
 log        = { workspace = true }
 serde      = { workspace = true, features = ["derive"] }
@@ -34,10 +30,10 @@ serde_json = { workspace = true }
 default = []
 
 fail-on-warnings = [
-    "moosicbox_web_server/fail-on-warnings",
     "simvar/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_http/fail-on-warnings",
     "switchy_http_models/fail-on-warnings",
     "switchy_time/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
 ]

@@ -1,0 +1,39 @@
+[package]
+authors = { workspace = true }
+categories = ["development-tools", "network-programming"]
+description = "Switchy Web Server combined extractors example demonstrating multiple extractors working together"
+edition = { workspace = true }
+keywords = [
+    "async",
+    "example",
+    "http",
+    "json",
+    "network",
+    "query",
+    "serde",
+    "web",
+]
+license = { workspace = true }
+name = "switchy_web_server_example_combined_extractors_standalone"
+publish = false
+readme = "README.md"
+repository = { workspace = true }
+version = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[features]
+actix            = ["switchy_web_server/actix"]
+default          = ["serde", "simulator"]
+fail-on-warnings = ["switchy_web_server/fail-on-warnings"]
+serde            = ["switchy_web_server/serde"]
+simulator        = ["switchy_web_server/simulator"]
+
+[dependencies]
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+switchy_web_server = { workspace = true, features = ["serde", "simulator"] }

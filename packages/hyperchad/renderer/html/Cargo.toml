@@ -73,11 +73,20 @@ actix = [
     "switchy_http_models/actix",
 ]
 lambda = ["dep:hyperchad_renderer_html_lambda"]
-web-server = ["dep:hyperchad_renderer_html_web_server", "extend"]
+web-server = [
+    "dep:hyperchad_renderer_html_web_server",
+    "extend",
+    "switchy/web-server",
+]
 
-web-server-actix = ["hyperchad_renderer_html_web_server?/actix", "web-server"]
+web-server-actix = [
+    "hyperchad_renderer_html_web_server?/actix",
+    "switchy/web-server-actix",
+    "web-server",
+]
 web-server-simulator = [
     "hyperchad_renderer_html_web_server?/simulator",
+    "switchy/web-server-simulator",
     "web-server",
 ]
 

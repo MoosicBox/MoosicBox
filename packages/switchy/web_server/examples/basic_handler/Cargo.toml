@@ -1,0 +1,29 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "network-programming"]
+description = "Switchy Web Server basic handler example demonstrating HttpRequest API across backends"
+edition     = { workspace = true }
+keywords    = ["async", "example", "http", "network", "web"]
+license     = { workspace = true }
+name        = "switchy_web_server_example_basic_handler"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+switchy_web_server = { workspace = true, default-features = false }
+
+[features]
+default = ["simulator"]
+
+fail-on-warnings = ["switchy_web_server/fail-on-warnings"]
+
+actix     = ["switchy_web_server/actix"]
+simulator = ["switchy_web_server/simulator"]

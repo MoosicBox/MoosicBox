@@ -1,7 +1,7 @@
 //! Web server renderer for `HyperChad`.
 //!
 //! This crate provides a web server backend for rendering `HyperChad` HTML content.
-//! It integrates the `HyperChad` renderer with `moosicbox_web_server` to enable
+//! It integrates the `HyperChad` renderer with `switchy_web_server` to enable
 //! server-side rendering of hyperchad views over HTTP.
 //!
 //! # Features
@@ -74,28 +74,28 @@ use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderR
 use moosicbox_env_utils::default_env_u16;
 use switchy_env::var_or;
 
-/// Re-export of the `moosicbox_web_server` crate.
+/// Re-export of the `switchy_web_server` crate.
 ///
 /// Provides direct access to the underlying web server implementation
 /// for advanced configuration and customization.
-pub use moosicbox_web_server;
+pub use switchy_web_server;
 
-use moosicbox_web_server::Scope;
+use switchy_web_server::Scope;
 
 /// Web server error type.
 ///
 /// Represents errors that can occur during web server operations.
-pub use moosicbox_web_server::Error as WebServerError;
+pub use switchy_web_server::Error as WebServerError;
 
 /// HTTP request type.
 ///
 /// Represents an incoming HTTP request to the web server.
-pub use moosicbox_web_server::HttpRequest;
+pub use switchy_web_server::HttpRequest;
 
 /// HTTP response type.
 ///
 /// Represents an HTTP response to be sent to the client.
-pub use moosicbox_web_server::HttpResponse;
+pub use switchy_web_server::HttpResponse;
 
 /// Trait for processing web server requests and responses.
 ///
@@ -243,13 +243,13 @@ impl<
             let addr = var_or("BIND_ADDR", "0.0.0.0");
             let port = default_env_u16!("PORT", 8343);
 
-            let cors = moosicbox_web_server::cors::Cors::default()
+            let cors = switchy_web_server::cors::Cors::default()
                 .allow_any_origin()
                 .allow_any_method()
                 .allow_any_header()
                 .expose_any_header();
 
-            let server = moosicbox_web_server::WebServerBuilder::new()
+            let server = switchy_web_server::WebServerBuilder::new()
                 .with_addr(addr)
                 .with_port(port)
                 .with_cors(cors)

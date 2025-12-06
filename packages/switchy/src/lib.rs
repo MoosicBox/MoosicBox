@@ -404,6 +404,16 @@ pub use switchy_time as time;
 #[cfg(feature = "upnp")]
 pub use switchy_upnp as upnp;
 
+/// Web server abstractions.
+///
+/// Provides runtime-agnostic web server implementations supporting different backends.
+/// Enable the `web-server` feature to use this module.
+#[cfg(feature = "web-server")]
+pub use switchy_web_server as web_server;
+
+#[cfg(feature = "web-server-core")]
+pub use switchy_web_server_core as web_server_core;
+
 /// HTTP client and model abstractions.
 ///
 /// This module provides HTTP functionality through two main components:

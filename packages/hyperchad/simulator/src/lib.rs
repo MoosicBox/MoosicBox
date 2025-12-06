@@ -39,7 +39,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use hyperchad_test_utils::{TestPlan, TestResult};
 #[cfg(feature = "test-utils")]
 use simvar::{Sim, SimBootstrap};
-use web_server_simulator::SimulationWebServer;
+use switchy_web_server_simulator::SimulationWebServer;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -55,7 +55,7 @@ pub use hyperchad_test_utils as test_utils;
 ///
 /// This module provides a simulated web server environment for testing `HyperChad` applications
 /// without requiring actual network operations.
-pub use web_server_simulator as web_server;
+pub use switchy_web_server_simulator as web_server;
 
 /// Errors that can occur during `HyperChad` simulation operations.
 #[derive(Debug, Error)]
@@ -71,7 +71,7 @@ pub enum SimulatorError {
     TestPlanFailed(String),
     /// Web server error occurred.
     #[error("Web server error: {0}")]
-    WebServer(#[from] web_server_simulator::Error),
+    WebServer(#[from] switchy_web_server_simulator::Error),
     /// Simvar simulation error occurred.
     #[error("Simvar error: {0}")]
     Simvar(#[from] simvar::Error),

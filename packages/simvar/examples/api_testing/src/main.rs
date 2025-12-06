@@ -1,9 +1,9 @@
-//! API endpoint testing simulation using `simvar` and `moosicbox_web_server`.
+//! API endpoint testing simulation using `simvar` and `switchy_web_server`.
 //!
 //! This example demonstrates how to use the `simvar` simulation framework to test
 //! REST API endpoints in a controlled, deterministic environment. It showcases:
 //!
-//! * Creating a REST API server with CRUD operations using `moosicbox_web_server`
+//! * Creating a REST API server with CRUD operations using `switchy_web_server`
 //! * Running multiple test scenarios (happy path, error handling, edge cases, concurrency)
 //! * Tracking and reporting test results with detailed metrics
 //! * Using simulation time for reproducible tests
@@ -29,9 +29,9 @@ use std::{
     time::Duration,
 };
 
-use moosicbox_web_server::{HttpResponse, Scope, WebServerBuilder};
 use serde::{Deserialize, Serialize};
 use simvar::{Sim, SimBootstrap, SimConfig, run_simulation};
+use switchy_web_server::{HttpResponse, Scope, WebServerBuilder};
 
 // Import result types from harness modules
 type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
@@ -306,7 +306,7 @@ struct CreateUserRequest {
 async fn start_api_server(port: u16) -> HostResult {
     log::info!("Starting API server on port {port}");
 
-    let cors = moosicbox_web_server::cors::Cors::default()
+    let cors = switchy_web_server::cors::Cors::default()
         .allow_any_origin()
         .allow_any_method()
         .allow_any_header()

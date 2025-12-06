@@ -1,4 +1,4 @@
-//! Basic web server simulation example using `simvar` and `moosicbox_web_server`.
+//! Basic web server simulation example using `simvar` and `switchy_web_server`.
 //!
 //! This example demonstrates how to use the `simvar` simulation framework to test
 //! a web server application with multiple concurrent clients. The simulation includes:
@@ -30,19 +30,19 @@
 
 use std::time::Duration;
 
-use moosicbox_web_server::{HttpResponse, Scope, WebServerBuilder};
 use serde::{Deserialize, Serialize};
 use simvar::{
     Sim, SimBootstrap, SimConfig, client::ClientResult, host::HostResult, run_simulation,
 };
 use switchy_http::Client as HttpClient;
 use switchy_http_models::Method;
+use switchy_web_server::{HttpResponse, Scope, WebServerBuilder};
 
 // // Import result types from harness modules
 // type HostResult = Result<(), Box<dyn std::error::Error + 'static>>;
 // type ClientResult = Result<(), Box<dyn std::error::Error>>;
 
-/// Example demonstrating a basic web server simulation using simvar and `moosicbox_web_server`.
+/// Example demonstrating a basic web server simulation using simvar and `switchy_web_server`.
 ///
 /// This simulation creates:
 /// * A web server host that serves HTTP requests
@@ -186,7 +186,7 @@ impl SimBootstrap for BasicWebServerBootstrap {
 async fn start_web_server(port: u16) -> HostResult {
     log::info!("Starting web server on port {port}");
 
-    let cors = moosicbox_web_server::cors::Cors::default()
+    let cors = switchy_web_server::cors::Cors::default()
         .allow_any_origin()
         .allow_any_method()
         .allow_any_header()

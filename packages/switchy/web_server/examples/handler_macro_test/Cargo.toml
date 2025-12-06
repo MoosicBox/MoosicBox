@@ -1,0 +1,43 @@
+[package]
+authors     = { workspace = true }
+categories  = ["web-programming"]
+description = "Switchy Web Server handler macros test examples"
+edition     = { workspace = true }
+keywords    = ["handler", "macro", "server", "test", "web"]
+license     = { workspace = true }
+name        = "switchy_web_server_example_handler_macro_test"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+serde              = { workspace = true, features = ["derive"] }
+switchy_async      = { workspace = true, features = ["macros", "tokio"] }
+switchy_web_server = { workspace = true, features = ["serde"] }
+
+[[bin]]
+name              = "test_actix"
+path              = "src/test_actix.rs"
+required-features = ["switchy_web_server/actix"]
+
+[[bin]]
+name              = "test_simulator"
+path              = "src/test_simulator.rs"
+required-features = ["switchy_web_server/simulator"]
+
+[[bin]]
+name              = "debug_actix"
+path              = "src/debug_actix.rs"
+required-features = ["switchy_web_server/actix"]
+
+[features]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
+]

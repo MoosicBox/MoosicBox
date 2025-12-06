@@ -1,0 +1,35 @@
+[package]
+authors     = { workspace = true }
+categories  = ["web-programming"]
+description = "Switchy Web Server FromRequest trait test examples"
+edition     = { workspace = true }
+keywords    = ["extraction", "request", "server", "test", "web"]
+license     = { workspace = true }
+name        = "switchy_web_server_example_from_request_test"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+switchy_async      = { workspace = true, features = ["macros", "tokio"] }
+switchy_web_server = { workspace = true, features = ["simulator"] }
+
+[[bin]]
+name = "test_sync_extraction"
+path = "src/test_sync_extraction.rs"
+
+[[bin]]
+name = "test_async_extraction"
+path = "src/test_async_extraction.rs"
+
+[features]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_web_server/fail-on-warnings",
+]

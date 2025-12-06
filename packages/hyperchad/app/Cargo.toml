@@ -105,10 +105,16 @@ logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
 
 actix      = ["hyperchad_renderer_html?/actix"]
 lambda     = ["hyperchad_renderer_html?/lambda"]
-web-server = ["hyperchad_renderer_html?/web-server"]
+web-server = ["hyperchad_renderer_html?/web-server", "switchy/web-server"]
 
-web-server-actix     = ["hyperchad_renderer_html?/web-server-actix"]
-web-server-simulator = ["hyperchad_renderer_html?/web-server-simulator"]
+web-server-actix = [
+    "hyperchad_renderer_html?/web-server-actix",
+    "switchy/web-server-actix",
+]
+web-server-simulator = [
+    "hyperchad_renderer_html?/web-server-simulator",
+    "switchy/web-server-simulator",
+]
 
 wayland = ["hyperchad_renderer_egui?/wayland"]
 x11     = ["hyperchad_renderer_egui?/x11"]
