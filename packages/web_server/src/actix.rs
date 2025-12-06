@@ -1,4 +1,13 @@
+//! Actix backend integration for the web server.
+//!
+//! This module provides Actix-web integration, including:
+//! - `ActixRequest` - Implementation of `HttpRequestTrait` for Actix
+//! - `build_actix()` - Builder method for creating Actix-based servers
+//! - Error conversions between the crate's error types and Actix errors
+
 use std::{
+    any::TypeId,
+    collections::BTreeMap,
     future::{self},
     marker::PhantomData,
     pin::Pin,
@@ -13,47 +22,162 @@ use actix_web::{
     dev::{AppConfig, ServerHandle},
     error::{self},
 };
+use bytes::Bytes;
 
-use crate::{Method, RequestContext};
+use crate::{
+    Method, PathParams,
+    request::{ErasedState, HttpRequestTrait},
+};
 use moosicbox_web_server_core::WebServer;
 #[cfg(feature = "cors")]
 use moosicbox_web_server_cors::AllOrSome;
 use switchy_http_models::{StatusCode, TryFromU16StatusCodeError};
 
-#[allow(clippy::fallible_impl_from)]
-impl From<HttpRequest> for actix_web::HttpRequest {
-    fn from(value: HttpRequest) -> Self {
-        #[allow(clippy::match_wildcard_for_single_variants)]
-        match value {
-            HttpRequest::Actix { inner, .. } => inner,
-            _ => panic!("Invalid HttpRequest"),
+/// Actix-specific HTTP request wrapper that implements `HttpRequestTrait`.
+///
+/// This struct extracts and stores data from an `actix_web::HttpRequest` in a
+/// `Send + Sync` compatible way. The original Actix request cannot be stored
+/// directly because it uses `Rc` internally.
+#[derive(Clone, Debug)]
+pub struct ActixRequest {
+    /// Request path
+    path: String,
+    /// Query string without leading ?
+    query_string: String,
+    /// HTTP method
+    method: Method,
+    /// Request headers
+    headers: BTreeMap<String, String>,
+    /// Cookies
+    cookies: BTreeMap<String, String>,
+    /// Remote address
+    remote_addr: Option<String>,
+    /// Path parameters from route matching
+    path_params: PathParams,
+}
+
+impl ActixRequest {
+    /// Creates a new `ActixRequest` by extracting data from an Actix `HttpRequest`.
+    #[must_use]
+    pub fn new(inner: &actix_web::HttpRequest) -> Self {
+        use actix_web::http::Method as ActixMethod;
+
+        let method = match *inner.method() {
+            ActixMethod::GET => Method::Get,
+            ActixMethod::POST => Method::Post,
+            ActixMethod::PUT => Method::Put,
+            ActixMethod::PATCH => Method::Patch,
+            ActixMethod::DELETE => Method::Delete,
+            ActixMethod::HEAD => Method::Head,
+            ActixMethod::OPTIONS => Method::Options,
+            ActixMethod::CONNECT => Method::Connect,
+            _ => Method::Trace,
+        };
+
+        let headers = inner
+            .headers()
+            .iter()
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|val| (k.as_str().to_string(), val.to_string()))
+            })
+            .collect();
+
+        let cookies = inner
+            .cookies()
+            .map(|jar| {
+                jar.iter()
+                    .map(|c| (c.name().to_string(), c.value().to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let remote_addr = inner
+            .connection_info()
+            .peer_addr()
+            .map(std::string::ToString::to_string);
+
+        Self {
+            path: inner.path().to_string(),
+            query_string: inner.query_string().to_string(),
+            method,
+            headers,
+            cookies,
+            remote_addr,
+            path_params: BTreeMap::new(),
         }
+    }
+
+    /// Creates a new `ActixRequest` with custom path parameters.
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn with_path_params(mut self, path_params: PathParams) -> Self {
+        self.path_params = path_params;
+        self
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
-impl<'a> From<HttpRequestRef<'a>> for &'a actix_web::HttpRequest {
-    fn from(value: HttpRequestRef<'a>) -> Self {
-        #[allow(clippy::match_wildcard_for_single_variants)]
-        match value {
-            HttpRequestRef::Actix(x) => x,
-            _ => panic!("Invalid HttpRequest"),
-        }
+impl HttpRequestTrait for ActixRequest {
+    fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn query_string(&self) -> &str {
+        &self.query_string
+    }
+
+    fn method(&self) -> switchy_http_models::Method {
+        self.method
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers.get(name).map(String::as_str)
+    }
+
+    fn headers(&self) -> BTreeMap<String, String> {
+        self.headers.clone()
+    }
+
+    fn body(&self) -> Option<&Bytes> {
+        // Actix body is consumed during extraction, not available here
+        None
+    }
+
+    fn cookie(&self, name: &str) -> Option<String> {
+        self.cookies.get(name).cloned()
+    }
+
+    fn cookies(&self) -> BTreeMap<String, String> {
+        self.cookies.clone()
+    }
+
+    fn remote_addr(&self) -> Option<String> {
+        self.remote_addr.clone()
+    }
+
+    fn path_params(&self) -> &PathParams {
+        &self.path_params
+    }
+
+    fn app_state_any(&self, type_id: TypeId) -> Option<ErasedState> {
+        // Actix stores state differently - we need to use app_data
+        // This is a simplified approach; for full support, the actix sub-crate
+        // provides more comprehensive state handling
+        let _ = type_id;
+        None
     }
 }
 
-impl From<actix_web::HttpRequest> for HttpRequest {
-    fn from(inner: actix_web::HttpRequest) -> Self {
-        Self::Actix {
-            inner,
-            context: Arc::new(RequestContext::default()),
-        }
+impl From<&actix_web::HttpRequest> for ActixRequest {
+    fn from(inner: &actix_web::HttpRequest) -> Self {
+        Self::new(inner)
     }
 }
 
-impl<'a> From<&'a actix_web::HttpRequest> for HttpRequestRef<'a> {
-    fn from(value: &'a actix_web::HttpRequest) -> Self {
-        Self::Actix(value)
+impl From<&actix_web::HttpRequest> for crate::HttpRequest {
+    fn from(inner: &actix_web::HttpRequest) -> Self {
+        Self::new(ActixRequest::new(inner))
     }
 }
 
@@ -180,7 +304,7 @@ where
     S::Response: Into<Response<B>>,
     B: MessageBody + 'static,
 {
-    fn start(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+    fn start(&self) -> Pin<Box<dyn std::future::Future<Output = ()>>> {
         log::debug!("Starting actix server on '{}'", self.addr);
         let server = HttpServer::new(self.factory.clone());
         let server = server.bind(&self.addr).unwrap();
@@ -194,7 +318,7 @@ where
         })
     }
 
-    fn stop(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+    fn stop(&self) -> Pin<Box<dyn std::future::Future<Output = ()>>> {
         log::debug!("Stopping actix server");
         let handle = self.handle.write().unwrap().take();
         if let Some(handle) = handle {
@@ -204,7 +328,7 @@ where
     }
 }
 
-use crate::{HttpRequest, HttpRequestRef, WebServerBuilder};
+use crate::{HttpRequest, WebServerBuilder};
 
 impl WebServerBuilder {
     /// Build the web server using Actix backend
@@ -265,13 +389,13 @@ impl WebServerBuilder {
 
             #[allow(unused_mut)]
             let mut app = {
-                let mut app = actix_web::App::new();
+                let app = actix_web::App::new();
 
                 #[cfg(feature = "htmx")]
-                let mut app = app.wrap(actix_htmx::HtmxMiddleware {});
+                let app = app.wrap(actix_htmx::HtmxMiddleware {});
 
                 #[cfg(feature = "cors")]
-                let mut app = app.wrap(cors);
+                let app = app.wrap(cors);
 
                 app
             };
@@ -286,7 +410,7 @@ impl WebServerBuilder {
                     let actix_handler = move |req: actix_web::HttpRequest| {
                         let handler = handler.clone();
                         async move {
-                            let result = handler(req.into()).await;
+                            let result = handler(HttpRequest::from(&req)).await;
                             result.map(|resp| {
                                 let mut actix_resp =
                                     actix_web::HttpResponseBuilder::new(resp.status_code.into());

@@ -337,8 +337,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_body(user_json.as_bytes().to_vec());
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let json = Json::<User>::from_request_sync(&http_request)?;
     println!("✅ JSON extracted successfully:");
@@ -354,8 +353,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_body(update_json.as_bytes().to_vec());
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let json = Json::<UpdateUser>::from_request_sync(&http_request)?;
     println!("✅ Optional JSON extracted successfully:");
@@ -372,8 +370,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_body(user_json.as_bytes().to_vec());
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let json = Json::<User>::from_request_sync(&http_request)?;
     println!("✅ JSON for response extracted successfully:");
@@ -391,8 +388,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_body(b"not json".to_vec());
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let data = RequestData::from_request_sync(&http_request)?;
     println!("✅ RequestData extracted successfully:");

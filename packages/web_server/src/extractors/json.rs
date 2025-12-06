@@ -371,7 +371,7 @@ mod tests {
     use super::*;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
-    use crate::{HttpRequest, Stub};
+    use crate::HttpRequest;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use bytes::Bytes;
@@ -413,7 +413,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_ok());
@@ -433,7 +433,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_ok());
@@ -460,7 +460,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Put, "/api/settings")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestSettings>::from_request_sync(&req);
         assert!(result.is_ok());
@@ -481,7 +481,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "text/plain")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_err());
@@ -501,7 +501,7 @@ mod tests {
         let body = Bytes::from(json_body);
 
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users").with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_err());
@@ -519,7 +519,7 @@ mod tests {
     fn test_json_extraction_empty_body() {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_err());
@@ -539,7 +539,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_err());
@@ -561,7 +561,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let result = Json::<TestUser>::from_request_sync(&req);
         assert!(result.is_err());
@@ -583,7 +583,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         // Test async extraction (which delegates to sync)
         // Since we use std::future::Ready, we can just call the sync version
@@ -604,7 +604,7 @@ mod tests {
         let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
             .with_header("Content-Type", "application/json")
             .with_body(body);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let Json(user) = Json::<TestUser>::from_request_sync(&req).unwrap();
         let json_wrapper = Json(user);

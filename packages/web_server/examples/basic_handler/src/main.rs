@@ -161,7 +161,7 @@ fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
         .with_body(b"{\"message\": \"Hello from simulator!\"}".to_vec());
 
     let stub = SimulationStub::new(request);
-    let http_request = HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = HttpRequest::new(stub);
 
     // Extract RequestData and show what the handler would receive
     let data = RequestData::from_request_sync(&http_request)?;

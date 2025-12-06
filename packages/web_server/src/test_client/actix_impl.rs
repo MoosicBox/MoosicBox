@@ -499,7 +499,7 @@ fn convert_scope_to_actix(scope: &crate::Scope) -> actix_web::Scope {
             let handler = handler.clone();
             async move {
                 // Convert actix_web::HttpRequest to our HttpRequest
-                let our_request = crate::HttpRequest::from(req);
+                let our_request = crate::HttpRequest::from(&req);
 
                 // Call our handler
                 let result = handler(our_request).await;
@@ -716,7 +716,7 @@ impl ActixWebServer {
                     let handler = handler.clone();
                     async move {
                         // Convert actix_web::HttpRequest to our HttpRequest
-                        let our_request = crate::HttpRequest::from(req);
+                        let our_request = crate::HttpRequest::from(&req);
 
                         // Call our handler
                         let result = handler(our_request).await;

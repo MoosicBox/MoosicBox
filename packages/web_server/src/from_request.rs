@@ -561,7 +561,7 @@ mod tests {
     use super::*;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
-    use crate::{Method, Stub, simulator::SimulationRequest};
+    use crate::{Method, simulator::SimulationRequest};
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn create_test_request() -> HttpRequest {
@@ -572,7 +572,7 @@ mod tests {
             .with_header("authorization", "Bearer token123")
             .with_header("accept", "application/json");
 
-        HttpRequest::Stub(Stub::Simulator(sim_req.into()))
+        HttpRequest::new(crate::simulator::SimulationStub::from(sim_req))
     }
 
     #[test_log::test]
@@ -676,7 +676,7 @@ mod tests {
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_u32_from_request_valid() {
         let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("42");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let result = u32::from_request_sync(&req);
         assert!(result.is_ok());
@@ -688,7 +688,7 @@ mod tests {
     fn test_u32_from_request_invalid() {
         let sim_req =
             SimulationRequest::new(Method::Get, "/test").with_query_string("not_a_number");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let result = u32::from_request_sync(&req);
         assert!(result.is_err());
@@ -698,7 +698,7 @@ mod tests {
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_i32_from_request_valid() {
         let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("-123");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let result = i32::from_request_sync(&req);
         assert!(result.is_ok());
@@ -711,7 +711,7 @@ mod tests {
         for true_value in &["true", "1", "yes", "on", "TRUE", "YES", "ON"] {
             let sim_req =
                 SimulationRequest::new(Method::Get, "/test").with_query_string(*true_value);
-            let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+            let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
             let result = bool::from_request_sync(&req);
             assert!(result.is_ok());
@@ -734,7 +734,7 @@ mod tests {
         ] {
             let sim_req =
                 SimulationRequest::new(Method::Get, "/test").with_query_string(*false_value);
-            let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+            let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
             let result = bool::from_request_sync(&req);
             assert!(result.is_ok());
@@ -864,7 +864,7 @@ mod tests {
     fn test_request_data_remote_addr_present() {
         let sim_req =
             SimulationRequest::new(Method::Get, "/test").with_remote_addr("192.168.1.50:43210");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let data = RequestData::from_request_sync(&req).unwrap();
 
@@ -875,7 +875,7 @@ mod tests {
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_request_data_remote_addr_absent() {
         let sim_req = SimulationRequest::new(Method::Get, "/test");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let data = RequestData::from_request_sync(&req).unwrap();
 
@@ -889,7 +889,7 @@ mod tests {
     fn test_request_info_remote_addr_present() {
         let sim_req =
             SimulationRequest::new(Method::Get, "/api/info").with_remote_addr("10.0.0.1:8080");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let info = RequestInfo::from_request_sync(&req).unwrap();
 
@@ -909,7 +909,7 @@ mod tests {
             .with_header("user-agent", "TestAgent/1.0")
             .with_header("accept", "text/html")
             .with_header("host", "example.com");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let headers = Headers::from_request_sync(&req).unwrap();
 
@@ -933,7 +933,7 @@ mod tests {
         let sim_req = SimulationRequest::new(Method::Get, "/test")
             .with_header("x-custom-header", "custom-value")
             .with_header("x-request-id", "req-12345");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let headers = Headers::from_request_sync(&req).unwrap();
 
@@ -947,7 +947,7 @@ mod tests {
     fn test_headers_accept_via_get() {
         let sim_req = SimulationRequest::new(Method::Get, "/test")
             .with_header("accept", "text/html,application/xhtml+xml");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let headers = Headers::from_request_sync(&req).unwrap();
 
@@ -961,7 +961,7 @@ mod tests {
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_headers_empty_request() {
         let sim_req = SimulationRequest::new(Method::Get, "/test");
-        let req = HttpRequest::Stub(Stub::Simulator(sim_req.into()));
+        let req = HttpRequest::new(crate::simulator::SimulationStub::from(sim_req));
 
         let headers = Headers::from_request_sync(&req).unwrap();
 

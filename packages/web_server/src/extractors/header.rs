@@ -351,7 +351,7 @@ impl FromRequest for Header<(String, String, String)> {
 #[cfg(all(test, feature = "simulator"))]
 mod tests {
     use super::*;
-    use crate::{HttpRequest, Stub};
+    use crate::HttpRequest;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use crate::simulator::{SimulationRequest, SimulationStub};
@@ -363,13 +363,13 @@ mod tests {
             for (name, value) in headers {
                 sim_req = sim_req.with_header(*name, *value);
             }
-            HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
+            HttpRequest::new(SimulationStub::new(sim_req))
         }
         #[cfg(all(feature = "actix", not(feature = "simulator")))]
         {
             // For Actix-only builds, use empty stub
             let _ = headers;
-            HttpRequest::Stub(Stub::Empty)
+            HttpRequest::new(crate::EmptyRequest)
         }
     }
 

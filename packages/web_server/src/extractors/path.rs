@@ -480,7 +480,7 @@ where
 #[cfg(all(test, feature = "simulator"))]
 mod tests {
     use super::*;
-    use crate::{HttpRequest, Stub};
+    use crate::HttpRequest;
     use serde::Deserialize;
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
@@ -490,13 +490,13 @@ mod tests {
         #[cfg(any(feature = "simulator", not(feature = "actix")))]
         {
             let sim_req = SimulationRequest::new(crate::Method::Get, path);
-            HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
+            HttpRequest::new(SimulationStub::new(sim_req))
         }
         #[cfg(all(feature = "actix", not(feature = "simulator")))]
         {
             // For Actix-only builds, use empty stub
             let _ = path;
-            HttpRequest::Stub(Stub::Empty)
+            HttpRequest::new(crate::EmptyRequest)
         }
     }
 

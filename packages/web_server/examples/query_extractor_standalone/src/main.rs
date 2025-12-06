@@ -244,8 +244,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_header("user-agent", "MoosicBox-QueryTest/1.0");
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let data = RequestData::from_request_sync(&http_request)?;
     println!("✅ RequestData extracted successfully:");
@@ -259,8 +258,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_header("user-agent", "MoosicBox-QueryTest/1.0");
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let query = Query::<SimpleQuery>::from_request_sync(&http_request)?;
     println!("✅ Query extracted successfully:");
@@ -273,8 +271,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
         .with_query_string("search=rust&limit=10&sort=date");
 
     let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+    let http_request = moosicbox_web_server::HttpRequest::new(stub);
 
     let query = Query::<OptionalQuery>::from_request_sync(&http_request)?;
     println!("✅ Optional query extracted successfully:");

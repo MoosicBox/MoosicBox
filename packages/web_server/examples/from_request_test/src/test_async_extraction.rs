@@ -9,11 +9,12 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
+use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
+use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData};
 
 /// Creates a test `HttpRequest` with predefined headers and query parameters.
 ///
-/// This helper constructs an `HttpRequest::Stub` using the simulator with:
+/// This helper constructs an `HttpRequest` using the simulator with:
 /// * Method: POST
 /// * Path: `/api/users`
 /// * Query: `filter=active&limit=10`
@@ -21,8 +22,6 @@ use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 /// * Remote address: `192.168.1.100:3000`
 #[must_use]
 fn create_test_request() -> HttpRequest {
-    use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
-
     let sim_req = SimulationRequest::new(Method::Post, "/api/users")
         .with_query_string("filter=active&limit=10")
         .with_header("user-agent", "async-test-client")
@@ -30,7 +29,7 @@ fn create_test_request() -> HttpRequest {
         .with_header("accept", "application/json")
         .with_remote_addr("192.168.1.100:3000");
 
-    HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
+    HttpRequest::new(SimulationStub::new(sim_req))
 }
 
 /// Creates a test `HttpRequest` with a custom query string.
@@ -40,11 +39,9 @@ fn create_test_request() -> HttpRequest {
 /// * `query` - The query string to include in the request
 #[must_use]
 fn create_test_request_with_query(query: &str) -> HttpRequest {
-    use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
-
     let sim_req = SimulationRequest::new(Method::Get, "/async/test").with_query_string(query);
 
-    HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
+    HttpRequest::new(SimulationStub::new(sim_req))
 }
 
 /// Tests asynchronous extraction of `RequestData` from an `HttpRequest`.

@@ -138,7 +138,7 @@ impl TestClient for SimulatorTestClient {
         let response = futures::executor::block_on(self.server.process_request(request));
 
         // Convert to TestResponse
-        let response_body = response.body.unwrap_or_default().into_bytes();
+        let response_body = response.body.unwrap_or_default().to_vec();
         Ok(TestResponse::new(
             response.status,
             response.headers,
@@ -203,6 +203,7 @@ mod tests {
             state: Arc::new(std::sync::RwLock::new(
                 crate::extractors::state::StateContainer::new(),
             )),
+            static_files: None,
         }
     }
 

@@ -129,6 +129,12 @@ mod actix;
 // New extractors module with enhanced functionality
 pub mod extractors;
 
+pub mod request;
+pub mod static_files;
+
+pub use request::{EmptyRequest, HttpRequest, HttpRequestTrait};
+pub use static_files::StaticFiles;
+
 pub mod from_request;
 pub mod handler;
 
@@ -173,6 +179,7 @@ pub struct WebServerBuilder {
     addr: String,
     port: u16,
     scopes: Vec<Scope>,
+    static_files: Option<StaticFiles>,
     #[cfg(feature = "cors")]
     cors: cors::Cors,
     #[cfg(feature = "compress")]
@@ -198,6 +205,7 @@ impl WebServerBuilder {
             addr: "0.0.0.0".to_string(),
             port: 8080,
             scopes: vec![],
+            static_files: None,
             #[cfg(feature = "cors")]
             cors: cors::Cors::default(),
             #[cfg(feature = "compress")]
@@ -242,6 +250,45 @@ impl WebServerBuilder {
         self.port = port.into();
         self
     }
+
+    /// Returns the configured bind address.
+    #[must_use]
+    pub fn addr(&self) -> &str {
+        &self.addr
+    }
+
+    /// Returns the configured port number.
+    #[must_use]
+    pub const fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Returns a reference to the configured scopes.
+    #[must_use]
+    pub fn scopes(&self) -> &[Scope] {
+        &self.scopes
+    }
+
+    /// Configures static file serving.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use moosicbox_web_server::{WebServerBuilder, StaticFiles};
+    /// let builder = WebServerBuilder::new()
+    ///     .with_static_files(StaticFiles::new("/static", "./public"));
+    /// ```
+    #[must_use]
+    pub fn with_static_files(mut self, config: StaticFiles) -> Self {
+        self.static_files = Some(config);
+        self
+    }
+
+    /// Returns the configured static files, if any.
+    #[must_use]
+    pub const fn static_files(&self) -> Option<&StaticFiles> {
+        self.static_files.as_ref()
+    }
 }
 
 #[cfg(feature = "cors")]
@@ -253,6 +300,14 @@ impl WebServerBuilder {
     pub fn with_cors(mut self, cors: cors::Cors) -> Self {
         self.cors = cors;
         self
+    }
+
+    /// Returns a reference to the configured CORS settings.
+    ///
+    /// Only available when the `cors` feature is enabled.
+    #[must_use]
+    pub const fn cors(&self) -> &cors::Cors {
+        &self.cors
     }
 }
 
@@ -283,414 +338,10 @@ impl WebServerHandle {
     // }
 }
 
-/// Backend-agnostic HTTP request wrapper.
-///
-/// This enum wraps different backend request types (Actix or Stub) and provides
-/// a unified interface for accessing request data. It includes request context
-/// for storing path parameters and other request-scoped data.
-///
-/// # Variants
-///
-/// * `Actix` - Wraps an Actix web request (requires `actix` feature)
-/// * `Stub` - Test/simulator request stub
-#[derive(Debug, Clone)]
-pub enum HttpRequest {
-    /// Actix web request wrapper (requires `actix` feature)
-    #[cfg(feature = "actix")]
-    Actix {
-        /// The underlying Actix `HttpRequest`
-        inner: actix_web::HttpRequest,
-        /// Request context holding path parameters and other request-scoped data
-        context: std::sync::Arc<RequestContext>,
-    },
-    /// Test or simulator request stub
-    Stub(Stub),
-}
-
-impl HttpRequest {
-    /// Returns a reference to the request as an [`HttpRequestRef`].
-    ///
-    /// This method provides a borrowed view of the request that can be used
-    /// to access request data without moving the request.
-    #[must_use]
-    pub const fn as_ref(&self) -> HttpRequestRef<'_> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => HttpRequestRef::Actix(inner),
-            Self::Stub(x) => HttpRequestRef::Stub(x),
-        }
-    }
-}
-
-impl HttpRequest {
-    /// Returns all path parameters extracted from route matching.
-    ///
-    /// Path parameters are extracted from dynamic route segments like `/users/{id}`.
-    /// Returns an empty map if no path parameters are present.
-    #[must_use]
-    pub fn path_params(&self) -> &PathParams {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { context, .. } => &context.path_params,
-            Self::Stub(Stub::Simulator(sim)) => &sim.request.path_params,
-            Self::Stub(Stub::Empty) => {
-                static EMPTY: PathParams = BTreeMap::new();
-                &EMPTY
-            }
-        }
-    }
-
-    /// Returns a specific path parameter by name.
-    ///
-    /// Returns `None` if the parameter doesn't exist.
-    #[must_use]
-    pub fn path_param(&self, name: &str) -> Option<&str> {
-        self.path_params().get(name).map(String::as_str)
-    }
-
-    /// Returns the request context for advanced use cases.
-    ///
-    /// The request context contains request-scoped data such as path parameters.
-    /// Returns `None` for stub requests.
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn context(&self) -> Option<&RequestContext> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { context, .. } => Some(context),
-            _ => None,
-        }
-    }
-
-    /// Returns a header value by name.
-    ///
-    /// Header name lookup is case-insensitive. Returns `None` if the header doesn't exist.
-    #[must_use]
-    pub fn header(&self, name: &str) -> Option<&str> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => inner.headers().get(name).and_then(|x| x.to_str().ok()),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.header(name),
-            },
-        }
-    }
-
-    /// Returns the request path (e.g., `/api/users`).
-    #[must_use]
-    pub fn path(&self) -> &str {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => inner.path(),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => "",
-                Stub::Simulator(sim) => sim.path(),
-            },
-        }
-    }
-
-    /// Returns the query string without the leading `?` (e.g., `name=john&age=30`).
-    #[must_use]
-    pub fn query_string(&self) -> &str {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => inner.query_string(),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => "",
-                Stub::Simulator(sim) => sim.query_string(),
-            },
-        }
-    }
-
-    /// Returns the HTTP method (GET, POST, etc.).
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn method(&self) -> Method {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => {
-                use actix_web::http::Method as ActixMethod;
-                match *inner.method() {
-                    ActixMethod::GET => Method::Get,
-                    ActixMethod::POST => Method::Post,
-                    ActixMethod::PUT => Method::Put,
-                    ActixMethod::PATCH => Method::Patch,
-                    ActixMethod::DELETE => Method::Delete,
-                    ActixMethod::HEAD => Method::Head,
-                    ActixMethod::OPTIONS => Method::Options,
-                    ActixMethod::CONNECT => Method::Connect,
-                    _ => Method::Trace, // Default fallback for unknown methods
-                }
-            }
-            Self::Stub(stub) => match stub {
-                Stub::Empty => Method::Get,
-                Stub::Simulator(sim) => *sim.method(),
-            },
-        }
-    }
-
-    /// Returns the request body as bytes if available.
-    ///
-    /// Note: For Actix backend, the body is consumed during extraction and may not be available.
-    /// For Simulator backend, the body is accessible.
-    #[must_use]
-    pub const fn body(&self) -> Option<&Bytes> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { .. } => None, // Actix body is consumed during extraction
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.body(),
-            },
-        }
-    }
-
-    /// Returns a cookie value by name.
-    ///
-    /// Returns `None` if the cookie doesn't exist.
-    #[must_use]
-    pub fn cookie(&self, name: &str) -> Option<String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => inner.cookie(name).map(|c| c.value().to_string()),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
-            },
-        }
-    }
-
-    /// Returns all cookies as a map of name-value pairs.
-    #[must_use]
-    pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => {
-                let mut cookies = std::collections::BTreeMap::new();
-                if let Ok(cookie_jar) = inner.cookies() {
-                    for cookie in cookie_jar.iter() {
-                        cookies.insert(cookie.name().to_string(), cookie.value().to_string());
-                    }
-                }
-                cookies
-            }
-            Self::Stub(stub) => match stub {
-                Stub::Empty => std::collections::BTreeMap::new(),
-                Stub::Simulator(sim) => sim.cookies().clone(),
-            },
-        }
-    }
-
-    /// Returns the remote client address if available.
-    #[must_use]
-    pub fn remote_addr(&self) -> Option<String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { inner, .. } => inner
-                .connection_info()
-                .peer_addr()
-                .map(std::string::ToString::to_string),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
-            },
-        }
-    }
-
-    /// Parses the query string into a typed structure.
-    ///
-    /// # Errors
-    ///
-    /// * Returns `qs::Error` if the query string parsing fails
-    pub fn parse_query<'a, T: serde::Deserialize<'a>>(&'a self) -> Result<T, qs::Error> {
-        qs::from_str(self.query_string(), qs::ParseMode::UrlEncoded)
-    }
-}
-
-/// Request stub for testing and simulation.
-///
-/// This enum provides different stub implementations for testing HTTP handlers
-/// without requiring a real HTTP server.
-///
-/// # Variants
-///
-/// * `Empty` - Minimal stub with no data
-/// * `Simulator` - Full simulator stub with request data
-#[derive(Debug, Clone, Default)]
-pub enum Stub {
-    /// Minimal stub with no data
-    #[default]
-    Empty,
-    /// Full simulator stub with request data
-    Simulator(simulator::SimulationStub),
-}
-
-/// Borrowed reference to an HTTP request.
-///
-/// This enum provides a lightweight, borrowed view of an [`HttpRequest`] that can be
-/// used to access request data without moving the request. It mirrors the structure
-/// of [`HttpRequest`] but holds references instead of owned values.
-///
-/// # Variants
-///
-/// * `Actix` - Reference to an Actix web request (requires `actix` feature)
-/// * `Stub` - Reference to a test/simulator request stub
-#[derive(Debug, Clone, Copy)]
-pub enum HttpRequestRef<'a> {
-    /// Reference to an Actix web request (requires `actix` feature)
-    #[cfg(feature = "actix")]
-    Actix(&'a actix_web::HttpRequest),
-    /// Reference to a test/simulator request stub
-    Stub(&'a Stub),
-}
-
-impl<'a> HttpRequestRef<'a> {
-    /// Returns a header value by name.
-    ///
-    /// Header name lookup is case-insensitive. Returns `None` if the header doesn't exist.
-    #[must_use]
-    pub fn header(&self, name: &str) -> Option<&str> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.header(name),
-            },
-        }
-    }
-
-    /// Returns the request path (e.g., `/api/users`).
-    #[must_use]
-    pub fn path(&self) -> &str {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => x.path(),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => "",
-                Stub::Simulator(sim) => sim.path(),
-            },
-        }
-    }
-
-    /// Returns the query string without the leading `?` (e.g., `name=john&age=30`).
-    #[must_use]
-    pub fn query_string(&self) -> &str {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => x.query_string(),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => "",
-                Stub::Simulator(sim) => sim.query_string(),
-            },
-        }
-    }
-
-    /// Returns the HTTP method (GET, POST, etc.).
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn method(&self) -> Method {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => {
-                use actix_web::http::Method as ActixMethod;
-                match *x.method() {
-                    ActixMethod::GET => Method::Get,
-                    ActixMethod::POST => Method::Post,
-                    ActixMethod::PUT => Method::Put,
-                    ActixMethod::PATCH => Method::Patch,
-                    ActixMethod::DELETE => Method::Delete,
-                    ActixMethod::HEAD => Method::Head,
-                    ActixMethod::OPTIONS => Method::Options,
-                    ActixMethod::CONNECT => Method::Connect,
-                    _ => Method::Trace, // Default fallback for unknown methods
-                }
-            }
-            Self::Stub(stub) => match stub {
-                Stub::Empty => Method::Get,
-                Stub::Simulator(sim) => *sim.method(),
-            },
-        }
-    }
-
-    /// Returns the request body as bytes if available.
-    ///
-    /// Note: For Actix backend, the body is consumed during extraction and may not be available.
-    /// For Simulator backend, the body is accessible.
-    #[must_use]
-    pub const fn body(&self) -> Option<&Bytes> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix { .. } => None, // Actix body is consumed during extraction
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.body(),
-            },
-        }
-    }
-
-    /// Returns a cookie value by name.
-    ///
-    /// Returns `None` if the cookie doesn't exist.
-    #[must_use]
-    pub fn cookie(&self, name: &str) -> Option<String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
-            },
-        }
-    }
-
-    /// Returns all cookies as a map of name-value pairs.
-    #[must_use]
-    pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => {
-                let mut cookies = std::collections::BTreeMap::new();
-                if let Ok(cookie_jar) = x.cookies() {
-                    for cookie in cookie_jar.iter() {
-                        cookies.insert(cookie.name().to_string(), cookie.value().to_string());
-                    }
-                }
-                cookies
-            }
-            Self::Stub(stub) => match stub {
-                Stub::Empty => std::collections::BTreeMap::new(),
-                Stub::Simulator(sim) => sim.cookies().clone(),
-            },
-        }
-    }
-
-    /// Returns the remote client address if available.
-    #[must_use]
-    pub fn remote_addr(&self) -> Option<String> {
-        match self {
-            #[cfg(feature = "actix")]
-            Self::Actix(x) => x
-                .connection_info()
-                .peer_addr()
-                .map(std::string::ToString::to_string),
-            Self::Stub(stub) => match stub {
-                Stub::Empty => None,
-                Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
-            },
-        }
-    }
-
-    /// Parses the query string into a typed structure.
-    ///
-    /// # Errors
-    ///
-    /// * Returns `qs::Error` if the query string parsing fails
-    pub fn parse_query<T: serde::Deserialize<'a>>(&'a self) -> Result<T, qs::Error> {
-        qs::from_str(self.query_string(), qs::ParseMode::UrlEncoded)
-    }
-}
+// NOTE: The old HttpRequest enum, Stub enum, and HttpRequestRef enum have been removed.
+// Use the trait-based HttpRequest from the request module instead.
+// For testing, use: HttpRequest::new(SimulationStub::new(sim_req))
+// See request.rs for the HttpRequestTrait-based implementation.
 
 /// HTTP response body container.
 ///
@@ -1083,6 +734,24 @@ impl Scope {
         self.scopes.extend(scopes.into_iter().map(Into::into));
         self
     }
+
+    /// Returns the path prefix for this scope.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Returns the routes in this scope.
+    #[must_use]
+    pub fn routes(&self) -> &[Route] {
+        &self.routes
+    }
+
+    /// Returns the nested scopes in this scope.
+    #[must_use]
+    pub fn scopes(&self) -> &[Self] {
+        &self.scopes
+    }
 }
 
 /// Web server error types.
@@ -1360,6 +1029,24 @@ impl Route {
     {
         Self::new(Method::Head, path, handler)
     }
+
+    /// Returns the path pattern for this route.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Returns the HTTP method for this route.
+    #[must_use]
+    pub const fn method(&self) -> Method {
+        self.method
+    }
+
+    /// Returns the handler for this route.
+    #[must_use]
+    pub fn handler(&self) -> &std::sync::Arc<RouteHandler> {
+        &self.handler
+    }
 }
 
 impl std::fmt::Debug for Route {
@@ -1371,17 +1058,55 @@ impl std::fmt::Debug for Route {
     }
 }
 
+/// Macro to implement the default `build()` method based on enabled features.
+///
+/// # Feature Priority
+///
+/// The default backend is selected based on the following priority:
+/// 1. **Simulator** - If `simulator` feature is enabled (takes precedence for deterministic testing)
+/// 2. **Actix** - If `actix` feature is enabled and `simulator` is not
+/// 3. **Simulator fallback** - If neither feature is explicitly enabled
 #[allow(unused)]
 macro_rules! impl_web_server {
     ($module:ident $(,)?) => {
         use moosicbox_web_server_core::WebServer;
 
         impl WebServerBuilder {
-            /// # Errors
+            /// Builds the web server using the default backend based on enabled features.
             ///
-            /// * If the underlying `WebServer` fails to build
+            /// # Backend Selection Priority
+            ///
+            /// 1. **Simulator** - If `simulator` feature is enabled (takes precedence)
+            /// 2. **Actix** - If only `actix` feature is enabled
+            /// 3. **Simulator fallback** - If neither feature is explicitly enabled
+            ///
+            /// This method is an alias for `build_default()`.
+            ///
+            /// # Returns
+            ///
+            /// Returns a boxed `WebServer` trait object that can be started with `start()`.
             #[must_use]
             pub fn build(self) -> Box<dyn WebServer> {
+                paste::paste! {
+                    Self::[< build_ $module >](self)
+                }
+            }
+
+            /// Builds the web server using the default backend based on enabled features.
+            ///
+            /// # Backend Selection Priority
+            ///
+            /// 1. **Simulator** - If `simulator` feature is enabled (takes precedence)
+            /// 2. **Actix** - If only `actix` feature is enabled
+            /// 3. **Simulator fallback** - If neither feature is explicitly enabled
+            ///
+            /// Use `build_simulator()` or `build_actix()` to explicitly select a backend.
+            ///
+            /// # Returns
+            ///
+            /// Returns a boxed `WebServer` trait object that can be started with `start()`.
+            #[must_use]
+            pub fn build_default(self) -> Box<dyn WebServer> {
                 paste::paste! {
                     Self::[< build_ $module >](self)
                 }
@@ -1390,9 +1115,11 @@ macro_rules! impl_web_server {
     };
 }
 
+// Simulator takes priority when enabled (for deterministic testing)
 #[cfg(any(feature = "simulator", not(feature = "actix")))]
 impl_web_server!(simulator);
 
+// Actix is used only when simulator is not enabled
 #[cfg(all(not(feature = "simulator"), feature = "actix"))]
 impl_web_server!(actix);
 
@@ -1939,7 +1666,7 @@ mod tests {
             .with_cookie("session_id", "abc123")
             .with_cookie("user_pref", "dark_mode");
 
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
         let cookies = req.cookies();
 
         assert_eq!(cookies.len(), 2);
@@ -1953,7 +1680,7 @@ mod tests {
         use simulator::{SimulationRequest, SimulationStub};
 
         let sim_req = SimulationRequest::new(Method::Get, "/test");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
         let cookies = req.cookies();
 
         assert!(cookies.is_empty());
@@ -1961,7 +1688,7 @@ mod tests {
 
     #[test_log::test]
     fn test_http_request_cookies_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
         let cookies = req.cookies();
 
         assert!(cookies.is_empty());
@@ -1975,7 +1702,7 @@ mod tests {
         let sim_req =
             SimulationRequest::new(Method::Get, "/test").with_remote_addr("192.168.1.100:54321");
 
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
         let remote_addr = req.remote_addr();
 
         assert_eq!(remote_addr, Some("192.168.1.100:54321".to_string()));
@@ -1987,7 +1714,7 @@ mod tests {
         use simulator::{SimulationRequest, SimulationStub};
 
         let sim_req = SimulationRequest::new(Method::Get, "/test");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
         let remote_addr = req.remote_addr();
 
         assert_eq!(remote_addr, None);
@@ -1995,7 +1722,7 @@ mod tests {
 
     #[test_log::test]
     fn test_http_request_remote_addr_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
         let remote_addr = req.remote_addr();
 
         assert_eq!(remote_addr, None);
@@ -2010,7 +1737,7 @@ mod tests {
             .with_header("X-Custom-Header", "custom-value")
             .with_header("Authorization", "Bearer token");
 
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         assert_eq!(req.header("X-Custom-Header"), Some("custom-value"));
         assert_eq!(req.header("Authorization"), Some("Bearer token"));
@@ -2019,7 +1746,7 @@ mod tests {
 
     #[test_log::test]
     fn test_http_request_header_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
 
         assert_eq!(req.header("Any-Header"), None);
     }
@@ -2037,7 +1764,7 @@ mod tests {
             Method::Patch,
         ] {
             let sim_req = SimulationRequest::new(method, "/test");
-            let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+            let req = HttpRequest::new(SimulationStub::new(sim_req));
 
             assert_eq!(req.method(), method);
         }
@@ -2045,7 +1772,7 @@ mod tests {
 
     #[test_log::test]
     fn test_http_request_method_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
 
         // Empty stub defaults to GET
         assert_eq!(req.method(), Method::Get);
@@ -2057,14 +1784,14 @@ mod tests {
         use simulator::{SimulationRequest, SimulationStub};
 
         let sim_req = SimulationRequest::new(Method::Get, "/api/v1/users/123");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         assert_eq!(req.path(), "/api/v1/users/123");
     }
 
     #[test_log::test]
     fn test_http_request_path_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
 
         assert_eq!(req.path(), "");
     }
@@ -2076,14 +1803,14 @@ mod tests {
 
         let sim_req = SimulationRequest::new(Method::Get, "/search")
             .with_query_string("q=rust&limit=10&sort=desc");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         assert_eq!(req.query_string(), "q=rust&limit=10&sort=desc");
     }
 
     #[test_log::test]
     fn test_http_request_query_string_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
 
         assert_eq!(req.query_string(), "");
     }
@@ -2095,7 +1822,7 @@ mod tests {
 
         let body_content = r#"{"name": "test", "value": 42}"#;
         let sim_req = SimulationRequest::new(Method::Post, "/api/data").with_body(body_content);
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let body = req.body();
         assert!(body.is_some());
@@ -2104,7 +1831,7 @@ mod tests {
 
     #[test_log::test]
     fn test_http_request_body_empty_stub() {
-        let req = HttpRequest::Stub(Stub::Empty);
+        let req = HttpRequest::new(EmptyRequest);
 
         assert!(req.body().is_none());
     }
@@ -2124,7 +1851,7 @@ mod tests {
 
         let sim_req = SimulationRequest::new(Method::Get, "/items")
             .with_query_string("page=5&limit=20&sort=name");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let params: QueryParams = req.parse_query().unwrap();
 
@@ -2146,7 +1873,7 @@ mod tests {
         }
 
         let sim_req = SimulationRequest::new(Method::Get, "/items").with_query_string("");
-        let req = HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)));
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
 
         let params: QueryParams = req.parse_query().unwrap();
 

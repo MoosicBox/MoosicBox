@@ -145,6 +145,7 @@ members = [
     "packages/upnp",
     "packages/uuid",
     "packages/web_server",
+    "packages/web_server/actix",
     "packages/web_server/core",
     "packages/web_server/cors",
     "packages/web_server/examples/basic_handler",
@@ -275,6 +276,7 @@ moosicbox_tidal                    = { version = "0.1.1", default-features = fal
 moosicbox_tunnel                   = { version = "0.1.1", default-features = false, path = "packages/tunnel" }
 moosicbox_tunnel_sender            = { version = "0.1.1", default-features = false, path = "packages/tunnel_sender" }
 moosicbox_web_server               = { version = "0.1.1", default-features = false, path = "packages/web_server" }
+moosicbox_web_server_actix         = { version = "0.1.0", default-features = false, path = "packages/web_server/actix" }
 moosicbox_web_server_core          = { version = "0.1.1", default-features = false, path = "packages/web_server/core" }
 moosicbox_web_server_cors          = { version = "0.1.1", default-features = false, path = "packages/web_server/cors" }
 moosicbox_ws                       = { version = "0.1.1", default-features = false, path = "packages/ws" }

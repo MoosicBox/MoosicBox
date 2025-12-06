@@ -9654,6 +9654,7 @@ dependencies = [
  "serde",
  "serde-querystring",
  "serde_json",
+ "switchy",
  "switchy_http_models",
  "test-log",
  "thiserror 2.0.17",
@@ -9663,6 +9664,27 @@ dependencies = [
  "utoipa-redoc",
  "utoipa-scalar",
  "utoipa-swagger-ui",
+]
+
+[[package]]
+name = "moosicbox_web_server_actix"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-htmx",
+ "actix-http",
+ "actix-service",
+ "actix-web",
+ "bytes",
+ "futures",
+ "log 0.4.29",
+ "moosicbox_assert",
+ "moosicbox_web_server",
+ "moosicbox_web_server_core",
+ "moosicbox_web_server_cors",
+ "switchy_http_models",
+ "test-log",
 ]
 
 [[package]]

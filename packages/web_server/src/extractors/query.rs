@@ -244,10 +244,10 @@ mod tests {
 
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn create_test_request(query: &str) -> HttpRequest {
-        use crate::{Method, Stub, simulator::SimulationRequest};
+        use crate::{Method, simulator::SimulationRequest};
         let sim_request =
             SimulationRequest::new(Method::Get, "/test").with_query_string(query.to_string());
-        HttpRequest::Stub(Stub::Simulator(sim_request.into()))
+        HttpRequest::new(crate::simulator::SimulationStub::from(sim_request))
     }
 
     #[cfg(all(feature = "actix", not(feature = "simulator")))]
@@ -256,7 +256,7 @@ mod tests {
         // For actix-only builds, we can't create a proper test request
         // This is a limitation of the current test setup
         use crate::Stub;
-        HttpRequest::Stub(Stub::Empty)
+        HttpRequest::new(crate::EmptyRequest)
     }
 
     #[test]

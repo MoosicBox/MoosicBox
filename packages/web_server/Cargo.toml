@@ -26,6 +26,8 @@ actix-service = { workspace = true, optional = true }
 actix-test    = { workspace = true, optional = true }
 actix-web     = { workspace = true, optional = true }
 
+switchy = { workspace = true, optional = true }
+
 base64            = { workspace = true }
 bytes             = { workspace = true }
 const_format      = { workspace = true, optional = true }
@@ -53,6 +55,7 @@ fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_web_server_core/fail-on-warnings",
     "moosicbox_web_server_cors?/fail-on-warnings",
+    "switchy?/fail-on-warnings",
     "switchy_http_models/fail-on-warnings",
 ]
 
@@ -83,4 +86,4 @@ openapi-redoc = ["dep:utoipa-redoc", "openapi"]
 openapi-scalar = ["dep:utoipa-scalar", "openapi"]
 openapi-swagger-ui = ["dep:const_format", "dep:utoipa-swagger-ui", "openapi"]
 
-simulator = []
+simulator = ["dep:switchy", "switchy?/fs-tokio", "switchy?/simulator"]

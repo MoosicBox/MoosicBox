@@ -57,7 +57,7 @@ use bytes::Bytes;
 use moosicbox_web_server_core::WebServer;
 use switchy_http_models::Method;
 
-use crate::{PathParams, RouteHandler, WebServerBuilder};
+use crate::{PathParams, RouteHandler, StaticFiles, WebServerBuilder};
 
 /// Simulation-specific implementation of HTTP response data
 #[derive(Debug, Clone)]
@@ -66,8 +66,8 @@ pub struct SimulationResponse {
     pub status: u16,
     /// Response headers as key-value pairs
     pub headers: BTreeMap<String, String>,
-    /// Optional response body as a string
-    pub body: Option<String>,
+    /// Optional response body as bytes
+    pub body: Option<Bytes>,
 }
 
 impl SimulationResponse {
@@ -108,9 +108,15 @@ impl SimulationResponse {
 
     /// Set the response body
     #[must_use]
-    pub fn with_body(mut self, body: impl Into<String>) -> Self {
+    pub fn with_body(mut self, body: impl Into<Bytes>) -> Self {
         self.body = Some(body.into());
         self
+    }
+
+    /// Returns the body as a UTF-8 string, if present and valid UTF-8.
+    #[must_use]
+    pub fn body_str(&self) -> Option<&str> {
+        self.body.as_ref().and_then(|b| std::str::from_utf8(b).ok())
     }
 }
 
@@ -257,10 +263,8 @@ fn convert_http_response_to_simulation_response(
 
     // Handle body conversion
     if let Some(body) = http_response.body {
-        let body_string = match body {
-            crate::HttpResponseBody::Bytes(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-        };
-        response.body = Some(body_string);
+        let crate::HttpResponseBody::Bytes(body_bytes) = body;
+        response.body = Some(body_bytes);
     }
 
     // Keep backwards compatibility with location field
@@ -527,6 +531,56 @@ impl From<SimulationRequest> for SimulationStub {
     }
 }
 
+impl crate::request::HttpRequestTrait for SimulationStub {
+    fn path(&self) -> &str {
+        &self.request.path
+    }
+
+    fn query_string(&self) -> &str {
+        &self.request.query_string
+    }
+
+    fn method(&self) -> Method {
+        self.request.method
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.request.headers.get(name).map(String::as_str)
+    }
+
+    fn headers(&self) -> BTreeMap<String, String> {
+        self.request.headers.clone()
+    }
+
+    fn body(&self) -> Option<&Bytes> {
+        self.request.body.as_ref()
+    }
+
+    fn cookie(&self, name: &str) -> Option<String> {
+        self.request.cookies.get(name).cloned()
+    }
+
+    fn cookies(&self) -> BTreeMap<String, String> {
+        self.request.cookies.clone()
+    }
+
+    fn remote_addr(&self) -> Option<String> {
+        self.request.remote_addr.clone()
+    }
+
+    fn path_params(&self) -> &PathParams {
+        &self.request.path_params
+    }
+
+    fn app_state_any(&self, type_id: std::any::TypeId) -> Option<crate::request::ErasedState> {
+        self.state_container.as_ref().and_then(|container| {
+            container
+                .read()
+                .map_or_else(|_| None, |state| state.get_any(type_id))
+        })
+    }
+}
+
 /// In-memory web server for deterministic testing and simulation.
 ///
 /// This struct provides a lightweight, in-process HTTP server simulator that can be used
@@ -557,6 +611,8 @@ pub struct SimulatorWebServer {
     pub routes: BTreeMap<(Method, String), RouteHandler>,
     /// Application state container for extractors
     pub state: Arc<RwLock<crate::extractors::state::StateContainer>>,
+    /// Static files configuration for serving files from disk
+    pub static_files: Option<StaticFiles>,
 }
 
 impl SimulatorWebServer {
@@ -671,7 +727,7 @@ impl SimulatorWebServer {
     /// This method implements the complete request processing pipeline:
     /// 1. Find matching route using `find_route()`
     /// 2. Inject path parameters into request
-    /// 3. Create `HttpRequest::Stub` from enhanced request
+    /// 3. Create `HttpRequest` from enhanced request
     /// 4. Execute matched handler with request
     /// 5. Convert `HttpResponse` to `SimulationResponse`
     /// 6. Return 404 response if no route matches
@@ -688,11 +744,11 @@ impl SimulatorWebServer {
         // Inject path params into request
         request.path_params = path_params;
 
-        // Create HttpRequest::Stub from enhanced request with state container
+        // Create HttpRequest from enhanced request with state container
         let simulation_stub =
             SimulationStub::new(request).with_state_container(Arc::clone(&self.state));
 
-        let http_request = crate::HttpRequest::Stub(crate::Stub::Simulator(simulation_stub));
+        let http_request = crate::HttpRequest::new(simulation_stub);
 
         // Execute matched handler with request
         handler(http_request).await.map_or_else(
@@ -760,7 +816,120 @@ impl SimulatorWebServer {
             scopes,
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+            static_files: None,
         }
+    }
+
+    /// Creates a new simulator web server with static files configuration.
+    #[must_use]
+    pub fn with_static_files(scopes: Vec<crate::Scope>, static_files: StaticFiles) -> Self {
+        Self {
+            scopes,
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+            static_files: Some(static_files),
+        }
+    }
+
+    /// Returns the static files configuration, if set.
+    #[must_use]
+    pub const fn static_files(&self) -> Option<&StaticFiles> {
+        self.static_files.as_ref()
+    }
+
+    /// Returns the MIME type for a file based on its extension.
+    ///
+    /// This is a simple lookup table covering common web file types.
+    /// Unknown extensions return `application/octet-stream`.
+    #[cfg(feature = "simulator")]
+    fn get_mime_type(path: &str) -> &'static str {
+        let extension = path.rsplit('.').next().unwrap_or("");
+        match extension.to_lowercase().as_str() {
+            "html" | "htm" => "text/html; charset=utf-8",
+            "css" => "text/css; charset=utf-8",
+            "js" | "mjs" => "application/javascript; charset=utf-8",
+            "json" => "application/json; charset=utf-8",
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "svg" => "image/svg+xml",
+            "webp" => "image/webp",
+            "ico" => "image/x-icon",
+            "woff" => "font/woff",
+            "woff2" => "font/woff2",
+            "ttf" => "font/ttf",
+            "eot" => "application/vnd.ms-fontobject",
+            "otf" => "font/otf",
+            "txt" => "text/plain; charset=utf-8",
+            "xml" => "application/xml; charset=utf-8",
+            "pdf" => "application/pdf",
+            "map" => "application/json",
+            "wasm" => "application/wasm",
+            _ => "application/octet-stream",
+        }
+    }
+
+    /// Serves a static file from the configured static files directory.
+    ///
+    /// Returns `None` if:
+    /// - No static files configuration is set
+    /// - The requested path doesn't match the mount path
+    /// - The file doesn't exist or cannot be read
+    ///
+    /// This method provides a primitive for serving static files. It does NOT
+    /// handle index files or SPA fallback - consumers should implement those
+    /// behaviors using this primitive combined with the config accessors.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use moosicbox_web_server::simulator::SimulatorWebServer;
+    /// use moosicbox_web_server::StaticFiles;
+    ///
+    /// let server = SimulatorWebServer::with_static_files(
+    ///     Vec::new(),
+    ///     StaticFiles::new("/static", "./public"),
+    /// );
+    ///
+    /// // Serve a file
+    /// if let Some(response) = server.serve_static_file("/static/style.css").await {
+    ///     // File found and served
+    /// }
+    /// ```
+    #[cfg(feature = "simulator")]
+    pub async fn serve_static_file(&self, request_path: &str) -> Option<SimulationResponse> {
+        let config = self.static_files.as_ref()?;
+
+        // Strip mount path prefix
+        let mount_path = config.mount_path();
+        let relative_path = if mount_path == "/" {
+            request_path.strip_prefix('/').unwrap_or(request_path)
+        } else {
+            request_path
+                .strip_prefix(mount_path)?
+                .strip_prefix('/')
+                .unwrap_or("")
+        };
+
+        // Prevent path traversal
+        if relative_path.contains("..") {
+            return None;
+        }
+
+        // Construct file path
+        let file_path = config.directory().join(relative_path);
+
+        // Read file using switchy async fs
+        let contents = switchy::fs::unsync::read(&file_path).await.ok()?;
+
+        // Determine MIME type
+        let mime_type = Self::get_mime_type(request_path);
+
+        Some(
+            SimulationResponse::ok()
+                .with_header("Content-Type", mime_type)
+                .with_body(contents),
+        )
     }
 
     /// Create a server with test routes
@@ -894,6 +1063,7 @@ impl WebServerBuilder {
             scopes: self.scopes,
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+            static_files: self.static_files,
         })
     }
 }
@@ -912,6 +1082,7 @@ mod tests {
     #[test]
     fn test_route_registration_stores_handler_correctly() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -931,6 +1102,7 @@ mod tests {
     #[test]
     fn test_multiple_routes_can_be_registered_without_conflict() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1081,6 +1253,7 @@ mod tests {
     #[test]
     fn test_find_route_exact_match() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1099,6 +1272,7 @@ mod tests {
     #[test]
     fn test_find_route_parameterized_match() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1118,6 +1292,7 @@ mod tests {
     #[test]
     fn test_find_route_method_discrimination() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1144,6 +1319,7 @@ mod tests {
     #[test]
     fn test_find_route_no_match_404() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1164,6 +1340,7 @@ mod tests {
     #[test]
     fn test_find_route_precedence_exact_over_parameterized() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1190,6 +1367,7 @@ mod tests {
         // This test validates that the process_request method can be set up correctly
         // Full async integration tests will be added when tokio dependency is available
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1218,7 +1396,7 @@ mod tests {
             response.headers.get("Content-Type"),
             Some(&"application/json".to_string())
         );
-        assert_eq!(response.body, Some("{}".to_string()));
+        assert_eq!(response.body_str(), Some("{}"));
     }
 
     #[test]
@@ -1265,8 +1443,8 @@ mod tests {
         assert!(simulation_response.body.is_some());
 
         // Verify the JSON content is preserved
-        let body = simulation_response.body.unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let body = simulation_response.body_str().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(body).unwrap();
         assert_eq!(parsed["message"], "Hello, World!");
         assert_eq!(parsed["status"], "success");
     }
@@ -1325,7 +1503,7 @@ mod tests {
             simulation_response.headers.get("Content-Type"),
             Some(&"text/plain".to_string())
         );
-        assert_eq!(simulation_response.body, Some("Hello, World!".to_string()));
+        assert_eq!(simulation_response.body_str(), Some("Hello, World!"));
     }
 
     #[test]
@@ -1340,7 +1518,7 @@ mod tests {
             simulation_response.headers.get("Content-Type"),
             Some(&"text/html; charset=utf-8".to_string())
         );
-        assert_eq!(simulation_response.body, Some(html_content.to_string()));
+        assert_eq!(simulation_response.body_str(), Some(html_content));
     }
 
     #[test]
@@ -1355,7 +1533,7 @@ mod tests {
             simulation_response.headers.get("Content-Type"),
             Some(&"text/plain; charset=utf-8".to_string())
         );
-        assert_eq!(simulation_response.body, Some(text_content.to_string()));
+        assert_eq!(simulation_response.body_str(), Some(text_content));
     }
 
     #[test]
@@ -1377,6 +1555,7 @@ mod tests {
     #[test]
     fn test_simulator_state_management_string_state() {
         let server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1402,6 +1581,7 @@ mod tests {
         }
 
         let server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1424,6 +1604,7 @@ mod tests {
     #[test]
     fn test_simulator_state_management_multiple_types() {
         let server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1451,6 +1632,7 @@ mod tests {
     #[test]
     fn test_simulator_state_management_shared_across_requests() {
         let server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1488,6 +1670,7 @@ mod tests {
         use crate::{extractors::state::State, from_request::FromRequest};
 
         let server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1501,7 +1684,7 @@ mod tests {
         let request = SimulationRequest::new(Method::Get, "/app-info");
         let simulation_stub =
             SimulationStub::new(request).with_state_container(Arc::clone(&server.state));
-        let http_request = crate::HttpRequest::Stub(crate::Stub::Simulator(simulation_stub));
+        let http_request = crate::HttpRequest::new(simulation_stub);
 
         // Test that State<T> extractor works with the simulator backend
         let state_result: Result<State<String>, _> = State::from_request_sync(&http_request);
@@ -1516,6 +1699,7 @@ mod tests {
     #[test]
     fn test_register_scope_with_single_route() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1543,6 +1727,7 @@ mod tests {
     #[test]
     fn test_register_scope_with_multiple_routes() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1583,6 +1768,7 @@ mod tests {
     #[test]
     fn test_register_scope_with_nested_scopes() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1639,6 +1825,7 @@ mod tests {
     #[test]
     fn test_register_scope_with_empty_prefix() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1666,6 +1853,7 @@ mod tests {
     #[test]
     fn test_register_scope_with_deeply_nested_scopes() {
         let mut server = SimulatorWebServer {
+            static_files: None,
             scopes: Vec::new(),
             routes: BTreeMap::new(),
             state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
@@ -1974,5 +2162,187 @@ mod tests {
                 .iter()
                 .all(|s| matches!(s, PathSegment::Literal(_)))
         );
+    }
+
+    // ==================== Static Files Tests ====================
+
+    #[test]
+    fn test_get_mime_type_html() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.html"),
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.htm"),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_css() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.css"),
+            "text/css; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_javascript() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.js"),
+            "application/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.mjs"),
+            "application/javascript; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_json() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.json"),
+            "application/json; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_images() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.png"),
+            "image/png"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.jpg"),
+            "image/jpeg"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.jpeg"),
+            "image/jpeg"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.gif"),
+            "image/gif"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.svg"),
+            "image/svg+xml"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.webp"),
+            "image/webp"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.ico"),
+            "image/x-icon"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_fonts() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.woff"),
+            "font/woff"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.woff2"),
+            "font/woff2"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.ttf"),
+            "font/ttf"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.otf"),
+            "font/otf"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.eot"),
+            "application/vnd.ms-fontobject"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_other() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.txt"),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.xml"),
+            "application/xml; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.pdf"),
+            "application/pdf"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.map"),
+            "application/json"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.wasm"),
+            "application/wasm"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_unknown() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.unknown"),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file"),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn test_get_mime_type_case_insensitive() {
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.HTML"),
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.CSS"),
+            "text/css; charset=utf-8"
+        );
+        assert_eq!(
+            SimulatorWebServer::get_mime_type("/path/file.PNG"),
+            "image/png"
+        );
+    }
+
+    #[test]
+    fn test_simulator_static_files_none_by_default() {
+        let server = SimulatorWebServer::new(Vec::new());
+        assert!(server.static_files().is_none());
+    }
+
+    #[test]
+    fn test_simulator_with_static_files_constructor() {
+        let config = crate::StaticFiles::new("/static", "./public");
+        let server = SimulatorWebServer::with_static_files(Vec::new(), config);
+
+        let sf = server.static_files().unwrap();
+        assert_eq!(sf.mount_path(), "/static");
+        assert_eq!(sf.directory(), &std::path::PathBuf::from("./public"));
+    }
+
+    #[test]
+    fn test_web_server_builder_static_files() {
+        let builder = crate::WebServerBuilder::new()
+            .with_static_files(crate::StaticFiles::new("/assets", "./dist"));
+
+        let sf = builder.static_files().unwrap();
+        assert_eq!(sf.mount_path(), "/assets");
+        assert_eq!(sf.directory(), &std::path::PathBuf::from("./dist"));
+    }
+
+    #[test]
+    fn test_web_server_builder_static_files_none_by_default() {
+        let builder = crate::WebServerBuilder::new();
+        assert!(builder.static_files().is_none());
     }
 }

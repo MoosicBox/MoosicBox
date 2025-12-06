@@ -228,93 +228,86 @@ impl<T> std::ops::Deref for State<T> {
 /// for single-threaded deterministic testing.
 #[derive(Debug, Default)]
 pub struct StateContainer {
-    /// Type-erased state storage using type names as keys
-    states: BTreeMap<&'static str, Box<dyn std::any::Any + Send + Sync>>,
+    /// Type-erased state storage using `TypeId` as keys
+    states: BTreeMap<std::any::TypeId, crate::request::ErasedState>,
+    /// Type names for debugging purposes
+    type_names: BTreeMap<std::any::TypeId, &'static str>,
 }
 
 impl StateContainer {
     /// Create a new empty state container
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             states: BTreeMap::new(),
+            type_names: BTreeMap::new(),
         }
     }
 
     /// Insert state of type T into the container
     pub fn insert<T: Send + Sync + 'static>(&mut self, state: T) {
+        let type_id = std::any::TypeId::of::<T>();
         let type_name = std::any::type_name::<T>();
-        self.states.insert(type_name, Box::new(Arc::new(state)));
+        self.states.insert(type_id, Arc::new(state));
+        self.type_names.insert(type_id, type_name);
     }
 
     /// Get state of type T from the container
+    #[must_use]
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
-        let type_name = std::any::type_name::<T>();
+        let type_id = std::any::TypeId::of::<T>();
         self.states
-            .get(type_name)
-            .and_then(|boxed| (**boxed).downcast_ref::<Arc<T>>())
-            .map(Arc::clone)
+            .get(&type_id)
+            .and_then(|arc| Arc::clone(arc).downcast::<T>().ok())
+    }
+
+    /// Get type-erased state by `TypeId`
+    #[must_use]
+    pub fn get_any(&self, type_id: std::any::TypeId) -> Option<crate::request::ErasedState> {
+        self.states.get(&type_id).cloned()
     }
 
     /// Check if state of type T exists in the container
     #[must_use]
     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
-        let type_name = std::any::type_name::<T>();
-        self.states.contains_key(type_name)
+        let type_id = std::any::TypeId::of::<T>();
+        self.states.contains_key(&type_id)
     }
 
     /// Remove state of type T from the container
     pub fn remove<T: Send + Sync + 'static>(&mut self) -> Option<Arc<T>> {
-        let type_name = std::any::type_name::<T>();
+        let type_id = std::any::TypeId::of::<T>();
+        self.type_names.remove(&type_id);
         self.states
-            .remove(type_name)
-            .and_then(|boxed| boxed.downcast::<Arc<T>>().ok())
-            .map(|boxed| *boxed)
+            .remove(&type_id)
+            .and_then(|arc| arc.downcast::<T>().ok())
     }
 
     /// Get all registered type names
     #[must_use]
     pub fn type_names(&self) -> Vec<&'static str> {
-        self.states.keys().copied().collect()
+        self.type_names.values().copied().collect()
     }
 
     /// Clear all state from the container
     pub fn clear(&mut self) {
         self.states.clear();
+        self.type_names.clear();
     }
 }
 
-// Unified implementation for all backends
+// Unified implementation for all backends using the trait-based HttpRequest
 impl<T: Send + Sync + 'static> FromRequest for State<T> {
     type Error = StateError;
     type Future = std::future::Ready<Result<Self, Self::Error>>;
 
     fn from_request_sync(req: &HttpRequest) -> Result<Self, Self::Error> {
-        match req {
-            #[cfg(feature = "actix")]
-            HttpRequest::Actix { inner, .. } => {
-                // Extract from Actix's web::Data
-                inner
-                    .app_data::<actix_web::web::Data<T>>()
-                    .map(|data| Self(Arc::clone(data)))
-                    .ok_or_else(|| StateError::NotFound {
-                        type_name: std::any::type_name::<T>(),
-                    })
-            }
-            HttpRequest::Stub(stub) => match stub {
-                crate::Stub::Empty => Err(StateError::NotInitialized {
-                    backend: "empty-stub".to_string(),
-                }),
-                crate::Stub::Simulator(sim) => {
-                    // Extract from custom state container
-                    sim.state::<T>()
-                        .map(Self::new)
-                        .ok_or_else(|| StateError::NotFound {
-                            type_name: std::any::type_name::<T>(),
-                        })
-                }
-            },
-        }
+        // Use the app_state method from HttpRequestTrait
+        req.app_state::<T>()
+            .map(Self::new)
+            .ok_or_else(|| StateError::NotFound {
+                type_name: std::any::type_name::<T>(),
+            })
     }
 
     fn from_request_async(req: HttpRequest) -> Self::Future {

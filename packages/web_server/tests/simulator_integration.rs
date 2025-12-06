@@ -26,6 +26,7 @@ fn create_test_server() -> SimulatorWebServer {
         state: Arc::new(std::sync::RwLock::new(
             moosicbox_web_server::extractors::state::StateContainer::new(),
         )),
+        static_files: None,
     }
 }
 
@@ -96,25 +97,25 @@ fn test_multiple_routes_different_methods() {
     let request = SimulationRequest::new(Method::Get, "/api/users");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("GET users".to_string()));
+    assert_eq!(response.body_str(), Some("GET users"));
 
     // Test POST request
     let request = SimulationRequest::new(Method::Post, "/api/users");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("POST users".to_string()));
+    assert_eq!(response.body_str(), Some("POST users"));
 
     // Test PUT request
     let request = SimulationRequest::new(Method::Put, "/api/users/123");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("PUT user".to_string()));
+    assert_eq!(response.body_str(), Some("PUT user"));
 
     // Test DELETE request
     let request = SimulationRequest::new(Method::Delete, "/api/users/456");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("DELETE user".to_string()));
+    assert_eq!(response.body_str(), Some("DELETE user"));
 
     // Verify method discrimination - wrong method should not match
     let request = SimulationRequest::new(Method::Head, "/api/users");
@@ -144,13 +145,13 @@ fn test_route_registration_and_matching() {
     let request = SimulationRequest::new(Method::Get, "/api/users/123");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("User found".to_string()));
+    assert_eq!(response.body_str(), Some("User found"));
 
     // Test multiple parameter route
     let request = SimulationRequest::new(Method::Get, "/api/posts/456/comments/789");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("Comment found".to_string()));
+    assert_eq!(response.body_str(), Some("Comment found"));
 
     // Test non-matching route
     let request = SimulationRequest::new(Method::Get, "/api/nonexistent");
@@ -184,19 +185,19 @@ fn test_scope_processing() {
     let request = SimulationRequest::new(Method::Get, "/api/health");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("healthy".to_string()));
+    assert_eq!(response.body_str(), Some("healthy"));
 
     // Test nested route
     let request = SimulationRequest::new(Method::Get, "/api/v1/users");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("v1 users".to_string()));
+    assert_eq!(response.body_str(), Some("v1 users"));
 
     // Test deeply nested route
     let request = SimulationRequest::new(Method::Delete, "/api/v1/admin/users/123");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("user deleted".to_string()));
+    assert_eq!(response.body_str(), Some("user deleted"));
 }
 
 /// Test 4: Request and response handling
@@ -225,7 +226,7 @@ fn test_request_response_handling() {
 
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("Echo response".to_string()));
+    assert_eq!(response.body_str(), Some("Echo response"));
     assert_eq!(response.headers.get("X-Echo"), Some(&"true".to_string()));
 }
 
@@ -258,7 +259,7 @@ fn test_404_handling() {
             "Path '{}' with method '{:?}' should return 404",
             path, method
         );
-        assert_eq!(response.body, Some("Not Found".to_string()));
+        assert_eq!(response.body_str(), Some("Not Found"));
     }
 }
 
@@ -291,19 +292,19 @@ fn test_performance_multiple_routes() {
         let response = process_request_sync(&server, request);
 
         assert_eq!(response.status, 200);
-        assert_eq!(response.body, Some(expected_body));
+        assert_eq!(response.body_str(), Some(expected_body.as_str()));
     }
 
     // Test a few more routes to verify they're all working
     let request = SimulationRequest::new(Method::Get, "/api/route_50");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("Response 50".to_string()));
+    assert_eq!(response.body_str(), Some("Response 50"));
 
     let request = SimulationRequest::new(Method::Get, "/api/route_99");
     let response = process_request_sync(&server, request);
     assert_eq!(response.status, 200);
-    assert_eq!(response.body, Some("Response 99".to_string()));
+    assert_eq!(response.body_str(), Some("Response 99"));
 }
 
 /// Test 7: Performance test - Multiple request processing
@@ -340,6 +341,6 @@ fn test_performance_multiple_requests() {
         let response = process_request_sync(&server, request);
 
         assert_eq!(response.status, 200);
-        assert_eq!(response.body, Some(expected_body));
+        assert_eq!(response.body_str(), Some(expected_body.as_str()));
     }
 }

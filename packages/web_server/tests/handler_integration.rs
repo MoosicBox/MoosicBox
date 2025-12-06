@@ -25,7 +25,7 @@
 //! * **Shared logic**: Common test functions used by both backends
 
 // Core imports (always available)
-use moosicbox_web_server::{Error, HttpRequest, HttpResponse, Stub, handler::IntoHandler};
+use moosicbox_web_server::{Error, HttpRequest, HttpResponse, handler::IntoHandler};
 
 // No module-level conditional imports - using function-local imports instead
 
@@ -82,14 +82,14 @@ mod test_utils {
             .with_header("upgrade", "websocket")
             .with_body(body);
 
-        HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
+        HttpRequest::new(SimulationStub::new(sim_req))
     }
 
     /// Create a test `HttpRequest` for `Actix`-only builds (limited functionality)
     #[cfg(all(feature = "actix", not(feature = "simulator")))]
     #[allow(dead_code)]
-    pub const fn create_comprehensive_test_request() -> HttpRequest {
-        HttpRequest::Stub(Stub::Empty)
+    pub fn create_comprehensive_test_request() -> HttpRequest {
+        HttpRequest::new(moosicbox_web_server::EmptyRequest)
     }
 
     /// Create test state for State extractor testing
