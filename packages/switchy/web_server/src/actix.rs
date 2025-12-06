@@ -344,6 +344,9 @@ impl WebServerBuilder {
     pub fn build_actix(self) -> Box<dyn WebServer> {
         #[cfg(feature = "cors")]
         let cors_builder = self.cors.clone();
+        #[cfg(feature = "static-files")]
+        let static_files = self.static_files.clone();
+        let scopes = self.scopes.clone();
         let factory = move || {
             #[cfg(feature = "cors")]
             let cors = {
@@ -400,7 +403,29 @@ impl WebServerBuilder {
                 app
             };
 
-            for scope in &self.scopes {
+            // Register static file serving FIRST so scopes are checked first,
+            // with static files as a fallback for unmatched routes.
+            #[cfg(feature = "static-files")]
+            #[allow(unused_mut)]
+            let mut app = {
+                if let Some(ref config) = static_files {
+                    let mut files =
+                        actix_files::Files::new(config.mount_path(), config.directory());
+
+                    // Set index file if configured
+                    if let Some(index) = config.effective_index_file() {
+                        files = files.index_file(index);
+                    }
+
+                    files = files.prefer_utf8(true);
+
+                    app.service(files)
+                } else {
+                    app
+                }
+            };
+
+            for scope in &scopes {
                 let mut actix_scope = actix_web::web::scope(&scope.path);
                 for route in &scope.routes {
                     let path = route.path.clone();

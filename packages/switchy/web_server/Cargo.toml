@@ -23,6 +23,7 @@ switchy_web_server_core = { workspace = true }
 switchy_web_server_cors = { workspace = true, optional = true }
 
 actix-cors    = { workspace = true, optional = true }
+actix-files   = { workspace = true, optional = true }
 actix-htmx    = { workspace = true, optional = true }
 actix-http    = { workspace = true, optional = true }
 actix-service = { workspace = true, optional = true }
@@ -72,10 +73,11 @@ actix = [
 
 serde = ["dep:serde_json", "switchy_http_models/serde"]
 
-compress = []
-cors     = ["dep:actix-cors", "dep:switchy_web_server_cors"]
-htmx     = ["dep:actix-htmx"]
-tls      = ["actix-web?/openssl"]
+compress     = []
+cors         = ["dep:actix-cors", "dep:switchy_web_server_cors"]
+htmx         = ["dep:actix-htmx"]
+static-files = ["dep:actix-files"]
+tls          = ["actix-web?/openssl"]
 
 openapi = ["dep:utoipa"]
 openapi-all = [

@@ -360,6 +360,7 @@ all-web-server = [
     "web-server-openapi-swagger-ui",
     "web-server-serde",
     "web-server-simulator",
+    "web-server-static-files",
     "web-server-tls",
 ]
 
@@ -388,4 +389,5 @@ web-server-openapi-swagger-ui = [
 ]
 web-server-serde = ["switchy_web_server?/serde", "web-server"]
 web-server-simulator = ["switchy_web_server?/simulator", "web-server"]
+web-server-static-files = ["switchy_web_server?/static-files", "web-server"]
 web-server-tls = ["switchy_web_server?/tls", "web-server"]
