@@ -405,7 +405,7 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
-flate2 = "1.1.5"
+flate2 = "1.1.7"
 fltk = "1.5.22"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
@@ -431,7 +431,7 @@ include_dir = "0.7.4"
 insta = "1.44.3"
 itertools = "0.14.0"
 itoa = "1.0.15"
-json5 = { version = "1.0.0", default-features = false }
+json5 = { version = "1.2.0", default-features = false }
 kanal = "0.1.1"
 lambda_http = "1.0.1"
 lambda_runtime = "1.0.1"
@@ -440,7 +440,7 @@ local-ip-address = "0.6.5"
 log = { version = "0.4.29", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.17.0"
+mdns-sd = "0.17.1"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
 mlua = { version = "0.11.5", default-features = false }
