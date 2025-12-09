@@ -299,11 +299,17 @@ impl Default for SignalChainStep {
 /// Processes audio through a signal chain step.
 ///
 /// This reads audio buffers, applies transformations (resampling, encoding),
-/// and outputs the processed audio data.
+/// and outputs the processed audio data. The processor receives decoded audio
+/// buffers through a channel, optionally resamples and encodes them, and
+/// provides the output bytes through the `Read` trait.
 pub struct SignalChainStepProcessor {
+    /// Optional encoder for transforming audio format
     encoder: Option<Box<dyn AudioEncoder>>,
+    /// Optional resampler for sample rate conversion
     resampler: Option<Resampler<f32>>,
+    /// Channel receiver for incoming audio buffers
     receiver: Receiver<AudioBuffer<f32>>,
+    /// Buffer for bytes that overflow the read buffer
     overflow: Vec<u8>,
 }
 
