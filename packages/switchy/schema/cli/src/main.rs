@@ -435,7 +435,20 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Create a new migration file
+/// Creates a new migration file with timestamped directory.
+///
+/// Creates a new migration directory with `up.sql` and `down.sql` files in the
+/// specified migrations directory. The directory name follows the format
+/// `YYYY-MM-DD-HHMMSS_<name>`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The migration name is empty
+/// * The migration directory already exists
+/// * Creating the migrations directory fails (permissions, disk space)
+/// * Creating the migration subdirectory fails
+/// * Writing the `up.sql` or `down.sql` files fails
 fn create_migration(name: &str, migrations_dir: &PathBuf) -> Result<()> {
     // Validate migration name
     if name.is_empty() {
@@ -515,7 +528,17 @@ fn create_migration(name: &str, migrations_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-/// Show migration status
+/// Displays migration status for the database.
+///
+/// Shows the current status of all migrations including applied, pending, failed,
+/// and in-progress migrations. When `show_failed` is true, displays detailed
+/// status with timestamps and failure reasons.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * Querying migration status fails (database errors, missing table)
 #[allow(clippy::too_many_lines)]
 async fn show_status(
     database_url: String,
@@ -672,7 +695,20 @@ async fn show_status(
     Ok(())
 }
 
-/// Run pending migrations
+/// Runs pending database migrations.
+///
+/// Executes pending migrations according to the specified strategy (all, up-to, or steps).
+/// Supports dry-run mode for validation without execution, force mode to bypass dirty
+/// state checks, and checksum validation to detect modified migration files.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Both `up_to` and `steps` arguments are specified (mutually exclusive)
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * Checksum validation fails when `require_checksum_validation` is enabled
+/// * Migration execution fails (SQL errors, constraint violations)
+/// * Migration state is dirty and `force` is not enabled
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn run_migrations(
     database_url: String,
@@ -831,7 +867,19 @@ async fn run_migrations(
     Ok(())
 }
 
-/// Rollback migrations
+/// Rolls back applied migrations.
+///
+/// Reverts applied migrations according to the specified strategy (last, steps, to, or all).
+/// Supports dry-run mode to preview changes without executing them. Requires user
+/// confirmation before proceeding with actual rollback.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Multiple rollback strategies are specified (--steps, --to, --all are mutually exclusive)
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * Reading user confirmation from stdin fails
+/// * Rollback execution fails (SQL errors, constraint violations)
 async fn rollback_migrations(
     database_url: String,
     migrations_dir: PathBuf,
@@ -963,7 +1011,18 @@ async fn rollback_migrations(
     Ok(())
 }
 
-/// Retry a failed migration
+/// Retries a previously failed migration.
+///
+/// Attempts to re-run a migration that previously failed. This is useful after
+/// fixing the underlying issue that caused the failure.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * The specified migration is not found
+/// * The migration is not in a failed state
+/// * Re-execution of the migration fails
 async fn retry_migration(
     database_url: String,
     migrations_dir: PathBuf,
@@ -1003,7 +1062,19 @@ async fn retry_migration(
     Ok(())
 }
 
-/// Mark a migration as completed (dangerous operation)
+/// Marks a migration as completed without executing it.
+///
+/// This is a dangerous operation that records a migration as completed without
+/// running its SQL. Use this only when you have manually applied the migration
+/// changes and need to sync the migration tracking table.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * User confirmation fails (stdin read error)
+/// * The migration is not found
+/// * Updating the migration record fails
 async fn mark_migration_completed(
     database_url: String,
     migrations_dir: PathBuf,
@@ -1072,7 +1143,21 @@ async fn mark_migration_completed(
     Ok(())
 }
 
-/// Mark all migrations as completed without executing them
+/// Marks all migrations as completed without executing them.
+///
+/// This is a very dangerous operation that records all migrations as completed
+/// without running their SQL. Supports various scopes to include or exclude
+/// failed and in-progress migrations. Can optionally drop and recreate the
+/// migration tracking table.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * User confirmation fails (stdin read error)
+/// * Dropping the tracking table fails (when `drop` is enabled)
+/// * Creating the tracking table fails
+/// * Updating migration records fails
 #[allow(
     clippy::fn_params_excessive_bools,
     clippy::too_many_lines,
@@ -1450,7 +1535,19 @@ async fn mark_all_migrations_completed(
     Ok(())
 }
 
-/// Validate checksums of applied migrations
+/// Validates checksums of applied migrations.
+///
+/// Compares stored checksums of applied migrations against their current file
+/// contents to detect any modifications since execution. This helps ensure
+/// migration file integrity across environments.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database connection fails (invalid URL, network issues, authentication)
+/// * Querying migration records fails
+/// * Reading migration files fails
+/// * Checksum mismatches are found and `strict` mode is enabled
 async fn validate_checksums(
     database_url: String,
     migrations_dir: PathBuf,
