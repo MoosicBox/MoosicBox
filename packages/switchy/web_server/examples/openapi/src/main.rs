@@ -1,11 +1,17 @@
-//! OpenAPI example for MoosicBox web server.
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+// Needed for utoipa::OpenApi derive macro which generates for_each loops
+#![allow(clippy::needless_for_each)]
+
+//! `OpenAPI` example for `MoosicBox` web server.
 //!
-//! This example demonstrates how to create and serve an OpenAPI specification
-//! using the MoosicBox web server framework with utoipa integration.
+//! This example demonstrates how to create and serve an `OpenAPI` specification
+//! using the `MoosicBox` web server framework with utoipa integration.
 //!
 //! # Features
 //!
-//! * Creates an OpenAPI specification with example endpoints
+//! * Creates an `OpenAPI` specification with example endpoints
 //! * Serves the specification through the `/openapi` path
 //! * Demonstrates path definition using the `path!` macro
 //! * Includes example endpoint with parameters and response documentation
@@ -13,9 +19,9 @@
 use switchy_web_server::{HttpResponse, Scope, path, utoipa};
 use utoipa::{OpenApi as _, openapi::OpenApi};
 
-/// Entry point for the OpenAPI example web server.
+/// Entry point for the `OpenAPI` example web server.
 ///
-/// Initializes logging, configures CORS, sets up the OpenAPI specification,
+/// Initializes logging, configures CORS, sets up the `OpenAPI` specification,
 /// and starts the web server with example endpoints.
 ///
 /// # Errors
@@ -59,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Static OpenAPI specification for the example endpoint.
+/// Static `OpenAPI` specification for the example endpoint.
 ///
 /// This lazy-initialized specification defines the `/example` endpoint with:
 /// * Tags for API categorization
@@ -89,20 +95,20 @@ pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> = std::sync::LazyL
         .build()
 });
 
-/// Base OpenAPI documentation structure.
+/// Base `OpenAPI` documentation structure.
 ///
-/// This empty structure serves as the foundation for the OpenAPI specification,
+/// This empty structure serves as the foundation for the `OpenAPI` specification,
 /// which is extended with custom API definitions through the `nest_api` function
 /// in the [`init`] function.
 #[derive(utoipa::OpenApi)]
 #[openapi()]
 struct ApiDoc;
 
-/// Initializes and returns the complete OpenAPI specification.
+/// Initializes and returns the complete `OpenAPI` specification.
 ///
 /// This function combines the base API documentation from `ApiDoc` with
 /// the custom [`API`] specification, nesting them together to create a
-/// complete OpenAPI document.
+/// complete `OpenAPI` document.
 ///
 /// # Returns
 ///
