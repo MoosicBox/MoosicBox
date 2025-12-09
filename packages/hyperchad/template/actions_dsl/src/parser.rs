@@ -125,7 +125,15 @@ fn try_parse_statement_as_raw_rust(input: ParseStream) -> Result<Statement> {
     Ok(Statement::Expression(Expression::RawRust(raw_code_str)))
 }
 
-/// Parse a let statement
+/// Parses a let statement: `let name = expression;`
+///
+/// # Errors
+///
+/// * Returns error if `let` keyword is missing
+/// * Returns error if variable name is invalid
+/// * Returns error if `=` is missing
+/// * Returns error if expression parsing fails
+/// * Returns error if semicolon is missing
 fn parse_let_statement(input: ParseStream) -> Result<Statement> {
     input.parse::<token::Let>()?;
     let name: Ident = input.parse()?;
@@ -139,7 +147,19 @@ fn parse_let_statement(input: ParseStream) -> Result<Statement> {
     })
 }
 
-/// Parse an if statement
+/// Parses an if statement with optional else/else-if branches
+///
+/// Supports:
+/// * Simple if: `if condition { ... }`
+/// * If-else: `if condition { ... } else { ... }`
+/// * If-else-if chains: `if condition { ... } else if condition { ... } else { ... }`
+///
+/// # Errors
+///
+/// * Returns error if `if` keyword is missing
+/// * Returns error if condition expression parsing fails
+/// * Returns error if then block parsing fails
+/// * Returns error if else block parsing fails (when present)
 fn parse_if_statement(input: ParseStream) -> Result<Statement> {
     input.parse::<token::If>()?;
     let condition = parse_expression(input)?;
@@ -167,7 +187,18 @@ fn parse_if_statement(input: ParseStream) -> Result<Statement> {
     })
 }
 
-/// Parse a match statement
+/// Parses a match statement with pattern arms
+///
+/// Format: `match expr { pattern => body, ... }`
+///
+/// # Errors
+///
+/// * Returns error if `match` keyword is missing
+/// * Returns error if expression parsing fails
+/// * Returns error if braces are missing
+/// * Returns error if pattern parsing fails
+/// * Returns error if `=>` is missing
+/// * Returns error if arm body parsing fails
 fn parse_match_statement(input: ParseStream) -> Result<Statement> {
     input.parse::<token::Match>()?;
     let expr = parse_expression(input)?;
@@ -191,7 +222,17 @@ fn parse_match_statement(input: ParseStream) -> Result<Statement> {
     Ok(Statement::Match { expr, arms })
 }
 
-/// Parse a for loop
+/// Parses a for loop statement
+///
+/// Format: `for pattern in iter { ... }`
+///
+/// # Errors
+///
+/// * Returns error if `for` keyword is missing
+/// * Returns error if pattern identifier is invalid
+/// * Returns error if `in` keyword is missing
+/// * Returns error if iterator expression parsing fails
+/// * Returns error if body block parsing fails
 fn parse_for_statement(input: ParseStream) -> Result<Statement> {
     input.parse::<token::For>()?;
     let pattern: Ident = input.parse()?;
@@ -206,7 +247,15 @@ fn parse_for_statement(input: ParseStream) -> Result<Statement> {
     })
 }
 
-/// Parse a while loop
+/// Parses a while loop statement
+///
+/// Format: `while condition { ... }`
+///
+/// # Errors
+///
+/// * Returns error if `while` keyword is missing
+/// * Returns error if condition expression parsing fails
+/// * Returns error if body block parsing fails
 fn parse_while_statement(input: ParseStream) -> Result<Statement> {
     input.parse::<token::While>()?;
     let condition = parse_expression(input)?;
@@ -215,7 +264,14 @@ fn parse_while_statement(input: ParseStream) -> Result<Statement> {
     Ok(Statement::While { condition, body })
 }
 
-/// Parse a block
+/// Parses a block of statements enclosed in braces
+///
+/// Format: `{ statement1; statement2; ... }`
+///
+/// # Errors
+///
+/// * Returns error if braces are missing
+/// * Returns error if any statement parsing fails
 fn parse_block(input: ParseStream) -> Result<Block> {
     let content;
     braced!(content in input);
@@ -229,12 +285,25 @@ fn parse_block(input: ParseStream) -> Result<Block> {
     Ok(Block { statements })
 }
 
-/// Parse an expression
+/// Parses an expression, starting with the lowest-precedence operator (OR)
+///
+/// This is the entry point for expression parsing, which then delegates to
+/// higher-precedence expression parsers.
+///
+/// # Errors
+///
+/// * Returns error if the input cannot be parsed as a valid expression
 fn parse_expression(input: ParseStream) -> Result<Expression> {
     parse_or_expression(input)
 }
 
-/// Parse logical OR expression
+/// Parses logical OR expressions (`||`)
+///
+/// Handles left-associative chaining of OR operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_or_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_and_expression(input)?;
 
@@ -251,7 +320,13 @@ fn parse_or_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse logical AND expression
+/// Parses logical AND expressions (`&&`)
+///
+/// Handles left-associative chaining of AND operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_and_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_equality_expression(input)?;
 
@@ -268,7 +343,13 @@ fn parse_and_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse equality expression
+/// Parses equality expressions (`==`, `!=`)
+///
+/// Handles left-associative chaining of equality operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_equality_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_comparison_expression(input)?;
 
@@ -292,7 +373,13 @@ fn parse_equality_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse comparison expression
+/// Parses comparison expressions (`<`, `<=`, `>`, `>=`)
+///
+/// Handles left-associative chaining of comparison operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_comparison_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_additive_expression(input)?;
 
@@ -326,7 +413,13 @@ fn parse_comparison_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse additive expression
+/// Parses additive expressions (`+`, `-`)
+///
+/// Handles left-associative chaining of addition and subtraction operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_additive_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_multiplicative_expression(input)?;
 
@@ -350,7 +443,13 @@ fn parse_additive_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse multiplicative expression
+/// Parses multiplicative expressions (`*`, `/`, `%`)
+///
+/// Handles left-associative chaining of multiplication, division, and modulo operators.
+///
+/// # Errors
+///
+/// * Returns error if the left or right operand parsing fails
 fn parse_multiplicative_expression(input: ParseStream) -> Result<Expression> {
     let mut left = parse_unary_expression(input)?;
 
@@ -377,7 +476,13 @@ fn parse_multiplicative_expression(input: ParseStream) -> Result<Expression> {
     Ok(left)
 }
 
-/// Parse unary expression
+/// Parses unary expressions (`!`, `-`, `+`, `&`)
+///
+/// Handles prefix unary operators including negation, reference, and logical not.
+///
+/// # Errors
+///
+/// * Returns error if the operand expression parsing fails
 fn parse_unary_expression(input: ParseStream) -> Result<Expression> {
     if input.peek(token::Not) {
         input.parse::<token::Not>()?;
@@ -412,7 +517,16 @@ fn parse_unary_expression(input: ParseStream) -> Result<Expression> {
     }
 }
 
-/// Parse postfix expressions (method calls, field access, etc.)
+/// Parses postfix expressions (method calls, field access, array indexing)
+///
+/// Handles chained operations like `obj.method().field[0]`.
+///
+/// # Errors
+///
+/// * Returns error if primary expression parsing fails
+/// * Returns error if method name or field name is invalid
+/// * Returns error if argument list parsing fails
+/// * Returns error if array index expression parsing fails
 fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
     let mut expr = parse_primary_expression(input)?;
 
@@ -485,7 +599,22 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
     Ok(expr)
 }
 
-/// Parse primary expressions (literals, variables, function calls, etc.)
+/// Parses primary expressions (literals, variables, grouped expressions, etc.)
+///
+/// Primary expressions are the atomic building blocks of the expression grammar.
+/// This includes:
+/// * Literals (integers, floats, strings, bools, chars)
+/// * Variables and enum variants
+/// * Closures
+/// * Parenthesized expressions
+/// * Array literals
+/// * If/match expressions
+/// * Block expressions
+///
+/// # Errors
+///
+/// * Returns error if the input cannot be parsed as a valid primary expression
+/// * Returns error for unrecognized syntax patterns
 fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
     let lookahead = input.lookahead1();
 
@@ -612,7 +741,13 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
     }
 }
 
-/// Parse a list of expressions separated by commas
+/// Parses a comma-separated list of expressions
+///
+/// Used for function arguments and array elements.
+///
+/// # Errors
+///
+/// * Returns error if any expression in the list fails to parse
 fn parse_expression_list(input: ParseStream) -> Result<Vec<Expression>> {
     let mut exprs = Vec::new();
 
@@ -648,7 +783,18 @@ fn parse_expression_list(input: ParseStream) -> Result<Vec<Expression>> {
     Ok(exprs)
 }
 
-/// Parse a pattern
+/// Parses a pattern for use in match arms
+///
+/// Supports:
+/// * Literal patterns (integers, strings, bools)
+/// * Variable patterns (identifiers)
+/// * Wildcard patterns (`_`)
+/// * Enum variant patterns (`Type::Variant`)
+///
+/// # Errors
+///
+/// * Returns error if the pattern cannot be recognized
+/// * Returns error if enum variant syntax is incomplete
 fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     let lookahead = input.lookahead1();
 
@@ -681,7 +827,13 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     }
 }
 
-/// Parse a literal
+/// Parses a literal value into the DSL literal type
+///
+/// Converts syn literals (strings, integers, floats, bools) into DSL literals.
+///
+/// # Errors
+///
+/// * Returns error for unsupported literal types (e.g., byte strings, chars)
 fn parse_literal(lit: Lit) -> Result<Literal> {
     match lit {
         Lit::Str(s) => Ok(Literal::String(s.value())),
@@ -692,7 +844,16 @@ fn parse_literal(lit: Lit) -> Result<Literal> {
     }
 }
 
-/// Parse an if expression
+/// Parses an if expression (not statement) with optional else branch
+///
+/// Unlike if statements, if expressions return values and can be used
+/// where expressions are expected.
+///
+/// # Errors
+///
+/// * Returns error if condition parsing fails
+/// * Returns error if then branch parsing fails
+/// * Returns error if else branch parsing fails (when present)
 fn parse_if_expression(input: ParseStream) -> Result<Expression> {
     input.parse::<token::If>()?;
 
@@ -723,7 +884,14 @@ fn parse_if_expression(input: ParseStream) -> Result<Expression> {
     })
 }
 
-/// Parse a match expression
+/// Parses a match expression with pattern arms
+///
+/// Match expressions allow pattern matching against values.
+///
+/// # Errors
+///
+/// * Returns error if match expression parsing fails
+/// * Returns error if arm pattern or body parsing fails
 fn parse_match_expression(input: ParseStream) -> Result<Expression> {
     input.parse::<token::Match>()?;
     let expr = Box::new(parse_expression(input)?);
@@ -747,7 +915,15 @@ fn parse_match_expression(input: ParseStream) -> Result<Expression> {
     Ok(Expression::Match { expr, arms })
 }
 
-/// Parse a closure expression: |param| { ... }
+/// Parses a closure expression: `|param| { ... }` or `|param| expr`
+///
+/// Supports both block-body closures and expression-body closures.
+///
+/// # Errors
+///
+/// * Returns error if pipe delimiters are missing
+/// * Returns error if parameter parsing fails
+/// * Returns error if body parsing fails
 fn parse_closure(input: ParseStream) -> Result<Expression> {
     // Parse opening |
     input.parse::<token::Or>()?;
@@ -778,7 +954,14 @@ fn parse_closure(input: ParseStream) -> Result<Expression> {
     Ok(Expression::Closure { params, body })
 }
 
-/// Try to parse an unrecognized pattern as raw Rust code
+/// Attempts to parse unrecognized syntax as raw Rust code
+///
+/// This is a fallback parser that collects tokens until reaching a delimiter
+/// (comma, semicolon, or arrow), then wraps them as a `RawRust` expression.
+///
+/// # Errors
+///
+/// * Returns error if input is unexpectedly empty
 fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
     // Collect tokens until we hit a delimiter that indicates end of expression
     let mut tokens = Vec::new();
@@ -905,7 +1088,14 @@ pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
     Dsl::new(vec![statement])
 }
 
-/// Try to parse DSL with argument-level fallback
+/// Attempts to parse DSL with argument-level fallback
+///
+/// This tries to parse the input using normal DSL parsing rules before
+/// falling back to raw Rust parsing.
+///
+/// # Errors
+///
+/// * Returns error if DSL parsing fails
 fn parse_dsl_with_argument_fallback(input: TokenStream) -> Result<Dsl> {
     // This is a simplified approach - we'll enhance the error handling
     // to be more specific about what failed
