@@ -1,6 +1,7 @@
 //! CSS identifier generators for property-based testing.
 //!
-//! Provides [`Arbitrary`] implementations for generating valid CSS identifier strings.
+//! Provides [`proptest::arbitrary::Arbitrary`] implementations for generating valid CSS
+//! identifier strings.
 
 #![allow(clippy::module_name_repetitions)]
 
