@@ -256,6 +256,8 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the static migrations example.
+
     use super::*;
 
     #[switchy_async::test]
