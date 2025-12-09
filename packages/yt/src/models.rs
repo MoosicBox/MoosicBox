@@ -1,3 +1,8 @@
+//! Data models for `YouTube` Music API entities.
+//!
+//! This module contains type definitions for artists, albums, tracks, search results,
+//! and internal API response structures used when interacting with `YouTube` Music.
+
 use std::fmt::Display;
 
 use moosicbox_date_utils::chrono::parse_date_time;

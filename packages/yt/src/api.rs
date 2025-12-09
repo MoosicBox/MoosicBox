@@ -1,3 +1,9 @@
+//! HTTP API endpoints for `YouTube` Music integration.
+//!
+//! This module provides Actix-web HTTP endpoints for interacting with `YouTube` Music,
+//! including device authorization, favorites management, track/album/artist retrieval,
+//! and search functionality.
+
 #![allow(clippy::needless_for_each)]
 #![allow(clippy::module_name_repetitions, clippy::future_not_send)]
 
