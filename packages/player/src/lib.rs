@@ -455,6 +455,9 @@ pub async fn get_session_playlist_id_from_session_id(
 }
 
 /// A track ready for playback with its media source.
+///
+/// This struct wraps a track identifier along with the media source for
+/// reading audio data and format hints for the decoder.
 pub struct PlayableTrack {
     /// ID of the track
     pub track_id: Id,
@@ -478,11 +481,14 @@ pub enum PlaybackType {
 }
 
 /// Configuration for retry behavior during playback operations.
+///
+/// Controls how many times an operation will be retried on failure
+/// and the delay between retry attempts.
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
-    /// Maximum number of retry attempts
+    /// Maximum number of retry attempts before giving up
     pub max_attempts: u32,
-    /// Delay between retry attempts
+    /// Duration to wait between retry attempts
     pub retry_delay: std::time::Duration,
 }
 
