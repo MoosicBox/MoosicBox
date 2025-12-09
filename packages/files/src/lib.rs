@@ -375,6 +375,9 @@ pub enum FetchCoverError {
 pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 /// Cover image bytes with optional size information.
+///
+/// Contains a byte stream for streaming cover image data along with its size (if known).
+/// Used for returning cover artwork from albums and artists to HTTP clients.
 #[cfg(feature = "files")]
 pub struct CoverBytes {
     /// Stream of image bytes

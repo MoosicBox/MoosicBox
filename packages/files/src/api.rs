@@ -65,6 +65,8 @@ pub fn bind_services<
 }
 
 /// `OpenAPI` documentation for file service endpoints.
+///
+/// Provides schema definitions for track, album cover, artist cover, and visualization endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
