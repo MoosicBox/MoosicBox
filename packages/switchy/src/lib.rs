@@ -411,6 +411,10 @@ pub use switchy_upnp as upnp;
 #[cfg(feature = "web-server")]
 pub use switchy_web_server as web_server;
 
+/// Core web server types and traits.
+///
+/// Provides the foundational types and traits used by web server implementations.
+/// Enable the `web-server-core` feature to use this module.
 #[cfg(feature = "web-server-core")]
 pub use switchy_web_server_core as web_server_core;
 
