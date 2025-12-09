@@ -1020,6 +1020,7 @@ pub mod stub {
             Ok(())
         }
 
+        /// No-op method for adding responsive triggers (stub implementation).
         fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
 
         /// # Errors
