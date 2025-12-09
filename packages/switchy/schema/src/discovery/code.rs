@@ -170,6 +170,41 @@ use crate::{
 use switchy_database::Executable;
 
 /// Migration implementation for code-based migrations using `Executable`
+///
+/// This struct represents a single migration defined in Rust code rather than SQL files.
+/// It uses the [`Executable`] trait from `switchy_database` to support both raw SQL strings
+/// and type-safe query builders.
+///
+/// # Type Parameters
+///
+/// * `'a` - Lifetime of the executable content. Use `'static` for owned data (most common)
+///   or a shorter lifetime when borrowing data.
+///
+/// # Examples
+///
+/// ## Basic SQL Migration
+///
+/// ```rust
+/// use switchy_schema::discovery::code::CodeMigration;
+///
+/// let migration = CodeMigration::new(
+///     "001_create_users".to_string(),
+///     Box::new("CREATE TABLE users (id INTEGER PRIMARY KEY)".to_string()),
+///     Some(Box::new("DROP TABLE users".to_string())),
+/// );
+/// ```
+///
+/// ## Migration Without Rollback
+///
+/// ```rust
+/// use switchy_schema::discovery::code::CodeMigration;
+///
+/// let migration = CodeMigration::new(
+///     "002_data_migration".to_string(),
+///     Box::new("INSERT INTO users (id) SELECT id FROM legacy_users".to_string()),
+///     None, // No rollback possible for data migration
+/// );
+/// ```
 pub struct CodeMigration<'a> {
     id: String,
     up_sql: Box<dyn Executable + 'a>,
@@ -291,6 +326,37 @@ where
 }
 
 /// Migration source for code-based migrations with registry
+///
+/// This struct serves as a container for programmatically-defined migrations.
+/// Migrations are added using [`add_migration`](Self::add_migration) and retrieved
+/// via the [`MigrationSource`] trait implementation.
+///
+/// # Features
+///
+/// * **Programmatic definition**: Define migrations in Rust code
+/// * **Automatic ordering**: Migrations are sorted by ID when retrieved
+/// * **Type-safe builders**: Can use query builders instead of raw SQL
+/// * **Flexible lifetime**: Supports both owned and borrowed data
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::discovery::code::{CodeMigration, CodeMigrationSource};
+///
+/// let mut source = CodeMigrationSource::new();
+///
+/// source.add_migration(CodeMigration::new(
+///     "001_create_users".to_string(),
+///     Box::new("CREATE TABLE users (id INTEGER PRIMARY KEY)".to_string()),
+///     Some(Box::new("DROP TABLE users".to_string())),
+/// ));
+///
+/// source.add_migration(CodeMigration::new(
+///     "002_add_email".to_string(),
+///     Box::new("ALTER TABLE users ADD COLUMN email TEXT".to_string()),
+///     None,
+/// ));
+/// ```
 pub struct CodeMigrationSource<'a> {
     migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
 }

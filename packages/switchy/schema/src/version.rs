@@ -146,6 +146,9 @@ pub struct VersionTracker {
 }
 
 impl VersionTracker {
+    /// Create a new version tracker with the default table name
+    ///
+    /// Uses `__switchy_migrations` as the tracking table name.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -153,6 +156,10 @@ impl VersionTracker {
         }
     }
 
+    /// Create a new version tracker with a custom table name
+    ///
+    /// Use this when you need to separate migration tracking for different
+    /// applications or avoid naming conflicts.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn with_table_name(table_name: impl Into<String>) -> Self {
@@ -161,6 +168,7 @@ impl VersionTracker {
         }
     }
 
+    /// Get the name of the migration tracking table
     #[must_use]
     pub fn table_name(&self) -> &str {
         &self.table_name

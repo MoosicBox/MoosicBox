@@ -89,6 +89,28 @@ use switchy_database::Database;
 use include_dir;
 
 /// Execution strategy for migrations
+///
+/// Controls how many and which migrations should be executed when running
+/// the migration runner. Each variant provides different granularity for
+/// migration execution.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::runner::ExecutionStrategy;
+///
+/// // Run all pending migrations
+/// let all = ExecutionStrategy::All;
+///
+/// // Run migrations up to a specific ID
+/// let up_to = ExecutionStrategy::UpTo("20240315_add_users".to_string());
+///
+/// // Run exactly 3 migrations
+/// let steps = ExecutionStrategy::Steps(3);
+///
+/// // Validate without executing
+/// let dry_run = ExecutionStrategy::DryRun;
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionStrategy {
     /// Run all pending migrations
@@ -102,6 +124,28 @@ pub enum ExecutionStrategy {
 }
 
 /// Rollback strategy for determining which migrations to roll back
+///
+/// Controls which and how many migrations should be rolled back when
+/// calling [`MigrationRunner::rollback`]. Migrations are rolled back
+/// in reverse chronological order.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::runner::RollbackStrategy;
+///
+/// // Roll back only the most recent migration
+/// let last = RollbackStrategy::Last;
+///
+/// // Roll back exactly 3 migrations
+/// let steps = RollbackStrategy::Steps(3);
+///
+/// // Roll back to (but not including) a specific migration
+/// let down_to = RollbackStrategy::DownTo("20240101_initial".to_string());
+///
+/// // Roll back all applied migrations
+/// let all = RollbackStrategy::All;
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RollbackStrategy {
     /// Roll back the most recent migration
@@ -115,6 +159,30 @@ pub enum RollbackStrategy {
 }
 
 /// Configuration for checksum validation requirements
+///
+/// Controls whether and how migration checksums are validated before
+/// executing migrations. Checksum validation helps detect if migration
+/// files have been modified after they were applied to the database.
+///
+/// # Default Behavior
+///
+/// By default, checksum validation is disabled (`require_validation: false`).
+/// Enable it in production environments to detect migration drift.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::runner::ChecksumConfig;
+///
+/// // Enable strict checksum validation
+/// let config = ChecksumConfig {
+///     require_validation: true,
+/// };
+///
+/// // Default (validation disabled)
+/// let default_config = ChecksumConfig::default();
+/// assert!(!default_config.require_validation);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct ChecksumConfig {
     /// When true, validates all migration checksums before running any migrations
@@ -122,6 +190,30 @@ pub struct ChecksumConfig {
 }
 
 /// Controls which migration states should be marked as completed
+///
+/// Used with [`MigrationRunner::mark_all_migrations_completed`] to specify
+/// which migration states should be updated. Different scopes provide varying
+/// levels of safety and flexibility.
+///
+/// # Safety Levels
+///
+/// * [`PendingOnly`](Self::PendingOnly) - Safest, only marks untracked migrations
+/// * [`IncludeFailed`](Self::IncludeFailed) - Also marks failed migrations
+/// * [`IncludeInProgress`](Self::IncludeInProgress) - Also marks in-progress migrations
+/// * [`All`](Self::All) - Most dangerous, marks all non-completed states
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::runner::MarkCompletedScope;
+///
+/// // Default: Only mark pending migrations (safest)
+/// let scope = MarkCompletedScope::default();
+/// assert_eq!(scope, MarkCompletedScope::PendingOnly);
+///
+/// // Include failed migrations in recovery scenarios
+/// let include_failed = MarkCompletedScope::IncludeFailed;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MarkCompletedScope {
     /// Only mark migrations that have not been tracked yet (safest, default)
@@ -174,6 +266,32 @@ impl MarkCompletedScope {
 }
 
 /// Summary of mark all migrations completed operation
+///
+/// Contains statistics about what happened when marking migrations as completed.
+/// Returned by [`MigrationRunner::mark_all_migrations_completed`].
+///
+/// # Fields Summary
+///
+/// * `total` - Total migrations found in source
+/// * `already_completed` - Migrations that were already completed
+/// * `newly_marked` - Untracked migrations now marked completed
+/// * `failed_marked` / `failed_skipped` - Failed migration handling
+/// * `in_progress_marked` / `in_progress_skipped` - In-progress migration handling
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use switchy_schema::runner::{MigrationRunner, MarkCompletedScope};
+/// # use switchy_database::Database;
+///
+/// # async fn example(runner: &MigrationRunner<'_>, db: &dyn Database) -> switchy_schema::Result<()> {
+/// let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::default()).await?;
+///
+/// println!("Total: {}, Newly marked: {}, Already completed: {}",
+///     summary.total, summary.newly_marked, summary.already_completed);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarkAllCompletedSummary {
     /// Total number of migrations found
@@ -193,6 +311,37 @@ pub struct MarkAllCompletedSummary {
 }
 
 /// Migration hooks for customizing execution behavior
+///
+/// Provides callback hooks that are invoked at various points during migration
+/// execution. Use these to implement custom logging, monitoring, or error handling.
+///
+/// All hooks are optional and default to `None`.
+///
+/// # Hook Execution Order
+///
+/// For each migration:
+/// 1. `before_migration` - Called before execution starts
+/// 2. Migration executes (up or down)
+/// 3. `after_migration` - Called on success, OR
+/// 4. `on_error` - Called on failure
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::runner::MigrationHooks;
+///
+/// let hooks = MigrationHooks {
+///     before_migration: Some(Box::new(|id| {
+///         println!("Starting migration: {}", id);
+///     })),
+///     after_migration: Some(Box::new(|id| {
+///         println!("Completed migration: {}", id);
+///     })),
+///     on_error: Some(Box::new(|id, error| {
+///         eprintln!("Migration {} failed: {}", id, error);
+///     })),
+/// };
+/// ```
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
 pub struct MigrationHooks {
@@ -205,6 +354,60 @@ pub struct MigrationHooks {
 }
 
 /// Migration runner with configurable execution strategies
+///
+/// The central type for executing database migrations. Supports multiple migration
+/// sources, execution strategies, rollback operations, and customizable hooks.
+///
+/// # Features
+///
+/// * **Multiple sources**: Embedded, directory, and code-based migrations
+/// * **Execution strategies**: Run all, up-to, steps, or dry-run
+/// * **Rollback support**: Roll back last, to-target, steps, or all
+/// * **Checksum validation**: Detect migration drift in production
+/// * **Custom hooks**: Before/after/error callbacks
+/// * **Dirty state detection**: Prevent running with in-progress migrations
+///
+/// # Type Parameters
+///
+/// * `'a` - Lifetime of the migration source. Use `'static` for owned sources.
+///
+/// # Examples
+///
+/// ## Basic Usage
+///
+/// ```rust,no_run
+/// use switchy_schema::runner::MigrationRunner;
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> switchy_schema::Result<()> {
+/// # #[cfg(feature = "directory")]
+/// # {
+/// let runner = MigrationRunner::new_directory("./migrations");
+/// runner.run(db).await?;
+/// # }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## With Configuration
+///
+/// ```rust,no_run
+/// use switchy_schema::runner::{MigrationRunner, ExecutionStrategy, ChecksumConfig};
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> switchy_schema::Result<()> {
+/// # #[cfg(feature = "directory")]
+/// # {
+/// let runner = MigrationRunner::new_directory("./migrations")
+///     .with_strategy(ExecutionStrategy::UpTo("20240315_add_users".to_string()))
+///     .with_table_name("my_migrations")
+///     .with_checksum_config(ChecksumConfig { require_validation: true });
+///
+/// runner.run(db).await?;
+/// # }
+/// # Ok(())
+/// # }
+/// ```
 pub struct MigrationRunner<'a> {
     source: Box<dyn MigrationSource<'a> + 'a>,
     version_tracker: VersionTracker,

@@ -103,6 +103,41 @@ use switchy_database::Database;
 use switchy_database::DatabaseValue;
 
 /// Information about a migration, including its current status
+///
+/// This struct provides a summary view of a migration's state, combining
+/// information from the migration source (ID, description) with runtime
+/// state from the database (applied status, timestamps, failure info).
+///
+/// Returned by [`MigrationSource::list`] and [`crate::runner::MigrationRunner::list_migrations`].
+///
+/// # Fields
+///
+/// * `id` - Unique migration identifier
+/// * `description` - Optional human-readable description
+/// * `applied` - Whether the migration has been successfully applied
+/// * `status` - Detailed status (in-progress, completed, failed)
+/// * `failure_reason` - Error message if migration failed
+/// * `run_on` / `finished_on` - Execution timestamps
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_schema::migration::MigrationInfo;
+///
+/// let info = MigrationInfo {
+///     id: "001_create_users".to_string(),
+///     description: Some("Create the users table".to_string()),
+///     applied: true,
+///     status: None,
+///     failure_reason: None,
+///     run_on: None,
+///     finished_on: None,
+/// };
+///
+/// if info.applied {
+///     println!("✓ {} - {}", info.id, info.description.unwrap_or_default());
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationInfo {
     /// Migration ID
