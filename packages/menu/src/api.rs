@@ -47,6 +47,7 @@ use crate::library::{
 ///
 /// This function registers all HTTP endpoints for menu operations, including
 /// artist queries, album management, track retrieval, and album version management.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
