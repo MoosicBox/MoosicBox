@@ -37,5 +37,6 @@ pub trait AudioEncoder: Send + Sync {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
 
     /// Returns the audio signal specification for this encoder.
+    #[must_use]
     fn spec(&self) -> SignalSpec;
 }

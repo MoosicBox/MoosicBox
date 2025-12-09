@@ -22,6 +22,7 @@ pub mod models;
 /// Binds audio output API endpoints to an Actix-web scope.
 ///
 /// This function registers all audio output-related HTTP endpoints with the provided scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
