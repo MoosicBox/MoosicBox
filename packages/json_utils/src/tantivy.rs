@@ -526,6 +526,38 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_to_value_type_u8_error_on_wrong_type() {
+        // Test error case when expecting u8 but getting string
+        let value = OwnedValue::Str("42".to_string());
+        let result: Result<u8, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_u16_error_on_wrong_type() {
+        // Test error case when expecting u16 but getting string
+        let value = OwnedValue::Str("1234".to_string());
+        let result: Result<u16, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_u32_error_on_wrong_type() {
+        // Test error case when expecting u32 but getting string
+        let value = OwnedValue::Str("12345".to_string());
+        let result: Result<u32, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_to_value_type_f32_error_on_wrong_type() {
+        // Test error case when expecting f32 but getting string
+        let value = OwnedValue::Str("2.5".to_string());
+        let result: Result<f32, ParseError> = (&value).to_value_type();
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
     fn test_get_doc_value_types_missing_field() {
         use std::collections::BTreeMap;
 
