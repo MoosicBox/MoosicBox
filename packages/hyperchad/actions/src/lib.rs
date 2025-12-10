@@ -1800,4 +1800,470 @@ mod tests {
             _ => panic!("Expected Style action"),
         }
     }
+
+    // ============================================
+    // ActionTrigger::trigger_type tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_trigger_type_returns_correct_strings() {
+        // Test that trigger_type returns the expected string for each variant
+        assert_eq!(ActionTrigger::Click.trigger_type(), "Click");
+        assert_eq!(ActionTrigger::ClickOutside.trigger_type(), "ClickOutside");
+        assert_eq!(ActionTrigger::MouseDown.trigger_type(), "MouseDown");
+        assert_eq!(ActionTrigger::KeyDown.trigger_type(), "KeyDown");
+        assert_eq!(ActionTrigger::Hover.trigger_type(), "Hover");
+        assert_eq!(ActionTrigger::Change.trigger_type(), "Change");
+        assert_eq!(ActionTrigger::Resize.trigger_type(), "Resize");
+        assert_eq!(ActionTrigger::Immediate.trigger_type(), "Immediate");
+        assert_eq!(
+            ActionTrigger::HttpBeforeRequest.trigger_type(),
+            "HttpBeforeRequest"
+        );
+        assert_eq!(
+            ActionTrigger::HttpAfterRequest.trigger_type(),
+            "HttpAfterRequest"
+        );
+        assert_eq!(
+            ActionTrigger::HttpRequestSuccess.trigger_type(),
+            "HttpRequestSuccess"
+        );
+        assert_eq!(
+            ActionTrigger::HttpRequestError.trigger_type(),
+            "HttpRequestError"
+        );
+        assert_eq!(
+            ActionTrigger::HttpRequestAbort.trigger_type(),
+            "HttpRequestAbort"
+        );
+        assert_eq!(
+            ActionTrigger::HttpRequestTimeout.trigger_type(),
+            "HttpRequestTimeout"
+        );
+        // Event variant returns "Event" regardless of the inner string
+        assert_eq!(
+            ActionTrigger::Event("custom-event".to_string()).trigger_type(),
+            "Event"
+        );
+        assert_eq!(
+            ActionTrigger::Event("another-event".to_string()).trigger_type(),
+            "Event"
+        );
+    }
+
+    // ============================================
+    // ChildClass targeting tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_set_focus_child_class() {
+        let action = ActionType::set_focus_child_class(true, "child-element");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("child-element"))
+                );
+                assert_eq!(action, StyleAction::SetFocus(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_select_child_class() {
+        let action = ActionType::select_child_class("input-child");
+
+        match action {
+            ActionType::Input(InputActionType::Select { target }) => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("input-child"))
+                );
+            }
+            _ => panic!("Expected Input Select action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_set_visibility_child_class() {
+        let action = ActionType::set_visibility_child_class(Visibility::Hidden, "child-vis");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::ChildClass(Target::from("child-vis")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_display_child_class() {
+        let action = ActionType::display_child_class("child-display");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("child-display"))
+                );
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_no_display_child_class() {
+        let action = ActionType::no_display_child_class("child-no-display");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("child-no-display"))
+                );
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_remove_background_child_class() {
+        let action = ActionType::remove_background_child_class("bg-child");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::ChildClass(Target::from("bg-child")));
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // LastChild visibility tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_hide_last_child() {
+        let action = ActionType::hide_last_child();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_show_last_child() {
+        let action = ActionType::show_last_child();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Display ID tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_display_id() {
+        let action = ActionType::display_id(42);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(42));
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_no_display_id() {
+        let action = ActionType::no_display_id(99);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(99));
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Display self tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_display_self() {
+        let action = ActionType::display_self();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_no_display_self() {
+        let action = ActionType::no_display_self();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Display last_child tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_display_last_child() {
+        let action = ActionType::display_last_child();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetDisplay(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_no_display_last_child() {
+        let action = ActionType::no_display_last_child();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::LastChild);
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Background ID and self tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_set_background_id() {
+        let action = ActionType::set_background_id("blue", 42);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(42));
+                assert_eq!(action, StyleAction::SetBackground(Some("blue".to_string())));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_set_background_self() {
+        let action = ActionType::set_background_self("#FF0000");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(
+                    action,
+                    StyleAction::SetBackground(Some("#FF0000".to_string()))
+                );
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_remove_background_self() {
+        let action = ActionType::remove_background_self();
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_remove_background_id() {
+        let action = ActionType::remove_background_id(77);
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Id(77));
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_action_type_remove_background_class() {
+        let action = ActionType::remove_background_class("bg-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("bg-class")));
+                assert_eq!(action, StyleAction::SetBackground(None));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Show class test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_show_class() {
+        let action = ActionType::show_class("visible-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("visible-class")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // No display class test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_no_display_class() {
+        let action = ActionType::no_display_class("hidden-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::Class(Target::from("hidden-class")));
+                assert_eq!(action, StyleAction::SetDisplay(false));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Focus class test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_focus_class() {
+        let action = ActionType::focus_class("focus-target-class");
+
+        match action {
+            ActionType::Style { target, action } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::Class(Target::from("focus-target-class"))
+                );
+                assert_eq!(action, StyleAction::SetFocus(true));
+            }
+            _ => panic!("Expected Style action"),
+        }
+    }
+
+    // ============================================
+    // Select class test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_type_select_class() {
+        let action = ActionType::select_class("select-class");
+
+        match action {
+            ActionType::Input(InputActionType::Select { target }) => {
+                assert_eq!(target, ElementTarget::Class(Target::from("select-class")));
+            }
+            _ => panic!("Expected Input Select action"),
+        }
+    }
+
+    // ============================================
+    // ActionEffect into_action_effect identity test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_effect_into_action_effect_identity() {
+        let original = ActionEffect {
+            action: ActionType::NoOp,
+            delay_off: Some(100),
+            throttle: Some(200),
+            unique: Some(true),
+        };
+
+        let converted = original.clone().into_action_effect();
+
+        assert_eq!(converted.action, original.action);
+        assert_eq!(converted.delay_off, original.delay_off);
+        assert_eq!(converted.throttle, original.throttle);
+        assert_eq!(converted.unique, original.unique);
+    }
+
+    // ============================================
+    // ActionEffect from Box<ActionType> test
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_effect_from_boxed_action_type() {
+        let boxed_action = Box::new(ActionType::hide_str_id("element"));
+        let effect: ActionEffect = boxed_action.into();
+
+        match effect.action {
+            ActionType::Style { target, action } => {
+                assert_eq!(target, ElementTarget::StrId(Target::from("element")));
+                assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
+            }
+            _ => panic!("Expected Style action"),
+        }
+        assert_eq!(effect.delay_off, None);
+        assert_eq!(effect.throttle, None);
+        assert_eq!(effect.unique, None);
+    }
+
+    // ============================================
+    // Key Display trait test
+    // ============================================
+
+    #[test_log::test]
+    fn test_key_display_trait() {
+        // Test that Display for Key uses as_str
+        assert_eq!(format!("{}", Key::Escape), "Escape");
+        assert_eq!(format!("{}", Key::Enter), "Enter");
+        assert_eq!(format!("{}", Key::Tab), "Tab");
+        assert_eq!(format!("{}", Key::ArrowUp), "ArrowUp");
+        assert_eq!(format!("{}", Key::F1), "F1");
+        assert_eq!(format!("{}", Key::A), "A");
+        assert_eq!(format!("{}", Key::Key0), "Key0");
+        assert_eq!(format!("{}", Key::Numpad0), "Numpad0");
+        assert_eq!(format!("{}", Key::Control), "Control");
+        assert_eq!(format!("{}", Key::Meta), "Meta");
+    }
 }
