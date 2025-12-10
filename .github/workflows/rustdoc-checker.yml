@@ -2,7 +2,7 @@ name: Rustdoc Accuracy Checker
 
 on:
     schedule:
-        - cron: "0 8 * * 2"
+        - cron: "0 5 * * 2"
     workflow_dispatch:
         inputs:
             existing_branch:

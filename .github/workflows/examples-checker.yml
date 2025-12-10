@@ -2,7 +2,7 @@ name: Examples Accuracy and Coverage Checker
 
 on:
     schedule:
-        - cron: "0 9 * * 3"
+        - cron: "0 5 * * 3"
     workflow_dispatch:
         inputs:
             existing_branch:
