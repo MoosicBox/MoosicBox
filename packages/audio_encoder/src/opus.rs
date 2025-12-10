@@ -574,4 +574,93 @@ mod tests {
         assert!(flush_result.is_ok());
         assert!(writer.packet.is_none(), "Packet should be written on flush");
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    async fn test_write_ogg_creates_valid_ogg_file() {
+        use std::fs::File;
+        use std::io::Read;
+
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
+        let temp_file = temp_dir.path().join("test_write_ogg.ogg");
+
+        // Create test data with some content
+        let content = vec![0x01u8, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+
+        {
+            let file = File::create(&temp_file).expect("Failed to create file");
+            write_ogg(file, &content);
+        }
+
+        // Verify file was created and contains data
+        let mut file = File::open(&temp_file).expect("Failed to open file");
+        let mut file_content = Vec::new();
+        file.read_to_end(&mut file_content)
+            .expect("Failed to read file");
+
+        // OGG files start with "OggS" magic
+        assert!(
+            file_content.len() >= 4,
+            "File should contain at least OGG header"
+        );
+        assert_eq!(
+            &file_content[..4],
+            b"OggS",
+            "File should start with OGG magic bytes"
+        );
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    async fn test_read_write_ogg_roundtrip() {
+        use std::fs::File;
+        use std::io::Read;
+
+        let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
+        let source_file = temp_dir.path().join("source.ogg");
+        let dest_file = temp_dir.path().join("dest.ogg");
+
+        // First create a source OGG file with some content
+        let content = vec![0xAAu8, 0xBB, 0xCC, 0xDD];
+        {
+            let file = File::create(&source_file).expect("Failed to create source file");
+            write_ogg(file, &content);
+        }
+
+        // Now use read_write_ogg to copy the file
+        {
+            let read_file = File::open(&source_file).expect("Failed to open source file");
+            let write_file = File::create(&dest_file).expect("Failed to create dest file");
+            read_write_ogg(read_file, write_file);
+        }
+
+        // Verify both files exist and have similar structure
+        let mut source_content = Vec::new();
+        let mut dest_content = Vec::new();
+
+        File::open(&source_file)
+            .expect("Failed to open source")
+            .read_to_end(&mut source_content)
+            .expect("Failed to read source");
+
+        File::open(&dest_file)
+            .expect("Failed to open dest")
+            .read_to_end(&mut dest_content)
+            .expect("Failed to read dest");
+
+        // Both should be valid OGG files
+        assert!(
+            source_content.len() >= 4 && &source_content[..4] == b"OggS",
+            "Source should be valid OGG"
+        );
+        assert!(
+            dest_content.len() >= 4 && &dest_content[..4] == b"OggS",
+            "Dest should be valid OGG"
+        );
+
+        // Content of the packet data should be preserved (files should be equal)
+        assert_eq!(
+            source_content.len(),
+            dest_content.len(),
+            "Files should be same size"
+        );
+    }
 }
