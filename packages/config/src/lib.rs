@@ -594,6 +594,55 @@ mod tests {
 
     #[test_log::test]
     #[serial]
+    fn test_make_profile_dir_path_returns_existing_directory() {
+        let temp_root = std::env::temp_dir().join("test_existing_profile_dir");
+        let expected_path = temp_root
+            .join("server")
+            .join("profiles")
+            .join("existing_profile");
+        // Pre-create the directory
+        std::fs::create_dir_all(&expected_path).unwrap();
+
+        set_root_dir(temp_root.clone());
+
+        let profile_path = make_profile_dir_path(AppType::Server, "existing_profile");
+        assert_eq!(profile_path, Some(expected_path.clone()));
+        assert!(expected_path.is_dir());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_make_cache_dir_path_returns_existing_directory() {
+        let temp_root = std::env::temp_dir().join("test_existing_cache_dir");
+        let expected_path = temp_root.join("cache");
+        // Pre-create the directory
+        std::fs::create_dir_all(&expected_path).unwrap();
+
+        set_root_dir(temp_root.clone());
+
+        let cache_path = make_cache_dir_path();
+        assert_eq!(cache_path, Some(expected_path.clone()));
+        assert!(expected_path.is_dir());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_root);
+
+        // Reset to default
+        if let Some(home) = home::home_dir() {
+            set_root_dir(home.join(".local").join("moosicbox"));
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
     fn test_get_tests_dir_path_uniqueness() {
         // Each call should return a different path (different timestamp)
         let path1 = get_tests_dir_path();

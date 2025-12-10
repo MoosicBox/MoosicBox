@@ -405,6 +405,19 @@ mod tests {
         assert_eq!(result, None);
     }
 
+    #[test_log::test]
+    fn test_get_config_file_path_finds_json5_only() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create only .json5 file (no .json fallback)
+        let json5_path = temp_path.join("config.json5");
+        sync::write(&json5_path, "{}").unwrap();
+
+        let result = get_config_file_path(temp_path, "config");
+        assert_eq!(result, Some(json5_path));
+    }
+
     // Tests for load_config_file()
     #[test_log::test]
     fn test_load_config_file_success() {
