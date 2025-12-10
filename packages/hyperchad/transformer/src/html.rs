@@ -2766,4 +2766,603 @@ Line 3</textarea>"#;
             panic!("Expected Anchor element");
         }
     }
+
+    #[test_log::test]
+    fn parse_direction_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_direction;
+
+        let result = parse_direction("invalid");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_direction("horizontal");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_bool_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_bool;
+
+        let result = parse_bool("yes");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_bool("no");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_bool("1");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_bool_parses_empty_string_as_true() {
+        use super::parse_bool;
+
+        assert_eq!(parse_bool("").unwrap(), true);
+        assert_eq!(parse_bool("true").unwrap(), true);
+        assert_eq!(parse_bool("false").unwrap(), false);
+    }
+
+    #[test_log::test]
+    fn parse_visibility_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_visibility;
+
+        let result = parse_visibility("show");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_visibility("collapse");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_target_returns_error_for_invalid_selector_format() {
+        use super::ParseAttrError;
+        use super::parse_target;
+
+        // No prefix - should fail
+        let result = parse_target("invalid");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        // Just a hash with no id
+        let result = parse_target("@something");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_target_parses_child_class_selector() {
+        use super::parse_target;
+        use hyperchad_transformer_models::Selector;
+
+        let result = parse_target("> .child-class").unwrap();
+        assert_eq!(result, Selector::ChildClass("child-class".to_string()));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_strategy;
+
+        let result = parse_strategy("replace");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_strategy("invalid");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_strategy_is_case_insensitive() {
+        use super::parse_strategy;
+        use hyperchad_transformer_models::SwapStrategy;
+
+        assert_eq!(parse_strategy("CHILDREN").unwrap(), SwapStrategy::Children);
+        assert_eq!(
+            parse_strategy("BeforeEnd").unwrap(),
+            SwapStrategy::BeforeEnd
+        );
+        assert_eq!(
+            parse_strategy("AFTERBEGIN").unwrap(),
+            SwapStrategy::AfterBegin
+        );
+    }
+
+    #[test_log::test]
+    fn parse_overflow_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_overflow;
+
+        let result = parse_overflow("visible");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_overflow("clip");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_parses_wrap_grid_correctly() {
+        use super::parse_overflow;
+        use hyperchad_transformer_models::LayoutOverflow;
+
+        assert_eq!(
+            parse_overflow("wrap").unwrap(),
+            LayoutOverflow::Wrap { grid: false }
+        );
+        assert_eq!(
+            parse_overflow("wrap-grid").unwrap(),
+            LayoutOverflow::Wrap { grid: true }
+        );
+    }
+
+    #[test_log::test]
+    fn parse_flex_returns_error_for_four_or_more_values() {
+        use super::ParseAttrError;
+        use super::parse_flex;
+
+        let result = parse_flex("1 2 3 4");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_flex_returns_error_for_empty_string() {
+        use super::parse_flex;
+
+        // Empty string should return empty flex (no values)
+        let result = parse_flex("");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_returns_error_for_empty_string() {
+        use super::ParseAttrError;
+        use super::parse_text_decoration;
+
+        let result = parse_text_decoration("");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_returns_error_for_multiple_thicknesses() {
+        use super::ParseAttrError;
+        use super::parse_text_decoration;
+
+        // Multiple thickness values (after color is consumed) should fail
+        // "underline dashed #ff0000 2px 3px" - style, color, then two thicknesses
+        let result = parse_text_decoration("underline dashed #ff0000 2px 3px");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_and_style() {
+        use super::parse_text_decoration;
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::{TextDecorationLine, TextDecorationStyle};
+
+        let result = parse_text_decoration("underline dashed").unwrap();
+        assert_eq!(
+            result,
+            TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: Some(TextDecorationStyle::Dashed),
+                color: None,
+                thickness: None,
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_line_and_color() {
+        use super::parse_text_decoration;
+        use crate::TextDecoration;
+        use hyperchad_color::Color;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let result = parse_text_decoration("overline #00ff00").unwrap();
+        assert_eq!(
+            result,
+            TextDecoration {
+                line: vec![TextDecorationLine::Overline],
+                style: None,
+                color: Some(Color::from_hex("#00ff00")),
+                thickness: None,
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_none_line() {
+        use super::parse_text_decoration;
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let result = parse_text_decoration("none").unwrap();
+        assert_eq!(
+            result,
+            TextDecoration {
+                line: vec![TextDecorationLine::None],
+                style: None,
+                color: None,
+                thickness: None,
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_image_fit;
+
+        let result = parse_image_fit("stretch");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_image_fit("scale-down");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_image_loading_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_image_loading;
+
+        let result = parse_image_loading("auto");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_image_loading("defer");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_cursor;
+
+        let result = parse_cursor("hand");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_cursor("wait");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_parses_all_resize_variants() {
+        use super::parse_cursor;
+        use hyperchad_transformer_models::Cursor;
+
+        assert_eq!(parse_cursor("n-resize").unwrap(), Cursor::NResize);
+        assert_eq!(parse_cursor("e-resize").unwrap(), Cursor::EResize);
+        assert_eq!(parse_cursor("s-resize").unwrap(), Cursor::SResize);
+        assert_eq!(parse_cursor("w-resize").unwrap(), Cursor::WResize);
+        assert_eq!(parse_cursor("ne-resize").unwrap(), Cursor::NeResize);
+        assert_eq!(parse_cursor("nw-resize").unwrap(), Cursor::NwResize);
+        assert_eq!(parse_cursor("se-resize").unwrap(), Cursor::SeResize);
+        assert_eq!(parse_cursor("sw-resize").unwrap(), Cursor::SwResize);
+        assert_eq!(parse_cursor("ew-resize").unwrap(), Cursor::EwResize);
+        assert_eq!(parse_cursor("ns-resize").unwrap(), Cursor::NsResize);
+        assert_eq!(parse_cursor("nesw-resize").unwrap(), Cursor::NeswResize);
+    }
+
+    #[test_log::test]
+    fn parse_position_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_position;
+
+        let result = parse_position("inherit");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_position("initial");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_justify_content;
+
+        let result = parse_justify_content("flex-start");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_justify_content("flex-end");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_align_items_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_align_items;
+
+        let result = parse_align_items("stretch");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_align_items("baseline");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_align_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_text_align;
+
+        let result = parse_text_align("left");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_text_align("right");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_white_space;
+
+        let result = parse_white_space("nowrap");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_white_space("break-spaces");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_white_space_parses_alternate_names() {
+        use super::parse_white_space;
+        use hyperchad_transformer_models::WhiteSpace;
+
+        // "pre" is an alias for "preserve"
+        assert_eq!(parse_white_space("pre").unwrap(), WhiteSpace::Preserve);
+        assert_eq!(parse_white_space("preserve").unwrap(), WhiteSpace::Preserve);
+
+        // "pre-wrap" is an alias for "preserve-wrap"
+        assert_eq!(
+            parse_white_space("pre-wrap").unwrap(),
+            WhiteSpace::PreserveWrap
+        );
+        assert_eq!(
+            parse_white_space("preserve-wrap").unwrap(),
+            WhiteSpace::PreserveWrap
+        );
+    }
+
+    #[test_log::test]
+    fn parse_user_select_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_user_select;
+
+        let result = parse_user_select("contain");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_overflow_wrap;
+
+        let result = parse_overflow_wrap("word-break");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_overflow_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_text_overflow;
+
+        let result = parse_text_overflow("fade");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_border_returns_error_for_missing_comma() {
+        use super::ParseAttrError;
+        use super::parse_border;
+
+        let result = parse_border("2 #ff0000");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_border_returns_error_for_invalid_color() {
+        use super::parse_border;
+
+        let result = parse_border("2, invalid");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_border_returns_error_for_invalid_size() {
+        use super::parse_border;
+
+        let result = parse_border("abc, #ff0000");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_border_handles_extra_whitespace() {
+        use super::parse_border;
+        use crate::Number;
+        use hyperchad_color::Color;
+
+        let result = parse_border("  5  ,  #00ff00  ").unwrap();
+        assert_eq!(result.0, Color::from_hex("#00ff00"));
+        assert_eq!(result.1, Number::Integer(5));
+    }
+
+    #[test_log::test]
+    fn parse_classes_splits_on_whitespace() {
+        use super::parse_classes;
+
+        let result = parse_classes("class1 class2  class3").unwrap();
+        assert_eq!(result, vec!["class1", "class2", "class3"]);
+    }
+
+    #[test_log::test]
+    fn parse_classes_filters_empty_strings() {
+        use super::parse_classes;
+
+        let result = parse_classes("  class1   class2  ").unwrap();
+        assert_eq!(result, vec!["class1", "class2"]);
+
+        let result = parse_classes("   ").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_standard_targets() {
+        use super::parse_link_target;
+        use hyperchad_transformer_models::LinkTarget;
+
+        assert_eq!(parse_link_target("_self"), LinkTarget::SelfTarget);
+        assert_eq!(parse_link_target("_blank"), LinkTarget::Blank);
+        assert_eq!(parse_link_target("_parent"), LinkTarget::Parent);
+        assert_eq!(parse_link_target("_top"), LinkTarget::Top);
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parses_custom_target_names() {
+        use super::parse_link_target;
+        use hyperchad_transformer_models::LinkTarget;
+
+        assert_eq!(
+            parse_link_target("my-frame"),
+            LinkTarget::Custom("my-frame".to_string())
+        );
+        assert_eq!(
+            parse_link_target("iframe_content"),
+            LinkTarget::Custom("iframe_content".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_font_weight;
+
+        let result = parse_font_weight("heavy");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_font_weight("ultralight");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+
+        let result = parse_font_weight("150");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_all_named_weights() {
+        use super::parse_font_weight;
+        use hyperchad_transformer_models::FontWeight;
+
+        assert_eq!(parse_font_weight("thin").unwrap(), FontWeight::Thin);
+        assert_eq!(
+            parse_font_weight("extra-light").unwrap(),
+            FontWeight::ExtraLight
+        );
+        assert_eq!(
+            parse_font_weight("extralight").unwrap(),
+            FontWeight::ExtraLight
+        );
+        assert_eq!(parse_font_weight("light").unwrap(), FontWeight::Light);
+        assert_eq!(parse_font_weight("normal").unwrap(), FontWeight::Normal);
+        assert_eq!(parse_font_weight("medium").unwrap(), FontWeight::Medium);
+        assert_eq!(
+            parse_font_weight("semi-bold").unwrap(),
+            FontWeight::SemiBold
+        );
+        assert_eq!(parse_font_weight("semibold").unwrap(), FontWeight::SemiBold);
+        assert_eq!(parse_font_weight("bold").unwrap(), FontWeight::Bold);
+        assert_eq!(
+            parse_font_weight("extra-bold").unwrap(),
+            FontWeight::ExtraBold
+        );
+        assert_eq!(
+            parse_font_weight("extrabold").unwrap(),
+            FontWeight::ExtraBold
+        );
+        assert_eq!(parse_font_weight("black").unwrap(), FontWeight::Black);
+        assert_eq!(parse_font_weight("lighter").unwrap(), FontWeight::Lighter);
+        assert_eq!(parse_font_weight("bolder").unwrap(), FontWeight::Bolder);
+    }
+
+    #[test_log::test]
+    fn parse_font_weight_parses_all_numeric_weights() {
+        use super::parse_font_weight;
+        use hyperchad_transformer_models::FontWeight;
+
+        assert_eq!(parse_font_weight("100").unwrap(), FontWeight::Weight100);
+        assert_eq!(parse_font_weight("200").unwrap(), FontWeight::Weight200);
+        assert_eq!(parse_font_weight("300").unwrap(), FontWeight::Weight300);
+        assert_eq!(parse_font_weight("400").unwrap(), FontWeight::Weight400);
+        assert_eq!(parse_font_weight("500").unwrap(), FontWeight::Weight500);
+        assert_eq!(parse_font_weight("600").unwrap(), FontWeight::Weight600);
+        assert_eq!(parse_font_weight("700").unwrap(), FontWeight::Weight700);
+        assert_eq!(parse_font_weight("800").unwrap(), FontWeight::Weight800);
+        assert_eq!(parse_font_weight("900").unwrap(), FontWeight::Weight900);
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_lines_parses_multiple_lines() {
+        use super::parse_text_decoration_lines;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let result = parse_text_decoration_lines("underline overline").unwrap();
+        assert_eq!(
+            result,
+            vec![TextDecorationLine::Underline, TextDecorationLine::Overline]
+        );
+
+        let result = parse_text_decoration_lines("underline line-through overline").unwrap();
+        assert_eq!(
+            result,
+            vec![
+                TextDecorationLine::Underline,
+                TextDecorationLine::LineThrough,
+                TextDecorationLine::Overline
+            ]
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_line_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_text_decoration_line;
+
+        let result = parse_text_decoration_line("strikethrough");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_returns_error_for_invalid_value() {
+        use super::ParseAttrError;
+        use super::parse_text_decoration_style;
+
+        let result = parse_text_decoration_style("thick");
+        assert!(matches!(result, Err(ParseAttrError::InvalidValue(_))));
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_style_parses_all_styles() {
+        use super::parse_text_decoration_style;
+        use hyperchad_transformer_models::TextDecorationStyle;
+
+        assert_eq!(
+            parse_text_decoration_style("inherit").unwrap(),
+            TextDecorationStyle::Inherit
+        );
+        assert_eq!(
+            parse_text_decoration_style("solid").unwrap(),
+            TextDecorationStyle::Solid
+        );
+        assert_eq!(
+            parse_text_decoration_style("double").unwrap(),
+            TextDecorationStyle::Double
+        );
+        assert_eq!(
+            parse_text_decoration_style("dotted").unwrap(),
+            TextDecorationStyle::Dotted
+        );
+        assert_eq!(
+            parse_text_decoration_style("dashed").unwrap(),
+            TextDecorationStyle::Dashed
+        );
+        assert_eq!(
+            parse_text_decoration_style("wavy").unwrap(),
+            TextDecorationStyle::Wavy
+        );
+    }
 }
