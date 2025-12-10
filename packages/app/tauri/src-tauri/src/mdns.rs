@@ -91,3 +91,40 @@ pub fn spawn_mdns_scanner(
 
     (handle, service.start_on(runtime_handle))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    #[test_log::test]
+    fn test_moosicbox_from_scanner_adds_http_prefix_to_host() {
+        let scanner_server = switchy::mdns::scanner::MoosicBox {
+            id: "server-1".to_string(),
+            name: "My MoosicBox Server".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080),
+            dns: "moosicbox.local".to_string(),
+        };
+
+        let moosicbox: MoosicBox = scanner_server.into();
+
+        assert_eq!(moosicbox.id, "server-1");
+        assert_eq!(moosicbox.name, "My MoosicBox Server");
+        assert_eq!(moosicbox.host, "http://192.168.1.100:8080");
+        assert_eq!(moosicbox.dns, "moosicbox.local");
+    }
+
+    #[test_log::test]
+    fn test_moosicbox_from_scanner_preserves_ipv6_address() {
+        let scanner_server = switchy::mdns::scanner::MoosicBox {
+            id: "ipv6-server".to_string(),
+            name: "IPv6 Server".to_string(),
+            host: SocketAddr::new(IpAddr::V6(std::net::Ipv6Addr::LOCALHOST), 9000),
+            dns: "ipv6.local".to_string(),
+        };
+
+        let moosicbox: MoosicBox = scanner_server.into();
+
+        assert_eq!(moosicbox.host, "http://[::1]:9000");
+    }
+}

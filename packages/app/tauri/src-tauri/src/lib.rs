@@ -1626,6 +1626,101 @@ mod native_app {
 mod tests {
     use super::*;
     use moosicbox_music_models::api::ApiTrack;
+    use moosicbox_session::models::PlaybackTarget;
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_fields_in_some() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: Some("conn-123".to_string()),
+            connection_name: Some("My Server".to_string()),
+            api_url: Some("http://localhost:8080".to_string()),
+            client_id: Some("client-456".to_string()),
+            signature_token: Some("sig-token".to_string()),
+            api_token: Some("api-token".to_string()),
+            profile: Some("default".to_string()),
+            playback_target: Some(PlaybackTarget::default()),
+            current_session_id: Some(42),
+        };
+
+        let update_state: UpdateAppState = tauri_state.into();
+
+        // Verify all fields are wrapped in Some(Some(...))
+        assert_eq!(
+            update_state.connection_id,
+            Some(Some("conn-123".to_string()))
+        );
+        assert_eq!(
+            update_state.connection_name,
+            Some(Some("My Server".to_string()))
+        );
+        assert_eq!(
+            update_state.api_url,
+            Some(Some("http://localhost:8080".to_string()))
+        );
+        assert_eq!(update_state.client_id, Some(Some("client-456".to_string())));
+        assert_eq!(
+            update_state.signature_token,
+            Some(Some("sig-token".to_string()))
+        );
+        assert_eq!(update_state.api_token, Some(Some("api-token".to_string())));
+        assert_eq!(update_state.profile, Some(Some("default".to_string())));
+        assert_eq!(
+            update_state.playback_target,
+            Some(Some(PlaybackTarget::default()))
+        );
+        assert_eq!(update_state.current_session_id, Some(Some(42)));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_none_values() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: None,
+            connection_name: None,
+            api_url: None,
+            client_id: None,
+            signature_token: None,
+            api_token: None,
+            profile: None,
+            playback_target: None,
+            current_session_id: None,
+        };
+
+        let update_state: UpdateAppState = tauri_state.into();
+
+        // Verify all None fields become Some(None)
+        assert_eq!(update_state.connection_id, Some(None));
+        assert_eq!(update_state.connection_name, Some(None));
+        assert_eq!(update_state.api_url, Some(None));
+        assert_eq!(update_state.client_id, Some(None));
+        assert_eq!(update_state.signature_token, Some(None));
+        assert_eq!(update_state.api_token, Some(None));
+        assert_eq!(update_state.profile, Some(None));
+        assert_eq!(update_state.playback_target, Some(None));
+        assert_eq!(update_state.current_session_id, Some(None));
+    }
+
+    #[test_log::test]
+    fn test_track_id_library_converts_to_id_number() {
+        let track_id = TrackId::Library(12345);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(12345));
+    }
+
+    #[cfg(feature = "tidal")]
+    #[test_log::test]
+    fn test_track_id_tidal_converts_to_id_number() {
+        let track_id = TrackId::Tidal(67890);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(67890));
+    }
+
+    #[cfg(feature = "qobuz")]
+    #[test_log::test]
+    fn test_track_id_qobuz_converts_to_id_number() {
+        let track_id = TrackId::Qobuz(11111);
+        let id: Id = track_id.into();
+        assert_eq!(id, Id::Number(11111));
+    }
 
     #[test_log::test]
     fn test_album_cover_url_generates_correct_format() {
