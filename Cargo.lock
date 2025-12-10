@@ -8679,6 +8679,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "switchy_fs",
+ "test-log",
  "thiserror 2.0.17",
  "webp",
 ]

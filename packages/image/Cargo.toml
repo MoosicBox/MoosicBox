@@ -54,3 +54,6 @@ image        = ["dep:image", "dep:webp"]
 libvips      = ["dep:libvips"]
 
 profiling = ["dep:profiling"]
+
+[dev-dependencies]
+test-log = { workspace = true }

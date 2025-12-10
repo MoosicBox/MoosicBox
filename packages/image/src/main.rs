@@ -14,7 +14,7 @@ use std::{
 };
 
 use clap::Parser;
-use moosicbox_image::Encoding;
+use moosicbox_image::{Encoding, calculate_target_dimensions};
 use thiserror::Error;
 
 mod image;
@@ -106,35 +106,7 @@ async fn try_resize_local_file(
         let reader = ::image::ImageReader::open(file_path)?;
         let dimensions = reader.into_dimensions()?;
 
-        width.map_or_else(
-            || {
-                height.map_or_else(
-                    || {
-                        (
-                            width.unwrap_or(dimensions.0),
-                            height.unwrap_or(dimensions.1),
-                        )
-                    },
-                    |height| {
-                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                        (
-                            (f64::from(dimensions.0)
-                                * (f64::from(height) / f64::from(dimensions.1)))
-                            .round() as u32,
-                            height,
-                        )
-                    },
-                )
-            },
-            |width| {
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                (
-                    width,
-                    (f64::from(dimensions.1) * (f64::from(width) / f64::from(dimensions.0))).round()
-                        as u32,
-                )
-            },
-        )
+        calculate_target_dimensions(width, height, dimensions)
     };
 
     let output = Path::new(output);
