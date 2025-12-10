@@ -3090,4 +3090,61 @@ mod tests {
             QobuzAlbumReleaseType::Album
         );
     }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_valid_string() {
+        use moosicbox_json_utils::ToValueType;
+
+        let json_value = serde_json::json!("album");
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert_eq!(result.unwrap(), QobuzAlbumReleaseType::Album);
+
+        let json_value = serde_json::json!("live");
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert_eq!(result.unwrap(), QobuzAlbumReleaseType::Live);
+
+        let json_value = serde_json::json!("compilation");
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert_eq!(result.unwrap(), QobuzAlbumReleaseType::Compilation);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_invalid_string() {
+        use moosicbox_json_utils::{ParseError, ToValueType};
+
+        let json_value = serde_json::json!("not_a_valid_type");
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_non_string_null() {
+        use moosicbox_json_utils::{ParseError, ToValueType};
+
+        let json_value = serde_json::json!(null);
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::MissingValue(_)));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_non_string_number() {
+        use moosicbox_json_utils::{ParseError, ToValueType};
+
+        let json_value = serde_json::json!(42);
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::MissingValue(_)));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_non_string_object() {
+        use moosicbox_json_utils::{ParseError, ToValueType};
+
+        let json_value = serde_json::json!({"type": "album"});
+        let result: Result<QobuzAlbumReleaseType, _> = (&json_value).to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::MissingValue(_)));
+    }
 }
