@@ -1461,6 +1461,70 @@ mod decoder_tests {
         assert_eq!(samples, 480);
         assert!(output.iter().all(|&s| s == 0));
     }
+
+    /// Tests that decoding a stereo packet with a mono decoder returns an error
+    #[cfg(any(feature = "silk", feature = "celt"))]
+    #[test_log::test]
+    fn test_decode_channel_mismatch_stereo_packet_mono_decoder() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        let mut output = vec![0i16; 480];
+
+        // Construct a CELT-only packet (config 16-31) with stereo flag set
+        // TOC byte: config 18 (CELT NB 10ms) = 0b10010, stereo = 1, code 0
+        // TOC = (18 << 3) | (1 << 2) | 0 = 0b10010_1_00 = 0x94
+        let packet = vec![0x94, 0x00, 0x00, 0x00, 0x00];
+
+        let result = decoder.decode(Some(&packet), &mut output, false);
+
+        assert!(matches!(result, Err(Error::InvalidPacket(_))));
+        if let Err(Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Channel mismatch"));
+            assert!(msg.contains("Stereo"));
+            assert!(msg.contains("Mono"));
+        }
+    }
+
+    /// Tests that decoding a mono packet with a stereo decoder returns an error
+    #[cfg(any(feature = "silk", feature = "celt"))]
+    #[test_log::test]
+    fn test_decode_channel_mismatch_mono_packet_stereo_decoder() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
+        let mut output = vec![0i16; 960];
+
+        // Construct a CELT-only packet (config 16-31) with mono flag (stereo = 0)
+        // TOC byte: config 18 (CELT NB 10ms) = 0b10010, stereo = 0, code 0
+        // TOC = (18 << 3) | (0 << 2) | 0 = 0b10010_0_00 = 0x90
+        let packet = vec![0x90, 0x00, 0x00, 0x00, 0x00];
+
+        let result = decoder.decode(Some(&packet), &mut output, false);
+
+        assert!(matches!(result, Err(Error::InvalidPacket(_))));
+        if let Err(Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Channel mismatch"));
+            assert!(msg.contains("Mono"));
+            assert!(msg.contains("Stereo"));
+        }
+    }
+
+    /// Tests that output buffer too small returns an appropriate error
+    #[cfg(any(feature = "silk", feature = "celt"))]
+    #[test_log::test]
+    fn test_decode_output_buffer_too_small() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        // For 10ms at 48kHz mono, we need 480 samples, but provide only 100
+        let mut output = vec![0i16; 100];
+
+        // Construct a CELT-only mono packet (config 18 = CELT NB 10ms)
+        // TOC = (18 << 3) | 0 = 0x90, code 0 (single frame)
+        let packet = vec![0x90, 0x00, 0x00, 0x00, 0x00];
+
+        let result = decoder.decode(Some(&packet), &mut output, false);
+
+        assert!(matches!(result, Err(Error::InvalidPacket(_))));
+        if let Err(Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("Output buffer too small"));
+        }
+    }
 }
 
 #[cfg(all(test, not(any(feature = "silk", feature = "celt"))))]
