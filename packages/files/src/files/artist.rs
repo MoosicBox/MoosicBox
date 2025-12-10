@@ -410,3 +410,104 @@ struct ArtistCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::{ApiSource, ApiSources};
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_cover_path() {
+        let artist = Artist {
+            id: 1.into(),
+            title: "Test Artist".to_string(),
+            cover: Some("/music/artists/Test Artist/cover.jpg".to_string()),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/music/artists/Test Artist".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_without_cover() {
+        let artist = Artist {
+            id: 2.into(),
+            title: "No Cover Artist".to_string(),
+            cover: None,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, None);
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_filename_only() {
+        // When cover is just a filename without directory, parent() returns empty
+        let artist = Artist {
+            id: 3.into(),
+            title: "Filename Only".to_string(),
+            cover: Some("cover.jpg".to_string()),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        // Filename-only path should return empty string as parent
+        assert_eq!(directory, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_nested_path() {
+        let artist = Artist {
+            id: 4.into(),
+            title: "Nested Path Artist".to_string(),
+            cover: Some(
+                "/home/user/music/library/artists/Some Artist/albums/Some Album/cover.png"
+                    .to_string(),
+            ),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        assert_eq!(
+            directory,
+            Some("/home/user/music/library/artists/Some Artist/albums/Some Album".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_root_path() {
+        let artist = Artist {
+            id: 5.into(),
+            title: "Root Path Artist".to_string(),
+            cover: Some("/cover.jpg".to_string()),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_spaces() {
+        let artist = Artist {
+            id: 6.into(),
+            title: "Spaced Name Artist".to_string(),
+            cover: Some("/music/My Music Library/Artists/Some Artist Name/cover.jpg".to_string()),
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let directory = get_artist_directory(&artist);
+        assert_eq!(
+            directory,
+            Some("/music/My Music Library/Artists/Some Artist Name".to_string())
+        );
+    }
+}

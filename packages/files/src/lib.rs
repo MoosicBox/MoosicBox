@@ -623,4 +623,137 @@ mod tests {
         assert_eq!(sanitize_filename("!!!???"), "______");
         assert_eq!(sanitize_filename("a!!!b???c"), "a___b___c");
     }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_creates_new_file() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("test_save_bytes_to_file_creates_new_file");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("test_file.bin");
+
+        let bytes = b"Hello, World!";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, bytes);
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_truncates_existing_file_when_start_none() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("test_save_bytes_to_file_truncates");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("truncate_test.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"This is old content that should be replaced").unwrap();
+
+        // Overwrite with new content
+        let new_bytes = b"New content";
+        save_bytes_to_file(new_bytes, &file_path, None).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, new_bytes);
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_truncates_when_start_is_zero() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("test_save_bytes_to_file_truncates_zero");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("truncate_zero_test.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"Old content to be replaced").unwrap();
+
+        // Overwrite with new content starting at 0
+        let new_bytes = b"New";
+        save_bytes_to_file(new_bytes, &file_path, Some(0)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, new_bytes);
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_appends_at_offset() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("test_save_bytes_to_file_appends");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("append_test.bin");
+
+        // Write initial content
+        let initial = b"Hello, ";
+        std::fs::write(&file_path, initial).unwrap();
+
+        // Append at offset
+        let append_bytes = b"World!";
+        #[allow(clippy::cast_possible_truncation)]
+        save_bytes_to_file(append_bytes, &file_path, Some(initial.len() as u64)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"Hello, World!");
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_overwrites_at_offset() {
+        let test_dir = moosicbox_config::get_tests_dir_path()
+            .join("test_save_bytes_to_file_overwrites_offset");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("overwrite_offset_test.bin");
+
+        // Write initial content
+        std::fs::write(&file_path, b"0123456789").unwrap();
+
+        // Overwrite in the middle
+        save_bytes_to_file(b"XYZ", &file_path, Some(3)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"012XYZ6789");
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_creates_parent_directories() {
+        let test_dir =
+            moosicbox_config::get_tests_dir_path().join("test_save_bytes_creates_parents");
+        let nested_path = test_dir.join("nested").join("deeply").join("test.bin");
+
+        // Ensure parent directories don't exist
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).unwrap();
+        }
+
+        let bytes = b"test content";
+        save_bytes_to_file(bytes, &nested_path, None).unwrap();
+
+        assert!(nested_path.exists());
+        let content = std::fs::read(&nested_path).unwrap();
+        assert_eq!(content, bytes);
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test]
+    fn test_save_bytes_to_file_empty_bytes() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("test_save_bytes_empty");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let file_path = test_dir.join("empty_test.bin");
+
+        let bytes: &[u8] = b"";
+        save_bytes_to_file(bytes, &file_path, None).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert!(content.is_empty());
+
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
 }

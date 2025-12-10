@@ -1450,4 +1450,92 @@ mod tests {
             assert_eq!(*value, 127);
         }
     }
+
+    #[cfg(feature = "format-flac")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_local_file_flac() {
+        use moosicbox_music_api::models::TrackSource;
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Flac,
+            path: "/music/track.flac".to_string(),
+            track_id: Some("123".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/flac".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-mp3")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_local_file_mp3() {
+        use moosicbox_music_api::models::TrackSource;
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Mp3,
+            path: "/music/track.mp3".to_string(),
+            track_id: Some("456".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/mp3".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-aac")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_url_aac() {
+        use moosicbox_music_api::models::TrackSource;
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Aac,
+            url: "https://example.com/track.m4a".to_string(),
+            track_id: Some("789".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: None,
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/m4a".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-opus")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_url_opus() {
+        use moosicbox_music_api::models::TrackSource;
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Opus,
+            url: "https://example.com/track.opus".to_string(),
+            track_id: Some("999".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: None,
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/opus".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_track_source_to_content_type_source_format() {
+        use moosicbox_music_api::models::TrackSource;
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Source,
+            path: "/music/track.wav".to_string(),
+            track_id: None,
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(track_source_to_content_type(&source), None);
+    }
 }
