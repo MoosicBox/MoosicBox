@@ -402,4 +402,111 @@ mod tests {
             "Should fetch from dynamic root endpoint"
         );
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_skeleton_html_with_only_title() {
+        use hyperchad_router::RequestInfo;
+
+        // Setup CDN optimization with only title (no viewport)
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+        let result = setup_cdn_optimization(router, Some("Title Only App"), None);
+
+        // Access the static route handler and clone before dropping the lock
+        let handler = {
+            let static_routes = result.static_routes.read().unwrap();
+            static_routes
+                .iter()
+                .find(|(route, _)| route.matches("/"))
+                .expect("Static route for / should exist")
+                .1
+                .clone()
+        };
+
+        let req = RouteRequest::from_path(
+            "/",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = handler(req)
+            .await
+            .expect("Handler should succeed")
+            .expect("Handler should return content");
+
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let html = match content {
+            Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
+            _ => panic!("Expected Raw content"),
+        };
+
+        // Verify title is present but viewport is not
+        assert!(
+            html.contains("<title>Title Only App</title>"),
+            "Should have title element"
+        );
+        assert!(
+            !html.contains("name=\"viewport\""),
+            "Should not have viewport meta when not provided"
+        );
+        assert!(
+            html.contains("fetch('/__hyperchad_dynamic_root__')"),
+            "Should fetch from dynamic root endpoint"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_skeleton_html_with_only_viewport() {
+        use hyperchad_router::RequestInfo;
+
+        // Setup CDN optimization with only viewport (no title)
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+        let result =
+            setup_cdn_optimization(router, None, Some("width=device-width, initial-scale=1"));
+
+        // Access the static route handler and clone before dropping the lock
+        let handler = {
+            let static_routes = result.static_routes.read().unwrap();
+            static_routes
+                .iter()
+                .find(|(route, _)| route.matches("/"))
+                .expect("Static route for / should exist")
+                .1
+                .clone()
+        };
+
+        let req = RouteRequest::from_path(
+            "/",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = handler(req)
+            .await
+            .expect("Handler should succeed")
+            .expect("Handler should return content");
+
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let html = match content {
+            Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
+            _ => panic!("Expected Raw content"),
+        };
+
+        // Verify viewport is present but title is not
+        assert!(
+            !html.contains("<title>"),
+            "Should not have title element when not provided"
+        );
+        assert!(
+            html.contains(
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            ),
+            "Should have viewport meta"
+        );
+        assert!(
+            html.contains("fetch('/__hyperchad_dynamic_root__')"),
+            "Should fetch from dynamic root endpoint"
+        );
+    }
 }
