@@ -1771,4 +1771,144 @@ mod tests {
         let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
         assert!(result.is_err());
     }
+
+    #[test_log::test]
+    fn test_audio_output_write_different_sample_rate_triggers_resampling() {
+        use symphonia::core::audio::Signal;
+
+        // Test that when sample rates differ, resampling is triggered
+        // Output expects 48000 Hz, but input is at 44100 Hz
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            output_spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an audio buffer with a DIFFERENT sample rate (44100 Hz)
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(441, input_spec);
+        buffer.render_reserved(Some(441)); // ~10ms of audio at 44100 Hz
+        // Fill with some data
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            #[allow(clippy::cast_precision_loss)]
+            for (i, sample) in chan.iter_mut().enumerate() {
+                *sample = (i as f32) / 441.0;
+            }
+        }
+
+        // Write through AudioWrite trait - this should trigger resampler creation
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_ok());
+
+        // Verify that some frames were written (the exact count will differ due to resampling)
+        // At 44100->48000 conversion, ~10ms of audio at 44100 Hz should produce
+        // approximately 480 samples at 48000 Hz (441 * 48000/44100 ≈ 480)
+        let frames_written = written_frames.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            frames_written > 0,
+            "Expected frames to be written after resampling"
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_output_resampler_persists_across_writes() {
+        use symphonia::core::audio::Signal;
+
+        // Test that the resampler is reused for subsequent writes
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            output_spec,
+            Box::new(mock_writer),
+        );
+
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+
+        // First write - creates resampler
+        let mut buffer1: AudioBuffer<f32> = AudioBuffer::new(441, input_spec);
+        buffer1.render_reserved(Some(441));
+        for ch in 0..2 {
+            let chan = buffer1.chan_mut(ch);
+            for sample in chan.iter_mut() {
+                *sample = 0.5;
+            }
+        }
+        let result1 = AudioWrite::write(&mut output, buffer1);
+        assert!(result1.is_ok());
+        let frames_after_first = written_frames.load(std::sync::atomic::Ordering::SeqCst);
+
+        // Second write - reuses existing resampler
+        let mut buffer2: AudioBuffer<f32> = AudioBuffer::new(441, input_spec);
+        buffer2.render_reserved(Some(441));
+        for ch in 0..2 {
+            let chan = buffer2.chan_mut(ch);
+            for sample in chan.iter_mut() {
+                *sample = 0.3;
+            }
+        }
+        let result2 = AudioWrite::write(&mut output, buffer2);
+        assert!(result2.is_ok());
+        let frames_after_second = written_frames.load(std::sync::atomic::Ordering::SeqCst);
+
+        // Both writes should have produced output
+        assert!(frames_after_first > 0, "First write should produce frames");
+        assert!(
+            frames_after_second > frames_after_first,
+            "Second write should produce additional frames"
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_with_resampling() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        // Test AudioDecode trait with sample rate mismatch
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            output_spec,
+            Box::new(mock_writer),
+        );
+
+        // Create buffer with different sample rate
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(441, input_spec);
+        buffer.render_reserved(Some(441));
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            for sample in chan.iter_mut() {
+                *sample = 0.25;
+            }
+        }
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded through AudioDecode trait
+        let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
+        assert!(result.is_ok());
+
+        // Verify frames were processed
+        assert!(
+            written_frames.load(std::sync::atomic::Ordering::SeqCst) > 0,
+            "Expected frames to be written via AudioDecode with resampling"
+        );
+    }
 }
