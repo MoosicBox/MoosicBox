@@ -155,3 +155,21 @@ fn test_code_3_cbr_with_max_padding_255() {
     assert_eq!(result.frames[1].data, vec![0xDD, 0xEE, 0xFF]);
     assert_eq!(result.padding.len(), 254);
 }
+
+#[test_log::test]
+fn test_code_3_chained_255_padding_truncated_fails() {
+    // Padding starts with multiple 255 bytes but packet ends before terminating byte.
+    // Tests the PacketTooShort error path when padding loop runs out of bytes mid-chain.
+    // Header 0x82 = padding flag (0x80) + frame_count=2 (0x02), CBR mode
+    // Padding bytes: 255, 255 (no terminating non-255 byte follows)
+    let packet = vec![0x03, 0x82, 255, 255];
+    assert!(OpusPacket::parse(&packet).is_err());
+}
+
+#[test_log::test]
+fn test_code_3_vbr_chained_255_padding_truncated_fails() {
+    // VBR variant: multiple 255 padding bytes without terminator
+    // Header 0xC2 = padding flag (0x80) + VBR flag (0x40) + frame_count=2 (0x02)
+    let packet = vec![0x03, 0xC2, 255, 255, 255];
+    assert!(OpusPacket::parse(&packet).is_err());
+}
