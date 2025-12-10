@@ -58,7 +58,8 @@ openapi = [
 events = []
 
 [dev-dependencies]
-serial_test   = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
-test-log      = { workspace = true }
-tokio         = { workspace = true }
+serial_test      = { workspace = true }
+switchy_async    = { workspace = true, features = ["macros", "tokio"] }
+switchy_database = { workspace = true, features = ["simulator"] }
+test-log         = { workspace = true }
+tokio            = { workspace = true }
