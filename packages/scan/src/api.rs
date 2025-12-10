@@ -556,3 +556,65 @@ pub async fn remove_scan_path_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "local")]
+    mod validate_path_tests {
+        use super::*;
+        use std::env;
+
+        #[test_log::test]
+        fn test_validate_path_rejects_double_dot_traversal() {
+            // Direct path traversal attempt
+            let result = validate_path("/some/path/../etc/passwd");
+            assert!(result.is_err());
+
+            // Double dot at start
+            let result = validate_path("../etc/passwd");
+            assert!(result.is_err());
+
+            // Double dot in middle
+            let result = validate_path("/home/user/../root");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_hidden_traversal_patterns() {
+            // Various hidden traversal attempts
+            let result = validate_path("/some/path/..hidden");
+            assert!(result.is_err());
+
+            let result = validate_path("/some/..path/file");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_accepts_valid_existing_path() {
+            // Use the current working directory which we know exists
+            let cwd = env::current_dir().expect("Failed to get current directory");
+            let cwd_str = cwd.to_str().expect("Path not valid UTF-8");
+
+            let result = validate_path(cwd_str);
+            assert!(result.is_ok());
+            // The result should be the canonicalized path
+            assert_eq!(result.unwrap(), cwd_str);
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_nonexistent_path() {
+            // Non-existent paths should fail during canonicalization
+            let result = validate_path("/nonexistent/path/that/does/not/exist/xyz123");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_handles_root_path() {
+            // Root path should be valid (exists on all Unix-like systems)
+            let result = validate_path("/");
+            assert!(result.is_ok());
+        }
+    }
+}
