@@ -6025,4 +6025,205 @@ mod tests {
         assert!(result_str.contains("Option"));
         assert!(result_str.contains("Some"));
     }
+
+    #[test_log::test]
+    fn test_generate_pattern_code_for_literal_bool_true() {
+        let pattern = Pattern::Literal(Literal::Bool(true));
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("true"));
+    }
+
+    #[test_log::test]
+    fn test_generate_pattern_code_for_literal_bool_false() {
+        let pattern = Pattern::Literal(Literal::Bool(false));
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("false"));
+    }
+
+    #[test_log::test]
+    fn test_generate_pattern_code_for_literal_float() {
+        let pattern = Pattern::Literal(Literal::Float(1.234));
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("1.234"));
+    }
+
+    #[test_log::test]
+    fn test_generate_pattern_code_for_literal_unit() {
+        let pattern = Pattern::Literal(Literal::Unit);
+        let result = generate_pattern_code(&pattern);
+        let result_str = result.to_string();
+        assert!(result_str.contains("Literal :: Unit"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_tuple_single_element() {
+        let mut context = Context::default();
+        let expr = Expression::Tuple(vec![Expression::Literal(Literal::Integer(42))]);
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains('('));
+        assert!(result_str.contains("42"));
+        assert!(result_str.contains(')'));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_empty_tuple() {
+        let mut context = Context::default();
+        let expr = Expression::Tuple(vec![]);
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains('('));
+        assert!(result_str.contains(')'));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_show_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "show", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_hide_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "hide", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_toggle_visibility_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result =
+            generate_action_for_class(&mut context, "test-class", "toggle_visibility", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_set_visibility_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "set_visibility", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_focus_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "focus", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_get_visibility_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "get_visibility", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_select_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "select", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_no_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "no_display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_toggle_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_class(&mut context, "test-class", "toggle_display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_class_set_display_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let result = generate_action_for_class(&mut context, "test-class", "set_display", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_get_visibility_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "get_visibility", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_select_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "select", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_no_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "no_display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_id_toggle_display_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote::quote! { "test-id" };
+        let args = vec![Expression::Literal(Literal::Integer(1))];
+        let result = generate_action_for_id(&mut context, &id, "toggle_display", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
 }
