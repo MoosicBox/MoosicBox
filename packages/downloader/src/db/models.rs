@@ -1272,4 +1272,164 @@ mod tests {
             _ => panic!("Expected AlbumCover item"),
         }
     }
+
+    #[test_log::test]
+    fn test_download_item_to_value_type_from_json_track() {
+        let source_json =
+            serde_json::to_value(crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+
+        let json = serde_json::json!({
+            "type": "TRACK",
+            "source": source_json,
+            "trackId": 123,
+            "quality": "FLAC_HIGHEST_RES",
+            "artistId": 456,
+            "artist": "Test Artist",
+            "albumId": 789,
+            "album": "Test Album",
+            "track": "Test Track",
+            "containsCover": true
+        });
+
+        let result: Result<DownloadItem, _> = (&json).to_value_type();
+        let item = result.unwrap();
+
+        match item {
+            DownloadItem::Track {
+                track_id,
+                quality,
+                artist_id,
+                artist,
+                album_id,
+                album,
+                title,
+                contains_cover,
+                ..
+            } => {
+                assert_eq!(track_id, 123.into());
+                assert_eq!(quality, TrackAudioQuality::FlacHighestRes);
+                assert_eq!(artist_id, 456.into());
+                assert_eq!(artist, "Test Artist");
+                assert_eq!(album_id, 789.into());
+                assert_eq!(album, "Test Album");
+                assert_eq!(title, "Test Track");
+                assert!(contains_cover);
+            }
+            _ => panic!("Expected Track variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_item_to_value_type_from_json_album_cover() {
+        let source_json =
+            serde_json::to_value(crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+
+        let json = serde_json::json!({
+            "type": "ALBUM_COVER",
+            "source": source_json,
+            "artistId": 456,
+            "artist": "Test Artist",
+            "albumId": 789,
+            "album": "Test Album",
+            "containsCover": true
+        });
+
+        let result: Result<DownloadItem, _> = (&json).to_value_type();
+        let item = result.unwrap();
+
+        match item {
+            DownloadItem::AlbumCover {
+                artist_id,
+                artist,
+                album_id,
+                title,
+                contains_cover,
+                ..
+            } => {
+                assert_eq!(artist_id, 456.into());
+                assert_eq!(artist, "Test Artist");
+                assert_eq!(album_id, 789.into());
+                assert_eq!(title, "Test Album");
+                assert!(contains_cover);
+            }
+            _ => panic!("Expected AlbumCover variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_item_to_value_type_from_json_artist_cover() {
+        let source_json =
+            serde_json::to_value(crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+
+        let json = serde_json::json!({
+            "type": "ARTIST_COVER",
+            "source": source_json,
+            "artistId": 456,
+            "albumId": 789,
+            "artist": "Test Artist",
+            "containsCover": false
+        });
+
+        let result: Result<DownloadItem, _> = (&json).to_value_type();
+        let item = result.unwrap();
+
+        match item {
+            DownloadItem::ArtistCover {
+                artist_id,
+                album_id,
+                title,
+                contains_cover,
+                ..
+            } => {
+                assert_eq!(artist_id, 456.into());
+                assert_eq!(album_id, 789.into());
+                assert_eq!(title, "Test Artist");
+                assert!(!contains_cover);
+            }
+            _ => panic!("Expected ArtistCover variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_task_to_value_type_from_json() {
+        let source_json =
+            serde_json::to_value(crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+
+        let json = serde_json::json!({
+            "id": 100,
+            "state": "STARTED",
+            "type": "TRACK",
+            "source": source_json,
+            "trackId": 123,
+            "quality": "FLAC_HIGHEST_RES",
+            "artistId": 456,
+            "artist": "Test Artist",
+            "albumId": 789,
+            "album": "Test Album",
+            "track": "Test Track",
+            "containsCover": true,
+            "file_path": "/music/test.flac",
+            "total_bytes": 1_024_000,
+            "created": "2024-01-15",
+            "updated": "2024-01-16"
+        });
+
+        let result: Result<DownloadTask, _> = (&json).to_value_type();
+        let task = result.unwrap();
+
+        assert_eq!(task.id, 100);
+        assert_eq!(task.state, DownloadTaskState::Started);
+        assert_eq!(task.file_path, "/music/test.flac");
+        assert_eq!(task.total_bytes, Some(1_024_000));
+
+        match task.item {
+            DownloadItem::Track {
+                track_id, title, ..
+            } => {
+                assert_eq!(track_id, 123.into());
+                assert_eq!(title, "Test Track");
+            }
+            _ => panic!("Expected Track item"),
+        }
+    }
 }
