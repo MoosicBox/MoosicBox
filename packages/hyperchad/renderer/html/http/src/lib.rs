@@ -931,5 +931,234 @@ mod tests {
             assert_eq!(action_name, "test");
             assert!(value.is_none());
         }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_with_multiple_delete_selectors() {
+            use hyperchad_renderer::View;
+            use hyperchad_renderer::transformer::models::Selector;
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/multi-delete", |_req| async {
+                let view = View::builder()
+                    .with_primary(Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    })
+                    .with_delete_selector(Selector::Class("class-a".to_string()))
+                    .with_delete_selector(Selector::Id("id-b".to_string()))
+                    .with_delete_selector(Selector::Class("class-c".to_string()))
+                    .build();
+                Content::View(Box::new(view))
+            });
+            let app = HttpApp::new(renderer, router);
+
+            let req = create_route_request("/multi-delete");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let delete_header = response
+                .headers()
+                .get("X-HyperChad-Delete-Selectors")
+                .unwrap()
+                .to_str()
+                .unwrap();
+            // Verify all three selectors are in the JSON array
+            assert!(delete_header.contains(".class-a"));
+            assert!(delete_header.contains("#id-b"));
+            assert!(delete_header.contains(".class-c"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_includes_description_in_response() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/described", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router)
+                .with_description("A meaningful page description for SEO");
+
+            let req = create_route_request("/described");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("A meaningful page description for SEO"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_includes_css_paths_in_response() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/styled-paths", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router)
+                .with_css_path("/static/main.css")
+                .with_css_paths(vec!["/static/theme.css", "/static/layout.css"]);
+
+            let req = create_route_request("/styled-paths");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("/static/main.css"));
+            assert!(body_str.contains("/static/theme.css"));
+            assert!(body_str.contains("/static/layout.css"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_includes_inline_css_in_response() {
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/inline-styled", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router)
+                .with_inline_css("body { margin: 0; }")
+                .with_inline_css_blocks(vec![
+                    ".header { color: blue; }",
+                    ".footer { padding: 10px; }",
+                ]);
+
+            let req = create_route_request("/inline-styled");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("body { margin: 0; }"));
+            assert!(body_str.contains(".header { color: blue; }"));
+            assert!(body_str.contains(".footer { padding: 10px; }"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_includes_background_color_in_response() {
+            use hyperchad_color::Color;
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/colored", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let app = HttpApp::new(renderer, router).with_background(Color::from_hex("#FF5733"));
+
+            let req = create_route_request("/colored");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            // The background color should appear in the HTML style
+            assert!(
+                body_str.contains("background")
+                    || body_str.contains("#ff5733")
+                    || body_str.contains("255")
+            );
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_static_asset_handler_returns_none_falls_through() {
+            use hyperchad_renderer::assets::AssetPathTarget;
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/page", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            // Handler that never matches
+            let app = HttpApp::new(renderer, router)
+                .with_static_asset_route_handler(|_req: &RouteRequest| None::<AssetPathTarget>);
+
+            // Request for a page, not an asset - handler returns None, falls through to router
+            let req = create_route_request("/page");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_static_asset_route_priority_over_router() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            // Router has a route that would match
+            let router = Router::new().with_route("/style.css", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router);
+            // But static asset route takes priority
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/style.css".to_string(),
+                target: AssetPathTarget::FileContents(Bytes::from_static(b"/* css */")),
+            });
+
+            let req = create_route_request("/style.css");
+            let response = app.process(&req).await.unwrap();
+
+            // Should return CSS, not HTML
+            assert_eq!(response.status(), 200);
+            assert_eq!(response.headers().get("Content-Type").unwrap(), "text/css");
+            assert_eq!(response.body(), b"/* css */");
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_static_asset_handler_priority_over_routes() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router).with_static_asset_route_handler(
+                |req: &RouteRequest| {
+                    if req.path == "/script.js" {
+                        Some(AssetPathTarget::FileContents(Bytes::from_static(
+                            b"// handler",
+                        )))
+                    } else {
+                        None
+                    }
+                },
+            );
+            // Also add a static route for the same path
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/script.js".to_string(),
+                target: AssetPathTarget::FileContents(Bytes::from_static(b"// route")),
+            });
+
+            let req = create_route_request("/script.js");
+            let response = app.process(&req).await.unwrap();
+
+            // Handler takes priority over static_asset_routes
+            assert_eq!(response.status(), 200);
+            assert_eq!(response.body(), b"// handler");
+        }
     }
 }
