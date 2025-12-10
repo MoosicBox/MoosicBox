@@ -4635,4 +4635,491 @@ mod tests {
         assert!((width - 100.0).abs() < f32::EPSILON);
         assert!((height - 50.0).abs() < f32::EPSILON);
     }
+
+    // ==================== add_watch_pos tests ====================
+
+    /// Helper to create an Action with a given `ActionType`
+    fn make_action(action_type: ActionType) -> hyperchad_actions::Action {
+        hyperchad_actions::Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: action_type,
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_position_x_self_target() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                    target: ElementTarget::SelfTarget,
+                }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // SelfTarget should add the container's own ID (1)
+        assert!(watch_positions.contains(&1));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_position_y_id_target() {
+        let target_child = make_container(2, None, vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_child]);
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionY {
+                    target: ElementTarget::Id(2),
+                }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Id target should add the target ID directly
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_mouse_x_str_id_target() {
+        let target_child = make_container(3, Some("target-element"), vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let mut container = make_container(1, None, vec![], vec![child]);
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::MouseX {
+                    target: Some(ElementTarget::StrId(Target::Literal(
+                        "target-element".to_string(),
+                    ))),
+                }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // StrId target should resolve and add ID 3
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_mouse_y_class_target() {
+        let target_child = make_container(3, None, vec!["highlight"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let mut container = make_container(1, None, vec![], vec![child]);
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::MouseY {
+                    target: Some(ElementTarget::Class(Target::Literal(
+                        "highlight".to_string(),
+                    ))),
+                }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Class target should resolve and add ID 3
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_ignores_mouse_without_target() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::MouseX { target: None }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // MouseX without target should not add anything
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_ignores_non_position_calc_values() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        // Add actions with CalcValues that should NOT trigger watch positions
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::WidthPx {
+                    target: ElementTarget::SelfTarget,
+                }),
+            }));
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::HeightPx {
+                    target: ElementTarget::SelfTarget,
+                }),
+            }));
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::EventValue),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // WidthPx, HeightPx, EventValue do not trigger watch positions
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_arithmetic_containing_positions() {
+        let target1 = make_container(2, Some("elem1"), vec![], vec![]);
+        let target2 = make_container(3, Some("elem2"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target1, target2]);
+
+        // Create arithmetic: PositionX(elem1) + PositionY(elem2)
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Arithmetic(Box::new(hyperchad_actions::logic::Arithmetic::Plus(
+                    Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                        target: ElementTarget::StrId(Target::Literal("elem1".to_string())),
+                    }),
+                    Value::Calc(hyperchad_actions::logic::CalcValue::PositionY {
+                        target: ElementTarget::StrId(Target::Literal("elem2".to_string())),
+                    }),
+                ))),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both elements should be in watch positions
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_nested_arithmetic_grouping() {
+        let target = make_container(2, Some("target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create nested: Grouping(PositionX * 2)
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Arithmetic(Box::new(hyperchad_actions::logic::Arithmetic::Grouping(
+                    Box::new(hyperchad_actions::logic::Arithmetic::Multiply(
+                        Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                            target: ElementTarget::StrId(Target::Literal("target".to_string())),
+                        }),
+                        Value::Real(2.0),
+                    )),
+                ))),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Nested arithmetic should still find the target
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_logic_condition() {
+        let target = make_container(2, Some("target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create Logic action with condition comparing PositionX to a value
+        container.actions.push(make_action(ActionType::Logic(
+            hyperchad_actions::logic::If {
+                condition: hyperchad_actions::logic::Condition::Eq(
+                    Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                        target: ElementTarget::StrId(Target::Literal("target".to_string())),
+                    }),
+                    Value::Real(100.0),
+                ),
+                actions: vec![],
+                else_actions: vec![],
+            },
+        )));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Condition should find the target
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_logic_nested_actions() {
+        let target1 = make_container(2, Some("elem1"), vec![], vec![]);
+        let target2 = make_container(3, Some("elem2"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target1, target2]);
+
+        // Create Logic action with nested parameterized actions
+        container.actions.push(make_action(ActionType::Logic(
+            hyperchad_actions::logic::If {
+                condition: hyperchad_actions::logic::Condition::Bool(true),
+                actions: vec![ActionEffect {
+                    action: ActionType::Parameterized {
+                        action: Box::new(ActionType::NoOp),
+                        value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                            target: ElementTarget::StrId(Target::Literal("elem1".to_string())),
+                        }),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                }],
+                else_actions: vec![ActionEffect {
+                    action: ActionType::Parameterized {
+                        action: Box::new(ActionType::NoOp),
+                        value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionY {
+                            target: ElementTarget::StrId(Target::Literal("elem2".to_string())),
+                        }),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                }],
+            },
+        )));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both then and else branches should be processed
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_multi_actions() {
+        let target1 = make_container(2, Some("elem1"), vec![], vec![]);
+        let target2 = make_container(3, Some("elem2"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target1, target2]);
+
+        // Create Multi action containing multiple parameterized actions
+        container.actions.push(make_action(ActionType::Multi(vec![
+            ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                    target: ElementTarget::StrId(Target::Literal("elem1".to_string())),
+                }),
+            },
+            ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::MouseY {
+                    target: Some(ElementTarget::StrId(Target::Literal("elem2".to_string()))),
+                }),
+            },
+        ])));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // All actions in Multi should be processed
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_multi_effect() {
+        let target1 = make_container(2, Some("elem1"), vec![], vec![]);
+        let target2 = make_container(3, Some("elem2"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target1, target2]);
+
+        // Create MultiEffect action
+        container
+            .actions
+            .push(make_action(ActionType::MultiEffect(vec![
+                ActionEffect {
+                    action: ActionType::Parameterized {
+                        action: Box::new(ActionType::NoOp),
+                        value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                            target: ElementTarget::StrId(Target::Literal("elem1".to_string())),
+                        }),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+                ActionEffect {
+                    action: ActionType::Parameterized {
+                        action: Box::new(ActionType::NoOp),
+                        value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionY {
+                            target: ElementTarget::StrId(Target::Literal("elem2".to_string())),
+                        }),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            ])));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // All effects in MultiEffect should be processed
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_event_action() {
+        let target = make_container(2, Some("target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create Event action wrapping a parameterized action
+        container.actions.push(make_action(ActionType::Event {
+            name: "custom-event".to_string(),
+            action: Box::new(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                    target: ElementTarget::StrId(Target::Literal("target".to_string())),
+                }),
+            }),
+        }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Event's inner action should be processed
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_recursively_processes_children() {
+        let mut grandchild = make_container(3, Some("target"), vec![], vec![]);
+        grandchild
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                    target: ElementTarget::SelfTarget,
+                }),
+            }));
+
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Should find action in grandchild
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_last_child_target() {
+        let grandchild1 = make_container(3, None, vec![], vec![]);
+        let grandchild2 = make_container(4, None, vec![], vec![]);
+        let grandchild3 = make_container(5, None, vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![grandchild1, grandchild2, grandchild3]);
+        let mut container = make_container(1, None, vec![], vec![child]);
+
+        // Use LastChild target from child (id=2)
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Calc(hyperchad_actions::logic::CalcValue::PositionX {
+                    target: ElementTarget::LastChild,
+                }),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // LastChild from container (id=1) should be child (id=2)
+        // But LastChild uses self_id which is container.id (1), so it looks at container's last child
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_empty_container_no_actions() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Empty container with no actions should result in empty watch positions
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_ignores_simple_value_types() {
+        let mut container = make_container(1, None, vec![], vec![]);
+
+        // Add actions with simple Value types that should NOT trigger watch positions
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Real(42.0),
+            }));
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::String("test".to_string()),
+            }));
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Display(true),
+            }));
+        container
+            .actions
+            .push(make_action(ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: Value::Visibility(Visibility::Visible),
+            }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Simple value types should not add watch positions
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_ignores_noop_and_style_actions() {
+        let mut container = make_container(1, None, vec![], vec![]);
+
+        // Add various action types that should NOT trigger watch positions
+        container.actions.push(make_action(ActionType::NoOp));
+        container.actions.push(make_action(ActionType::Navigate {
+            url: "/test".to_string(),
+        }));
+        container.actions.push(make_action(ActionType::Custom {
+            action: "custom-action".to_string(),
+        }));
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // These action types should not add watch positions
+        assert!(watch_positions.is_empty());
+    }
 }
