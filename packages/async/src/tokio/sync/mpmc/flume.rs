@@ -139,3 +139,220 @@ pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     let (tx, rx) = flume::bounded(capacity);
     (Sender { inner: tx }, Receiver { inner: rx })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_unbounded_channel_send_and_try_recv() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Send a value
+        tx.send(42).unwrap();
+
+        // Try to receive it
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 42);
+    }
+
+    #[test_log::test]
+    fn test_bounded_channel_send_and_try_recv() {
+        let (tx, rx) = bounded::<i32>(10);
+
+        tx.send(100).unwrap();
+
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 100);
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_empty() {
+        let (_tx, rx) = unbounded::<i32>();
+
+        // Should return Empty error when no messages
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(TryRecvError::Empty)));
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_disconnected() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the sender
+        drop(tx);
+
+        // Should return Disconnected error
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(TryRecvError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_sender_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.send(42);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_sender_try_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.try_send(99);
+        assert!(matches!(result, Err(TrySendError::Disconnected(99))));
+    }
+
+    #[test_log::test]
+    fn test_sender_clone() {
+        let (tx1, rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.send(1).unwrap();
+        tx2.send(2).unwrap();
+
+        // Order is preserved - FIFO
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        assert_eq!(rx.try_recv().unwrap(), 2);
+    }
+
+    #[test_log::test]
+    fn test_receiver_clone() {
+        let (tx, rx1) = unbounded::<i32>();
+        let rx2 = rx1.clone();
+
+        tx.send(1).unwrap();
+        tx.send(2).unwrap();
+
+        // Either receiver can consume messages
+        let v1 = rx1.try_recv().unwrap();
+        let v2 = rx2.try_recv().unwrap();
+
+        assert!(v1 == 1 || v1 == 2);
+        assert!(v2 == 1 || v2 == 2);
+        assert_ne!(v1, v2);
+    }
+
+    #[test_log::test]
+    fn test_bounded_channel_full() {
+        let (tx, _rx) = bounded::<i32>(2);
+
+        tx.try_send(1).unwrap();
+        tx.try_send(2).unwrap();
+
+        // Should return Full error when at capacity
+        let result = tx.try_send(3);
+        assert!(matches!(result, Err(TrySendError::Full(3))));
+    }
+
+    #[test_log::test]
+    fn test_multiple_messages() {
+        let (tx, rx) = unbounded::<String>();
+
+        tx.send("first".to_string()).unwrap();
+        tx.send("second".to_string()).unwrap();
+        tx.send("third".to_string()).unwrap();
+
+        assert_eq!(rx.try_recv().unwrap(), "first");
+        assert_eq!(rx.try_recv().unwrap(), "second");
+        assert_eq!(rx.try_recv().unwrap(), "third");
+        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_returns_data_when_available() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Send data first
+        tx.send(99).unwrap();
+
+        // recv_timeout should return the data immediately
+        let result = rx.recv_timeout(std::time::Duration::from_secs(1));
+        assert_eq!(result.unwrap(), 99);
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_returns_timeout_when_empty() {
+        let (_tx, rx) = unbounded::<i32>();
+
+        // recv_timeout should return Timeout when no data is available
+        let result = rx.recv_timeout(std::time::Duration::from_millis(10));
+        assert!(matches!(result, Err(RecvTimeoutError::Timeout)));
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_returns_disconnected_when_senders_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop all senders
+        drop(tx);
+
+        // recv_timeout should return Disconnected
+        let result = rx.recv_timeout(std::time::Duration::from_millis(10));
+        assert!(matches!(result, Err(RecvTimeoutError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_poll_recv_returns_ready_when_data_available() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, rx) = unbounded::<i32>();
+
+        tx.send(42).unwrap();
+
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(Some(42))));
+    }
+
+    #[test_log::test]
+    fn test_poll_recv_returns_pending_when_empty() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (_tx, rx) = unbounded::<i32>();
+
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Pending));
+    }
+
+    #[test_log::test]
+    fn test_poll_recv_returns_none_when_disconnected() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the sender to disconnect
+        drop(tx);
+
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(None)));
+    }
+}
