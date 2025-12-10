@@ -1995,4 +1995,381 @@ mod tests {
         );
         assert!(output.contains("unsync"), "Should contain unsync: {output}");
     }
+
+    // ============================================================================
+    // MainArgs parsing tests
+    // ============================================================================
+
+    /// Tests parsing of empty `MainArgs`.
+    #[::core::prelude::v1::test]
+    fn main_args_empty() {
+        let input = quote! {};
+        let _args: MainArgs = syn::parse2(input).expect("Failed to parse empty MainArgs");
+        // MainArgs has no fields, so this just verifies parsing succeeds
+    }
+
+    /// Tests parsing of `MainArgs` with arbitrary tokens (ignored for forward compatibility).
+    #[::core::prelude::v1::test]
+    fn main_args_with_tokens_ignored() {
+        // MainArgs currently ignores all tokens for forward compatibility
+        let input = quote! { some_arg, another_arg };
+        let _args: MainArgs =
+            syn::parse2(input).expect("MainArgs should ignore tokens for forward compatibility");
+    }
+
+    /// Tests parsing of `MainArgs` with complex tokens.
+    #[::core::prelude::v1::test]
+    fn main_args_complex_tokens_ignored() {
+        let input = quote! { flavor = "multi_thread", worker_threads = 4 };
+        let _args: MainArgs =
+            syn::parse2(input).expect("MainArgs should accept complex tokens for compatibility");
+    }
+
+    // ============================================================================
+    // YieldInjector with control flow tests
+    // ============================================================================
+
+    /// Tests that `YieldInjector` transforms await in if expression condition.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_if_condition() {
+        let input: Expr = syn::parse_quote! {
+            if check_condition().await {
+                do_something();
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now for await in if condition: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms await in match scrutinee.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_match_scrutinee() {
+        let input: Expr = syn::parse_quote! {
+            match get_result().await {
+                Ok(v) => v,
+                Err(_) => 0,
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now for await in match: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms await in loop body.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_loop_body() {
+        let input: Expr = syn::parse_quote! {
+            loop {
+                let item = fetch_next().await;
+                if item.is_none() {
+                    break;
+                }
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now for await in loop: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms await in while condition.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_while_let() {
+        let input: Expr = syn::parse_quote! {
+            while let Some(item) = stream.next().await {
+                process(item);
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now for await in while let: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` handles multiple awaits in a match arm.
+    #[::core::prelude::v1::test]
+    fn yield_injector_multiple_awaits_in_match_arms() {
+        let input: Expr = syn::parse_quote! {
+            match condition {
+                true => first_operation().await,
+                false => second_operation().await,
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 2,
+            "Should have two yield_now calls for two awaits in match arms: {output}"
+        );
+    }
+
+    // ============================================================================
+    // inject_item with trait implementations tests
+    // ============================================================================
+
+    /// Tests that `inject_item` processes trait impl blocks with async methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_trait_impl_async_method() {
+        let mut item: Item = syn::parse_quote! {
+            impl MyTrait for MyStruct {
+                async fn async_trait_method(&self) {
+                    self.inner_future().await;
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Async method in trait impl should have yield injected: {output}"
+        );
+    }
+
+    /// Tests that `inject_item` handles trait impl with mixed sync/async methods.
+    #[::core::prelude::v1::test]
+    fn inject_item_trait_impl_mixed_methods() {
+        let mut item: Item = syn::parse_quote! {
+            impl AsyncIterator for MyStream {
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    (0, None)
+                }
+
+                async fn next(&mut self) -> Option<Self::Item> {
+                    self.inner.next().await
+                }
+            }
+        };
+
+        let mut injector = YieldInjector;
+        inject_item(&mut item, &mut injector);
+
+        let output = quote!(#item).to_string();
+        // Only the async method should be transformed
+        let yield_count = output.matches("yield_now").count();
+        assert_eq!(
+            yield_count, 1,
+            "Only async method should have yield: {output}"
+        );
+        // Sync method should remain unchanged
+        assert!(
+            output.contains("size_hint"),
+            "Sync method should be preserved: {output}"
+        );
+    }
+
+    // ============================================================================
+    // TestWithPathInput edge case tests
+    // ============================================================================
+
+    /// Tests parsing of `TestWithPathInput` with sync function (should still parse).
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_sync_function() {
+        let input = quote! {
+            @path = crate;
+            fn sync_test() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Should parse sync function in TestWithPathInput");
+
+        assert!(
+            parsed.function.sig.asyncness.is_none(),
+            "Function should be sync"
+        );
+    }
+
+    /// Tests parsing of `TestWithPathInput` with function attributes.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_with_attributes() {
+        let input = quote! {
+            @path = switchy_async;
+            #[allow(dead_code)]
+            #[cfg(test)]
+            async fn attributed_test() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Should parse function with attributes");
+
+        assert_eq!(
+            parsed.function.attrs.len(),
+            2,
+            "Function should have two attributes"
+        );
+    }
+
+    /// Tests error message content for invalid flag in `TestWithPathInput`.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_error_message_content() {
+        let input = quote! {
+            @path = crate;
+            unknown_option;
+            async fn my_test() {}
+        };
+        let result = syn::parse2::<TestWithPathInput>(input);
+
+        match result {
+            Ok(_) => panic!("Should fail with unknown option"),
+            Err(err) => {
+                let err_msg = err.to_string();
+                assert!(
+                    err_msg.contains("real_time")
+                        || err_msg.contains("real_fs")
+                        || err_msg.contains("no_simulator"),
+                    "Error should mention valid options: {err_msg}"
+                );
+            }
+        }
+    }
+
+    /// Tests parsing of `TestWithPathInput` with leading path separator.
+    #[::core::prelude::v1::test]
+    fn test_with_path_input_absolute_path() {
+        let input = quote! {
+            @path = ::switchy_async;
+            async fn my_test() {}
+        };
+        let parsed: TestWithPathInput =
+            syn::parse2(input).expect("Should parse with absolute path");
+
+        assert!(
+            parsed.crate_path.leading_colon.is_some(),
+            "Path should have leading colon"
+        );
+    }
+
+    // ============================================================================
+    // MainWithPathInput edge case tests
+    // ============================================================================
+
+    /// Tests parsing of `MainWithPathInput` with attributes.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_with_attributes() {
+        let input = quote! {
+            @path = crate;
+            #[allow(unused)]
+            async fn main() {}
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Should parse main with attributes");
+
+        assert_eq!(
+            parsed.function.attrs.len(),
+            1,
+            "Function should have one attribute"
+        );
+    }
+
+    /// Tests parsing of `MainWithPathInput` with non-unit return type.
+    #[::core::prelude::v1::test]
+    fn main_with_path_input_i32_return_type() {
+        let input = quote! {
+            @path = switchy_async;
+            async fn main() -> i32 { 0 }
+        };
+        let parsed: MainWithPathInput =
+            syn::parse2(input).expect("Should parse main with i32 return type");
+
+        assert!(
+            matches!(parsed.function.sig.output, syn::ReturnType::Type(_, _)),
+            "Should have a return type"
+        );
+    }
+
+    // ============================================================================
+    // YieldInjector with complex async patterns tests
+    // ============================================================================
+
+    /// Tests that `YieldInjector` transforms await with field access.
+    #[::core::prelude::v1::test]
+    fn yield_injector_field_access_before_await() {
+        let input: Expr = syn::parse_quote! {
+            self.client.fetch().await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now: {output}"
+        );
+        assert!(
+            output.contains("client"),
+            "Field access should be preserved: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms await with index access.
+    #[::core::prelude::v1::test]
+    fn yield_injector_index_access_before_await() {
+        let input: Expr = syn::parse_quote! {
+            futures[0].await
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now: {output}"
+        );
+    }
+
+    /// Tests that `YieldInjector` transforms await in closure body.
+    #[::core::prelude::v1::test]
+    fn yield_injector_await_in_async_closure() {
+        let input: Expr = syn::parse_quote! {
+            async move |x| {
+                process(x).await
+            }
+        };
+
+        let mut expr = input;
+        let mut injector = YieldInjector;
+        injector.visit_expr_mut(&mut expr);
+
+        let output = quote!(#expr).to_string();
+        assert!(
+            output.contains("yield_now"),
+            "Should have yield_now in async closure: {output}"
+        );
+    }
 }
