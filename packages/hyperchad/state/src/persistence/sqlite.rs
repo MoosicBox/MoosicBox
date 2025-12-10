@@ -381,4 +381,34 @@ mod tests {
 
         Ok(())
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_persistence_take_type_mismatch_returns_serde_error() -> Result<(), crate::Error> {
+        // Test that take returns serde error when deserializing to incompatible type
+        // This tests a different code path from get - take uses delete + deserialize
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        // Store a TestSettings value
+        let settings = TestSettings {
+            name: "take_type_mismatch".to_string(),
+            value: 99,
+        };
+        persistence.set("key", &settings).await?;
+
+        // Try to take it as a completely different type
+        let result = persistence.take::<DifferentType>("key").await;
+
+        // Should return a serde deserialization error
+        assert!(
+            matches!(result, Err(crate::Error::Serde(_))),
+            "Expected Serde error, got: {result:?}"
+        );
+
+        // Note: Since take deletes before returning, the value should be gone
+        // even though deserialization failed. This is an important behavior to understand.
+        let after: Option<TestSettings> = persistence.get("key").await?;
+        assert_eq!(after, None, "Value should be deleted even if take fails");
+
+        Ok(())
+    }
 }
