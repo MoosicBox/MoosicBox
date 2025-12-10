@@ -53,6 +53,7 @@ url              = { workspace = true }
 
 [dev-dependencies]
 env_logger    = { workspace = true }
+serial_test   = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "time"] }
 switchy_time  = { workspace = true, features = ["std"] }
 test-log      = { workspace = true }

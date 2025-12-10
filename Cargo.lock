@@ -9104,6 +9104,7 @@ dependencies = [
  "profiling",
  "regex",
  "serde",
+ "serial_test",
  "switchy_async",
  "switchy_database",
  "switchy_http",
