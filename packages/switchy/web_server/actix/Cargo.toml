@@ -54,5 +54,5 @@ cors = [
     "switchy_web_server/cors",
 ]
 htmx = ["dep:actix-htmx", "switchy_web_server/htmx"]
-static-files = ["dep:actix-files"]
+static-files = ["dep:actix-files", "switchy_web_server/static-files"]
 tls = ["actix-web/openssl", "switchy_web_server/tls"]
