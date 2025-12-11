@@ -1164,6 +1164,49 @@ source "${SCRIPT_DIR}/lib/run-matrix.sh"
 # End of Library Sourcing
 # =============================================================================
 
+# =============================================================================
+# Ensure Required Tools are Available
+# =============================================================================
+
+# Install yq on Windows if not available (needed for YAML parsing in run-matrix)
+#
+# Ubuntu and macOS GitHub Actions runners have yq pre-installed, but Windows
+# runners do not. This function downloads the yq binary if needed.
+#
+# Exit codes:
+#   0: yq is available (either pre-installed or successfully installed)
+#   0: Installation failed (warns but doesn't fail - graceful degradation)
+ensure_yq_available() {
+    # Only needed on Windows - Ubuntu and macOS runners have yq pre-installed
+    if [[ "${RUNNER_OS:-}" != "Windows" ]]; then
+        return 0
+    fi
+
+    # Check if yq is already available
+    if command -v yq &>/dev/null; then
+        return 0
+    fi
+
+    echo "📦 Installing yq for Windows..."
+    local yq_version="v4.49.2"
+    local yq_url="https://github.com/mikefarah/yq/releases/download/${yq_version}/yq_windows_amd64.exe"
+    local yq_dest="/usr/bin/yq.exe"
+
+    if curl -fsSL "$yq_url" -o "$yq_dest" && chmod +x "$yq_dest"; then
+        echo "✅ yq installed successfully"
+    else
+        echo "⚠️ Failed to install yq - YAML parsing may not work" >&2
+        echo "   You can manually install from: https://github.com/mikefarah/yq" >&2
+    fi
+}
+
+# Ensure tools are available before proceeding
+ensure_yq_available
+
+# =============================================================================
+# End of Tool Installation
+# =============================================================================
+
 # Specific error handler for setup command
 handle_setup_error() {
     local reason="$1"
