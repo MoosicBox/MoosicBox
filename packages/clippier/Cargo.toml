@@ -34,7 +34,6 @@ switchy_random    = { workspace = true, features = ["rand"] }
 anyhow     = { workspace = true }
 chrono     = { workspace = true }
 clap       = { workspace = true }
-glob       = { workspace = true }
 globset    = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }

@@ -2740,7 +2740,6 @@ dependencies = [
  "clap 4.5.53",
  "clippier_test_utilities",
  "git2",
- "glob",
  "globset",
  "insta",
  "itertools 0.14.0",
