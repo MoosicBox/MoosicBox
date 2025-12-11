@@ -410,6 +410,7 @@
               cargo-audit
               postgresql
               vips
+              yq-go # For YAML parsing in reproduce scripts
             ];
 
             shellHook = ''
