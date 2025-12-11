@@ -7,8 +7,10 @@
 
 use std::slice;
 
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
-    template::{self as hyperchad_template, Containers, container},
+    template::{Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;

@@ -5,8 +5,10 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
-    template::{self as hyperchad_template, Containers, container},
+    template::{Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow},
 };
 use moosicbox_music_models::{

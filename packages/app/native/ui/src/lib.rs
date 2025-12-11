@@ -21,9 +21,11 @@ pub mod state;
 
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
     actions::ActionType,
-    template::{self as hyperchad_template, Containers, IntoActionEffect, container},
+    template::{Containers, IntoActionEffect, container},
 };
 use moosicbox_music_models::{
     API_SOURCES, AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id,

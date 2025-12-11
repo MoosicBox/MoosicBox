@@ -5,7 +5,9 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::template::{self as hyperchad_template, Containers, container};
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
+use hyperchad::template::{Containers, container};
 use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;

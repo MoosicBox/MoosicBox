@@ -67,11 +67,13 @@
 //! }
 //! ```
 
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
     app::AppBuilder,
     renderer::View,
     router::{RouteRequest, Router},
-    template::{self as hyperchad_template, Containers, container},
+    template::{Containers, container},
 };
 use log::info;
 

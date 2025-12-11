@@ -17,11 +17,13 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
     app::AppBuilder,
     renderer::View,
     router::{RouteRequest, Router},
-    template::{self as hyperchad_template, Containers, container},
+    template::{Containers, container},
 };
 use hyperchad_markdown::markdown_to_container;
 use log::info;

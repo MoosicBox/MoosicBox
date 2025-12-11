@@ -5,9 +5,11 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+#[allow(unused_imports)]
+use hyperchad::template as hyperchad_template;
 use hyperchad::{
     actions::Key,
-    template::{self as hyperchad_template, Containers, container},
+    template::{Containers, container},
     transformer::models::Visibility,
 };
 use moosicbox_music_api_models::search::api::{
