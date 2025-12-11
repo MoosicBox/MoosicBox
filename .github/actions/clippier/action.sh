@@ -135,6 +135,60 @@ print_debug_environment() {
     echo ""
 }
 
+# Print the full action.sh invocation command for local reproduction
+#
+# Outputs all INPUT_* environment variables and necessary GITHUB_* variables
+# in a format that can be copy-pasted to reproduce the exact action invocation locally.
+#
+# Special handling:
+#   - GITHUB_WORKSPACE: Uses $(pwd) so it resolves to user's current directory
+#   - GITHUB_STEP_SUMMARY: Uses temp file path with run ID
+#   - GITHUB_OUTPUT: Uses temp file path with run ID
+#   - GITHUB_EVENT_NAME: Preserved as-is (affects git detection logic)
+#   - GITHUB_BASE_REF, GITHUB_SHA: Preserved for git detection in PR/push contexts
+#
+# Side effects:
+#   Prints to stdout
+print_action_invocation() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔧 Reproduce this action invocation locally:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Use run ID for unique temp file paths, fallback to 'local' if not set
+    local run_id="${GITHUB_RUN_ID:-local}"
+
+    # GITHUB_WORKSPACE should resolve to pwd when run locally
+    echo 'GITHUB_WORKSPACE="$(pwd)" \'
+
+    # GITHUB_STEP_SUMMARY and GITHUB_OUTPUT need valid file paths
+    echo "GITHUB_STEP_SUMMARY=\"/tmp/github_step_summary_${run_id}.md\" \\"
+    echo "GITHUB_OUTPUT=\"/tmp/github_output_${run_id}.txt\" \\"
+
+    # Preserve GITHUB_* vars that affect action behavior
+    [[ -n "${GITHUB_EVENT_NAME:-}" ]] && echo "GITHUB_EVENT_NAME='$GITHUB_EVENT_NAME' \\"
+    [[ -n "${GITHUB_BASE_REF:-}" ]] && echo "GITHUB_BASE_REF='$GITHUB_BASE_REF' \\"
+    [[ -n "${GITHUB_SHA:-}" ]] && echo "GITHUB_SHA='$GITHUB_SHA' \\"
+
+    # Print all INPUT_* vars that are set
+    # Use declare -p for robust escaping of all special characters
+    for name in $(env | grep '^INPUT_' | cut -d= -f1 | sort); do
+        # declare -p outputs: declare -x VAR="value"
+        # Strip the "declare -x " prefix and add line continuation
+        declare -p "$name" 2>/dev/null | sed 's/^declare -x //' | sed 's/$/ \\/'
+    done
+
+    echo './.github/actions/clippier/action.sh'
+    echo ""
+    echo "# View results:"
+    echo "# cat /tmp/github_step_summary_${run_id}.md  # Step summary (markdown)"
+    echo "# cat /tmp/github_output_${run_id}.txt       # Action outputs"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
 # =============================================================================
 # End of Debug Output Infrastructure
 # =============================================================================
@@ -1333,6 +1387,9 @@ main() {
 
     # Print environment debug info
     print_debug_environment
+
+    # Print full action invocation for local reproduction
+    print_action_invocation
 
     if [[ "$INPUT_COMMAND" == "setup" ]]; then
         setup_ci_environment
