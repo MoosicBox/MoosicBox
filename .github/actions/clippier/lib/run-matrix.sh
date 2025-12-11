@@ -827,8 +827,11 @@ parse_run_matrix_steps() {
 
     # Parse YAML to JSON using yq (available on GitHub Actions runners)
     local steps_json
-    if ! steps_json=$(echo "$steps_input" | yq -o=json '.' 2>/dev/null); then
+    local yq_error
+    if ! steps_json=$(echo "$steps_input" | yq -o=json '.' 2>&1); then
+        yq_error="$steps_json"
         echo "❌ Error: Failed to parse run-matrix-steps as YAML or JSON" >&2
+        echo "   yq error: $yq_error" >&2
         echo "   Ensure yq is installed (https://github.com/mikefarah/yq)" >&2
         return 1
     fi
