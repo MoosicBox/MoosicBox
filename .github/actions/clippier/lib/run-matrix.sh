@@ -1519,7 +1519,20 @@ run_matrix_flush_command() {
                     local target_file="$upload_dir/${artifact_name}.json"
                     cp "$source_file" "$target_file"
                     echo "📦 Prepared failure artifact: $target_file"
-                    echo "failure-artifact-path=$target_file" >> $GITHUB_OUTPUT
+
+                    # Copy reproduction script to upload directory if it exists
+                    local script_path_file="${RUNNER_TEMP:-/tmp}/clippier-reproduce-script-path.txt"
+                    if [[ -f "$script_path_file" ]]; then
+                        local script_path
+                        script_path=$(cat "$script_path_file")
+                        if [[ -f "$script_path" ]]; then
+                            cp "$script_path" "$upload_dir/"
+                            echo "📜 Included reproduction script: $upload_dir/reproduce.sh"
+                        fi
+                    fi
+
+                    # Output the directory path so both JSON and reproduce.sh are uploaded
+                    echo "failure-artifact-path=$upload_dir" >> $GITHUB_OUTPUT
                 fi
             else
                 echo "ℹ️  No failure data to prepare for upload (group_default.json not found)"
@@ -1679,6 +1692,50 @@ run_matrix_aggregate_failures_command() {
             json_files+=("$file")
         fi
     done
+
+    # Rename reproduce.sh scripts to be unique based on their artifact
+    # When artifacts are merged, multiple reproduce.sh files would overwrite each other
+    # We look for reproduce.sh in subdirectories (artifact-name/reproduce.sh pattern)
+    # and rename them to reproduce_<artifact-name>.sh in the current directory
+    for artifact_dir in test-results-*/; do
+        if [[ -d "$artifact_dir" ]]; then
+            local reproduce_script="${artifact_dir}reproduce.sh"
+            if [[ -f "$reproduce_script" ]]; then
+                # Extract artifact name from directory (remove trailing slash)
+                local artifact_name="${artifact_dir%/}"
+                # Remove "test-results-" prefix for cleaner name
+                local unique_suffix="${artifact_name#test-results-}"
+                local new_name="reproduce_${unique_suffix}.sh"
+                mv "$reproduce_script" "./$new_name"
+                echo "  📜 Renamed: $reproduce_script -> $new_name"
+            fi
+            # Also check for JSON file in subdirectory and move it up
+            for json_in_subdir in "${artifact_dir}"*.json; do
+                if [[ -f "$json_in_subdir" ]]; then
+                    local json_basename=$(basename "$json_in_subdir")
+                    if [[ ! -f "./$json_basename" ]]; then
+                        mv "$json_in_subdir" "./"
+                        json_files+=("$json_basename")
+                        echo "  📄 Moved: $json_in_subdir -> ./$json_basename"
+                    fi
+                fi
+            done
+        fi
+    done
+
+    # Also handle reproduce.sh in current directory (single artifact case or already merged)
+    # If there's a single reproduce.sh and we have JSON files, rename it based on first JSON
+    if [[ -f "reproduce.sh" && ${#json_files[@]} -gt 0 ]]; then
+        # Get unique suffix from first JSON file
+        local first_json="${json_files[0]}"
+        local unique_suffix="${first_json%.json}"
+        unique_suffix="${unique_suffix#test-results-}"
+        local new_name="reproduce_${unique_suffix}.sh"
+        if [[ ! -f "$new_name" ]]; then
+            mv "reproduce.sh" "$new_name"
+            echo "  📜 Renamed: reproduce.sh -> $new_name"
+        fi
+    fi
 
     if [[ ${#json_files[@]} -eq 0 ]]; then
         echo "ℹ️  No test result artifacts found - all tests may have passed!"
@@ -1885,11 +1942,32 @@ run_matrix_aggregate_failures_command() {
         write_aggregate_content ""
     done
 
-    # Set outputs
+    # Prepare upload directory with summary and all reproduce scripts
     if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
-        echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
+        local upload_dir="${RUNNER_TEMP:-/tmp}/aggregate-upload"
+        mkdir -p "$upload_dir"
+
+        # Copy the summary markdown to upload directory
+        cp "$AGGREGATE_OUTPUT_FILE" "$upload_dir/"
+        echo "📄 Copied summary to: $upload_dir/$(basename "$AGGREGATE_OUTPUT_FILE")"
+
+        # Copy all reproduce scripts to upload directory
+        local script_count=0
+        for script in reproduce_*.sh; do
+            if [[ -f "$script" ]]; then
+                cp "$script" "$upload_dir/"
+                echo "📜 Copied reproduce script: $script"
+                script_count=$((script_count + 1))
+            fi
+        done
+
+        if [[ "$script_count" -gt 0 ]]; then
+            echo "📦 Prepared $script_count reproduce script(s) for upload"
+        fi
+
+        # Output the directory path so both summary and scripts are uploaded
+        echo "aggregate-summary-path=$upload_dir" >> $GITHUB_OUTPUT
         echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT
-        echo "📄 Summary also written to: $AGGREGATE_OUTPUT_FILE"
     else
         echo "aggregate-summary-path=" >> $GITHUB_OUTPUT
         echo "aggregate-summary-generated=true" >> $GITHUB_OUTPUT

@@ -149,15 +149,63 @@ print_debug_environment() {
 #
 # Side effects:
 #   Prints to stdout
+#   Writes reproduce.sh script to ${RUNNER_TEMP}/reproduce-scripts/
 print_action_invocation() {
+    # Use run ID for unique temp file paths, fallback to 'local' if not set
+    local run_id="${GITHUB_RUN_ID:-local}"
+
+    # ==========================================================================
+    # Generate reproduction script file
+    # ==========================================================================
+    local script_dir="${RUNNER_TEMP:-/tmp}/reproduce-scripts"
+    mkdir -p "$script_dir"
+    local script_file="$script_dir/reproduce.sh"
+
+    {
+        echo "#!/usr/bin/env bash"
+        echo "# Reproduction script for GitHub Actions run: ${run_id}"
+        echo "# Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "#"
+        echo "# Usage: Run this script from the repository root"
+        echo "#   ./reproduce.sh"
+        echo ""
+        echo "set -e"
+        echo ""
+        echo "# GitHub environment variables"
+        echo 'export GITHUB_WORKSPACE="$(pwd)"'
+        echo "export GITHUB_STEP_SUMMARY=\"/tmp/github_step_summary_${run_id}.md\""
+        echo "export GITHUB_OUTPUT=\"/tmp/github_output_${run_id}.txt\""
+        [[ -n "${GITHUB_EVENT_NAME:-}" ]] && echo "export GITHUB_EVENT_NAME='${GITHUB_EVENT_NAME}'"
+        [[ -n "${GITHUB_BASE_REF:-}" ]] && echo "export GITHUB_BASE_REF='${GITHUB_BASE_REF}'"
+        [[ -n "${GITHUB_SHA:-}" ]] && echo "export GITHUB_SHA='${GITHUB_SHA}'"
+        echo ""
+        echo "# Action input variables"
+        for name in $(env | grep '^INPUT_' | cut -d= -f1 | sort); do
+            declare -p "$name" 2>/dev/null | sed 's/^declare -x /export /'
+        done
+        echo ""
+        echo "# Run the action"
+        echo 'echo "Running clippier action..."'
+        echo './.github/actions/clippier/action.sh'
+        echo ""
+        echo 'echo ""'
+        echo "echo \"Step summary written to: /tmp/github_step_summary_${run_id}.md\""
+        echo "echo \"Action outputs written to: /tmp/github_output_${run_id}.txt\""
+    } > "$script_file"
+    chmod +x "$script_file"
+
+    # Store script path for flush command to pick up
+    echo "$script_file" > "${RUNNER_TEMP:-/tmp}/clippier-reproduce-script-path.txt"
+    echo "📜 Reproduction script generated: $script_file"
+
+    # ==========================================================================
+    # Print to logs (existing behavior)
+    # ==========================================================================
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🔧 Reproduce this action invocation locally:"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-
-    # Use run ID for unique temp file paths, fallback to 'local' if not set
-    local run_id="${GITHUB_RUN_ID:-local}"
 
     # GITHUB_WORKSPACE should resolve to pwd when run locally
     echo 'GITHUB_WORKSPACE="$(pwd)" \'
