@@ -74,44 +74,9 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
-    sync::{LazyLock, RwLock},
 };
 
 use clap::ValueEnum;
-
-/// Global cache for compiled glob patterns to avoid recompilation.
-///
-/// Uses `RwLock` to allow concurrent reads (common case) while only blocking for
-/// writes (when compiling a new pattern).
-static GLOB_CACHE: LazyLock<RwLock<BTreeMap<String, globset::GlobMatcher>>> =
-    LazyLock::new(|| RwLock::new(BTreeMap::new()));
-
-/// Returns a compiled glob matcher for the given pattern, using a cache to avoid
-/// recompilation of previously seen patterns.
-///
-/// # Arguments
-///
-/// * `pattern` - The glob pattern to compile (e.g., "packages/*", "pkg_[abc]")
-///
-/// # Returns
-///
-/// * `Some(GlobMatcher)` - A compiled matcher that can be used for pattern matching
-/// * `None` - If the pattern is invalid and cannot be compiled
-fn get_or_compile_glob(pattern: &str) -> Option<globset::GlobMatcher> {
-    // Fast path: check if already cached (read lock)
-    if let Ok(cache) = GLOB_CACHE.read()
-        && let Some(matcher) = cache.get(pattern)
-    {
-        return Some(matcher.clone());
-    }
-
-    // Slow path: compile and cache (write lock)
-    let matcher = globset::Glob::new(pattern).ok()?.compile_matcher();
-    if let Ok(mut cache) = GLOB_CACHE.write() {
-        cache.insert(pattern.to_string(), matcher.clone());
-    }
-    Some(matcher)
-}
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml::Value;
@@ -505,26 +470,17 @@ impl WorkspaceContext {
         let content = switchy_fs::sync::read_to_string(&workspace_cargo)?;
         let root_toml: Value = toml::from_str(&content)?;
 
-        let mut raw_patterns = Vec::new();
+        let mut member_patterns = Vec::new();
 
         if let Some(Value::Table(workspace)) = root_toml.get("workspace")
             && let Some(Value::Array(member_list)) = workspace.get("members")
         {
             for member in member_list {
                 if let Value::String(member_pattern) = member {
-                    raw_patterns.push(member_pattern.clone());
+                    member_patterns.push(member_pattern.clone());
                 }
             }
         }
-
-        // Expand glob patterns (e.g., "packages/*" -> ["packages/foo", "packages/bar"])
-        let member_patterns = Self::expand_member_globs(workspace_root, &raw_patterns);
-
-        log::debug!(
-            "WorkspaceContext: expanded {} patterns to {} member paths",
-            raw_patterns.len(),
-            member_patterns.len()
-        );
 
         Ok(Self {
             root: workspace_root.to_path_buf(),
@@ -534,18 +490,6 @@ impl WorkspaceContext {
             fully_loaded: RefCell::new(false),
             workspace_config: RefCell::new(None),
         })
-    }
-
-    /// Expands glob patterns in workspace member paths to actual directory paths.
-    ///
-    /// Cargo supports glob patterns like `packages/*` in workspace members.
-    /// This function expands those patterns to actual directory paths.
-    ///
-    /// Uses `switchy_fs` for filesystem operations to work correctly in both
-    /// real and simulated filesystem modes.
-    fn expand_member_globs(workspace_root: &Path, patterns: &[String]) -> Vec<String> {
-        let patterns_ref: Vec<&str> = patterns.iter().map(String::as_str).collect();
-        expand_workspace_member_globs(workspace_root, &patterns_ref)
     }
 
     fn is_member_by_path(&self, path: &Path) -> bool {
@@ -2787,105 +2731,6 @@ fn should_ignore_file(file_path: &str, ignore_patterns: &[String]) -> Result<boo
 /// * `workspace_root` - Path to the workspace root directory
 /// * `members` - List of workspace member paths (may contain globs like `packages/*`)
 ///
-/// Expands a glob pattern like `packages/*` or `pkg_[abc]` using `switchy_fs`.
-///
-/// This function handles Cargo-style workspace member patterns by walking directories
-/// with `switchy_fs` and matching paths against the compiled glob pattern using `globset`.
-/// This approach works correctly in both real and simulated filesystem modes.
-///
-/// # Arguments
-///
-/// * `workspace_root` - The root directory of the workspace
-/// * `pattern` - The glob pattern to expand (e.g., "packages/*", "pkg_[abc]")
-///
-/// # Returns
-///
-/// * `Some(Vec<String>)` - List of expanded paths relative to workspace root
-/// * `None` - If the pattern is invalid or couldn't be expanded
-fn expand_simple_glob_pattern(workspace_root: &Path, pattern: &str) -> Option<Vec<String>> {
-    // Compile the pattern once (cached)
-    let matcher = get_or_compile_glob(pattern)?;
-
-    // Calculate the max depth we need to walk based on the pattern
-    // e.g., "packages/*" needs depth 2, "a/b/c/*" needs depth 4
-    let max_depth = pattern.matches('/').count() + 1;
-
-    let mut results = Vec::new();
-
-    // Walk directories and collect matches
-    walk_and_match_glob(
-        workspace_root,
-        workspace_root,
-        &matcher,
-        0,
-        max_depth,
-        &mut results,
-    );
-
-    Some(results)
-}
-
-/// Recursively walks directories and collects paths that match the glob pattern.
-///
-/// # Arguments
-///
-/// * `workspace_root` - The root directory of the workspace (for computing relative paths)
-/// * `current_dir` - The current directory being walked
-/// * `matcher` - The compiled glob matcher
-/// * `current_depth` - Current recursion depth
-/// * `max_depth` - Maximum depth to recurse (based on pattern structure)
-/// * `results` - Vector to collect matching paths
-fn walk_and_match_glob(
-    workspace_root: &Path,
-    current_dir: &Path,
-    matcher: &globset::GlobMatcher,
-    current_depth: usize,
-    max_depth: usize,
-    results: &mut Vec<String>,
-) {
-    // Stop if we've exceeded max depth
-    if current_depth > max_depth {
-        return;
-    }
-
-    let Ok(entries) = switchy_fs::sync::read_dir_sorted(current_dir) else {
-        return;
-    };
-
-    for entry in entries {
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-
-        if !file_type.is_dir() {
-            continue;
-        }
-
-        let full_path = current_dir.join(entry.file_name());
-
-        // Compute relative path from workspace root
-        let Ok(relative_path) = full_path.strip_prefix(workspace_root) else {
-            continue;
-        };
-        let relative_str = relative_path.to_string_lossy();
-
-        // Check if this path matches the pattern and has a Cargo.toml
-        if matcher.is_match(relative_path) && switchy_fs::exists(full_path.join("Cargo.toml")) {
-            results.push(relative_str.into_owned());
-        }
-
-        // Recurse into subdirectories
-        walk_and_match_glob(
-            workspace_root,
-            &full_path,
-            matcher,
-            current_depth + 1,
-            max_depth,
-            results,
-        );
-    }
-}
-
 /// # Returns
 ///
 /// Vector of expanded member paths (without glob patterns)
@@ -2900,11 +2745,21 @@ fn expand_workspace_member_globs(workspace_root: &Path, members: &[&str]) -> Vec
     for member in members {
         // Check if this member contains glob characters
         if member.contains('*') || member.contains('?') || member.contains('[') {
-            // Use our switchy_fs-aware glob expansion
-            if let Some(expanded_paths) = expand_simple_glob_pattern(workspace_root, member) {
-                for path in expanded_paths {
-                    log::trace!("Expanded glob '{member}' -> '{path}'");
-                    expanded.push(path);
+            // Expand the glob pattern using the glob crate for proper pattern matching
+            let full_pattern = workspace_root.join(member);
+            let pattern_str = full_pattern.to_string_lossy();
+
+            // Use glob crate for proper glob expansion
+            if let Ok(paths) = glob::glob(&pattern_str) {
+                for path in paths.flatten() {
+                    if path.is_dir()
+                        && path.join("Cargo.toml").exists()
+                        && let Ok(relative) = path.strip_prefix(workspace_root)
+                    {
+                        let relative_str = relative.to_string_lossy().to_string();
+                        log::trace!("Expanded glob '{member}' -> '{relative_str}'");
+                        expanded.push(relative_str);
+                    }
                 }
             } else {
                 log::warn!("Failed to expand glob pattern '{member}'");
