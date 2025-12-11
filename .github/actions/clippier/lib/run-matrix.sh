@@ -825,10 +825,11 @@ parse_run_matrix_steps() {
         return 0
     fi
 
-    # Parse YAML to JSON using Ruby (available in GitHub Actions runners)
+    # Parse YAML to JSON using yq (available on GitHub Actions runners)
     local steps_json
-    if ! steps_json=$(ruby -ryaml -rjson -e 'puts JSON.generate(YAML.load(STDIN.read))' <<< "$steps_input" 2>/dev/null); then
+    if ! steps_json=$(echo "$steps_input" | yq -o=json '.' 2>/dev/null); then
         echo "❌ Error: Failed to parse run-matrix-steps as YAML or JSON" >&2
+        echo "   Ensure yq is installed (https://github.com/mikefarah/yq)" >&2
         return 1
     fi
 
