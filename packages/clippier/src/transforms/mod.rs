@@ -184,15 +184,15 @@ fn load_transform_script(spec: &str, workspace_root: &Path) -> Result<String, Bo
             std::path::PathBuf::from(spec)
         };
 
-        if path.exists() {
-            return Ok(std::fs::read_to_string(path)?);
+        if switchy_fs::exists(&path) {
+            return Ok(switchy_fs::sync::read_to_string(&path)?);
         }
     }
 
     // Check if it's a named transform from .clippier/clippier.toml
     let clippier_config = workspace_root.join(".clippier/clippier.toml");
-    if clippier_config.exists() {
-        let content = std::fs::read_to_string(clippier_config)?;
+    if switchy_fs::exists(&clippier_config) {
+        let content = switchy_fs::sync::read_to_string(&clippier_config)?;
         let config: toml::Value = toml::from_str(&content)?;
 
         if let Some(transforms) = config.get("transforms").and_then(|t| t.as_array()) {
@@ -204,7 +204,7 @@ fn load_transform_script(spec: &str, workspace_root: &Path) -> Result<String, Bo
                     }
                     if let Some(file) = transform.get("script-file").and_then(|s| s.as_str()) {
                         let script_path = workspace_root.join(file);
-                        return Ok(std::fs::read_to_string(script_path)?);
+                        return Ok(switchy_fs::sync::read_to_string(&script_path)?);
                     }
                 }
             }

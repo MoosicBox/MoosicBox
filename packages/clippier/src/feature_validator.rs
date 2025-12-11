@@ -44,7 +44,6 @@
 #![allow(clippy::similar_names)]
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
@@ -926,11 +925,11 @@ impl FeatureValidator {
     /// Load overrides from workspace-level clippier.toml
     fn load_workspace_clippier_overrides(&self) -> Result<Vec<ValidationOverride>> {
         let config_path = self.workspace_root.join("clippier.toml");
-        if !config_path.exists() {
+        if !switchy_fs::exists(&config_path) {
             return Ok(Vec::new());
         }
 
-        let content = fs::read_to_string(&config_path)?;
+        let content = switchy_fs::sync::read_to_string(&config_path)?;
         let value: Value = toml::from_str(&content)?;
 
         let mut overrides = Vec::new();
@@ -971,11 +970,11 @@ impl FeatureValidator {
             .ok_or_else(|| anyhow!("Package path not found for {package_name}"))?;
 
         let config_path = self.workspace_root.join(package_path).join("clippier.toml");
-        if !config_path.exists() {
+        if !switchy_fs::exists(&config_path) {
             return Ok(Vec::new());
         }
 
-        let content = fs::read_to_string(&config_path)?;
+        let content = switchy_fs::sync::read_to_string(&config_path)?;
         let value: Value = toml::from_str(&content)?;
 
         let mut overrides = Vec::new();
@@ -1382,11 +1381,11 @@ impl FeatureValidator {
     /// Load parent package configs from workspace-level clippier.toml
     fn load_workspace_parent_configs(&self) -> Result<BTreeMap<String, ResolvedParentConfig>> {
         let config_path = self.workspace_root.join("clippier.toml");
-        if !config_path.exists() {
+        if !switchy_fs::exists(&config_path) {
             return Ok(BTreeMap::new());
         }
 
-        let content = fs::read_to_string(&config_path)?;
+        let content = switchy_fs::sync::read_to_string(&config_path)?;
         let value: Value = toml::from_str(&content)?;
 
         let mut configs = BTreeMap::new();
@@ -1457,11 +1456,11 @@ impl FeatureValidator {
             .ok_or_else(|| anyhow!("Package path not found for {package_name}"))?;
 
         let config_path = self.workspace_root.join(package_path).join("clippier.toml");
-        if !config_path.exists() {
+        if !switchy_fs::exists(&config_path) {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&config_path)?;
+        let content = switchy_fs::sync::read_to_string(&config_path)?;
         let value: Value = toml::from_str(&content)?;
 
         if let Some(feature_validation) = value.get("feature-validation")
@@ -1717,8 +1716,8 @@ fn find_workspace_root(path: Option<PathBuf>) -> Result<PathBuf> {
     let mut current = start_dir.as_path();
     loop {
         let cargo_toml = current.join("Cargo.toml");
-        if cargo_toml.exists() {
-            let content = fs::read_to_string(&cargo_toml)?;
+        if switchy_fs::exists(&cargo_toml) {
+            let content = switchy_fs::sync::read_to_string(&cargo_toml)?;
             let value: Value = toml::from_str(&content)?;
             if value.get("workspace").is_some() {
                 return Ok(current.to_path_buf());
@@ -1733,7 +1732,7 @@ fn find_workspace_root(path: Option<PathBuf>) -> Result<PathBuf> {
 
     // If no workspace found, use start directory if it has Cargo.toml
     let cargo_toml = start_dir.join("Cargo.toml");
-    if cargo_toml.exists() {
+    if switchy_fs::exists(&cargo_toml) {
         Ok(start_dir)
     } else {
         Err(anyhow!("Could not find Cargo.toml or workspace root"))
@@ -1743,7 +1742,7 @@ fn find_workspace_root(path: Option<PathBuf>) -> Result<PathBuf> {
 /// Load workspace data - packages, paths, and cargo values
 fn load_workspace_data(workspace_root: &Path) -> Result<WorkspaceData> {
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-    let workspace_source = fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
     let workspace_value: Value = toml::from_str(&workspace_source)?;
 
     // Handle both workspace and single-package projects
@@ -1766,11 +1765,11 @@ fn load_workspace_data(workspace_root: &Path) -> Result<WorkspaceData> {
         };
         let cargo_path = full_path.join("Cargo.toml");
 
-        if !cargo_path.exists() {
+        if !switchy_fs::exists(&cargo_path) {
             continue;
         }
 
-        let source = fs::read_to_string(&cargo_path)?;
+        let source = switchy_fs::sync::read_to_string(&cargo_path)?;
         let value: Value = toml::from_str(&source)?;
 
         if let Some(package_name) = value
@@ -2035,13 +2034,12 @@ pub fn print_github_output(result: &ValidationResult) {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use std::fs;
-    use tempfile::TempDir;
+    use switchy_fs::TempDir;
 
     /// Helper to create a temporary workspace for testing
     #[allow(clippy::similar_names)]
     fn create_test_workspace() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
@@ -2052,10 +2050,10 @@ members = ["pkg_a", "pkg_b", "pkg_c"]
 anyhow = "1.0"
 serde = "1.0"
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create pkg_a with fail-on-warnings feature
-        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
         let package_a_cargo = r#"[package]
 name = "pkg_a"
 version = "0.1.0"
@@ -2068,10 +2066,10 @@ anyhow = { workspace = true }
 fail-on-warnings = ["pkg_b/fail-on-warnings"]
 test-feature = ["pkg_b/test-feature"]
 "#;
-        fs::write(root_path.join("pkg_a/Cargo.toml"), package_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), package_a_cargo).unwrap();
 
         // Create pkg_b with fail-on-warnings feature
-        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
         let package_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -2084,10 +2082,10 @@ serde = { workspace = true }
 fail-on-warnings = ["pkg_c?/fail-on-warnings"]
 test-feature = []
 "#;
-        fs::write(root_path.join("pkg_b/Cargo.toml"), package_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), package_b_cargo).unwrap();
 
         // Create pkg_c with fail-on-warnings feature
-        fs::create_dir(root_path.join("pkg_c")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_c")).unwrap();
         let package_c_cargo = r#"[package]
 name = "pkg_c"
 version = "0.1.0"
@@ -2099,14 +2097,14 @@ anyhow = { workspace = true }
 fail-on-warnings = []
 other-feature = []
 "#;
-        fs::write(root_path.join("pkg_c/Cargo.toml"), package_c_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_c/Cargo.toml"), package_c_cargo).unwrap();
 
         temp_dir
     }
 
     /// Helper to create a workspace with errors
     fn create_test_workspace_with_errors() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
@@ -2116,10 +2114,10 @@ members = ["pkg_error"]
 [workspace.dependencies]
 anyhow = "1.0"
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create pkg_error with missing and incorrect feature propagations
-        fs::create_dir(root_path.join("pkg_error")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_error")).unwrap();
         let pkg_error_cargo = r#"[package]
 name = "pkg_error"
 version = "0.1.0"
@@ -2134,7 +2132,7 @@ fail-on-warnings = ["external_dep/nonexistent-feature"]
 # Has feature but anyhow doesn't
 test-feature = []
 "#;
-        fs::write(root_path.join("pkg_error/Cargo.toml"), pkg_error_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_error/Cargo.toml"), pkg_error_cargo).unwrap();
 
         temp_dir
     }
@@ -2160,7 +2158,7 @@ test-feature = []
 
     #[test]
     fn test_find_workspace_root_no_workspace() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create a single package Cargo.toml without workspace
@@ -2168,7 +2166,7 @@ test-feature = []
 name = "single_package"
 version = "0.1.0"
 "#;
-        fs::write(root_path.join("Cargo.toml"), cargo_toml).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), cargo_toml).unwrap();
 
         let found_root = find_workspace_root(Some(root_path.to_path_buf())).unwrap();
         assert_eq!(found_root, root_path);
@@ -2525,17 +2523,17 @@ dev_dep = "1.0"
 
     /// Helper to create a test workspace with default feature
     fn create_test_workspace_with_default_feature() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["test_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("test_pkg")).unwrap();
-        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
-        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
 
         let pkg_cargo = r#"[package]
 name = "test_pkg"
@@ -2545,24 +2543,24 @@ version = "0.1.0"
 default = []
 fail-on-warnings = []
 "#;
-        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
         temp_dir
     }
 
     /// Helper to create a test workspace with multiple features
     fn create_test_workspace_with_multiple_features() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["test_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("test_pkg")).unwrap();
-        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
-        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
 
         let pkg_cargo = r#"[package]
 name = "test_pkg"
@@ -2573,24 +2571,24 @@ default = []
 fail-on-warnings = []
 test-utils = []
 "#;
-        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
         temp_dir
     }
 
     /// Helper to create a test workspace with underscore features
     fn create_test_workspace_with_underscore_features() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["test_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("test_pkg")).unwrap();
-        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
-        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
 
         let pkg_cargo = r#"[package]
 name = "test_pkg"
@@ -2603,7 +2601,7 @@ fail-on-warnings = []
 "_private" = []
 "_debug" = []
 "#;
-        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
         temp_dir
     }
@@ -2741,17 +2739,17 @@ fail-on-warnings = []
 
     #[test]
     fn test_skip_features_glob_patterns() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["test_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("test_pkg")).unwrap();
-        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
-        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("test_pkg/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
 
         let pkg_cargo = r#"[package]
 name = "test_pkg"
@@ -2763,7 +2761,7 @@ test-utils = []
 test-fixtures = []
 fail-on-warnings = []
 "#;
-        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
         // Skip all test-* features using glob pattern
         let config = ValidatorConfig {
@@ -2794,18 +2792,18 @@ fail-on-warnings = []
     #[test]
     fn test_lenient_optional_propagation_accepts_both_styles() {
         // Lenient mode (default) should accept both dep?/feature and dep/feature for optional deps
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["pkg_a", "pkg_b"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create pkg_b (dependency)
-        fs::create_dir(root_path.join("pkg_b")).unwrap();
-        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
         let pkg_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -2813,12 +2811,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
         // Create pkg_a (depends on pkg_b)
-        fs::create_dir(root_path.join("pkg_a")).unwrap();
-        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
 
         // Package with optional dependency using dep/feature syntax (without ?)
         let pkg_a_cargo = r#"[package]
@@ -2831,7 +2829,7 @@ pkg_b = { path = "../pkg_b", optional = true }
 [features]
 test-feature = ["pkg_b/test-feature"]
 "#;
-        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
         let config = ValidatorConfig {
             features: Some(vec!["test-feature".to_string()]),
@@ -2856,18 +2854,18 @@ test-feature = ["pkg_b/test-feature"]
     #[test]
     fn test_strict_optional_propagation_requires_question_mark() {
         // Strict mode should only accept dep?/feature for optional deps
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["pkg_a", "pkg_b"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create pkg_b (dependency)
-        fs::create_dir(root_path.join("pkg_b")).unwrap();
-        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
         let pkg_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -2875,12 +2873,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
         // Create pkg_a (depends on pkg_b)
-        fs::create_dir(root_path.join("pkg_a")).unwrap();
-        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
 
         // Package with optional dependency using dep/feature syntax (without ?)
         let pkg_a_cargo = r#"[package]
@@ -2893,7 +2891,7 @@ pkg_b = { path = "../pkg_b", optional = true }
 [features]
 test-feature = ["pkg_b/test-feature"]
 "#;
-        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
         let config = ValidatorConfig {
             features: Some(vec!["test-feature".to_string()]),
@@ -2919,18 +2917,18 @@ test-feature = ["pkg_b/test-feature"]
     #[test]
     fn test_strict_mode_accepts_question_mark_syntax() {
         // Strict mode should accept dep?/feature for optional deps
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["pkg_a", "pkg_b"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create pkg_b (dependency)
-        fs::create_dir(root_path.join("pkg_b")).unwrap();
-        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
         let pkg_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -2938,12 +2936,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
         // Create pkg_a (depends on pkg_b)
-        fs::create_dir(root_path.join("pkg_a")).unwrap();
-        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
 
         // Package with optional dependency using dep?/feature syntax (with ?)
         let pkg_a_cargo = r#"[package]
@@ -2956,7 +2954,7 @@ pkg_b = { path = "../pkg_b", optional = true }
 [features]
 test-feature = ["dep:pkg_b", "pkg_b?/test-feature"]
 "#;
-        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
         let config = ValidatorConfig {
             features: Some(vec!["test-feature".to_string()]),
@@ -3169,17 +3167,17 @@ version = "0.1.0"
 
     /// Helper to create a test workspace for parent validation
     fn create_parent_test_workspace() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
         let workspace_cargo = r#"[workspace]
 members = ["parent", "child_a", "child_b"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create parent package that should expose child features
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -3195,10 +3193,10 @@ child-a-api = ["child-a", "parent_child_a?/api"]
 child-b = ["dep:parent_child_b"]
 # Missing: child-a-serde, child-b-api, child-b-serde
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
         // Create child_a with features
-        fs::create_dir(root_path.join("child_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child_a")).unwrap();
         let child_a_cargo = r#"[package]
 name = "parent_child_a"
 version = "0.1.0"
@@ -3208,10 +3206,10 @@ default = []
 api = []
 serde = []
 "#;
-        fs::write(root_path.join("child_a/Cargo.toml"), child_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child_a/Cargo.toml"), child_a_cargo).unwrap();
 
         // Create child_b with features
-        fs::create_dir(root_path.join("child_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child_b")).unwrap();
         let child_b_cargo = r#"[package]
 name = "parent_child_b"
 version = "0.1.0"
@@ -3221,7 +3219,7 @@ default = []
 api = []
 serde = []
 "#;
-        fs::write(root_path.join("child_b/Cargo.toml"), child_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child_b/Cargo.toml"), child_b_cargo).unwrap();
 
         temp_dir
     }
@@ -3344,14 +3342,14 @@ serde = []
 
     /// Helper to create a workspace with clippier.toml configurations
     fn create_workspace_with_parent_config() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
         let workspace_cargo = r#"[workspace]
 members = ["parent_pkg", "child_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create workspace-level clippier.toml
         let workspace_clippier = r#"
@@ -3364,10 +3362,10 @@ skip-features = ["workspace-skip"]
 dependency = "parent_pkg_child_pkg"
 prefix = "workspace-prefix"
 "#;
-        fs::write(root_path.join("clippier.toml"), workspace_clippier).unwrap();
+        switchy_fs::sync::write(root_path.join("clippier.toml"), workspace_clippier).unwrap();
 
         // Create parent package
-        fs::create_dir(root_path.join("parent_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent_pkg")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent_pkg"
 version = "0.1.0"
@@ -3379,10 +3377,10 @@ parent_pkg_child_pkg = { path = "../child_pkg", optional = true }
 default = []
 child = ["dep:parent_pkg_child_pkg"]
 "#;
-        fs::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
 
         // Create child package
-        fs::create_dir(root_path.join("child_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child_pkg")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_pkg_child_pkg"
 version = "0.1.0"
@@ -3392,7 +3390,7 @@ default = []
 api = []
 serde = []
 "#;
-        fs::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
 
         temp_dir
     }
@@ -3422,17 +3420,17 @@ serde = []
 
     #[test]
     fn test_parent_config_from_package_clippier_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
         let workspace_cargo = r#"[workspace]
 members = ["parent_pkg", "child_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Create parent package with its own clippier.toml
-        fs::create_dir(root_path.join("parent_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent_pkg")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent_pkg"
 version = "0.1.0"
@@ -3444,7 +3442,7 @@ parent_pkg_child_pkg = { path = "../child_pkg", optional = true }
 default = []
 child = ["dep:parent_pkg_child_pkg"]
 "#;
-        fs::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent_pkg/Cargo.toml"), parent_cargo).unwrap();
 
         // Package-level clippier.toml declaring it as a parent
         let pkg_clippier = r#"
@@ -3453,10 +3451,10 @@ enabled = true
 depth = 1
 skip-features = ["pkg-skip"]
 "#;
-        fs::write(root_path.join("parent_pkg/clippier.toml"), pkg_clippier).unwrap();
+        switchy_fs::sync::write(root_path.join("parent_pkg/clippier.toml"), pkg_clippier).unwrap();
 
         // Create child package
-        fs::create_dir(root_path.join("child_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child_pkg")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_pkg_child_pkg"
 version = "0.1.0"
@@ -3465,7 +3463,7 @@ version = "0.1.0"
 default = []
 api = []
 "#;
-        fs::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child_pkg/Cargo.toml"), child_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -3514,17 +3512,17 @@ api = []
 
     /// Helper to create a workspace with nested dependencies for depth testing
     fn create_nested_deps_workspace() -> TempDir {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace Cargo.toml
         let workspace_cargo = r#"[workspace]
 members = ["parent", "level1", "level2", "level3"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
         // Parent -> level1 -> level2 -> level3
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -3536,9 +3534,9 @@ parent_level1 = { path = "../level1", optional = true }
 default = []
 level1 = ["dep:parent_level1"]
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
-        fs::create_dir(root_path.join("level1")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("level1")).unwrap();
         let level1_cargo = r#"[package]
 name = "parent_level1"
 version = "0.1.0"
@@ -3551,9 +3549,9 @@ default = []
 api = []
 level2 = ["dep:parent_level2"]
 "#;
-        fs::write(root_path.join("level1/Cargo.toml"), level1_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("level1/Cargo.toml"), level1_cargo).unwrap();
 
-        fs::create_dir(root_path.join("level2")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("level2")).unwrap();
         let level2_cargo = r#"[package]
 name = "parent_level2"
 version = "0.1.0"
@@ -3566,9 +3564,9 @@ default = []
 api = []
 level3 = ["dep:parent_level3"]
 "#;
-        fs::write(root_path.join("level2/Cargo.toml"), level2_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("level2/Cargo.toml"), level2_cargo).unwrap();
 
-        fs::create_dir(root_path.join("level3")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("level3")).unwrap();
         let level3_cargo = r#"[package]
 name = "parent_level3"
 version = "0.1.0"
@@ -3578,7 +3576,7 @@ default = []
 api = []
 deep-feature = []
 "#;
-        fs::write(root_path.join("level3/Cargo.toml"), level3_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("level3/Cargo.toml"), level3_cargo).unwrap();
 
         temp_dir
     }
@@ -3724,16 +3722,16 @@ deep-feature = []
 
     #[test]
     fn test_parent_validation_cycle_detection() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         // Create workspace with circular dependencies
         let workspace_cargo = r#"[workspace]
 members = ["parent", "pkg_a", "pkg_b"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -3745,10 +3743,10 @@ parent_pkg_a = { path = "../pkg_a", optional = true }
 default = []
 pkg-a = ["dep:parent_pkg_a"]
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
         // pkg_a depends on pkg_b
-        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
         let pkg_a_cargo = r#"[package]
 name = "parent_pkg_a"
 version = "0.1.0"
@@ -3761,10 +3759,10 @@ default = []
 api = []
 pkg-b = ["dep:parent_pkg_b"]
 "#;
-        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
         // pkg_b depends on pkg_a (cycle!)
-        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
         let pkg_b_cargo = r#"[package]
 name = "parent_pkg_b"
 version = "0.1.0"
@@ -3777,7 +3775,7 @@ default = []
 api = []
 pkg-a = ["dep:parent_pkg_a"]
 "#;
-        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -3863,15 +3861,15 @@ pkg-a = ["dep:parent_pkg_a"]
 
     #[test]
     fn test_parent_validation_default_skips_underscore_features() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["parent", "child"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -3883,9 +3881,9 @@ parent_child = { path = "../child", optional = true }
 default = []
 child = ["dep:parent_child"]
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
-        fs::create_dir(root_path.join("child")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_child"
 version = "0.1.0"
@@ -3896,7 +3894,7 @@ api = []
 _internal = []
 _private_feature = []
 "#;
-        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -3944,15 +3942,15 @@ _private_feature = []
 
     #[test]
     fn test_parent_cli_skip_features_merge_with_defaults() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["parent", "child"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -3964,9 +3962,9 @@ parent_child = { path = "../child", optional = true }
 default = []
 child = ["dep:parent_child"]
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
-        fs::create_dir(root_path.join("child")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_child"
 version = "0.1.0"
@@ -3977,7 +3975,7 @@ api = []
 serde = []
 _internal = []
 "#;
-        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -4028,15 +4026,15 @@ _internal = []
 
     #[test]
     fn test_parent_validation_no_workspace_deps() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["parent"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -4047,7 +4045,7 @@ serde = "1.0"
 [features]
 default = []
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -4073,15 +4071,15 @@ default = []
 
     #[test]
     fn test_parent_validation_all_features_exposed() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["parent", "child"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         // Parent correctly exposes all child features
         let parent_cargo = r#"[package]
 name = "parent"
@@ -4096,9 +4094,9 @@ child = ["dep:parent_child"]
 child-api = ["child", "parent_child?/api"]
 child-serde = ["child", "parent_child?/serde"]
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
-        fs::create_dir(root_path.join("child")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_child"
 version = "0.1.0"
@@ -4108,7 +4106,7 @@ default = []
 api = []
 serde = []
 "#;
-        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -4131,15 +4129,15 @@ serde = []
 
     #[test]
     fn test_parent_validation_non_optional_dependency() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["parent", "child"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("parent")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("parent")).unwrap();
         let parent_cargo = r#"[package]
 name = "parent"
 version = "0.1.0"
@@ -4150,9 +4148,9 @@ parent_child = { path = "../child" }
 [features]
 default = []
 "#;
-        fs::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("parent/Cargo.toml"), parent_cargo).unwrap();
 
-        fs::create_dir(root_path.join("child")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("child")).unwrap();
         let child_cargo = r#"[package]
 name = "parent_child"
 version = "0.1.0"
@@ -4161,7 +4159,7 @@ version = "0.1.0"
 default = []
 api = []
 "#;
-        fs::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("child/Cargo.toml"), child_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {
@@ -4193,15 +4191,15 @@ api = []
 
     #[test]
     fn test_parent_package_not_found_warning() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = switchy_fs::tempdir().unwrap();
         let root_path = temp_dir.path();
 
         let workspace_cargo = r#"[workspace]
 members = ["real_pkg"]
 "#;
-        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-        fs::create_dir(root_path.join("real_pkg")).unwrap();
+        switchy_fs::sync::create_dir(root_path.join("real_pkg")).unwrap();
         let pkg_cargo = r#"[package]
 name = "real_pkg"
 version = "0.1.0"
@@ -4209,7 +4207,7 @@ version = "0.1.0"
 [features]
 default = []
 "#;
-        fs::write(root_path.join("real_pkg/Cargo.toml"), pkg_cargo).unwrap();
+        switchy_fs::sync::write(root_path.join("real_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
         let config = ValidatorConfig {
             parent_config: ParentValidationConfig {

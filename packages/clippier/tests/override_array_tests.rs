@@ -1,11 +1,10 @@
 use clippier::OutputType;
 use clippier::feature_validator::{FeatureValidator, ValidatorConfig};
-use std::fs;
-use tempfile::TempDir;
+use switchy_fs::TempDir;
 
 /// Helper to create a test workspace for override testing
 fn create_override_test_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Create workspace Cargo.toml
@@ -15,12 +14,12 @@ members = ["pkg_a", "pkg_b", "pkg_c"]
 [workspace.dependencies]
 anyhow = "1.0"
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // Create pkg_b with test-feature
-    fs::create_dir(root_path.join("pkg_b")).unwrap();
-    fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-    fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
     let pkg_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -28,12 +27,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-    fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
     // Create pkg_c with test-feature
-    fs::create_dir(root_path.join("pkg_c")).unwrap();
-    fs::create_dir(root_path.join("pkg_c/src")).unwrap();
-    fs::write(root_path.join("pkg_c/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_c")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_c/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_c/src/lib.rs"), "").unwrap();
     let pkg_c_cargo = r#"[package]
 name = "pkg_c"
 version = "0.1.0"
@@ -41,12 +40,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-    fs::write(root_path.join("pkg_c/Cargo.toml"), pkg_c_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_c/Cargo.toml"), pkg_c_cargo).unwrap();
 
     // Create pkg_a (depends on pkg_b and pkg_c but doesn't propagate test-feature)
-    fs::create_dir(root_path.join("pkg_a")).unwrap();
-    fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-    fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
     let pkg_a_cargo = r#"[package]
 name = "pkg_a"
 version = "0.1.0"
@@ -58,7 +57,7 @@ pkg_c = { path = "../pkg_c" }
 [features]
 test-feature = []
 "#;
-    fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
     temp_dir
 }
@@ -76,7 +75,7 @@ dependencies = ["pkg_b", "pkg_c"]
 type = "allow-missing"
 reason = "Testing array expansion in workspace config"
 "#;
-    fs::write(root_path.join("clippier.toml"), clippier_config).unwrap();
+    switchy_fs::sync::write(root_path.join("clippier.toml"), clippier_config).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -117,7 +116,7 @@ dependencies = ["pkg_b", "pkg_c"]
 type = "allow-missing"
 reason = "Testing array expansion in package config"
 "#;
-    fs::write(root_path.join("pkg_a/clippier.toml"), clippier_config).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/clippier.toml"), clippier_config).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -171,7 +170,7 @@ pkg_c = { path = "../pkg_c" }
 [features]
 test-feature = []
 "#;
-    fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -218,7 +217,7 @@ dependency = "pkg_c"
 type = "allow-missing"
 reason = "Single syntax"
 "#;
-    fs::write(root_path.join("clippier.toml"), clippier_single).unwrap();
+    switchy_fs::sync::write(root_path.join("clippier.toml"), clippier_single).unwrap();
 
     let config1 = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -239,7 +238,7 @@ dependencies = ["pkg_b", "pkg_c"]
 type = "allow-missing"
 reason = "Array syntax"
 "#;
-    fs::write(root_path.join("clippier.toml"), clippier_array).unwrap();
+    switchy_fs::sync::write(root_path.join("clippier.toml"), clippier_array).unwrap();
 
     let config2 = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -274,7 +273,7 @@ dependencies = ["pkg_*"]
 type = "allow-missing"
 reason = "Wildcard pattern in array"
 "#;
-    fs::write(root_path.join("clippier.toml"), clippier_config).unwrap();
+    switchy_fs::sync::write(root_path.join("clippier.toml"), clippier_config).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -308,7 +307,7 @@ dependencies = ["pkg_b", "pkg_c"]
 type = "allow-missing"
 reason = "Array syntax"
 "#;
-    fs::write(root_path.join("clippier.toml"), clippier_config).unwrap();
+    switchy_fs::sync::write(root_path.join("clippier.toml"), clippier_config).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),
@@ -401,7 +400,7 @@ dependencies = ["pkg_b", "pkg_c"]
 type = "allow-missing"
 reason = "Integration test for array overrides"
 "#;
-    fs::write(root_path.join("pkg_a/clippier.toml"), clippier_config).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/clippier.toml"), clippier_config).unwrap();
 
     let config = ValidatorConfig {
         features: Some(vec!["test-feature".to_string()]),

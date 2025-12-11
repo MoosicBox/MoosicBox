@@ -1,24 +1,23 @@
 //! Edge case and error handling tests for feature validator
 
-use std::fs;
-use tempfile::TempDir;
+use switchy_fs::TempDir;
 
 use clippier::OutputType;
 use clippier::feature_validator::{FeatureValidator, ValidatorConfig};
 
 /// Helper to create a simple workspace
 fn create_simple_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["simple"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("simple")).unwrap();
-    fs::create_dir(root_path.join("simple/src")).unwrap();
-    fs::write(root_path.join("simple/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("simple")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("simple/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("simple/src/lib.rs"), "").unwrap();
 
     let pkg_cargo = r#"[package]
 name = "simple"
@@ -28,24 +27,24 @@ version = "0.1.0"
 default = []
 fail-on-warnings = []
 "#;
-    fs::write(root_path.join("simple/Cargo.toml"), pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("simple/Cargo.toml"), pkg_cargo).unwrap();
 
     temp_dir
 }
 
 /// Helper to create workspace with unicode features
 fn create_workspace_with_unicode_features() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["unicode_pkg"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("unicode_pkg")).unwrap();
-    fs::create_dir(root_path.join("unicode_pkg/src")).unwrap();
-    fs::write(root_path.join("unicode_pkg/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("unicode_pkg")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("unicode_pkg/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("unicode_pkg/src/lib.rs"), "").unwrap();
 
     let pkg_cargo = r#"[package]
 name = "unicode_pkg"
@@ -57,24 +56,24 @@ default = []
 "test-emoji-😀" = []
 production = []
 "#;
-    fs::write(root_path.join("unicode_pkg/Cargo.toml"), pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("unicode_pkg/Cargo.toml"), pkg_cargo).unwrap();
 
     temp_dir
 }
 
 /// Helper to create workspace with multiple features
 fn create_multi_feature_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["multi"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("multi")).unwrap();
-    fs::create_dir(root_path.join("multi/src")).unwrap();
-    fs::write(root_path.join("multi/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("multi")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("multi/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("multi/src/lib.rs"), "").unwrap();
 
     let pkg_cargo = r#"[package]
 name = "multi"
@@ -86,7 +85,7 @@ test-utils = []
 test-fixtures = []
 fail-on-warnings = []
 "#;
-    fs::write(root_path.join("multi/Cargo.toml"), pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("multi/Cargo.toml"), pkg_cargo).unwrap();
 
     temp_dir
 }
@@ -151,14 +150,14 @@ async fn test_conflicting_patterns() {
 
 #[switchy_async::test]
 async fn test_empty_workspace() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Empty workspace with no members
     let workspace_cargo = r#"[workspace]
 members = []
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     let config = ValidatorConfig {
         features: None,
@@ -180,23 +179,23 @@ members = []
 
 #[switchy_async::test]
 async fn test_package_with_no_features() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["no_features"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("no_features")).unwrap();
-    fs::create_dir(root_path.join("no_features/src")).unwrap();
-    fs::write(root_path.join("no_features/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("no_features")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("no_features/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("no_features/src/lib.rs"), "").unwrap();
 
     let pkg_cargo = r#"[package]
 name = "no_features"
 version = "0.1.0"
 "#; // No [features] section
-    fs::write(root_path.join("no_features/Cargo.toml"), pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("no_features/Cargo.toml"), pkg_cargo).unwrap();
 
     let config = ValidatorConfig {
         features: None,
@@ -217,18 +216,18 @@ version = "0.1.0"
 #[switchy_async::test]
 async fn test_circular_dependency_detection() {
     // Create workspace with circular feature dependencies
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["pkg_a", "pkg_b"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // pkg_a depends on pkg_b
-    fs::create_dir(root_path.join("pkg_a")).unwrap();
-    fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-    fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
     let pkg_a_cargo = r#"[package]
 name = "pkg_a"
 version = "0.1.0"
@@ -239,12 +238,12 @@ pkg_b = { path = "../pkg_b" }
 [features]
 test = ["pkg_b/test"]
 "#;
-    fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
     // pkg_b depends on pkg_a (circular)
-    fs::create_dir(root_path.join("pkg_b")).unwrap();
-    fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-    fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
     let pkg_b_cargo = r#"[package]
 name = "pkg_b"
 version = "0.1.0"
@@ -255,7 +254,7 @@ pkg_a = { path = "../pkg_a" }
 [features]
 test = []
 "#;
-    fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
     let config = ValidatorConfig {
         features: None,
@@ -283,22 +282,22 @@ test = []
 
 #[switchy_async::test]
 async fn test_malformed_cargo_toml() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
 members = ["bad_pkg"]
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("bad_pkg")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("bad_pkg")).unwrap();
 
     // Write malformed TOML
     let bad_cargo = r#"[package
 name = "bad_pkg"
 this is not valid toml
 "#;
-    fs::write(root_path.join("bad_pkg/Cargo.toml"), bad_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("bad_pkg/Cargo.toml"), bad_cargo).unwrap();
 
     let config = ValidatorConfig {
         features: None,
@@ -413,7 +412,7 @@ async fn test_skip_features_negation_edge_case() {
 
 #[switchy_async::test]
 async fn test_workspace_only_flag_behavior() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     let workspace_cargo = r#"[workspace]
@@ -422,11 +421,11 @@ members = ["internal"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
-    fs::create_dir(root_path.join("internal")).unwrap();
-    fs::create_dir(root_path.join("internal/src")).unwrap();
-    fs::write(root_path.join("internal/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("internal")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("internal/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("internal/src/lib.rs"), "").unwrap();
 
     let pkg_cargo = r#"[package]
 name = "internal"
@@ -438,7 +437,7 @@ serde = { workspace = true, features = ["derive"] }
 [features]
 fail-on-warnings = []
 "#;
-    fs::write(root_path.join("internal/Cargo.toml"), pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("internal/Cargo.toml"), pkg_cargo).unwrap();
 
     // Test with workspace_only = true (should not check serde)
     let config_workspace = ValidatorConfig {
@@ -475,7 +474,7 @@ fail-on-warnings = []
 /// Test that feature propagation to dev-dependencies is correctly validated
 #[switchy_async::test]
 async fn test_dev_dependency_feature_propagation() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Create workspace with two packages
@@ -485,12 +484,12 @@ members = ["main_pkg", "test_util"]
 [workspace.dependencies]
 test_util = { path = "test_util" }
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // Create test utility package with a feature
-    fs::create_dir(root_path.join("test_util")).unwrap();
-    fs::create_dir(root_path.join("test_util/src")).unwrap();
-    fs::write(root_path.join("test_util/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("test_util")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("test_util/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("test_util/src/lib.rs"), "").unwrap();
 
     let test_util_cargo = r#"[package]
 name = "test_util"
@@ -499,12 +498,12 @@ version = "0.1.0"
 [features]
 test-feature = []
 "#;
-    fs::write(root_path.join("test_util/Cargo.toml"), test_util_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("test_util/Cargo.toml"), test_util_cargo).unwrap();
 
     // Create main package that uses test_util as dev-dependency with feature propagation
-    fs::create_dir(root_path.join("main_pkg")).unwrap();
-    fs::create_dir(root_path.join("main_pkg/src")).unwrap();
-    fs::write(root_path.join("main_pkg/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("main_pkg")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("main_pkg/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("main_pkg/src/lib.rs"), "").unwrap();
 
     let main_pkg_cargo = r#"[package]
 name = "main_pkg"
@@ -516,7 +515,7 @@ test_util = { workspace = true }
 [features]
 test-feature = ["test_util/test-feature"]
 "#;
-    fs::write(root_path.join("main_pkg/Cargo.toml"), main_pkg_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("main_pkg/Cargo.toml"), main_pkg_cargo).unwrap();
 
     // Validate - should NOT report "test_util is not a direct dependency"
     let config = ValidatorConfig {

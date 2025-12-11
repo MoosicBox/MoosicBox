@@ -3,16 +3,15 @@
 //! These tests create real workspace structures on disk and test the validator
 //! against them to ensure it works correctly in real-world scenarios.
 
-use std::fs;
 use std::path::Path;
-use tempfile::TempDir;
+use switchy_fs::TempDir;
 
 use clippier::OutputType;
 use clippier::feature_validator::{FeatureValidator, ValidatorConfig};
 
 /// Helper to create a complex workspace structure for testing
 fn create_complex_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Create workspace Cargo.toml
@@ -33,7 +32,7 @@ anyhow = "1.0"
 uuid = "1.0"
 reqwest = "0.11"
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // Create core package - central package with multiple features
     create_package(
@@ -176,7 +175,7 @@ crypto = []
 
 /// Helper to create a workspace with feature propagation errors
 fn create_error_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Create workspace Cargo.toml
@@ -186,7 +185,7 @@ members = ["main", "lib_a", "lib_b"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // Create main package with errors
     create_package(
@@ -247,7 +246,7 @@ test-utils = []
 
 /// Helper to create a single-package (non-workspace) project
 fn create_single_package_project() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Create single package Cargo.toml
@@ -264,7 +263,7 @@ default = []
 fail-on-warnings = []
 json = []
 "#;
-    fs::write(root_path.join("Cargo.toml"), cargo_toml).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), cargo_toml).unwrap();
 
     temp_dir
 }
@@ -272,13 +271,13 @@ json = []
 /// Helper function to create a package directory and Cargo.toml
 fn create_package(workspace_root: &Path, name: &str, cargo_content: &str) {
     let pkg_dir = workspace_root.join(name);
-    fs::create_dir(&pkg_dir).unwrap();
-    fs::write(pkg_dir.join("Cargo.toml"), cargo_content).unwrap();
+    switchy_fs::sync::create_dir(&pkg_dir).unwrap();
+    switchy_fs::sync::write(pkg_dir.join("Cargo.toml"), cargo_content).unwrap();
 
     // Create a basic lib.rs to make it a valid package
     let src_dir = pkg_dir.join("src");
-    fs::create_dir(&src_dir).unwrap();
-    fs::write(src_dir.join("lib.rs"), "// Auto-generated for testing\n").unwrap();
+    switchy_fs::sync::create_dir(&src_dir).unwrap();
+    switchy_fs::sync::write(src_dir.join("lib.rs"), "// Auto-generated for testing\n").unwrap();
 }
 
 #[switchy_async::test]

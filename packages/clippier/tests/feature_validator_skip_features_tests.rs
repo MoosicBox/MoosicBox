@@ -1,14 +1,13 @@
 //! Integration tests for --skip-features CLI argument
 
-use std::fs;
-use tempfile::TempDir;
+use switchy_fs::TempDir;
 
 use clippier::OutputType;
 use clippier::feature_validator::{FeatureValidator, ValidatorConfig};
 
 /// Helper to create workspace with various feature types
 fn create_multi_feature_workspace() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = switchy_fs::tempdir().unwrap();
     let root_path = temp_dir.path();
 
     // Workspace Cargo.toml
@@ -18,12 +17,12 @@ members = ["pkg_a", "pkg_b"]
 [workspace.dependencies]
 serde = "1.0"
 "#;
-    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
 
     // Package A with multiple feature types
-    fs::create_dir(root_path.join("pkg_a")).unwrap();
-    fs::create_dir(root_path.join("pkg_a/src")).unwrap();
-    fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_a/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
 
     let pkg_a_cargo = r#"[package]
 name = "pkg_a"
@@ -42,12 +41,12 @@ mp3-codec = []
 flac-codec = []
 opus-codec = []
 "#;
-    fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
 
     // Package B
-    fs::create_dir(root_path.join("pkg_b")).unwrap();
-    fs::create_dir(root_path.join("pkg_b/src")).unwrap();
-    fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b")).unwrap();
+    switchy_fs::sync::create_dir(root_path.join("pkg_b/src")).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
 
     let pkg_b_cargo = r#"[package]
 name = "pkg_b"
@@ -59,7 +58,7 @@ fail-on-warnings = []
 test-utils = []
 test-fixtures = []
 "#;
-    fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+    switchy_fs::sync::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
 
     temp_dir
 }
