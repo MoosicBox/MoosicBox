@@ -95,6 +95,7 @@ pin_project! {
     /// A future that completes at a specific instant in time.
     ///
     /// This future resolves when the simulator time reaches or exceeds the target instant.
+    #[allow(clippy::struct_field_names)]
     #[derive(Debug, Copy, Clone)]
     pub struct Instant {
         #[pin]
@@ -192,6 +193,7 @@ pin_project! {
     ///
     /// This is the simulator's implementation of an interval timer. It yields values
     /// at regular intervals controlled by the simulator's time advancement.
+    #[allow(clippy::struct_field_names)]
     #[derive(Debug, Copy, Clone)]
     pub struct Interval {
         #[pin]
