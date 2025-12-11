@@ -2220,7 +2220,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             );
 
                             #[cfg(feature = "debug")]
-                            if let Some(mut pos) = pos {
+                            if let Some(pos) = pos {
                                 let painter = ui.painter();
                                 let text = format!("({}, {}, {width}, {height})", pos.x, pos.y);
                                 let galley = painter.layout_no_wrap(
@@ -2237,8 +2237,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     egui::FontId::default(),
                                     Color32::RED,
                                 );
-
-                                pos.y += rect.height();
 
                                 if container.calculated_padding_left.is_some()
                                     || container.calculated_padding_right.is_some()
@@ -2271,8 +2269,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                         egui::FontId::default(),
                                         Color32::RED,
                                     );
-
-                                    pos.y += rect.height();
                                 }
 
                                 if container.calculated_margin_left.is_some()
@@ -2306,8 +2302,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                         egui::FontId::default(),
                                         Color32::RED,
                                     );
-
-                                    pos.y += rect.height();
                                 }
                             }
 
