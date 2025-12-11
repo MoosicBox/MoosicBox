@@ -473,6 +473,11 @@ inputs:
         required: false
         default: ""
 
+    run-matrix-print-commands:
+        description: "Print each command before execution with copy-pasteable local reproduction instructions for configured shells (uses run-matrix-debug-shells)"
+        required: false
+        default: "true"
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -839,6 +844,7 @@ runs:
               INPUT_RUN_MATRIX_AUTO_UPLOAD: ${{ inputs.run-matrix-auto-upload }}
               INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-auto-upload-only-on-failure }}
               INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE: ${{ inputs.run-matrix-aggregate-output-file }}
+              INPUT_RUN_MATRIX_PRINT_COMMANDS: ${{ inputs.run-matrix-print-commands }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

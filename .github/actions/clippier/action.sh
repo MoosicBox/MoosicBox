@@ -110,6 +110,35 @@ trap 'generate_error_summary' ERR
 # End of Error Handling Infrastructure
 # =============================================================================
 
+# =============================================================================
+# Debug Output Infrastructure
+# =============================================================================
+
+# Print relevant environment variables for debugging
+#
+# Outputs key environment variables that affect CI behavior to help users
+# reproduce issues locally. Uses stdout so it appears in normal log flow.
+print_debug_environment() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔍 Environment Debug Info:"
+    echo "  CI=${CI:-<not set>}"
+    echo "  GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-<not set>}"
+    echo "  GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME:-<not set>}"
+    echo "  RUNNER_OS=${RUNNER_OS:-<not set>}"
+    echo "  RUNNER_TEMP=${RUNNER_TEMP:-<not set>}"
+    echo "  CARGO_TERM_COLOR=${CARGO_TERM_COLOR:-<not set>}"
+    echo "  RUST_BACKTRACE=${RUST_BACKTRACE:-<not set>}"
+    echo "  RUSTFLAGS=${RUSTFLAGS:-<not set>}"
+    echo "  RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-<not set>}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
+# =============================================================================
+# End of Debug Output Infrastructure
+# =============================================================================
+
 # Specific error handler for missing clippier binary
 handle_binary_not_found() {
     {
@@ -533,7 +562,17 @@ build_clippier_command() {
 
 run_clippier() {
     local cmd=$(build_clippier_command)
-    echo "Running: $cmd" >&2
+
+    # Print the command clearly for debugging/reproduction
+    # Use stderr since stdout is captured for JSON output
+    echo "" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "🔧 Clippier Command:" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "$cmd" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "" >&2
+
     local output
     output=$(eval "$cmd" | tail -1 | jq -c .)
 
@@ -1291,6 +1330,9 @@ setup_ci_environment() {
 
 main() {
     echo "🚀 Running clippier action for command: $INPUT_COMMAND"
+
+    # Print environment debug info
+    print_debug_environment
 
     if [[ "$INPUT_COMMAND" == "setup" ]]; then
         setup_ci_environment

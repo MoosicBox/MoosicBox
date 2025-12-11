@@ -122,6 +122,62 @@ get_debug_command() {
     fi
 }
 
+# Print reproduction commands for all configured shells before test execution
+#
+# Outputs shell-specific commands that users can copy-paste to reproduce
+# the test locally. Uses the same shell formats as the failure summary.
+#
+# Arguments:
+#   $1 - working_dir: Working directory path
+#   $2 - command: Command to execute (may contain newlines)
+#
+# Environment:
+#   INPUT_RUN_MATRIX_DEBUG_SHELLS: Comma-separated list of shells (default: bash)
+#   CI, CARGO_TERM_COLOR, RUST_BACKTRACE, RUSTFLAGS: Included in env prefix if set
+#
+# Side effects:
+#   Prints formatted commands to stdout (normal log flow)
+print_reproduction_commands() {
+    local working_dir="$1"
+    local command="$2"
+
+    local debug_shells="${INPUT_RUN_MATRIX_DEBUG_SHELLS:-bash}"
+
+    # Build environment variables string
+    local env_prefix="CI=true"
+    [[ -n "${CARGO_TERM_COLOR:-}" ]] && env_prefix="$env_prefix CARGO_TERM_COLOR=$CARGO_TERM_COLOR"
+    [[ -n "${RUST_BACKTRACE:-}" ]] && env_prefix="$env_prefix RUST_BACKTRACE=$RUST_BACKTRACE"
+    [[ -n "${RUSTFLAGS:-}" ]] && env_prefix="$env_prefix RUSTFLAGS='$RUSTFLAGS'"
+
+    echo ""
+    echo "📋 Reproduce locally:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Parse comma-separated shell list
+    IFS=',' read -ra SHELLS <<< "$debug_shells"
+    for shell in "${SHELLS[@]}"; do
+        # Trim whitespace
+        shell=$(echo "$shell" | xargs)
+
+        # Capitalize shell name for display
+        local first_char="$(echo "${shell:0:1}" | tr '[:lower:]' '[:upper:]')"
+        local shell_display="${first_char}${shell:1}"
+
+        # Generate debug command for this shell
+        local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$command")
+
+        # Prepend env vars
+        debug_cmd="$env_prefix $debug_cmd"
+
+        echo ""
+        echo "$shell_display:"
+        echo "$debug_cmd"
+    done
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 # Initialize summary state directory
 #
 # Creates the state directory for accumulating summary data in combined mode.
@@ -900,7 +956,12 @@ run_matrix_single_command_mode() {
         local feature_combo="${FEATURE_COMBINATIONS[$iteration]}"
 
         echo ""
-        echo "### Iteration $((iteration + 1))/$total_iterations: Features [$feature_combo]"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🧪 Iteration $((iteration + 1))/$total_iterations"
+        echo "📦 Package: $package_name"
+        echo "🎯 Features: [$feature_combo]"
+        echo "📂 Working Directory: $working_dir"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
         # Render the entire script with template variables
         local rendered_script=$(render_template \
@@ -921,13 +982,20 @@ run_matrix_single_command_mode() {
             fi
         fi
 
+        # Print reproduction commands if enabled (default: true)
+        local print_commands="${INPUT_RUN_MATRIX_PRINT_COMMANDS:-true}"
+        if [[ "$print_commands" == "true" ]]; then
+            print_reproduction_commands "$working_dir" "$rendered_script"
+        fi
+
         total_runs=$((total_runs + 1))
 
         # Create temp file for output
         local output_file=$(mktemp)
         local start_time=$(date +%s.%N)
 
-        echo "RUNNING script for features [$feature_combo]"
+        echo ""
+        echo "▶️  RUNNING script for features [$feature_combo]"
         if [[ "$verbose" == "true" ]]; then
             echo "Script content:"
             echo "$rendered_script" | sed 's/^/  /'
