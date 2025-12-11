@@ -7,7 +7,7 @@ use std::path::Path;
 pub mod test_resources {
     use super::Path;
     use serde::{Deserialize, Serialize};
-    use tempfile::TempDir;
+    use switchy_fs::TempDir;
 
     /// Representation of a Cargo.lock file for testing.
     ///
@@ -117,7 +117,7 @@ pub mod test_resources {
 
         // Get workspace members from the workspace Cargo.toml
         let workspace_cargo_toml = temp_dir.path().join("Cargo.toml");
-        let workspace_content = std::fs::read_to_string(&workspace_cargo_toml)
+        let workspace_content = switchy_fs::sync::read_to_string(&workspace_cargo_toml)
             .expect("Failed to read workspace Cargo.toml");
 
         let workspace_toml: toml::Value =
@@ -144,20 +144,26 @@ pub mod test_resources {
     /// * If fails to read the Cargo.lock file
     #[must_use]
     pub fn load_cargo_lock(workspace_name: &str, cargo_lock_name: &str) -> crate::CargoLock {
-        let cargo_lock_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let cargo_locks_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("test-resources")
             .join("workspaces")
             .join(workspace_name)
-            .join("cargo-locks")
-            .join(format!("{cargo_lock_name}.json"));
+            .join("cargo-locks");
+        let cargo_lock_path = cargo_locks_dir.join(format!("{cargo_lock_name}.json"));
 
-        let cargo_lock_content = std::fs::read_to_string(&cargo_lock_path).unwrap_or_else(|e| {
-            panic!(
-                "Failed to read cargo lock file {}: {}",
-                cargo_lock_path.display(),
-                e
-            )
-        });
+        // Seed from real filesystem when in simulator mode
+        // seed_from_real_fs expects a directory, so seed the cargo-locks directory
+        switchy_fs::seed_from_real_fs_same_path(&cargo_locks_dir)
+            .expect("Failed to seed cargo locks directory");
+
+        let cargo_lock_content =
+            switchy_fs::sync::read_to_string(&cargo_lock_path).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to read cargo lock file {}: {}",
+                    cargo_lock_path.display(),
+                    e
+                )
+            });
 
         let cargo_lock: CargoLock = serde_json::from_str(&cargo_lock_content).unwrap_or_else(|e| {
             panic!(
@@ -198,13 +204,13 @@ pub mod test_resources {
             writeln!(workspace_toml, "{dep} = \"1.0\"").unwrap();
         }
 
-        std::fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
+        switchy_fs::sync::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
             .expect("Failed to write workspace Cargo.toml");
 
         // Create package directories and Cargo.toml files
         for (package_name, dependencies) in package_configs {
             let package_path = temp_dir.path().join("packages").join(package_name);
-            std::fs::create_dir_all(package_path.join("src"))
+            switchy_fs::sync::create_dir_all(package_path.join("src"))
                 .expect("Failed to create package directory");
 
             let mut package_toml = format!(
@@ -219,7 +225,7 @@ pub mod test_resources {
                 }
             }
 
-            std::fs::write(package_path.join("Cargo.toml"), package_toml)
+            switchy_fs::sync::write(package_path.join("Cargo.toml"), package_toml)
                 .expect("Failed to write package Cargo.toml");
         }
 
@@ -230,11 +236,16 @@ pub mod test_resources {
         (temp_dir, workspace_members)
     }
 
+    /// Copies a directory recursively from the real filesystem to the `switchy_fs` filesystem.
+    ///
+    /// This function reads from the real filesystem (for test resources) and writes
+    /// to the `switchy_fs` filesystem (which may be simulated or real depending on features).
     fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-        if !dst.exists() {
-            std::fs::create_dir_all(dst)?;
+        if !switchy_fs::exists(dst) {
+            switchy_fs::sync::create_dir_all(dst)?;
         }
 
+        // Read from real filesystem since test-resources are on disk
         let mut entries: Vec<_> = std::fs::read_dir(src)?.collect::<Result<Vec<_>, _>>()?;
         entries.sort_by_key(std::fs::DirEntry::file_name);
 
@@ -245,7 +256,9 @@ pub mod test_resources {
             if src_path.is_dir() {
                 copy_dir_recursive(&src_path, &dst_path)?;
             } else {
-                std::fs::copy(&src_path, &dst_path)?;
+                // Read from real filesystem, write to switchy_fs
+                let content = std::fs::read(&src_path)?;
+                switchy_fs::sync::write(&dst_path, content)?;
             }
         }
 
