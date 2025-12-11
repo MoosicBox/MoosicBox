@@ -2868,8 +2868,8 @@ impl SilkDecoder {
         let use_interpolated =
             frame_size_ms == 20 && (subframe_index == 0 || subframe_index == 1) && w_q2 < 4;
 
-        let lpc_coeffs_q12 = if use_interpolated && lpc_n1_q15.is_some() {
-            Self::limit_lpc_coefficients(lpc_n1_q15.unwrap(), bandwidth)?
+        let lpc_coeffs_q12 = if use_interpolated && let Some(lpc_n1_q15) = lpc_n1_q15 {
+            Self::limit_lpc_coefficients(lpc_n1_q15, bandwidth)?
         } else {
             Self::limit_lpc_coefficients(lpc_n2_q15, bandwidth)?
         };
