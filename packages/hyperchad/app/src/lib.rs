@@ -34,7 +34,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::{Parser, Subcommand, arg, command};
+use clap::{Parser, Subcommand};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
 use hyperchad_router::{Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};

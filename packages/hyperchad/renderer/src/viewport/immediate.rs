@@ -45,7 +45,7 @@
 #[derive(Debug, Clone)]
 pub struct Viewport {
     /// Parent viewport in the hierarchy, if any
-    pub parent: Option<Box<Viewport>>,
+    pub parent: Option<Box<Self>>,
     /// Position and dimensions of this viewport's content
     pub pos: Pos,
     /// Viewport's visible area position and dimensions

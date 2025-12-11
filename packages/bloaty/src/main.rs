@@ -154,7 +154,7 @@ fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
     let base_filename = args
         .report_file
         .clone()
-        .map_or_else(|| format!("bloaty_report_{timestamp}"), |path| path);
+        .unwrap_or_else(|| format!("bloaty_report_{timestamp}"));
 
     let should_output_text = args.output_format.contains(&"text".to_string())
         || args.output_format.contains(&"all".to_string());

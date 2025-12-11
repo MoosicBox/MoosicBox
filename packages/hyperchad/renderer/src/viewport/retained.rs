@@ -88,7 +88,7 @@ impl std::fmt::Debug for dyn WidgetPosition {
 #[derive(Clone)]
 pub struct Viewport {
     widget: Arc<Box<dyn WidgetPosition>>,
-    parent: Option<Box<Viewport>>,
+    parent: Option<Box<Self>>,
     position: Arc<Box<dyn ViewportPosition + Send + Sync>>,
 }
 

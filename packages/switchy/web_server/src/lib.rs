@@ -606,7 +606,7 @@ pub struct Scope {
     /// Routes directly under this scope
     pub routes: Vec<Route>,
     /// Nested sub-scopes
-    pub scopes: Vec<Scope>,
+    pub scopes: Vec<Self>,
 }
 
 impl Scope {

@@ -55,11 +55,11 @@ pub enum Expression {
     /// Binary operation (comparison, logical)
     BinaryOp {
         /// Left operand
-        left: Box<Expression>,
+        left: Box<Self>,
         /// Operator type
         op: BinaryOperator,
         /// Right operand
-        right: Box<Expression>,
+        right: Box<Self>,
     },
 
     /// Unary operation (negation)
@@ -67,7 +67,7 @@ pub enum Expression {
         /// Operator type
         op: UnaryOperator,
         /// Expression to operate on
-        expr: Box<Expression>,
+        expr: Box<Self>,
     },
 
     /// Function call with arguments
@@ -75,15 +75,15 @@ pub enum Expression {
         /// Function name
         name: String,
         /// Function arguments
-        args: Vec<Expression>,
+        args: Vec<Self>,
     },
 
     /// Array/object indexing
     Index {
         /// Expression to index into
-        expr: Box<Expression>,
+        expr: Box<Self>,
         /// Index expression
-        index: Box<Expression>,
+        index: Box<Self>,
     },
 }
 

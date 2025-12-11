@@ -759,7 +759,6 @@ macro_rules! die_or_unimplemented {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[derive(Debug, PartialEq)]
     enum TestError {

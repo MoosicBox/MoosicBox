@@ -343,11 +343,11 @@ pub enum DataType {
     Jsonb, // PostgreSQL binary JSON
 
     // Specialized types
-    Uuid,                 // UUID type
-    Xml,                  // XML type
-    Array(Box<DataType>), // PostgreSQL arrays
-    Inet,                 // IP address
-    MacAddr,              // MAC address
+    Uuid,             // UUID type
+    Xml,              // XML type
+    Array(Box<Self>), // PostgreSQL arrays
+    Inet,             // IP address
+    MacAddr,          // MAC address
 
     // Fallback for database-specific types
     Custom(String), // For types we don't explicitly handle

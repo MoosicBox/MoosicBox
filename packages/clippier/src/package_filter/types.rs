@@ -187,9 +187,9 @@ pub enum FilterExpression {
     /// A single filter condition
     Condition(PackageFilter),
     /// Logical AND - all children must be true
-    And(Vec<FilterExpression>),
+    And(Vec<Self>),
     /// Logical OR - at least one child must be true
-    Or(Vec<FilterExpression>),
+    Or(Vec<Self>),
     /// Logical NOT - inverts child result
-    Not(Box<FilterExpression>),
+    Not(Box<Self>),
 }

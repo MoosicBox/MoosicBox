@@ -1751,7 +1751,7 @@ fn load_workspace_data(workspace_root: &Path) -> Result<WorkspaceData> {
         .and_then(|w| w.get("members"))
         .and_then(|m| m.as_array())
         .and_then(|a| a.iter().map(|v| v.as_str()).collect::<Option<Vec<_>>>())
-        .map_or_else(|| vec!["."], |members| members);
+        .unwrap_or_else(|| vec!["."]);
 
     let mut workspace_packages = BTreeSet::new();
     let mut package_paths = BTreeMap::new();
