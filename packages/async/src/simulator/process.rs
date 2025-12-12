@@ -24,9 +24,13 @@
 
 use std::collections::VecDeque;
 use std::ffi::OsStr;
-use std::io;
+use std::io::{self, Cursor};
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+
+use tokio::io::{AsyncRead, ReadBuf};
 
 /// Simulated exit status.
 ///
@@ -490,7 +494,24 @@ impl Command {
             ));
         }
 
-        Ok(Child { response })
+        // Create stdout/stderr handles based on Stdio configuration
+        let stdout = if matches!(self.stdout, Stdio::Piped) {
+            Some(ChildStdout::new(response.stdout.clone()))
+        } else {
+            None
+        };
+
+        let stderr = if matches!(self.stderr, Stdio::Piped) {
+            Some(ChildStderr::new(response.stderr.clone()))
+        } else {
+            None
+        };
+
+        Ok(Child {
+            response,
+            stdout,
+            stderr,
+        })
     }
 }
 
@@ -500,6 +521,16 @@ impl Command {
 #[derive(Debug)]
 pub struct Child {
     response: MockResponse,
+    /// Handle to the child's standard output.
+    ///
+    /// This is `Some` if stdout was set to `Stdio::piped()` on the command.
+    /// Use `.take()` to take ownership of the handle.
+    pub stdout: Option<ChildStdout>,
+    /// Handle to the child's standard error.
+    ///
+    /// This is `Some` if stderr was set to `Stdio::piped()` on the command.
+    /// Use `.take()` to take ownership of the handle.
+    pub stderr: Option<ChildStderr>,
 }
 
 impl Child {
@@ -532,25 +563,101 @@ impl Child {
             stderr: self.response.stderr.clone(),
         })
     }
+
+    /// Forces the child process to exit.
+    ///
+    /// In the simulator, this is a no-op since there's no real process to kill.
+    /// The method exists for API compatibility with `tokio::process::Child`.
+    ///
+    /// # Errors
+    ///
+    /// This simulated version never fails.
+    #[allow(clippy::unused_async)] // Keep async for API compatibility with tokio::process::Child
+    pub async fn kill(&mut self) -> io::Result<()> {
+        // No-op in simulator - there's no real process to kill
+        Ok(())
+    }
 }
 
 /// A handle to a child process's standard input.
 ///
-/// Placeholder for API compatibility.
+/// In the simulator, this is a no-op sink that discards all written data.
 #[derive(Debug)]
 pub struct ChildStdin;
 
 /// A handle to a child process's standard output.
 ///
-/// Placeholder for API compatibility.
+/// In the simulator, this reads from the mocked stdout data.
 #[derive(Debug)]
-pub struct ChildStdout;
+pub struct ChildStdout {
+    data: Cursor<Vec<u8>>,
+}
+
+impl ChildStdout {
+    /// Creates a new `ChildStdout` with the given data.
+    pub(crate) const fn new(data: Vec<u8>) -> Self {
+        Self {
+            data: Cursor::new(data),
+        }
+    }
+}
+
+impl AsyncRead for ChildStdout {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let data = self.data.get_ref();
+        #[allow(clippy::cast_possible_truncation)]
+        // Position can never exceed Vec length (which is usize)
+        let pos = self.data.position() as usize;
+        let remaining = &data[pos..];
+
+        let to_read = std::cmp::min(remaining.len(), buf.remaining());
+        buf.put_slice(&remaining[..to_read]);
+        self.data.set_position((pos + to_read) as u64);
+
+        Poll::Ready(Ok(()))
+    }
+}
 
 /// A handle to a child process's standard error.
 ///
-/// Placeholder for API compatibility.
+/// In the simulator, this reads from the mocked stderr data.
 #[derive(Debug)]
-pub struct ChildStderr;
+pub struct ChildStderr {
+    data: Cursor<Vec<u8>>,
+}
+
+impl ChildStderr {
+    /// Creates a new `ChildStderr` with the given data.
+    pub(crate) const fn new(data: Vec<u8>) -> Self {
+        Self {
+            data: Cursor::new(data),
+        }
+    }
+}
+
+impl AsyncRead for ChildStderr {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let data = self.data.get_ref();
+        #[allow(clippy::cast_possible_truncation)]
+        // Position can never exceed Vec length (which is usize)
+        let pos = self.data.position() as usize;
+        let remaining = &data[pos..];
+
+        let to_read = std::cmp::min(remaining.len(), buf.remaining());
+        buf.put_slice(&remaining[..to_read]);
+        self.data.set_position((pos + to_read) as u64);
+
+        Poll::Ready(Ok(()))
+    }
+}
 
 #[cfg(test)]
 mod tests {
