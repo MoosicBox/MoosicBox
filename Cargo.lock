@@ -4422,6 +4422,9 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "fax"
@@ -4600,7 +4603,18 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "nanorand",
+ "spin",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
+dependencies = [
+ "fastrand",
+ "futures-core",
+ "futures-sink",
  "spin",
 ]
 
@@ -5964,7 +5978,7 @@ dependencies = [
 name = "hyperchad_actions"
 version = "0.1.4"
 dependencies = [
- "flume",
+ "flume 0.12.0",
  "hyperchad_color",
  "hyperchad_transformer_models",
  "log 0.4.29",
@@ -5983,7 +5997,7 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "clap 4.5.53",
- "flume",
+ "flume 0.12.0",
  "hyperchad_actions",
  "hyperchad_renderer",
  "hyperchad_renderer_egui",
@@ -6108,7 +6122,7 @@ dependencies = [
  "async-trait",
  "eframe",
  "egui_extras",
- "flume",
+ "flume 0.12.0",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_renderer",
@@ -6138,7 +6152,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "fltk",
- "flume",
+ "flume 0.12.0",
  "hyperchad_actions",
  "hyperchad_renderer",
  "hyperchad_transformer",
@@ -6160,7 +6174,7 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "bytes",
- "flume",
+ "flume 0.12.0",
  "html-escape",
  "hyperchad_renderer",
  "hyperchad_renderer_html_actix",
@@ -6194,7 +6208,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "flate2",
- "flume",
+ "flume 0.12.0",
  "futures-util",
  "hyperchad_renderer",
  "log 0.4.29",
@@ -6225,7 +6239,7 @@ name = "hyperchad_renderer_html_http"
 version = "0.1.4"
 dependencies = [
  "bytes",
- "flume",
+ "flume 0.12.0",
  "http 1.4.0",
  "hyperchad_color",
  "hyperchad_renderer",
@@ -6267,7 +6281,7 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "bytes",
- "flume",
+ "flume 0.12.0",
  "hyperchad_renderer",
  "log 0.4.29",
  "moosicbox_assert",
@@ -6313,7 +6327,7 @@ version = "0.1.4"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "flume",
+ "flume 0.12.0",
  "futures",
  "hyper 0.10.16",
  "hyperchad_renderer",
@@ -7870,7 +7884,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f43e377ae111ceb4630fc8239cf7af8c894193f02bb23976177a475007977417"
 dependencies = [
  "fastrand",
- "flume",
+ "flume 0.11.1",
  "if-addrs 0.14.0",
  "log 0.4.29",
  "mio",
@@ -8179,7 +8193,7 @@ dependencies = [
  "app-tauri-plugin-player",
  "async-trait",
  "console-subscriber",
- "flume",
+ "flume 0.12.0",
  "http 1.4.0",
  "hyperchad",
  "kanal",
@@ -8250,7 +8264,7 @@ name = "moosicbox_app_native"
 version = "0.1.4"
 dependencies = [
  "console-subscriber",
- "flume",
+ "flume 0.12.0",
  "hyperchad",
  "log 0.4.29",
  "moosicbox_app_models",
@@ -8427,7 +8441,7 @@ name = "moosicbox_async_service"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "flume",
+ "flume 0.12.0",
  "futures",
  "log 0.4.29",
  "pretty_assertions",
@@ -8442,7 +8456,7 @@ name = "moosicbox_audio_decoder"
 version = "0.1.4"
 dependencies = [
  "bytes",
- "flume",
+ "flume 0.12.0",
  "futures",
  "log 0.4.29",
  "moosicbox_opus",
@@ -8484,7 +8498,7 @@ dependencies = [
  "bytes",
  "cpal",
  "fdk-aac",
- "flume",
+ "flume 0.12.0",
  "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
@@ -8672,7 +8686,7 @@ dependencies = [
  "actix-web",
  "atomic_float",
  "bytes",
- "flume",
+ "flume 0.12.0",
  "futures",
  "futures-core",
  "log 0.4.29",
@@ -9122,7 +9136,7 @@ dependencies = [
  "atomic_float",
  "bytes",
  "env_logger 0.11.8",
- "flume",
+ "flume 0.12.0",
  "futures",
  "local-ip-address",
  "log 0.4.29",
@@ -9339,7 +9353,7 @@ dependencies = [
  "actix-web",
  "actix-ws",
  "console-subscriber",
- "flume",
+ "flume 0.12.0",
  "futures-util",
  "local-ip-address",
  "log 0.4.29",
@@ -9809,15 +9823,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
 dependencies = [
  "rand 0.8.5",
-]
-
-[[package]]
-name = "nanorand"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
-dependencies = [
- "getrandom 0.2.16",
 ]
 
 [[package]]
@@ -14498,7 +14503,7 @@ checksum = "c2d12fe70b2c1b4401038055f90f151b78208de1f9f89a7dbfd41587a10c3eea"
 dependencies = [
  "atoi",
  "chrono",
- "flume",
+ "flume 0.11.1",
  "futures-channel",
  "futures-core",
  "futures-executor",
@@ -15252,7 +15257,7 @@ dependencies = [
 name = "switchy_async"
 version = "0.1.4"
 dependencies = [
- "flume",
+ "flume 0.12.0",
  "futures",
  "log 0.4.29",
  "pin-project-lite",
@@ -15516,7 +15521,7 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "bytes",
- "flume",
+ "flume 0.12.0",
  "futures",
  "log 0.4.29",
  "paste",
@@ -15569,7 +15574,7 @@ dependencies = [
  "actix-web",
  "async-recursion",
  "async-trait",
- "flume",
+ "flume 0.12.0",
  "futures",
  "itertools 0.14.0",
  "log 0.4.29",
