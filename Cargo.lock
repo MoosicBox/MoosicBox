@@ -2753,7 +2753,6 @@ dependencies = [
  "switchy_async",
  "switchy_fs",
  "switchy_random",
- "tempfile",
  "test-log",
  "thiserror 2.0.17",
  "toml 0.9.8",
