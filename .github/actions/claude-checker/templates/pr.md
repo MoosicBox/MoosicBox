@@ -54,7 +54,7 @@ GUIDELINES:
       → Implement changes to the SPECIFIC code mentioned
       → **CRITICAL - MANDATORY VERIFICATION BEFORE ANY COMMIT:**
 
-${include('rust/verification-checklist', { package_name: '' })}
+${project_type == 'rust' ? include('rust/verification-checklist', { package_name: '' }) : include('node/verification-checklist', { package_name: '' })}
 
       → Create commits with descriptive messages
       → **DO NOT push commits - the workflow will handle pushing safely**

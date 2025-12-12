@@ -25,7 +25,7 @@ Before reviewing, check if `${readme_path}` exists at `${package_path}/${readme_
 
 - Create a new README.md from scratch
 - Base it on the actual code in `${package_path}/src/`
-- Check `${package_path}/Cargo.toml` for package metadata (name, description, dependencies)
+  ${project_type == 'rust' ? '- Check `' + package_path + '/Cargo.toml` for package metadata (name, description, dependencies)' : ''}${project_type == 'node' ? '- Check `' + package_path + '/package.json` for package metadata (name, description, dependencies)' : ''}
 - Include standard sections: Description, Features (if applicable), Installation, Usage, License
 - Follow the public API documentation rules below
 - Keep it concise but complete for fundamental usage
@@ -125,10 +125,8 @@ ${include('commit-message-instructions', { commit_type: 'changes to the README',
 
 1. ${include('regression-check', { file_path: readme_path, repository: repository })}
 
-2. **Check Claims Against Code**
-    - Read the code at `${package_path}/src/` to verify README claims
-    - Compare API examples with actual function signatures
-    - Check `${package_path}/Cargo.toml` for dependency accuracy
+2. **Check Claims Against Code** - Read the code at `${package_path}/src/` to verify README claims - Compare API examples with actual function signatures
+   ${project_type == 'rust' ? '    - Check `' + package_path + '/Cargo.toml` for dependency accuracy' : ''}${project_type == 'node' ? ' - Check `' + package_path + '/package.json` for dependency accuracy' : ''}
 
 3. **Identify Only Fundamental Issues**
     - Focus on factual errors and critical omissions

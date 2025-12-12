@@ -33,21 +33,13 @@ Scan the codebase for security vulnerabilities. Report all findings at or above 
 4. **Fix issues** where remediation is straightforward
 5. **Flag for review** issues that require architectural changes
 
-${include('rust/security-checklist', { severity_threshold: severity_threshold })}
+${project_type == 'rust' ? include('rust/security-checklist', { severity_threshold: severity_threshold }) : include('node/security-checklist', { severity_threshold: severity_threshold })}
 
 ## Dependency Audit
 
 Before scanning source code, run:
 
-```bash
-# Install cargo-audit if not present
-cargo install cargo-audit
-
-# Run audit
-cargo audit
-```
-
-Document any findings from `cargo audit` in your report.
+${project_type == 'rust' ? '`bash\n# Install cargo-audit if not present\ncargo install cargo-audit\n\n# Run audit\ncargo audit\n`\n\nDocument any findings from `cargo audit` in your report.' : '`bash\n# Run audit\n' + pm_audit() + '\n`\n\nDocument any findings from the audit in your report.'}
 
 ## Scope Exclusions
 
@@ -59,7 +51,7 @@ Skip the following when scanning:
 - Test code (`#[cfg(test)]` modules) - unless testing security features
 - Example code (`examples/` directories) - document but don't fix
 
-${include('rust/verification-checklist', { package_name: '', run_tests: true })}
+${project_type == 'rust' ? include('rust/verification-checklist', { package_name: '', run_tests: true }) : include('node/verification-checklist', { package_name: '', run_tests: true })}
 
 ${include('commit-message-instructions', { commit_type: 'security fixes', example_bullets: '- Fixed path traversal vulnerability in file handler by validating and canonicalizing paths\\n- Replaced unwrap() with proper error handling for user input parsing in config module\\n- Removed hardcoded API key from constants and moved to environment variable\\n- Updated vulnerable dependency xyz from 1.2.3 to 1.2.5 (fixes CVE-2024-XXXXX)', no_changes_message: 'No security issues found at or above severity threshold' })}
 

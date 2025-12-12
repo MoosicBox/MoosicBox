@@ -42,7 +42,7 @@ CRITICAL: Your default behavior is to EXPLAIN and ANALYZE, NOT to implement code
 
     **When implementing (ONLY if explicitly requested):**
 
-${include('rust/verification-checklist', { package_name: '' })}
+${project_type == 'rust' ? include('rust/verification-checklist', { package_name: '' }) : include('node/verification-checklist', { package_name: '' })}
 
     → Create commits with descriptive messages
     → Commit message format: "fix: [description] (#${issue_number})"

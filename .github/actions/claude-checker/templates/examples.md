@@ -41,9 +41,9 @@ Ensure ${package_name} has working examples demonstrating:
 - Include comments explaining the code
 - Examples should demonstrate best practices
 
-${include('rust/verification-checklist', { package_name: package_name, run_tests: false })}
+${project_type == 'rust' ? include('rust/verification-checklist', { package_name: package_name, run_tests: false }) : include('node/verification-checklist', { package_name: package_name, run_tests: false })}
 
-After running the verification checklist, also run `cargo run --example <name>` for each example to verify it works.
+${project_type == 'rust' ? 'After running the verification checklist, also run `cargo run --example <name>` for each example to verify it works.' : 'After running the verification checklist, also run `' + pm_exec('tsx examples/<name>.ts') + '` (for TypeScript) or `node examples/<name>.js` (for JavaScript) for each example to verify it works.'}
 
 ${include('commit-message-instructions', { commit_type: 'changes to examples', example_bullets: '- Added new `basic_usage.rs` example demonstrating core API functionality\\n- Fixed `advanced.rs` example to use correct async runtime setup\\n- Updated example README with clearer explanations of each example\'s purpose', no_changes_message: 'No changes required - examples are adequate' })}
 

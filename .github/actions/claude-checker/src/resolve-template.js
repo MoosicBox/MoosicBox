@@ -5,6 +5,243 @@ const path = require('path');
 const yaml = require('js-yaml');
 const matter = require('gray-matter');
 
+// =============================================================================
+// Project Detection Functions
+// =============================================================================
+
+/**
+ * Get the path to use for detection (monorepo-aware)
+ * If package_path is specified and has its own config files, use it
+ */
+function getDetectionPath(cwd, packagePath) {
+    if (packagePath && packagePath !== '.') {
+        const pkgDir = path.join(cwd, packagePath);
+        // If package directory exists and has package.json or Cargo.toml, use it
+        if (
+            fs.existsSync(pkgDir) &&
+            (fs.existsSync(path.join(pkgDir, 'package.json')) ||
+                fs.existsSync(path.join(pkgDir, 'Cargo.toml')))
+        ) {
+            return pkgDir;
+        }
+    }
+    return cwd;
+}
+
+/**
+ * Detect project type - Rust takes priority
+ */
+function detectProjectType(cwd) {
+    if (fs.existsSync(path.join(cwd, 'Cargo.toml'))) return 'rust';
+    if (fs.existsSync(path.join(cwd, 'package.json'))) return 'node';
+    return 'unknown';
+}
+
+/**
+ * Detect package manager from lockfiles
+ */
+function detectPackageManager(cwd) {
+    if (fs.existsSync(path.join(cwd, 'bun.lockb'))) return 'bun';
+    if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+    if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn';
+    if (fs.existsSync(path.join(cwd, 'package-lock.json'))) return 'npm';
+    return 'npm'; // default
+}
+
+/**
+ * Detect TypeScript vs JavaScript
+ */
+function detectLanguage(cwd) {
+    if (fs.existsSync(path.join(cwd, 'tsconfig.json'))) return 'typescript';
+    try {
+        const pkg = JSON.parse(
+            fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+        );
+        const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+        if (allDeps.typescript) return 'typescript';
+    } catch {
+        // Ignore errors
+    }
+    return 'javascript';
+}
+
+/**
+ * Detect if ESLint is configured
+ */
+function detectEslint(cwd) {
+    // Flat config (modern)
+    if (fs.existsSync(path.join(cwd, 'eslint.config.js'))) return true;
+    if (fs.existsSync(path.join(cwd, 'eslint.config.mjs'))) return true;
+    if (fs.existsSync(path.join(cwd, 'eslint.config.cjs'))) return true;
+    if (fs.existsSync(path.join(cwd, 'eslint.config.ts'))) return true;
+    // Legacy config
+    if (fs.existsSync(path.join(cwd, '.eslintrc.js'))) return true;
+    if (fs.existsSync(path.join(cwd, '.eslintrc.json'))) return true;
+    if (fs.existsSync(path.join(cwd, '.eslintrc.yml'))) return true;
+    if (fs.existsSync(path.join(cwd, '.eslintrc.yaml'))) return true;
+    if (fs.existsSync(path.join(cwd, '.eslintrc'))) return true;
+    return false;
+}
+
+/**
+ * Detect if TypeDoc is configured/installed
+ */
+function detectTypedoc(cwd) {
+    // Check for typedoc config files
+    if (fs.existsSync(path.join(cwd, 'typedoc.json'))) return true;
+    if (fs.existsSync(path.join(cwd, 'typedoc.config.js'))) return true;
+    if (fs.existsSync(path.join(cwd, 'typedoc.config.cjs'))) return true;
+    if (fs.existsSync(path.join(cwd, 'typedoc.config.mjs'))) return true;
+    if (fs.existsSync(path.join(cwd, 'typedoc.config.ts'))) return true;
+
+    // Check package.json dependencies
+    try {
+        const pkg = JSON.parse(
+            fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+        );
+        const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+        if (allDeps.typedoc) return true;
+    } catch {
+        // Ignore errors
+    }
+
+    return false;
+}
+
+/**
+ * Detect test framework (vitest only for now)
+ */
+function detectTestFramework(cwd) {
+    // Vitest config files
+    if (fs.existsSync(path.join(cwd, 'vitest.config.ts'))) return 'vitest';
+    if (fs.existsSync(path.join(cwd, 'vitest.config.js'))) return 'vitest';
+    if (fs.existsSync(path.join(cwd, 'vitest.config.mts'))) return 'vitest';
+    if (fs.existsSync(path.join(cwd, 'vitest.config.mjs'))) return 'vitest';
+
+    // Check vite config with test configuration
+    for (const viteConfig of [
+        'vite.config.ts',
+        'vite.config.js',
+        'vite.config.mts',
+    ]) {
+        const configPath = path.join(cwd, viteConfig);
+        if (fs.existsSync(configPath)) {
+            try {
+                const content = fs.readFileSync(configPath, 'utf8');
+                if (content.includes('test:') || content.includes('test :')) {
+                    return 'vitest';
+                }
+            } catch {
+                // Ignore errors
+            }
+        }
+    }
+
+    // Check package.json dependencies
+    try {
+        const pkg = JSON.parse(
+            fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+        );
+        const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+        if (allDeps.vitest) return 'vitest';
+    } catch {
+        // Ignore errors
+    }
+
+    return 'vitest'; // modern default
+}
+
+/**
+ * Detect available scripts from package.json
+ */
+function detectScripts(cwd) {
+    try {
+        const pkg = JSON.parse(
+            fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+        );
+        const scripts = pkg.scripts || {};
+        return {
+            has_format_script: !!(scripts.format || scripts.prettier),
+            has_lint_script: !!scripts.lint,
+            has_typecheck_script: !!(
+                scripts.typecheck ||
+                scripts['type-check'] ||
+                scripts.tsc
+            ),
+            has_test_script: !!scripts.test,
+            format_script_name: scripts.format
+                ? 'format'
+                : scripts.prettier
+                  ? 'prettier'
+                  : null,
+            lint_script_name: scripts.lint ? 'lint' : null,
+            typecheck_script_name: scripts.typecheck
+                ? 'typecheck'
+                : scripts['type-check']
+                  ? 'type-check'
+                  : scripts.tsc
+                    ? 'tsc'
+                    : null,
+        };
+    } catch {
+        return {
+            has_format_script: false,
+            has_lint_script: false,
+            has_typecheck_script: false,
+            has_test_script: false,
+            format_script_name: null,
+            lint_script_name: null,
+            typecheck_script_name: null,
+        };
+    }
+}
+
+/**
+ * Build project-specific variables based on detection
+ */
+function buildProjectVars(cwd, packagePath) {
+    const detectionPath = getDetectionPath(cwd, packagePath);
+    const rootDetectionPath = cwd;
+
+    // Project type detection at package level
+    const projectType = detectProjectType(detectionPath);
+
+    // For Node projects, detect additional configuration
+    if (projectType === 'node') {
+        // Package manager: check package path first, then root (lockfiles may be in either)
+        let packageManager = detectPackageManager(detectionPath);
+        if (packageManager === 'npm' && detectionPath !== rootDetectionPath) {
+            // npm is the default fallback, so check root too
+            packageManager = detectPackageManager(rootDetectionPath);
+        }
+
+        // Other detection at package level
+        const language = detectLanguage(detectionPath);
+        const hasEslint = detectEslint(detectionPath);
+        const hasTypedoc = detectTypedoc(detectionPath);
+        const testFramework = detectTestFramework(detectionPath);
+        const scripts = detectScripts(detectionPath);
+
+        return {
+            project_type: projectType,
+            package_manager: packageManager,
+            language: language,
+            has_eslint: hasEslint,
+            has_typedoc: hasTypedoc,
+            test_framework: testFramework,
+            ...scripts,
+        };
+    }
+
+    return {
+        project_type: projectType,
+    };
+}
+
+// =============================================================================
+// Main Template Resolver
+// =============================================================================
+
 /**
  * Main template resolver
  * Priority: user template_vars > frontmatter defaults > auto-detected GitHub context
@@ -23,8 +260,33 @@ async function main() {
         const autoDetectedVars = buildAutoDetectedVars(githubContext);
         const userVars = parseUserVars(process.env.TEMPLATE_VARS || '{}');
 
-        // Step 4: Merge variables (user > frontmatter > auto-detected)
+        // Step 3.5: Early project detection (before frontmatter processing)
+        // This ensures project_type, package_manager, etc. are available in frontmatter
+        const cwd = process.env.GITHUB_WORKSPACE || process.cwd();
+        // Use package_path from user vars or frontmatter if available
+        const earlyPackagePath =
+            userVars.package_path || frontmatter.package_path || '.';
+        const projectVars = buildProjectVars(cwd, earlyPackagePath);
+
+        console.log(
+            `📦 Detected project type: ${projectVars.project_type || 'unknown'}`,
+        );
+        if (projectVars.project_type === 'node') {
+            console.log(
+                `📦 Package manager: ${projectVars.package_manager || 'npm'}`,
+            );
+            console.log(`📦 Language: ${projectVars.language || 'javascript'}`);
+            console.log(
+                `📦 Test framework: ${projectVars.test_framework || 'vitest'}`,
+            );
+        }
+
+        // Step 4: Merge variables (user > frontmatter > project > auto-detected)
+        // Start with auto-detected GitHub context
         let resolvedVars = { ...autoDetectedVars };
+
+        // Add project-specific variables (can be overridden by frontmatter and user vars)
+        resolvedVars = { ...resolvedVars, ...projectVars };
 
         // Store original frontmatter template strings for second pass (before first render)
         // This preserves the raw templates so we can re-render them after user vars are applied
@@ -424,6 +686,44 @@ function evaluateExpression(expression, vars) {
         // Add include() helper for composable partials
         evalContext.include = (partialName, overrideParams = {}) => {
             return loadPartial(partialName, vars, overrideParams);
+        };
+
+        // Add package manager helpers
+        evalContext.pm_run = (scriptName) => {
+            const pm = vars.package_manager || 'npm';
+            if (pm === 'npm') return `npm run ${scriptName}`;
+            if (pm === 'pnpm') return `pnpm ${scriptName}`;
+            if (pm === 'yarn') return `yarn ${scriptName}`;
+            if (pm === 'bun') return `bun run ${scriptName}`;
+            return `npm run ${scriptName}`;
+        };
+
+        evalContext.pm_exec = (command) => {
+            const pm = vars.package_manager || 'npm';
+            if (pm === 'npm') return `npx ${command}`;
+            if (pm === 'pnpm') return `pnpm exec ${command}`;
+            if (pm === 'yarn') return `yarn ${command}`;
+            if (pm === 'bun') return `bunx ${command}`;
+            return `npx ${command}`;
+        };
+
+        evalContext.pm_install = (pkg, dev = false) => {
+            const pm = vars.package_manager || 'npm';
+            if (pm === 'npm')
+                return `npm install ${dev ? '--save-dev ' : ''}${pkg}`;
+            if (pm === 'pnpm') return `pnpm add ${dev ? '-D ' : ''}${pkg}`;
+            if (pm === 'yarn') return `yarn add ${dev ? '-D ' : ''}${pkg}`;
+            if (pm === 'bun') return `bun add ${dev ? '-d ' : ''}${pkg}`;
+            return `npm install ${dev ? '--save-dev ' : ''}${pkg}`;
+        };
+
+        evalContext.pm_audit = () => {
+            const pm = vars.package_manager || 'npm';
+            if (pm === 'npm') return 'npm audit';
+            if (pm === 'pnpm') return 'pnpm audit';
+            if (pm === 'yarn') return 'yarn audit';
+            if (pm === 'bun') return 'bun pm audit';
+            return 'npm audit';
         };
 
         // Build safe evaluation function

@@ -157,11 +157,11 @@ jobs:
 
 ### Prompt Template (required for `check` command)
 
-| Input                  | Description                                                                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `prompt_template`      | Built-in template name: `readme`, `rustdoc`, `examples`, `unit-tests`, `issue`, `pr`, `code-review` |
-| `prompt_template_file` | Path to custom template file                                                                        |
-| `prompt_template_text` | Inline template text                                                                                |
+| Input                  | Description                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `prompt_template`      | Built-in template name: `readme`, `rustdoc`, `tsdoc`, `examples`, `unit-tests`, `issue`, `pr`, `code-review` |
+| `prompt_template_file` | Path to custom template file                                                                                 |
+| `prompt_template_text` | Inline template text                                                                                         |
 
 ### Branch Management (`create-branch` command)
 
@@ -244,11 +244,41 @@ jobs:
 
 ## Template System
 
+### Project Type Detection
+
+The action automatically detects project type and configuration:
+
+| Variable            | Auto-detected                              | Override via    | Values                            |
+| ------------------- | ------------------------------------------ | --------------- | --------------------------------- |
+| `project_type`      | `Cargo.toml` → rust, `package.json` → node | `template_vars` | `rust`, `node`, `unknown`         |
+| `package_manager`   | Lockfile detection                         | `template_vars` | `npm`, `pnpm`, `yarn`, `bun`      |
+| `language`          | `tsconfig.json` or typescript dep          | `template_vars` | `typescript`, `javascript`        |
+| `test_framework`    | Config files and dependencies              | `template_vars` | `vitest` (more frameworks coming) |
+| `has_eslint`        | ESLint config files                        | -               | `true`, `false`                   |
+| `has_typedoc`       | TypeDoc config or dependency               | -               | `true`, `false`                   |
+| `has_format_script` | `package.json` scripts                     | -               | `true`, `false`                   |
+
+**Detection priority**: Rust takes priority over Node (if both `Cargo.toml` and `package.json` exist, it's detected as Rust).
+
+**Monorepo support**: Detection runs at the `package_path` level if specified, otherwise at the repository root.
+
+### Helper Functions
+
+Available in templates for package manager-agnostic commands:
+
+| Function                  | Description                        | Example output (npm)         |
+| ------------------------- | ---------------------------------- | ---------------------------- |
+| `pm_run('test')`          | Run a package.json script          | `npm run test`               |
+| `pm_exec('prettier .')`   | Execute a package binary           | `npx prettier .`             |
+| `pm_install('pkg', true)` | Install a package (dev dependency) | `npm install --save-dev pkg` |
+| `pm_audit()`              | Run security audit                 | `npm audit`                  |
+
 ### Variable Resolution Priority
 
 1. **User-provided `template_vars`** (highest priority)
 2. **Template frontmatter defaults**
-3. **Auto-detected from GitHub context** (lowest priority)
+3. **Auto-detected project variables** (project_type, package_manager, etc.)
+4. **Auto-detected from GitHub context** (lowest priority)
 
 ### Frontmatter Format
 
@@ -364,6 +394,39 @@ branch_name: docs/rustdoc-updates-${run_id}
           package_path: packages/my-package
 ```
 
+### `tsdoc`
+
+Ensures complete TSDoc documentation for TypeScript public APIs.
+
+**Default Variables:**
+
+```yaml
+project_name: ${repository_name}
+package_path: .
+package_name: ${derive_package_name(package_path)}
+target_path: src/**/*.ts
+branch_name: docs/tsdoc-updates-${run_id}
+```
+
+**Key Features:**
+
+- Checks all exported functions, classes, interfaces, and types
+- Ensures `@param`, `@returns`, `@throws`, `@example` documentation
+- TSDoc style guidelines with examples
+- Optional TypeDoc verification (auto-detected via `has_typedoc`)
+
+**Usage:**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'tsdoc'
+      template_vars: |
+          package_path: app-website
+```
+
 ### `examples`
 
 Validates and creates examples.
@@ -392,7 +455,7 @@ branch_name: docs/examples-updates-${run_id}
 
 ### `unit-tests`
 
-Adds missing unit tests to increase test coverage.
+Adds missing unit tests to increase test coverage. Supports both Rust and Node/TypeScript projects.
 
 **Default Variables:**
 
@@ -400,18 +463,18 @@ Adds missing unit tests to increase test coverage.
 project_name: ${repository_name}
 package_path: .
 package_name: ${derive_package_name(package_path)}
-target_path: src/**/*.rs
+target_path: src/**/*.rs # or src/**/*.ts for Node projects
 branch_name: test/coverage-${package_name}-${run_id}
 ```
 
 **Key Features:**
 
 - Strict test selection criteria (only meaningful, non-duplicative tests)
-- MoosicBox-specific test conventions (switchy_async::test, test_log composition)
-- Simulator compatibility guidance
-- Verification includes simulator testing
+- Language-specific test conventions (Rust or Node/TypeScript)
+- Rust: MoosicBox-specific conventions (switchy_async::test, simulator compatibility)
+- Node: Vitest conventions (mocking, snapshots, async patterns)
 
-**Usage:**
+**Usage (Rust):**
 
 ```yaml
 - uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
@@ -420,7 +483,22 @@ branch_name: test/coverage-${package_name}-${run_id}
       claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       prompt_template: 'unit-tests'
       template_vars: |
-          package_path: packages/my-package
+          package_path: packages/my-rust-package
+```
+
+**Usage (Node/TypeScript):**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'unit-tests'
+      template_vars: |
+          package_path: app-website
+          # Optional: override auto-detection
+          project_type: node
+          package_manager: pnpm
 ```
 
 ### `issue` (TODO)
@@ -530,17 +608,35 @@ jobs:
                   branch_name: readme-updates-${{ github.run_id }}
 ```
 
-### TypeScript Project
+### Node/TypeScript Project
+
+Project type is auto-detected from `package.json`. Package manager is detected from lockfiles.
 
 ```yaml
 - uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
       claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      prompt_template: 'readme'
-      verification_profile: 'typescript'
+      prompt_template: 'unit-tests'
       template_vars: |
-          package_path: packages/auth
+          package_path: app-website
+```
+
+### Node Project with Manual Override
+
+Override auto-detection when needed:
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'unit-tests'
+      template_vars: |
+          package_path: packages/my-package
+          project_type: node
+          package_manager: pnpm
+          language: typescript
 ```
 
 ### With Custom Guidelines
