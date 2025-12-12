@@ -15609,7 +15609,6 @@ dependencies = [
  "actix-service",
  "actix-web",
  "bytes",
- "futures",
  "log 0.4.29",
  "moosicbox_assert",
  "switchy_http_models",

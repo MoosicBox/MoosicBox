@@ -30,9 +30,8 @@ actix-http    = { workspace = true }
 actix-service = { workspace = true }
 actix-web     = { workspace = true }
 
-bytes   = { workspace = true }
-futures = { workspace = true }
-log     = { workspace = true }
+bytes = { workspace = true }
+log   = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
