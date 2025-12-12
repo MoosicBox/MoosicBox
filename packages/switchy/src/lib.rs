@@ -404,6 +404,13 @@ pub use switchy_time as time;
 #[cfg(feature = "upnp")]
 pub use switchy_upnp as upnp;
 
+/// UUID generation utilities.
+///
+/// Provides runtime-agnostic UUID generation with support for deterministic simulation.
+/// Enable the `uuid` feature to use this module.
+#[cfg(feature = "uuid")]
+pub use switchy_uuid as uuid;
+
 /// Web server abstractions.
 ///
 /// Provides runtime-agnostic web server implementations supporting different backends.

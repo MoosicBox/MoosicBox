@@ -33,6 +33,7 @@ switchy_tcp                 = { workspace = true, optional = true }
 switchy_telemetry           = { workspace = true, optional = true }
 switchy_time                = { workspace = true, optional = true }
 switchy_upnp                = { workspace = true, optional = true }
+switchy_uuid                = { workspace = true, optional = true }
 switchy_web_server          = { workspace = true, optional = true }
 switchy_web_server_core     = { workspace = true, optional = true }
 
@@ -59,6 +60,7 @@ fail-on-warnings = [
     "switchy_telemetry?/fail-on-warnings",
     "switchy_time?/fail-on-warnings",
     "switchy_upnp?/fail-on-warnings",
+    "switchy_uuid?/fail-on-warnings",
     "switchy_web_server?/fail-on-warnings",
     "switchy_web_server_core?/fail-on-warnings",
 ]
@@ -77,6 +79,7 @@ all = [
     "all-telemetry",
     "all-time",
     "all-upnp",
+    "all-uuid",
     "all-web-server",
 ]
 
@@ -93,6 +96,7 @@ simulator = [
     "switchy_telemetry?/simulator",
     "switchy_time?/simulator",
     "switchy_upnp?/simulator",
+    "switchy_uuid?/simulator",
     "switchy_web_server?/simulator",
 ]
 
@@ -344,6 +348,12 @@ upnp-listener  = ["switchy_upnp?/listener", "upnp"]
 upnp-openapi   = ["switchy_upnp?/openapi", "upnp"]
 upnp-player    = ["switchy_upnp?/player", "upnp"]
 upnp-simulator = ["switchy_upnp?/simulator", "upnp"]
+
+all-uuid = ["uuid", "uuid-simulator", "uuid-uuid"]
+
+uuid           = ["dep:switchy_uuid"]
+uuid-simulator = ["switchy_uuid?/simulator", "uuid"]
+uuid-uuid      = ["switchy_uuid?/uuid", "uuid"]
 
 all-web-server = [
     "web-server",
