@@ -651,4 +651,252 @@ mod tests {
         assert!(visible);
         assert_eq!(prev_visible, Some(false));
     }
+
+    #[test_log::test]
+    fn test_viewport_is_visible_no_parent() {
+        // Viewport with no parent should always report as visible
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+        };
+
+        let (visible, dist) = viewport.is_visible();
+        assert!(visible);
+        assert!(dist < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_viewport_is_visible_with_visible_parent() {
+        let parent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+        };
+
+        // Child viewport within parent's bounds
+        let child = Viewport {
+            parent: Some(Box::new(parent)),
+            pos: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+        };
+
+        let (visible, dist) = child.is_visible();
+        assert!(visible);
+        assert!(dist < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_viewport_is_visible_with_invisible_parent_propagates() {
+        // When a viewport's parent is NOT visible, the viewport itself should
+        // report as not visible due to the parent check
+        let grandparent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        };
+
+        // Parent positioned inside grandparent but with pos that's outside its own viewport
+        let parent = Viewport {
+            parent: Some(Box::new(grandparent)),
+            pos: Pos {
+                x: 500.0, // pos is far outside viewport
+                y: 500.0,
+                w: 50.0,
+                h: 50.0,
+            },
+            viewport: Pos {
+                x: 10.0,
+                y: 10.0,
+                w: 50.0,
+                h: 50.0,
+            },
+        };
+
+        let (visible, dist) = parent.is_visible();
+        // pos (500,500,50,50) is outside viewport (10,10,50,50)
+        assert!(!visible);
+        assert!(dist > 0.0);
+    }
+
+    #[test_log::test]
+    fn test_viewport_clone() {
+        let parent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+        };
+
+        let child = Viewport {
+            parent: Some(Box::new(parent)),
+            pos: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 200.0,
+                h: 200.0,
+            },
+        };
+
+        #[allow(clippy::redundant_clone)]
+        let cloned = child.clone();
+
+        assert!((cloned.pos.x - child.pos.x).abs() < f32::EPSILON);
+        assert!((cloned.pos.y - child.pos.y).abs() < f32::EPSILON);
+        assert!((cloned.pos.w - child.pos.w).abs() < f32::EPSILON);
+        assert!((cloned.pos.h - child.pos.h).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_pos_copy_semantics() {
+        let original = Pos {
+            x: 10.0,
+            y: 20.0,
+            w: 30.0,
+            h: 40.0,
+        };
+        let copied = original; // Copy occurs here
+
+        assert!((copied.x - 10.0).abs() < f32::EPSILON);
+        assert!((copied.y - 20.0).abs() < f32::EPSILON);
+        assert!((copied.w - 30.0).abs() < f32::EPSILON);
+        assert!((copied.h - 40.0).abs() < f32::EPSILON);
+
+        // Original is still usable (Copy trait)
+        assert!((original.x - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_pos_field_access() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        let listener = ViewportListener::new(Some(viewport), 50.0, 75.0, 100.0, 125.0);
+
+        assert!((listener.pos.x - 50.0).abs() < f32::EPSILON);
+        assert!((listener.pos.y - 75.0).abs() < f32::EPSILON);
+        assert!((listener.pos.w - 100.0).abs() < f32::EPSILON);
+        assert!((listener.pos.h - 125.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_viewport_field_access() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 10.0,
+                y: 20.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 10.0,
+                y: 20.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        let listener = ViewportListener::new(Some(viewport), 50.0, 75.0, 100.0, 125.0);
+
+        assert!(listener.viewport.is_some());
+        let vp = listener.viewport.as_ref().unwrap();
+        assert!((vp.pos.x - 10.0).abs() < f32::EPSILON);
+        assert!((vp.pos.y - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_with_viewport_offset() {
+        // Viewport with non-zero position offset
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 100.0,
+                y: 200.0,
+                w: 400.0,
+                h: 300.0,
+            },
+            viewport: Pos {
+                x: 50.0,
+                y: 75.0,
+                w: 400.0,
+                h: 300.0,
+            },
+        };
+
+        // Widget positioned relative to viewport
+        let mut listener = ViewportListener::new(Some(viewport), 200.0, 300.0, 50.0, 50.0);
+
+        let ((visible, _), _) = listener.check();
+        // Visibility depends on combined pos and viewport offsets
+        let _ = visible; // Verify it runs without panic
+    }
 }

@@ -192,3 +192,137 @@ pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
     let (tx, rx) = mpmc::unbounded();
     (Sender { inner: tx }, Receiver { inner: rx })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_unbounded_channel_send_and_try_recv() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Send a value
+        tx.send(42).unwrap();
+
+        // Try to receive it
+        let value = rx.try_recv().unwrap();
+        assert_eq!(value, 42);
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_empty() {
+        let (_tx, mut rx) = unbounded::<i32>();
+
+        // Should return Empty error when no messages
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(mpmc::TryRecvError::Empty)));
+    }
+
+    #[test_log::test]
+    fn test_unbounded_channel_try_recv_disconnected() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop the sender
+        drop(tx);
+
+        // Should return Disconnected error
+        let result = rx.try_recv();
+        assert!(matches!(result, Err(mpmc::TryRecvError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_sender_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.send(42);
+        assert!(matches!(result, Err(SendError::Disconnected(42))));
+    }
+
+    #[test_log::test]
+    fn test_sender_try_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        // Drop the receiver
+        drop(rx);
+
+        // Should return Disconnected error
+        let result = tx.try_send(99);
+        assert!(matches!(result, Err(TrySendError::Disconnected(99))));
+    }
+
+    #[test_log::test]
+    fn test_sender_clone() {
+        let (tx1, mut rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.send(1).unwrap();
+        tx2.send(2).unwrap();
+
+        // Order is preserved - FIFO
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        assert_eq!(rx.try_recv().unwrap(), 2);
+    }
+
+    #[test_log::test]
+    fn test_multiple_messages() {
+        let (tx, mut rx) = unbounded::<String>();
+
+        tx.send("first".to_string()).unwrap();
+        tx.send("second".to_string()).unwrap();
+        tx.send("third".to_string()).unwrap();
+
+        assert_eq!(rx.try_recv().unwrap(), "first");
+        assert_eq!(rx.try_recv().unwrap(), "second");
+        assert_eq!(rx.try_recv().unwrap(), "third");
+        assert!(matches!(rx.try_recv(), Err(mpmc::TryRecvError::Empty)));
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_returns_data_when_available() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Send data first
+        tx.send(99).unwrap();
+
+        // recv_timeout should return the data immediately
+        let result = rx.recv_timeout(std::time::Duration::from_secs(1));
+        assert_eq!(result.unwrap(), 99);
+    }
+
+    #[test_log::test]
+    fn test_recv_timeout_returns_disconnected_when_senders_dropped() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop all senders
+        drop(tx);
+
+        // recv_timeout should return Disconnected
+        let result = rx.recv_timeout(std::time::Duration::from_millis(10));
+        assert!(matches!(result, Err(mpmc::RecvTimeoutError::Disconnected)));
+    }
+
+    #[test_log::test]
+    fn test_try_send_error_conversion_from_send_error() {
+        // Test the From<SendError<T>> for TrySendError<T> conversion
+        let send_err: SendError<i32> = SendError::Disconnected(42);
+        let try_send_err: TrySendError<i32> = send_err.into();
+        assert!(matches!(try_send_err, TrySendError::Disconnected(42)));
+    }
+
+    #[test_log::test]
+    fn test_try_send_error_conversion_from_mpmc_try_send_error() {
+        // Test the From<mpmc::TrySendError<T>> for TrySendError<T> conversion with Full
+        let mpmc_err = mpmc::TrySendError::Full(100);
+        let try_send_err: TrySendError<i32> = mpmc_err.into();
+        assert!(matches!(try_send_err, TrySendError::Full(100)));
+
+        // Test with Disconnected
+        let mpmc_err = mpmc::TrySendError::Disconnected(200);
+        let try_send_err: TrySendError<i32> = mpmc_err.into();
+        assert!(matches!(try_send_err, TrySendError::Disconnected(200)));
+    }
+}

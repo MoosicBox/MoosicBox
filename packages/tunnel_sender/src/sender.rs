@@ -2082,6 +2082,28 @@ mod tests {
         );
     }
 
+    #[test_log::test]
+    fn test_tunnel_sender_handle_close_cancels_token() {
+        let sender = Arc::new(RwLock::new(None));
+        let cancellation_token = CancellationToken::new();
+        let player_actions = Arc::new(RwLock::new(vec![]));
+
+        let handle = TunnelSenderHandle {
+            sender,
+            cancellation_token: cancellation_token.clone(),
+            player_actions,
+        };
+
+        // Token should not be cancelled initially
+        assert!(!cancellation_token.is_cancelled());
+
+        // Close the handle
+        handle.close();
+
+        // Token should now be cancelled
+        assert!(cancellation_token.is_cancelled());
+    }
+
     #[cfg(feature = "base64")]
     mod base64_tests {
         use super::{BTreeMap, TunnelSender};

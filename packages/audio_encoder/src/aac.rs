@@ -159,4 +159,19 @@ mod tests {
             "Second call should consume all input samples"
         );
     }
+
+    #[test_log::test]
+    fn test_encode_aac_empty_input() {
+        let encoder = encoder_aac().expect("Failed to create encoder");
+
+        let input: Vec<i16> = vec![];
+        let mut output = vec![0u8; 8192];
+
+        let result = encode_aac(&encoder, &input, &mut output);
+
+        // Empty input should be handled - may produce output due to encoder buffering
+        assert!(result.is_ok(), "Empty input should be handled");
+        let info = result.unwrap();
+        assert_eq!(info.input_consumed, 0, "Should consume zero input samples");
+    }
 }

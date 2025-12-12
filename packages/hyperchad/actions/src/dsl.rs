@@ -1348,4 +1348,645 @@ mod tests {
             _ => panic!("Expected CalcValue::MouseY"),
         }
     }
+
+    // ============================================
+    // Expression Display tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_display_literal() {
+        let expr = Expression::Literal(Literal::Integer(42));
+        assert_eq!(format!("{expr}"), "42");
+
+        let expr_string = Expression::Literal(Literal::String("hello".to_string()));
+        assert_eq!(format!("{expr_string}"), "hello");
+
+        let expr_bool = Expression::Literal(Literal::Bool(true));
+        assert_eq!(format!("{expr_bool}"), "true");
+    }
+
+    #[test_log::test]
+    fn test_expression_display_variable() {
+        let expr = Expression::Variable("my_variable".to_string());
+        assert_eq!(format!("{expr}"), "my_variable");
+    }
+
+    // ============================================
+    // Dsl struct tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_dsl_new_creates_with_statements() {
+        let statements = vec![Statement::Expression(Expression::Literal(Literal::Unit))];
+
+        let dsl = Dsl::new(statements.clone());
+
+        assert_eq!(dsl.statements.len(), 1);
+        assert_eq!(dsl.statements, statements);
+    }
+
+    #[test_log::test]
+    fn test_dsl_new_empty() {
+        let dsl = Dsl::new(vec![]);
+
+        assert!(dsl.statements.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_dsl_evaluate_returns_empty_vec() {
+        // Currently evaluate() returns an empty vector (TODO in impl)
+        let dsl = Dsl::new(vec![Statement::Expression(Expression::Literal(
+            Literal::Integer(42),
+        ))]);
+
+        let actions = dsl.evaluate();
+
+        assert!(actions.is_empty());
+    }
+
+    // ============================================
+    // DslValue conversion completeness tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_effect_from_dsl_value_target() {
+        let dsl_value = DslValue::Target(ElementTarget::SelfTarget);
+
+        let result: ActionEffect = dsl_value.into();
+
+        // Non-action DslValues convert to NoOp
+        assert_eq!(result.action, ActionType::NoOp);
+    }
+
+    // ============================================
+    // Block and Statement tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_block_equality() {
+        let block1 = Block {
+            statements: vec![Statement::Expression(Expression::Literal(Literal::Unit))],
+        };
+        let block2 = Block {
+            statements: vec![Statement::Expression(Expression::Literal(Literal::Unit))],
+        };
+        let block3 = Block { statements: vec![] };
+
+        assert_eq!(block1, block2);
+        assert_ne!(block1, block3);
+    }
+
+    #[test_log::test]
+    fn test_statement_let_variant() {
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            value: Expression::Literal(Literal::Integer(10)),
+        };
+
+        match stmt {
+            Statement::Let { name, value } => {
+                assert_eq!(name, "x");
+                assert_eq!(value, Expression::Literal(Literal::Integer(10)));
+            }
+            _ => panic!("Expected Let statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_statement_if_variant() {
+        let stmt = Statement::If {
+            condition: Expression::Literal(Literal::Bool(true)),
+            then_block: Block { statements: vec![] },
+            else_block: Some(Block { statements: vec![] }),
+        };
+
+        match stmt {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                assert_eq!(condition, Expression::Literal(Literal::Bool(true)));
+                assert!(then_block.statements.is_empty());
+                assert!(else_block.is_some());
+            }
+            _ => panic!("Expected If statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_statement_while_variant() {
+        let stmt = Statement::While {
+            condition: Expression::Literal(Literal::Bool(true)),
+            body: Block { statements: vec![] },
+        };
+
+        match stmt {
+            Statement::While { condition, body } => {
+                assert_eq!(condition, Expression::Literal(Literal::Bool(true)));
+                assert!(body.statements.is_empty());
+            }
+            _ => panic!("Expected While statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_statement_for_variant() {
+        let stmt = Statement::For {
+            pattern: "i".to_string(),
+            iter: Expression::Range {
+                start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+                end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+                inclusive: false,
+            },
+            body: Block { statements: vec![] },
+        };
+
+        match stmt {
+            Statement::For {
+                pattern,
+                iter,
+                body,
+            } => {
+                assert_eq!(pattern, "i");
+                assert!(matches!(iter, Expression::Range { .. }));
+                assert!(body.statements.is_empty());
+            }
+            _ => panic!("Expected For statement"),
+        }
+    }
+
+    // ============================================
+    // Pattern tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_pattern_variants() {
+        let literal_pattern = Pattern::Literal(Literal::Integer(42));
+        assert_eq!(literal_pattern, Pattern::Literal(Literal::Integer(42)));
+
+        let variable_pattern = Pattern::Variable("x".to_string());
+        assert_eq!(variable_pattern, Pattern::Variable("x".to_string()));
+
+        let wildcard_pattern = Pattern::Wildcard;
+        assert_eq!(wildcard_pattern, Pattern::Wildcard);
+
+        let variant_pattern = Pattern::Variant {
+            enum_name: "Option".to_string(),
+            variant: "Some".to_string(),
+            fields: vec![Pattern::Variable("inner".to_string())],
+        };
+        match variant_pattern {
+            Pattern::Variant {
+                enum_name,
+                variant,
+                fields,
+            } => {
+                assert_eq!(enum_name, "Option");
+                assert_eq!(variant, "Some");
+                assert_eq!(fields.len(), 1);
+            }
+            _ => panic!("Expected Variant pattern"),
+        }
+    }
+
+    // ============================================
+    // MatchArm tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_match_arm_equality() {
+        let arm1 = MatchArm {
+            pattern: Pattern::Wildcard,
+            body: Expression::Literal(Literal::Unit),
+        };
+        let arm2 = MatchArm {
+            pattern: Pattern::Wildcard,
+            body: Expression::Literal(Literal::Unit),
+        };
+        let arm3 = MatchArm {
+            pattern: Pattern::Variable("x".to_string()),
+            body: Expression::Literal(Literal::Unit),
+        };
+
+        assert_eq!(arm1, arm2);
+        assert_ne!(arm1, arm3);
+    }
+
+    // ============================================
+    // Expression variants tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_call_variant() {
+        let expr = Expression::Call {
+            function: "print".to_string(),
+            args: vec![Expression::Literal(Literal::String("hello".to_string()))],
+        };
+
+        match expr {
+            Expression::Call { function, args } => {
+                assert_eq!(function, "print");
+                assert_eq!(args.len(), 1);
+            }
+            _ => panic!("Expected Call expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_method_call_variant() {
+        let expr = Expression::MethodCall {
+            receiver: Box::new(Expression::Variable("obj".to_string())),
+            method: "do_something".to_string(),
+            args: vec![],
+        };
+
+        match expr {
+            Expression::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
+                assert!(matches!(*receiver, Expression::Variable(_)));
+                assert_eq!(method, "do_something");
+                assert!(args.is_empty());
+            }
+            _ => panic!("Expected MethodCall expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_field_variant() {
+        let expr = Expression::Field {
+            object: Box::new(Expression::Variable("person".to_string())),
+            field: "name".to_string(),
+        };
+
+        match expr {
+            Expression::Field { object, field } => {
+                assert!(matches!(*object, Expression::Variable(_)));
+                assert_eq!(field, "name");
+            }
+            _ => panic!("Expected Field expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_binary_variant() {
+        let expr = Expression::Binary {
+            left: Box::new(Expression::Literal(Literal::Integer(1))),
+            op: BinaryOp::Add,
+            right: Box::new(Expression::Literal(Literal::Integer(2))),
+        };
+
+        match expr {
+            Expression::Binary { left, op, right } => {
+                assert!(matches!(*left, Expression::Literal(Literal::Integer(1))));
+                assert_eq!(op, BinaryOp::Add);
+                assert!(matches!(*right, Expression::Literal(Literal::Integer(2))));
+            }
+            _ => panic!("Expected Binary expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_unary_variant() {
+        let expr = Expression::Unary {
+            op: UnaryOp::Not,
+            expr: Box::new(Expression::Literal(Literal::Bool(true))),
+        };
+
+        match expr {
+            Expression::Unary { op, expr } => {
+                assert_eq!(op, UnaryOp::Not);
+                assert!(matches!(*expr, Expression::Literal(Literal::Bool(true))));
+            }
+            _ => panic!("Expected Unary expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_array_variant() {
+        let expr = Expression::Array(vec![
+            Expression::Literal(Literal::Integer(1)),
+            Expression::Literal(Literal::Integer(2)),
+        ]);
+
+        match expr {
+            Expression::Array(elements) => {
+                assert_eq!(elements.len(), 2);
+            }
+            _ => panic!("Expected Array expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_tuple_variant() {
+        let expr = Expression::Tuple(vec![
+            Expression::Literal(Literal::Integer(1)),
+            Expression::Literal(Literal::String("hello".to_string())),
+        ]);
+
+        match expr {
+            Expression::Tuple(elements) => {
+                assert_eq!(elements.len(), 2);
+            }
+            _ => panic!("Expected Tuple expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_closure_variant() {
+        let expr = Expression::Closure {
+            params: vec!["x".to_string(), "y".to_string()],
+            body: Box::new(Expression::Binary {
+                left: Box::new(Expression::Variable("x".to_string())),
+                op: BinaryOp::Add,
+                right: Box::new(Expression::Variable("y".to_string())),
+            }),
+        };
+
+        match expr {
+            Expression::Closure { params, body } => {
+                assert_eq!(params, vec!["x".to_string(), "y".to_string()]);
+                assert!(matches!(*body, Expression::Binary { .. }));
+            }
+            _ => panic!("Expected Closure expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_grouping_variant() {
+        let expr = Expression::Grouping(Box::new(Expression::Literal(Literal::Integer(42))));
+
+        match expr {
+            Expression::Grouping(inner) => {
+                assert!(matches!(*inner, Expression::Literal(Literal::Integer(42))));
+            }
+            _ => panic!("Expected Grouping expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_raw_rust_variant() {
+        let expr = Expression::RawRust("some_complex_code()".to_string());
+
+        match expr {
+            Expression::RawRust(code) => {
+                assert_eq!(code, "some_complex_code()");
+            }
+            _ => panic!("Expected RawRust expression"),
+        }
+    }
+
+    // ============================================
+    // BinaryOp completeness tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_binary_op_variants_equality() {
+        // Test all BinaryOp variants for equality
+        assert_eq!(BinaryOp::Add, BinaryOp::Add);
+        assert_eq!(BinaryOp::Subtract, BinaryOp::Subtract);
+        assert_eq!(BinaryOp::Multiply, BinaryOp::Multiply);
+        assert_eq!(BinaryOp::Divide, BinaryOp::Divide);
+        assert_eq!(BinaryOp::Modulo, BinaryOp::Modulo);
+        assert_eq!(BinaryOp::Equal, BinaryOp::Equal);
+        assert_eq!(BinaryOp::NotEqual, BinaryOp::NotEqual);
+        assert_eq!(BinaryOp::Less, BinaryOp::Less);
+        assert_eq!(BinaryOp::LessEqual, BinaryOp::LessEqual);
+        assert_eq!(BinaryOp::Greater, BinaryOp::Greater);
+        assert_eq!(BinaryOp::GreaterEqual, BinaryOp::GreaterEqual);
+        assert_eq!(BinaryOp::And, BinaryOp::And);
+        assert_eq!(BinaryOp::Or, BinaryOp::Or);
+        assert_eq!(BinaryOp::BitAnd, BinaryOp::BitAnd);
+        assert_eq!(BinaryOp::BitOr, BinaryOp::BitOr);
+        assert_eq!(BinaryOp::BitXor, BinaryOp::BitXor);
+
+        // Also test inequality
+        assert_ne!(BinaryOp::Add, BinaryOp::Subtract);
+    }
+
+    // ============================================
+    // UnaryOp completeness tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_unary_op_variants_equality() {
+        assert_eq!(UnaryOp::Not, UnaryOp::Not);
+        assert_eq!(UnaryOp::Minus, UnaryOp::Minus);
+        assert_eq!(UnaryOp::Plus, UnaryOp::Plus);
+        assert_eq!(UnaryOp::Ref, UnaryOp::Ref);
+
+        assert_ne!(UnaryOp::Not, UnaryOp::Minus);
+    }
+
+    // ============================================
+    // Statement Match variant tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_statement_match_variant() {
+        let stmt = Statement::Match {
+            expr: Expression::Variable("x".to_string()),
+            arms: vec![MatchArm {
+                pattern: Pattern::Wildcard,
+                body: Expression::Literal(Literal::Unit),
+            }],
+        };
+
+        match stmt {
+            Statement::Match { expr, arms } => {
+                assert!(matches!(expr, Expression::Variable(_)));
+                assert_eq!(arms.len(), 1);
+            }
+            _ => panic!("Expected Match statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_statement_block_variant() {
+        let stmt = Statement::Block(Block { statements: vec![] });
+
+        match stmt {
+            Statement::Block(block) => {
+                assert!(block.statements.is_empty());
+            }
+            _ => panic!("Expected Block statement"),
+        }
+    }
+
+    // ============================================
+    // Expression::If variant test
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_if_variant() {
+        let expr = Expression::If {
+            condition: Box::new(Expression::Literal(Literal::Bool(true))),
+            then_branch: Box::new(Expression::Literal(Literal::Integer(1))),
+            else_branch: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+        };
+
+        match expr {
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                assert!(matches!(
+                    *condition,
+                    Expression::Literal(Literal::Bool(true))
+                ));
+                assert!(matches!(
+                    *then_branch,
+                    Expression::Literal(Literal::Integer(1))
+                ));
+                assert!(else_branch.is_some());
+            }
+            _ => panic!("Expected If expression"),
+        }
+    }
+
+    // ============================================
+    // Expression::Match variant test
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_match_variant() {
+        let expr = Expression::Match {
+            expr: Box::new(Expression::Variable("x".to_string())),
+            arms: vec![MatchArm {
+                pattern: Pattern::Literal(Literal::Integer(1)),
+                body: Expression::Literal(Literal::String("one".to_string())),
+            }],
+        };
+
+        match expr {
+            Expression::Match { expr, arms } => {
+                assert!(matches!(*expr, Expression::Variable(_)));
+                assert_eq!(arms.len(), 1);
+            }
+            _ => panic!("Expected Match expression"),
+        }
+    }
+
+    // ============================================
+    // EvalContext tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_eval_context_default() {
+        let ctx = EvalContext::default();
+
+        assert!(ctx.variables.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_eval_context_with_variables() {
+        let mut ctx = EvalContext::default();
+        ctx.variables
+            .insert("x".to_string(), DslValue::Number(42.0));
+        ctx.variables.insert("y".to_string(), DslValue::Bool(true));
+
+        assert_eq!(ctx.variables.len(), 2);
+        assert_eq!(ctx.variables.get("x"), Some(&DslValue::Number(42.0)));
+        assert_eq!(ctx.variables.get("y"), Some(&DslValue::Bool(true)));
+    }
+
+    // ============================================
+    // Expression::Range variant tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_range_inclusive() {
+        let expr = Expression::Range {
+            start: Some(Box::new(Expression::Literal(Literal::Integer(1)))),
+            end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+            inclusive: true,
+        };
+
+        match expr {
+            Expression::Range {
+                start,
+                end,
+                inclusive,
+            } => {
+                assert!(start.is_some());
+                assert!(end.is_some());
+                assert!(inclusive);
+            }
+            _ => panic!("Expected Range expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_expression_range_open_ended() {
+        // Test open-ended ranges like ..10 or 0..
+        let expr_no_start = Expression::Range {
+            start: None,
+            end: Some(Box::new(Expression::Literal(Literal::Integer(10)))),
+            inclusive: false,
+        };
+
+        match expr_no_start {
+            Expression::Range { start, end, .. } => {
+                assert!(start.is_none());
+                assert!(end.is_some());
+            }
+            _ => panic!("Expected Range expression"),
+        }
+
+        let expr_no_end = Expression::Range {
+            start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
+            end: None,
+            inclusive: false,
+        };
+
+        match expr_no_end {
+            Expression::Range { start, end, .. } => {
+                assert!(start.is_some());
+                assert!(end.is_none());
+            }
+            _ => panic!("Expected Range expression"),
+        }
+    }
+
+    // ============================================
+    // Expression::Block variant test
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_block_variant() {
+        let expr = Expression::Block(Block {
+            statements: vec![Statement::Expression(Expression::Literal(
+                Literal::Integer(42),
+            ))],
+        });
+
+        match expr {
+            Expression::Block(block) => {
+                assert_eq!(block.statements.len(), 1);
+            }
+            _ => panic!("Expected Block expression"),
+        }
+    }
+
+    // ============================================
+    // Expression::ElementRef variant test
+    // ============================================
+
+    #[test_log::test]
+    fn test_expression_element_ref_variant() {
+        let expr = Expression::ElementRef(Box::new(Expression::Literal(Literal::String(
+            "#my-element".to_string(),
+        ))));
+
+        match expr {
+            Expression::ElementRef(inner) => {
+                assert!(matches!(*inner, Expression::Literal(Literal::String(_))));
+            }
+            _ => panic!("Expected ElementRef expression"),
+        }
+    }
 }

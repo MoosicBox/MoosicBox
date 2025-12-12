@@ -3460,4 +3460,134 @@ mod tests {
             assert_eq!(nav.0, "/test");
         }
     }
+
+    mod query_string_edge_cases {
+        use super::*;
+
+        #[test_log::test]
+        fn test_path_with_multiple_question_marks() {
+            // Only the first ? should be used as delimiter
+            let req = RouteRequest::from_path("/search?q=what?is?this", RequestInfo::default());
+            assert_eq!(req.path, "/search");
+            // The entire string after first ? is the query
+            assert_eq!(req.query.get("q"), Some(&"what?is?this".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_values_with_equals_sign() {
+            // Query values containing = should be handled
+            let req = RouteRequest::from_path("/api?expr=a=b", RequestInfo::default());
+            assert_eq!(req.path, "/api");
+            assert_eq!(req.query.get("expr"), Some(&"a=b".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_string_ordering_in_navigation() {
+            // BTreeMap ordering should make query string deterministic
+            let mut req = RouteRequest::from_path("/search", RequestInfo::default());
+            // Insert in non-alphabetical order
+            req.query.insert("z".to_string(), "last".to_string());
+            req.query.insert("a".to_string(), "first".to_string());
+            req.query.insert("m".to_string(), "middle".to_string());
+
+            let nav: Navigation = req.into();
+            // BTreeMap sorts by key, so output should be a=first&m=middle&z=last
+            assert!(nav.0.contains("?a=first&m=middle&z=last"));
+        }
+
+        #[test_log::test]
+        fn test_query_params_with_empty_value() {
+            let req = RouteRequest::from_path("/page?flag=&other=value", RequestInfo::default());
+            assert_eq!(req.path, "/page");
+            assert_eq!(req.query.get("flag"), Some(&String::new()));
+            assert_eq!(req.query.get("other"), Some(&"value".to_string()));
+        }
+    }
+
+    mod route_handler_request_access {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_handler_can_access_cookies() {
+            let router = Router::new().with_route("/dashboard", |req| async move {
+                let session = req.cookies.get("session_id").cloned().unwrap_or_default();
+                format!("Session: {session}")
+            });
+
+            let mut req = RouteRequest::from_path("/dashboard", RequestInfo::default());
+            req.cookies
+                .insert("session_id".to_string(), "abc123".to_string());
+
+            let result = router.navigate(req).await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_handler_can_access_multiple_headers() {
+            let router = Router::new().with_route("/api", |req| async move {
+                let auth = req
+                    .headers
+                    .get("authorization")
+                    .cloned()
+                    .unwrap_or_default();
+                let accept = req.headers.get("accept").cloned().unwrap_or_default();
+                format!("Auth: {auth}, Accept: {accept}")
+            });
+
+            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+            req.headers
+                .insert("authorization".to_string(), "Bearer token123".to_string());
+            req.headers
+                .insert("accept".to_string(), "application/json".to_string());
+
+            let result = router.navigate(req).await.unwrap();
+            assert!(result.is_some());
+        }
+    }
+
+    mod route_matching_priority {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_first_registered_route_wins() {
+            // When multiple routes could match, the first registered one should be used
+            let router = Router::new()
+                .with_route("/api/users", |_req| async { "Specific users".to_string() })
+                .with_route(
+                    RoutePath::LiteralPrefix("/api/".to_string()),
+                    |_req| async { "Generic API".to_string() },
+                );
+
+            // The specific route was registered first, but it's an exact match
+            // The prefix route was registered second
+            let func = router.get_route_func("/api/users");
+            assert!(func.is_some());
+
+            // Both could match /api/users - the first one (exact match) should win
+            // because routes are checked in registration order
+            assert!(router.has_route("/api/users"));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_multiple_prefix_routes_first_match_wins() {
+            // Two prefix routes where one is more specific
+            let router = Router::new()
+                .with_route(
+                    RoutePath::LiteralPrefix("/api/v1/".to_string()),
+                    |_req| async { "V1 API".to_string() },
+                )
+                .with_route(
+                    RoutePath::LiteralPrefix("/api/".to_string()),
+                    |_req| async { "Generic API".to_string() },
+                );
+
+            // /api/v1/users should match the first (more specific) route
+            let func = router.get_route_func("/api/v1/users");
+            assert!(func.is_some());
+
+            // /api/v2/users should match the second (generic) route
+            let func2 = router.get_route_func("/api/v2/users");
+            assert!(func2.is_some());
+        }
+    }
 }

@@ -1485,4 +1485,81 @@ mod tests {
         // Verify position was updated
         assert_eq!(stream.read_position, 500);
     }
+
+    // ==== Read Buffer Edge Cases ====
+
+    /// Test reading with exact buffer size matching file size
+    #[test_log::test(switchy_async::test)]
+    async fn test_read_exact_file_size() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("exactly_17_bytes!")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(17),
+            true,
+            true,
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read exactly 17 bytes (the exact file size)
+        let mut buf = [0u8; 17];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 17);
+        assert_eq!(&buf[..], b"exactly_17_bytes!");
+    }
+
+    /// Test reading with buffer larger than file size
+    #[test_log::test(switchy_async::test)]
+    async fn test_read_buffer_larger_than_file() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("tiny")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(4),
+            true,
+            true,
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Buffer is 1000 bytes but file is only 4 bytes
+        let mut buf = [0u8; 1000];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 4);
+        assert_eq!(&buf[..bytes_read], b"tiny");
+    }
+
+    /// Test that stream with unknown size (None) handles end gracefully
+    #[test_log::test(switchy_async::test)]
+    async fn test_unknown_size_stream_ends_gracefully() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("data with unknown size")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            None, // Unknown size
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read all available data
+        let mut buf = [0u8; 100];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 22);
+        assert_eq!(&buf[..bytes_read], b"data with unknown size");
+
+        // Stream should end gracefully without error (since size is unknown)
+        assert!(
+            stream.finished,
+            "Stream should be finished after all data consumed"
+        );
+    }
 }

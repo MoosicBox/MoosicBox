@@ -1959,4 +1959,282 @@ mod tests {
             _ => panic!("Expected block expression"),
         }
     }
+
+    #[test_log::test]
+    fn test_parse_binary_subtract() {
+        let input = quote! { 10 - 3 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Subtract));
+            }
+            _ => panic!("Expected binary subtract expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_binary_divide() {
+        let input = quote! { 10 / 2 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Divide));
+            }
+            _ => panic!("Expected binary divide expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_binary_modulo() {
+        let input = quote! { 10 % 3 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Modulo));
+            }
+            _ => panic!("Expected binary modulo expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_unary_plus() {
+        let input = quote! { +42 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Unary { op, expr: _ } => {
+                assert!(matches!(op, UnaryOp::Plus));
+            }
+            _ => panic!("Expected unary plus expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_expression_statement_with_semicolon() {
+        let input = quote! { show("test"); };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::Expression(Expression::Call { function, .. }) => {
+                assert_eq!(function, "show");
+            }
+            _ => panic!("Expected expression statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_function_call_with_multiple_args() {
+        let input = quote! { invoke(Action::Test, "value", 123) };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Call { function, args } => {
+                assert_eq!(function, "invoke");
+                assert_eq!(args.len(), 3);
+            }
+            _ => panic!("Expected function call expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_chained_field_and_method() {
+        let input = quote! { obj.field.method() };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
+                assert_eq!(method, "method");
+                assert!(args.is_empty());
+                // Receiver should be a field access
+                match *receiver {
+                    Expression::Field { object: _, field } => {
+                        assert_eq!(field, "field");
+                    }
+                    _ => panic!("Expected field access as receiver"),
+                }
+            }
+            _ => panic!("Expected method call expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_nested_parentheses() {
+        let input = quote! { ((a + b)) };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Grouping(inner) => match *inner {
+                Expression::Grouping(innermost) => match *innermost {
+                    Expression::Binary {
+                        left: _,
+                        op: BinaryOp::Add,
+                        right: _,
+                    } => {} // Correct nesting
+                    _ => panic!("Expected binary add in innermost grouping"),
+                },
+                _ => panic!("Expected nested grouping"),
+            },
+            _ => panic!("Expected grouping expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_if_expression_without_else() {
+        let input = quote! { if cond { 1 } };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::If {
+                condition: _,
+                then_branch: _,
+                else_branch,
+            } => {
+                assert!(else_branch.is_none());
+            }
+            _ => panic!("Expected if expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_dsl_with_fallback_for_let_keyword() {
+        // When parsing with 'let' keyword, should try DSL parsing
+        let input = quote! { let x = 42; };
+        let result = parse_dsl_with_fallback(&input);
+        assert_eq!(result.statements.len(), 1);
+        match &result.statements[0] {
+            Statement::Let { name, value: _ } => {
+                assert_eq!(name, "x");
+            }
+            _ => panic!("Expected let statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_logical_and_or_precedence() {
+        // OR has lower precedence than AND, so `a && b || c` should parse as `(a && b) || c`
+        let input = quote! { a && b || c };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left,
+                op: BinaryOp::Or,
+                right: _,
+            } => {
+                // Left side should be the AND expression
+                match *left {
+                    Expression::Binary {
+                        left: _,
+                        op: BinaryOp::And,
+                        right: _,
+                    } => {} // Correct precedence
+                    _ => panic!("Expected AND expression on left of OR"),
+                }
+            }
+            _ => panic!("Expected OR expression at top level"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_empty_closure_params() {
+        let input = quote! { || show("test") };
+        let result = Parser::parse2(parse_closure, input).unwrap();
+        match result {
+            Expression::Closure { params, body: _ } => {
+                assert!(params.is_empty());
+            }
+            _ => panic!("Expected closure expression"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_match_with_single_arm() {
+        let input = quote! {
+            match value {
+                _ => noop(),
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::Match { expr: _, arms } => {
+                assert_eq!(arms.len(), 1);
+                assert!(matches!(arms[0].pattern, Pattern::Wildcard));
+            }
+            _ => panic!("Expected match statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_for_with_empty_body() {
+        let input = quote! {
+            for item in items {
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::For {
+                pattern,
+                iter: _,
+                body,
+            } => {
+                assert_eq!(pattern, "item");
+                assert!(body.statements.is_empty());
+            }
+            _ => panic!("Expected for statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_while_with_empty_body() {
+        let input = quote! {
+            while condition {
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::While { condition: _, body } => {
+                assert!(body.statements.is_empty());
+            }
+            _ => panic!("Expected while statement"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_pattern_literal_bool_true() {
+        let input = quote! { true };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Literal(Literal::Bool(value)) => assert!(value),
+            _ => panic!("Expected bool literal pattern"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_pattern_literal_bool_false() {
+        let input = quote! { false };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Literal(Literal::Bool(value)) => assert!(!value),
+            _ => panic!("Expected bool literal pattern"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_parse_literal_float_decimal() {
+        let lit = syn::parse_quote! { 1.234 };
+        let result = parse_literal(lit).unwrap();
+        match result {
+            Literal::Float(f) => assert!((f - 1.234).abs() < f64::EPSILON),
+            _ => panic!("Expected float literal"),
+        }
+    }
 }

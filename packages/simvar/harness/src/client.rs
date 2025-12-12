@@ -128,3 +128,65 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_context() {
+        // When called outside of a client context, should return None
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_sets_current_client_name() {
+        // Verify that with_client correctly sets the context
+        let result = with_client("test-client".to_string(), |name| {
+            assert_eq!(name, "test-client");
+            current_client()
+        });
+
+        assert_eq!(result, Some("test-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_with_client_clears_context_after_completion() {
+        // Verify that the context is cleared after with_client returns
+        with_client("temporary-client".to_string(), |_| {
+            // Inside context, should be set
+            assert!(current_client().is_some());
+        });
+
+        // After with_client returns, context should be cleared
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_with_client_returns_closure_result() {
+        // Verify that with_client correctly returns the closure result
+        let result = with_client("my-client".to_string(), |name| format!("processed: {name}"));
+
+        assert_eq!(result, "processed: my-client");
+    }
+
+    #[test_log::test]
+    fn test_nested_with_client_uses_innermost_context() {
+        // Test that nested with_client calls use the innermost context
+        with_client("outer-client".to_string(), |outer_name| {
+            assert_eq!(outer_name, "outer-client");
+            assert_eq!(current_client(), Some("outer-client".to_string()));
+
+            with_client("inner-client".to_string(), |inner_name| {
+                assert_eq!(inner_name, "inner-client");
+                assert_eq!(current_client(), Some("inner-client".to_string()));
+            });
+
+            // After inner with_client returns, outer context is restored
+            assert_eq!(current_client(), Some("outer-client".to_string()));
+        });
+
+        // After all contexts, should be None
+        assert!(current_client().is_none());
+    }
+}

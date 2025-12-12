@@ -999,4 +999,45 @@ mod tests {
             "Signal should be preserved through 1:1 resampling"
         );
     }
+
+    /// Test to_audio_buffer conversion with i16 sample type
+    ///
+    /// Verifies the generic to_audio_buffer function works correctly with
+    /// integer sample types, not just f32. This tests the generic `S: Sample`
+    /// constraint and ensures sample values are correctly de-interleaved.
+    #[test_log::test]
+    fn test_to_audio_buffer_i16() {
+        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+
+        // Create interleaved i16 stereo samples: [L0, R0, L1, R1, ...]
+        // Using values across the i16 range
+        let samples: Vec<i16> = vec![
+            1000,
+            -1000, // Frame 0: L=1000, R=-1000
+            5000,
+            -5000, // Frame 1: L=5000, R=-5000
+            10000,
+            -10000, // Frame 2: L=10000, R=-10000
+            i16::MAX,
+            i16::MIN, // Frame 3: extremes
+        ];
+
+        let audio_buffer = to_audio_buffer(&samples, spec);
+
+        // Check buffer frame count
+        assert_eq!(audio_buffer.frames(), 4);
+
+        // Verify samples were correctly de-interleaved
+        let left = audio_buffer.chan(0);
+        let right = audio_buffer.chan(1);
+
+        assert_eq!(left[0], 1000);
+        assert_eq!(right[0], -1000);
+        assert_eq!(left[1], 5000);
+        assert_eq!(right[1], -5000);
+        assert_eq!(left[2], 10000);
+        assert_eq!(right[2], -10000);
+        assert_eq!(left[3], i16::MAX);
+        assert_eq!(right[3], i16::MIN);
+    }
 }

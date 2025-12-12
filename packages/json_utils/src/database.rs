@@ -1120,6 +1120,15 @@ mod tests {
     }
 
     #[test_log::test]
+    #[cfg(feature = "uuid")]
+    fn test_to_value_type_option_uuid_opt_none() {
+        // Test UuidOpt(None) returns None for Option type
+        let value = &DatabaseValue::UuidOpt(None);
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
     fn test_to_value_type_naive_datetime_from_string() {
         use chrono::{Datelike, NaiveDateTime, Timelike};
 

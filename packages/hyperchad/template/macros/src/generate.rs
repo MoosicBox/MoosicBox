@@ -4661,4 +4661,227 @@ mod tests {
             );
         }
     }
+
+    mod parse_number_literal_string_tests {
+        use super::*;
+
+        // Note: The function tries f32 parsing first for all unit types, so whole numbers
+        // like "50" still parse as f32 (50.0) and get the Real* variant
+
+        #[test_log::test]
+        fn parses_percentage_whole_number_as_real() {
+            // "50" parses as 50.0f32, so we get RealPercent
+            let result = Generator::parse_number_literal_string("50%").to_string();
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains("50"));
+        }
+
+        #[test_log::test]
+        fn parses_real_percentage() {
+            let result = Generator::parse_number_literal_string("33.3%").to_string();
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains("33.3"));
+        }
+
+        #[test_log::test]
+        fn parses_vw_whole_number_as_real() {
+            // "100" parses as 100.0f32, so we get RealVw
+            let result = Generator::parse_number_literal_string("100vw").to_string();
+            assert!(result.contains("RealVw"));
+            assert!(result.contains("100"));
+        }
+
+        #[test_log::test]
+        fn parses_real_vw() {
+            let result = Generator::parse_number_literal_string("50.5vw").to_string();
+            assert!(result.contains("RealVw"));
+            assert!(result.contains("50.5"));
+        }
+
+        #[test_log::test]
+        fn parses_vh_whole_number_as_real() {
+            // "80" parses as 80.0f32, so we get RealVh
+            let result = Generator::parse_number_literal_string("80vh").to_string();
+            assert!(result.contains("RealVh"));
+            assert!(result.contains("80"));
+        }
+
+        #[test_log::test]
+        fn parses_real_vh() {
+            let result = Generator::parse_number_literal_string("75.5vh").to_string();
+            assert!(result.contains("RealVh"));
+            assert!(result.contains("75.5"));
+        }
+
+        #[test_log::test]
+        fn parses_dvw_whole_number_as_real() {
+            // "90" parses as 90.0f32, so we get RealDvw
+            let result = Generator::parse_number_literal_string("90dvw").to_string();
+            assert!(result.contains("RealDvw"));
+            assert!(result.contains("90"));
+        }
+
+        #[test_log::test]
+        fn parses_real_dvw() {
+            let result = Generator::parse_number_literal_string("45.5dvw").to_string();
+            assert!(result.contains("RealDvw"));
+            assert!(result.contains("45.5"));
+        }
+
+        #[test_log::test]
+        fn parses_dvh_whole_number_as_real() {
+            // "60" parses as 60.0f32, so we get RealDvh
+            let result = Generator::parse_number_literal_string("60dvh").to_string();
+            assert!(result.contains("RealDvh"));
+            assert!(result.contains("60"));
+        }
+
+        #[test_log::test]
+        fn parses_real_dvh() {
+            let result = Generator::parse_number_literal_string("30.5dvh").to_string();
+            assert!(result.contains("RealDvh"));
+            assert!(result.contains("30.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_as_real() {
+            // "42" parses as 42.0f32, so we get Real
+            let result = Generator::parse_number_literal_string("42").to_string();
+            assert!(result.contains("Real"));
+            assert!(result.contains("42"));
+        }
+
+        #[test_log::test]
+        fn parses_plain_real() {
+            let result = Generator::parse_number_literal_string("3.14").to_string();
+            assert!(result.contains("Real"));
+            assert!(result.contains("3.14"));
+        }
+
+        #[test_log::test]
+        fn falls_back_to_parse_number_for_invalid_input() {
+            let result = Generator::parse_number_literal_string("invalid").to_string();
+            assert!(result.contains("parse_number"));
+        }
+
+        #[test_log::test]
+        fn parses_negative_number() {
+            let result = Generator::parse_number_literal_string("-10").to_string();
+            // -10 parses as -10.0f32, so we get Real
+            assert!(result.contains("Real"));
+        }
+
+        #[test_log::test]
+        fn parses_zero_percentage() {
+            let result = Generator::parse_number_literal_string("0%").to_string();
+            // 0 parses as f32 (0.0), so it will be RealPercent
+            assert!(result.contains("RealPercent"));
+        }
+    }
+
+    mod parse_color_string_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn parses_named_color_black() {
+            let result = Generator::parse_color_string("black").to_string();
+            assert!(result.contains("Color :: BLACK"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_white() {
+            let result = Generator::parse_color_string("white").to_string();
+            assert!(result.contains("Color :: WHITE"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_red() {
+            let result = Generator::parse_color_string("red").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FF0000"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_green() {
+            let result = Generator::parse_color_string("green").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("00FF00"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_blue() {
+            let result = Generator::parse_color_string("blue").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("0000FF"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_gray() {
+            let result = Generator::parse_color_string("gray").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("808080"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_yellow() {
+            let result = Generator::parse_color_string("yellow").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFFF00"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_cyan() {
+            let result = Generator::parse_color_string("cyan").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("00FFFF"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_magenta() {
+            let result = Generator::parse_color_string("magenta").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FF00FF"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_orange() {
+            let result = Generator::parse_color_string("orange").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFA500"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_purple() {
+            let result = Generator::parse_color_string("purple").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("800080"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_pink() {
+            let result = Generator::parse_color_string("pink").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFC0CB"));
+        }
+
+        #[test_log::test]
+        fn parses_named_color_brown() {
+            let result = Generator::parse_color_string("brown").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("A52A2A"));
+        }
+
+        #[test_log::test]
+        fn parses_hex_color_with_hash() {
+            let result = Generator::parse_color_string("#AABBCC").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("#AABBCC"));
+        }
+
+        #[test_log::test]
+        fn falls_back_to_black_for_unknown() {
+            let result = Generator::parse_color_string("unknown_color").to_string();
+            assert!(result.contains("Color :: BLACK"));
+        }
+    }
 }

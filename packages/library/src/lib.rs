@@ -2909,4 +2909,107 @@ mod test {
         assert_eq!(versions[2].sample_rate, Some(44100));
         assert_eq!(versions[2].bit_depth, Some(16));
     }
+
+    #[cfg(feature = "api")]
+    mod api_tests {
+        use crate::api::{ApiArtist, ApiTrack};
+        use crate::models::{LibraryArtist, LibraryTrack};
+
+        #[test_log::test]
+        fn library_track_to_api_track_converts_artwork_presence_to_contains_cover_true() {
+            let track = LibraryTrack {
+                id: 1,
+                number: 5,
+                title: "Test Track".to_string(),
+                duration: 180.5,
+                album: "Test Album".to_string(),
+                album_id: 10,
+                artist: "Test Artist".to_string(),
+                artist_id: 20,
+                artwork: Some("/path/to/artwork.jpg".to_string()),
+                ..Default::default()
+            };
+
+            let api_track: ApiTrack = track.into();
+
+            match api_track {
+                ApiTrack::Library(inner) => {
+                    assert_eq!(inner.id, 1);
+                    assert_eq!(inner.number, 5);
+                    assert_eq!(inner.title, "Test Track");
+                    assert!((inner.duration - 180.5).abs() < f64::EPSILON);
+                    assert_eq!(inner.album, "Test Album");
+                    assert_eq!(inner.album_id, 10);
+                    assert_eq!(inner.artist, "Test Artist");
+                    assert_eq!(inner.artist_id, 20);
+                    assert!(inner.contains_cover);
+                    assert!(!inner.explicit);
+                }
+            }
+        }
+
+        #[test_log::test]
+        fn library_track_to_api_track_converts_artwork_absence_to_contains_cover_false() {
+            let track = LibraryTrack {
+                id: 2,
+                number: 1,
+                title: "No Cover Track".to_string(),
+                duration: 240.0,
+                album: "No Cover Album".to_string(),
+                album_id: 11,
+                artist: "Another Artist".to_string(),
+                artist_id: 21,
+                artwork: None,
+                ..Default::default()
+            };
+
+            let api_track: ApiTrack = track.into();
+
+            match api_track {
+                ApiTrack::Library(inner) => {
+                    assert!(!inner.contains_cover);
+                }
+            }
+        }
+
+        #[test_log::test]
+        fn library_artist_to_api_artist_converts_cover_presence_to_contains_cover_true() {
+            let artist = LibraryArtist {
+                id: 100,
+                title: "Popular Artist".to_string(),
+                cover: Some("/path/to/cover.jpg".to_string()),
+                ..Default::default()
+            };
+
+            let api_artist: ApiArtist = artist.into();
+
+            match api_artist {
+                ApiArtist::Library(inner) => {
+                    assert_eq!(inner.id, 100);
+                    assert_eq!(inner.title, "Popular Artist");
+                    assert!(inner.contains_cover);
+                }
+            }
+        }
+
+        #[test_log::test]
+        fn library_artist_to_api_artist_converts_cover_absence_to_contains_cover_false() {
+            let artist = LibraryArtist {
+                id: 101,
+                title: "Unknown Artist".to_string(),
+                cover: None,
+                ..Default::default()
+            };
+
+            let api_artist: ApiArtist = artist.into();
+
+            match api_artist {
+                ApiArtist::Library(inner) => {
+                    assert_eq!(inner.id, 101);
+                    assert_eq!(inner.title, "Unknown Artist");
+                    assert!(!inner.contains_cover);
+                }
+            }
+        }
+    }
 }

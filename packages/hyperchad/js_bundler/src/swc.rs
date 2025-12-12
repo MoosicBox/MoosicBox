@@ -301,6 +301,165 @@ impl Load for Loader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
+
+    #[test_log::test]
+    fn test_loader_loads_javascript_file() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let js_path = temp_dir.path().join("test.js");
+
+            {
+                let mut file = std::fs::File::create(&js_path).unwrap();
+                writeln!(file, "export const greeting = 'hello';").unwrap();
+                writeln!(file, "export function add(a, b) {{ return a + b; }}").unwrap();
+            }
+
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(js_path);
+
+            let result = loader.load(&filename);
+            assert!(result.is_ok(), "Should successfully load JavaScript file");
+
+            let module_data = result.unwrap();
+            // The module should have exports (body items)
+            assert!(
+                !module_data.module.body.is_empty(),
+                "Module should have body items"
+            );
+        });
+    }
+
+    #[test_log::test]
+    fn test_loader_loads_typescript_file_and_strips_types() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let ts_path = temp_dir.path().join("test.ts");
+
+            {
+                let mut file = std::fs::File::create(&ts_path).unwrap();
+                writeln!(file, "interface Person {{ name: string; age: number; }}").unwrap();
+                writeln!(file, "export const greet = (person: Person): string => {{").unwrap();
+                writeln!(file, "  return `Hello, ${{person.name}}`;").unwrap();
+                writeln!(file, "}};").unwrap();
+            }
+
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(ts_path);
+
+            let result = loader.load(&filename);
+            assert!(result.is_ok(), "Should successfully load TypeScript file");
+
+            let module_data = result.unwrap();
+            // After stripping, the module should still have exports but no interface declarations
+            assert!(
+                !module_data.module.body.is_empty(),
+                "Module should have body items after type stripping"
+            );
+        });
+    }
+
+    #[test_log::test]
+    fn test_loader_loads_mjs_file() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let mjs_path = temp_dir.path().join("test.mjs");
+
+            {
+                let mut file = std::fs::File::create(&mjs_path).unwrap();
+                writeln!(file, "export const value = 42;").unwrap();
+            }
+
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(mjs_path);
+
+            let result = loader.load(&filename);
+            assert!(result.is_ok(), "Should successfully load .mjs file");
+        });
+    }
+
+    #[test_log::test]
+    fn test_loader_loads_cjs_file() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let cjs_path = temp_dir.path().join("test.cjs");
+
+            {
+                let mut file = std::fs::File::create(&cjs_path).unwrap();
+                writeln!(file, "const value = 42;").unwrap();
+                writeln!(file, "export {{ value }};").unwrap();
+            }
+
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(cjs_path);
+
+            let result = loader.load(&filename);
+            assert!(result.is_ok(), "Should successfully load .cjs file");
+        });
+    }
+
+    #[test_log::test]
+    fn test_loader_returns_error_for_nonexistent_file() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(std::path::PathBuf::from("/nonexistent/path/test.js"));
+
+            let result = loader.load(&filename);
+            assert!(result.is_err(), "Should return error for nonexistent file");
+        });
+    }
+
+    #[test_log::test]
+    fn test_loader_typescript_with_complex_types() {
+        let globals = Box::leak(Box::default());
+        GLOBALS.set(globals, || {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let ts_path = temp_dir.path().join("complex.ts");
+
+            {
+                let mut file = std::fs::File::create(&ts_path).unwrap();
+                // Write TypeScript with generics and type parameters
+                writeln!(
+                    file,
+                    "type Result<T, E> = {{ ok: true; value: T }} | {{ ok: false; error: E }};"
+                )
+                .unwrap();
+                writeln!(
+                    file,
+                    "export function process<T>(items: T[]): T | undefined {{"
+                )
+                .unwrap();
+                writeln!(file, "  return items[0];").unwrap();
+                writeln!(file, "}}").unwrap();
+            }
+
+            let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+            let loader = Loader { cm };
+            let filename = FileName::Real(ts_path);
+
+            let result = loader.load(&filename);
+            assert!(
+                result.is_ok(),
+                "Should successfully load TypeScript with complex types"
+            );
+
+            let module_data = result.unwrap();
+            assert!(
+                !module_data.module.body.is_empty(),
+                "Module should have body items"
+            );
+        });
+    }
 
     #[test_log::test]
     fn test_syntax_for_extension_typescript() {

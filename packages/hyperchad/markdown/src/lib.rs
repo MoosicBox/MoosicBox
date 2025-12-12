@@ -2000,4 +2000,262 @@ mod tests {
             assert_eq!(href, &Some("#".to_string()));
         }
     }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_textarea_tag() {
+        let md = "<textarea>hidden content</textarea>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify textarea tag is escaped
+            assert!(value.contains("&amp;lt;textarea"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_xmp_tag() {
+        let md = "<xmp>raw content</xmp>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify xmp tag is escaped
+            assert!(value.contains("&amp;lt;xmp"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noembed_tag() {
+        let md = "<noembed>fallback</noembed>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noembed tag is escaped
+            assert!(value.contains("&amp;lt;noembed"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noframes_tag() {
+        let md = "<noframes>no frames</noframes>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noframes tag is escaped
+            assert!(value.contains("&amp;lt;noframes"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_plaintext_tag() {
+        let md = "<plaintext>plain text";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify plaintext tag is escaped
+            assert!(value.contains("&amp;lt;plaintext"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_html_escape_preserves_ampersand_entities() {
+        // Test that the html_escape function handles text with existing ampersands
+        // The function replaces & last to handle pre-existing HTML entities correctly
+        let escaped = html_escape("<script>&amp;</script>");
+        // The & in &amp; gets escaped to &amp;amp; because html_escape escapes all &
+        assert!(escaped.contains("&amp;lt;script&amp;gt;"));
+        assert!(escaped.contains("&amp;amp;"));
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_html_escape_all_special_chars() {
+        // Test that all HTML special characters are properly escaped
+        let input = "<tag attr=\"value\" data='test'>content</tag>";
+        let escaped = html_escape(input);
+        // Verify all special characters are escaped
+        assert!(escaped.contains("&amp;lt;"));
+        assert!(escaped.contains("&amp;gt;"));
+        assert!(escaped.contains("&amp;quot;"));
+        assert!(escaped.contains("&amp;#x27;"));
+    }
+
+    #[test_log::test]
+    fn test_hard_break_whitespace_preservation() {
+        // Test that hard breaks preserve whitespace with PreserveWrap
+        let md = "Line 1  \nLine 2";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            // Find the hard break element (should have newline and WhiteSpace::PreserveWrap)
+            let hard_break = paragraph.children.iter().find(|child| {
+                if let Element::Raw { value } = &child.element {
+                    value == "\n" && child.white_space == Some(WhiteSpace::PreserveWrap)
+                } else {
+                    false
+                }
+            });
+            assert!(
+                hard_break.is_some(),
+                "Expected a hard break element with PreserveWrap whitespace"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_image_with_title() {
+        // Test image parsing where both alt and title are provided
+        let md = "![Alt text](https://example.com/image.png \"Image title\")";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            let image = paragraph
+                .children
+                .iter()
+                .find(|c| matches!(c.element, Element::Image { .. }));
+            assert!(image.is_some());
+            let image = image.unwrap();
+            if let Element::Image { source, alt, .. } = &image.element {
+                assert_eq!(source, &Some("https://example.com/image.png".to_string()));
+                // pulldown-cmark puts title in the alt field for images
+                assert_eq!(alt, &Some("Image title".to_string()));
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn test_code_block_preserves_content() {
+        // Verify code block content is preserved correctly
+        let code_content = "fn main() {\n    println!(\"Hello\");\n}";
+        let md = format!("```rust\n{code_content}\n```");
+        let container = markdown_to_container(&md);
+        if let Some(code_block) = container.children.first() {
+            // Find the raw text content inside the code block
+            let has_content = code_block.children.iter().any(|child| {
+                if let Element::Raw { value } = &child.element {
+                    value.contains("fn main()") && value.contains("println!")
+                } else {
+                    false
+                }
+            });
+            assert!(has_content, "Code block should preserve code content");
+        }
+    }
+
+    #[test_log::test]
+    fn test_deeply_nested_structure() {
+        // Test a complex nested structure to ensure stack handling works correctly
+        let md = "> **Bold in *italic and [link](https://example.com) with `code`***";
+        let container = markdown_to_container(md);
+        // Should not panic and should produce non-empty output
+        assert!(!container.children.is_empty());
+        // Verify blockquote is created
+        if let Some(blockquote) = container.children.first() {
+            assert!(
+                blockquote
+                    .classes
+                    .contains(&"markdown-blockquote".to_string())
+            );
+            // Should have nested content
+            assert!(!blockquote.children.is_empty());
+        }
+    }
+
+    #[test_log::test]
+    fn test_consecutive_code_blocks() {
+        // Test multiple consecutive code blocks
+        let md = "```rust\ncode1\n```\n\n```python\ncode2\n```";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 2, "Should have two code blocks");
+        // Verify both are code blocks with different languages
+        let first = &container.children[0];
+        let second = &container.children[1];
+        assert!(first.classes.contains(&"markdown-code-block".to_string()));
+        assert!(second.classes.contains(&"markdown-code-block".to_string()));
+        assert_eq!(first.data.get("language"), Some(&"rust".to_string()));
+        assert_eq!(second.data.get("language"), Some(&"python".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_list_with_code_and_links() {
+        // Test list items containing inline code and links
+        let md = "- Item with `code`\n- Item with [link](https://example.com)";
+        let container = markdown_to_container(md);
+        if let Some(list) = container.children.first() {
+            assert_eq!(list.element, Element::UnorderedList);
+            assert_eq!(list.children.len(), 2);
+            // First item should contain inline code
+            let first_item = &list.children[0];
+            let has_code = first_item
+                .children
+                .iter()
+                .any(|c| c.classes.contains(&"inline-code".to_string()));
+            assert!(has_code, "First item should contain inline code");
+            // Second item should contain a link
+            let second_item = &list.children[1];
+            let has_link = second_item
+                .children
+                .iter()
+                .any(|c| matches!(c.element, Element::Anchor { .. }));
+            assert!(has_link, "Second item should contain a link");
+        }
+    }
+
+    #[test_log::test]
+    fn test_heading_styles_h5_h6() {
+        // Test H5 and H6 specific styling (less commonly tested)
+        let md = "##### H5\n###### H6";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 2);
+
+        let h5 = &container.children[0];
+        let h6 = &container.children[1];
+
+        // H5: margin_top=16, margin_bottom=8, font_size=14
+        assert_eq!(h5.font_size, Some(Number::from(14)));
+        assert_eq!(h5.margin_top, Some(Number::from(16)));
+        assert_eq!(h5.margin_bottom, Some(Number::from(8)));
+
+        // H6: margin_top=16, margin_bottom=8, font_size=13
+        assert_eq!(h6.font_size, Some(Number::from(13)));
+        assert_eq!(h6.margin_top, Some(Number::from(16)));
+        assert_eq!(h6.margin_bottom, Some(Number::from(8)));
+    }
+
+    #[test_log::test]
+    fn test_root_container_classes() {
+        // Verify root container has the "markdown" class
+        let md = "Some content";
+        let container = markdown_to_container(md);
+        assert!(container.classes.contains(&"markdown".to_string()));
+        assert_eq!(container.element, Element::Div);
+    }
 }

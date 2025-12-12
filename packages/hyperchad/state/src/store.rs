@@ -459,4 +459,35 @@ mod tests {
 
         Ok(())
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_store_type_mismatch_on_take_returns_error() -> Result<(), Error> {
+        // Test that take returns serde error when deserializing to incompatible type
+        // This tests the error path through StateStore (which also invalidates cache)
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        // Set a TestData value and populate cache
+        let data = TestData {
+            id: 42,
+            name: "take_mismatch_test".to_string(),
+        };
+        store.set("key", &data).await?;
+        let _: Option<TestData> = store.get("key").await?; // Populate cache
+
+        // Try to take it as an incompatible type
+        let result = store.take::<IncompatibleType>("key").await;
+
+        // Should return a serde error
+        assert!(
+            matches!(result, Err(Error::Serde(_))),
+            "Expected Serde error, got: {result:?}"
+        );
+
+        // The cache should have been invalidated and the value deleted from persistence
+        let after: Option<TestData> = store.get("key").await?;
+        assert_eq!(after, None, "Value should be deleted even if take fails");
+
+        Ok(())
+    }
 }

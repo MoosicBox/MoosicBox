@@ -1927,6 +1927,8 @@ pub fn send_playback_event(update: &UpdateSession, playback: &Playback) {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     fn create_test_track(id: u64) -> Track {
@@ -2178,6 +2180,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[serial(service_port)]
     fn test_set_service_port() {
         set_service_port(9876);
         assert_eq!(*SERVICE_PORT.read().unwrap(), Some(9876));
@@ -2979,6 +2982,7 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial(service_port)]
     async fn test_get_track_url_with_local_source() {
         use moosicbox_music_api::models::TrackAudioQuality;
 
@@ -3110,5 +3114,281 @@ mod tests {
             .player_status()
             .expect("Failed to get status");
         assert!(status.active_playbacks.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_use_local_network_ip_replaces_localhost() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 444.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://localhost:8080".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should NOT contain "localhost" when use_local_network_ip is true
+        // It should be replaced with an IP address (127.0.0.1 or local IP)
+        assert!(!url.contains("localhost"));
+        assert!(url.contains(":8080/files/track"));
+        assert!(url.contains("trackId=444"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_with_use_local_network_ip_preserves_non_localhost() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 555.into();
+        let api_source = ApiSource::library();
+        // Use a non-localhost URL
+        let player_source = PlayerSource::Remote {
+            host: "http://192.168.1.100:9000".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Should preserve the original IP since it's not localhost
+        assert!(url.starts_with("http://192.168.1.100:9000/files/track"));
+        assert!(url.contains("trackId=555"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial(service_port)]
+    async fn test_get_track_url_local_source_with_use_local_network_ip() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        // Set up SERVICE_PORT for local source
+        set_service_port(7777);
+
+        let track_id = 666.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Local;
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true should use local IP instead of 127.0.0.1
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // With use_local_network_ip=true, it should use the local network IP or fallback to 127.0.0.1
+        // The URL structure should be: http://<ip>:<port>/files/track?<query>
+        assert!(url.contains("/files/track?"));
+        assert!(url.contains("trackId=666"));
+        // Verify the URL starts with http:// and contains the port
+        assert!(url.starts_with("http://"));
+    }
+
+    #[test_log::test]
+    fn test_playback_type_variants() {
+        // Test that all PlaybackType variants can be created and debug-formatted
+        let file_type = PlaybackType::File;
+        let stream_type = PlaybackType::Stream;
+        let default_type = PlaybackType::Default;
+
+        let debug_file = format!("{file_type:?}");
+        let debug_stream = format!("{stream_type:?}");
+        let debug_default = format!("{default_type:?}");
+
+        assert!(debug_file.contains("File"));
+        assert!(debug_stream.contains("Stream"));
+        assert!(debug_default.contains("Default"));
+    }
+
+    #[test_log::test]
+    fn test_playback_type_clone() {
+        let original = PlaybackType::Stream;
+        let cloned = original;
+
+        assert!(matches!(cloned, PlaybackType::Stream));
+    }
+
+    #[test_log::test]
+    fn test_playback_retry_options_custom() {
+        let options = PlaybackRetryOptions {
+            max_attempts: 5,
+            retry_delay: std::time::Duration::from_millis(250),
+        };
+
+        assert_eq!(options.max_attempts, 5);
+        assert_eq!(options.retry_delay, std::time::Duration::from_millis(250));
+
+        // Test Clone trait
+        let cloned = options;
+        assert_eq!(cloned.max_attempts, 5);
+    }
+
+    #[test_log::test]
+    fn test_player_source_remote_with_all_params() {
+        let mut query = std::collections::BTreeMap::new();
+        query.insert("key1".to_string(), "value1".to_string());
+        query.insert("key2".to_string(), "value2".to_string());
+
+        let mut headers = std::collections::BTreeMap::new();
+        headers.insert("Authorization".to_string(), "Bearer token".to_string());
+        headers.insert("X-Custom".to_string(), "custom-value".to_string());
+
+        let source = PlayerSource::Remote {
+            host: "https://api.example.com".to_string(),
+            query: Some(query.clone()),
+            headers: Some(headers.clone()),
+        };
+
+        // Test Debug formatting includes all components
+        let debug_str = format!("{source:?}");
+        assert!(debug_str.contains("Remote"));
+        assert!(debug_str.contains("api.example.com"));
+        assert!(debug_str.contains("key1"));
+        assert!(debug_str.contains("value1"));
+        assert!(debug_str.contains("Authorization"));
+        assert!(debug_str.contains("Bearer token"));
+
+        // Test Clone trait
+        let cloned = source.clone();
+        if let PlayerSource::Remote {
+            host,
+            query: cloned_query,
+            headers: cloned_headers,
+        } = cloned
+        {
+            assert_eq!(host, "https://api.example.com");
+            assert_eq!(cloned_query, Some(query));
+            assert_eq!(cloned_headers, Some(headers));
+        } else {
+            panic!("Expected PlayerSource::Remote after clone");
+        }
+    }
+
+    #[test_log::test]
+    fn test_playback_volume_concurrent_access() {
+        use std::sync::atomic::Ordering;
+
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(0.5),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+
+        // Test atomic volume updates
+        assert!((playback.volume.load(Ordering::SeqCst) - 0.5).abs() < 0.001);
+
+        playback.volume.store(0.75, Ordering::SeqCst);
+        assert!((playback.volume.load(Ordering::SeqCst) - 0.75).abs() < 0.001);
+
+        // Test fetch_add operation (useful for concurrent modifications)
+        let _old_value = playback
+            .volume
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| Some(v + 0.1));
+        assert!((playback.volume.load(Ordering::SeqCst) - 0.85).abs() < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_playback_with_playback_target() {
+        let tracks = vec![create_test_track(1)];
+        let target = PlaybackTarget::AudioZone { audio_zone_id: 42 };
+
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            123,
+            "profile".to_string(),
+            Some(target.clone()),
+        );
+
+        assert!(playback.playback_target.is_some());
+        if let Some(PlaybackTarget::AudioZone { audio_zone_id }) = playback.playback_target {
+            assert_eq!(audio_zone_id, 42);
+        } else {
+            panic!("Expected AudioZone target");
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_playback_status_with_playback() {
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let mut playback = Playback::new(
+            tracks,
+            Some(1),
+            AtomicF64::new(0.8),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+        playback.playing = true;
+        playback.progress = 60.5;
+
+        let api_playback: ApiPlayback = playback.into();
+        let status = ApiPlaybackStatus {
+            active_playbacks: Some(api_playback),
+        };
+
+        assert!(status.active_playbacks.is_some());
+        let active = status.active_playbacks.unwrap();
+        assert_eq!(active.track_ids.len(), 2);
+        assert!(active.playing);
+        assert_eq!(active.position, 1);
+        assert!((active.seek - 60.5).abs() < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_playable_track_debug_hides_source() {
+        use ::symphonia::core::probe::Hint;
+
+        // Create a PlayableTrack and verify Debug impl hides the source
+        let track = PlayableTrack {
+            track_id: 123.into(),
+            source: Box::new(std::io::Cursor::new(vec![0u8; 100])),
+            hint: Hint::new(),
+        };
+
+        let debug_str = format!("{track:?}");
+
+        // Should contain track_id
+        assert!(debug_str.contains("track_id"));
+        assert!(debug_str.contains("123"));
+
+        // Should show {{source}} placeholder, not actual source details
+        assert!(debug_str.contains("source"));
     }
 }

@@ -211,6 +211,38 @@ mod tests {
             // Expected wants z before a, which cannot happen
             assert!(!headers_contains_in_order(&expected, &actual));
         }
+
+        #[test_log::test]
+        fn is_case_sensitive_for_header_keys() {
+            let expected = vec![("Content-Type".to_string(), "text/plain".to_string())];
+            let mut actual = BTreeMap::new();
+            actual.insert("content-type".to_string(), "text/plain".to_string());
+            // Keys differ in case, so should not match
+            assert!(!headers_contains_in_order(&expected, &actual));
+        }
+
+        #[test_log::test]
+        fn is_case_sensitive_for_header_values() {
+            let expected = vec![("content-type".to_string(), "TEXT/PLAIN".to_string())];
+            let mut actual = BTreeMap::new();
+            actual.insert("content-type".to_string(), "text/plain".to_string());
+            // Values differ in case, so should not match
+            assert!(!headers_contains_in_order(&expected, &actual));
+        }
+
+        #[test_log::test]
+        fn matches_consecutive_expected_headers_correctly() {
+            let expected = vec![
+                ("a".to_string(), "1".to_string()),
+                ("b".to_string(), "2".to_string()),
+            ];
+            let mut actual = BTreeMap::new();
+            actual.insert("a".to_string(), "1".to_string());
+            actual.insert("b".to_string(), "2".to_string());
+            actual.insert("c".to_string(), "3".to_string());
+            // Both expected headers appear consecutively in order
+            assert!(headers_contains_in_order(&expected, &actual));
+        }
     }
 
     mod parse_http_response {
@@ -323,6 +355,49 @@ mod tests {
             let raw = "HTTP/1.1 200 OK\r\n  Key  :  Value  \r\n\r\nBody";
             let result = parse_http_response(raw).unwrap();
             assert_eq!(result.headers.get("Key"), Some(&"Value".to_string()));
+        }
+
+        #[test_log::test]
+        fn ignores_non_numeric_content_length_and_returns_full_body() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\nHello World";
+            let result = parse_http_response(raw).unwrap();
+            // When Content-Length is non-numeric, parsing fails and body is not truncated
+            assert_eq!(result.body, "Hello World");
+        }
+
+        #[test_log::test]
+        fn returns_error_for_completely_empty_input() {
+            let raw = "";
+            let result = parse_http_response(raw);
+            assert_eq!(result.unwrap_err(), "Invalid HTTP response format");
+        }
+
+        #[test_log::test]
+        fn handles_headers_without_colon_by_skipping_them() {
+            let raw = "HTTP/1.1 200 OK\r\nMalformed Header\r\nValid-Header: value\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            // Malformed header (no colon) should be skipped
+            assert_eq!(result.headers.len(), 1);
+            assert_eq!(
+                result.headers.get("Valid-Header"),
+                Some(&"value".to_string())
+            );
+        }
+
+        #[test_log::test]
+        fn parses_status_line_with_extra_reason_phrase_words() {
+            // Status reason phrases can have multiple words
+            let raw = "HTTP/1.1 502 Bad Gateway Error\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.status_code, 502);
+        }
+
+        #[test_log::test]
+        fn truncates_body_exactly_at_content_length_boundary() {
+            // Test edge case where body length equals content length exactly
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Hello");
         }
     }
 }
