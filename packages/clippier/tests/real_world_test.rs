@@ -6,25 +6,6 @@ use clippier::git_diff::{
 use clippier::test_utils::test_resources::load_cargo_lock_for_git_diff;
 use std::path::Path;
 
-/// Seeds a single file from the real filesystem into the simulated filesystem.
-///
-/// This reads the file content from the real filesystem (using `std::fs`) and
-/// writes it to the simulated filesystem (using `switchy_fs`). The parent
-/// directories are created if needed.
-#[cfg(feature = "git-diff")]
-fn seed_file_from_real_fs(path: &Path) {
-    // Read from real filesystem
-    let content = std::fs::read(path).expect("Failed to read file from real filesystem");
-
-    // Create parent directory in simulated filesystem if needed
-    if let Some(parent) = path.parent() {
-        switchy_fs::sync::create_dir_all(parent).expect("Failed to create parent directory");
-    }
-
-    // Write to simulated filesystem
-    switchy_fs::sync::write(path, content).expect("Failed to write file to simulated filesystem");
-}
-
 #[cfg(feature = "git-diff")]
 #[test_log::test(switchy_async::test)]
 async fn test_real_world_tokio_update() {
@@ -76,12 +57,6 @@ async fn test_real_world_cargo_lock_changes() {
         workspace_root = workspace_root.parent().unwrap().to_path_buf();
     }
 
-    // Seed the simulated filesystem with the real Cargo.lock and Cargo.toml files
-    // so that switchy_fs can find them when the simulator is enabled.
-    // We do this manually because seed_from_real_fs_same_path expects directories.
-    seed_file_from_real_fs(&workspace_root.join("Cargo.lock"));
-    seed_file_from_real_fs(&workspace_root.join("Cargo.toml"));
-
     let base_commit = "c721488ba3aa21df6d7c8f9874c3189ae3d6191d";
     let head_commit = "3c5d315c42b0b579c27d41cce9c2c6280a6e0e34";
 
@@ -132,17 +107,12 @@ async fn test_debug_cargo_lock_parsing() {
     use std::path::Path;
 
     // Test the complete flow that filters by Cargo.lock
-    let mut workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
+    let workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
+    let mut workspace_root = workspace_root.clone();
 
     while !workspace_root.join(".git").exists() {
         workspace_root = workspace_root.parent().unwrap().to_path_buf();
     }
-
-    // Seed the simulated filesystem with the real Cargo.lock and Cargo.toml files
-    // so that switchy_fs can find them when the simulator is enabled.
-    // We do this manually because seed_from_real_fs_same_path expects directories.
-    seed_file_from_real_fs(&workspace_root.join("Cargo.lock"));
-    seed_file_from_real_fs(&workspace_root.join("Cargo.toml"));
 
     let base_commit = "c721488ba3aa21df6d7c8f9874c3189ae3d6191d";
     let head_commit = "3c5d315c42b0b579c27d41cce9c2c6280a6e0e34";
