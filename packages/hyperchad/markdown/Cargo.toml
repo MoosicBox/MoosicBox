@@ -27,6 +27,7 @@ thiserror = { workspace = true }
 
 gh-emoji       = { workspace = true, optional = true }
 pulldown-cmark = { workspace = true }
+syntect        = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
@@ -42,5 +43,5 @@ fail-on-warnings = [
 ]
 
 emoji               = ["dep:gh-emoji"]
-syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
+syntax-highlighting = ["dep:syntect"]
 xss-protection      = []

@@ -49,6 +49,9 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::VecDeque;
 use thiserror::Error;
 
+#[cfg(feature = "syntax-highlighting")]
+mod syntax;
+
 /// Errors that can occur during markdown processing.
 #[derive(Debug, Error)]
 pub enum MarkdownError {
@@ -104,6 +107,9 @@ impl From<HeaderSize> for hyperchad_transformer::HeaderSize {
 struct MarkdownContext {
     stack: VecDeque<Container>,
     options: MarkdownOptions,
+    /// State for buffering code block content during syntax highlighting.
+    #[cfg(feature = "syntax-highlighting")]
+    code_block_state: Option<syntax::CodeBlockState>,
 }
 
 /// Configuration options for markdown parsing and rendering.
@@ -125,6 +131,7 @@ struct MarkdownContext {
 ///     enable_smart_punctuation: false,
 ///     emoji_enabled: false,
 ///     xss_protection: true,
+///     syntax_highlighting: false,
 /// };
 /// ```
 #[allow(clippy::struct_excessive_bools)]
@@ -149,6 +156,12 @@ pub struct MarkdownOptions {
     /// When enabled, dangerous tags like `<script>` and URLs with `javascript:` schemes
     /// are escaped or filtered out.
     pub xss_protection: bool,
+    /// Enable syntax highlighting for fenced code blocks.
+    ///
+    /// Requires the `syntax-highlighting` feature to be enabled at compile time.
+    /// When enabled, code blocks with language tags (e.g., ` ```rust `) will have
+    /// their content syntax highlighted with colored spans.
+    pub syntax_highlighting: bool,
 }
 
 impl Default for MarkdownOptions {
@@ -162,6 +175,7 @@ impl Default for MarkdownOptions {
     /// * `enable_smart_punctuation`: `true`
     /// * `emoji_enabled`: `true` if the `emoji` feature is enabled, otherwise `false`
     /// * `xss_protection`: `true` if the `xss-protection` feature is enabled, otherwise `false`
+    /// * `syntax_highlighting`: `true` if the `syntax-highlighting` feature is enabled, otherwise `false`
     fn default() -> Self {
         Self {
             enable_tables: true,
@@ -171,6 +185,7 @@ impl Default for MarkdownOptions {
             enable_smart_punctuation: true,
             emoji_enabled: cfg!(feature = "emoji"),
             xss_protection: cfg!(feature = "xss-protection"),
+            syntax_highlighting: cfg!(feature = "syntax-highlighting"),
         }
     }
 }
@@ -185,7 +200,12 @@ impl MarkdownContext {
         };
         let mut stack = VecDeque::new();
         stack.push_back(root);
-        Self { stack, options }
+        Self {
+            stack,
+            options,
+            #[cfg(feature = "syntax-highlighting")]
+            code_block_state: None,
+        }
     }
 
     fn current_mut(&mut self) -> Result<&mut Container, MarkdownError> {
@@ -257,6 +277,7 @@ pub fn markdown_to_container(markdown: &str) -> Container {
 ///     enable_smart_punctuation: true,
 ///     emoji_enabled: false,
 ///     xss_protection: true,
+///     syntax_highlighting: false,
 /// };
 ///
 /// let markdown = "~~strikethrough~~ text";
@@ -331,12 +352,24 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
     match event {
         Event::Start(tag) => process_start_tag(ctx, tag),
         Event::End(tag_end) => process_end_tag(ctx, tag_end),
-        Event::Text(text) => ctx.add_child(Container {
-            element: Element::Raw {
-                value: text.to_string(),
-            },
-            ..Default::default()
-        }),
+        Event::Text(text) => {
+            // When syntax highlighting is enabled and we're inside a code block,
+            // buffer the text for later highlighting instead of adding it directly.
+            #[cfg(feature = "syntax-highlighting")]
+            if ctx.options.syntax_highlighting
+                && let Some(ref mut state) = ctx.code_block_state
+            {
+                state.content.push_str(&text);
+                return Ok(());
+            }
+
+            ctx.add_child(Container {
+                element: Element::Raw {
+                    value: text.to_string(),
+                },
+                ..Default::default()
+            })
+        }
         Event::Code(code) => ctx.add_child(Container {
             element: Element::Raw {
                 value: code.to_string(),
@@ -466,6 +499,15 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                     }
                 }
             };
+
+            // Initialize code block state for syntax highlighting
+            #[cfg(feature = "syntax-highlighting")]
+            if ctx.options.syntax_highlighting {
+                ctx.code_block_state = Some(syntax::CodeBlockState {
+                    language: language.clone(),
+                    content: String::new(),
+                });
+            }
 
             ctx.push(Container {
                 element: Element::Div,
@@ -651,10 +693,24 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
 
 fn process_end_tag(ctx: &mut MarkdownContext, tag_end: TagEnd) -> Result<(), MarkdownError> {
     match tag_end {
+        TagEnd::CodeBlock => {
+            // Apply syntax highlighting if enabled and we have buffered content
+            #[cfg(feature = "syntax-highlighting")]
+            if ctx.options.syntax_highlighting
+                && let Some(state) = ctx.code_block_state.take()
+            {
+                let containers =
+                    syntax::highlight_code_to_containers(&state.content, state.language.as_deref());
+                ctx.current_mut()?.children.extend(containers);
+            }
+
+            let container = ctx.pop()?;
+            ctx.add_child(container)?;
+            Ok(())
+        }
         TagEnd::Paragraph
         | TagEnd::Heading(_)
         | TagEnd::BlockQuote(_)
-        | TagEnd::CodeBlock
         | TagEnd::List(_)
         | TagEnd::Item
         | TagEnd::Emphasis
@@ -1002,6 +1058,7 @@ mod tests {
             enable_smart_punctuation: false,
             emoji_enabled: false,
             xss_protection: false,
+            syntax_highlighting: false,
         };
         let md = "**bold** text";
         let container = markdown_to_container_with_options(md, options);
@@ -1998,6 +2055,185 @@ mod tests {
         {
             // Mixed case vbscript URLs should be filtered to "#"
             assert_eq!(href, &Some("#".to_string()));
+        }
+    }
+
+    #[test_log::test]
+    fn test_syntax_highlighting_disabled() {
+        let md = "```rust\nfn main() {}\n```";
+        let options = MarkdownOptions {
+            syntax_highlighting: false,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+
+        // Without highlighting, children should be Raw elements (not Span)
+        if let Some(code_block) = container.children.first() {
+            assert!(
+                code_block
+                    .children
+                    .iter()
+                    .any(|c| matches!(c.element, Element::Raw { .. }))
+            );
+        }
+    }
+
+    // =========================================================================
+    // Syntax Highlighting Tests
+    // =========================================================================
+
+    #[cfg(feature = "syntax-highlighting")]
+    mod syntax {
+        use super::*;
+
+        #[test_log::test]
+        fn test_syntax_highlighting_rust() {
+            let md = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            // Should have code block with span children (not raw text)
+            if let Some(code_block) = container.children.first() {
+                assert!(
+                    code_block
+                        .classes
+                        .contains(&"markdown-code-block".to_string())
+                );
+                // With syntax highlighting, children should be Span elements with colors
+                assert!(
+                    code_block
+                        .children
+                        .iter()
+                        .any(|c| matches!(c.element, Element::Span))
+                );
+                assert!(code_block.children.iter().any(|c| c.color.is_some()));
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_python() {
+            let md = "```python\ndef hello():\n    print('Hello')\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            if let Some(code_block) = container.children.first() {
+                assert!(
+                    code_block
+                        .classes
+                        .contains(&"markdown-code-block".to_string())
+                );
+                assert!(
+                    code_block
+                        .children
+                        .iter()
+                        .any(|c| matches!(c.element, Element::Span))
+                );
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_javascript() {
+            let md = "```javascript\nfunction hello() {\n    console.log('Hello');\n}\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            if let Some(code_block) = container.children.first() {
+                assert!(
+                    code_block
+                        .children
+                        .iter()
+                        .any(|c| matches!(c.element, Element::Span))
+                );
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_unknown_language() {
+            let md = "```unknownlang\nsome code here\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            // Should still work, falling back to plain text syntax
+            assert!(!container.children.is_empty());
+            if let Some(code_block) = container.children.first() {
+                assert!(
+                    code_block
+                        .classes
+                        .contains(&"markdown-code-block".to_string())
+                );
+                // Even with unknown language, should have span children
+                assert!(!code_block.children.is_empty());
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_no_language() {
+            let md = "```\nplain code\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            // Should still work with plain text
+            assert!(!container.children.is_empty());
+            if let Some(code_block) = container.children.first() {
+                assert!(!code_block.children.is_empty());
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_preserves_code_block_styling() {
+            let md = "```rust\nlet x = 1;\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            if let Some(code_block) = container.children.first() {
+                // Code block should still have its styling
+                assert_eq!(code_block.background, Some(Color::from_hex("#f6f8fa")));
+                assert_eq!(code_block.font_family, Some(vec!["monospace".to_string()]));
+                assert_eq!(code_block.padding_left, Some(Number::from(16)));
+            }
+        }
+
+        #[test_log::test]
+        fn test_syntax_highlighting_multiple_code_blocks() {
+            let md = "```rust\nfn a() {}\n```\n\nSome text\n\n```python\ndef b(): pass\n```";
+            let options = MarkdownOptions {
+                syntax_highlighting: true,
+                ..Default::default()
+            };
+            let container = markdown_to_container_with_options(md, options);
+
+            // Should have multiple children: code block, paragraph, code block
+            assert!(container.children.len() >= 2);
+
+            // Both code blocks should be highlighted
+            let code_blocks: Vec<_> = container
+                .children
+                .iter()
+                .filter(|c| c.classes.contains(&"markdown-code-block".to_string()))
+                .collect();
+            assert_eq!(code_blocks.len(), 2);
+
+            for block in code_blocks {
+                assert!(block.children.iter().any(|c| c.color.is_some()));
+            }
         }
     }
 }

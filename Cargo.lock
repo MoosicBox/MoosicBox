@@ -6027,6 +6027,7 @@ dependencies = [
  "log 0.4.29",
  "moosicbox_assert",
  "pulldown-cmark",
+ "syntect",
  "test-log",
  "thiserror 2.0.17",
 ]
