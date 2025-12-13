@@ -22,6 +22,7 @@ hyperchad = { workspace = true, features = [
     "color",
     "markdown",
     "markdown-emoji",
+    "markdown-syntax-highlighting",
     "markdown-xss-protection",
     "renderer",
     "renderer-assets",

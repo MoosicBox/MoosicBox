@@ -57,6 +57,7 @@ Markdown into HyperChad `Container` structures for backend-agnostic rendering.
 
 - ✅ **Full CommonMark Support** - All standard markdown syntax
 - ✅ **GitHub Flavored Markdown** - Tables, strikethrough, task lists, and more
+- ✅ **Syntax Highlighting** - Language-aware code coloring (opt-in via `syntax-highlighting` feature)
 - ✅ **Emoji Support** - Use `:emoji:` shortcodes like `:rocket:`, `:star:`, `:fire:`
 - ✅ **XSS Protection** - Built-in filtering of dangerous HTML
 - ✅ **Backend Agnostic** - Renders to HTML, egui, or any HyperChad backend
@@ -111,6 +112,10 @@ const LISTS_MARKDOWN: &str = r"
 const CODE_MARKDOWN: &str = r##"
 ## Code Examples
 
+Code blocks support **syntax highlighting** when enabled via the `syntax-highlighting` feature
+(or `markdown-syntax-highlighting` when using the `hyperchad` umbrella crate).
+The highlighting is language-aware - just specify the language after the opening fence.
+
 ### Inline Code
 
 Use the `markdown_to_container()` function to convert markdown strings.
@@ -154,6 +159,7 @@ const TABLES_MARKDOWN: &str = r"
 | Type Safety | ✅ | ❌ | Compile-time validation |
 | Backend Agnostic | ✅ | ❌ | Works with HTML, egui, etc. |
 | GitHub Flavored | ✅ | ⚠️ | Requires additional libraries |
+| Syntax Highlighting | ✅ | ⚠️ | Opt-in with feature flag |
 | Emoji Support | ✅ | ⚠️ | Built-in with feature flag |
 | XSS Protection | ✅ | ⚠️ | Optional, built-in |
 | Zero-cost Abstractions | ✅ | N/A | Rust performance |
@@ -298,6 +304,7 @@ let options = MarkdownOptions {
     enable_smart_punctuation: true,
     emoji_enabled: true,
     xss_protection: true,
+    syntax_highlighting: true, // Requires `syntax-highlighting` feature
 };
 
 let container = markdown_to_container_with_options(markdown, options);
@@ -335,14 +342,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperchad_markdown = { version = "0.1", features = ["emoji", "xss-protection"] }
+hyperchad_markdown = { version = "0.1", features = [
+    "emoji",
+    "syntax-highlighting",
+    "xss-protection",
+] }
 ```
 
 Or use the main hyperchad package:
 
 ```toml
 [dependencies]
-hyperchad = { version = "0.1", features = ["markdown", "markdown-emoji"] }
+hyperchad = { version = "0.1", features = [
+    "markdown",
+    "markdown-emoji",
+    "markdown-syntax-highlighting",
+] }
 ```
 "##;
 
@@ -526,6 +541,10 @@ fn create_main_page() -> Containers {
                             li {
                                 span font-weight=bold { "Emoji Support: " }
                                 "GitHub-style :emoji: shortcodes"
+                            }
+                            li {
+                                span font-weight=bold { "Syntax Highlighting: " }
+                                "Language-aware code coloring (opt-in \"syntax-highlighting\" feature)"
                             }
                             li {
                                 span font-weight=bold { "Easy Integration: " }
