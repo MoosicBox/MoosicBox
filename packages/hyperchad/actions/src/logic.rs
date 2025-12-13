@@ -14,12 +14,12 @@
 //! # Example
 //!
 //! ```rust
-//! use hyperchad_actions::logic::{get_visibility_str_id, visible, If};
+//! use hyperchad_actions::logic::{get_visibility_by_id, visible, If};
 //! use hyperchad_actions::ActionType;
 //!
 //! // Create a conditional action that shows an element if another is visible
-//! let condition = get_visibility_str_id("other-element").eq(visible());
-//! let if_action = condition.then(ActionType::show_str_id("my-element"));
+//! let condition = get_visibility_by_id("other-element").eq(visible());
+//! let if_action = condition.then(ActionType::show_by_id("my-element"));
 //! ```
 
 use hyperchad_transformer_models::{LayoutDirection, Visibility};
@@ -46,7 +46,7 @@ pub enum CalcValue {
         /// Target element
         target: ElementTarget,
     },
-    /// Get string ID of an element
+    /// Get element ID of an element
     Id {
         /// Target element
         target: ElementTarget,
@@ -681,14 +681,6 @@ pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
     Condition::Eq(a.into(), b.into())
 }
 
-/// Gets the visibility value of an element by string ID
-#[must_use]
-pub fn get_visibility_str_id(str_id: impl Into<Target>) -> CalcValue {
-    CalcValue::Visibility {
-        target: ElementTarget::StrId(str_id.into()),
-    }
-}
-
 /// Gets the visibility value of an element by numeric ID
 #[must_use]
 pub const fn get_visibility_id(id: usize) -> CalcValue {
@@ -713,11 +705,27 @@ pub fn get_visibility_class(class_name: impl Into<Target>) -> CalcValue {
     }
 }
 
-/// Gets the display value of an element by string ID
+/// Gets the visibility value of an element by explicit ID lookup
 #[must_use]
-pub fn get_display_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_visibility_by_id(id: impl Into<Target>) -> CalcValue {
+    CalcValue::Visibility {
+        target: ElementTarget::ById(id.into()),
+    }
+}
+
+/// Gets the visibility value of an element by CSS selector
+#[must_use]
+pub fn get_visibility_selector(selector: impl Into<Target>) -> CalcValue {
+    CalcValue::Visibility {
+        target: ElementTarget::Selector(selector.into()),
+    }
+}
+
+/// Gets the display value of an element by element ID
+#[must_use]
+pub fn get_display_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::Display {
-        target: ElementTarget::StrId(str_id.into()),
+        target: ElementTarget::ById(id.into()),
     }
 }
 
@@ -767,7 +775,7 @@ pub const fn get_event_value() -> CalcValue {
     CalcValue::EventValue
 }
 
-/// Gets the string ID of the element itself
+/// Gets the element ID of the element itself
 #[must_use]
 pub const fn get_id_self() -> CalcValue {
     CalcValue::Id {
@@ -784,11 +792,11 @@ pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
     }
 }
 
-/// Gets the width in pixels of an element by string ID
+/// Gets the width in pixels of an element by element ID
 #[must_use]
-pub fn get_width_px_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_width_px_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::WidthPx {
-        target: ElementTarget::StrId(str_id.into()),
+        target: ElementTarget::ById(id.into()),
     }
 }
 
@@ -808,11 +816,11 @@ pub const fn get_width_px_self() -> CalcValue {
     }
 }
 
-/// Gets the height in pixels of an element by string ID
+/// Gets the height in pixels of an element by element ID
 #[must_use]
-pub fn get_height_px_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_height_px_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::HeightPx {
-        target: ElementTarget::StrId(str_id.into()),
+        target: ElementTarget::ById(id.into()),
     }
 }
 
@@ -832,11 +840,11 @@ pub const fn get_height_px_self() -> CalcValue {
     }
 }
 
-/// Gets the X position of an element by string ID
+/// Gets the X position of an element by element ID
 #[must_use]
-pub fn get_position_x_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_position_x_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionX {
-        target: ElementTarget::StrId(str_id.into()),
+        target: ElementTarget::ById(id.into()),
     }
 }
 
@@ -856,11 +864,11 @@ pub const fn get_position_x_self() -> CalcValue {
     }
 }
 
-/// Gets the Y position of an element by string ID
+/// Gets the Y position of an element by element ID
 #[must_use]
-pub fn get_position_y_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_position_y_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionY {
-        target: ElementTarget::StrId(str_id.into()),
+        target: ElementTarget::ById(id.into()),
     }
 }
 
@@ -886,11 +894,11 @@ pub const fn get_mouse_x() -> CalcValue {
     CalcValue::MouseX { target: None }
 }
 
-/// Gets the mouse X coordinate relative to an element by string ID
+/// Gets the mouse X coordinate relative to an element by element ID
 #[must_use]
-pub fn get_mouse_x_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_mouse_x_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseX {
-        target: Some(ElementTarget::StrId(str_id.into())),
+        target: Some(ElementTarget::ById(id.into())),
     }
 }
 
@@ -916,11 +924,11 @@ pub const fn get_mouse_y() -> CalcValue {
     CalcValue::MouseY { target: None }
 }
 
-/// Gets the mouse Y coordinate relative to an element by string ID
+/// Gets the mouse Y coordinate relative to an element by element ID
 #[must_use]
-pub fn get_mouse_y_str_id(str_id: impl Into<Target>) -> CalcValue {
+pub fn get_mouse_y_by_id(id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseY {
-        target: Some(ElementTarget::StrId(str_id.into())),
+        target: Some(ElementTarget::ById(id.into())),
     }
 }
 
@@ -1232,9 +1240,9 @@ mod tests {
     fn test_if_chaining() {
         let condition = Condition::Bool(true);
         let if_action = condition
-            .then(ActionType::hide_str_id("element1"))
-            .then(ActionType::show_str_id("element2"))
-            .or_else(ActionType::no_display_str_id("element3"));
+            .then(ActionType::hide_by_id("element1"))
+            .then(ActionType::show_by_id("element2"))
+            .or_else(ActionType::no_display_by_id("element3"));
 
         assert_eq!(if_action.actions.len(), 2);
         assert_eq!(if_action.else_actions.len(), 1);
@@ -1275,12 +1283,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_get_visibility_str_id() {
-        let calc = get_visibility_str_id("my-element");
+    fn test_get_visibility_by_id() {
+        let calc = get_visibility_by_id("my-element");
 
         match calc {
             CalcValue::Visibility { target } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
             }
             _ => panic!("Expected Visibility CalcValue"),
         }
@@ -1299,12 +1307,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_get_display_str_id() {
-        let calc = get_display_str_id("my-element");
+    fn test_get_display_by_id() {
+        let calc = get_display_by_id("my-element");
 
         match calc {
             CalcValue::Display { target } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
             }
             _ => panic!("Expected Display CalcValue"),
         }
@@ -1324,11 +1332,11 @@ mod tests {
 
     #[test_log::test]
     fn test_get_width_px() {
-        let calc = get_width_px_str_id("my-element");
+        let calc = get_width_px_by_id("my-element");
 
         match calc {
             CalcValue::WidthPx { target } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
             }
             _ => panic!("Expected WidthPx CalcValue"),
         }
@@ -1359,14 +1367,14 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_get_mouse_x_str_id() {
-        let calc = get_mouse_x_str_id("my-element");
+    fn test_get_mouse_x_by_id() {
+        let calc = get_mouse_x_by_id("my-element");
 
         match calc {
             CalcValue::MouseX { target } => {
                 assert_eq!(
                     target,
-                    Some(ElementTarget::StrId(Target::from("my-element")))
+                    Some(ElementTarget::ById(Target::from("my-element")))
                 );
             }
             _ => panic!("Expected MouseX CalcValue"),
@@ -1554,7 +1562,7 @@ mod tests {
     #[test_log::test]
     fn test_arithmetic_then_pass_to() {
         let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
-        let action = arith.then_pass_to(ActionType::show_str_id("element"));
+        let action = arith.then_pass_to(ActionType::show_by_id("element"));
 
         match action {
             ActionType::Parameterized { action, value } => {
@@ -1828,14 +1836,14 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_get_position_x_str_id() {
-        let calc = get_position_x_str_id("positioned-element");
+    fn test_get_position_x_by_id() {
+        let calc = get_position_x_by_id("positioned-element");
 
         match calc {
             CalcValue::PositionX { target } => {
                 assert_eq!(
                     target,
-                    ElementTarget::StrId(Target::from("positioned-element"))
+                    ElementTarget::ById(Target::from("positioned-element"))
                 );
             }
             _ => panic!("Expected PositionX CalcValue"),
@@ -1843,12 +1851,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_get_position_y_str_id() {
-        let calc = get_position_y_str_id("y-element");
+    fn test_get_position_y_by_id() {
+        let calc = get_position_y_by_id("y-element");
 
         match calc {
             CalcValue::PositionY { target } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("y-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("y-element")));
             }
             _ => panic!("Expected PositionY CalcValue"),
         }

@@ -378,28 +378,38 @@ fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
 /// # Panics
 ///
 /// Panics if the target is `ElementTarget::Id(_)`, which should be converted to
-/// `ElementTarget::StrId` before calling this function. This is an internal invariant.
+/// `ElementTarget::ById` before calling this function. This is an internal invariant.
 fn element_target_to_js(target: &ElementTarget) -> String {
     #[allow(clippy::match_wildcard_for_single_variants)]
     match target {
-        ElementTarget::StrId(id) => {
-            match id {
-                Target::Literal(id) => format!("[document.getElementById('{id}')]"),
-                Target::Ref(ref_name) => format!("[{ref_name}]"),
+        ElementTarget::ById(id) => match id {
+            Target::Literal(id) => format!("[document.getElementById('{id}')]"),
+            Target::Ref(js_var) => format!("[document.getElementById({js_var})]"),
+        },
+        ElementTarget::Selector(selector) => match selector {
+            Target::Literal(sel) => {
+                format!("Array.from(document.querySelectorAll('{sel}'))")
             }
-        }
-        ElementTarget::Class(class) => {
-            match class {
-                Target::Literal(class) => format!("Array.from(document.querySelectorAll('.{class}'))"),
-                Target::Ref(ref_name) => format!("[{ref_name}]"),
+            Target::Ref(js_var) => {
+                format!("Array.from(document.querySelectorAll({js_var}))")
             }
-        }
-        ElementTarget::ChildClass(class) => {
-            match class {
-                Target::Literal(class) => format!("Array.from(ctx.element.querySelectorAll('.{class}'))"),
-                Target::Ref(ref_name) => format!("[{ref_name}]"),
+        },
+        ElementTarget::Class(class) => match class {
+            Target::Literal(class) => {
+                format!("Array.from(document.querySelectorAll('.{class}'))")
             }
-        }
+            Target::Ref(js_var) => {
+                format!("Array.from(document.querySelectorAll({js_var}))")
+            }
+        },
+        ElementTarget::ChildClass(class) => match class {
+            Target::Literal(class) => {
+                format!("Array.from(ctx.element.querySelectorAll('.{class}'))")
+            }
+            Target::Ref(js_var) => {
+                format!("Array.from(ctx.element.querySelectorAll({js_var}))")
+            }
+        },
         ElementTarget::SelfTarget => "[ctx.element]".to_string(),
         ElementTarget::LastChild => {
             "(ctx.element.children.length>0?[ctx.element.children[ctx.element.children.length-1]]:[])"
@@ -474,6 +484,17 @@ fn expression_to_js(expr: &Expression) -> String {
             Expression::Variable(selector) => {
                 let selector = selector.clone();
                 format!("document.querySelector({selector})")
+            }
+            _ => unimplemented!(),
+        },
+        Expression::ElementByIdRef(element_ref) => match &**element_ref {
+            Expression::Literal(Literal::String(id)) => {
+                let id = id.clone();
+                format!("document.getElementById('{id}')")
+            }
+            Expression::Variable(id) => {
+                let id = id.clone();
+                format!("document.getElementById({id})")
             }
             _ => unimplemented!(),
         },
@@ -1330,7 +1351,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_id_with_literal_target() {
             let calc = CalcValue::Id {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1341,7 +1362,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_width_px() {
             let calc = CalcValue::WidthPx {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1352,7 +1373,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_height_px() {
             let calc = CalcValue::HeightPx {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1363,7 +1384,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_position_x() {
             let calc = CalcValue::PositionX {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1374,7 +1395,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_position_y() {
             let calc = CalcValue::PositionY {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1385,7 +1406,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_mouse_x_with_target() {
             let calc = CalcValue::MouseX {
-                target: Some(ElementTarget::StrId(Target::Literal("myId".to_string()))),
+                target: Some(ElementTarget::ById(Target::Literal("myId".to_string()))),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1396,7 +1417,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_mouse_y_with_target() {
             let calc = CalcValue::MouseY {
-                target: Some(ElementTarget::StrId(Target::Literal("myId".to_string()))),
+                target: Some(ElementTarget::ById(Target::Literal("myId".to_string()))),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1407,7 +1428,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_data_attr_value() {
             let calc = CalcValue::DataAttrValue {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
                 attr: "my-custom-attr".to_string(),
             };
             assert_eq!(
@@ -1419,7 +1440,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_visibility() {
             let calc = CalcValue::Visibility {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1430,7 +1451,7 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_display() {
             let calc = CalcValue::Display {
-                target: ElementTarget::StrId(Target::Literal("myId".to_string())),
+                target: ElementTarget::ById(Target::Literal("myId".to_string())),
             };
             assert_eq!(
                 calc_value_to_js(&calc, false),
@@ -1528,8 +1549,8 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         #[test_log::test]
-        fn test_element_target_str_id_literal() {
-            let target = ElementTarget::StrId(Target::Literal("myElement".to_string()));
+        fn test_element_target_by_id_literal() {
+            let target = ElementTarget::ById(Target::Literal("myElement".to_string()));
             assert_eq!(
                 element_target_to_js(&target),
                 "[document.getElementById('myElement')]"
@@ -1537,9 +1558,12 @@ mod tests {
         }
 
         #[test_log::test]
-        fn test_element_target_str_id_ref() {
-            let target = ElementTarget::StrId(Target::Ref("myRef".to_string()));
-            assert_eq!(element_target_to_js(&target), "[myRef]");
+        fn test_element_target_by_id_ref() {
+            let target = ElementTarget::ById(Target::Ref("myRef".to_string()));
+            assert_eq!(
+                element_target_to_js(&target),
+                "[document.getElementById(myRef)]"
+            );
         }
 
         #[test_log::test]
@@ -1554,7 +1578,10 @@ mod tests {
         #[test_log::test]
         fn test_element_target_class_ref() {
             let target = ElementTarget::Class(Target::Ref("myRef".to_string()));
-            assert_eq!(element_target_to_js(&target), "[myRef]");
+            assert_eq!(
+                element_target_to_js(&target),
+                "Array.from(document.querySelectorAll(myRef))"
+            );
         }
 
         #[test_log::test]
@@ -1569,7 +1596,28 @@ mod tests {
         #[test_log::test]
         fn test_element_target_child_class_ref() {
             let target = ElementTarget::ChildClass(Target::Ref("childRef".to_string()));
-            assert_eq!(element_target_to_js(&target), "[childRef]");
+            assert_eq!(
+                element_target_to_js(&target),
+                "Array.from(ctx.element.querySelectorAll(childRef))"
+            );
+        }
+
+        #[test_log::test]
+        fn test_element_target_selector_literal() {
+            let target = ElementTarget::Selector(Target::Literal(".my-class".to_string()));
+            assert_eq!(
+                element_target_to_js(&target),
+                "Array.from(document.querySelectorAll('.my-class'))"
+            );
+        }
+
+        #[test_log::test]
+        fn test_element_target_selector_ref() {
+            let target = ElementTarget::Selector(Target::Ref("myVar".to_string()));
+            assert_eq!(
+                element_target_to_js(&target),
+                "Array.from(document.querySelectorAll(myVar))"
+            );
         }
 
         #[test_log::test]
@@ -1990,7 +2038,7 @@ mod tests {
         #[test_log::test]
         fn test_action_input_select() {
             let action = ActionType::Input(InputActionType::Select {
-                target: ElementTarget::StrId(Target::Literal("myInput".to_string())),
+                target: ElementTarget::ById(Target::Literal("myInput".to_string())),
             });
             let (result, reset) = action_to_js(&action, true);
             assert_eq!(
@@ -2003,7 +2051,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_visibility_visible() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetVisibility(Visibility::Visible),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2020,7 +2068,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_visibility_hidden() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetVisibility(Visibility::Hidden),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2037,7 +2085,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_focus() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetFocus(true),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2048,7 +2096,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_blur() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetFocus(false),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2059,7 +2107,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_display_true() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetDisplay(true),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2076,7 +2124,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_display_false() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetDisplay(false),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2093,7 +2141,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_background_color() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetBackground(Some("red".to_string())),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -2110,7 +2158,7 @@ mod tests {
         #[test_log::test]
         fn test_action_style_set_background_none() {
             let action = ActionType::Style {
-                target: ElementTarget::StrId(Target::Literal("elem".to_string())),
+                target: ElementTarget::ById(Target::Literal("elem".to_string())),
                 action: StyleAction::SetBackground(None),
             };
             let (result, reset) = action_to_js(&action, true);
@@ -3169,10 +3217,10 @@ mod tests {
         #[test_log::test]
         fn test_calc_value_with_ref_target() {
             let calc = CalcValue::PositionX {
-                target: ElementTarget::StrId(Target::Ref("myRef".to_string())),
+                target: ElementTarget::ById(Target::Ref("myRef".to_string())),
             };
             let result = calc_value_to_js(&calc, false);
-            assert!(result.contains("[myRef]"));
+            assert!(result.contains("[document.getElementById(myRef)]"));
             assert!(result.contains("getBoundingClientRect().left"));
         }
     }

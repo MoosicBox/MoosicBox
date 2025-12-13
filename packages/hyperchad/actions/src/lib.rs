@@ -28,7 +28,7 @@
 //! // Create an action that hides an element when clicked
 //! let action = Action {
 //!     trigger: ActionTrigger::Click,
-//!     effect: ActionType::hide_str_id("my-element").into(),
+//!     effect: ActionType::hide_by_id("my-element").into(),
 //! };
 //! ```
 
@@ -628,11 +628,11 @@ impl ActionType {
         }
     }
 
-    /// Sets focus on an element identified by string ID
+    /// Sets focus on an element identified by element ID
     #[must_use]
-    pub fn set_focus_str_id(focus: bool, target: impl Into<Target>) -> Self {
+    pub fn set_focus_by_id(focus: bool, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
             action: StyleAction::SetFocus(focus),
         }
     }
@@ -655,11 +655,11 @@ impl ActionType {
         }
     }
 
-    /// Selects an input element identified by string ID
+    /// Selects an input element identified by element ID
     #[must_use]
-    pub fn select_str_id(target: impl Into<Target>) -> Self {
+    pub fn select_by_id(target: impl Into<Target>) -> Self {
         Self::Input(InputActionType::Select {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
         })
     }
 
@@ -679,11 +679,11 @@ impl ActionType {
         })
     }
 
-    /// Sets visibility on an element identified by string ID
+    /// Sets visibility on an element identified by element ID
     #[must_use]
-    pub fn set_visibility_str_id(visibility: Visibility, target: impl Into<Target>) -> Self {
+    pub fn set_visibility_by_id(visibility: Visibility, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
             action: StyleAction::SetVisibility(visibility),
         }
     }
@@ -697,16 +697,16 @@ impl ActionType {
         }
     }
 
-    /// Hides an element identified by string ID
+    /// Hides an element identified by element ID
     #[must_use]
-    pub fn hide_str_id(target: impl Into<Target>) -> Self {
-        Self::set_visibility_str_id(Visibility::Hidden, target)
+    pub fn hide_by_id(target: impl Into<Target>) -> Self {
+        Self::set_visibility_by_id(Visibility::Hidden, target)
     }
 
-    /// Shows an element identified by string ID
+    /// Shows an element identified by element ID
     #[must_use]
-    pub fn show_str_id(target: impl Into<Target>) -> Self {
-        Self::set_visibility_str_id(Visibility::Visible, target)
+    pub fn show_by_id(target: impl Into<Target>) -> Self {
+        Self::set_visibility_by_id(Visibility::Visible, target)
     }
 
     /// Hides an element identified by class name
@@ -721,10 +721,10 @@ impl ActionType {
         Self::set_visibility_class(Visibility::Visible, class_name)
     }
 
-    /// Focuses an element identified by string ID
+    /// Focuses an element identified by element ID
     #[must_use]
-    pub fn focus_str_id(target: impl Into<Target>) -> Self {
-        Self::set_focus_str_id(true, target)
+    pub fn focus_by_id(target: impl Into<Target>) -> Self {
+        Self::set_focus_by_id(true, target)
     }
 
     /// Focuses an element identified by class name
@@ -805,19 +805,19 @@ impl ActionType {
         Self::set_visibility_last_child(Visibility::Visible)
     }
 
-    /// Toggles visibility on an element identified by string ID
+    /// Toggles visibility on an element identified by element ID
     #[cfg(feature = "logic")]
     #[must_use]
-    pub fn toggle_visibility_str_id(target: impl Into<Target>) -> Self {
+    pub fn toggle_visibility_by_id(target: impl Into<Target>) -> Self {
         let target = target.into();
         Self::Logic(crate::logic::If {
             condition: crate::logic::Condition::Eq(
-                crate::logic::get_visibility_str_id(&target).into(),
+                crate::logic::get_visibility_by_id(&target).into(),
                 crate::logic::Value::Visibility(hyperchad_transformer_models::Visibility::Visible),
             ),
             actions: vec![crate::ActionEffect {
                 action: Self::Style {
-                    target: crate::ElementTarget::str_id(&target),
+                    target: crate::ElementTarget::ById(target.clone()),
                     action: crate::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Hidden,
                     ),
@@ -826,7 +826,7 @@ impl ActionType {
             }],
             else_actions: vec![crate::ActionEffect {
                 action: Self::Style {
-                    target: crate::ElementTarget::str_id(&target),
+                    target: crate::ElementTarget::ById(target),
                     action: crate::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Visible,
                     ),
@@ -836,11 +836,42 @@ impl ActionType {
         })
     }
 
-    /// Sets display property on an element identified by string ID
+    /// Toggles visibility on an element identified by CSS selector
+    #[cfg(feature = "logic")]
     #[must_use]
-    pub fn set_display_str_id(display: bool, target: impl Into<Target>) -> Self {
+    pub fn toggle_visibility_selector(target: impl Into<Target>) -> Self {
+        let target = target.into();
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::get_visibility_selector(&target).into(),
+                crate::logic::Value::Visibility(hyperchad_transformer_models::Visibility::Visible),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::Selector(target.clone()),
+                    action: crate::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Hidden,
+                    ),
+                },
+                ..Default::default()
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::Selector(target),
+                    action: crate::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Visible,
+                    ),
+                },
+                ..Default::default()
+            }],
+        })
+    }
+
+    /// Sets display property on an element identified by element ID
+    #[must_use]
+    pub fn set_display_by_id(display: bool, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
             action: StyleAction::SetDisplay(display),
         }
     }
@@ -854,16 +885,16 @@ impl ActionType {
         }
     }
 
-    /// Disables display on an element identified by string ID
+    /// Disables display on an element identified by element ID
     #[must_use]
-    pub fn no_display_str_id(target: impl Into<Target>) -> Self {
-        Self::set_display_str_id(false, target)
+    pub fn no_display_by_id(target: impl Into<Target>) -> Self {
+        Self::set_display_by_id(false, target)
     }
 
-    /// Enables display on an element identified by string ID
+    /// Enables display on an element identified by element ID
     #[must_use]
-    pub fn display_str_id(target: impl Into<Target>) -> Self {
-        Self::set_display_str_id(true, target)
+    pub fn display_by_id(target: impl Into<Target>) -> Self {
+        Self::set_display_by_id(true, target)
     }
 
     /// Disables display on an element identified by class name
@@ -962,26 +993,26 @@ impl ActionType {
         Self::set_display_child_class(true, class)
     }
 
-    /// Toggles display property on an element identified by string ID
+    /// Toggles display property on an element identified by element ID
     #[cfg(feature = "logic")]
     #[must_use]
-    pub fn toggle_display_str_id(target: impl Into<Target>) -> Self {
+    pub fn toggle_display_by_id(target: impl Into<Target>) -> Self {
         let target = target.into();
         Self::Logic(crate::logic::If {
             condition: crate::logic::Condition::Eq(
-                crate::logic::get_display_str_id(&target).into(),
+                crate::logic::get_display_by_id(&target).into(),
                 crate::logic::Value::Display(true),
             ),
             actions: vec![crate::ActionEffect {
                 action: Self::Style {
-                    target: crate::ElementTarget::str_id(&target),
+                    target: crate::ElementTarget::by_id(&target),
                     action: crate::StyleAction::SetDisplay(false),
                 },
                 ..Default::default()
             }],
             else_actions: vec![crate::ActionEffect {
                 action: Self::Style {
-                    target: crate::ElementTarget::str_id(&target),
+                    target: crate::ElementTarget::by_id(&target),
                     action: crate::StyleAction::SetDisplay(true),
                 },
                 ..Default::default()
@@ -1133,11 +1164,11 @@ impl ActionType {
         })
     }
 
-    /// Sets background on an element identified by string ID
+    /// Sets background on an element identified by element ID
     #[must_use]
-    pub fn set_background_str_id(background: impl Into<String>, target: impl Into<Target>) -> Self {
+    pub fn set_background_by_id(background: impl Into<String>, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
             action: StyleAction::SetBackground(Some(background.into())),
         }
     }
@@ -1169,11 +1200,11 @@ impl ActionType {
         }
     }
 
-    /// Removes background from an element identified by string ID
+    /// Removes background from an element identified by element ID
     #[must_use]
-    pub fn remove_background_str_id(target: impl Into<Target>) -> Self {
+    pub fn remove_background_by_id(target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.into()),
+            target: ElementTarget::ById(target.into()),
             action: StyleAction::SetBackground(None),
         }
     }
@@ -1417,12 +1448,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_hide_str_id() {
-        let action = ActionType::hide_str_id("my-element");
+    fn test_action_type_hide_by_id() {
+        let action = ActionType::hide_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetVisibility(Visibility::Hidden));
             }
             _ => panic!("Expected Style action"),
@@ -1430,12 +1461,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_show_str_id() {
-        let action = ActionType::show_str_id("my-element");
+    fn test_action_type_show_by_id() {
+        let action = ActionType::show_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetVisibility(Visibility::Visible));
             }
             _ => panic!("Expected Style action"),
@@ -1495,12 +1526,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_display_str_id() {
-        let action = ActionType::display_str_id("my-element");
+    fn test_action_type_display_by_id() {
+        let action = ActionType::display_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetDisplay(true));
             }
             _ => panic!("Expected Style action"),
@@ -1508,12 +1539,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_no_display_str_id() {
-        let action = ActionType::no_display_str_id("my-element");
+    fn test_action_type_no_display_by_id() {
+        let action = ActionType::no_display_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetDisplay(false));
             }
             _ => panic!("Expected Style action"),
@@ -1522,11 +1553,11 @@ mod tests {
 
     #[test_log::test]
     fn test_action_type_set_focus() {
-        let action = ActionType::set_focus_str_id(true, "my-element");
+        let action = ActionType::set_focus_by_id(true, "my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetFocus(true));
             }
             _ => panic!("Expected Style action"),
@@ -1534,12 +1565,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_focus_str_id() {
-        let action = ActionType::focus_str_id("my-element");
+    fn test_action_type_focus_by_id() {
+        let action = ActionType::focus_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetFocus(true));
             }
             _ => panic!("Expected Style action"),
@@ -1548,11 +1579,11 @@ mod tests {
 
     #[test_log::test]
     fn test_action_type_set_background() {
-        let action = ActionType::set_background_str_id("red", "my-element");
+        let action = ActionType::set_background_by_id("red", "my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetBackground(Some("red".to_string())));
             }
             _ => panic!("Expected Style action"),
@@ -1561,11 +1592,11 @@ mod tests {
 
     #[test_log::test]
     fn test_action_type_remove_background() {
-        let action = ActionType::remove_background_str_id("my-element");
+        let action = ActionType::remove_background_by_id("my-element");
 
         match action {
             ActionType::Style { target, action } => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("my-element")));
+                assert_eq!(target, ElementTarget::ById(Target::from("my-element")));
                 assert_eq!(action, StyleAction::SetBackground(None));
             }
             _ => panic!("Expected Style action"),
@@ -1605,8 +1636,8 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::similar_names)]
     fn test_action_type_and_chaining() {
-        let action1 = ActionType::hide_str_id("element1");
-        let action2 = ActionType::show_str_id("element2");
+        let action1 = ActionType::hide_by_id("element1");
+        let action2 = ActionType::show_by_id("element2");
         let chained = action1.and(action2);
 
         match chained {
@@ -1620,9 +1651,9 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::similar_names)]
     fn test_action_type_and_chaining_with_existing_multi() {
-        let action1 = ActionType::hide_str_id("element1");
-        let action2 = ActionType::show_str_id("element2");
-        let action3 = ActionType::no_display_str_id("element3");
+        let action1 = ActionType::hide_by_id("element1");
+        let action2 = ActionType::show_by_id("element2");
+        let action3 = ActionType::no_display_by_id("element3");
 
         let chained = action1.and(action2).and(action3);
 
@@ -1636,7 +1667,7 @@ mod tests {
 
     #[test_log::test]
     fn test_action_type_on_event() {
-        let inner_action = ActionType::show_str_id("element");
+        let inner_action = ActionType::show_by_id("element");
         let event_action = ActionType::on_event("custom-event", inner_action);
 
         match event_action {
@@ -1652,12 +1683,12 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_type_select_str_id() {
-        let action = ActionType::select_str_id("input-field");
+    fn test_action_type_select_by_id() {
+        let action = ActionType::select_by_id("input-field");
 
         match action {
             ActionType::Input(InputActionType::Select { target }) => {
-                assert_eq!(target, ElementTarget::StrId(Target::from("input-field")));
+                assert_eq!(target, ElementTarget::ById(Target::from("input-field")));
             }
             _ => panic!("Expected Input Select action"),
         }
@@ -1666,8 +1697,8 @@ mod tests {
     #[test_log::test]
     fn test_action_effect_from_vec_action_types() {
         let actions = vec![
-            ActionType::hide_str_id("element1"),
-            ActionType::show_str_id("element2"),
+            ActionType::hide_by_id("element1"),
+            ActionType::show_by_id("element2"),
         ];
         let effect: ActionEffect = actions.into();
 
@@ -1683,13 +1714,13 @@ mod tests {
     fn test_action_effect_from_vec_action_effects() {
         let effects = vec![
             ActionEffect {
-                action: ActionType::hide_str_id("element1"),
+                action: ActionType::hide_by_id("element1"),
                 delay_off: Some(100),
                 throttle: None,
                 unique: None,
             },
             ActionEffect {
-                action: ActionType::show_str_id("element2"),
+                action: ActionType::show_by_id("element2"),
                 delay_off: None,
                 throttle: Some(200),
                 unique: None,

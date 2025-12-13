@@ -407,14 +407,16 @@ impl Target {
 
 /// Target specification for DOM element selection.
 ///
-/// Provides various ways to target elements including by string ID, class, child class,
-/// internal numeric ID, self-reference, or last child.
+/// Provides various ways to target elements including by ID, class, child class,
+/// CSS selector, internal numeric ID, self-reference, or last child.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "arb", derive(test_strategy::Arbitrary))]
 pub enum ElementTarget {
-    /// Target by string ID.
-    StrId(Target),
+    /// Target by element ID only (uses `getElementById`, no `#` prefix needed).
+    ById(Target),
+    /// Target by CSS selector (uses `querySelectorAll`, works for any selector).
+    Selector(Target),
     /// Target by CSS class.
     Class(Target),
     /// Target direct children with a specific class.
@@ -429,10 +431,16 @@ pub enum ElementTarget {
 }
 
 impl ElementTarget {
-    /// Creates a string ID target.
+    /// Creates a by-ID target (uses `getElementById`).
     #[must_use]
-    pub fn str_id(target: impl Into<Target>) -> Self {
-        Self::StrId(target.into())
+    pub fn by_id(target: impl Into<Target>) -> Self {
+        Self::ById(target.into())
+    }
+
+    /// Creates a CSS selector target (uses `querySelectorAll`).
+    #[must_use]
+    pub fn selector(target: impl Into<Target>) -> Self {
+        Self::Selector(target.into())
     }
 
     /// Creates a class target.
@@ -451,11 +459,18 @@ impl ElementTarget {
 impl std::fmt::Display for ElementTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::StrId(target) => {
+            Self::ById(target) => {
                 if let Some(s) = target.as_str() {
                     write!(f, "#{s}")
                 } else {
                     f.write_str("#")
+                }
+            }
+            Self::Selector(target) => {
+                if let Some(s) = target.as_str() {
+                    f.write_str(s)
+                } else {
+                    f.write_str("[selector]")
                 }
             }
             Self::Class(target) => {

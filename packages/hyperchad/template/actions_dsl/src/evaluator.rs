@@ -623,6 +623,27 @@ pub fn generate_expression_code(
             }
             _ => Err("Invalid element selector".to_string()),
         },
+        Expression::ElementByIdRef(element_ref) => match &**element_ref {
+            Expression::Literal(Literal::String(id)) => {
+                let id = id.clone();
+                Ok(quote! {
+                    hyperchad_actions::dsl::Expression::ElementByIdRef(
+                        Box::new(hyperchad_actions::dsl::Expression::Literal(
+                            hyperchad_actions::dsl::Literal::String(#id.to_string())
+                        ))
+                    )
+                })
+            }
+            Expression::Variable(id) => {
+                let id = format_ident!("{id}");
+                Ok(quote! {
+                    hyperchad_actions::dsl::Expression::ElementByIdRef(
+                        Box::new(hyperchad_actions::dsl::Expression::Variable(#id.to_string()))
+                    )
+                })
+            }
+            _ => Err("Invalid element_by_id selector".to_string()),
+        },
 
         Expression::Call { function, args } => generate_function_call_code(context, function, args),
         Expression::MethodCall {
@@ -630,6 +651,60 @@ pub fn generate_expression_code(
             method,
             args,
         } => {
+            // Handle element() function call method chaining: element("selector").method()
+            if let Expression::Call {
+                function: fn_name,
+                args: fn_args,
+            } = &**receiver
+            {
+                if fn_name == "element" && fn_args.len() == 1 {
+                    match &fn_args[0] {
+                        Expression::Literal(Literal::String(selector)) => {
+                            let reference = hyperchad_actions::dsl::ElementReference {
+                                selector: selector.clone(),
+                            };
+                            match reference.parse_selector() {
+                                hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                                    let id = syn::LitStr::new(&id, proc_macro2::Span::call_site());
+                                    let id = quote! { #id };
+                                    return generate_action_for_id(context, &id, method, args);
+                                }
+                                hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                                    return generate_action_for_class(
+                                        context, &class, method, args,
+                                    );
+                                }
+                                hyperchad_actions::dsl::ParsedSelector::Complex(..)
+                                | hyperchad_actions::dsl::ParsedSelector::Invalid => {}
+                            }
+                        }
+                        Expression::Variable(selector) => {
+                            let sel = format_ident!("{selector}");
+                            let sel = quote! { #sel };
+                            return generate_action_for_selector(context, &sel, method, args);
+                        }
+                        _ => {}
+                    }
+                }
+                // Handle element_by_id() function call method chaining: element_by_id(id).method()
+                if fn_name == "element_by_id" && fn_args.len() == 1 {
+                    match &fn_args[0] {
+                        Expression::Literal(Literal::String(id)) => {
+                            let id = syn::LitStr::new(id, proc_macro2::Span::call_site());
+                            let id = quote! { #id };
+                            return generate_action_for_by_id(context, &id, method, args);
+                        }
+                        Expression::Variable(id) => {
+                            let id = format_ident!("{id}");
+                            let id = quote! { #id };
+                            return generate_action_for_by_id(context, &id, method, args);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Handle element() expression method chaining (for already-evaluated expressions)
             if let hyperchad_actions::dsl::Expression::ElementRef(element_ref) = &**receiver {
                 match &**element_ref {
                     Expression::Literal(Literal::String(selector)) => {
@@ -650,9 +725,25 @@ pub fn generate_expression_code(
                         }
                     }
                     Expression::Variable(selector) => {
-                        let id = format_ident!("{selector}");
+                        let sel = format_ident!("{selector}");
+                        let sel = quote! { #sel };
+                        return generate_action_for_selector(context, &sel, method, args);
+                    }
+                    _ => {}
+                }
+            }
+            // Handle element_by_id() expression method chaining (for already-evaluated expressions)
+            if let hyperchad_actions::dsl::Expression::ElementByIdRef(element_ref) = &**receiver {
+                match &**element_ref {
+                    Expression::Literal(Literal::String(id)) => {
+                        let id = syn::LitStr::new(id, proc_macro2::Span::call_site());
                         let id = quote! { #id };
-                        return generate_action_for_id(context, &id, method, args);
+                        return generate_action_for_by_id(context, &id, method, args);
+                    }
+                    Expression::Variable(id) => {
+                        let id = format_ident!("{id}");
+                        let id = quote! { #id };
+                        return generate_action_for_by_id(context, &id, method, args);
                     }
                     _ => {}
                 }
@@ -859,6 +950,13 @@ pub fn generate_expression_code(
 ///
 /// Creates optimized `HyperChad` actions targeting elements by ID.
 ///
+/// # Arguments
+///
+/// * `context` - The code generation context
+/// * `id` - `TokenStream` representing the ID/selector
+/// * `method` - The method being called (e.g., "show", "hide", "display")
+/// * `args` - Arguments to the method
+///
 /// # Errors
 ///
 /// * Returns error if method name is unknown
@@ -870,13 +968,15 @@ fn generate_action_for_id(
     method: &str,
     args: &[Expression],
 ) -> Result<TokenStream, String> {
+    let target = quote! { hyperchad_actions::Target::literal(#id) };
+
     Ok(match method {
         "show" => {
             if !args.is_empty() {
                 return Err("ElementReference.show() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::show_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::show_by_id(#target)
             }
         }
         "hide" => {
@@ -884,7 +984,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.hide() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::hide_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::hide_by_id(#target)
             }
         }
         "toggle_visibility" => {
@@ -892,7 +992,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::toggle_visibility_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::toggle_visibility_by_id(#target)
             }
         }
         "set_visibility" => {
@@ -903,7 +1003,7 @@ fn generate_action_for_id(
             }
             let visibility = generate_expression_code(context, &args[0])?;
             quote! {
-                hyperchad_actions::ActionType::set_visibility_str_id(#visibility, hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::set_visibility_by_id(#visibility, #target)
             }
         }
         "focus" => {
@@ -911,7 +1011,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.focus() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::focus_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::focus_by_id(#target)
             }
         }
         "get_visibility" => {
@@ -919,7 +1019,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.get_visibility() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::get_visibility_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::get_visibility_by_id(#target)
             }
         }
         "select" => {
@@ -927,7 +1027,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.select() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::select_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::select_by_id(#target)
             }
         }
         "display" => {
@@ -935,7 +1035,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.display() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::display_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::display_by_id(#target)
             }
         }
         "no_display" => {
@@ -943,7 +1043,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.no_display() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::no_display_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::no_display_by_id(#target)
             }
         }
         "toggle_display" => {
@@ -951,7 +1051,7 @@ fn generate_action_for_id(
                 return Err("ElementReference.toggle_display() expects no arguments".to_string());
             }
             quote! {
-                hyperchad_actions::ActionType::toggle_display_str_id(hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::toggle_display_by_id(#target)
             }
         }
         "set_display" => {
@@ -960,7 +1060,7 @@ fn generate_action_for_id(
             }
             let display = generate_expression_code(context, &args[0])?;
             quote! {
-                hyperchad_actions::ActionType::set_display_str_id(#display, hyperchad_actions::Target::literal(#id))
+                hyperchad_actions::ActionType::set_display_by_id(#display, #target)
             }
         }
         unknown => {
@@ -1083,6 +1183,272 @@ fn generate_action_for_class(
     })
 }
 
+/// Generates action code for element by-ID selectors
+///
+/// Creates `HyperChad` actions targeting elements by ID using `getElementById`.
+///
+/// # Arguments
+///
+/// * `context` - The current evaluation context
+/// * `id` - The element ID token stream
+/// * `method` - The method being called on the element reference
+/// * `args` - Arguments to the method
+///
+/// # Errors
+///
+/// * Returns error if method name is unknown
+/// * Returns error if argument count is incorrect for the method
+/// * Returns error if expression code generation fails
+#[allow(clippy::too_many_lines)]
+fn generate_action_for_by_id(
+    context: &mut Context,
+    id: &TokenStream,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    let target = quote! { hyperchad_actions::Target::literal(#id) };
+
+    Ok(match method {
+        "show" => {
+            if !args.is_empty() {
+                return Err("ElementReference.show() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Visible
+                    ),
+                }
+            }
+        }
+        "hide" => {
+            if !args.is_empty() {
+                return Err("ElementReference.hide() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Hidden
+                    ),
+                }
+            }
+        }
+        "toggle_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_visibility_by_id(#target)
+            }
+        }
+        "set_visibility" => {
+            if args.len() != 1 {
+                return Err(
+                    "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
+                );
+            }
+            let visibility = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(#visibility),
+                }
+            }
+        }
+        "focus" => {
+            if !args.is_empty() {
+                return Err("ElementReference.focus() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Focus {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    focus: true,
+                }
+            }
+        }
+        "display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(true),
+                }
+            }
+        }
+        "no_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.no_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(false),
+                }
+            }
+        }
+        "toggle_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::ToggleDisplay,
+                }
+            }
+        }
+        "set_display" => {
+            if args.len() != 1 {
+                return Err("ElementReference.set_display() expects exactly 1 argument".to_string());
+            }
+            let display = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ById(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(#display),
+                }
+            }
+        }
+        unknown => {
+            return Err(format!("Unknown method: {unknown}"));
+        }
+    })
+}
+
+/// Generates action code for CSS selector-based targeting
+///
+/// Creates `HyperChad` actions targeting elements using `querySelectorAll`.
+/// Used for runtime-evaluated Rust variables where the selector type is unknown.
+///
+/// # Errors
+///
+/// * Returns error if method name is unknown
+/// * Returns error if argument count is incorrect for the method
+/// * Returns error if expression code generation fails
+#[allow(clippy::too_many_lines)]
+fn generate_action_for_selector(
+    context: &mut Context,
+    selector: &TokenStream,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    let target = quote! { hyperchad_actions::Target::literal(#selector) };
+
+    Ok(match method {
+        "show" => {
+            if !args.is_empty() {
+                return Err("ElementReference.show() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Visible
+                    ),
+                }
+            }
+        }
+        "hide" => {
+            if !args.is_empty() {
+                return Err("ElementReference.hide() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Hidden
+                    ),
+                }
+            }
+        }
+        "toggle_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_visibility_selector(#target)
+            }
+        }
+        "set_visibility" => {
+            if args.len() != 1 {
+                return Err(
+                    "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
+                );
+            }
+            let visibility = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(#visibility),
+                }
+            }
+        }
+        "focus" => {
+            if !args.is_empty() {
+                return Err("ElementReference.focus() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Focus {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    focus: true,
+                }
+            }
+        }
+        "display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(true),
+                }
+            }
+        }
+        "no_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.no_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(false),
+                }
+            }
+        }
+        "toggle_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::ToggleDisplay,
+                }
+            }
+        }
+        "set_display" => {
+            if args.len() != 1 {
+                return Err("ElementReference.set_display() expects exactly 1 argument".to_string());
+            }
+            let display = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::Selector(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(#display),
+                }
+            }
+        }
+        unknown => {
+            return Err(format!("Unknown method: {unknown}"));
+        }
+    })
+}
+
 /// Converts a target expression into a `HyperChad` Target token stream
 ///
 /// Determines whether the target is a variable reference or literal and generates
@@ -1113,6 +1479,7 @@ fn target_to_expr(
         }
         Expression::Literal(..)
         | Expression::ElementRef(..)
+        | Expression::ElementByIdRef(..)
         | Expression::Call { .. }
         | Expression::MethodCall { .. }
         | Expression::Field { .. }
@@ -1218,6 +1585,46 @@ fn generate_function_call_code(
             })
         }
 
+        // Element by ID reference function (uses getElementById)
+        "element_by_id" => {
+            if args.len() != 1 {
+                return Err("element_by_id() expects exactly 1 argument".to_string());
+            }
+
+            // Note: element_by_id() calls that are directly chained with methods
+            // are optimized in the method call handler. This case handles standalone calls.
+            match &args[0] {
+                Expression::Literal(Literal::String(id)) => {
+                    let id = id.clone();
+                    Ok(quote! {
+                        hyperchad_actions::dsl::Expression::ElementByIdRef(
+                            Box::new(hyperchad_actions::dsl::Expression::Literal(
+                                hyperchad_actions::dsl::Literal::String(#id.to_string())
+                            ))
+                        )
+                    })
+                }
+                Expression::Variable(var_name) => {
+                    let var_ident = format_ident!("{}", var_name);
+                    Ok(quote! {
+                        hyperchad_actions::dsl::Expression::ElementByIdRef(
+                            Box::new(hyperchad_actions::dsl::Expression::Variable(#var_ident.to_string()))
+                        )
+                    })
+                }
+                _ => {
+                    let id = generate_expression_code(context, &args[0])?;
+                    Ok(quote! {
+                        hyperchad_actions::dsl::Expression::ElementByIdRef(
+                            Box::new(hyperchad_actions::dsl::Expression::Literal(
+                                hyperchad_actions::dsl::Literal::String(#id.to_string())
+                            ))
+                        )
+                    })
+                }
+            }
+        }
+
         // Element visibility functions
         "hide" => {
             if args.len() != 1 {
@@ -1226,7 +1633,7 @@ fn generate_function_call_code(
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Hidden
                     ),
@@ -1240,7 +1647,7 @@ fn generate_function_call_code(
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Visible
                     ),
@@ -1255,7 +1662,7 @@ fn generate_function_call_code(
             let visibility = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetVisibility(#visibility),
                 }
             })
@@ -1269,7 +1676,7 @@ fn generate_function_call_code(
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetDisplay(true),
                 }
             })
@@ -1281,7 +1688,7 @@ fn generate_function_call_code(
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetDisplay(false),
                 }
             })
@@ -1294,7 +1701,7 @@ fn generate_function_call_code(
             let display = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                     action: hyperchad_actions::StyleAction::SetDisplay(#display),
                 }
             })
@@ -1305,7 +1712,7 @@ fn generate_function_call_code(
             }
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::toggle_display_str_id(#target)
+                hyperchad_actions::ActionType::toggle_display_by_id(#target)
             })
         }
 
@@ -1336,22 +1743,22 @@ fn generate_function_call_code(
         }
 
         // Display functions
-        "display_str_id" => {
+        "display_by_id" => {
             if args.len() != 1 {
-                return Err("display_str_id() expects exactly 1 argument".to_string());
+                return Err("display_by_id() expects exactly 1 argument".to_string());
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::display_str_id(#target)
+                hyperchad_actions::ActionType::display_by_id(#target)
             })
         }
-        "no_display_str_id" => {
+        "no_display_by_id" => {
             if args.len() != 1 {
-                return Err("no_display_str_id() expects exactly 1 argument".to_string());
+                return Err("no_display_by_id() expects exactly 1 argument".to_string());
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::no_display_str_id(#target)
+                hyperchad_actions::ActionType::no_display_by_id(#target)
             })
         }
         "display_class" => {
@@ -1381,7 +1788,7 @@ fn generate_function_call_code(
             let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    target: hyperchad_actions::ElementTarget::ById(#target),
                 }
             })
         }
@@ -1391,7 +1798,7 @@ fn generate_function_call_code(
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_display_str_id(#target)
+                hyperchad_actions::logic::get_display_by_id(#target)
             })
         }
         "get_width" => {
@@ -1400,7 +1807,7 @@ fn generate_function_call_code(
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_width_px_str_id(#target)
+                hyperchad_actions::logic::get_width_px_by_id(#target)
             })
         }
         "get_width_px_self" => {
@@ -1417,16 +1824,16 @@ fn generate_function_call_code(
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_height_px_str_id(#target)
+                hyperchad_actions::logic::get_height_px_by_id(#target)
             })
         }
-        "get_height_px_str_id" => {
+        "get_height_px_by_id" => {
             if args.len() != 1 {
-                return Err("get_height_px_str_id() expects exactly 1 argument".to_string());
+                return Err("get_height_px_by_id() expects exactly 1 argument".to_string());
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_height_px_str_id(#target)
+                hyperchad_actions::logic::get_height_px_by_id(#target)
             })
         }
         "get_mouse_x" => {
@@ -1437,7 +1844,7 @@ fn generate_function_call_code(
             } else if args.len() == 1 {
                 let target = target_to_expr(context, &args[0], false)?;
                 Ok(quote! {
-                    hyperchad_actions::logic::get_mouse_x_str_id(#target)
+                    hyperchad_actions::logic::get_mouse_x_by_id(#target)
                 })
             } else {
                 Err("get_mouse_x() expects 0 or 1 arguments".to_string())
@@ -1459,19 +1866,19 @@ fn generate_function_call_code(
             } else if args.len() == 1 {
                 let target = target_to_expr(context, &args[0], false)?;
                 Ok(quote! {
-                    hyperchad_actions::logic::get_mouse_y_str_id(#target)
+                    hyperchad_actions::logic::get_mouse_y_by_id(#target)
                 })
             } else {
                 Err("get_mouse_y() expects 0 or 1 arguments".to_string())
             }
         }
-        "get_mouse_y_str_id" => {
+        "get_mouse_y_by_id" => {
             if args.len() != 1 {
-                return Err("get_mouse_y_str_id() expects exactly 1 argument".to_string());
+                return Err("get_mouse_y_by_id() expects exactly 1 argument".to_string());
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_mouse_y_str_id(#target)
+                hyperchad_actions::logic::get_mouse_y_by_id(#target)
             })
         }
 
@@ -1751,26 +2158,26 @@ fn generate_function_call_code(
                         )
                     }
                 }
-                "hide_str_id" => {
+                "hide_by_id" => {
                     if args.len() != 1 {
                         return Err(
-                            "hyperchad_actions::ActionType::hide_str_id() expects exactly 1 argument".to_string()
+                            "hyperchad_actions::ActionType::hide_by_id() expects exactly 1 argument".to_string()
                         );
                     }
                     let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
-                        hyperchad_actions::ActionType::hide_str_id(#target)
+                        hyperchad_actions::ActionType::hide_by_id(#target)
                     })
                 }
-                "show_str_id" => {
+                "show_by_id" => {
                     if args.len() != 1 {
                         return Err(
-                            "hyperchad_actions::ActionType::show_str_id() expects exactly 1 argument".to_string()
+                            "hyperchad_actions::ActionType::show_by_id() expects exactly 1 argument".to_string()
                         );
                     }
                     let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
-                        hyperchad_actions::ActionType::show_str_id(#target)
+                        hyperchad_actions::ActionType::show_by_id(#target)
                     })
                 }
                 "show_self" => {
@@ -1816,16 +2223,16 @@ fn generate_function_call_code(
                         hyperchad_actions::ActionType::remove_background_self()
                     })
                 }
-                "remove_background_str_id" => {
+                "remove_background_by_id" => {
                     if args.len() != 1 {
                         return Err(
-                            "remove_background_str_id() expects exactly 1 argument (target)"
+                            "remove_background_by_id() expects exactly 1 argument (target)"
                                 .to_string(),
                         );
                     }
                     let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
-                        hyperchad_actions::ActionType::remove_background_str_id(#target)
+                        hyperchad_actions::ActionType::remove_background_by_id(#target)
                     })
                 }
                 "remove_background_id" => {
@@ -1976,15 +2383,15 @@ fn generate_function_call_code(
                 hyperchad_actions::ActionType::remove_background_self()
             })
         }
-        "remove_background_str_id" => {
+        "remove_background_by_id" => {
             if args.len() != 1 {
                 return Err(
-                    "remove_background_str_id() expects exactly 1 argument (target)".to_string(),
+                    "remove_background_by_id() expects exactly 1 argument (target)".to_string(),
                 );
             }
             let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::remove_background_str_id(#target)
+                hyperchad_actions::ActionType::remove_background_by_id(#target)
             })
         }
         "remove_background_id" => {
@@ -3137,7 +3544,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "show", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("show_str_id"));
+        assert!(result_str.contains("show_by_id"));
     }
 
     #[test_log::test]
@@ -3146,7 +3553,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "hide", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("hide_str_id"));
+        assert!(result_str.contains("hide_by_id"));
     }
 
     #[test_log::test]
@@ -3199,7 +3606,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "toggle_visibility", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("toggle_visibility_str_id"));
+        assert!(result_str.contains("toggle_visibility_by_id"));
     }
 
     #[test_log::test]
@@ -3219,7 +3626,7 @@ mod tests {
         let args = vec![Expression::Variable("Visibility::Hidden".to_string())];
         let result = generate_action_for_id(&mut context, &id, "set_visibility", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("set_visibility_str_id"));
+        assert!(result_str.contains("set_visibility_by_id"));
     }
 
     #[test_log::test]
@@ -3237,7 +3644,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "focus", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("focus_str_id"));
+        assert!(result_str.contains("focus_by_id"));
     }
 
     #[test_log::test]
@@ -3256,7 +3663,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "get_visibility", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_visibility_str_id"));
+        assert!(result_str.contains("get_visibility_by_id"));
     }
 
     #[test_log::test]
@@ -3265,7 +3672,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "select", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("select_str_id"));
+        assert!(result_str.contains("select_by_id"));
     }
 
     #[test_log::test]
@@ -3274,7 +3681,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "display", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("display_str_id"));
+        assert!(result_str.contains("display_by_id"));
     }
 
     #[test_log::test]
@@ -3283,7 +3690,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "no_display", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("no_display_str_id"));
+        assert!(result_str.contains("no_display_by_id"));
     }
 
     #[test_log::test]
@@ -3292,7 +3699,7 @@ mod tests {
         let id = quote::quote! { "test-id" };
         let result = generate_action_for_id(&mut context, &id, "toggle_display", &[]).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("toggle_display_str_id"));
+        assert!(result_str.contains("toggle_display_by_id"));
     }
 
     #[test_log::test]
@@ -3302,7 +3709,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::Bool(true))];
         let result = generate_action_for_id(&mut context, &id, "set_display", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("set_display_str_id"));
+        assert!(result_str.contains("set_display_by_id"));
     }
 
     #[test_log::test]
@@ -4077,7 +4484,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem".to_string()))];
         let result = generate_function_call_code(&mut context, "toggle_display", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("toggle_display_str_id"));
+        assert!(result_str.contains("toggle_display_by_id"));
     }
 
     #[test_log::test]
@@ -4177,7 +4584,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem".to_string()))];
         let result = generate_function_call_code(&mut context, "get_mouse_x", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_mouse_x_str_id"));
+        assert!(result_str.contains("get_mouse_x_by_id"));
     }
 
     #[test_log::test]
@@ -4681,19 +5088,19 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_remove_background_str_id_with_correct_args() {
+    fn test_generate_function_call_code_remove_background_by_id_with_correct_args() {
         let mut context = Context::default();
         let args = vec![Expression::Literal(Literal::String("elem".to_string()))];
         let result =
-            generate_function_call_code(&mut context, "remove_background_str_id", &args).unwrap();
+            generate_function_call_code(&mut context, "remove_background_by_id", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("remove_background_str_id"));
+        assert!(result_str.contains("remove_background_by_id"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_remove_background_str_id_wrong_arg_count_returns_error() {
+    fn test_generate_function_call_code_remove_background_by_id_wrong_arg_count_returns_error() {
         let mut context = Context::default();
-        let result = generate_function_call_code(&mut context, "remove_background_str_id", &[]);
+        let result = generate_function_call_code(&mut context, "remove_background_by_id", &[]);
         assert!(result.is_err());
         assert!(
             result
@@ -5549,7 +5956,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
         let result = generate_function_call_code(&mut context, "get_height", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_height_px_str_id"));
+        assert!(result_str.contains("get_height_px_by_id"));
         assert!(result_str.contains("elem-id"));
     }
 
@@ -5567,7 +5974,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
         let result = generate_function_call_code(&mut context, "get_width", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_width_px_str_id"));
+        assert!(result_str.contains("get_width_px_by_id"));
         assert!(result_str.contains("elem-id"));
     }
 
@@ -5580,19 +5987,19 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_get_height_px_str_id_with_correct_args() {
+    fn test_generate_function_call_code_get_height_px_by_id_with_correct_args() {
         let mut context = Context::default();
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
         let result =
-            generate_function_call_code(&mut context, "get_height_px_str_id", &args).unwrap();
+            generate_function_call_code(&mut context, "get_height_px_by_id", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_height_px_str_id"));
+        assert!(result_str.contains("get_height_px_by_id"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_get_height_px_str_id_wrong_arg_count_returns_error() {
+    fn test_generate_function_call_code_get_height_px_by_id_wrong_arg_count_returns_error() {
         let mut context = Context::default();
-        let result = generate_function_call_code(&mut context, "get_height_px_str_id", &[]);
+        let result = generate_function_call_code(&mut context, "get_height_px_by_id", &[]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expects exactly 1 argument"));
     }
@@ -5611,7 +6018,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
         let result = generate_function_call_code(&mut context, "get_mouse_y", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_mouse_y_str_id"));
+        assert!(result_str.contains("get_mouse_y_by_id"));
     }
 
     #[test_log::test]
@@ -5627,19 +6034,18 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_get_mouse_y_str_id_with_correct_args() {
+    fn test_generate_function_call_code_get_mouse_y_by_id_with_correct_args() {
         let mut context = Context::default();
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
-        let result =
-            generate_function_call_code(&mut context, "get_mouse_y_str_id", &args).unwrap();
+        let result = generate_function_call_code(&mut context, "get_mouse_y_by_id", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_mouse_y_str_id"));
+        assert!(result_str.contains("get_mouse_y_by_id"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_get_mouse_y_str_id_wrong_arg_count_returns_error() {
+    fn test_generate_function_call_code_get_mouse_y_by_id_wrong_arg_count_returns_error() {
         let mut context = Context::default();
-        let result = generate_function_call_code(&mut context, "get_mouse_y_str_id", &[]);
+        let result = generate_function_call_code(&mut context, "get_mouse_y_by_id", &[]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expects exactly 1 argument"));
     }
@@ -5650,7 +6056,7 @@ mod tests {
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
         let result = generate_function_call_code(&mut context, "get_display", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("get_display_str_id"));
+        assert!(result_str.contains("get_display_by_id"));
     }
 
     #[test_log::test]
@@ -5688,35 +6094,35 @@ mod tests {
     // Tests for display function calls
 
     #[test_log::test]
-    fn test_generate_function_call_code_display_str_id_with_correct_args() {
+    fn test_generate_function_call_code_display_by_id_with_correct_args() {
         let mut context = Context::default();
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
-        let result = generate_function_call_code(&mut context, "display_str_id", &args).unwrap();
+        let result = generate_function_call_code(&mut context, "display_by_id", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("display_str_id"));
+        assert!(result_str.contains("display_by_id"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_display_str_id_wrong_arg_count_returns_error() {
+    fn test_generate_function_call_code_display_by_id_wrong_arg_count_returns_error() {
         let mut context = Context::default();
-        let result = generate_function_call_code(&mut context, "display_str_id", &[]);
+        let result = generate_function_call_code(&mut context, "display_by_id", &[]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expects exactly 1 argument"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_no_display_str_id_with_correct_args() {
+    fn test_generate_function_call_code_no_display_by_id_with_correct_args() {
         let mut context = Context::default();
         let args = vec![Expression::Literal(Literal::String("elem-id".to_string()))];
-        let result = generate_function_call_code(&mut context, "no_display_str_id", &args).unwrap();
+        let result = generate_function_call_code(&mut context, "no_display_by_id", &args).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("no_display_str_id"));
+        assert!(result_str.contains("no_display_by_id"));
     }
 
     #[test_log::test]
-    fn test_generate_function_call_code_no_display_str_id_wrong_arg_count_returns_error() {
+    fn test_generate_function_call_code_no_display_by_id_wrong_arg_count_returns_error() {
         let mut context = Context::default();
-        let result = generate_function_call_code(&mut context, "no_display_str_id", &[]);
+        let result = generate_function_call_code(&mut context, "no_display_by_id", &[]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expects exactly 1 argument"));
     }

@@ -207,7 +207,7 @@ fn test_http_event_html_output() {
 #[test]
 fn test_http_event_with_hide_action() {
     let containers = container! {
-        button fx-http-before-request=(ActionType::hide_str_id(Target::literal("spinner"))) {
+        button fx-http-before-request=(ActionType::hide_by_id(Target::literal("spinner"))) {
             "Submit"
         }
     };

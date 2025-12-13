@@ -179,17 +179,6 @@ fn map_element_target<R>(
     func: impl Fn(&Container) -> R,
 ) -> Option<R> {
     match target {
-        ElementTarget::StrId(str_id) => {
-            let Target::Literal(str_id) = str_id else {
-                // FIXME
-                return None;
-            };
-            if let Some(element) = container.find_element_by_str_id(str_id) {
-                return Some(func(element));
-            }
-
-            log::warn!("Could not find element with str id '{str_id}'");
-        }
         ElementTarget::Class(class) => {
             let Target::Literal(class) = class else {
                 // FIXME
@@ -238,6 +227,31 @@ fn map_element_target<R>(
 
             log::warn!("Could not find element last child for id '{self_id}'");
         }
+        ElementTarget::ById(id) => {
+            let Target::Literal(id) = id else {
+                // FIXME
+                return None;
+            };
+            if let Some(element) = container.find_element_by_str_id(id) {
+                return Some(func(element));
+            }
+
+            log::warn!("Could not find element with id '{id}'");
+        }
+        ElementTarget::Selector(selector) => {
+            let Target::Literal(selector) = selector else {
+                // FIXME
+                return None;
+            };
+            // For egui, treat selector as a class lookup (best effort)
+            // Strip leading '.' or '#' if present
+            let selector = selector.trim_start_matches('.').trim_start_matches('#');
+            if let Some(element) = container.find_element_by_class(selector) {
+                return Some(func(element));
+            }
+
+            log::warn!("Could not find element with selector '{selector}'");
+        }
     }
 
     None
@@ -282,7 +296,8 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                         ElementTarget::Class(..)
                         | ElementTarget::ChildClass(..)
                         | ElementTarget::LastChild
-                        | ElementTarget::StrId(..) => {
+                        | ElementTarget::ById(..)
+                        | ElementTarget::Selector(..) => {
                             map_element_target(target, id, root, |x| x.id)
                         }
                     };
@@ -1137,7 +1152,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                                         if let Some(primary) = view.primary {
                                                             let element_target = match target {
                                                                 hyperchad_transformer::models::Selector::Id(id) => {
-                                                                    ElementTarget::StrId(Target::Literal(id))
+                                                                    ElementTarget::ById(Target::Literal(id))
                                                                 }
                                                                 hyperchad_transformer::models::Selector::Class(class) => {
                                                                     ElementTarget::Class(Target::Literal(class))
@@ -1202,8 +1217,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         let target_id = match target {
             ElementTarget::SelfTarget => Some(container_id),
-            ElementTarget::StrId(Target::Literal(str_id) | Target::Ref(str_id)) => {
-                page.find_element_by_str_id(str_id).map(|el| el.id)
+            ElementTarget::ById(Target::Literal(id) | Target::Ref(id)) => {
+                page.find_element_by_str_id(id).map(|el| el.id)
             }
             _ => {
                 log::warn!("Unsupported target type for egui: {target:?}");
@@ -4463,12 +4478,12 @@ mod tests {
     // ==================== map_element_target tests ====================
 
     #[test_log::test]
-    fn test_map_element_target_with_str_id_literal() {
+    fn test_map_element_target_with_by_id_literal() {
         let target_child = make_container(3, Some("my-target"), vec![], vec![]);
         let child = make_container(2, None, vec![], vec![target_child]);
         let container = make_container(1, None, vec![], vec![child]);
 
-        let target = ElementTarget::StrId(Target::Literal("my-target".to_string()));
+        let target = ElementTarget::ById(Target::Literal("my-target".to_string()));
         let result = map_element_target(&target, 1, &container, |c| c.id);
 
         assert!(result.is_some());
@@ -4476,21 +4491,21 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_map_element_target_with_str_id_not_found() {
+    fn test_map_element_target_with_by_id_not_found() {
         let container = make_container(1, Some("root"), vec![], vec![]);
 
-        let target = ElementTarget::StrId(Target::Literal("nonexistent".to_string()));
+        let target = ElementTarget::ById(Target::Literal("nonexistent".to_string()));
         let result = map_element_target(&target, 1, &container, |c| c.id);
 
         assert!(result.is_none());
     }
 
     #[test_log::test]
-    fn test_map_element_target_with_str_id_ref_returns_none() {
+    fn test_map_element_target_with_by_id_ref_returns_none() {
         let container = make_container(1, Some("root"), vec![], vec![]);
 
         // Target::Ref is not supported, should return None
-        let target = ElementTarget::StrId(Target::Ref("root".to_string()));
+        let target = ElementTarget::ById(Target::Ref("root".to_string()));
         let result = map_element_target(&target, 1, &container, |c| c.id);
 
         assert!(result.is_none());
@@ -4614,7 +4629,7 @@ mod tests {
         target_child.calculated_height = Some(50.0);
         let container = make_container(1, None, vec![], vec![target_child]);
 
-        let target = ElementTarget::StrId(Target::Literal("target".to_string()));
+        let target = ElementTarget::ById(Target::Literal("target".to_string()));
 
         // Test that callback function is properly applied
         let result = map_element_target(&target, 1, &container, |c| {

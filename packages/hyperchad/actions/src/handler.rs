@@ -385,11 +385,11 @@ where
     #[must_use]
     pub fn get_element_id(&self, target: &ElementTarget, self_id: usize) -> Option<usize> {
         match target {
-            ElementTarget::StrId(str_id) => {
-                let Target::Literal(str_id) = str_id else {
+            ElementTarget::ById(id) | ElementTarget::Selector(id) => {
+                let Target::Literal(id) = id else {
                     return None;
                 };
-                self.finder.find_by_str_id(str_id)
+                self.finder.find_by_str_id(id)
             }
             ElementTarget::Class(class) => {
                 let Target::Literal(class) = class else {
@@ -1645,9 +1645,9 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_action_handler_get_element_id_str_id() {
+    fn test_action_handler_get_element_id_by_id() {
         let handler = create_test_handler();
-        let target = ElementTarget::StrId(Target::from("test-element"));
+        let target = ElementTarget::ById(Target::from("test-element"));
 
         let result = handler.get_element_id(&target, 1);
         assert_eq!(result, Some(10));
@@ -1703,7 +1703,7 @@ mod tests {
     #[test_log::test]
     fn test_action_handler_get_element_id_not_found() {
         let handler = create_test_handler();
-        let target = ElementTarget::StrId(Target::from("nonexistent"));
+        let target = ElementTarget::ById(Target::from("nonexistent"));
 
         let result = handler.get_element_id(&target, 1);
         assert_eq!(result, None);
@@ -1780,7 +1780,7 @@ mod tests {
     #[test_log::test]
     fn test_action_handler_handle_style_action_target_not_found() {
         let mut handler = create_test_handler();
-        let target = ElementTarget::StrId(Target::from("nonexistent"));
+        let target = ElementTarget::ById(Target::from("nonexistent"));
         let action = StyleAction::SetVisibility(Visibility::Hidden);
 
         let success = handler.handle_style_action(&action, &target, StyleTrigger::UiEvent, 1);

@@ -355,7 +355,7 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=fx { element(AUDIO_ZONES_ID).toggle_visibility() }
+                        fx-click=fx { element_by_id(AUDIO_ZONES_ID).toggle_visibility() }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -366,7 +366,7 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=fx { element(PLAYBACK_SESSIONS_ID).toggle_visibility() }
+                        fx-click=fx { element_by_id(PLAYBACK_SESSIONS_ID).toggle_visibility() }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -374,7 +374,7 @@ pub fn player(state: &State) -> Containers {
                             src=(public_img!("sessions-white.svg"));
                     }
                     button
-                        fx-click=fx { element(PLAY_QUEUE_ID).toggle_visibility() }
+                        fx-click=fx { element_by_id(PLAY_QUEUE_ID).toggle_visibility() }
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -410,7 +410,7 @@ fn volume(state: &State, size: u16) -> Containers {
             width=(size)
             height=(size)
             position=relative
-            fx-hover=fx { element(VOLUME_SLIDER_ID).show().delay_off(400) }
+            fx-hover=fx { element_by_id(VOLUME_SLIDER_ID).show().delay_off(400) }
         {
             button {
                 image
@@ -444,7 +444,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             background=(BACKGROUND)
             cursor=pointer
             fx-mouse-down=fx {
-                let element = element(VOLUME_SLIDER_VALUE_CONTAINER_ID);
+                let element = element_by_id(VOLUME_SLIDER_VALUE_CONTAINER_ID);
                 invoke(
                     Action::SetVolume,
                     ((element.get_height_px() - element.get_mouse_y()) / element.get_height_px())
@@ -828,7 +828,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 min-height=calc(min(vh(90), 300))
                 max-height=vh90
                 border-radius=15
-                fx-click-outside=fx { hide(id) }
+                fx-click-outside=fx { element_by_id(id).hide() }
                 overflow-y=auto
             {
                 div
@@ -847,7 +847,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                         button
                             width=(icon_size)
                             height=(icon_size)
-                            fx-click=fx { element(id).toggle_visibility() }
+                            fx-click=fx { element_by_id(id).toggle_visibility() }
                         {
                             image
                                 width=(icon_size)

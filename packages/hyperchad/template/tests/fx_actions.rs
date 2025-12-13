@@ -13,7 +13,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_fx_click_with_action_type() {
     let containers = container! {
-        div fx-click=(ActionType::hide_str_id("test")) {
+        div fx-click=(ActionType::hide_by_id("test")) {
             "Hello"
         }
     };
@@ -25,7 +25,7 @@ fn test_fx_click_with_action_type() {
     // Verify the specific action type and target
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id(Target::literal("test")));
+            assert_eq!(*target, ElementTarget::by_id(Target::literal("test")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action for hide_str_id"),
@@ -35,7 +35,7 @@ fn test_fx_click_with_action_type() {
 #[test]
 fn test_fx_click_with_action_effect() {
     let action = ActionEffect {
-        action: ActionType::hide_str_id(Target::literal("test")),
+        action: ActionType::hide_by_id(Target::literal("test")),
         delay_off: Some(1000),
         throttle: Some(500),
         unique: Some(true),
@@ -60,7 +60,7 @@ fn test_fx_click_with_action_effect() {
     // Verify the underlying action
     match &action_effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(target, &ElementTarget::str_id(Target::literal("test")));
+            assert_eq!(target, &ElementTarget::by_id(Target::literal("test")));
             assert_eq!(action, &StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action"),
@@ -70,7 +70,7 @@ fn test_fx_click_with_action_effect() {
 #[test]
 fn test_fx_click_outside() {
     let containers = container! {
-        div fx-click-outside=(ActionType::hide_str_id(Target::literal("modal"))) {
+        div fx-click-outside=(ActionType::hide_by_id(Target::literal("modal"))) {
             "Modal content"
         }
     };
@@ -85,7 +85,7 @@ fn test_fx_click_outside() {
     // Verify the action content
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id(Target::literal("modal")));
+            assert_eq!(*target, ElementTarget::by_id(Target::literal("modal")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action for click outside"),
@@ -146,7 +146,7 @@ fn test_fx_custom_event() {
 #[test]
 fn test_multiple_fx_actions() {
     let containers = container! {
-        div fx-click=(ActionType::show_str_id(Target::literal("panel")))
+        div fx-click=(ActionType::show_by_id(Target::literal("panel")))
             fx-hover=(ActionType::Log {
                 message: "Hovered".to_string(),
                 level: LogLevel::Debug,
@@ -162,7 +162,7 @@ fn test_multiple_fx_actions() {
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id(Target::literal("panel")));
+            assert_eq!(*target, ElementTarget::by_id(Target::literal("panel")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         _ => panic!("Expected Style action for first action"),
@@ -210,10 +210,7 @@ fn test_dsl_basic_features() {
     // Verify the second action (hide)
     match &actions[1].action {
         ActionType::Style { target, action } => {
-            assert_eq!(
-                *target,
-                ElementTarget::str_id(Target::reference("modal_id"))
-            );
+            assert_eq!(*target, ElementTarget::by_id(Target::reference("modal_id")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -243,7 +240,7 @@ fn test_dsl_simple_conditional() {
     assert_eq!(
         action.action,
         ActionType::Style {
-            target: ElementTarget::str_id("panel"),
+            target: ElementTarget::by_id("panel"),
             action: StyleAction::SetVisibility(Visibility::Visible)
         }
     );
@@ -329,7 +326,7 @@ fn test_fx_action_with_complex_expression() {
                         ActionType::Style { target, action } => {
                             assert_eq!(
                                 *target,
-                                ElementTarget::str_id(Target::reference("element_id"))
+                                ElementTarget::by_id(Target::reference("element_id"))
                             );
                             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                         }
@@ -444,7 +441,7 @@ fn test_dsl_action_chaining() {
     // Verify each action type
     match &actions[0].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("modal"));
+            assert_eq!(*target, ElementTarget::by_id("modal"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action for hide"),
@@ -452,7 +449,7 @@ fn test_dsl_action_chaining() {
 
     match &actions[1].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("backdrop"));
+            assert_eq!(*target, ElementTarget::by_id("backdrop"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         _ => panic!("Expected Style action for show"),
@@ -486,7 +483,7 @@ fn test_dsl_action_chaining() {
     // Verify the single action on the container
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("modal"));
+            assert_eq!(*target, ElementTarget::by_id("modal"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action for container"),
@@ -512,7 +509,7 @@ fn test_dsl_nested_conditions() {
             // Verify first action (hide)
             match &actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("outer"));
+                    assert_eq!(*target, ElementTarget::by_id("outer"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -546,7 +543,7 @@ fn test_dsl_variable_interpolation() {
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("component")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("component")),
                 }
                 .into(),
                 hyperchad_actions::logic::Value::Visibility(Visibility::Hidden),
@@ -657,7 +654,7 @@ fn test_dsl_complex_workflow() {
 
     match &actions[2].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id(Target::reference("modal")));
+            assert_eq!(*target, ElementTarget::by_id(Target::reference("modal")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -665,7 +662,7 @@ fn test_dsl_complex_workflow() {
 
     match &actions[3].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id(Target::reference("overlay")));
+            assert_eq!(*target, ElementTarget::by_id(Target::reference("overlay")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -718,7 +715,7 @@ fn test_fx_wrapper_syntax() {
 
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("panel"));
+            assert_eq!(*target, ElementTarget::by_id("panel"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -746,7 +743,7 @@ fn test_fx_wrapper_complex_dsl() {
             // Verify first action (hide)
             match &logic.actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -755,7 +752,7 @@ fn test_fx_wrapper_complex_dsl() {
             // Verify second action (show)
             match &logic.else_actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -781,14 +778,14 @@ fn test_dsl_moosicbox_patterns() {
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("audio-zones")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("audio-zones")),
                 }
                 .into(),
                 hyperchad_actions::logic::Value::Visibility(Visibility::Visible),
             ),
             actions: vec![hyperchad_actions::ActionEffect {
                 action: hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("audio-zones")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("audio-zones")),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Hidden
                     ),
@@ -797,7 +794,7 @@ fn test_dsl_moosicbox_patterns() {
             }],
             else_actions: vec![hyperchad_actions::ActionEffect {
                 action: hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("audio-zones")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("audio-zones")),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Visible
                     ),
@@ -824,14 +821,14 @@ fn test_dsl_method_chaining_patterns() {
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("modal")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("modal")),
                 }
                 .into(),
                 hyperchad_actions::logic::Value::Visibility(Visibility::Hidden),
             ),
             actions: vec![hyperchad_actions::ActionEffect {
                 action: hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("modal")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("modal")),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Visible
                     ),
@@ -840,7 +837,7 @@ fn test_dsl_method_chaining_patterns() {
             }],
             else_actions: vec![hyperchad_actions::ActionEffect {
                 action: hyperchad_actions::ActionType::Style {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("modal")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("modal")),
                     action: hyperchad_actions::StyleAction::SetVisibility(
                         hyperchad_transformer_models::Visibility::Hidden
                     ),
@@ -927,7 +924,7 @@ fn test_dsl_delay_and_throttle() {
         actions.into_iter().map(|x| x.action).collect::<Vec<_>>(),
         vec![
             ActionType::Style {
-                target: ElementTarget::StrId(Target::literal("tooltip")),
+                target: ElementTarget::ById(Target::literal("tooltip")),
                 action: StyleAction::SetVisibility(Visibility::Visible),
             },
             ActionType::Log {
@@ -1017,7 +1014,7 @@ fn test_dsl_in_hyperchad_template() {
     assert_eq!(containers[0].children[3].actions.len(), 1);
     match &containers[0].children[3].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("search"));
+            assert_eq!(*target, ElementTarget::by_id("search"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => panic!("Expected Style action for fourth button, got {unknown:?}"),
@@ -1069,7 +1066,7 @@ fn test_multiple_dsl_actions_use_multi() {
             // First action should be hide("modal")
             match &action_types[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 _ => panic!("Expected Style action for hide"),
@@ -1078,7 +1075,7 @@ fn test_multiple_dsl_actions_use_multi() {
             // Second action should be show("success")
             match &action_types[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("success"));
+                    assert_eq!(*target, ElementTarget::by_id("success"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 _ => panic!("Expected Style action for show"),
@@ -1117,7 +1114,7 @@ fn test_dsl_in_template_with_multiple_actions() {
             // Verify first action (hide)
             match &actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -1126,7 +1123,7 @@ fn test_dsl_in_template_with_multiple_actions() {
             // Verify second action (show)
             match &actions[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("success"));
+                    assert_eq!(*target, ElementTarget::by_id("success"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -1155,7 +1152,7 @@ fn test_dsl_macro_single_action() {
     assert_eq!(
         action.action,
         ActionType::Style {
-            target: ElementTarget::str_id("test-modal"),
+            target: ElementTarget::by_id("test-modal"),
             action: StyleAction::SetVisibility(Visibility::Hidden)
         }
     );
@@ -1176,7 +1173,7 @@ fn test_dsl_macro_multiple_actions() {
     // Verify first action (show)
     match &actions[0].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("success-dialog"));
+            assert_eq!(*target, ElementTarget::by_id("success-dialog"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         _ => panic!("Expected Style action for show from DSL"),
@@ -1236,10 +1233,7 @@ fn test_dsl_macro_with_variables() {
     // Verify variable was properly substituted in first action
     match &actions[1].action {
         ActionType::Style { target, action } => {
-            assert_eq!(
-                *target,
-                ElementTarget::str_id(Target::reference("modal_id"))
-            );
+            assert_eq!(*target, ElementTarget::by_id(Target::reference("modal_id")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action with variable from DSL"),
@@ -1273,7 +1267,7 @@ fn test_dsl_macro_conditional_logic() {
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("sidebar")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("sidebar")),
                 }
                 .into(),
                 hyperchad_actions::logic::Value::Visibility(Visibility::Hidden),
@@ -1281,7 +1275,7 @@ fn test_dsl_macro_conditional_logic() {
             actions: vec![
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal("sidebar")),
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal("sidebar")),
                         action: hyperchad_actions::StyleAction::SetVisibility(
                             hyperchad_transformer_models::Visibility::Visible
                         ),
@@ -1299,7 +1293,7 @@ fn test_dsl_macro_conditional_logic() {
             else_actions: vec![
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal("sidebar")),
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal("sidebar")),
                         action: hyperchad_actions::StyleAction::SetVisibility(
                             hyperchad_transformer_models::Visibility::Hidden
                         ),
@@ -1371,7 +1365,7 @@ fn test_dsl_macro_in_container_multiple() {
             // Verify first DSL action (hide)
             match &action_types[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("loading-spinner"));
+                    assert_eq!(*target, ElementTarget::by_id("loading-spinner"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 _ => panic!("Expected Style action for hide from DSL"),
@@ -1380,7 +1374,7 @@ fn test_dsl_macro_in_container_multiple() {
             // Verify second DSL action (show)
             match &action_types[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("content"));
+                    assert_eq!(*target, ElementTarget::by_id("content"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 _ => panic!("Expected Style action for show from DSL"),
@@ -1436,10 +1430,7 @@ fn test_dsl_macro_with_fx_wrapper() {
             // Verify first action (show)
             match &actions[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(
-                        *target,
-                        ElementTarget::str_id(Target::reference("panel_id"))
-                    );
+                    assert_eq!(*target, ElementTarget::by_id(Target::reference("panel_id")));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 unknown => panic!("Expected Style action from DSL in fx block, got {unknown:?}"),
@@ -1485,7 +1476,7 @@ fn test_dsl_macro_complex_real_world_usage() {
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
-                    target: hyperchad_actions::ElementTarget::StrId(Target::literal("audio-zones")),
+                    target: hyperchad_actions::ElementTarget::ById(Target::literal("audio-zones")),
                 }
                 .into(),
                 hyperchad_actions::logic::Value::Visibility(Visibility::Hidden),
@@ -1493,7 +1484,7 @@ fn test_dsl_macro_complex_real_world_usage() {
             actions: vec![
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1504,7 +1495,7 @@ fn test_dsl_macro_complex_real_world_usage() {
                 },
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones-button-icon"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1515,7 +1506,7 @@ fn test_dsl_macro_complex_real_world_usage() {
                 },
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones-close-icon"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1535,7 +1526,7 @@ fn test_dsl_macro_complex_real_world_usage() {
             else_actions: vec![
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1546,7 +1537,7 @@ fn test_dsl_macro_complex_real_world_usage() {
                 },
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones-button-icon"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1557,7 +1548,7 @@ fn test_dsl_macro_complex_real_world_usage() {
                 },
                 hyperchad_actions::ActionEffect {
                     action: hyperchad_actions::ActionType::Style {
-                        target: hyperchad_actions::ElementTarget::StrId(Target::literal(
+                        target: hyperchad_actions::ElementTarget::ById(Target::literal(
                             "audio-zones-close-icon"
                         )),
                         action: hyperchad_actions::StyleAction::SetVisibility(
@@ -1582,7 +1573,7 @@ fn test_dsl_macro_complex_real_world_usage() {
 
     match &close_actions[0].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("search-modal"));
+            assert_eq!(*target, ElementTarget::by_id("search-modal"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         _ => panic!("Expected Style action for hide from DSL"),
@@ -1590,7 +1581,7 @@ fn test_dsl_macro_complex_real_world_usage() {
 
     match &close_actions[1].action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("search-button"));
+            assert_eq!(*target, ElementTarget::by_id("search-button"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         _ => panic!("Expected Style action for show from DSL"),
@@ -1611,7 +1602,7 @@ fn test_dsl_macro_vs_direct_actiontype() {
         hide("test-element")
     };
 
-    let direct_action = ActionType::hide_str_id("test-element");
+    let direct_action = ActionType::hide_by_id("test-element");
 
     // Both should generate equivalent Style actions
     match (&dsl_action.action, &direct_action) {
@@ -1647,7 +1638,7 @@ fn test_new_fx_syntax_without_parentheses() {
 
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("search"));
+            assert_eq!(*target, ElementTarget::by_id("search"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => {
@@ -1680,7 +1671,7 @@ fn test_new_fx_syntax_multiple_actions() {
             // Verify first action (hide)
             match &actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("search"));
+                    assert_eq!(*target, ElementTarget::by_id("search"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -1689,7 +1680,7 @@ fn test_new_fx_syntax_multiple_actions() {
             // Verify second action (show)
             match &actions[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("search-button"));
+                    assert_eq!(*target, ElementTarget::by_id("search-button"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -1735,7 +1726,7 @@ fn test_new_fx_syntax_conditional() {
             // Verify first action (hide)
             match &logic.actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -1744,7 +1735,7 @@ fn test_new_fx_syntax_conditional() {
             // Verify second action (show)
             match &logic.else_actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("modal"));
+                    assert_eq!(*target, ElementTarget::by_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
                 }
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -1794,10 +1785,7 @@ fn test_new_fx_syntax_with_variables() {
             // Verify first action (hide with variable)
             match &action_types[1].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(
-                        *target,
-                        ElementTarget::str_id(Target::reference("modal_id"))
-                    );
+                    assert_eq!(*target, ElementTarget::by_id(Target::reference("modal_id")));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for hide with variable, got {unknown:?}"),
@@ -1848,7 +1836,7 @@ fn test_fx_syntax_variations() {
 
     match &containers[0].children[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("panel"));
+            assert_eq!(*target, ElementTarget::by_id("panel"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
         unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -1856,7 +1844,7 @@ fn test_fx_syntax_variations() {
 
     match &containers[0].children[1].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("panel"));
+            assert_eq!(*target, ElementTarget::by_id("panel"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
@@ -1868,7 +1856,7 @@ fn test_fx_syntax_variations() {
 
             match &actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("panel"));
+                    assert_eq!(*target, ElementTarget::by_id("panel"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
                 }
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
@@ -1926,8 +1914,8 @@ fn test_element_reference_api() {
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
             match target {
-                ElementTarget::StrId(id) => assert_eq!(id, &Target::literal("play-queue")),
-                _ => panic!("Expected StrId target"),
+                ElementTarget::ById(id) => assert_eq!(id, &Target::literal("play-queue")),
+                _ => panic!("Expected ById target"),
             }
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
@@ -1954,8 +1942,8 @@ fn test_delay_off_literal() {
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
             match target {
-                ElementTarget::StrId(id) => assert_eq!(id, &Target::literal("play-queue")),
-                _ => panic!("Expected StrId target"),
+                ElementTarget::ById(id) => assert_eq!(id, &Target::literal("play-queue")),
+                _ => panic!("Expected ById target"),
             }
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
@@ -1989,8 +1977,8 @@ fn test_delay_off_interpolation() {
     match &containers[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
             match target {
-                ElementTarget::StrId(id) => assert_eq!(id, &Target::literal("play-queue")),
-                _ => panic!("Expected StrId target"),
+                ElementTarget::ById(id) => assert_eq!(id, &Target::literal("play-queue")),
+                _ => panic!("Expected ById target"),
             }
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
         }
@@ -2022,12 +2010,12 @@ fn test_element_reference_interpolation() {
     let id = "test";
 
     // Test very simple element reference usage without complex conditionals
-    let action = actions_dsl! { element(id).show() };
+    let action = actions_dsl! { element_by_id(id).show() };
 
     assert_eq!(
         action.action,
         ActionType::Style {
-            target: ElementTarget::StrId(Target::literal("test")),
+            target: ElementTarget::ById(Target::literal("test")),
             action: StyleAction::SetVisibility(Visibility::Visible),
         }
     );
@@ -2052,7 +2040,7 @@ fn test_element_reference_interpolation_multi_statement() {
                 )))),
             },
             ActionType::Style {
-                target: ElementTarget::str_id(Target::reference("x")),
+                target: ElementTarget::by_id(Target::reference("x")),
                 action: StyleAction::SetVisibility(Visibility::Visible),
             }
         ]
@@ -2102,7 +2090,7 @@ fn test_display_in_template() {
 
     match &containers[0].children[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("panel"));
+            assert_eq!(*target, ElementTarget::by_id("panel"));
             assert_eq!(*action, StyleAction::SetDisplay(true));
         }
         other => panic!("Expected SetDisplay(true), got: {other:?}"),
@@ -2110,7 +2098,7 @@ fn test_display_in_template() {
 
     match &containers[0].children[1].actions[0].effect.action {
         ActionType::Style { target, action } => {
-            assert_eq!(*target, ElementTarget::str_id("modal"));
+            assert_eq!(*target, ElementTarget::by_id("modal"));
             assert_eq!(*action, StyleAction::SetDisplay(false));
         }
         other => panic!("Expected SetDisplay(false), got: {other:?}"),
@@ -2177,8 +2165,8 @@ fn test_element_api_display_methods() {
     match &containers[0].children[0].actions[0].effect.action {
         ActionType::Style { target, action } => {
             match target {
-                ElementTarget::StrId(id) => assert_eq!(id, &Target::literal("panel")),
-                _ => panic!("Expected StrId target"),
+                ElementTarget::ById(id) => assert_eq!(id, &Target::literal("panel")),
+                _ => panic!("Expected ById target"),
             }
             assert_eq!(*action, StyleAction::SetDisplay(true));
         }
@@ -2214,7 +2202,7 @@ fn test_display_in_conditionals() {
 
             match &logic.actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("sidebar"));
+                    assert_eq!(*target, ElementTarget::by_id("sidebar"));
                     assert_eq!(*action, StyleAction::SetDisplay(false));
                 }
                 other => panic!("Expected no_display in if branch, got: {other:?}"),
@@ -2222,7 +2210,7 @@ fn test_display_in_conditionals() {
 
             match &logic.else_actions[0].action {
                 ActionType::Style { target, action } => {
-                    assert_eq!(*target, ElementTarget::str_id("sidebar"));
+                    assert_eq!(*target, ElementTarget::by_id("sidebar"));
                     assert_eq!(*action, StyleAction::SetDisplay(true));
                 }
                 other => panic!("Expected display in else branch, got: {other:?}"),

@@ -70,10 +70,10 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                                 placeholder="Search..."
                                 fx-global-key-down=fx {
                                     if get_event_value() == Key::Escape {
-                                        let search = element("#search");
+                                        let search = element_by_id("search");
                                         if search.visibility() == visible() {
                                             search.hide();
-                                            element("#search-button").show();
+                                            element_by_id("search-button").show();
                                         }
                                     }
                                 };
@@ -95,8 +95,8 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                             border="2, #222"
                             padding=10
                             fx-click=fx {
-                                hide("search");
-                                show("search-button");
+                                element_by_id("search").hide();
+                                element_by_id("search-button").show();
                             }
                         {
                             image
@@ -126,10 +126,10 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             right=0
             fx-click=fx {
                 hide_self();
-                show("search");
-                let element = element("#search-input");
-                element.focus();
-                element.select();
+                element_by_id("search").show();
+                let input = element_by_id("search-input");
+                input.focus();
+                input.select();
             }
         {
             image
@@ -167,7 +167,7 @@ pub fn search_results(
                             background=(BACKGROUND)
                             fx-click=fx {
                                 no_display_class("search-results-container");
-                                display_str_id(id);
+                                display_by_id(id);
                             }
                         {
                             (source.to_string_display())
