@@ -349,9 +349,10 @@ upnp-openapi   = ["switchy_upnp?/openapi", "upnp"]
 upnp-player    = ["switchy_upnp?/player", "upnp"]
 upnp-simulator = ["switchy_upnp?/simulator", "upnp"]
 
-all-uuid = ["uuid", "uuid-simulator", "uuid-uuid"]
+all-uuid = ["uuid", "uuid-serde", "uuid-simulator", "uuid-uuid"]
 
 uuid           = ["dep:switchy_uuid"]
+uuid-serde     = ["switchy_uuid?/serde", "uuid"]
 uuid-simulator = ["switchy_uuid?/simulator", "uuid"]
 uuid-uuid      = ["switchy_uuid?/uuid", "uuid"]
 

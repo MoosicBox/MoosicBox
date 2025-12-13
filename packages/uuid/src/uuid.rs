@@ -2,7 +2,7 @@
 //!
 //! This module provides truly random UUID v4 generation suitable for production use.
 
-use uuid::Uuid;
+use crate::Uuid;
 
 /// Generates a new random UUID v4.
 ///
@@ -18,7 +18,7 @@ use uuid::Uuid;
 /// ```
 #[must_use]
 pub fn new_v4() -> Uuid {
-    Uuid::new_v4()
+    Uuid::from_inner(uuid::Uuid::new_v4())
 }
 
 /// Generates a new random UUID v4 as a hyphenated string.
@@ -35,7 +35,7 @@ pub fn new_v4() -> Uuid {
 /// ```
 #[must_use]
 pub fn new_v4_string() -> String {
-    Uuid::new_v4().to_string()
+    uuid::Uuid::new_v4().to_string()
 }
 
 #[cfg(test)]

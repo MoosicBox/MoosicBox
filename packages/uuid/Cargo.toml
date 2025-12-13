@@ -18,6 +18,7 @@ group = "switchy"
 
 [dependencies]
 log            = { workspace = true }
+serde          = { workspace = true, optional = true }
 switchy_env    = { workspace = true, optional = true, features = ["simulator"] }
 switchy_random = { workspace = true, optional = true, features = ["simulator"] }
 uuid           = { workspace = true, features = ["v4"] }
@@ -32,6 +33,8 @@ fail-on-warnings = [
     "switchy_env?/fail-on-warnings",
     "switchy_random?/fail-on-warnings",
 ]
+
+serde = ["dep:serde", "uuid/serde"]
 
 simulator = [
     "dep:switchy_env",

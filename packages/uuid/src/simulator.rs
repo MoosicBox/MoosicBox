@@ -6,9 +6,9 @@
 //! The seed can be configured via the `SIMULATOR_UUID_SEED` environment variable.
 //! If not set, defaults to 12345.
 
+use crate::Uuid;
 use switchy_env::var_parse_or;
 use switchy_random::{GenericRng, Rng};
-use uuid::Uuid;
 
 static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(|| {
     let seed = var_parse_or("SIMULATOR_UUID_SEED", 12345u64);
