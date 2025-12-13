@@ -355,6 +355,7 @@ pub enum GetSilenceBytesError {
 /// # Panics
 ///
 /// * If an encoder feature is not enabled for the `AudioFormat`
+#[allow(unused_assignments)]
 pub fn get_silence_bytes(
     format: AudioFormat,
     duration: u64,
