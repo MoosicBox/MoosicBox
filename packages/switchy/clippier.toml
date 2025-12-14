@@ -1,6 +1,12 @@
 [[ci-steps]]
 toolchain = "free_disk_space"
 
+[[feature-validation.override]]
+dependencies = ["switchy_database", "switchy_uuid"]
+feature      = "uuid"
+reason       = "switchy's uuid feature is not intended to propagate to these dependencies"
+type         = "allow-missing"
+
 [[config]]
 os = "ubuntu"
 

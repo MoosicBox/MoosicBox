@@ -1,2 +1,8 @@
 [[ci-steps]]
 toolchain = "free_disk_space"
+
+[[feature-validation.override]]
+dependency = "hyperchad_transformer"
+feature    = "syntax-highlighting"
+reason     = "hyperchad_transformer's syntax-highlighting feature is not intended to be propagated"
+type       = "allow-missing"
