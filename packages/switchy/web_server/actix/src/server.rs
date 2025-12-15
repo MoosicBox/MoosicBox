@@ -332,9 +332,9 @@ fn convert_response(resp: HttpResponse) -> actix_web::HttpResponse {
 /// Build CORS configuration for Actix.
 #[cfg(feature = "cors")]
 fn build_cors(config: &switchy_web_server_cors::Cors) -> actix_cors::Cors {
-    let cors = actix_cors::Cors::default().max_age(config.max_age().map(|x| x as usize));
+    let cors = actix_cors::Cors::default().max_age(config.max_age.map(|x| x as usize));
 
-    let cors = match config.allowed_origins() {
+    let cors = match &config.allowed_origins {
         AllOrSome::All => cors.allow_any_origin(),
         AllOrSome::Some(origins) => {
             let mut cors = cors;
@@ -345,24 +345,24 @@ fn build_cors(config: &switchy_web_server_cors::Cors) -> actix_cors::Cors {
         }
     };
 
-    let cors = match config.allowed_methods() {
+    let cors = match &config.allowed_methods {
         AllOrSome::All => cors.allow_any_method(),
         AllOrSome::Some(methods) => cors.allowed_methods(methods.iter().map(AsRef::as_ref)),
     };
 
-    let cors = match config.allowed_headers() {
+    let cors = match &config.allowed_headers {
         AllOrSome::All => cors.allow_any_header(),
         AllOrSome::Some(headers) => cors.allowed_headers(headers),
     };
 
-    let cors = match config.expose_headers() {
+    let cors = match &config.expose_headers {
         AllOrSome::All => cors.expose_any_header(),
         AllOrSome::Some(headers) => cors.expose_headers(headers),
     };
 
     let mut cors = cors;
 
-    if config.supports_credentials() {
+    if config.supports_credentials {
         cors = cors.supports_credentials();
     }
 
