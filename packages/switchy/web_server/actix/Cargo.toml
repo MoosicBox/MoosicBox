@@ -34,7 +34,7 @@ bytes = { workspace = true }
 log   = { workspace = true }
 
 [features]
-default = []
+default = ["cors", "htmx", "static-files"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
