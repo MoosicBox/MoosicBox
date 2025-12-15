@@ -16,6 +16,8 @@
 //! use switchy_uuid::Uuid;
 //!
 //! // Generate a UUID (random or deterministic based on feature flags)
+//! # #[cfg(any(feature = "uuid", feature = "simulator"))]
+//! # {
 //! let id = switchy_uuid::new_v4();
 //! let id_string = switchy_uuid::new_v4_string();
 //!
@@ -24,6 +26,7 @@
 //!
 //! // Use in data structures
 //! assert!(!id.is_nil());
+//! # }
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]

@@ -19,6 +19,8 @@ use std::str::FromStr;
 /// use switchy_uuid::Uuid;
 ///
 /// // Generate a new random UUID
+/// # #[cfg(any(feature = "uuid", feature = "simulator"))]
+/// # {
 /// let id = Uuid::new_v4();
 ///
 /// // Convert to string
@@ -27,6 +29,7 @@ use std::str::FromStr;
 /// // Parse from string
 /// let parsed: Uuid = id_string.parse().unwrap();
 /// assert_eq!(id, parsed);
+/// # }
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -148,8 +151,11 @@ impl Uuid {
     /// ```
     /// use switchy_uuid::Uuid;
     ///
+    /// # #[cfg(any(feature = "uuid", feature = "simulator"))]
+    /// # {
     /// assert!(Uuid::nil().is_nil());
     /// assert!(!Uuid::new_v4().is_nil());
+    /// # }
     /// ```
     #[must_use]
     pub const fn is_nil(&self) -> bool {
@@ -175,8 +181,11 @@ impl Uuid {
     /// ```
     /// use switchy_uuid::Uuid;
     ///
+    /// # #[cfg(any(feature = "uuid", feature = "simulator"))]
+    /// # {
     /// let uuid = Uuid::new_v4();
     /// assert_eq!(uuid.get_version_num(), 4);
+    /// # }
     /// ```
     #[must_use]
     pub const fn get_version_num(&self) -> usize {
