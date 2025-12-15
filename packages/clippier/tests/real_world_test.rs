@@ -13,6 +13,10 @@ use std::path::Path;
 /// directories are created if needed.
 #[cfg(feature = "git-diff")]
 fn seed_file_from_real_fs(path: &Path) {
+    if !switchy_fs::is_simulator_enabled() {
+        return;
+    }
+
     // Read from real filesystem
     let content = std::fs::read(path).expect("Failed to read file from real filesystem");
 
