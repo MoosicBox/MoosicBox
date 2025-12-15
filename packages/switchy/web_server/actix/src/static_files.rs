@@ -8,6 +8,7 @@ use switchy_web_server::StaticFiles;
 /// Extension trait for adding static file serving to Actix apps.
 pub trait StaticFilesExt {
     /// Registers static file serving with the application.
+    #[must_use]
     fn with_static_files(self, config: &StaticFiles) -> Self;
 }
 
@@ -26,7 +27,7 @@ where
 {
     let files = create_files_service(
         config.mount_path().to_string(),
-        config.directory().to_path_buf(),
+        config.directory().clone(),
         config.index_file_name().map(String::from),
         config.is_spa_fallback(),
         config.effective_index_file().map(String::from),
@@ -35,6 +36,7 @@ where
 }
 
 /// Creates an `actix_files::Files` service from the configuration.
+#[allow(clippy::needless_pass_by_value)]
 fn create_files_service(
     mount_path: String,
     directory: PathBuf,
