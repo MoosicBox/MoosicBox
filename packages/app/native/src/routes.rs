@@ -79,6 +79,9 @@ pub enum RouteError {
     /// Failed to parse a track API source from a string.
     #[error(transparent)]
     TryFromStringTrackApiSource(#[from] TryFromStringTrackApiSourceError),
+    /// Search error
+    #[error(transparent)]
+    Search(#[from] SearchError),
 }
 
 /// Parses a comma-separated string of track API sources.
@@ -1129,6 +1132,17 @@ pub struct SearchRequest {
     pub query: String,
 }
 
+/// Errors that can occur during search operation.
+#[derive(Debug, thiserror::Error)]
+pub enum SearchError {
+    /// Invalid `api_source`
+    #[error("Invalid api_source: {0}")]
+    InvalidApiSource(ApiSource),
+    /// Serach request failed
+    #[error("Search request failed for '{url}': {message}")]
+    RequestFailed { url: String, message: String },
+}
+
 /// Handles music search across all registered API sources.
 ///
 /// Spawns concurrent search tasks for each music API source and updates the UI
@@ -1171,13 +1185,10 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
         let query = query.clone();
 
         switchy::unsync::task::spawn(async move {
-            let response = CLIENT
-                .get(&format!(
-                    "{host}/music-api/search?moosicboxProfile={PROFILE}&query={query}&apiSource={api_source}"
-                ))
-                .send()
-                .await
-                .unwrap();
+            let url = format!(
+                "{host}/music-api/search?moosicboxProfile={PROFILE}&query={query}&apiSource={api_source}"
+            );
+            let response = CLIENT.get(&url).send().await.unwrap();
 
             if !response.status().is_success() {
                 let message = format!(
@@ -1185,12 +1196,18 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
                     response.status(),
                     response.text().await.unwrap()
                 );
-                panic!("Route failed: {message}");
+                let error = SearchError::RequestFailed { url, message };
+                let error = Box::new(error) as Box<dyn std::error::Error + Send + 'static>;
+                return Err(error);
             }
 
             let results: BTreeMap<ApiSource, ApiSearchResultsResponse> =
                 response.json().await.unwrap();
-            let results = results.get(&api_source).unwrap().clone();
+            let results = results
+                .get(&api_source)
+                .ok_or_else(|| SearchError::InvalidApiSource(api_source.clone()))
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?
+                .clone();
             let markup = results_content(&host, &api_source, &results.results);
 
             let renderer = RENDERER.get().unwrap();
