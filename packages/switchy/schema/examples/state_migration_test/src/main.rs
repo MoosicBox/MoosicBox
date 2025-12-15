@@ -36,8 +36,14 @@ impl Migration<'static> for AddUsersBioColumn {
     /// * Returns an error if the database connection fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Add bio column with default value for existing users
-        // Using raw SQL since ALTER TABLE ADD COLUMN isn't supported by schema builder yet
-        db.exec_raw("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
+        db.alter_table("users")
+            .add_column(
+                "bio".to_string(),
+                DataType::Text,
+                false,
+                Some(DatabaseValue::String(String::new())),
+            )
+            .execute(db)
             .await?;
         Ok(())
     }
@@ -76,7 +82,10 @@ impl Migration<'static> for AddEmailIndex {
     /// * Returns an error if an index with the same name already exists
     /// * Returns an error if the database connection fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
-        db.exec_raw("CREATE INDEX idx_users_email_migration ON users(email)")
+        db.create_index("idx_users_email_migration")
+            .table("users")
+            .column("email")
+            .execute(db)
             .await?;
         Ok(())
     }
@@ -88,7 +97,9 @@ impl Migration<'static> for AddEmailIndex {
     /// * Returns an error if the DROP INDEX statement fails
     /// * Returns an error if the database connection fails
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
-        db.exec_raw("DROP INDEX idx_users_email_migration").await?;
+        db.drop_index("idx_users_email_migration", "users")
+            .execute(db)
+            .await?;
         Ok(())
     }
 
