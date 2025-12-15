@@ -33,9 +33,6 @@ actix-web     = { workspace = true }
 bytes = { workspace = true }
 log   = { workspace = true }
 
-[dev-dependencies]
-test-log = { workspace = true }
-
 [features]
 default = []
 

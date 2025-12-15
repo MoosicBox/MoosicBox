@@ -15618,7 +15618,6 @@ dependencies = [
  "switchy_web_server",
  "switchy_web_server_core",
  "switchy_web_server_cors",
- "test-log",
 ]
 
 [[package]]
