@@ -14506,10 +14506,12 @@ name = "state_migration_test"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "log 0.4.29",
  "switchy_async",
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
+ "test-log",
 ]
 
 [[package]]

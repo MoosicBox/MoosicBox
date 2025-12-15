@@ -25,6 +25,10 @@ switchy_database          = { workspace = true, features = ["schema"] }
 switchy_schema            = { workspace = true }
 switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 
+[dev-dependencies]
+log      = { workspace = true }
+test-log = { workspace = true }
+
 [features]
 fail-on-warnings = [
     "switchy_async/fail-on-warnings",
