@@ -68,7 +68,7 @@ _transforms         = []
 check               = ["_tools"]
 format              = ["_tools"]
 git-diff            = ["dep:git2"]
-test-utils          = ["switchy_fs/simulator-real-fs"]
+test-utils          = ["switchy_fs/simulator", "switchy_fs/simulator-real-fs"]
 transforms-system   = ["_transforms", "dep:mlua"]
 transforms-vendored = ["_transforms", "mlua/vendored"]
 
