@@ -13,11 +13,11 @@ use crate::{AudioOutputFactory, SignalSpec};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAudioOutput {
-    /// Unique identifier for the audio output.
+    /// Unique identifier for the audio output
     pub id: String,
-    /// Human-readable name of the audio output.
+    /// Human-readable name of the audio output
     pub name: String,
-    /// Audio signal specification.
+    /// Audio signal specification
     pub spec: ApiSignalSpec,
 }
 
@@ -39,7 +39,7 @@ pub struct ApiSignalSpec {
     /// The signal sampling rate in hertz (Hz).
     pub rate: u32,
 
-    /// The channel count.
+    /// The channel count
     pub channels: usize,
 }
 

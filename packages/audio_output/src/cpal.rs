@@ -26,11 +26,11 @@ use crate::{
 /// the audio output implementation.
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
-    /// Pause the audio stream immediately.
+    /// Pause the audio stream
     Pause,
-    /// Resume the audio stream from where it was paused.
+    /// Resume the audio stream
     Resume,
-    /// Reset the audio stream to its initial state, clearing any buffered data.
+    /// Reset the audio stream to its initial state
     Reset,
 }
 
