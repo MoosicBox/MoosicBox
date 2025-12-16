@@ -26,6 +26,9 @@ The Switchy package provides:
 - **`telemetry`**: Telemetry and monitoring (via `switchy_telemetry`)
 - **`time`**: Time utilities (via `switchy_time`)
 - **`upnp`**: UPnP device discovery (via `switchy_upnp`)
+- **`uuid`**: UUID generation utilities (via `switchy_uuid`)
+- **`web-server`**: Web server abstractions (via `switchy_web_server`)
+- **`web-server-core`**: Core web server types and traits (via `switchy_web_server_core`)
 - **`http`**: HTTP client/server (via `switchy_http` and `switchy_http_models`)
 
 ### Module Structure
@@ -55,6 +58,9 @@ switchy = { path = "../switchy", features = [
     "telemetry",
     "time",
     "upnp",
+    "uuid",
+    "web-server",
+    "web-server-core",
     "http",
     "http-models"
 ] }
@@ -156,6 +162,9 @@ use switchy::random;
 - **`telemetry`**: Enable telemetry and monitoring
 - **`time`**: Enable time utilities
 - **`upnp`**: Enable UPnP device discovery
+- **`uuid`**: Enable UUID generation utilities
+- **`web-server`**: Enable web server abstractions
+- **`web-server-core`**: Enable core web server types
 - **`http`**: Enable HTTP client/server
 - **`http-models`**: Enable HTTP model types
 
@@ -176,12 +185,14 @@ Each module has an `all-*` feature that enables all sub-features for that module
 - **`all-telemetry`**: All telemetry features
 - **`all-time`**: All time features
 - **`all-upnp`**: All UPnP features
+- **`all-uuid`**: All UUID features
+- **`all-web-server`**: All web server features
 
 ### Sub-Features
 
 Each module has additional sub-features for fine-grained control:
 
-**Async**: `async-fs`, `async-io`, `async-net`, `async-rt-multi-thread`, `async-sync`, `async-time`, `async-tokio`, `async-util`
+**Async**: `async-fs`, `async-io`, `async-net`, `async-process`, `async-rt-multi-thread`, `async-sync`, `async-time`, `async-tokio`, `async-util`
 
 **Database**: `database-api`, `database-mysql`, `database-mysql-sqlx`, `database-postgres`, `database-postgres-raw`, `database-postgres-sqlx`, `database-schema`, `database-simulator`, `database-sqlite`, `database-sqlite-rusqlite`, `database-sqlite-sqlx`, `database-sqlx`, `database-tls`, `database-turso`
 
@@ -189,7 +200,7 @@ Each module has additional sub-features for fine-grained control:
 
 **Filesystem**: `fs-async`, `fs-simulator`, `fs-simulator-real-fs`, `fs-std`, `fs-sync`, `fs-tokio`
 
-**HTTP**: `http-json`, `http-reqwest`, `http-serde`, `http-simulator`, `http-stream`
+**HTTP**: `http-brotli`, `http-deflate`, `http-gzip`, `http-json`, `http-reqwest`, `http-serde`, `http-simulator`, `http-stream`, `http-zstd`
 
 **HTTP Models**: `http-models-actix`, `http-models-reqwest`, `http-models-serde`
 
@@ -204,6 +215,10 @@ Each module has additional sub-features for fine-grained control:
 **Time**: `time-simulator`, `time-std`
 
 **UPnP**: `upnp-api`, `upnp-listener`, `upnp-openapi`, `upnp-player`, `upnp-simulator`
+
+**UUID**: `uuid-serde`, `uuid-simulator`, `uuid-uuid`
+
+**Web Server**: `web-server-actix`, `web-server-compress`, `web-server-core`, `web-server-cors`, `web-server-htmx`, `web-server-openapi`, `web-server-openapi-all`, `web-server-openapi-rapidoc`, `web-server-openapi-redoc`, `web-server-openapi-scalar`, `web-server-openapi-swagger-ui`, `web-server-serde`, `web-server-simulator`, `web-server-static-files`, `web-server-tls`
 
 ## Dependencies
 
@@ -220,6 +235,9 @@ This package re-exports functionality from:
 - `switchy_telemetry` - Telemetry and monitoring
 - `switchy_time` - Time utilities
 - `switchy_upnp` - UPnP device discovery
+- `switchy_uuid` - UUID generation utilities
+- `switchy_web_server` - Web server abstractions
+- `switchy_web_server_core` - Core web server types
 - `switchy_http` - HTTP client/server
 - `switchy_http_models` - HTTP model types
 
