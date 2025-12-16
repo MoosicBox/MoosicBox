@@ -10,6 +10,7 @@ use maud::{Markup, html};
 use switchy_database::{DatabaseError, config::ConfigDatabase};
 
 /// Binds server info endpoints to the provided Actix web scope.
+#[must_use]
 pub const fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

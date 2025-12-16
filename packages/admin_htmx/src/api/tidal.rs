@@ -29,6 +29,7 @@ static SP1: &str = "VkpLaERGcUpQcXZzUFZOQlY2dWtYVA==";
 static SP2: &str = "Sm13bHZidHRQN3dsTWxyYzcyc2U0PQ==";
 
 /// Binds Tidal authentication and settings endpoints to the provided Actix web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

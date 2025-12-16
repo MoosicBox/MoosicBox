@@ -21,6 +21,7 @@ use switchy_database::profiles::LibraryDatabase;
 use crate::api::util::clear_input;
 
 /// Binds scan-related endpoints to the provided Actix web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
