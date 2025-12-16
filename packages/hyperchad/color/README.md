@@ -58,7 +58,7 @@ hyperchad_color = {
 ```rust
 use hyperchad_color::Color;
 
-// Create colors from hex strings
+// Create colors from hex strings (runtime parsing)
 let red = Color::from_hex("#FF0000");
 let green = Color::from_hex("#00FF00");
 let blue = Color::from_hex("#0000FF");
@@ -70,6 +70,15 @@ let black = Color::from_hex("#000");  // Expands to #000000
 // With alpha channel
 let transparent_red = Color::from_hex("#FF000080");
 let transparent_blue = Color::from_hex("#00F8");  // Short form with alpha
+```
+
+### Compile-Time Color Parsing
+
+```rust
+use hyperchad_color::color_from_hex;
+
+// Parse hex colors at compile time (errors at compile time if invalid)
+let color = color_from_hex!("#FF5733");
 ```
 
 ### Error Handling
@@ -191,7 +200,7 @@ All formats support:
 
 - Optional `#` prefix
 - Uppercase and lowercase hex digits
-- Leading/trailing whitespace (automatically trimmed)
+- Trailing whitespace (automatically trimmed)
 
 ## Error Types
 
