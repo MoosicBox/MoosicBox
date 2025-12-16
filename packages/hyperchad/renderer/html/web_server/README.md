@@ -4,7 +4,7 @@ This package provides a web server backend for HyperChad HTML rendering using th
 
 ## Features
 
-- **Web Server Backend**: Uses `moosicbox_web_server` for HTTP handling
+- **Web Server Backend**: Uses `switchy_web_server` for HTTP handling
 - **Actix Support**: Optional actix-web backend support via the `actix` feature
 - **Simulator Support**: Easy testing and simulation via the `simulator` feature
 - **Assets**: Static asset serving via the `assets` feature
@@ -64,7 +64,7 @@ runner.run()?;
 
 ## Cargo Features
 
-- `actix` - Enable actix-web backend support in `moosicbox_web_server`
-- `simulator` - Enable simulation capabilities for testing in `moosicbox_web_server`
+- `actix` - Enable actix-web backend support in `switchy_web_server`
+- `simulator` - Enable simulation capabilities for testing in `switchy_web_server`
 - `assets` - Enable static asset serving (enabled by default)
 - `debug` - Enable debug features (enabled by default)
