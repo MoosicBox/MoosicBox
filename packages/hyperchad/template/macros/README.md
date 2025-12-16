@@ -124,13 +124,13 @@ For complex action sequences, you can also use Rust expressions with `ActionType
 
 ```rust
 // Using ActionType directly
-div fx-click=(ActionType::hide_str_id("test")) {
+div fx-click=(ActionType::hide_by_id("test")) {
     "Click to hide"
 }
 
 // Using ActionEffect for timing control
 div fx-click=(ActionEffect {
-    action: ActionType::hide_str_id(Target::literal("test")),
+    action: ActionType::hide_by_id(Target::literal("test")),
     delay_off: Some(1000),
     throttle: Some(500),
     unique: Some(true),
