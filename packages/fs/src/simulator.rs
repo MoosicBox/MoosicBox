@@ -1212,6 +1212,9 @@ pub mod sync {
     }
 
     /// Directory entry for synchronous filesystem operations
+    ///
+    /// Represents a single entry (file or directory) when iterating over directory contents.
+    /// Provides methods to access the entry's path, name, and type information.
     pub struct DirEntry {
         path: PathBuf,
         file_name: std::ffi::OsString,
@@ -2187,6 +2190,9 @@ pub mod unsync {
     }
 
     /// Directory entry for asynchronous filesystem operations
+    ///
+    /// Represents a single entry (file or directory) when iterating over directory contents.
+    /// Provides async methods to access the entry's path, name, type, and metadata information.
     pub struct DirEntry {
         path: PathBuf,
         file_name: std::ffi::OsString,
