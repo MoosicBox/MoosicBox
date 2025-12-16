@@ -40,6 +40,7 @@ pub mod models;
 /// Binds the configuration API endpoints to an Actix-Web scope.
 ///
 /// This function registers the profiles endpoints with the provided scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
