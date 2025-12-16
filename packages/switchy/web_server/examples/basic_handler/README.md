@@ -22,23 +22,23 @@ This example demonstrates the fundamental handler implementation using the `Rout
 
 ```bash
 # From repository root
-cargo run -p basic_handler_example --features actix
+cargo run -p switchy_web_server_example_basic_handler --features actix
 
 # With NixOS
-nix develop .#server --command cargo run -p basic_handler_example --features actix
+nix develop .#server --command cargo run -p switchy_web_server_example_basic_handler --features actix
 ```
 
 ### With Simulator (Testing Backend - Default)
 
 ```bash
 # From repository root
-cargo run -p basic_handler_example --features simulator
+cargo run -p switchy_web_server_example_basic_handler --features simulator
 
 # Or simply (simulator is the default feature)
-cargo run -p basic_handler_example
+cargo run -p switchy_web_server_example_basic_handler
 
 # With NixOS
-nix develop .#server --command cargo run -p basic_handler_example --features simulator
+nix develop .#server --command cargo run -p switchy_web_server_example_basic_handler --features simulator
 ```
 
 ## Expected Output
@@ -176,9 +176,9 @@ Planned: The web server abstraction is being enhanced to:
 **Solution**: Ensure either `actix` or `simulator` feature is enabled:
 
 ```bash
-cargo run -p basic_handler_example --features actix
+cargo run -p switchy_web_server_example_basic_handler --features actix
 # or
-cargo run -p basic_handler_example --features simulator
+cargo run -p switchy_web_server_example_basic_handler --features simulator
 ```
 
 ### Compilation Errors
