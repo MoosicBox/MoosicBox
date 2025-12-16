@@ -47,6 +47,11 @@ use switchy_uuid::new_v4_string;
 /// * Test clients that validate API contracts
 /// * Comprehensive test scenarios (happy path, edge cases, error conditions)
 /// * Detailed test result reporting
+///
+/// # Errors
+///
+/// Returns an error if the simulation fails to run or encounters a fatal error
+/// during execution.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bootstrap = ApiTestingBootstrap::new();
     let results = run_simulation(bootstrap)?;
