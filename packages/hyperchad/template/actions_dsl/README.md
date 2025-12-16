@@ -166,7 +166,7 @@ button fx-click=fx {
 
 - `set_background_self(color)` - Set background color of current element
 - `remove_background_self()` - Remove background from current element
-- `remove_background_str_id(id)` - Remove background from element by ID
+- `remove_background_by_id(id)` - Remove background from element by ID
 - `remove_background_class(class)` - Remove background from elements by class
 - `set_visibility_child_class(visibility, class)` - Set visibility for child elements by class
 
@@ -178,9 +178,9 @@ button fx-click=fx {
 ### Getters and Queries
 
 - `get_width_px_self()` - Get width of current element in pixels
-- `get_height_px_str_id(id)` - Get height of element by ID
+- `get_height_px_by_id(id)` - Get height of element by ID
 - `get_mouse_x_self()` - Get mouse X position relative to current element
-- `get_mouse_y_str_id(id)` - Get mouse Y position relative to element
+- `get_mouse_y_by_id(id)` - Get mouse Y position relative to element
 - `get_data_attr_value_self(attr)` - Get data attribute value from current element
 
 ## Advanced Features
@@ -228,7 +228,7 @@ The DSL supports arithmetic operations that are converted to method calls:
 div fx-click=fx {
     invoke(
         Action::SetVolume,
-        ((get_height_px_str_id("container") - get_mouse_y_str_id("container")) / get_height_px_str_id("container"))
+        ((get_height_px_by_id("container") - get_mouse_y_by_id("container")) / get_height_px_by_id("container"))
             .clamp(0.0, 1.0)
     );
 } id="container" { /* vertical volume control */ }
