@@ -212,7 +212,7 @@ pub mod rusqlite {
 ### Music Library JSON Processing
 
 ```rust
-use moosicbox_json_utils::serde_json::{ToValueType, ToValue};
+use moosicbox_json_utils::serde_json::ToValue;
 
 fn process_album_metadata() -> Result<(), Box<dyn std::error::Error>> {
     // Process album metadata
@@ -263,7 +263,7 @@ fn process_album_metadata() -> Result<(), Box<dyn std::error::Error>> {
 ### Database Value Conversion
 
 ```rust
-use moosicbox_json_utils::database::{ToValue, ToValueType};
+use moosicbox_json_utils::database::ToValue;
 use switchy_database::{Database, DatabaseValue, Row};
 
 async fn query_albums(db: &dyn Database) -> Result<(), Box<dyn std::error::Error>> {
