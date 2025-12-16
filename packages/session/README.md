@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db: LibraryDatabase = /* your database connection */;
 
     // Create a new session
-    let create_session = CreateSession {
+    let new_session = CreateSession {
         name: "My Music Session".to_string(),
         audio_zone_id: Some(1),
         playlist: CreateSessionPlaylist {
@@ -48,11 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
 
-    let session = create_session(&db, &create_session).await?;
+    let session = create_session(&db, &new_session).await?;
     println!("Created session: {}", session.id);
 
     // Update session
-    let update_session = UpdateSession {
+    let session_update = UpdateSession {
         session_id: session.id,
         profile: "default".to_string(),
         playback_target: PlaybackTarget::AudioZone { audio_zone_id: 1 },
@@ -61,14 +61,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         name: Some("Paused Session".to_string()),
         active: Some(false),
         playing: Some(false),
-        position: Some(30),    // 30 seconds
+        position: Some(2),     // Playlist position index
         seek: None,
         volume: Some(0.8),     // 80% volume
         playlist: None,
         quality: None,
     };
 
-    update_session(&db, &update_session).await?;
+    update_session(&db, &session_update).await?;
 
     // Get session
     let session = get_session(&db, session.id).await?;
