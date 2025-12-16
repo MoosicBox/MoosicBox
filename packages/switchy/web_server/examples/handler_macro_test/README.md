@@ -28,45 +28,45 @@ This example validates the handler extractor system implementation, testing vari
 
 ```bash
 # From repository root
-cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
+cargo run -p switchy_web_server_example_handler_macro_test --bin test_actix --features switchy_web_server/actix
 
 # From example directory
-cd packages/web_server/examples/handler_macro_test
-cargo run --bin test_actix --features moosicbox_web_server/actix
+cd packages/switchy/web_server/examples/handler_macro_test
+cargo run --bin test_actix --features switchy_web_server/actix
 
 # With NixOS
-nix develop .#server --command cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
+nix develop .#server --command cargo run -p switchy_web_server_example_handler_macro_test --bin test_actix --features switchy_web_server/actix
 ```
 
 ### Simulator Backend Tests
 
 ```bash
 # From repository root
-cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
+cargo run -p switchy_web_server_example_handler_macro_test --bin test_simulator --features switchy_web_server/simulator
 
 # From example directory
-cd packages/web_server/examples/handler_macro_test
-cargo run --bin test_simulator --features moosicbox_web_server/simulator
+cd packages/switchy/web_server/examples/handler_macro_test
+cargo run --bin test_simulator --features switchy_web_server/simulator
 
 # With NixOS
-nix develop .#server --command cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
+nix develop .#server --command cargo run -p switchy_web_server_example_handler_macro_test --bin test_simulator --features switchy_web_server/simulator
 ```
 
 ### Debug Mode
 
 ```bash
 # Debug Actix backend behavior
-cargo run -p handler_macro_test --bin debug_actix --features moosicbox_web_server/actix
+cargo run -p switchy_web_server_example_handler_macro_test --bin debug_actix --features switchy_web_server/actix
 ```
 
 ### Build All Binaries
 
 ```bash
 # Test compilation of all binaries
-cargo build -p handler_macro_test --bins --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
+cargo build -p switchy_web_server_example_handler_macro_test --bins --features "switchy_web_server/actix,switchy_web_server/simulator"
 
 # Build specific binary
-cargo build -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
+cargo build -p switchy_web_server_example_handler_macro_test --bin test_actix --features switchy_web_server/actix
 ```
 
 ## Expected Results
@@ -175,8 +175,8 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 **Solution**: Ensure correct backend feature is enabled:
 
 ```bash
---features moosicbox_web_server/actix        # for Actix backend
---features moosicbox_web_server/simulator    # for Simulator backend
+--features switchy_web_server/actix        # for Actix backend
+--features switchy_web_server/simulator    # for Simulator backend
 ```
 
 ### Compilation Errors
@@ -195,31 +195,31 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 
 ```bash
 # Verify all handler signatures compile
-cargo check -p handler_macro_test --features moosicbox_web_server/actix
-cargo check -p handler_macro_test --features moosicbox_web_server/simulator
+cargo check -p switchy_web_server_example_handler_macro_test --features switchy_web_server/actix
+cargo check -p switchy_web_server_example_handler_macro_test --features switchy_web_server/simulator
 ```
 
 ### Runtime Tests
 
 ```bash
 # Test actual handler execution
-cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
-cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
+cargo run -p switchy_web_server_example_handler_macro_test --bin test_actix --features switchy_web_server/actix
+cargo run -p switchy_web_server_example_handler_macro_test --bin test_simulator --features switchy_web_server/simulator
 ```
 
 ### Cross-Backend Validation
 
 ```bash
 # Ensure same behavior across backends
-cargo build -p handler_macro_test --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
+cargo build -p switchy_web_server_example_handler_macro_test --features "switchy_web_server/actix,switchy_web_server/simulator"
 ```
 
 ## Related Documentation
 
 For more information about the web server abstraction layer and handler system, see:
 
-- The main `moosicbox_web_server` package documentation
-- Other examples in `packages/web_server/examples/`
+- The main `switchy_web_server` package documentation
+- Other examples in `packages/switchy/web_server/examples/`
 
 ## Development Notes
 
