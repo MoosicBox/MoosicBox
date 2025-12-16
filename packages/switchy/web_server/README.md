@@ -1,4 +1,4 @@
-# MoosicBox Web Server
+# Switchy Web Server
 
 A web server abstraction library providing a unified interface for HTTP server functionality with support for routing, middleware, and multiple backend implementations.
 
@@ -20,10 +20,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_web_server = "0.1.4"
+switchy_web_server = "0.1.4"
 
 # Enable features as needed
-moosicbox_web_server = {
+switchy_web_server = {
     version = "0.1.4",
     features = ["actix", "cors", "compress", "openapi"]
 }
@@ -34,7 +34,7 @@ moosicbox_web_server = {
 ### Basic Server Setup
 
 ```rust
-use moosicbox_web_server::{WebServerBuilder, Scope, HttpResponse};
+use switchy_web_server::{WebServerBuilder, Scope, HttpResponse};
 
 #[tokio::main]
 async fn main() {
@@ -57,7 +57,7 @@ async fn main() {
 ### Creating Routes and Scopes
 
 ```rust
-use moosicbox_web_server::{Scope, HttpResponse, Error};
+use switchy_web_server::{Scope, HttpResponse, Error};
 use switchy_http_models::StatusCode;
 
 fn create_api_routes() -> Scope {
@@ -88,7 +88,7 @@ fn create_api_routes() -> Scope {
 ### Request Handling
 
 ```rust
-use moosicbox_web_server::{HttpRequest, HttpResponse, Error};
+use switchy_web_server::{HttpRequest, HttpResponse, Error};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -124,7 +124,7 @@ async fn handle_request(req: HttpRequest) -> Result<HttpResponse, Error> {
 
 ```rust
 #[cfg(feature = "serde")]
-use moosicbox_web_server::{Path, HttpResponse, Error};
+use switchy_web_server::{Path, HttpResponse, Error};
 
 #[cfg(feature = "serde")]
 async fn get_user(Path(user_id): Path<u32>) -> Result<HttpResponse, Error> {
@@ -164,7 +164,7 @@ async fn get_user_post_named(Path(params): Path<UserPostParams>) -> Result<HttpR
 ### Response Types
 
 ```rust
-use moosicbox_web_server::{HttpResponse, HttpResponseBody};
+use switchy_web_server::{HttpResponse, HttpResponseBody};
 use switchy_http_models::StatusCode;
 
 fn response_examples() -> Vec<HttpResponse> {
@@ -199,7 +199,7 @@ fn response_examples() -> Vec<HttpResponse> {
 
 // JSON responses (require 'serde' feature)
 #[cfg(feature = "serde")]
-fn json_response_examples() -> Result<Vec<HttpResponse>, moosicbox_web_server::Error> {
+fn json_response_examples() -> Result<Vec<HttpResponse>, switchy_web_server::Error> {
     use serde_json::json;
 
     Ok(vec![
@@ -216,7 +216,7 @@ fn json_response_examples() -> Result<Vec<HttpResponse>, moosicbox_web_server::E
 
 ```rust
 #[cfg(feature = "cors")]
-use moosicbox_web_server::{WebServerBuilder, cors::Cors, Method};
+use switchy_web_server::{WebServerBuilder, cors::Cors, Method};
 
 #[cfg(feature = "cors")]
 fn server_with_cors() {
@@ -235,7 +235,7 @@ fn server_with_cors() {
 
 ```rust
 #[cfg(feature = "compress")]
-use moosicbox_web_server::WebServerBuilder;
+use switchy_web_server::WebServerBuilder;
 
 #[cfg(feature = "compress")]
 fn server_with_compression() {
@@ -248,7 +248,7 @@ fn server_with_compression() {
 ### Error Handling
 
 ```rust
-use moosicbox_web_server::{Error, HttpResponse};
+use switchy_web_server::{Error, HttpResponse};
 use switchy_http_models::StatusCode;
 
 fn error_examples() -> Vec<Error> {
@@ -291,7 +291,7 @@ fn another_condition() -> bool { false }
 
 ```rust
 #[cfg(feature = "openapi")]
-use moosicbox_web_server::{utoipa, openapi};
+use switchy_web_server::{utoipa, openapi};
 #[cfg(feature = "openapi")]
 use utoipa::openapi::OpenApi;
 
@@ -316,7 +316,7 @@ fn create_server_with_openapi() {
     // Set the OpenAPI spec
     *openapi::OPENAPI.write().unwrap() = Some(setup_openapi());
 
-    let server = moosicbox_web_server::WebServerBuilder::new()
+    let server = switchy_web_server::WebServerBuilder::new()
         // Add OpenAPI UI routes
         .with_scope(openapi::bind_services(Scope::new("/openapi")))
         // Add your API routes
@@ -362,7 +362,6 @@ fn create_server_with_openapi() {
 - `cookie(name)` - Get cookie value by name
 - `cookies()` - Get all cookies as a map
 - `remote_addr()` - Get remote client address
-- `context()` - Get request context (advanced use)
 
 ### Response Methods
 
@@ -554,7 +553,7 @@ cargo test -p basic_handler_standalone_example
 cargo test -p json_extractor_standalone_example
 
 # Test the main web_server package
-cargo test -p moosicbox_web_server --features "actix,serde"
+cargo test -p switchy_web_server --features "actix,serde"
 ```
 
 #### Manual Testing with curl
@@ -625,7 +624,7 @@ Future versions will provide a unified API that removes this requirement.
 // Before (raw Actix)
 App::new().route("/api/users", web::get().to(get_users))
 
-// After (MoosicBox abstraction)
+// After (Switchy abstraction)
 Scope::new("/api").with_route(Route {
     path: "/users",
     method: Method::Get,
@@ -639,13 +638,13 @@ Core dependencies:
 
 - `switchy_http_models` - HTTP types and status codes
 - `serde-querystring` - Query string parsing
-- `moosicbox_web_server_core` - Core server functionality
+- `switchy_web_server_core` - Core server functionality
 - `bytes` - Efficient byte buffer handling
 - `futures` - Async runtime utilities
 
 Optional dependencies (feature-gated):
 
-- `moosicbox_web_server_cors` - CORS middleware (with `cors` feature)
+- `switchy_web_server_cors` - CORS middleware (with `cors` feature)
 - `actix-web` - Actix Web server backend (with `actix` feature)
 - `actix-cors` - Actix CORS support (with `cors` feature)
 - `actix-htmx` - HTMX integration (with `htmx` feature)
