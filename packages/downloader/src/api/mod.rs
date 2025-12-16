@@ -40,6 +40,7 @@ use switchy_database::profiles::LibraryDatabase;
 pub mod models;
 
 /// Binds download API service endpoints to an actix-web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
