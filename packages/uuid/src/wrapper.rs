@@ -375,6 +375,18 @@ impl AsRef<uuid::Uuid> for Uuid {
 }
 
 /// An error that occurred while parsing a UUID string.
+///
+/// This error is returned when attempting to parse an invalid UUID string
+/// via [`Uuid::parse_str`] or the [`FromStr`] implementation.
+///
+/// # Examples
+///
+/// ```
+/// use switchy_uuid::Uuid;
+///
+/// let err = Uuid::parse_str("not-a-uuid").unwrap_err();
+/// assert!(err.to_string().contains("invalid UUID"));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError(String);
 
