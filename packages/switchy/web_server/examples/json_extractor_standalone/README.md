@@ -16,13 +16,13 @@ This example demonstrates JSON request/response handling with serde deserializat
 ### With Simulator (default)
 
 ```bash
-cargo run -p json_extractor_standalone_example
+cargo run -p switchy_web_server_example_json_extractor_standalone
 ```
 
 ### With Actix
 
 ```bash
-cargo run -p json_extractor_standalone_example --features actix --no-default-features
+cargo run -p switchy_web_server_example_json_extractor_standalone --features actix --no-default-features
 ```
 
 ## Routes
