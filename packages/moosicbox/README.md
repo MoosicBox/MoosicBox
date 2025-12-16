@@ -100,7 +100,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox = { version = "0.1.0", features = ["all-sources"] }
+moosicbox = "0.1.0"
+```
+
+By default, all components are enabled. You can selectively enable only what you need:
+
+```toml
+[dependencies]
+moosicbox = { version = "0.1.0", default-features = false, features = ["player", "library", "logging"] }
 ```
 
 ### Basic Example
@@ -108,7 +115,7 @@ moosicbox = { version = "0.1.0", features = ["all-sources"] }
 This package re-exports underlying components, allowing you to access their APIs:
 
 ```rust
-// Import specific components you need
+// Import specific components you need (requires corresponding features enabled)
 use moosicbox::logging;
 use moosicbox::player;
 use moosicbox::library;
