@@ -292,4 +292,3 @@ This application integrates with:
 - **Streaming Services**: Tidal, Qobuz, YouTube Music
 - **Local Files**: Local music library
 - **System Audio**: Native audio system integration
-- **Media Keys**: System media key handling
