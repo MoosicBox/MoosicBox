@@ -35,6 +35,9 @@ use symphonia::core::audio::AudioBuffer;
 use crate::listener::Handle;
 
 /// Default retry options for seeking operations on `UPnP` devices.
+///
+/// These options define how many times to retry seek operations and the delay between attempts
+/// when a seek operation fails on a `UPnP` device.
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(100),
