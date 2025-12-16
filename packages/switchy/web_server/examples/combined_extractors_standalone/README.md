@@ -16,13 +16,13 @@ This example demonstrates using multiple extractors together in a single handler
 ### With Simulator (default)
 
 ```bash
-cargo run -p combined_extractors_standalone_example
+cargo run -p switchy_web_server_example_combined_extractors_standalone
 ```
 
 ### With Actix
 
 ```bash
-cargo run -p combined_extractors_standalone_example --features actix --no-default-features
+cargo run -p switchy_web_server_example_combined_extractors_standalone --features actix --no-default-features
 ```
 
 ## Routes
