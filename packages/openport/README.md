@@ -224,6 +224,9 @@ impl<R: PortRange> PortReservation<R> {
 
     /// Check if a port is currently reserved
     pub fn is_reserved(&self, port: Port) -> bool;
+
+    /// Check if a port is free (not reserved)
+    pub fn is_free(&self, port: Port) -> bool;
 }
 ```
 
