@@ -39,7 +39,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_web_server_cors = { path = "../web_server/cors" }
+switchy_web_server_cors = { path = "../web_server/cors" }
 ```
 
 ## Usage
@@ -47,7 +47,7 @@ moosicbox_web_server_cors = { path = "../web_server/cors" }
 ### Basic CORS Configuration
 
 ```rust
-use moosicbox_web_server_cors::Cors;
+use switchy_web_server_cors::Cors;
 use switchy_http_models::Method;
 
 // Create restrictive CORS policy
@@ -106,7 +106,7 @@ cors = cors.allowed_headers(vec![
 ### AllOrSome Usage
 
 ```rust
-use moosicbox_web_server_cors::AllOrSome;
+use switchy_web_server_cors::AllOrSome;
 
 // Check permission type
 match cors.allowed_origins {
