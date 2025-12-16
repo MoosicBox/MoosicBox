@@ -8,21 +8,21 @@
 //!
 //! The workspace abstraction is built around several core traits:
 //!
-//! - [`Workspace`] - Main trait for workspace operations (package enumeration, lockfile access)
-//! - [`Package`] - Represents a single package within a workspace
-//! - [`Lockfile`] - Parsed lockfile with dependency information
-//! - [`LockfileDiffParser`] - Parses git diffs of lockfiles to detect changed dependencies
+//! - `Workspace` - Main trait for workspace operations (package enumeration, lockfile access)
+//! - `Package` - Represents a single package within a workspace
+//! - `Lockfile` - Parsed lockfile with dependency information
+//! - `LockfileDiffParser` - Parses git diffs of lockfiles to detect changed dependencies
 //!
 //! ## Detection
 //!
-//! Use [`detect_workspaces`] to detect all workspaces at a given path, optionally filtered
-//! by workspace type. Use [`select_primary_workspace`] to select the highest-priority
+//! Use `detect_workspaces` to detect all workspaces at a given path, optionally filtered
+//! by workspace type. Use `select_primary_workspace` to select the highest-priority
 //! workspace when only one is needed.
 //!
 //! ## Workspace Types
 //!
-//! The [`WorkspaceType`] enum identifies workspace types for filtering and CLI integration.
-//! All workspaces implement the dyn-compatible [`Workspace`] trait, allowing for runtime
+//! The `WorkspaceType` enum identifies workspace types for filtering and CLI integration.
+//! All workspaces implement the dyn-compatible `Workspace` trait, allowing for runtime
 //! polymorphism via `Box<dyn Workspace>`.
 //!
 //! # Features
