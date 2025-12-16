@@ -60,6 +60,7 @@ fn validate_path(path: &str) -> Result<String, actix_web::Error> {
 }
 
 /// Binds all scan-related API endpoints to an Actix-Web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
