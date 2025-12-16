@@ -49,9 +49,9 @@ pub struct Api;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAudioOutputs {
-    /// Page offset for pagination.
+    /// Page offset for pagination
     offset: Option<u32>,
-    /// Maximum number of items to return.
+    /// Maximum number of items to return
     limit: Option<u32>,
 }
 

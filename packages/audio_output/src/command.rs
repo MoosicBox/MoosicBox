@@ -14,17 +14,17 @@ use thiserror::Error;
 /// These commands are sent through an [`AudioHandle`] to control playback.
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
-    /// Set the volume level (0.0 to 1.0).
+    /// Set the volume level (0.0 to 1.0)
     SetVolume(f64),
-    /// Pause audio playback.
+    /// Pause audio playback
     Pause,
-    /// Resume audio playback.
+    /// Resume audio playback
     Resume,
-    /// Seek to the specified position in seconds.
+    /// Seek to the specified position in seconds
     Seek(f64),
-    /// Flush buffered audio data.
+    /// Flush buffered audio data
     Flush,
-    /// Reset the audio output to its initial state.
+    /// Reset the audio output to its initial state
     Reset,
 }
 
@@ -33,9 +33,9 @@ pub enum AudioCommand {
 /// Indicates whether the command was processed successfully or failed.
 #[derive(Debug, Clone)]
 pub enum AudioResponse {
-    /// Command executed successfully.
+    /// Command executed successfully
     Success,
-    /// Command execution failed with error message.
+    /// Command execution failed with error message
     Error(String),
 }
 
@@ -44,9 +44,9 @@ pub enum AudioResponse {
 /// Contains the command to execute and optionally a channel for receiving the response.
 #[derive(Debug)]
 pub struct CommandMessage {
-    /// The command to execute.
+    /// The command to execute
     pub command: AudioCommand,
-    /// Optional channel for sending back the response.
+    /// Optional channel for sending back the response
     pub response_sender: Option<flume::Sender<AudioResponse>>,
 }
 
@@ -55,19 +55,19 @@ pub struct CommandMessage {
 /// These errors indicate failures in sending commands or receiving responses.
 #[derive(Debug, Error)]
 pub enum AudioError {
-    /// Command execution failed with error message.
+    /// Command execution failed with error message
     #[error("Command error: {0}")]
     Command(String),
-    /// Failed to send command through channel.
+    /// Failed to send command through channel
     #[error("Channel send error")]
     ChannelSend,
-    /// Failed to receive response through channel.
+    /// Failed to receive response through channel
     #[error("Channel receive error")]
     ChannelReceive,
-    /// Received unexpected response type.
+    /// Received unexpected response type
     #[error("Unexpected response type")]
     UnexpectedResponse,
-    /// Audio handle is not available.
+    /// Audio handle is not available
     #[error("Handle not available")]
     HandleNotAvailable,
 }
@@ -124,7 +124,7 @@ impl AudioHandle {
         Self { command_sender }
     }
 
-    /// Sets the volume of the audio output.
+    /// Set the volume of the audio output
     ///
     /// # Errors
     ///
@@ -136,7 +136,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Pauses the audio output.
+    /// Pause the audio output
     ///
     /// # Errors
     ///
@@ -147,7 +147,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Resumes the audio output.
+    /// Resume the audio output
     ///
     /// # Errors
     ///
@@ -159,7 +159,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Seeks to the specified position in the audio output.
+    /// Seek to the specified position in the audio output
     ///
     /// # Errors
     ///
@@ -171,7 +171,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Flushes the audio output.
+    /// Flush the audio output
     ///
     /// # Errors
     ///
@@ -182,7 +182,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Resets the audio output.
+    /// Reset the audio output
     ///
     /// # Errors
     ///
@@ -193,7 +193,7 @@ impl AudioHandle {
         Ok(())
     }
 
-    /// Immediately sets the volume of the audio output.
+    /// Immediately set the volume of the audio output
     ///
     /// This is a fire-and-forget command that does not wait for a response.
     /// It is intended to be used in situations where the caller wants to set the volume of the audio output
@@ -206,7 +206,7 @@ impl AudioHandle {
         self.send_command_fire_and_forget(AudioCommand::SetVolume(volume))
     }
 
-    /// Immediately pauses the audio output.
+    /// Immediately pause the audio output
     ///
     /// This is a fire-and-forget command that does not wait for a response.
     /// It is intended to be used in situations where the caller wants to pause the audio output
@@ -219,7 +219,7 @@ impl AudioHandle {
         self.send_command_fire_and_forget(AudioCommand::Pause)
     }
 
-    /// Immediately resumes the audio output.
+    /// Immediately resume the audio output
     ///
     /// This is a fire-and-forget command that does not wait for a response.
     /// It is intended to be used in situations where the caller wants to resume the audio output

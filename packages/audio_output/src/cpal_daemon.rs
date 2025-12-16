@@ -16,13 +16,13 @@ use ::cpal::traits::StreamTrait;
 /// on the underlying CPAL stream.
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
-    /// Pause the stream immediately.
+    /// Pause the stream
     Pause,
-    /// Resume playback from the current position.
+    /// Resume playback
     Resume,
-    /// Reset the stream by pausing it.
+    /// Reset the stream (pause it)
     Reset,
-    /// Set the volume to the specified level (0.0 to 1.0).
+    /// Set the volume to the specified level (0.0 to 1.0)
     SetVolume(f64),
 }
 
@@ -31,9 +31,9 @@ pub enum StreamCommand {
 /// Returned by the daemon thread after processing a [`StreamCommand`].
 #[derive(Debug, Clone)]
 pub enum StreamResponse {
-    /// Command executed successfully.
+    /// Command executed successfully
     Success,
-    /// Command execution failed with an error message.
+    /// Command execution failed with an error message
     Error(String),
 }
 
@@ -42,11 +42,11 @@ pub enum StreamResponse {
 /// These errors can occur when creating or controlling a CPAL stream daemon.
 #[derive(Debug, Clone)]
 pub enum StreamDaemonError {
-    /// Stream creation failed with the given error message.
+    /// Stream creation failed with the given error message
     StreamCreationFailed(String),
-    /// Stream operation failed with the given error message.
+    /// Stream operation failed with the given error message
     StreamOperationFailed(String),
-    /// The daemon has stopped and is no longer accepting commands.
+    /// The daemon has stopped and is no longer accepting commands
     DaemonStopped,
 }
 
@@ -57,7 +57,7 @@ pub enum StreamDaemonError {
 #[derive(Debug)]
 pub struct CpalStreamDaemon {
     daemon: ResourceDaemon<(), StreamDaemonError>,
-    /// Quit channel sender for immediate shutdown.
+    // Quit channel sender for immediate shutdown
     shutdown_sender: Option<flume::Sender<()>>,
 }
 
@@ -129,12 +129,10 @@ impl StreamHandle {
 }
 
 impl CpalStreamDaemon {
-    /// Creates a new CPAL stream daemon.
+    /// Create a new CPAL stream daemon
     ///
     /// The `stream_factory` function will be called in the daemon thread to create the stream.
     /// The `volume_atomic` will be used for volume control.
-    ///
-    /// Returns both the daemon and a [`StreamHandle`] for controlling the stream.
     ///
     /// # Errors
     ///
@@ -190,15 +188,13 @@ impl CpalStreamDaemon {
         Ok((stream_daemon, handle))
     }
 
-    /// Gets the current state of the daemon.
+    /// Get the current state of the daemon
     #[must_use]
     pub fn state(&self) -> DaemonState<StreamDaemonError> {
         self.daemon.state()
     }
 
-    /// Stops the daemon and releases resources.
-    ///
-    /// This signals the daemon thread to shut down and waits for it to finish.
+    /// Stop the daemon
     pub fn quit(&mut self, reason: StreamDaemonError) {
         // Send quit signal for immediate shutdown
         log::debug!("CpalStreamDaemon: quit called, sending quit signal");
