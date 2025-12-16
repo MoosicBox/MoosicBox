@@ -55,6 +55,8 @@ You may ONLY make changes for these reasons:
 
 - A major implemented feature is completely missing from README
 - Critical usage information is absent (e.g., how to use the main API)
+- Critical public API items lack documentation (main entry points, primary functions, core types users interact with)
+- CLI programs missing documentation for commands, subcommands, or important arguments
 
 **FORBIDDEN Changes (even if you think they would be "better"):**
 
@@ -97,6 +99,17 @@ READMEs are for **users of the package**, not maintainers. Only document the pub
 - Public configuration options
 - Integration examples for users
 
+**REQUIRED: Add Documentation for Critical Public APIs**
+
+While preserving existing README content and style, you MUST add documentation for critical public API items that are missing:
+
+- **Main entry points**: Primary functions/methods users call to use the library
+- **Core types**: Key structs, traits, and enums that users interact with directly
+- **CLI programs**: All commands, subcommands, and important arguments/flags with examples
+- **Configuration**: Public options that affect behavior
+
+This is NOT about documenting every `pub` item - focus on what users actually need to know to use the library effectively. If a user would be unable to use a key feature because it's undocumented, that's a fundamental omission that must be fixed.
+
 **DO NOT Document:**
 
 - Internal macros (`macro_rules!` not in public API)
@@ -114,10 +127,12 @@ READMEs are for **users of the package**, not maintainers. Only document the pub
 4. Only called within same crate = Internal
 
 **Decision Rule for Documentation:**
-When considering whether to document something, ask: "Would a user of this library as a dependency need to know this?"
+When considering whether to document something, ask: "Would a user of this library as a dependency need to know this to use the library effectively?"
 
-- YES (it's a public API they'll call) → Document it
-- NO (it's internal implementation) → Leave it out or remove it
+- YES (it's a critical API they'll use) → **Add documentation if missing**
+- NO (it's internal or rarely-used implementation detail) → Leave it out or remove it
+
+Note: Adding missing documentation for critical APIs is a **required fix**, not a stylistic improvement.
 
 ${include('commit-message-instructions', { commit_type: 'changes to the README', example_bullets: '- Removed claim about WebSocket support as the feature is not implemented in the codebase\\n- Added documentation for the new `connect_async` method which is exported in lib.rs but was missing from README', no_changes_message: 'No changes required - documentation is accurate' })}
 
