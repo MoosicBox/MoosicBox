@@ -646,6 +646,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
     }
 }
 
+/// Optimizes a list of canvas actions by removing redundant operations.
+///
+/// This function removes actions that are rendered obsolete by subsequent
+/// `Clear` or `ClearRect` operations:
+/// - All actions before a `Clear` are removed.
+/// - `FillRect` actions that intersect with a later `ClearRect` are removed.
 fn compact_canvas_actions(actions: &mut Vec<CanvasAction>) {
     let len = actions.len();
     let mut cleared = vec![];
@@ -682,35 +688,64 @@ fn compact_canvas_actions(actions: &mut Vec<CanvasAction>) {
     }
 }
 
+/// Internal application events for async operations.
 #[derive(Debug)]
 enum AppEvent {
-    LoadImage { source: String },
-    ProcessRoute { route: Route, container_id: usize },
+    /// Event to trigger loading an image from a source URL or path.
+    LoadImage {
+        /// The source URL or path of the image to load.
+        source: String,
+    },
+    /// Event to process a route request for a container.
+    ProcessRoute {
+        /// The route configuration to process.
+        route: Route,
+        /// The ID of the container that triggered the route.
+        container_id: usize,
+    },
 }
 
+/// Represents the state of an image being loaded or cached.
 #[derive(Clone)]
 enum AppImage {
+    /// Image is currently being loaded.
     Loading,
+    /// Image has been loaded successfully with its byte data.
     Bytes(Arc<[u8]>),
 }
 
+/// Context holding mutable state references used during rendering.
+///
+/// This struct aggregates all mutable state needed during a render pass,
+/// including viewport listeners, image cache, canvas actions, and more.
 struct RenderContext<'a> {
+    /// Map of viewport listeners by element ID for lazy loading.
     viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
+    /// Cache of loaded images keyed by source URL.
     images: &'a mut HashMap<String, AppImage>,
+    /// Pending canvas drawing actions by canvas ID.
     canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
+    /// Container IDs that have requested route processing.
     route_requests: &'a mut Vec<usize>,
+    /// Checkbox state by egui widget ID.
     checkboxes: &'a mut HashMap<egui::Id, bool>,
+    /// Element positions by element ID for position tracking.
     positions: &'a mut HashMap<usize, egui::Rect>,
+    /// Set of element IDs whose positions should be tracked.
     watch_positions: &'a mut HashSet<usize>,
-    // Shared action handler for all action processing
+    /// Shared action handler for all action processing.
     action_handler: EguiActionHandler<'a>,
-    // Action context for UI operations
+    /// Action context for UI operations like navigation and repaint.
     action_context: &'a EguiActionContext,
 }
 
+/// Internal application state for the egui renderer.
+///
+/// Manages all rendering state, communication channels, and UI widget state.
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
+    /// The egui context used for rendering.
     ctx: Arc<RwLock<Option<egui::Context>>>,
     calculator: Arc<RwLock<C>>,
     render_queue: Arc<RwLock<Option<VecDeque<RenderView>>>>,
@@ -753,11 +788,17 @@ type EguiActionHandler<'a> = hyperchad_actions::handler::ActionHandler<
     hyperchad_actions::handler::BTreeMapStyleManager<bool>,
 >;
 
-/// `ActionContext` implementation for egui renderer
+/// `ActionContext` implementation for egui renderer.
+///
+/// Provides context for executing actions including navigation,
+/// custom action requests, logging, and repaint requests.
 #[derive(Clone)]
 struct EguiActionContext {
+    /// The egui rendering context.
     ctx: Arc<RwLock<Option<egui::Context>>>,
+    /// Channel for sending navigation requests.
     sender: Sender<String>,
+    /// Channel for sending custom action requests.
     request_action: Sender<(String, Option<Value>)>,
 }
 
@@ -805,14 +846,22 @@ impl ActionContext for EguiActionContext {
     }
 }
 
-/// Custom element finder for Container since we can't use the wrapper approach effectively
+/// `ElementFinder` implementation for egui renderer.
+///
+/// Provides methods to find elements within the container tree
+/// by ID, string ID, class, or other attributes. Also provides
+/// access to element dimensions and positions.
 struct EguiElementFinder<'a> {
+    /// Root container to search within.
     container: &'a Container,
+    /// Cached element positions by ID.
     positions: std::collections::BTreeMap<usize, (f32, f32)>,
+    /// Cached element dimensions by ID.
     dimensions: std::collections::BTreeMap<usize, (f32, f32)>,
 }
 
 impl<'a> EguiElementFinder<'a> {
+    /// Creates a new element finder for the given container.
     const fn new(container: &'a Container) -> Self {
         Self {
             container,
@@ -876,6 +925,7 @@ impl hyperchad_actions::handler::ElementFinder for EguiElementFinder<'_> {
 }
 
 impl EguiElementFinder<'_> {
+    /// Finds a container by its numeric ID using depth-first search.
     fn find_element_by_id(container: &Container, id: usize) -> Option<&Container> {
         if container.id == id {
             return Some(container);
@@ -889,6 +939,7 @@ impl EguiElementFinder<'_> {
         None
     }
 
+    /// Finds a container by its string ID using depth-first search.
     fn find_element_by_str_id<'b>(container: &'b Container, str_id: &str) -> Option<&'b Container> {
         if container.str_id.as_deref() == Some(str_id) {
             return Some(container);
@@ -902,6 +953,7 @@ impl EguiElementFinder<'_> {
         None
     }
 
+    /// Finds a container by class name using depth-first search.
     fn find_element_by_class<'b>(container: &'b Container, class: &str) -> Option<&'b Container> {
         if container.classes.iter().any(|c| c == class) {
             return Some(container);
@@ -3713,6 +3765,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
     }
 }
 
+/// Converts a `HyperChad` cursor type to an egui cursor icon.
 const fn cursor_to_cursor_icon(cursor: Cursor) -> CursorIcon {
     match cursor {
         Cursor::Auto => CursorIcon::Default,
@@ -3743,8 +3796,12 @@ const fn cursor_to_cursor_icon(cursor: Cursor) -> CursorIcon {
     }
 }
 
+/// Epsilon value for floating-point comparisons.
 const EPSILON: f32 = 0.001;
 
+/// Gets the left offset (x offset + left margin) for a container.
+///
+/// Returns `None` if the offset is effectively zero.
 fn get_left_offset(x: impl AsRef<Container>) -> Option<f32> {
     let x = x.as_ref();
 
@@ -3754,6 +3811,9 @@ fn get_left_offset(x: impl AsRef<Container>) -> Option<f32> {
     if offset < EPSILON { None } else { Some(offset) }
 }
 
+/// Gets the top offset (y offset + top margin) for a container.
+///
+/// Returns `None` if the offset is effectively zero.
 fn get_top_offset(x: impl AsRef<Container>) -> Option<f32> {
     let x = x.as_ref();
 
@@ -3763,12 +3823,14 @@ fn get_top_offset(x: impl AsRef<Container>) -> Option<f32> {
     if offset < EPSILON { None } else { Some(offset) }
 }
 
+/// Calculates the remaining width after accounting for the left margin.
 fn get_remaining_offset_width(x: impl AsRef<Container>) -> f32 {
     let x = x.as_ref();
 
     x.bounding_calculated_width().unwrap_or_default() - x.calculated_margin_left.unwrap_or_default()
 }
 
+/// Calculates the remaining height after accounting for the top margin.
 fn get_remaining_offset_height(x: impl AsRef<Container>) -> f32 {
     let x = x.as_ref();
 
