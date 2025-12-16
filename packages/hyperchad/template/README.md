@@ -288,7 +288,7 @@ let visible = some_condition.to_bool();
 ```rust
 use hyperchad_template::IntoBorder;
 
-let border = ("red", 2).into_border(); // (Color, Number)
+let border = ("#ff0000", 2).into_border(); // (Color, Number)
 ```
 
 ### Action Effect Conversion
@@ -297,7 +297,7 @@ let border = ("red", 2).into_border(); // (Color, Number)
 use hyperchad_template::IntoActionEffect;
 use hyperchad_template::actions::ActionType;
 
-let effect = ActionType::show_str_id("element").into_action_effect();
+let effect = ActionType::show_by_id("element").into_action_effect();
 ```
 
 ## No-std Support
