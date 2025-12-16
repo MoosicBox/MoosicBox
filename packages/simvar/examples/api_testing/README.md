@@ -1,6 +1,6 @@
 # API Testing Simulation Example
 
-This example demonstrates API testing using simvar and moosicbox_web_server to validate REST endpoint behavior.
+This example demonstrates API testing using simvar and switchy_web_server to validate REST endpoint behavior.
 
 ## Overview
 
