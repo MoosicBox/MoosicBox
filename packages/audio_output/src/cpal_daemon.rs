@@ -10,44 +10,54 @@ use crate::resource_daemon::{DaemonState, QuitSignal, ResourceDaemon};
 // Import CPAL traits for stream control methods
 use ::cpal::traits::StreamTrait;
 
-/// Commands that can be sent to control the CPAL stream
+/// Commands that can be sent to control the CPAL stream.
+///
+/// These commands are processed by the daemon thread and executed
+/// on the underlying CPAL stream.
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
-    /// Pause the stream
+    /// Pause the stream immediately.
     Pause,
-    /// Resume playback
+    /// Resume playback from the current position.
     Resume,
-    /// Reset the stream (pause it)
+    /// Reset the stream by pausing it.
     Reset,
-    /// Set the volume to the specified level (0.0 to 1.0)
+    /// Set the volume to the specified level (0.0 to 1.0).
     SetVolume(f64),
 }
 
-/// Response from stream command execution
+/// Response from stream command execution.
+///
+/// Returned by the daemon thread after processing a [`StreamCommand`].
 #[derive(Debug, Clone)]
 pub enum StreamResponse {
-    /// Command executed successfully
+    /// Command executed successfully.
     Success,
-    /// Command execution failed with an error message
+    /// Command execution failed with an error message.
     Error(String),
 }
 
-/// Error type for stream daemon operations
+/// Error type for stream daemon operations.
+///
+/// These errors can occur when creating or controlling a CPAL stream daemon.
 #[derive(Debug, Clone)]
 pub enum StreamDaemonError {
-    /// Stream creation failed with the given error message
+    /// Stream creation failed with the given error message.
     StreamCreationFailed(String),
-    /// Stream operation failed with the given error message
+    /// Stream operation failed with the given error message.
     StreamOperationFailed(String),
-    /// The daemon has stopped and is no longer accepting commands
+    /// The daemon has stopped and is no longer accepting commands.
     DaemonStopped,
 }
 
-/// A Send+Sync handle for controlling a CPAL stream that lives in a dedicated thread
+/// A Send+Sync handle for controlling a CPAL stream that lives in a dedicated thread.
+///
+/// The daemon manages a `!Send` CPAL stream by keeping it confined to a single thread
+/// and providing a thread-safe interface for external control through [`StreamHandle`].
 #[derive(Debug)]
 pub struct CpalStreamDaemon {
     daemon: ResourceDaemon<(), StreamDaemonError>,
-    // Quit channel sender for immediate shutdown
+    /// Quit channel sender for immediate shutdown.
     shutdown_sender: Option<flume::Sender<()>>,
 }
 
@@ -119,10 +129,12 @@ impl StreamHandle {
 }
 
 impl CpalStreamDaemon {
-    /// Create a new CPAL stream daemon
+    /// Creates a new CPAL stream daemon.
     ///
     /// The `stream_factory` function will be called in the daemon thread to create the stream.
     /// The `volume_atomic` will be used for volume control.
+    ///
+    /// Returns both the daemon and a [`StreamHandle`] for controlling the stream.
     ///
     /// # Errors
     ///
@@ -178,13 +190,15 @@ impl CpalStreamDaemon {
         Ok((stream_daemon, handle))
     }
 
-    /// Get the current state of the daemon
+    /// Gets the current state of the daemon.
     #[must_use]
     pub fn state(&self) -> DaemonState<StreamDaemonError> {
         self.daemon.state()
     }
 
-    /// Stop the daemon
+    /// Stops the daemon and releases resources.
+    ///
+    /// This signals the daemon thread to shut down and waits for it to finish.
     pub fn quit(&mut self, reason: StreamDaemonError) {
         // Send quit signal for immediate shutdown
         log::debug!("CpalStreamDaemon: quit called, sending quit signal");

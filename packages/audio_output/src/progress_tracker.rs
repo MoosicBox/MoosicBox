@@ -31,7 +31,7 @@ pub struct ProgressTracker {
 }
 
 impl ProgressTracker {
-    /// Create a new `ProgressTracker` with the specified threshold.
+    /// Creates a new `ProgressTracker` with the specified threshold.
     ///
     /// # Arguments
     /// * `threshold` - Minimum position change in seconds before calling the progress callback (default: 0.1)
@@ -47,7 +47,7 @@ impl ProgressTracker {
         }
     }
 
-    /// Set the audio specification (sample rate and channels).
+    /// Sets the audio specification (sample rate and channels).
     ///
     /// This should be called when the audio format is known.
     pub fn set_audio_spec(&self, sample_rate: u32, channels: u32) {
@@ -56,7 +56,7 @@ impl ProgressTracker {
         log::debug!("ProgressTracker: audio spec set - rate={sample_rate}, channels={channels}");
     }
 
-    /// Set the progress callback function.
+    /// Sets the progress callback function.
     ///
     /// The callback will be called whenever the playback position changes by more than the threshold.
     pub fn set_callback(&self, callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>) {
@@ -68,7 +68,7 @@ impl ProgressTracker {
         }
     }
 
-    /// Get a reference to the consumed samples counter.
+    /// Gets a reference to the consumed samples counter.
     ///
     /// This can be passed to `AudioOutput` implementations that need to track consumed samples.
     #[must_use]
@@ -76,7 +76,7 @@ impl ProgressTracker {
         self.consumed_samples.clone()
     }
 
-    /// Update the consumed samples count and potentially trigger the progress callback.
+    /// Updates the consumed samples count and potentially triggers the progress callback.
     ///
     /// This method should be called by `AudioOutput` implementations when samples are consumed.
     /// It will automatically calculate the current position and call the progress callback
@@ -117,7 +117,7 @@ impl ProgressTracker {
         }
     }
 
-    /// Get the current playback position in seconds.
+    /// Gets the current playback position in seconds.
     ///
     /// Returns `None` if audio spec hasn't been set yet.
     #[must_use]
@@ -134,7 +134,7 @@ impl ProgressTracker {
         }
     }
 
-    /// Set the consumed samples count to a specific value.
+    /// Sets the consumed samples count to a specific value.
     ///
     /// This is useful for seeking operations where the position needs to be set to a specific value.
     pub fn set_consumed_samples(&self, samples: usize) {
@@ -149,7 +149,7 @@ impl ProgressTracker {
         log::debug!("ProgressTracker: consumed samples set to {samples}");
     }
 
-    /// Reset the progress tracker for a new track.
+    /// Resets the progress tracker for a new track.
     ///
     /// This clears the consumed samples count and last reported position.
     pub fn reset(&self) {
@@ -158,7 +158,7 @@ impl ProgressTracker {
         log::debug!("ProgressTracker: reset for new track");
     }
 
-    /// Get clones of the internal atomic references for use in audio callbacks.
+    /// Gets clones of the internal atomic references for use in audio callbacks.
     ///
     /// This is useful for audio implementations that need to access the tracking state
     /// from within audio callback functions where `&self` is not available.
@@ -184,7 +184,7 @@ impl ProgressTracker {
         )
     }
 
-    /// Update consumed samples and check for progress callback (optimized for audio callbacks).
+    /// Updates consumed samples and checks for progress callback (optimized for audio callbacks).
     ///
     /// This is a convenience method that can be used directly in audio callbacks
     /// using the references obtained from `get_callback_refs()`.

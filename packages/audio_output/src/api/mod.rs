@@ -31,8 +31,10 @@ pub fn bind_services<
     scope.service(audio_outputs_endpoint)
 }
 
-#[cfg(feature = "openapi")]
 /// `OpenAPI` documentation for the audio output API.
+///
+/// Provides schema definitions and endpoint documentation for the audio output API.
+#[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Audio Output")),
@@ -42,12 +44,14 @@ pub fn bind_services<
 pub struct Api;
 
 /// Query parameters for retrieving audio outputs.
+///
+/// Used for paginated requests to the audio outputs endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAudioOutputs {
-    /// Page offset for pagination
+    /// Page offset for pagination.
     offset: Option<u32>,
-    /// Maximum number of items to return
+    /// Maximum number of items to return.
     limit: Option<u32>,
 }
 
