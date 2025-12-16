@@ -1123,16 +1123,25 @@ runs:
                 echo "pr_action=created" >> $GITHUB_OUTPUT
 
                 # Pass PR body directly with proper quoting to prevent bash interpretation
+                # Note: Labels are added separately to avoid permission issues with GITHUB_TOKEN
                 PR_URL=$(gh pr create \
                   --base "${{ inputs.pr_base_branch }}" \
                   --head "${{ inputs.branch_name }}" \
                   --title "$PR_TITLE" \
-                  --body "$PR_BODY" \
-                  --label "${{ inputs.pr_labels }}")
+                  --body "$PR_BODY")
 
                 PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
                 echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
                 echo "pr_created=true" >> $GITHUB_OUTPUT
                 echo "✅ Created PR #$PR_NUMBER: $PR_URL"
+
+                # Add labels separately (best effort - don't fail if permission denied)
+                if [ -n "${{ inputs.pr_labels }}" ]; then
+                  if gh pr edit "$PR_NUMBER" --add-label "${{ inputs.pr_labels }}" 2>/dev/null; then
+                    echo "✅ Added labels: ${{ inputs.pr_labels }}"
+                  else
+                    echo "⚠️ Could not add labels (permission denied or labels don't exist)"
+                  fi
+                fi
               fi
