@@ -1,0 +1,48 @@
+{
+  "lockfileVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "bun-monorepo",
+      "dependencies": {},
+      "devDependencies": {
+        "typescript": "^5.0.0"
+      }
+    },
+    "packages/api": {
+      "name": "@myorg/api",
+      "dependencies": {
+        "@myorg/models": "workspace:*",
+        "express": "^4.18.2"
+      }
+    },
+    "packages/client": {
+      "name": "@myorg/client",
+      "dependencies": {
+        "@myorg/models": "workspace:*",
+        "lodash": "^4.17.21"
+      }
+    },
+    "packages/models": {
+      "name": "@myorg/models",
+      "dependencies": {
+        "zod": "^3.22.4"
+      }
+    }
+  },
+  "packages": {
+    "@myorg/api": ["packages/api", {}],
+    "@myorg/client": ["packages/client", {}],
+    "@myorg/models": ["packages/models", {}],
+    "accepts": ["accepts@1.3.8", "sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==", {}],
+    "body-parser": ["body-parser@1.20.1", "sha512-jWi7abTbYwajOytWCQc37VulmWiRae5RyTpaCyDcS5/lMdtwSz5lOpDE67srw/HYe35f1z3fDQw+3txg7gNtWw==", {}],
+    "express": ["express@4.18.2", "sha512-5/PsL6iGPdfQ/lKM1UuielYgv3BUoJfz1aUwU9vHZ+J7gyvwdQXFEBIEIaxeGf0GIcreATNyBExtalisDbuMqQ==", {
+      "dependencies": {
+        "accepts": "~1.3.8",
+        "body-parser": "1.20.1"
+      }
+    }],
+    "lodash": ["lodash@4.17.21", "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==", {}],
+    "typescript": ["typescript@5.3.3", "sha512-pXWcraxM0uxAS+tN0AG/BF2TyqmHO014Z070UsJ+pFvYuRSq8KH8DmWpnbXe0pEPDHXZV3FcAbJkijJ5oNEnWw==", {}],
+    "zod": ["zod@3.22.4", "sha512-iC+8Io04lddc+mVqQ9AZ7OQ2MrUKGN+oIQyq1vemgt46jwCwLfHq7N53E8HGo4WEg1lorF2U2D3B3mLVhPJlCA==", {}]
+  }
+}

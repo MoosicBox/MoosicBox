@@ -2736,6 +2736,7 @@ name = "clippier"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "clap 4.5.53",
  "clippier_test_utilities",
@@ -2750,6 +2751,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_yaml 0.9.34+deprecated",
  "switchy_async",
  "switchy_fs",
  "switchy_random",

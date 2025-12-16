@@ -70,6 +70,17 @@ pub mod tools;
 #[cfg(feature = "_transforms")]
 pub mod transforms;
 
+/// Generic workspace abstraction for monorepo support.
+///
+/// This module provides a unified interface for working with different workspace types:
+/// - Cargo workspaces (Rust) - enabled with `cargo-workspace` feature
+/// - Node.js workspaces (npm, pnpm, bun) - enabled with `node-workspace` feature
+///
+/// The workspace abstraction enables generic dependency analysis, lockfile parsing,
+/// and affected package detection across different ecosystems.
+#[cfg(feature = "_workspace")]
+pub mod workspace;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -3714,9 +3725,14 @@ pub async fn handle_features_command(
     include_if: &[String],
     #[cfg(feature = "_transforms")] transform_scripts: &[std::path::PathBuf],
     #[cfg(feature = "_transforms")] transform_trace: bool,
+    #[cfg(feature = "_workspace")] workspace_type: Option<&[workspace::WorkspaceType]>,
     output: OutputType,
 ) -> Result<String, BoxError> {
     use std::str::FromStr;
+
+    // Log the workspace type for debugging
+    #[cfg(feature = "_workspace")]
+    log::debug!("Using workspace type filter: {workspace_type:?}");
 
     let path = std::path::PathBuf::from_str(file)?;
     let specific_features = features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
@@ -3731,40 +3747,56 @@ pub async fn handle_features_command(
     {
         log::debug!("Filtering to specific packages: {selected_packages:?}");
 
-        // Get workspace members
-        let workspace_cargo_path = path.join("Cargo.toml");
-        let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
-        let workspace_value: Value = toml::from_str(&workspace_source)?;
+        // Detect workspace using the abstraction
+        #[cfg(feature = "_workspace")]
+        let workspaces = workspace::detect_workspaces(&path, workspace_type).await?;
+        #[cfg(feature = "_workspace")]
+        let detected_workspace = workspace::select_primary_workspace(workspaces);
 
-        let workspace_members_raw = workspace_value
-            .get("workspace")
-            .and_then(|x| x.get("members"))
-            .and_then(|x| x.as_array())
-            .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
-            .unwrap_or_default();
+        #[cfg(feature = "_workspace")]
+        let package_name_to_path = if let Some(ws) = detected_workspace.as_ref() {
+            ws.package_name_to_path().await?
+        } else {
+            std::collections::BTreeMap::new()
+        };
 
-        // Expand glob patterns in workspace members
-        let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
+        // Fallback for when no workspace features are enabled
+        #[cfg(not(feature = "_workspace"))]
+        let package_name_to_path = {
+            let workspace_cargo_path = path.join("Cargo.toml");
+            let workspace_source =
+                switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
+            let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-        // Map package names to paths
-        let mut package_name_to_path = BTreeMap::new();
-        for member_path in &workspace_members {
-            let full_path = path.join(member_path);
-            let cargo_path = full_path.join("Cargo.toml");
+            let workspace_members_raw = workspace_value
+                .get("workspace")
+                .and_then(|x| x.get("members"))
+                .and_then(|x| x.as_array())
+                .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+                .unwrap_or_default();
 
-            if switchy_fs::unsync::exists(&cargo_path).await {
-                let source = switchy_fs::unsync::read_to_string(&cargo_path).await?;
-                let value: Value = toml::from_str(&source)?;
+            let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
 
-                if let Some(package_name) = value
-                    .get("package")
-                    .and_then(|x| x.get("name"))
-                    .and_then(|x| x.as_str())
-                {
-                    package_name_to_path.insert(package_name.to_string(), member_path.clone());
+            let mut package_name_to_path = BTreeMap::new();
+            for member_path in &workspace_members {
+                let full_path = path.join(member_path);
+                let cargo_path = full_path.join("Cargo.toml");
+
+                if switchy_fs::unsync::exists(&cargo_path).await {
+                    let source = switchy_fs::unsync::read_to_string(&cargo_path).await?;
+                    let value: Value = toml::from_str(&source)?;
+
+                    if let Some(package_name) = value
+                        .get("package")
+                        .and_then(|x| x.get("name"))
+                        .and_then(|x| x.as_str())
+                    {
+                        package_name_to_path.insert(package_name.to_string(), member_path.clone());
+                    }
                 }
             }
-        }
+            package_name_to_path
+        };
 
         // Get all available package names for wildcard expansion
         let all_package_names: Vec<String> = package_name_to_path.keys().cloned().collect();
@@ -4287,6 +4319,7 @@ pub async fn handle_affected_packages_command(
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
     include_reasoning: bool,
     ignore_patterns: Option<&[String]>,
+    #[cfg(feature = "_workspace")] workspace_type: Option<&[workspace::WorkspaceType]>,
     output: OutputType,
 ) -> Result<String, BoxError> {
     #[cfg(feature = "git-diff")]
@@ -4294,6 +4327,10 @@ pub async fn handle_affected_packages_command(
         build_external_dependency_map, extract_changed_dependencies_from_git,
         find_packages_affected_by_external_deps_with_mapping, get_changed_files_from_git,
     };
+
+    // Log the workspace type for debugging
+    #[cfg(feature = "_workspace")]
+    log::debug!("Using workspace type filter: {workspace_type:?}");
 
     // Combine manual changed files with git-extracted files
     let mut all_changed_files = changed_files.to_vec();
@@ -4307,30 +4344,50 @@ pub async fn handle_affected_packages_command(
         log::debug!("Git changed files: {git_changed_files:?}");
         all_changed_files.extend(git_changed_files);
 
-        // Analyze external dependency changes from Cargo.lock
-        log::debug!("Analyzing external dependency changes from Cargo.lock");
+        // Analyze external dependency changes from lockfile
+        log::debug!("Analyzing external dependency changes from lockfile");
         if let Ok(changed_external_deps) =
             extract_changed_dependencies_from_git(workspace_root, base, head, &all_changed_files)
         {
             log::debug!("Changed external dependencies: {changed_external_deps:?}");
 
             if !changed_external_deps.is_empty() {
-                // Get workspace members for building external dependency map
-                let workspace_cargo_path = workspace_root.join("Cargo.toml");
-                let workspace_source =
-                    switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
-                let workspace_value: Value = toml::from_str(&workspace_source)?;
+                // Get workspace members using workspace abstraction
+                #[cfg(feature = "_workspace")]
+                let workspace_members_owned = {
+                    let workspaces =
+                        workspace::detect_workspaces(workspace_root, workspace_type).await;
+                    workspaces
+                        .ok()
+                        .and_then(workspace::select_primary_workspace)
+                        .map_or_else(Vec::new, |ws| ws.member_patterns().to_vec())
+                };
 
-                if let Some(workspace_members_raw) = workspace_value
-                    .get("workspace")
-                    .and_then(|x| x.get("members"))
-                    .and_then(|x| x.as_array())
-                    .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
-                {
-                    // Expand glob patterns in workspace members
-                    let workspace_members_owned =
-                        expand_workspace_member_globs(workspace_root, &workspace_members_raw);
+                #[cfg(not(feature = "_workspace"))]
+                let workspace_members_owned = {
+                    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+                    if let Ok(workspace_source) =
+                        switchy_fs::unsync::read_to_string(&workspace_cargo_path).await
+                    {
+                        if let Ok(workspace_value) = toml::from_str::<Value>(&workspace_source) {
+                            workspace_value
+                                .get("workspace")
+                                .and_then(|x| x.get("members"))
+                                .and_then(|x| x.as_array())
+                                .and_then(|x| {
+                                    x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>()
+                                })
+                                .map(|raw| expand_workspace_member_globs(workspace_root, &raw))
+                                .unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        }
+                    } else {
+                        Vec::new()
+                    }
+                };
 
+                if !workspace_members_owned.is_empty() {
                     // Build external dependency map and find affected packages
                     if let Ok(external_dep_map) =
                         build_external_dependency_map(workspace_root, &workspace_members_owned)
@@ -4667,7 +4724,7 @@ pub fn handle_validate_feature_propagation_command(
 /// * If the git-diff feature is required but not enabled
 /// * If git diff analysis fails when `git_base` and `git_head` are provided
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn handle_packages_command(
+pub async fn handle_packages_command(
     file: &str,
     os: Option<&str>,
     packages: Option<&[String]>,
@@ -4679,45 +4736,71 @@ pub fn handle_packages_command(
     #[cfg(feature = "git-diff")] ignore_patterns: Option<&[String]>,
     skip_if: &[String],
     include_if: &[String],
+    #[cfg(feature = "_workspace")] workspace_type: Option<&[workspace::WorkspaceType]>,
     output: OutputType,
 ) -> Result<String, BoxError> {
     use std::str::FromStr;
 
+    // Log the workspace type for debugging
+    #[cfg(feature = "_workspace")]
+    log::debug!("Using workspace type filter: {workspace_type:?}");
+
     let path = std::path::PathBuf::from_str(file)?;
 
-    let workspace_cargo_path = path.join("Cargo.toml");
-    let workspace_source = switchy_fs::sync::read_to_string(&workspace_cargo_path)?;
-    let workspace_value: Value = toml::from_str(&workspace_source)?;
+    // Detect workspace using the abstraction
+    #[cfg(feature = "_workspace")]
+    let workspaces = workspace::detect_workspaces(&path, workspace_type).await?;
+    #[cfg(feature = "_workspace")]
+    let detected_workspace = workspace::select_primary_workspace(workspaces);
 
-    let workspace_members_raw = workspace_value
-        .get("workspace")
-        .and_then(|x| x.get("members"))
-        .and_then(|x| x.as_array())
-        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
-        .unwrap_or_default();
+    #[cfg(feature = "_workspace")]
+    let workspace_members: Vec<String> = detected_workspace
+        .as_ref()
+        .map_or_else(Vec::new, |ws| ws.member_patterns().to_vec());
 
-    // Expand glob patterns in workspace members
-    let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
+    #[cfg(feature = "_workspace")]
+    let package_name_to_path = if let Some(ws) = detected_workspace.as_ref() {
+        ws.package_name_to_path().await?
+    } else {
+        BTreeMap::new()
+    };
 
-    let mut package_name_to_path = BTreeMap::new();
+    // Fallback for when no workspace features are enabled
+    #[cfg(not(feature = "_workspace"))]
+    let (workspace_members, package_name_to_path) = {
+        let workspace_cargo_path = path.join("Cargo.toml");
+        let workspace_source = switchy_fs::unsync::read_to_string(&workspace_cargo_path).await?;
+        let workspace_value: Value = toml::from_str(&workspace_source)?;
 
-    for member_path in &workspace_members {
-        let full_path = path.join(member_path);
-        let cargo_path = full_path.join("Cargo.toml");
+        let workspace_members_raw = workspace_value
+            .get("workspace")
+            .and_then(|x| x.get("members"))
+            .and_then(|x| x.as_array())
+            .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+            .unwrap_or_default();
 
-        if switchy_fs::exists(&cargo_path) {
-            let source = switchy_fs::sync::read_to_string(&cargo_path)?;
-            let value: Value = toml::from_str(&source)?;
+        let workspace_members = expand_workspace_member_globs(&path, &workspace_members_raw);
 
-            if let Some(package_name) = value
-                .get("package")
-                .and_then(|x| x.get("name"))
-                .and_then(|x| x.as_str())
-            {
-                package_name_to_path.insert(package_name.to_string(), member_path.clone());
+        let mut package_name_to_path = BTreeMap::new();
+        for member_path in &workspace_members {
+            let full_path = path.join(member_path);
+            let cargo_path = full_path.join("Cargo.toml");
+
+            if switchy_fs::unsync::exists(&cargo_path).await {
+                let source = switchy_fs::unsync::read_to_string(&cargo_path).await?;
+                let value: Value = toml::from_str(&source)?;
+
+                if let Some(package_name) = value
+                    .get("package")
+                    .and_then(|x| x.get("name"))
+                    .and_then(|x| x.as_str())
+                {
+                    package_name_to_path.insert(package_name.to_string(), member_path.clone());
+                }
             }
         }
-    }
+        (workspace_members, package_name_to_path)
+    };
 
     // Get all available package names for wildcard expansion
     let all_package_names: Vec<String> = package_name_to_path.keys().cloned().collect();

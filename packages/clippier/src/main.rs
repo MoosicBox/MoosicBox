@@ -162,6 +162,12 @@ enum Commands {
         #[arg(long)]
         transform_trace: bool,
 
+        /// Workspace type(s) to use. Can be specified multiple times.
+        /// If not specified, all workspace types are detected and the highest priority (cargo) is used.
+        #[cfg(feature = "_workspace")]
+        #[arg(long, value_enum)]
+        workspace_type: Option<Vec<clippier::workspace::WorkspaceType>>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -246,6 +252,11 @@ enum Commands {
         /// Can be specified multiple times. Use "!" prefix for negation (e.g., "!important.md")
         #[arg(long, action = clap::ArgAction::Append)]
         ignore: Vec<String>,
+        /// Workspace type(s) to use. Can be specified multiple times.
+        /// If not specified, all workspace types are detected and the highest priority (cargo) is used.
+        #[cfg(feature = "_workspace")]
+        #[arg(long, value_enum)]
+        workspace_type: Option<Vec<clippier::workspace::WorkspaceType>>,
         /// Output format
         #[arg(long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
@@ -402,6 +413,12 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         include_if: Vec<String>,
 
+        /// Workspace type(s) to use. Can be specified multiple times.
+        /// If not specified, all workspace types are detected and the highest priority (cargo) is used.
+        #[cfg(feature = "_workspace")]
+        #[arg(long, value_enum)]
+        workspace_type: Option<Vec<clippier::workspace::WorkspaceType>>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
@@ -532,6 +549,8 @@ async fn main() -> Result<(), BoxError> {
             transform_scripts,
             #[cfg(feature = "_transforms")]
             transform_trace,
+            #[cfg(feature = "_workspace")]
+            workspace_type,
             output,
         } => {
             handle_features_command(
@@ -565,6 +584,8 @@ async fn main() -> Result<(), BoxError> {
                 &transform_scripts,
                 #[cfg(feature = "_transforms")]
                 transform_trace,
+                #[cfg(feature = "_workspace")]
+                workspace_type.as_deref(),
                 output,
             )
             .await?
@@ -626,6 +647,8 @@ async fn main() -> Result<(), BoxError> {
             git_head,
             include_reasoning,
             ignore,
+            #[cfg(feature = "_workspace")]
+            workspace_type,
             output,
         } => {
             handle_affected_packages_command(
@@ -642,6 +665,8 @@ async fn main() -> Result<(), BoxError> {
                 } else {
                     Some(&ignore)
                 },
+                #[cfg(feature = "_workspace")]
+                workspace_type.as_deref(),
                 output,
             )
             .await?
@@ -730,25 +755,32 @@ async fn main() -> Result<(), BoxError> {
             ignore,
             skip_if,
             include_if,
+            #[cfg(feature = "_workspace")]
+            workspace_type,
             output,
-        } => handle_packages_command(
-            &file,
-            os.as_deref(),
-            packages.as_deref(),
-            changed_files.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_base.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_head.as_deref(),
-            #[cfg(feature = "git-diff")]
-            include_reasoning,
-            max_parallel,
-            #[cfg(feature = "git-diff")]
-            Some(&ignore),
-            &skip_if,
-            &include_if,
-            output,
-        )?,
+        } => {
+            handle_packages_command(
+                &file,
+                os.as_deref(),
+                packages.as_deref(),
+                changed_files.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_base.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_head.as_deref(),
+                #[cfg(feature = "git-diff")]
+                include_reasoning,
+                max_parallel,
+                #[cfg(feature = "git-diff")]
+                Some(&ignore),
+                &skip_if,
+                &include_if,
+                #[cfg(feature = "_workspace")]
+                workspace_type.as_deref(),
+                output,
+            )
+            .await?
+        }
         Commands::WorkspaceToolchains {
             workspace_root,
             os,

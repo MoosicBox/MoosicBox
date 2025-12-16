@@ -1,0 +1,12 @@
+{
+  "name": "@myorg/api",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@myorg/models": "workspace:*",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

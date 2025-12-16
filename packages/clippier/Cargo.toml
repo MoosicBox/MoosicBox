@@ -27,23 +27,36 @@ required-features = []
 
 [dependencies]
 moosicbox_logging = { workspace = true, features = ["free_log"] }
-switchy_async     = { workspace = true, features = ["macros", "process", "tokio"] }
-switchy_fs        = { workspace = true, features = ["async", "std", "sync", "tokio"] }
-switchy_random    = { workspace = true, features = ["rand"] }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "process",
+    "sync",
+    "tokio",
+] }
+switchy_fs = { workspace = true, features = [
+    "async",
+    "simulator-real-fs",
+    "std",
+    "sync",
+    "tokio",
+] }
+switchy_random = { workspace = true, features = ["rand"] }
 
-anyhow     = { workspace = true }
-chrono     = { workspace = true }
-clap       = { workspace = true }
-globset    = { workspace = true }
-itertools  = { workspace = true }
-log        = { workspace = true }
-rayon      = { workspace = true, optional = true }
-regex      = { workspace = true }
-serde      = { workspace = true }
-serde_json = { workspace = true }
-thiserror  = { workspace = true }
-toml       = { workspace = true }
-which      = { workspace = true, optional = true, features = ["real-sys"] }
+anyhow      = { workspace = true }
+async-trait = { workspace = true }
+chrono      = { workspace = true }
+clap        = { workspace = true }
+globset     = { workspace = true }
+itertools   = { workspace = true }
+log         = { workspace = true }
+rayon       = { workspace = true, optional = true }
+regex       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+serde_yaml  = { workspace = true, optional = true }
+thiserror   = { workspace = true }
+toml        = { workspace = true }
+which       = { workspace = true, optional = true, features = ["real-sys"] }
 
 git2 = { workspace = true, optional = true }
 mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
@@ -54,7 +67,14 @@ insta                   = { workspace = true, features = ["json", "redactions", 
 test-log                = { workspace = true }
 
 [features]
-default = ["check", "format", "git-diff", "transforms-vendored"]
+default = [
+    "cargo-workspace",
+    "check",
+    "format",
+    "git-diff",
+    "node-workspace",
+    "transforms-vendored",
+]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
@@ -62,6 +82,11 @@ fail-on-warnings = [
     "switchy_fs/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
+
+# Workspace type support
+_workspace      = []
+cargo-workspace = ["_workspace"]
+node-workspace  = ["_workspace", "dep:serde_yaml"]
 
 _tools              = ["dep:rayon", "dep:which"]
 _transforms         = []

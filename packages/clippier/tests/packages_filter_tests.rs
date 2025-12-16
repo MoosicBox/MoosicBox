@@ -33,6 +33,7 @@ async fn test_packages_filter_single_package() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -81,6 +82,7 @@ async fn test_packages_filter_multiple_packages() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -136,6 +138,7 @@ async fn test_packages_filter_empty_list() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -167,6 +170,7 @@ async fn test_packages_filter_empty_list() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -220,6 +224,7 @@ async fn test_packages_with_os_filter() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -266,6 +271,7 @@ async fn test_packages_with_chunking() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -321,6 +327,7 @@ async fn test_packages_with_features_filter() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -373,6 +380,7 @@ async fn test_packages_nonexistent_package() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -420,6 +428,7 @@ async fn test_packages_mixed_valid_invalid() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -471,6 +480,7 @@ async fn test_packages_case_sensitivity() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -513,6 +523,7 @@ async fn test_packages_raw_output_format() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Raw,
     )
     .await;

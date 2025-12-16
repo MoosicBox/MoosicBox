@@ -267,6 +267,7 @@ async fn test_ci_steps_with_command_and_toolchain() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -343,6 +344,7 @@ async fn test_ci_steps_mixed_entries() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -410,6 +412,7 @@ async fn test_ci_steps_with_features() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -468,6 +471,7 @@ async fn test_ci_steps_json_output_structure() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -569,6 +573,7 @@ async fn test_handle_features_command_basic() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Raw,
     )
     .await;
@@ -760,6 +765,7 @@ async fn test_handle_features_command_comprehensive() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -898,6 +904,7 @@ serde = "1.0"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -950,6 +957,7 @@ serde = "1.0"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -1160,6 +1168,7 @@ async fn test_handle_features_command_with_git_submodules() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -1304,8 +1313,10 @@ async fn test_handle_packages_command_basic() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1345,8 +1356,10 @@ async fn test_handle_packages_command_json_output() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1377,8 +1390,10 @@ async fn test_handle_packages_command_raw_output() {
         None,
         &[],
         &[],
+        None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_raw = result.unwrap();
@@ -1414,8 +1429,10 @@ async fn test_handle_packages_command_with_specific_packages() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1455,8 +1472,10 @@ async fn test_handle_packages_command_with_max_parallel() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1488,8 +1507,10 @@ async fn test_handle_packages_command_no_os_filter() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1527,8 +1548,10 @@ async fn test_handle_packages_command_nonexistent_package() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1567,8 +1590,10 @@ members = []
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1606,8 +1631,10 @@ async fn test_handle_packages_command_with_changed_files() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1649,8 +1676,10 @@ async fn test_handle_packages_command_changed_files_with_dependencies() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1689,8 +1718,10 @@ async fn test_handle_packages_command_with_include_reasoning() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1726,8 +1757,10 @@ async fn test_handle_packages_command_mixed_valid_invalid() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();
@@ -1768,8 +1801,10 @@ async fn test_handle_packages_command_all_packages() {
         None,
         &[],
         &[],
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let packages_json = result.unwrap();

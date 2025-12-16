@@ -31,6 +31,7 @@ async fn test_git_submodules_propagates_through_build_deps() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -82,6 +83,7 @@ async fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -133,6 +135,7 @@ async fn test_dependencies_propagate_and_merge() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -196,6 +199,7 @@ async fn test_dependencies_propagate_to_root() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -259,6 +263,7 @@ async fn test_ci_steps_propagate_and_preserve_order() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -326,6 +331,7 @@ async fn test_env_vars_propagate_with_overlay() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -394,6 +400,7 @@ async fn test_nightly_does_not_propagate() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -442,6 +449,7 @@ async fn test_propagation_with_all_workspace_packages() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;
@@ -493,6 +501,7 @@ async fn test_external_deps_dont_break_propagation() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None,
         OutputType::Json,
     )
     .await;

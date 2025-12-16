@@ -136,6 +136,7 @@ async fn test_basic_chunking_respects_limit() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -182,6 +183,7 @@ async fn test_basic_chunking_respects_limit() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -234,6 +236,7 @@ async fn test_basic_spreading_distributes_features() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -289,6 +292,7 @@ async fn test_chunking_and_spreading_combination() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -347,6 +351,7 @@ async fn test_max_parallel_with_chunking() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -404,6 +409,7 @@ async fn test_changed_files_respects_chunking_and_spreading() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -468,6 +474,7 @@ async fn test_chunking_with_small_limit() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -520,6 +527,7 @@ async fn test_empty_workspace_with_chunking_spreading() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -614,6 +622,7 @@ serde = "1.0"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -671,6 +680,7 @@ async fn test_complex_scenario_all_flags() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -726,6 +736,7 @@ async fn test_chunking_without_spreading() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -818,6 +829,7 @@ members = ["packages/minimal"]
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -911,6 +923,7 @@ members = ["packages/pkg_a", "packages/pkg_b", "packages/pkg_c"]
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -969,6 +982,7 @@ async fn test_spreading_without_chunking() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1070,6 +1084,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1176,6 +1191,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1291,6 +1307,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1412,6 +1429,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1530,6 +1548,7 @@ edition = "2021"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1646,6 +1665,7 @@ edition = "2021"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1723,6 +1743,7 @@ members = ["nonexistent/*"]
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1817,6 +1838,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
@@ -1910,6 +1932,7 @@ os = "ubuntu"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        None, // workspace_type filter
         OutputType::Json,
     )
     .await;
