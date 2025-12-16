@@ -39,7 +39,11 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     Ok(Player(handle))
 }
 
-/// Access to the player APIs.
+/// Mobile player implementation providing access to native platform player APIs.
+///
+/// This struct wraps a [`PluginHandle`] to communicate with native iOS (Swift) or
+/// Android (Kotlin) implementations that integrate with platform-specific media
+/// session APIs for controlling audio playback and responding to media control events.
 pub struct Player<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Player<R> {
