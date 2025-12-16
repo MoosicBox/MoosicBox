@@ -20,17 +20,17 @@ This example demonstrates how to organize routes using nested scopes in the Moos
 
 ```bash
 # From repository root
-cargo run -p web_server_nested_get
+cargo run -p switchy_web_server_example_nested_get
 
 # From example directory
-cd packages/web_server/examples/nested_get
+cd packages/switchy/web_server/examples/nested_get
 cargo run
 
 # With NixOS
-nix develop .#server --command cargo run -p web_server_nested_get
+nix develop .#server --command cargo run -p switchy_web_server_example_nested_get
 ```
 
-Note: This example uses the actix backend, which is enabled via the features in the moosicbox_web_server dependency.
+Note: This example uses the actix backend, which is enabled via the features in the switchy_web_server dependency.
 
 ## Expected Output
 
@@ -73,7 +73,7 @@ curl http://localhost:8080/other/example
 ### Scope Creation and Nesting
 
 ```rust
-let server = moosicbox_web_server::WebServerBuilder::new()
+let server = switchy_web_server::WebServerBuilder::new()
     .with_cors(cors)
     .with_scope(
         Scope::new("/nested")           // Create scope with prefix
