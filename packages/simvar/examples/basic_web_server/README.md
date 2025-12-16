@@ -1,6 +1,6 @@
 # Basic Web Server Simulation Example
 
-This example demonstrates how to use simvar with moosicbox_web_server to create a basic web server simulation.
+This example demonstrates how to use simvar with switchy_web_server to create a basic web server simulation.
 
 ## Overview
 
@@ -11,7 +11,7 @@ The simulation creates:
 
 ## Features Demonstrated
 
-- Setting up a web server using `moosicbox_web_server`
+- Setting up a web server using `switchy_web_server`
 - Creating simulation hosts and clients with `simvar`
 - Handling HTTP requests and responses
 - Time-based simulation with configurable duration
