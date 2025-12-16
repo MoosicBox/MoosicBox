@@ -19,6 +19,7 @@ use serde::Deserialize;
 use switchy_database::profiles::LibraryDatabase;
 
 /// Binds Qobuz authentication and settings endpoints to the provided Actix web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

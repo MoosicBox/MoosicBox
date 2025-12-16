@@ -17,6 +17,7 @@ use serde::Deserialize;
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 
 /// Binds profile management endpoints to the provided Actix web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

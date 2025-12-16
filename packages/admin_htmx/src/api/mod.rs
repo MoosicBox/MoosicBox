@@ -39,6 +39,7 @@ pub mod util;
 /// This is the main entry point for integrating the admin UI into an Actix web application.
 /// It registers all admin-related endpoints including server info, profiles management,
 /// and optionally scan, Tidal, and Qobuz settings endpoints (depending on enabled features).
+#[must_use]
 #[allow(clippy::let_and_return)]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
