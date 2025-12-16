@@ -77,10 +77,20 @@ pub mod service {
 impl service::Processor for service::Service {
     type Error = service::Error;
 
+    /// Called when the service starts.
+    ///
+    /// # Errors
+    ///
+    /// * Currently always succeeds
     async fn on_start(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
+    /// Called when the service shuts down to clean up resources.
+    ///
+    /// # Errors
+    ///
+    /// * Currently always succeeds
     async fn on_shutdown(_ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
         Ok(())
     }
