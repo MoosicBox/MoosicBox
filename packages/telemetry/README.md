@@ -139,9 +139,7 @@ impl HttpMetricsHandler for CustomMetricsHandler {
     }
 
     fn request_middleware(&self) -> RequestMetrics {
-        RequestMetrics::builder()
-            .with_service_name("my-service")
-            .build()
+        RequestMetrics::builder().build()
     }
 }
 
