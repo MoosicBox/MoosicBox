@@ -1,10 +1,10 @@
-# MoosicBox Web Server Core
+# Switchy Web Server Core
 
 Core abstractions and traits for web server implementations.
 
 ## Overview
 
-The MoosicBox Web Server Core package provides:
+The Switchy Web Server Core package provides:
 
 - **WebServer Trait**: Abstract interface for web server implementations
 - **Lifecycle Management**: Standard start/stop operations for servers
@@ -32,7 +32,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_web_server_core = { path = "../web_server/core" }
+switchy_web_server_core = { path = "../web_server/core" }
 ```
 
 ## Usage
@@ -40,7 +40,7 @@ moosicbox_web_server_core = { path = "../web_server/core" }
 ### Implementing WebServer
 
 ```rust
-use moosicbox_web_server_core::WebServer;
+use switchy_web_server_core::WebServer;
 use std::pin::Pin;
 use std::future::Future;
 
