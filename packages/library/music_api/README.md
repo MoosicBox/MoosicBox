@@ -1,111 +1,98 @@
 # MoosicBox Library Music API
 
-Music API implementation for local music library integration.
-
-## Overview
-
-The MoosicBox Library Music API provides:
-
-- **Local Library API**: MusicApi implementation for local music collections
-- **Database Integration**: Direct integration with library database
-- **Search Support**: Full-text search across local music library
-- **Scan Integration**: Library scanning and indexing capabilities
-- **Profile Support**: Multi-profile library management
+A `MusicApi` implementation for local library access, providing access to artists, albums, tracks, and search functionality against a local library database.
 
 ## Features
 
-### MusicApi Implementation
-
-- **Complete API**: Full implementation of MusicApi trait for local library
-- **Artists**: Browse and manage favorite artists with ordering and pagination
-- **Albums**: Album browsing with artist filtering, album type filtering, and pagination
-- **Tracks**: Track management and playback with favorite support
-- **Search**: Full-text search across library content
-- **Album Versions**: Support for multiple quality versions per album
-
-### Library Operations
-
-- **Favorites**: Add/remove favorite artists, albums, and tracks
-- **Cover Art**: Album and artist cover art management via local file paths
-- **File Access**: Direct file system access for local tracks
-- **Track Sizing**: Calculate and cache track sizes for different quality levels
+- **Local Library Access**: Query artists, albums, and tracks from a local database
+- **Search**: Full-text search across the library
+- **Favorites Management**: Add/remove artists, albums, and tracks as favorites
+- **Profile Support**: Manage multiple library databases via `LibraryMusicApiProfiles`
+- **Library Scanning**: Scan local files to populate the library
 - **Audio Encoding**: Support for multiple audio formats (AAC, FLAC, MP3, Opus)
-
-### Scanning & Indexing
-
-- **Library Scanning**: Automatic music library scanning via MoosicBox Scan integration
-- **Scan Control**: Enable/disable and check scan status
-- **Profile Integration**: Multi-profile library management via LibraryMusicApiProfiles
+- **Actix-web Integration**: Automatic profile extraction from HTTP requests (with `api` feature)
 
 ## Installation
 
-Add this to your `Cargo.toml`:
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_library_music_api = { path = "../library/music_api" }
+moosicbox_library_music_api = { workspace = true }
 ```
 
 ## Usage
 
-### Basic Library API
+### Basic Usage
 
 ```rust
 use moosicbox_library_music_api::LibraryMusicApi;
-use moosicbox_music_api::MusicApi;
 use switchy_database::profiles::LibraryDatabase;
 
-// Create library API instance with existing database connection
-let library_api = LibraryMusicApi::new(db);
+// Create a LibraryMusicApi from a database
+let api = LibraryMusicApi::new(db);
 
-// Use as MusicApi
-let artists = library_api.artists(None, Some(50), None, None).await?;
-let albums = library_api.albums(&request).await?;
+// Or convert from a LibraryDatabase
+let api: LibraryMusicApi = db.into();
 ```
 
-### Library-Specific Operations
+### Using the MusicApi Trait
+
+The `LibraryMusicApi` implements the `MusicApi` trait from `moosicbox_music_api`:
 
 ```rust
-// Get library-specific models
-let library_artist = library_api.library_artist(&artist_id).await?;
-let library_album = library_api.library_album(&album_id).await?;
-let library_track = library_api.library_track(&track_id).await?;
+use moosicbox_music_api::MusicApi;
 
-// Get album versions
-let versions = library_api.library_album_versions(&album_id).await?;
+// Get artists with pagination
+let artists = api.artists(Some(0), Some(20), None, None).await?;
+
+// Get a specific album
+let album = api.album(&album_id).await?;
+
+// Search the library
+let results = api.search("query", Some(0), Some(10)).await?;
+
+// Manage favorites
+api.add_album(&album_id).await?;
+api.remove_track(&track_id).await?;
+
+// Scan the library
+api.enable_scan().await?;
+api.scan().await?;
 ```
 
-## Features
+### Profile Management
 
-### Cargo Features
+Manage multiple library databases simultaneously:
 
-- **api**: Actix-web request extraction support
-- **encoder-aac**: AAC audio encoding support
-- **encoder-flac**: FLAC audio encoding support
-- **encoder-mp3**: MP3 audio encoding support
-- **encoder-opus**: Opus audio encoding support
-- **all-encoders**: Enable all supported encoders
-- **format-aac**: AAC format support
-- **format-flac**: FLAC format support
-- **format-mp3**: MP3 format support
-- **format-opus**: Opus format support
+```rust
+use moosicbox_library_music_api::profiles::{PROFILES, LibraryMusicApiProfiles};
 
-Default features: `all-encoders`, `api`
+// Add a profile
+PROFILES.add("my_profile".to_string(), db);
 
-## Dependencies
+// Retrieve a profile's API
+let api = PROFILES.get("my_profile");
 
-- **moosicbox_music_api**: Core music API traits and models
-- **moosicbox_library**: Library database operations and models
-- **moosicbox_scan**: Library scanning functionality
-- **moosicbox_files**: File system operations and content handling
-- **moosicbox_profiles**: Multi-profile support
-- **moosicbox_paging**: Pagination utilities
-- **moosicbox_menu_models**: Menu and UI model types
-- **moosicbox_music_models**: Core music domain models
-- **moosicbox_assert**: Assertion utilities
-- **switchy_database**: Database abstraction layer
-- **switchy_async**: Async synchronization primitives
-- **async-trait**: Async trait support
-- **futures**: Async runtime utilities
-- **log**: Logging support
-- **regex**: Regular expression support
+// List all profile names
+let names = PROFILES.names();
+
+// Remove a profile
+PROFILES.remove("my_profile");
+```
+
+## Cargo Features
+
+- **`default`**: Enables `all-encoders` and `api`
+- **`api`**: Actix-web integration for profile extraction from requests
+- **`all-encoders`**: All audio encoders (AAC, FLAC, MP3, Opus)
+- **`encoder-aac`**: AAC encoding support
+- **`encoder-flac`**: FLAC encoding support
+- **`encoder-mp3`**: MP3 encoding support
+- **`encoder-opus`**: Opus encoding support
+- **`all-formats`**: All audio format support
+- **`simulator`**: Testing simulator support
+
+## License
+
+See the [LICENSE](../../../LICENSE) file for details.
