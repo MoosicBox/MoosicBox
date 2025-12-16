@@ -68,6 +68,7 @@ hyperchad_renderer_html_lambda = {
 
 ```rust
 use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+use hyperchad_renderer::ToRenderRunner;
 use hyperchad_template::container;
 use lambda_http::Request;
 use lambda_runtime::Error;
