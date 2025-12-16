@@ -86,13 +86,13 @@ use hyperchad_actions::{Action, ActionTrigger, ActionType, ElementTarget};
 // Simple click action to hide element
 let action = Action {
     trigger: ActionTrigger::Click,
-    effect: ActionType::hide_str_id("modal").into(),
+    effect: ActionType::hide_by_id("modal").into(),
 };
 
 // Show element on hover
 let show_action = Action {
     trigger: ActionTrigger::Hover,
-    effect: ActionType::show_str_id("tooltip").into(),
+    effect: ActionType::show_by_id("tooltip").into(),
 };
 ```
 
@@ -103,7 +103,7 @@ use hyperchad_actions::{ActionType, ElementTarget};
 use hyperchad_transformer_models::Visibility;
 
 // Target by string ID
-let hide_modal = ActionType::hide_str_id("modal");
+let hide_modal = ActionType::hide_by_id("modal");
 
 // Target by class
 let show_menu = ActionType::set_display_class(true, "menu");
@@ -119,15 +119,15 @@ let show_last = ActionType::show_last_child();
 
 ```rust
 // Visibility control
-let hide_action = ActionType::hide_str_id("element");
-let show_action = ActionType::show_str_id("element");
+let hide_action = ActionType::hide_by_id("element");
+let show_action = ActionType::show_by_id("element");
 
 // Display control
-let display_action = ActionType::display_str_id("element");
-let no_display_action = ActionType::no_display_str_id("element");
+let display_action = ActionType::display_by_id("element");
+let no_display_action = ActionType::no_display_by_id("element");
 
 // Background control
-let set_bg = ActionType::set_background_str_id("red", "element");
+let set_bg = ActionType::set_background_by_id("red", "element");
 let remove_bg = ActionType::remove_background_self();
 ```
 
@@ -136,8 +136,8 @@ let remove_bg = ActionType::remove_background_self();
 ```rust
 // Combine multiple actions
 let multi_action = ActionType::Multi(vec![
-    ActionType::hide_str_id("modal"),
-    ActionType::show_str_id("success"),
+    ActionType::hide_by_id("modal"),
+    ActionType::show_by_id("success"),
     ActionType::Log {
         message: "Action completed".to_string(),
         level: LogLevel::Info,
@@ -145,23 +145,23 @@ let multi_action = ActionType::Multi(vec![
 ]);
 
 // Chain actions with `and`
-let chained = ActionType::hide_str_id("modal")
-    .and(ActionType::show_str_id("success"));
+let chained = ActionType::hide_by_id("modal")
+    .and(ActionType::show_by_id("success"));
 ```
 
 ### Action Effects
 
 ```rust
 // Add throttling to prevent rapid firing
-let throttled_action = ActionType::hide_str_id("element")
+let throttled_action = ActionType::hide_by_id("element")
     .throttle(500); // 500ms throttle
 
 // Add delay before turning off
-let delayed_action = ActionType::show_str_id("tooltip")
+let delayed_action = ActionType::show_by_id("tooltip")
     .delay_off(2000); // Hide after 2 seconds
 
 // Make action unique (prevent duplicates)
-let unique_action = ActionType::display_str_id("notification")
+let unique_action = ActionType::display_by_id("notification")
     .unique();
 ```
 
@@ -169,8 +169,8 @@ let unique_action = ActionType::display_str_id("notification")
 
 ```rust
 // Select/focus input elements
-let select_input = ActionType::select_str_id("email-input");
-let focus_button = ActionType::focus_str_id("submit-button");
+let select_input = ActionType::select_by_id("email-input");
+let focus_button = ActionType::focus_by_id("submit-button");
 let focus_by_class = ActionType::focus_class("primary-input");
 ```
 
@@ -184,7 +184,7 @@ let custom = ActionType::Custom {
 
 // Event-based actions
 let event_action = ActionType::on_event("user-login",
-    ActionType::show_str_id("dashboard")
+    ActionType::show_by_id("dashboard")
 );
 
 // Navigation
@@ -196,20 +196,20 @@ let navigate = ActionType::Navigate {
 ### Conditional Logic (with `logic` feature)
 
 ```rust
-use hyperchad_actions::logic::{If, Value, Condition, get_visibility_str_id, visible};
+use hyperchad_actions::logic::{If, Value, Condition, get_visibility_by_id, visible};
 
 // Conditional action based on element state
 let conditional = ActionType::Logic(If {
     condition: Condition::Eq(
-        get_visibility_str_id("menu").into(),
+        get_visibility_by_id("menu").into(),
         visible(),
     ),
-    actions: vec![ActionType::hide_str_id("menu").into()],
-    else_actions: vec![ActionType::show_str_id("menu").into()],
+    actions: vec![ActionType::hide_by_id("menu").into()],
+    else_actions: vec![ActionType::show_by_id("menu").into()],
 });
 
 // Toggle visibility using logic
-let toggle = ActionType::toggle_visibility_str_id("sidebar");
+let toggle = ActionType::toggle_visibility_by_id("sidebar");
 ```
 
 ### Value Calculations (with `logic` feature)
