@@ -31,16 +31,16 @@ This example demonstrates comprehensive OpenAPI (Swagger) documentation integrat
 
 ```bash
 # From repository root
-cargo run --package web_server_openapi
+cargo run --package switchy_web_server_example_openapi
 # or using the short form:
-cargo run -p web_server_openapi
+cargo run -p switchy_web_server_example_openapi
 
 # From example directory
-cd packages/web_server/examples/openapi
+cd packages/switchy/web_server/examples/openapi
 cargo run
 
 # With NixOS
-nix develop .#server --command cargo run -p web_server_openapi
+nix develop .#server --command cargo run -p switchy_web_server_example_openapi
 ```
 
 **Note**: This example uses the Actix Web backend with all OpenAPI documentation formats (Swagger UI, ReDoc, RapiDoc, Scalar) enabled by default. To use a different backend or customize features, you'll need to modify the `Cargo.toml` dependencies.
@@ -177,7 +177,7 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 **Automatic Binding**
 
 ```rust
-.with_scope(moosicbox_web_server::openapi::bind_services(
+.with_scope(switchy_web_server::openapi::bind_services(
     Scope::new("/openapi")
 ))
 ```
@@ -327,10 +327,10 @@ This pattern is useful for combining multiple API specifications in modular desi
 ### Feature Flag Issues
 
 **Problem**: OpenAPI features not available
-**Solution**: This example has `openapi-all` enabled by default in its `Cargo.toml`. If you've modified the dependencies, ensure `moosicbox_web_server` is included with the `openapi-all` feature:
+**Solution**: This example has `openapi-all` enabled by default in its `Cargo.toml`. If you've modified the dependencies, ensure `switchy_web_server` is included with the `openapi-all` feature:
 
 ```toml
-moosicbox_web_server = { workspace = true, features = ["actix", "cors", "openapi-all"] }
+switchy_web_server = { workspace = true, features = ["actix", "cors", "openapi-all"] }
 ```
 
 ### Documentation Not Loading
