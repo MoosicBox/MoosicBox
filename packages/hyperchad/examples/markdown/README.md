@@ -19,32 +19,20 @@ This example demonstrates the `hyperchad_markdown` package, which converts Markd
 
 ## Running the Example
 
-### Development (with embedded assets):
-
 ```bash
-cd packages/hyperchad/examples/markdown
-PORT=3134 cargo run -- serve
+cargo run -p hyperchad_markdown_example
 ```
 
-Then open your browser to: **http://localhost:3134**
+Then open your browser to: **http://localhost:8080**
 
-> **Note**: The default port is 8343. Set the `PORT` environment variable to use a different port.
+## Cargo Features
 
-### Production (expects external JS hosting):
-
-```bash
-PORT=3134 cargo run --no-default-features --features actix,vanilla-js -- serve
-```
-
-## Features
-
-- `markdown` - Enables markdown support in main hyperchad package
-- `markdown-emoji` - Enables emoji shortcode replacement (`:rocket:` → 🚀)
-- `markdown-xss-protection` - Enables XSS protection filtering
-- `dev` - Enables embedded assets for local development
-- `assets` - Enables static asset serving
-- `vanilla-js` - Enables vanilla JavaScript renderer
 - `actix` - Enables Actix web server backend
+- `assets` - Enables static asset serving
+- `dev` - Enables embedded assets for local development (enables `assets`)
+- `vanilla-js` - Enables vanilla JavaScript renderer with client-side interactivity plugins
+
+Default features: `actix`, `dev`, `vanilla-js`
 
 ## What's Special About hyperchad_markdown?
 
@@ -146,12 +134,9 @@ let container = markdown_to_container_with_options(markdown, options);
 ### Integration with Router
 
 ```rust
-use hyperchad_router::RoutePath;
-
 Router::new()
-    .with_route(RoutePath::LiteralPrefix("/blog/".to_string()), |req: RouteRequest| async move {
-        let slug = req.path.strip_prefix("/blog/").unwrap_or("");
-        let markdown = load_blog_post(slug).await;
+    .with_route("/blog/:slug", |req: RouteRequest| async move {
+        let markdown = load_blog_post(&req.params["slug"]).await;
         let content = markdown_to_container(&markdown);
 
         View::builder()
@@ -296,7 +281,6 @@ Perfect for:
 
 Potential improvements (not yet implemented):
 
-- Syntax highlighting for code blocks
 - Math equation rendering (KaTeX/MathJax)
 - Mermaid diagram support
 - Custom markdown extensions
