@@ -1,6 +1,6 @@
 # MoosicBox Web Server Simulator
 
-In-memory HTTP request/response simulation for deterministic testing. This package provides the core simulation types and server implementation used by the moosicbox_web_server testing framework.
+In-memory HTTP request/response simulation for deterministic testing. This package provides the core simulation types and server implementation used by the switchy_web_server testing framework.
 
 ## Features
 
@@ -22,7 +22,7 @@ In-memory HTTP request/response simulation for deterministic testing. This packa
 ## Usage
 
 ```rust
-use web_server_simulator::{
+use switchy_web_server_simulator::{
     SimulationWebServer, SimulatedRequest, SimulatedResponse, RouteHandler,
     handlers,
 };
@@ -64,4 +64,4 @@ The `handlers` module provides convenience functions for common response pattern
 
 ## Integration
 
-This package is typically used through the `moosicbox_web_server` crate's simulator backend feature, which provides higher-level integration with `WebServerBuilder`, `Scope`, and routing APIs.
+This package is typically used through the `switchy_web_server` crate's simulator backend feature, which provides higher-level integration with `WebServerBuilder`, `Scope`, and routing APIs.
