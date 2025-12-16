@@ -721,6 +721,17 @@ runs:
               path: ./target/release/clippier
               key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}
 
+        - name: Setup Rust toolchain for clippier build
+          if: |
+              inputs.command == 'features' ||
+              inputs.command == 'packages' ||
+              inputs.command == 'affected-packages' ||
+              inputs.command == 'workspace-deps' ||
+              inputs.command == 'validate-feature-propagation' ||
+              inputs.command == 'workspace-toolchains' ||
+              (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
+          uses: dtolnay/rust-toolchain@stable
+
         - name: Build clippier
           if: |
               inputs.command == 'features' ||
