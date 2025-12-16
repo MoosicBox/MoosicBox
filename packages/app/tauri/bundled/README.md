@@ -77,7 +77,7 @@ use moosicbox_async_service::Arc;
 # use switchy_async::sync::oneshot;
 # use tauri::RunEvent;
 #
-# async fn example_event_handling(service_handle: moosicbox_app_tauri_bundled::service::ServiceHandle, run_event: RunEvent) -> Result<(), Box<dyn std::error::Error>> {
+# async fn example_event_handling(service_handle: moosicbox_app_tauri_bundled::service::Handle, run_event: RunEvent) -> Result<(), Box<dyn std::error::Error>> {
 
 // Handle Tauri run events
 let event = Arc::new(run_event);
