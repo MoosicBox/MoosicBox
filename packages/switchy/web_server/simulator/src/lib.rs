@@ -446,8 +446,12 @@ impl Clone for SimulationWebServer {
     }
 }
 
-/// Helper functions for creating common route handlers.
 pub mod handlers {
+    //! Pre-built route handlers for common response types.
+    //!
+    //! This module provides factory functions for creating [`RouteHandler`]s that return
+    //! common response types like JSON, plain text, and HTML. These helpers simplify
+    //! test setup by eliminating boilerplate for standard response patterns.
     use super::{Arc, HttpMethod, RouteHandler, Serialize, SimulatedResponse};
 
     /// Creates a route handler that returns a JSON response.
