@@ -23,9 +23,15 @@ pub struct CodeBlockState {
     pub content: String,
 }
 
-/// Highlight code and return containers with styled spans.
+/// Highlights code and returns containers with styled spans.
 ///
-/// If the language is not recognized, falls back to plain text.
+/// Takes source code and an optional language identifier, and produces
+/// a vector of `Container` elements with syntax highlighting applied.
+/// Each token is wrapped in a `Span` element with the appropriate color
+/// based on the syntax highlighting theme.
+///
+/// If the language is not recognized, falls back to plain text syntax.
+#[must_use]
 pub fn highlight_code_to_containers(code: &str, language: Option<&str>) -> Vec<Container> {
     let syntax = language
         .and_then(|lang| SYNTAX_SET.find_syntax_by_token(lang))
