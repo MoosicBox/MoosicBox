@@ -225,6 +225,7 @@ where
 }
 
 /// Get an environment variable parsed with a default value
+#[must_use]
 pub fn var_parse_or<T>(name: &str, default: T) -> T
 where
     T: std::str::FromStr,
