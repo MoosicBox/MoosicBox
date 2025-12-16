@@ -1,3 +1,30 @@
+//! Test response handling and assertion utilities.
+//!
+//! This module provides [`TestResponse`], a unified response wrapper for testing HTTP handlers,
+//! along with [`TestResponseExt`], an extension trait providing assertion methods for
+//! validating response status codes, headers, and body content.
+//!
+//! # Overview
+//!
+//! The test response utilities enable expressive, fluent assertions in tests:
+//!
+//! ```rust,ignore
+//! use switchy_web_server::test_client::{TestResponse, TestResponseExt};
+//!
+//! // Chain assertions fluently
+//! response
+//!     .assert_success()
+//!     .assert_header("Content-Type", "application/json")
+//!     .assert_text_contains("success");
+//! ```
+//!
+//! # Features
+//!
+//! * Status code classification (`is_success()`, `is_client_error()`, etc.)
+//! * Body parsing (`text()`, `json()`)
+//! * Fluent assertions (`assert_status()`, `assert_header()`, `assert_text_contains()`)
+//! * JSON assertions when `serde` feature is enabled
+
 use std::collections::BTreeMap;
 
 #[cfg(feature = "serde")]
