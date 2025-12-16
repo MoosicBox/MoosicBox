@@ -129,15 +129,13 @@ if let Some(user_id) = state.get::<serde_json::Value>("user_id").await? {
 ### Action System
 
 ```rust
-use hyperchad::actions::{Action, ActionType};
-
-// Define actions in templates using ActionType
+// Define actions in templates using the fx DSL
 let ui = container! {
     div {
-        button fx-click=(ActionType::show_by_id("modal")) {
+        button fx-click=fx { show("modal") } {
             "Open Modal"
         }
-        button fx-click=(ActionType::Navigate { url: "/success".to_string() }) {
+        button fx-click=fx { navigate("/success") } {
             "Submit"
         }
     }
@@ -145,23 +143,17 @@ let ui = container! {
 
 // Actions support conditionals and logic (with "actions-logic" feature)
 #[cfg(feature = "actions-logic")]
-{
-    use hyperchad_template_actions_dsl::actions_dsl;
-
-    let action = actions_dsl! {
+let ui = container! {
+    button fx-click=fx {
         if get_visibility("panel") == visible() {
             hide("panel")
         } else {
             show("panel")
         }
-    };
-
-    let ui = container! {
-        button fx-click=(action) {
-            "Toggle Panel"
-        }
-    };
-}
+    } {
+        "Toggle Panel"
+    }
+};
 ```
 
 ## Programming Interface
