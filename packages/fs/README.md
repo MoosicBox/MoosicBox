@@ -380,6 +380,7 @@ match OpenOptions::new().read(true).open("nonexistent.txt") {
 
 ## Dependencies
 
+- **log**: Logging facade for diagnostic messages
 - **switchy_async**: Async I/O trait abstractions (optional)
 - **bytes**: Byte buffer utilities for simulator backend (optional)
 - **scoped-tls**: Thread-local storage for simulator real-fs mode (optional)
