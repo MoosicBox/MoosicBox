@@ -87,7 +87,6 @@ async fn manage_zones(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Err
     // Create new zone
     let new_zone = CreateAudioZone {
         name: "Living Room".to_string(),
-        // ... other zone configuration
     };
     let created = create_audio_zone(db, &new_zone).await?;
     println!("Created zone: {}", created.name);
@@ -106,7 +105,7 @@ async fn modify_zones(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Err
     let update = UpdateAudioZone {
         id: 1,
         name: Some("Updated Living Room".to_string()),
-        // ... other fields to update
+        players: None,
     };
     let updated = update_audio_zone(db, update).await?;
     println!("Updated zone: {}", updated.name);
