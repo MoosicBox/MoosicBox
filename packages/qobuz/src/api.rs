@@ -39,6 +39,7 @@ use crate::{
 ///
 /// This function registers route handlers for authentication, favorites, albums, artists,
 /// tracks, and search operations.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
