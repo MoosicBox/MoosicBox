@@ -54,8 +54,11 @@ pub static STATE: LazyLock<moosicbox_app_state::AppState> =
 pub static PROFILE: &str = "master";
 
 #[cfg(feature = "assets")]
-/// Static asset configuration for the application.
 pub mod assets {
+    //! Static asset configuration for the application.
+    //!
+    //! This module defines static asset routes for serving application resources
+    //! such as JavaScript files, favicons, and public directory contents.
     use std::{path::PathBuf, sync::LazyLock};
 
     use hyperchad::renderer;
