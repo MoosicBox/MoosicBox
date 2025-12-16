@@ -218,7 +218,9 @@ fn render_user(user_id: &str) -> String {
     view.to_string()
 }
 
-async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
+async fn handle_api_users(req: &RouteRequest) -> Result<Content, Box<dyn std::error::Error>> {
+    use hyperchad_renderer::Content;
+
     match req.method.as_ref() {
         "GET" => {
             let users = serde_json::json!([
@@ -226,10 +228,7 @@ async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<d
                 {"id": 2, "name": "Bob", "email": "bob@example.com"}
             ]);
 
-            Ok(Response::builder()
-                .status(200)
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(&users)?)?)
+            Ok(Content::Json(users))
         }
         "POST" => {
             // Handle user creation
@@ -242,15 +241,13 @@ async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<d
                 "email": new_user["email"]
             });
 
-            Ok(Response::builder()
-                .status(201)
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(&response)?)?)
+            Ok(Content::Json(response))
         }
         _ => {
-            Ok(Response::builder()
-                .status(405)
-                .body(b"Method Not Allowed".to_vec())?)
+            Ok(Content::Raw {
+                data: bytes::Bytes::from_static(b"Method Not Allowed"),
+                content_type: "text/plain".to_string(),
+            })
         }
     }
 }
