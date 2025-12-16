@@ -4366,10 +4366,13 @@ pub async fn handle_affected_packages_command(
                 #[cfg(not(feature = "_workspace"))]
                 let workspace_members_owned = {
                     let workspace_cargo_path = workspace_root.join("Cargo.toml");
-                    if let Ok(workspace_source) =
-                        switchy_fs::unsync::read_to_string(&workspace_cargo_path).await
-                    {
-                        if let Ok(workspace_value) = toml::from_str::<Value>(&workspace_source) {
+                    switchy_fs::unsync::read_to_string(&workspace_cargo_path)
+                        .await
+                        .ok()
+                        .and_then(|workspace_source| {
+                            toml::from_str::<Value>(&workspace_source).ok()
+                        })
+                        .and_then(|workspace_value| {
                             workspace_value
                                 .get("workspace")
                                 .and_then(|x| x.get("members"))
@@ -4378,13 +4381,8 @@ pub async fn handle_affected_packages_command(
                                     x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>()
                                 })
                                 .map(|raw| expand_workspace_member_globs(workspace_root, &raw))
-                                .unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        }
-                    } else {
-                        Vec::new()
-                    }
+                        })
+                        .unwrap_or_default()
                 };
 
                 if !workspace_members_owned.is_empty() {

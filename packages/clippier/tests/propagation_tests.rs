@@ -1,6 +1,9 @@
+#[cfg(feature = "cargo-workspace")]
 use clippier::{OutputType, handle_features_command};
+#[cfg(feature = "cargo-workspace")]
 use clippier_test_utilities::test_resources::load_test_workspace;
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_git_submodules_propagates_through_build_deps() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -31,6 +34,7 @@ async fn test_git_submodules_propagates_through_build_deps() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -53,6 +57,7 @@ async fn test_git_submodules_propagates_through_build_deps() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_git_submodules_propagates_through_dev_and_regular_deps() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -83,6 +88,7 @@ async fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -105,6 +111,7 @@ async fn test_git_submodules_propagates_through_dev_and_regular_deps() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_dependencies_propagate_and_merge() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -135,6 +142,7 @@ async fn test_dependencies_propagate_and_merge() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -169,6 +177,7 @@ async fn test_dependencies_propagate_and_merge() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_dependencies_propagate_to_root() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -199,6 +208,7 @@ async fn test_dependencies_propagate_to_root() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -233,6 +243,7 @@ async fn test_dependencies_propagate_to_root() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_ci_steps_propagate_and_preserve_order() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -263,6 +274,7 @@ async fn test_ci_steps_propagate_and_preserve_order() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -301,6 +313,7 @@ async fn test_ci_steps_propagate_and_preserve_order() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_env_vars_propagate_with_overlay() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -331,6 +344,7 @@ async fn test_env_vars_propagate_with_overlay() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -370,6 +384,7 @@ async fn test_env_vars_propagate_with_overlay() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_nightly_does_not_propagate() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -400,6 +415,7 @@ async fn test_nightly_does_not_propagate() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -419,6 +435,7 @@ async fn test_nightly_does_not_propagate() {
     assert_eq!(leaf["nightly"], false, "leaf should not be nightly");
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_propagation_with_all_workspace_packages() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -449,6 +466,7 @@ async fn test_propagation_with_all_workspace_packages() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -471,6 +489,7 @@ async fn test_propagation_with_all_workspace_packages() {
     }
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_external_deps_dont_break_propagation() {
     let (temp_dir, _) = load_test_workspace("propagation");
@@ -501,6 +520,7 @@ async fn test_external_deps_dont_break_propagation() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )

@@ -219,6 +219,7 @@ async fn test_git_submodules_with_chunking_and_spreading() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )

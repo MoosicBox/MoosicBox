@@ -1,7 +1,8 @@
+#[cfg(feature = "cargo-workspace")]
+use clippier::handle_packages_command;
 use clippier::{
     OutputType, handle_ci_steps_command, handle_dependencies_command, handle_environment_command,
-    handle_features_command, handle_packages_command, handle_workspace_deps_command,
-    process_workspace_configs,
+    handle_features_command, handle_workspace_deps_command, process_workspace_configs,
 };
 use clippier_test_utilities::TempDir;
 use clippier_test_utilities::test_resources::{create_simple_workspace, load_test_workspace};
@@ -267,6 +268,7 @@ async fn test_ci_steps_with_command_and_toolchain() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -344,6 +346,7 @@ async fn test_ci_steps_mixed_entries() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -412,6 +415,7 @@ async fn test_ci_steps_with_features() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -471,6 +475,7 @@ async fn test_ci_steps_json_output_structure() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -573,6 +578,7 @@ async fn test_handle_features_command_basic() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Raw,
     )
@@ -765,6 +771,7 @@ async fn test_handle_features_command_comprehensive() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -904,6 +911,7 @@ serde = "1.0"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -957,6 +965,7 @@ serde = "1.0"
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1168,6 +1177,7 @@ async fn test_handle_features_command_with_git_submodules() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1293,6 +1303,7 @@ os = "macos"
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1313,6 +1324,7 @@ async fn test_handle_packages_command_basic() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1336,6 +1348,7 @@ async fn test_handle_packages_command_basic() {
     insta::assert_yaml_snapshot!("packages_command_basic", parsed);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_json_output() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1356,6 +1369,7 @@ async fn test_handle_packages_command_json_output() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1370,6 +1384,7 @@ async fn test_handle_packages_command_json_output() {
     insta::assert_yaml_snapshot!("packages_command_json_output", parsed);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_raw_output() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1390,6 +1405,7 @@ async fn test_handle_packages_command_raw_output() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Raw,
     )
@@ -1409,6 +1425,7 @@ async fn test_handle_packages_command_raw_output() {
     insta::assert_snapshot!("packages_command_raw_output", packages_raw);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_with_specific_packages() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1429,6 +1446,7 @@ async fn test_handle_packages_command_with_specific_packages() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1452,6 +1470,7 @@ async fn test_handle_packages_command_with_specific_packages() {
     insta::assert_yaml_snapshot!("packages_command_specific_packages", parsed);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_with_max_parallel() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1472,6 +1491,7 @@ async fn test_handle_packages_command_with_max_parallel() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1487,6 +1507,7 @@ async fn test_handle_packages_command_with_max_parallel() {
     insta::assert_yaml_snapshot!("packages_command_max_parallel", parsed);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_no_os_filter() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1507,6 +1528,7 @@ async fn test_handle_packages_command_no_os_filter() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1528,6 +1550,7 @@ async fn test_handle_packages_command_no_os_filter() {
     }
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_nonexistent_package() {
     let (temp_dir, _) = load_test_workspace("complex");
@@ -1548,6 +1571,7 @@ async fn test_handle_packages_command_nonexistent_package() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1565,6 +1589,7 @@ async fn test_handle_packages_command_nonexistent_package() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_empty_workspace() {
     let temp_dir = switchy_fs::tempdir().unwrap();
@@ -1590,6 +1615,7 @@ members = []
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1607,8 +1633,8 @@ members = []
     );
 }
 
+#[cfg(all(feature = "cargo-workspace", feature = "git-diff"))]
 #[switchy_async::test]
-#[cfg(feature = "git-diff")]
 async fn test_handle_packages_command_with_changed_files() {
     use std::collections::HashSet;
 
@@ -1631,6 +1657,7 @@ async fn test_handle_packages_command_with_changed_files() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1655,8 +1682,8 @@ async fn test_handle_packages_command_with_changed_files() {
     );
 }
 
+#[cfg(all(feature = "cargo-workspace", feature = "git-diff"))]
 #[switchy_async::test]
-#[cfg(feature = "git-diff")]
 async fn test_handle_packages_command_changed_files_with_dependencies() {
     use std::collections::HashSet;
 
@@ -1676,6 +1703,7 @@ async fn test_handle_packages_command_changed_files_with_dependencies() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1699,8 +1727,8 @@ async fn test_handle_packages_command_changed_files_with_dependencies() {
     );
 }
 
+#[cfg(all(feature = "cargo-workspace", feature = "git-diff"))]
 #[switchy_async::test]
-#[cfg(feature = "git-diff")]
 async fn test_handle_packages_command_with_include_reasoning() {
     let (temp_dir, _) = load_test_workspace("complex");
 
@@ -1718,6 +1746,7 @@ async fn test_handle_packages_command_with_include_reasoning() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1731,6 +1760,7 @@ async fn test_handle_packages_command_with_include_reasoning() {
     assert!(!packages.is_empty());
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_mixed_valid_invalid() {
     use std::collections::HashSet;
@@ -1757,6 +1787,7 @@ async fn test_handle_packages_command_mixed_valid_invalid() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )
@@ -1779,6 +1810,7 @@ async fn test_handle_packages_command_mixed_valid_invalid() {
     assert!(!package_names.contains("nonexistent"));
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_handle_packages_command_all_packages() {
     use std::collections::HashSet;
@@ -1801,6 +1833,7 @@ async fn test_handle_packages_command_all_packages() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_workspace")]
         None,
         OutputType::Json,
     )

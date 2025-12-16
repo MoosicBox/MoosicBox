@@ -1,7 +1,11 @@
+#[cfg(feature = "cargo-workspace")]
 use clippier::{OutputType, handle_features_command};
+#[cfg(feature = "cargo-workspace")]
 use clippier_test_utilities::test_resources::load_test_workspace;
+#[cfg(feature = "cargo-workspace")]
 use std::collections::HashSet;
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_filter_single_package() {
     // Test filtering to a single package
@@ -33,6 +37,7 @@ async fn test_packages_filter_single_package() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -51,6 +56,7 @@ async fn test_packages_filter_single_package() {
     );
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_filter_multiple_packages() {
     // Test filtering to multiple packages
@@ -82,6 +88,7 @@ async fn test_packages_filter_multiple_packages() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -107,6 +114,7 @@ async fn test_packages_filter_multiple_packages() {
     assert!(!package_names.contains("shared-utils"));
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_filter_empty_list() {
     // Test with empty packages list (should process all packages)
@@ -138,6 +146,7 @@ async fn test_packages_filter_empty_list() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -170,6 +179,7 @@ async fn test_packages_filter_empty_list() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -193,6 +203,7 @@ async fn test_packages_filter_empty_list() {
     assert_eq!(json_empty.len(), json_none.len());
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_with_os_filter() {
     // Test combining --packages with --os
@@ -224,6 +235,7 @@ async fn test_packages_with_os_filter() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -240,6 +252,7 @@ async fn test_packages_with_os_filter() {
     }
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_with_chunking() {
     // Test combining --packages with --chunked
@@ -271,6 +284,7 @@ async fn test_packages_with_chunking() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -296,6 +310,7 @@ async fn test_packages_with_chunking() {
     }
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_with_features_filter() {
     // Test combining --packages with --features and --skip-features
@@ -327,6 +342,7 @@ async fn test_packages_with_features_filter() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -349,6 +365,7 @@ async fn test_packages_with_features_filter() {
     }
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_nonexistent_package() {
     // Test with package name that doesn't exist
@@ -380,6 +397,7 @@ async fn test_packages_nonexistent_package() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -392,6 +410,7 @@ async fn test_packages_nonexistent_package() {
     assert_eq!(json.len(), 0);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_mixed_valid_invalid() {
     // Test with mix of valid and invalid package names
@@ -428,6 +447,7 @@ async fn test_packages_mixed_valid_invalid() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -449,6 +469,7 @@ async fn test_packages_mixed_valid_invalid() {
     assert!(package_names.len() >= 2); // At least api + web configs
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_case_sensitivity() {
     // Test that package names are case-sensitive
@@ -480,6 +501,7 @@ async fn test_packages_case_sensitivity() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Json,
     )
@@ -492,6 +514,7 @@ async fn test_packages_case_sensitivity() {
     assert_eq!(json.len(), 0);
 }
 
+#[cfg(feature = "cargo-workspace")]
 #[switchy_async::test]
 async fn test_packages_raw_output_format() {
     // Test that --packages works with Raw output format
@@ -523,6 +546,7 @@ async fn test_packages_raw_output_format() {
         &[],
         #[cfg(feature = "_transforms")]
         false,
+        #[cfg(feature = "_workspace")]
         None, // workspace_type filter
         OutputType::Raw,
     )
