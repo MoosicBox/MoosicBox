@@ -1038,6 +1038,30 @@ clippier workspace-deps . my-package --features "default,feature1"
 clippier workspace-deps . my-package --all-potential-deps --format json
 ```
 
+### Workspace Toolchains
+
+Aggregate toolchains and dependencies from all workspace packages for CI setup:
+
+```bash
+# Get aggregated toolchain information for CI setup
+clippier workspace-toolchains . --os ubuntu --output json
+```
+
+This command scans all packages in the workspace and collects their toolchains, dependencies, CI steps, and environment variables for the specified OS. Useful for workspace-level CI setup.
+
+**Output format:**
+
+```json
+{
+    "dependencies": ["sudo apt-get install -y libssl-dev"],
+    "toolchains": ["cargo-machete", "taplo"],
+    "ci_steps": ["cargo fmt --check"],
+    "env": { "RUST_BACKTRACE": "1" },
+    "nightly_packages": ["experimental_package"],
+    "git_submodules": false
+}
+```
+
 ## Command Line Options
 
 ### Global Options
@@ -1067,6 +1091,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--git-head`          | Git head commit for external dep analysis                               | -            |
 | `--skip-if`           | Skip packages matching Cargo.toml filter                                | -            |
 | `--include-if`        | Include only packages matching filter                                   | -            |
+| `--ignore`            | Glob patterns to ignore when detecting affected packages                | -            |
 
 ### Packages Command Options
 
@@ -1081,6 +1106,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--max-parallel`      | Maximum number of packages to return                               | -            |
 | `--skip-if`           | Skip packages matching Cargo.toml filter                           | -            |
 | `--include-if`        | Include only packages matching filter                              | -            |
+| `--ignore`            | Glob patterns to ignore when detecting affected packages           | -            |
 | `--output`            | Output format: `json`, `raw`                                       | `json`       |
 
 ### Workspace Dependencies Options
@@ -1112,6 +1138,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--target-package` | Specific package to check                 | -        |
 | `--git-base`       | Git base commit for external dep analysis | -        |
 | `--git-head`       | Git head commit for external dep analysis | -        |
+| `--ignore`         | Glob patterns to ignore when detecting changes | -        |
 | `--output`         | Output format: `json`, `raw`              | `json`   |
 
 ### Feature Validation Options
@@ -1139,6 +1166,13 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--parent-skip-features`         | Additional features to skip for parent validation       | -                   |
 | `--parent-prefix`                | Override prefix for dependencies (`dep:prefix`)         | Auto-inferred       |
 | `--no-parent-config`             | Disable loading parent config from clippier.toml        | false               |
+
+### Workspace Toolchains Options
+
+| Option     | Description                        | Default           |
+| ---------- | ---------------------------------- | ----------------- |
+| `--os`     | Target operating system (required) | -                 |
+| `--output` | Output format: `json`, `raw`       | `json`            |
 
 ### Check Command Options
 
