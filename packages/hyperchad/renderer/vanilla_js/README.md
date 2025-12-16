@@ -88,15 +88,17 @@ hyperchad_renderer_vanilla_js = {
 
 ```rust
 use hyperchad_renderer_vanilla_js::VanillaJsTagRenderer;
-use hyperchad_renderer_html::{HtmlRenderer, HtmlApp};
+use hyperchad_renderer_html::{HtmlRenderer, stub::StubApp};
 use hyperchad_template::container;
-use hyperchad_actions::ActionType;
 
 // Create vanilla JS tag renderer
 let tag_renderer = VanillaJsTagRenderer::default();
 
+// Wrap in StubApp (or use router_to_actix/router_to_lambda for real backends)
+let app = StubApp::new(tag_renderer);
+
 // Create HTML renderer with vanilla JS support
-let mut renderer = HtmlRenderer::new(tag_renderer)
+let renderer = HtmlRenderer::new(app)
     .with_title(Some("Vanilla JS App".to_string()));
 
 // Create interactive view
@@ -308,29 +310,29 @@ The renderer supports various action types through the `ActionType` enum. Here a
 
 ### Visibility Actions
 
-- `ActionType::show_str_id(target)` - Show element by string ID
-- `ActionType::hide_str_id(target)` - Hide element by string ID
-- `ActionType::toggle_visibility_str_id(target)` - Toggle element visibility (requires `logic` feature)
+- `ActionType::show_by_id(target)` - Show element by ID
+- `ActionType::hide_by_id(target)` - Hide element by ID
+- `ActionType::toggle_visibility_by_id(target)` - Toggle element visibility (requires `logic` feature)
 - `ActionType::show_class(class)` - Show elements by class name
 - `ActionType::hide_class(class)` - Hide elements by class name
 
 ### Display Actions
 
-- `ActionType::display_str_id(target)` - Set display to initial
-- `ActionType::no_display_str_id(target)` - Set display to none
+- `ActionType::display_by_id(target)` - Set display to initial
+- `ActionType::no_display_by_id(target)` - Set display to none
 - `ActionType::display_class(class)` - Set display to initial for class
 - `ActionType::no_display_class(class)` - Set display to none for class
 
 ### Focus Actions
 
-- `ActionType::focus_str_id(target)` - Focus element by string ID
+- `ActionType::focus_by_id(target)` - Focus element by ID
 - `ActionType::focus_class(class)` - Focus element by class name
-- `ActionType::select_str_id(target)` - Select input text by string ID
+- `ActionType::select_by_id(target)` - Select input text by ID
 
 ### Style Actions
 
-- `ActionType::set_background_str_id(color, target)` - Set background color
-- `ActionType::remove_background_str_id(target)` - Remove background color
+- `ActionType::set_background_by_id(color, target)` - Set background color
+- `ActionType::remove_background_by_id(target)` - Remove background color
 - `ActionType::remove_background_class(class)` - Remove background color from class
 
 ### Navigation Actions
