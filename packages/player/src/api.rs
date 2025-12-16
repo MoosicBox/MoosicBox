@@ -39,6 +39,7 @@ use crate::{
 ///
 /// This function registers all playback control endpoints including play, pause,
 /// resume, stop, seek, and status endpoints.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
