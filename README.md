@@ -275,9 +275,9 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 ### Web & Networking
 
-- **[moosicbox_web_server](packages/web_server)** - Web server abstraction and utilities
-- **[moosicbox_web_server_core](packages/web_server/core)** - Core web server functionality
-- **[moosicbox_web_server_cors](packages/web_server/cors)** - CORS middleware for web servers
+- **[switchy_web_server](packages/switchy/web_server)** - Web server abstraction and utilities
+- **[switchy_web_server_core](packages/switchy/web_server/core)** - Core web server functionality
+- **[switchy_web_server_cors](packages/switchy/web_server/cors)** - CORS middleware for web servers
 - **[switchy_http](packages/http)** - Generic HTTP client abstraction
 - **[switchy_http_models](packages/http/models)** - HTTP protocol models and types
 - **[moosicbox_ws](packages/ws)** - WebSocket utilities and abstractions
@@ -356,7 +356,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[hyperchad_simulator](packages/hyperchad/simulator)** - HyperChad simulation utilities
 - **[hyperchad_test_utils](packages/hyperchad/test_utils)** - HyperChad testing utilities
 - **[switchy_schema_test_utils](packages/switchy/schema/test_utils)** - Schema testing utilities
-- **[web_server_simulator](packages/web_server/simulator)** - Web server simulation utilities
+- **[switchy_web_server_simulator](packages/switchy/web_server/simulator)** - Web server simulation utilities
 - **[bloaty](packages/bloaty)** - Binary analysis utilities (placeholder)
 
 ### Core Libraries
@@ -398,15 +398,15 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 #### HTTP & Web Server
 
 - **[simple_get](packages/http/examples/simple_get)** - Simple HTTP GET example
-- **[basic_handler](packages/web_server/examples/basic_handler)** - Basic web server handler example
-- **[basic_handler_standalone](packages/web_server/examples/basic_handler_standalone)** - Standalone basic handler
-- **[nested_get](packages/web_server/examples/nested_get)** - Nested GET routes
-- **[openapi](packages/web_server/examples/openapi)** - OpenAPI integration
-- **[from_request_test](packages/web_server/examples/from_request_test)** - Request extraction example
-- **[json_extractor_standalone](packages/web_server/examples/json_extractor_standalone)** - JSON extraction
-- **[query_extractor_standalone](packages/web_server/examples/query_extractor_standalone)** - Query parameter extraction
-- **[combined_extractors_standalone](packages/web_server/examples/combined_extractors_standalone)** - Combined extractors
-- **[handler_macro_test](packages/web_server/examples/handler_macro_test)** - Handler macro testing
+- **[basic_handler](packages/switchy/web_server/examples/basic_handler)** - Basic web server handler example
+- **[basic_handler_standalone](packages/switchy/web_server/examples/basic_handler_standalone)** - Standalone basic handler
+- **[nested_get](packages/switchy/web_server/examples/nested_get)** - Nested GET routes
+- **[openapi](packages/switchy/web_server/examples/openapi)** - OpenAPI integration
+- **[from_request_test](packages/switchy/web_server/examples/from_request_test)** - Request extraction example
+- **[json_extractor_standalone](packages/switchy/web_server/examples/json_extractor_standalone)** - JSON extraction
+- **[query_extractor_standalone](packages/switchy/web_server/examples/query_extractor_standalone)** - Query parameter extraction
+- **[combined_extractors_standalone](packages/switchy/web_server/examples/combined_extractors_standalone)** - Combined extractors
+- **[handler_macro_test](packages/switchy/web_server/examples/handler_macro_test)** - Handler macro testing
 
 #### Testing & Simulation
 
