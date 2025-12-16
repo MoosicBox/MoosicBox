@@ -20,7 +20,7 @@ This example demonstrates how to create a basic web server with a single GET end
 
 ```bash
 # From example directory
-cd packages/web_server/examples/simple_get
+cd packages/switchy/web_server/examples/simple_get
 cargo run
 
 # With NixOS
@@ -66,7 +66,7 @@ curl -H "Origin: https://example.com" \
 ### Server Configuration
 
 ```rust
-let server = moosicbox_web_server::WebServerBuilder::new()
+let server = switchy_web_server::WebServerBuilder::new()
     .with_cors(cors)                    // Enable CORS
     .with_scope(                        // Add route scope
         Scope::new("")                  // Root scope
@@ -78,7 +78,7 @@ let server = moosicbox_web_server::WebServerBuilder::new()
 ### CORS Setup
 
 ```rust
-let cors = moosicbox_web_server::cors::Cors::default()
+let cors = switchy_web_server::cors::Cors::default()
     .allow_any_origin()     // Allow requests from any origin
     .allow_any_method()     // Allow any HTTP method
     .allow_any_header()     // Allow any request headers
