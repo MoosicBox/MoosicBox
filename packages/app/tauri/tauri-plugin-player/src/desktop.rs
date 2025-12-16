@@ -20,7 +20,11 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     Player(app.clone())
 }
 
-/// Access to the player APIs.
+/// Desktop player implementation providing access to player APIs.
+///
+/// This struct provides a lightweight interface for desktop platforms (Windows, macOS,
+/// Linux). The desktop implementation returns stub responses as actual player logic is
+/// typically handled in the frontend JavaScript/TypeScript code.
 pub struct Player<R: Runtime>(AppHandle<R>);
 
 impl<R: Runtime> Player<R> {
