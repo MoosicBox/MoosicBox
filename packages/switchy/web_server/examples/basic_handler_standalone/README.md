@@ -14,13 +14,13 @@ This example demonstrates basic request handling using only `RequestData` extrac
 ### With Simulator (default)
 
 ```bash
-cargo run -p basic_handler_standalone_example
+cargo run -p switchy_web_server_example_basic_handler_standalone
 ```
 
 ### With Actix
 
 ```bash
-cargo run -p basic_handler_standalone_example --features actix --no-default-features
+cargo run -p switchy_web_server_example_basic_handler_standalone --features actix --no-default-features
 ```
 
 ## What It Does
