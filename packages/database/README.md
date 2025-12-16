@@ -43,7 +43,7 @@ The Switchy Database package provides:
 ### Basic Query Operations
 
 ```rust
-use switchy_database::{Database, DatabaseError};
+use switchy_database::{Database, DatabaseError, query::FilterableQuery};
 
 async fn query_examples(db: &dyn Database) -> Result<(), DatabaseError> {
     // SELECT query
@@ -396,8 +396,9 @@ The following feature flags are available in `Cargo.toml`:
 ## Error Handling
 
 ```rust
-use switchy_database::DatabaseError;
+use switchy_database::{Database, DatabaseError, query::FilterableQuery};
 
+// Within an async function with access to db: &dyn Database and track_id
 match db.select("tracks").where_eq("id", track_id).execute_first(db).await {
     Ok(Some(row)) => println!("Found track: {:?}", row),
     Ok(None) => println!("Track not found"),
