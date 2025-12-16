@@ -403,6 +403,14 @@ impl SqliteSqlxDatabase {
         self.connection.lock().await.replace(connection.clone());
         Ok(connection)
     }
+
+    /// Clears the cached connection, forcing the next operation to acquire a fresh connection.
+    ///
+    /// This should be called after schema-modifying operations to ensure subsequent queries
+    /// see the updated schema metadata.
+    pub async fn clear_connection_cache(&self) {
+        self.connection.lock().await.take();
+    }
 }
 
 /// Errors that can occur during `SQLite` `SQLx` database operations
@@ -667,8 +675,12 @@ impl Database for SqliteSqlxDatabase {
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
+        Ok(())
     }
 
     #[cfg(feature = "schema")]
@@ -680,8 +692,12 @@ impl Database for SqliteSqlxDatabase {
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
+        Ok(())
     }
 
     #[cfg(feature = "schema")]
@@ -693,8 +709,12 @@ impl Database for SqliteSqlxDatabase {
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
+        Ok(())
     }
 
     #[cfg(feature = "schema")]
@@ -706,8 +726,12 @@ impl Database for SqliteSqlxDatabase {
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
+        Ok(())
     }
 
     #[cfg(feature = "schema")]
@@ -719,8 +743,12 @@ impl Database for SqliteSqlxDatabase {
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
+        Ok(())
     }
 
     #[cfg(feature = "schema")]
@@ -1036,6 +1064,10 @@ impl Database for SqliteSqlxDatabase {
         }
 
         Ok(rows)
+    }
+
+    async fn clear_connection_cache(&self) {
+        self.connection.lock().await.take();
     }
 }
 

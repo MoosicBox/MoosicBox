@@ -388,6 +388,14 @@ impl PostgresSqlxDatabase {
         self.connection.lock().await.replace(connection.clone());
         Ok(connection)
     }
+
+    /// Clears the cached connection, forcing the next operation to acquire a fresh connection.
+    ///
+    /// This should be called after schema-modifying operations to ensure subsequent queries
+    /// see the updated schema metadata.
+    pub async fn clear_connection_cache(&self) {
+        self.connection.lock().await.take();
+    }
 }
 
 /// Errors specific to `PostgreSQL` database operations using `SQLx`
@@ -600,6 +608,9 @@ impl Database for PostgresSqlxDatabase {
         )
         .await?;
 
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
         Ok(())
     }
 
@@ -617,13 +628,18 @@ impl Database for PostgresSqlxDatabase {
             ) {
                 let tx = self.begin_transaction().await?;
                 let result = tx.exec_drop_table(statement).await;
-                return match result {
+                let commit_result = match result {
                     Ok(()) => tx.commit().await,
                     Err(e) => {
                         let _ = tx.rollback().await;
                         Err(e)
                     }
                 };
+
+                // Clear cached connection to ensure subsequent queries see the updated schema
+                self.clear_connection_cache().await;
+
+                return commit_result;
             }
         }
 
@@ -632,6 +648,9 @@ impl Database for PostgresSqlxDatabase {
             statement,
         )
         .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
 
         Ok(())
     }
@@ -647,6 +666,9 @@ impl Database for PostgresSqlxDatabase {
         )
         .await?;
 
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
         Ok(())
     }
 
@@ -661,6 +683,9 @@ impl Database for PostgresSqlxDatabase {
         )
         .await?;
 
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
+
         Ok(())
     }
 
@@ -674,6 +699,9 @@ impl Database for PostgresSqlxDatabase {
             statement,
         )
         .await?;
+
+        // Clear cached connection to ensure subsequent queries see the updated schema
+        self.clear_connection_cache().await;
 
         Ok(())
     }
@@ -995,6 +1023,10 @@ impl Database for PostgresSqlxDatabase {
         }
 
         Ok(rows)
+    }
+
+    async fn clear_connection_cache(&self) {
+        self.connection.lock().await.take();
     }
 }
 

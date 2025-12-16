@@ -1262,6 +1262,21 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 
     /// Executes a raw SQL statement without returning results
     ///
+    /// # Schema Modifications
+    ///
+    /// If you use `exec_raw` to execute schema-modifying statements (like `ALTER TABLE`,
+    /// `CREATE TABLE`, `DROP TABLE`), you should call
+    /// [`clear_connection_cache`](Self::clear_connection_cache) afterward to ensure
+    /// subsequent queries see the updated schema:
+    ///
+    /// ```rust,ignore
+    /// db.exec_raw("ALTER TABLE users ADD COLUMN bio TEXT").await?;
+    /// db.clear_connection_cache().await;
+    /// ```
+    ///
+    /// The typed schema methods ([`exec_alter_table`](Self::exec_alter_table),
+    /// [`exec_create_table`](Self::exec_create_table), etc.) handle this automatically.
+    ///
     /// # Errors
     ///
     /// * If the statement execution fails
@@ -1559,6 +1574,38 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// * If transaction creation fails
     /// * If called on a `DatabaseTransaction` (nested transactions not supported)
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>;
+
+    /// Clears any cached database connections.
+    ///
+    /// Some database backends cache connections for performance. After schema-modifying
+    /// operations (like `ALTER TABLE`, `CREATE TABLE`, `DROP TABLE`), the cached
+    /// connection may have stale schema metadata that can cause query failures.
+    ///
+    /// The typed schema methods ([`exec_alter_table`](Self::exec_alter_table),
+    /// [`exec_create_table`](Self::exec_create_table), etc.) automatically clear
+    /// the connection cache after successful execution.
+    ///
+    /// # When to Call Manually
+    ///
+    /// Call this method after executing raw schema-modifying SQL via
+    /// [`exec_raw`](Self::exec_raw):
+    ///
+    /// ```rust,ignore
+    /// db.exec_raw("ALTER TABLE users ADD COLUMN bio TEXT").await?;
+    /// db.clear_connection_cache().await;
+    /// // Subsequent queries will now see the updated schema
+    /// ```
+    ///
+    /// # Backend Support
+    ///
+    /// * **`SQLite` (sqlx)**: Clears the cached pooled connection
+    /// * **`PostgreSQL` (sqlx)**: Clears the cached pooled connection
+    /// * **`MySQL` (sqlx)**: No-op (doesn't cache individual connections)
+    /// * **rusqlite**: No-op (uses connection pool rotation)
+    ///
+    /// The default implementation does nothing, which is correct for backends
+    /// that don't cache connections in a way that causes stale schema issues.
+    async fn clear_connection_cache(&self) {}
 }
 
 /// Savepoint within a transaction for nested transaction support
