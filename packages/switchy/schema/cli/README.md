@@ -1,278 +1,197 @@
 # switchy_schema_cli
 
-A command-line interface for managing database schema migrations using the `switchy_schema` library.
+Command-line interface for managing database schema migrations with support for PostgreSQL and SQLite databases.
 
 ## Installation
 
-Build from source:
-
 ```bash
-cargo build -p switchy_schema_cli
+cargo install switchy_schema_cli
 ```
 
-The binary will be available at `target/debug/switchy-migrate` (or `target/release/switchy-migrate` for release builds).
-
-## Usage
-
-### Create a new migration
-
-```bash
-switchy-migrate create create_users_table
-```
-
-This creates a new migration with timestamped directory and up/down SQL files.
-
-### Check migration status
-
-```bash
-switchy-migrate status --database-url sqlite:./database.db
-```
-
-Shows which migrations have been applied and which are pending.
-
-```bash
-# Show detailed status including failed and in-progress migrations
-switchy-migrate status --database-url sqlite:./database.db --show-failed
-```
-
-### Run pending migrations
-
-```bash
-switchy-migrate migrate --database-url sqlite:./database.db
-```
-
-Applies all pending migrations to the database.
-
-```bash
-# Require checksum validation before running migrations
-switchy-migrate migrate --database-url sqlite:./database.db --require-checksum-validation
-```
-
-### Rollback migrations
-
-```bash
-# Rollback the most recent migration
-switchy-migrate rollback --database-url sqlite:./database.db
-
-# Rollback multiple migrations
-switchy-migrate rollback --database-url sqlite:./database.db --steps 3
-
-# Rollback to a specific migration (exclusive)
-switchy-migrate rollback --database-url sqlite:./database.db --to 2025-01-01-120000_initial_schema
-```
-
-### Retry a failed migration
-
-```bash
-switchy-migrate retry --database-url sqlite:./database.db 2025-09-01-151110_create_users_table
-```
-
-Retries a migration that previously failed.
-
-### Validate migration checksums
-
-```bash
-# Validate checksums of applied migrations
-switchy-migrate validate --database-url sqlite:./database.db
-
-# Exit with error if mismatches found (for CI/CD)
-switchy-migrate validate --database-url sqlite:./database.db --strict
-
-# Show detailed checksum values
-switchy-migrate validate --database-url sqlite:./database.db --verbose
-```
-
-Validates that migration files haven't been modified after being applied to the database.
-
-### Mark migrations as completed (dangerous operations)
-
-```bash
-# Mark a single migration as completed
-switchy-migrate mark-completed 2025-09-01-151110_create_users_table --database-url sqlite:./app.db
-
-# Mark untracked migrations as completed (default, safest)
-switchy-migrate mark-all-completed --database-url sqlite:./app.db
-
-# Also mark failed migrations as completed
-switchy-migrate mark-all-completed --include-failed --database-url sqlite:./app.db
-
-# Also mark in-progress migrations as completed
-switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:./app.db
-
-# Mark ALL migrations as completed (VERY dangerous)
-switchy-migrate mark-all-completed --all --database-url sqlite:./app.db
-
-# Drop migration table and start fresh (CRITICAL)
-switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
-```
-
-**⚠️ WARNING:** These operations bypass migration execution and can cause:
-
-- Database schema inconsistencies
-- Failed future migrations
-- Data corruption
-
-**Default behavior** (`mark-all-completed` without flags):
-
-- ✅ Safe: Only marks untracked migrations as completed
-- ⏭️ Preserves: Failed and in-progress migration states
-- 💡 Use for: Initializing tracking for existing databases
-
-**With flags** (`--include-failed`, `--include-in-progress`, `--all`):
-
-- ⚠️ Dangerous: Changes migration states
-- 🔄 Updates: Failed/in-progress migrations to completed
-- 💡 Use for: Recovery scenarios only
-
-**With `--drop` flag** (CRITICAL):
-
-- 🔥 **DESTROYS ALL MIGRATION HISTORY**
-- 🗑️ Drops the entire migration tracking table
-- 🆕 Recreates fresh tracking table
-- ✅ Marks all migrations as completed with new checksums
-- 💡 Use for: Corrupted tracking table, schema incompatibility
-- ⚠️ **PERMANENT DATA LOSS** - Cannot be undone
-
-All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation. The `--drop` flag requires double confirmation with critical warnings.
+The binary is installed as `switchy-migrate`.
 
 ## Supported Databases
 
-- **SQLite**: `sqlite:./database.db` or `sqlite:` for in-memory
-- **PostgreSQL**: `postgresql://user:password@localhost:5432/dbname`
+- **SQLite**: `sqlite://path/to/db.sqlite` or `sqlite://:memory:`
+- **PostgreSQL**: `postgresql://user:pass@host:port/database` or `postgres://user:pass@host:port/database`
 
 ## Environment Variables
 
-- `SWITCHY_DATABASE_URL` - Database connection URL
-- `SWITCHY_MIGRATIONS_DIR` - Directory containing migrations (default: `./migrations`)
-- `SWITCHY_MIGRATION_TABLE` - Migration tracking table name (default: `__switchy_migrations`)
-- `MIGRATION_REQUIRE_CHECKSUM_VALIDATION` - Require checksum validation before running migrations (set to `true` or `1` to enable)
+- `SWITCHY_DATABASE_URL`: Database connection URL
+- `SWITCHY_MIGRATIONS_DIR`: Directory containing migration files (default: `./migrations`)
+- `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
+
+## Commands
+
+### create
+
+Create a new migration file with timestamped directory containing `up.sql` and `down.sql` files.
+
+```bash
+switchy-migrate create <name>
+switchy-migrate create add_users_table -m /custom/migrations
+```
+
+**Arguments:**
+
+- `<name>`: Name for the migration
+
+**Options:**
+
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+
+### status
+
+Show migration status and pending migrations.
+
+```bash
+switchy-migrate status -d <database-url>
+switchy-migrate status -d sqlite://db.sqlite --show-failed
+```
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--show-failed`: Show detailed status including failed and in-progress migrations
+
+### migrate
+
+Run pending migrations.
+
+```bash
+switchy-migrate migrate -d <database-url>
+switchy-migrate migrate -d sqlite://db.sqlite --dry-run
+switchy-migrate migrate -d postgres://localhost/mydb --up-to 20231201000000_init
+switchy-migrate migrate -d sqlite://db.sqlite --steps 3
+```
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--up-to <ID>`: Run migrations up to this specific migration ID
+- `--steps <N>`: Run only this many migrations
+- `--dry-run`: Show what would be done without executing
+- `--force`: Force migration even if dirty state detected (dangerous)
+- `--require-checksum-validation`: Require checksum validation before running migrations
+
+### rollback
+
+Rollback migrations.
+
+```bash
+switchy-migrate rollback -d <database-url>
+switchy-migrate rollback -d sqlite://db.sqlite --steps 2
+switchy-migrate rollback -d postgres://localhost/mydb --to 20231201000000_init
+switchy-migrate rollback -d sqlite://db.sqlite --all --dry-run
+```
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--to <ID>`: Rollback to this migration ID (not including it)
+- `--steps <N>`: Number of migrations to rollback (default: 1)
+- `--all`: Rollback all migrations
+- `--dry-run`: Show what would be done without executing
+
+### retry
+
+Retry a failed migration.
+
+```bash
+switchy-migrate retry -d <database-url> <migration-id>
+switchy-migrate retry -d sqlite://db.sqlite 20231201000000_create_users
+```
+
+**Arguments:**
+
+- `<migration-id>`: Migration ID to retry
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+
+### mark-completed
+
+Mark a migration as completed without executing it (dangerous operation).
+
+```bash
+switchy-migrate mark-completed -d <database-url> <migration-id>
+switchy-migrate mark-completed -d sqlite://db.sqlite 20231201000000_init --force
+```
+
+**Arguments:**
+
+- `<migration-id>`: Migration ID to mark as completed
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--force`: Force the operation without confirmation
+
+### mark-all-completed
+
+Mark all migrations as completed without executing them (very dangerous operation).
+
+```bash
+switchy-migrate mark-all-completed -d <database-url>
+switchy-migrate mark-all-completed -d sqlite://db.sqlite --include-failed --force
+switchy-migrate mark-all-completed -d postgres://localhost/mydb --drop --force
+```
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--include-failed`: Also mark failed migrations as completed
+- `--include-in-progress`: Also mark in-progress migrations as completed
+- `--all`: Mark ALL migrations regardless of state (implies `--include-failed` and `--include-in-progress`)
+- `--drop`: Drop and recreate the migration tracking table before marking (critical - deletes all migration history)
+- `--force`: Force the operation without confirmation
+
+### validate
+
+Validate checksums of applied migrations.
+
+```bash
+switchy-migrate validate -d <database-url>
+switchy-migrate validate -d sqlite://db.sqlite --strict --verbose
+```
+
+**Options:**
+
+- `-d, --database-url <URL>`: Database connection URL (required)
+- `-m, --migrations-dir <PATH>`: Directory containing migrations (default: `./migrations`)
+- `--migration-table <NAME>`: Migration table name (default: `__switchy_migrations`)
+- `--strict`: Exit with error code if mismatches found
+- `--verbose`: Show detailed checksum values
 
 ## Migration File Structure
 
-Migrations are organized in directories:
+Migrations are organized in timestamped directories:
 
 ```
 migrations/
-├── 2025-09-01-151110_create_users_table/
-│   ├── up.sql    # Forward migration
-│   └── down.sql  # Rollback migration (optional)
-└── 2025-09-01-151120_add_user_email/
-    ├── up.sql
-    └── down.sql
+  2024-01-15-120000_create_users/
+    up.sql
+    down.sql
+  2024-01-16-093000_add_posts/
+    up.sql
+    down.sql
 ```
 
-## Examples
+The `create` command automatically generates this structure with template files.
 
-### Complete workflow
+## License
 
-```bash
-# Create a new migration
-switchy-migrate create create_users_table
-
-# Edit the generated SQL files
-# migrations/2025-09-01-151110_create_users_table/up.sql
-# migrations/2025-09-01-151110_create_users_table/down.sql
-
-# Check status
-switchy-migrate status --database-url sqlite:./app.db
-
-# Apply migrations
-switchy-migrate migrate --database-url sqlite:./app.db
-
-# Check status again
-switchy-migrate status --database-url sqlite:./app.db
-```
-
-### Dry run
-
-```bash
-# See what would be migrated without applying
-switchy-migrate migrate --database-url sqlite:./app.db --dry-run
-```
-
-### Partial migrations
-
-```bash
-# Apply only the next 2 migrations
-switchy-migrate migrate --database-url sqlite:./app.db --steps 2
-
-# Apply migrations up to a specific one
-switchy-migrate migrate --database-url sqlite:./app.db --up-to 2025-09-01-151120_add_user_email
-```
-
-### Marking Migrations with Different Scopes
-
-```bash
-# Scenario 1: Initialize tracking for existing database
-# Safe - only marks new migrations
-switchy-migrate mark-all-completed --database-url sqlite:./app.db
-
-# Scenario 2: Multiple migrations failed, you fixed them manually
-# Marks failed migrations as completed
-switchy-migrate mark-all-completed --include-failed --database-url sqlite:./app.db
-
-# Scenario 3: Migration process crashed, but migrations actually completed
-# Marks in-progress migrations as completed
-switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:./app.db
-
-# Scenario 4: Complete reset of tracking table
-# Marks everything as completed (most dangerous)
-switchy-migrate mark-all-completed --all --force --database-url sqlite:./app.db
-
-# Scenario 5: Corrupted migration tracking table
-# CRITICAL - Drops table, recreates, marks all completed
-switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
-```
-
-#### `--drop` Flag Details (CRITICAL)
-
-The `--drop` flag is the most destructive operation and should only be used in extreme recovery scenarios.
-
-**What it does:**
-
-1. Drops the entire migration tracking table (`__switchy_migrations`)
-2. Recreates the table with fresh schema
-3. Marks all migrations from source as completed with new checksums
-
-**What you lose:**
-
-- All migration execution history
-- Timestamps of when migrations ran
-- Failure reasons and error messages
-- Old checksums for validation
-- Migration status tracking (completed/failed/in-progress)
-
-**When to use:**
-
-- ✅ Migration tracking table is corrupted or unreadable
-- ✅ Table schema is incompatible with current code version
-- ✅ Need to completely reset migration history
-- ❌ **NOT** for normal recovery scenarios - use scopes instead
-
-**Examples:**
-
-```bash
-# Drop and recreate tracking table (requires double confirmation)
-switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
-
-# With specific scope to control what gets marked after drop
-switchy-migrate mark-all-completed --drop --include-failed --database-url sqlite:./app.db
-
-# Skip confirmations (use with extreme caution in automation)
-switchy-migrate mark-all-completed --drop --force --database-url sqlite:./app.db
-```
-
-## Safety Features
-
-- Rollback operations require user confirmation
-- Mark-completed operations have progressive confirmation levels:
-    - Default scope (pending only): Single confirmation
-    - Dangerous scopes (include-failed/in-progress): Double confirmation
-    - All scope: Double confirmation with extreme warnings
-    - **Drop flag: Double confirmation with CRITICAL warnings**
-- Danger-level-aware warnings adapt to selected scope
-- Database connections are validated before operations
-- Migration ordering is deterministic (alphabetical by ID)
-- Comprehensive error reporting with detailed summaries
-- Support for dry-run operations
-- Failed and in-progress states preserved by default
+MPL-2.0
