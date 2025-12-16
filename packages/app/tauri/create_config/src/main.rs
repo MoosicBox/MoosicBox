@@ -30,6 +30,7 @@ struct Args {
 /// # Panics
 ///
 /// * If logging initialization fails
+/// * If the output file cannot be opened or written to
 fn main() {
     moosicbox_logging::init(None, None).expect("Failed to initialize FreeLog");
 
