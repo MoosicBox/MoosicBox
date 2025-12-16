@@ -220,6 +220,9 @@ pub(crate) static PROGRESS_LISTENERS: LazyLock<Arc<RwLock<Vec<Arc<ProgressListen
     LazyLock::new(|| Arc::new(RwLock::new(vec![])));
 
 /// Registers a listener to receive progress events during scanning.
+///
+/// The listener will be called asynchronously whenever a scan progress event occurs.
+/// Multiple listeners can be registered and all will receive each event.
 pub async fn add_progress_listener(listener: ProgressListenerRef) {
     PROGRESS_LISTENERS.write().await.push(Arc::new(listener));
 }
