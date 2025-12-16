@@ -10,13 +10,15 @@ use std::{
 };
 
 /// The current state of a resource daemon.
+///
+/// Represents the lifecycle states of a [`ResourceDaemon`].
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DaemonState<QuitReason> {
-    /// The daemon is holding the resource and running normally
+    /// The daemon is holding the resource and running normally.
     Holding,
-    /// The daemon is in the process of quitting with an optional reason
+    /// The daemon is in the process of quitting with an optional reason.
     Quitting(Option<QuitReason>),
-    /// The daemon has quit with an optional reason
+    /// The daemon has quit with an optional reason.
     Quit(Option<QuitReason>),
 }
 
@@ -67,7 +69,7 @@ fn wake_to_quit<QuitReason: Clone + Send + 'static>(
 }
 
 impl<T, QuitReason: Clone + Send + 'static> ResourceDaemon<T, QuitReason> {
-    /// Create a new resource daemon that manages a !Send resource in a dedicated thread
+    /// Creates a new resource daemon that manages a `!Send` resource in a dedicated thread.
     ///
     /// # Panics
     ///
@@ -138,7 +140,7 @@ impl<T, QuitReason: Clone + Send + 'static> ResourceDaemon<T, QuitReason> {
         }
     }
 
-    /// Drop the associated resource and stops the daemon thread
+    /// Drops the associated resource and stops the daemon thread.
     ///
     /// # Panics
     ///
@@ -148,7 +150,7 @@ impl<T, QuitReason: Clone + Send + 'static> ResourceDaemon<T, QuitReason> {
         self.wake_to_quit_and_join(Some(reason));
     }
 
-    /// Get the current state of the daemon
+    /// Gets the current state of the daemon.
     ///
     /// # Panics
     ///

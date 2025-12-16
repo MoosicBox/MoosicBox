@@ -21,13 +21,16 @@ use crate::{
 };
 
 /// Stream commands for immediate processing of CPAL audio streams.
+///
+/// These commands are used internally to control the CPAL stream from
+/// the audio output implementation.
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
-    /// Pause the audio stream
+    /// Pause the audio stream immediately.
     Pause,
-    /// Resume the audio stream
+    /// Resume the audio stream from where it was paused.
     Resume,
-    /// Reset the audio stream to its initial state
+    /// Reset the audio stream to its initial state, clearing any buffered data.
     Reset,
 }
 
