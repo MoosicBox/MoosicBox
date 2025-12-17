@@ -53,7 +53,7 @@ pub fn highlight_code_to_containers(code: &str, language: Option<&str>) -> Vec<C
                         a: Some(style.foreground.a),
                     }),
                     children: vec![Container {
-                        element: Element::Raw {
+                        element: Element::Text {
                             value: text.to_string(),
                         },
                         ..Default::default()

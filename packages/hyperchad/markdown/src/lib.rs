@@ -364,14 +364,14 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
             }
 
             ctx.add_child(Container {
-                element: Element::Raw {
+                element: Element::Text {
                     value: text.to_string(),
                 },
                 ..Default::default()
             })
         }
         Event::Code(code) => ctx.add_child(Container {
-            element: Element::Raw {
+            element: Element::Text {
                 value: code.to_string(),
             },
             classes: vec!["inline-code".to_string()],
@@ -405,13 +405,13 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
             }
         }
         Event::SoftBreak => ctx.add_child(Container {
-            element: Element::Raw {
+            element: Element::Text {
                 value: " ".to_string(),
             },
             ..Default::default()
         }),
         Event::HardBreak => ctx.add_child(Container {
-            element: Element::Raw {
+            element: Element::Text {
                 value: "\n".to_string(),
             },
             white_space: Some(WhiteSpace::PreserveWrap),
@@ -860,7 +860,7 @@ mod tests {
         let container = markdown_to_container(md);
         if let Some(child) = container.children.first()
             && let Some(text_child) = child.children.first()
-            && let Element::Raw { value } = &text_child.element
+            && let Element::Text { value } = &text_child.element
         {
             assert!(value.contains('🚀'));
         }
@@ -2067,13 +2067,13 @@ mod tests {
         };
         let container = markdown_to_container_with_options(md, options);
 
-        // Without highlighting, children should be Raw elements (not Span)
+        // Without highlighting, children should be Text elements (not Span)
         if let Some(code_block) = container.children.first() {
             assert!(
                 code_block
                     .children
                     .iter()
-                    .any(|c| matches!(c.element, Element::Raw { .. }))
+                    .any(|c| matches!(c.element, Element::Text { .. }))
             );
         }
     }
