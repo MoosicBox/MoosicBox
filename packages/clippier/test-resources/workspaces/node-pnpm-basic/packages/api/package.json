@@ -1,0 +1,9 @@
+{
+    "name": "@myorg/api",
+    "version": "1.0.0",
+    "main": "index.js",
+    "dependencies": {
+        "@myorg/models": "workspace:*",
+        "express": "^4.21.0"
+    }
+}

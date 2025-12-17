@@ -1,4 +1,5 @@
 # Workspace-level defaults
+[rust]
 nightly = false
 
 [env]

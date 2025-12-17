@@ -1,6 +1,6 @@
 [[config]]
-os            = "ubuntu"
-skip-features = ["*"]
+os   = "ubuntu"
+rust = { skip-features = ["*"] }
 
 [[config.dependencies]]
 command = "sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev"

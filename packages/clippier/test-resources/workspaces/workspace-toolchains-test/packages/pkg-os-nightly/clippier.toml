@@ -1,11 +1,11 @@
 # Package that requires nightly only on Ubuntu
 [[config]]
-nightly = true
-os      = "ubuntu"
+os   = "ubuntu"
+rust = { nightly = true }
 
 [[config]]
-nightly = false
-os      = "windows"
+os   = "windows"
+rust = { nightly = false }
 
 [[config]]
 os = "macos"

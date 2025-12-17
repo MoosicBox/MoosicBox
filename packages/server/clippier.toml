@@ -12,8 +12,8 @@ command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
 features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
 
 [[config]]
-os            = "windows"
-skip-features = ["asio"]
+os   = "windows"
+rust = { skip-features = ["asio"] }
 
 [config.env]
 BIND_ADDR = "127.0.0.1"

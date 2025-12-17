@@ -1,0 +1,7 @@
+[workspace]
+members  = ["packages/*"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = "1.0"
+tokio = "1.0"

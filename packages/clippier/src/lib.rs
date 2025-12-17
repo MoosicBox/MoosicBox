@@ -275,30 +275,82 @@ impl<T> Default for VecOrItem<T> {
     }
 }
 
+/// Rust-specific configuration options.
+///
+/// This struct contains all configuration options that are specific to Rust/Cargo
+/// workspaces. It can appear at the root level (`[rust]`), in workspace config,
+/// or within OS-specific configurations (`[config.rust]`).
+///
+/// # Example
+///
+/// ```toml
+/// [rust]
+/// nightly = true
+/// cargo = ["--locked"]
+/// skip-features = ["dev", "test"]
+/// required-features = ["production"]
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RustConfig {
+    /// Cargo command arguments to pass to all cargo invocations
+    pub cargo: Option<VecOrItem<String>>,
+    /// Whether to use nightly toolchain
+    pub nightly: Option<bool>,
+    /// Features to skip during testing/CI
+    pub skip_features: Option<Vec<String>>,
+    /// Features required for this configuration
+    pub required_features: Option<Vec<String>>,
+}
+
+/// Node.js-specific configuration options.
+///
+/// This struct contains all configuration options that are specific to Node.js
+/// workspaces. It can appear at the root level (`[node]`), in workspace config,
+/// or within OS-specific configurations (`[config.node]`).
+///
+/// # Example
+///
+/// ```toml
+/// [node]
+/// package-manager = "pnpm"
+/// node-version = "20"
+/// skip-packages = ["@myorg/deprecated-*"]
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct NodeConfig {
+    /// Preferred package manager (npm, pnpm, or bun).
+    /// If not specified, auto-detected from lockfiles.
+    pub package_manager: Option<String>,
+    /// Node.js version to use (e.g., "18", "20", "lts")
+    pub node_version: Option<String>,
+    /// Packages to skip during CI (supports wildcards)
+    pub skip_packages: Option<Vec<String>>,
+    /// Additional arguments to pass to package manager commands
+    pub args: Option<VecOrItem<String>>,
+}
+
 /// Configuration for a single platform/OS in clippier.toml
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConfiguration {
     /// CI steps to run for this configuration
     pub ci_steps: Option<VecOrItem<Step>>,
-    /// Cargo commands to run
-    pub cargo: Option<VecOrItem<String>>,
     /// Environment variables for this configuration
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     /// System dependencies required
     pub dependencies: Option<Vec<Step>>,
     /// Operating system this configuration applies to
     pub os: String,
-    /// Features to skip for this configuration
-    pub skip_features: Option<Vec<String>>,
-    /// Features required for this configuration
-    pub required_features: Option<Vec<String>>,
     /// Optional name for this configuration
     pub name: Option<String>,
-    /// Whether to use nightly toolchain
-    pub nightly: Option<bool>,
     /// Whether git submodules are needed
     pub git_submodules: Option<bool>,
+    /// Rust-specific configuration for this OS
+    pub rust: Option<RustConfig>,
+    /// Node.js-specific configuration for this OS
+    pub node: Option<NodeConfig>,
 }
 
 /// Configuration for parallelization settings
@@ -315,18 +367,18 @@ pub struct ParallelizationConfig {
 pub struct ClippierConf {
     /// Global CI steps
     pub ci_steps: Option<VecOrItem<Step>>,
-    /// Global cargo commands
-    pub cargo: Option<VecOrItem<String>>,
     /// Platform-specific configurations (optional to allow feature-validation-only configs)
     pub config: Option<Vec<ClippierConfiguration>>,
     /// Global environment variables
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     /// Parallelization configuration
     pub parallelization: Option<ParallelizationConfig>,
-    /// Whether to use nightly toolchain globally
-    pub nightly: Option<bool>,
     /// Whether git submodules are needed globally
     pub git_submodules: Option<bool>,
+    /// Rust-specific configuration
+    pub rust: Option<RustConfig>,
+    /// Node.js-specific configuration
+    pub node: Option<NodeConfig>,
     /// Tool configuration for check/format commands
     #[cfg(feature = "_tools")]
     pub tools: Option<tools::ToolsConfig>,
@@ -340,14 +392,14 @@ pub struct WorkspaceClippierConf {
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     /// Default CI steps
     pub ci_steps: Option<VecOrItem<Step>>,
-    /// Default cargo commands
-    pub cargo: Option<VecOrItem<String>>,
-    /// Default nightly setting
-    pub nightly: Option<bool>,
     /// Default git submodules setting
     pub git_submodules: Option<bool>,
     /// Default dependencies
     pub dependencies: Option<Vec<Step>>,
+    /// Rust-specific configuration
+    pub rust: Option<RustConfig>,
+    /// Node.js-specific configuration
+    pub node: Option<NodeConfig>,
 }
 
 /// List of features that may be chunked for parallel processing
@@ -1318,13 +1370,11 @@ pub async fn process_configs(
         os: "ubuntu".to_string(),
         dependencies: None,
         env: None,
-        cargo: None,
         name: None,
         ci_steps: None,
-        skip_features: None,
-        required_features: None,
-        nightly: None,
         git_submodules: None,
+        rust: None,
+        node: None,
     }];
 
     let configs = conf
@@ -1345,23 +1395,27 @@ pub async fn process_configs(
         .map(str::to_string)
     {
         for config in configs {
+            // Get Rust-specific config for this OS config
+            let config_rust = config.rust.as_ref();
+            let config_skip_features = config_rust.and_then(|r| r.skip_features.as_deref());
+            let config_required_features = config_rust.and_then(|r| r.required_features.as_deref());
+
             // Combine skip_features from command line and config file
-            let combined_skip_features =
-                match (skip_features_override, config.skip_features.as_deref()) {
-                    (Some(override_features), Some(config_features)) => {
-                        // Combine both lists and remove duplicates
-                        let mut combined = override_features.to_vec();
-                        for feature in config_features {
-                            if !combined.contains(feature) {
-                                combined.push(feature.clone());
-                            }
+            let combined_skip_features = match (skip_features_override, config_skip_features) {
+                (Some(override_features), Some(config_features)) => {
+                    // Combine both lists and remove duplicates
+                    let mut combined = override_features.to_vec();
+                    for feature in config_features {
+                        if !combined.contains(feature) {
+                            combined.push(feature.clone());
                         }
-                        Some(combined)
                     }
-                    (Some(override_features), None) => Some(override_features.to_vec()),
-                    (None, Some(config_features)) => Some(config_features.to_vec()),
-                    (None, None) => None,
-                };
+                    Some(combined)
+                }
+                (Some(override_features), None) => Some(override_features.to_vec()),
+                (None, Some(config_features)) => Some(config_features.to_vec()),
+                (None, None) => None,
+            };
 
             let features = fetch_features(
                 &value,
@@ -1369,7 +1423,7 @@ pub async fn process_configs(
                 max,
                 specific_features,
                 combined_skip_features.as_deref(),
-                required_features_override.or(config.required_features.as_deref()),
+                required_features_override.or(config_required_features),
             );
             let features = process_features(
                 features,
@@ -1383,7 +1437,7 @@ pub async fn process_configs(
 
             // Expand wildcards in required_features
             let expanded_required_features = required_features_override
-                .or(config.required_features.as_deref())
+                .or(config_required_features)
                 .map(|patterns| expand_features_from_cargo_toml(&value, patterns));
 
             match &features {
@@ -1578,9 +1632,20 @@ pub fn create_map(
     map.insert(
         "nightly".to_string(),
         config
-            .nightly
-            .or_else(|| conf.as_ref().and_then(|x| x.nightly))
-            .or_else(|| workspace_conf.as_ref().and_then(|x| x.nightly))
+            .rust
+            .as_ref()
+            .and_then(|r| r.nightly)
+            .or_else(|| {
+                conf.as_ref()
+                    .and_then(|x| x.rust.as_ref())
+                    .and_then(|r| r.nightly)
+            })
+            .or_else(|| {
+                workspace_conf
+                    .as_ref()
+                    .and_then(|x| x.rust.as_ref())
+                    .and_then(|r| r.nightly)
+            })
             .unwrap_or_default()
             .into(),
     );
@@ -1685,17 +1750,24 @@ pub fn create_map(
 
     let mut cargo: Vec<_> = workspace_conf
         .as_ref()
-        .and_then(|x| x.cargo.as_ref())
+        .and_then(|x| x.rust.as_ref())
+        .and_then(|r| r.cargo.as_ref())
         .cloned()
         .unwrap_or_default()
         .into();
     let conf_cargo: Vec<_> = conf
-        .and_then(|x| x.cargo.as_ref())
+        .and_then(|x| x.rust.as_ref())
+        .and_then(|r| r.cargo.as_ref())
         .cloned()
         .unwrap_or_default()
         .into();
     cargo.extend(conf_cargo);
-    let config_cargo: Vec<_> = config.cargo.clone().unwrap_or_default().into();
+    let config_cargo: Vec<_> = config
+        .rust
+        .as_ref()
+        .and_then(|r| r.cargo.clone())
+        .unwrap_or_default()
+        .into();
     cargo.extend(config_cargo);
 
     if !cargo.is_empty() {
@@ -5130,7 +5202,7 @@ pub fn handle_workspace_toolchains_command(
             };
 
             // Process global settings
-            if conf.nightly == Some(true) {
+            if conf.rust.as_ref().and_then(|r| r.nightly) == Some(true) {
                 nightly_packages.insert(package_name.clone());
             }
             if conf.git_submodules == Some(true) {
@@ -5169,7 +5241,7 @@ pub fn handle_workspace_toolchains_command(
                     }
 
                     // Process config-specific settings
-                    if config.nightly == Some(true) {
+                    if config.rust.as_ref().and_then(|r| r.nightly) == Some(true) {
                         nightly_packages.insert(package_name.clone());
                     }
                     if config.git_submodules == Some(true) {
@@ -5451,6 +5523,103 @@ pub fn handle_fmt_command(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_node_config_parsing() {
+        // Test basic NodeConfig parsing
+        let toml_str = r#"
+[node]
+package-manager = "pnpm"
+node-version = "20"
+skip-packages = ["@myorg/deprecated-*", "@myorg/test-*"]
+args = ["--frozen-lockfile"]
+"#;
+        let parsed: Result<WorkspaceClippierConf, _> = toml::from_str(toml_str);
+        assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed.err());
+
+        let conf = parsed.unwrap();
+        let node = conf.node.expect("node section should be present");
+        assert_eq!(node.package_manager, Some("pnpm".to_string()));
+        assert_eq!(node.node_version, Some("20".to_string()));
+        assert_eq!(
+            node.skip_packages,
+            Some(vec![
+                "@myorg/deprecated-*".to_string(),
+                "@myorg/test-*".to_string()
+            ])
+        );
+        let args: Vec<String> = node.args.unwrap().into();
+        assert_eq!(args, vec!["--frozen-lockfile".to_string()]);
+    }
+
+    #[test]
+    fn test_node_config_in_os_config() {
+        // Test NodeConfig within [[config]] section
+        let toml_str = r#"
+[[config]]
+os = "ubuntu"
+node = { package-manager = "pnpm", args = ["--frozen-lockfile"] }
+"#;
+        let parsed: Result<ClippierConf, _> = toml::from_str(toml_str);
+        assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed.err());
+
+        let conf = parsed.unwrap();
+        let configs = conf.config.expect("config section should be present");
+        assert_eq!(configs.len(), 1);
+
+        let node = configs[0].node.as_ref().expect("node should be present");
+        assert_eq!(node.package_manager, Some("pnpm".to_string()));
+        let args: Vec<String> = node.args.clone().unwrap().into();
+        assert_eq!(args, vec!["--frozen-lockfile".to_string()]);
+    }
+
+    #[test]
+    fn test_rust_and_node_config_together() {
+        // Test both Rust and Node config in the same file
+        let toml_str = r#"
+[rust]
+nightly = true
+cargo = ["--locked"]
+
+[node]
+package-manager = "pnpm"
+node-version = "20"
+
+[[config]]
+os = "ubuntu"
+rust = { skip-features = ["simd"] }
+node = { args = ["--frozen-lockfile"] }
+"#;
+        let parsed: Result<ClippierConf, _> = toml::from_str(toml_str);
+        assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed.err());
+
+        let conf = parsed.unwrap();
+
+        // Check root-level rust config
+        let rust = conf.rust.as_ref().expect("rust should be present");
+        assert_eq!(rust.nightly, Some(true));
+
+        // Check root-level node config
+        let node = conf.node.as_ref().expect("node should be present");
+        assert_eq!(node.package_manager, Some("pnpm".to_string()));
+
+        // Check OS-specific configs
+        let configs = conf.config.expect("config section should be present");
+        let ubuntu_config = &configs[0];
+
+        let os_rust = ubuntu_config
+            .rust
+            .as_ref()
+            .expect("rust override should exist");
+        assert_eq!(os_rust.skip_features, Some(vec!["simd".to_string()]));
+
+        let os_node = ubuntu_config
+            .node
+            .as_ref()
+            .expect("node override should exist");
+        let args: Vec<String> = os_node.args.clone().unwrap().into();
+        assert_eq!(args, vec!["--frozen-lockfile".to_string()]);
+    }
+
     #[switchy_async::test]
     async fn test_skip_features_combination() {
         // Create a temporary directory for testing
@@ -5476,6 +5645,8 @@ fail-on-warnings = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["simd"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5538,6 +5709,8 @@ enable-bob = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["*-default"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5591,6 +5764,8 @@ production = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["test-*"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5643,6 +5818,8 @@ version = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["v?"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5694,6 +5871,8 @@ enable-sally = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["*", "!enable-bob"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5745,6 +5924,8 @@ disable-test = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["*", "!enable-*"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5799,6 +5980,8 @@ production = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["*-default", "test-*", "!test-utils"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -5855,6 +6038,8 @@ simd = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 skip-features = ["*-default"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
@@ -6347,6 +6532,8 @@ production = []
         let clippier_toml = r#"
 [[config]]
 os = "ubuntu"
+
+[config.rust]
 required-features = ["test-*"]
 "#;
         switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();

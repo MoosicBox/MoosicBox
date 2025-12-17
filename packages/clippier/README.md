@@ -1,10 +1,10 @@
 # Clippier
 
-Rust workspace analysis and automation tool for managing multi-package projects, with focus on CI/CD pipeline generation and dependency analysis.
+Monorepo workspace analysis and automation tool for managing multi-package projects, with focus on CI/CD pipeline generation and dependency analysis.
 
 ## Overview
 
-Clippier is a command-line utility designed to analyze Rust workspaces and automate various development tasks:
+Clippier is a command-line utility designed to analyze monorepo workspaces and automate various development tasks. It supports multiple workspace types including Cargo (Rust) and Node.js (npm, pnpm, bun):
 
 - **CI/CD Pipeline Generation**: Generate feature matrices for testing
 - **Dependency Analysis**: Analyze workspace dependencies and relationships
@@ -16,6 +16,46 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 - **Docker Integration**: Generate optimized Dockerfiles for workspace packages
 - **Change Impact Analysis**: Determine which packages are affected by file changes
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
+- **Multi-Workspace Support**: Native support for Cargo and Node.js (npm, pnpm, bun) monorepos
+
+## Supported Workspace Types
+
+Clippier supports multiple monorepo workspace types with automatic detection:
+
+### Cargo Workspaces (Rust)
+
+- **Detection**: `Cargo.toml` with `[workspace]` section
+- **Lockfile**: `Cargo.lock`
+- **Package manifest**: `Cargo.toml`
+
+### Node.js Workspaces
+
+Clippier supports three Node.js package managers:
+
+| Package Manager | Workspace Config | Lockfile |
+|-----------------|------------------|----------|
+| **npm** | `package.json` with `workspaces` field | `package-lock.json` |
+| **pnpm** | `pnpm-workspace.yaml` | `pnpm-lock.yaml` |
+| **bun** | `package.json` with `workspaces` field | `bun.lock` |
+
+### Auto-Detection and Priority
+
+When multiple workspace types exist in the same directory:
+
+1. **Cargo** workspaces take priority by default
+2. Use `--workspace-type node` to explicitly select Node.js workspace
+3. Use `--workspace-type cargo` to explicitly select Cargo workspace
+
+```bash
+# Auto-detect (Cargo takes priority if both exist)
+clippier packages .
+
+# Explicitly use Node.js workspace
+clippier packages . --workspace-type node
+
+# Explicitly use Cargo workspace
+clippier packages . --workspace-type cargo
+```
 
 ## Installation
 
@@ -142,7 +182,7 @@ clippier features Cargo.toml \
 ```toml
 [[config]]
 os = "ubuntu"
-skip-features = ["*-default", "test-*", "!test-utils"]
+rust = { skip-features = ["*-default", "test-*", "!test-utils"] }
 ```
 
 #### Wildcard Pattern Support in --features
@@ -218,7 +258,7 @@ clippier features Cargo.toml \
 ```toml
 [[config]]
 os = "ubuntu"
-required-features = ["enable-*", "production"]
+rust = { required-features = ["enable-*", "production"] }
 ```
 
 The wildcards will be expanded when the configuration is processed, ensuring the JSON output contains concrete feature names.
@@ -370,13 +410,34 @@ clippier packages . \
   --output json
 ```
 
+#### Node.js Workspaces
+
+The packages command works with Node.js monorepos (npm, pnpm, bun):
+
+```bash
+# List packages in a Node.js monorepo (auto-detected from lockfile)
+clippier packages . --output json
+
+# Explicitly use Node.js workspace type
+clippier packages . --workspace-type node --output json
+
+# With change detection using lockfile changes
+clippier packages . \
+  --workspace-type node \
+  --changed-files "pnpm-lock.yaml,packages/api/src/index.ts" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --output json
+```
+
 The packages command provides:
 
 - **Package enumeration**: List all workspace packages with metadata
 - **Change-based filtering**: Only include packages affected by specific changes
 - **Git integration**: Automatically detect changed files from git commits
-- **External dependency tracking**: Detect packages affected by Cargo.lock changes
+- **External dependency tracking**: Detect packages affected by lockfile changes (Cargo.lock, pnpm-lock.yaml, package-lock.json, bun.lock)
 - **CI matrix optimization**: Generate one job per package instead of per feature
+- **Multi-workspace support**: Works with Cargo, npm, pnpm, and bun workspaces
 
 **Output format:**
 
@@ -477,9 +538,22 @@ clippier affected-packages /path/to/workspace \
 
 This enhanced mode:
 
-- Detects changes in external dependencies by analyzing Cargo.lock diff
+- Detects changes in external dependencies by analyzing lockfile diff (Cargo.lock, pnpm-lock.yaml, package-lock.json, bun.lock)
 - Maps external dependency changes to affected workspace packages
 - Provides comprehensive impact analysis for both internal and external changes
+- Works with both Cargo and Node.js workspaces
+
+#### Node.js Workspaces
+
+```bash
+# Analyze affected packages in a Node.js monorepo
+clippier affected-packages /path/to/workspace \
+  --workspace-type node \
+  --changed-files "pnpm-lock.yaml,packages/api/src/index.ts" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --output json
+```
 
 ### Feature Propagation Validation
 
@@ -1066,15 +1140,17 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 ### Global Options
 
-| Option     | Description                  |
-| ---------- | ---------------------------- |
-| `--output` | Output format: `json`, `raw` |
+| Option             | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `--output`         | Output format: `json`, `raw`                         |
+| `--workspace-type` | Workspace type to use: `cargo`, `node` (auto-detect if not specified) |
 
 ### Features Command Options
 
 | Option                | Description                                                             | Default      |
 | --------------------- | ----------------------------------------------------------------------- | ------------ |
 | `--os`                | Target operating system                                                 | -            |
+| `--workspace-type`    | Workspace type: `cargo`, `node` (auto-detect if not specified)          | Auto-detect  |
 | `--offset`            | Skip first N features                                                   | 0            |
 | `--max`               | Maximum number of features                                              | All          |
 | `--max-parallel`      | Maximum parallel jobs                                                   | -            |
@@ -1089,7 +1165,7 @@ This command scans all packages in the workspace and collects their toolchains, 
 | `--changed-files`     | Filter by changed files                                                 | -            |
 | `--git-base`          | Git base commit for external dep analysis                               | -            |
 | `--git-head`          | Git head commit for external dep analysis                               | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter                                | -            |
+| `--skip-if`           | Skip packages matching manifest filter                                  | -            |
 | `--include-if`        | Include only packages matching filter                                   | -            |
 | `--ignore`            | Glob patterns to ignore when detecting affected packages                | -            |
 
@@ -1098,13 +1174,14 @@ This command scans all packages in the workspace and collects their toolchains, 
 | Option                | Description                                                        | Default      |
 | --------------------- | ------------------------------------------------------------------ | ------------ |
 | `--os`                | Target operating system                                            | `ubuntu`     |
+| `--workspace-type`    | Workspace type: `cargo`, `node` (auto-detect if not specified)     | Auto-detect  |
 | `--packages`          | Packages to include (supports wildcards `*`, `?` and negation `!`) | All packages |
 | `--changed-files`     | Filter by changed files                                            | -            |
 | `--git-base`          | Git base commit for change detection                               | -            |
 | `--git-head`          | Git head commit for change detection                               | -            |
 | `--include-reasoning` | Include reasoning for affected packages                            | false        |
 | `--max-parallel`      | Maximum number of packages to return                               | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter                           | -            |
+| `--skip-if`           | Skip packages matching manifest filter                             | -            |
 | `--include-if`        | Include only packages matching filter                              | -            |
 | `--ignore`            | Glob patterns to ignore when detecting affected packages           | -            |
 | `--output`            | Output format: `json`, `raw`                                       | `json`       |
@@ -1132,14 +1209,15 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 ### Affected Packages Options
 
-| Option             | Description                                    | Default  |
-| ------------------ | ---------------------------------------------- | -------- |
-| `--changed-files`  | List of changed files                          | Required |
-| `--target-package` | Specific package to check                      | -        |
-| `--git-base`       | Git base commit for external dep analysis      | -        |
-| `--git-head`       | Git head commit for external dep analysis      | -        |
-| `--ignore`         | Glob patterns to ignore when detecting changes | -        |
-| `--output`         | Output format: `json`, `raw`                   | `json`   |
+| Option             | Description                                                    | Default     |
+| ------------------ | -------------------------------------------------------------- | ----------- |
+| `--workspace-type` | Workspace type: `cargo`, `node` (auto-detect if not specified) | Auto-detect |
+| `--changed-files`  | List of changed files                                          | Required    |
+| `--target-package` | Specific package to check                                      | -           |
+| `--git-base`       | Git base commit for external dep analysis                      | -           |
+| `--git-head`       | Git head commit for external dep analysis                      | -           |
+| `--ignore`         | Glob patterns to ignore when detecting changes                 | -           |
+| `--output`         | Output format: `json`, `raw`                                   | `json`      |
 
 ### Feature Validation Options
 
@@ -1209,7 +1287,10 @@ Place a `clippier.toml` at the workspace root to define defaults for all package
 # {workspace_root}/clippier.toml
 # Workspace-level defaults apply to all packages unless overridden
 
+# Rust-specific configuration (workspace-wide defaults)
+[rust]
 nightly = false
+cargo = ["--locked"]
 
 [env]
 RUST_BACKTRACE = "1"
@@ -1236,10 +1317,14 @@ Place a `clippier.toml` in individual package directories to override or extend 
 [env]
 PACKAGE_SPECIFIC_VAR = "custom_value"
 
+# Root-level Rust config (applies to all OS configs unless overridden)
+[rust]
+nightly = true
+
 [[config]]
 os = "ubuntu-latest"
-nightly = false
-cargo = ["build", "test", "clippy"]
+# Per-OS Rust config using inline table
+rust = { skip-features = ["simd"], cargo = ["build", "test", "clippy"] }
 
 [config.env]
 RUST_BACKTRACE = "1"
@@ -1257,8 +1342,77 @@ command = "sudo apt-get install -y pkg-config libssl-dev libasound2-dev"
 command = "sudo apt-get install -y libsqlite3-dev"
 features = ["database"]
 
+[[config]]
+os = "windows"
+# Skip certain features on Windows
+rust = { skip-features = ["asio"] }
+
 [parallelization]
 chunked = 4
+```
+
+### Rust-Specific Configuration
+
+Rust/Cargo-specific options are now namespaced under `[rust]` (workspace/package level) or `rust = {...}` (OS config level):
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `nightly` | Use nightly toolchain | `nightly = true` |
+| `cargo` | Cargo command arguments | `cargo = ["--locked"]` |
+| `skip-features` | Features to skip in CI | `skip-features = ["simd", "test-*"]` |
+| `required-features` | Features required for CI | `required-features = ["production"]` |
+
+**Examples:**
+
+```toml
+# Workspace-level Rust config
+[rust]
+nightly = false
+cargo = ["--locked"]
+skip-features = ["dev", "test-*"]
+
+# Per-OS config with Rust overrides
+[[config]]
+os = "ubuntu"
+rust = { nightly = true, skip-features = ["simd"] }
+
+[[config]]
+os = "windows"
+rust = { skip-features = ["asio"] }
+
+[[config]]
+os = "macos"
+# Uses workspace defaults (no rust override)
+```
+
+### Node.js-Specific Configuration
+
+Node.js-specific options are namespaced under `[node]` (workspace/package level) or `node = {...}` (OS config level):
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `package-manager` | Preferred package manager | `package-manager = "pnpm"` |
+| `node-version` | Node.js version to use | `node-version = "20"` |
+| `skip-packages` | Packages to skip in CI | `skip-packages = ["@myorg/deprecated-*"]` |
+| `args` | Additional package manager arguments | `args = ["--frozen-lockfile"]` |
+
+**Examples:**
+
+```toml
+# Workspace-level Node config
+[node]
+package-manager = "pnpm"
+node-version = "20"
+skip-packages = ["@myorg/deprecated-*"]
+
+# Per-OS config with Node overrides
+[[config]]
+os = "ubuntu"
+node = { package-manager = "pnpm", args = ["--frozen-lockfile"] }
+
+[[config]]
+os = "windows"
+node = { package-manager = "npm" }
 ```
 
 ### Configuration Precedence

@@ -236,6 +236,169 @@ pub mod test_resources {
         (temp_dir, workspace_members)
     }
 
+    /// Load a Node.js test workspace from the test-resources directory.
+    ///
+    /// This function loads a Node.js workspace (npm, pnpm, or bun) and returns
+    /// the temporary directory and list of workspace package paths.
+    ///
+    /// # Arguments
+    ///
+    /// * `workspace_name` - Name of the workspace directory under test-resources/workspaces/
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (`TempDir`, `Vec<String>`) where the Vec contains workspace member paths.
+    ///
+    /// # Panics
+    ///
+    /// * If fails to create a temporary directory
+    /// * If fails to copy workspace files to the temporary directory
+    /// * If fails to read pnpm-workspace.yaml or package.json
+    /// * If fails to parse package.json as JSON
+    #[must_use]
+    pub fn load_node_test_workspace(workspace_name: &str) -> (TempDir, Vec<String>) {
+        let test_resources_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test-resources")
+            .join("workspaces")
+            .join(workspace_name);
+
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+        // Copy workspace files to temp directory
+        copy_dir_recursive(&test_resources_path, temp_dir.path())
+            .expect("Failed to copy test workspace");
+
+        // Try to get workspace members from pnpm-workspace.yaml first
+        let pnpm_workspace_path = temp_dir.path().join("pnpm-workspace.yaml");
+        let package_json_path = temp_dir.path().join("package.json");
+
+        let workspace_patterns = if switchy_fs::exists(&pnpm_workspace_path) {
+            // Parse pnpm-workspace.yaml
+            let content = switchy_fs::sync::read_to_string(&pnpm_workspace_path)
+                .expect("Failed to read pnpm-workspace.yaml");
+            parse_pnpm_workspace_patterns(&content)
+        } else if switchy_fs::exists(&package_json_path) {
+            // Parse package.json workspaces field
+            let content = switchy_fs::sync::read_to_string(&package_json_path)
+                .expect("Failed to read package.json");
+            parse_npm_workspace_patterns(&content)
+        } else {
+            vec![]
+        };
+
+        // Expand glob patterns to actual package paths
+        let workspace_members =
+            expand_node_workspace_patterns(temp_dir.path(), &workspace_patterns);
+
+        (temp_dir, workspace_members)
+    }
+
+    /// Parse pnpm-workspace.yaml to extract workspace patterns.
+    fn parse_pnpm_workspace_patterns(content: &str) -> Vec<String> {
+        // Simple YAML parsing for packages field
+        // Format: packages:\n  - "pattern1"\n  - "pattern2"
+        let mut patterns = vec![];
+        let mut in_packages = false;
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed == "packages:" {
+                in_packages = true;
+                continue;
+            }
+            if in_packages {
+                if trimmed.starts_with('-') {
+                    let pattern = trimmed
+                        .trim_start_matches('-')
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'');
+                    if !pattern.is_empty() {
+                        patterns.push(pattern.to_string());
+                    }
+                } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                    // End of packages section
+                    break;
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Parse package.json to extract workspace patterns.
+    fn parse_npm_workspace_patterns(content: &str) -> Vec<String> {
+        let json: serde_json::Value =
+            serde_json::from_str(content).expect("Failed to parse package.json");
+
+        json.get("workspaces")
+            .and_then(|w| w.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Expand workspace patterns (e.g., "packages/*") to actual package paths.
+    fn expand_node_workspace_patterns(root: &Path, patterns: &[String]) -> Vec<String> {
+        let mut members = vec![];
+
+        for pattern in patterns {
+            if pattern.ends_with("/*") {
+                // Simple glob: packages/*
+                let dir = pattern.trim_end_matches("/*");
+                let dir_path = root.join(dir);
+
+                if switchy_fs::exists(&dir_path)
+                    && let Ok(entries) = switchy_fs::sync::read_dir_sorted(&dir_path)
+                {
+                    for entry in entries {
+                        let entry_path = entry.path();
+                        let package_json = entry_path.join("package.json");
+                        if switchy_fs::exists(&package_json)
+                            && let Ok(rel_path) = entry_path.strip_prefix(root)
+                        {
+                            members.push(rel_path.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            } else {
+                // Exact path
+                let package_json = root.join(pattern).join("package.json");
+                if switchy_fs::exists(&package_json) {
+                    members.push(pattern.clone());
+                }
+            }
+        }
+
+        members
+    }
+
+    /// Get the workspace root path for a test workspace without copying to temp.
+    ///
+    /// Useful for tests that need to directly access test fixtures.
+    ///
+    /// # Panics
+    ///
+    /// * If fails to seed the fixture into the simulator filesystem (when simulator is enabled)
+    #[must_use]
+    pub fn get_test_workspace_path(workspace_name: &str) -> std::path::PathBuf {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test-resources")
+            .join("workspaces")
+            .join(workspace_name);
+
+        // Seed the fixture directory into the simulator filesystem if enabled
+        if switchy_fs::is_simulator_enabled() {
+            switchy_fs::seed_from_real_fs_same_path(&path)
+                .expect("Failed to seed fixture into simulator filesystem");
+        }
+
+        path
+    }
+
     /// Copies a directory recursively from the real filesystem to the `switchy_fs` filesystem.
     ///
     /// This function reads from the real filesystem (for test resources) and writes

@@ -1,4 +1,5 @@
 # Package that requires nightly toolchain
+[rust]
 nightly = true
 
 [env]
