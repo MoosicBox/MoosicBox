@@ -729,6 +729,8 @@ struct RenderContext<'a> {
     route_requests: &'a mut Vec<usize>,
     /// Checkbox state by egui widget ID.
     checkboxes: &'a mut HashMap<egui::Id, bool>,
+    /// Select dropdown state by egui widget ID (stores selected value).
+    selects: &'a mut HashMap<egui::Id, String>,
     /// Element positions by element ID for position tracking.
     positions: &'a mut HashMap<usize, egui::Rect>,
     /// Set of element IDs whose positions should be tracked.
@@ -764,6 +766,7 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     // Removed: action_handler - now created locally as needed to avoid lifetime issues
     action_context: EguiActionContext,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
+    selects: Arc<RwLock<HashMap<egui::Id, String>>>,
     positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
     watch_positions: Arc<RwLock<HashSet<usize>>>,
     router: Router,
@@ -1004,6 +1007,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 request_action: request_action.clone(),
             },
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
+            selects: Arc::new(RwLock::new(HashMap::new())),
             positions: Arc::new(RwLock::new(HashMap::new())),
             watch_positions: Arc::new(RwLock::new(HashSet::new())),
             router,
@@ -1035,6 +1039,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let mut canvas_actions = self.canvas_actions.write().unwrap();
         let mut route_requests = self.route_requests.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
+        let mut selects = self.selects.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
         // Create action handler for event processing
@@ -1048,6 +1053,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             canvas_actions: &mut canvas_actions,
             route_requests: &mut route_requests,
             checkboxes: &mut checkboxes,
+            selects: &mut selects,
             positions: &mut positions,
             watch_positions: &mut watch_positions,
             action_handler,
@@ -3008,7 +3014,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             Element::Input { input, .. } => {
                 Self::render_input(element, ui, ctx, input, render_context.checkboxes)
             }
-            Element::Raw { value } => {
+            Element::Select { selected, .. } => Some(Self::render_select(
+                element,
+                ui,
+                selected.as_deref(),
+                render_context.selects,
+            )),
+            Element::Raw { value } | Element::Text { value } => {
                 let font_size = element
                     .calculated_font_size
                     .expect("Missing calculated_font_size");
@@ -3186,6 +3198,93 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
 
         response
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
+    fn render_select(
+        container: &Container,
+        ui: &mut Ui,
+        initial_selected: Option<&str>,
+        selects: &mut HashMap<egui::Id, String>,
+    ) -> Response {
+        let id = ui.next_auto_id();
+
+        // Get current selection from state or use initial value
+        let contains = selects.contains_key(&id);
+        let current_value = ui
+            .data_mut(|data| {
+                let value = data.remove_temp::<String>(id);
+                if !contains {
+                    return None;
+                }
+                value
+            })
+            .unwrap_or_else(|| initial_selected.unwrap_or_default().to_string());
+
+        // Build options list from children
+        let options: Vec<(String, String)> = container
+            .children
+            .iter()
+            .filter_map(|child| {
+                if let Element::Option { value, disabled } = &child.element {
+                    // Skip disabled options
+                    if *disabled == Some(true) {
+                        return None;
+                    }
+                    // Get display text from child's text content
+                    let display_text = Self::get_container_text(child);
+                    let option_value = value.clone().unwrap_or_default();
+                    Some((option_value, display_text))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Find display text for current selection
+        let selected_text = options
+            .iter()
+            .find(|(val, _)| val == &current_value)
+            .map(|(_, text)| text.clone())
+            .unwrap_or_default();
+
+        let mut new_value = current_value.clone();
+
+        let response = egui::ComboBox::from_id_salt(id)
+            .selected_text(&selected_text)
+            .show_ui(ui, |ui| {
+                for (option_value, option_text) in &options {
+                    let is_selected = &current_value == option_value;
+                    if ui.selectable_label(is_selected, option_text).clicked() {
+                        new_value.clone_from(option_value);
+                    }
+                }
+            });
+
+        // Store updated state
+        ui.data_mut(|data| data.insert_temp(id, new_value.clone()));
+
+        // Track if value changed
+        if new_value != current_value {
+            selects.insert(id, new_value);
+        }
+
+        response.response
+    }
+
+    /// Extracts text content from a container's children (Raw elements).
+    fn get_container_text(container: &Container) -> String {
+        container
+            .children
+            .iter()
+            .filter_map(|child| {
+                if let Element::Raw { value } | Element::Text { value } = &child.element {
+                    Some(value.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<String>()
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -3592,6 +3691,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let mut canvas_actions = self.canvas_actions.write().unwrap();
         let mut route_requests = self.route_requests.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
+        let mut selects = self.selects.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
         #[cfg(feature = "debug")]
@@ -3618,6 +3718,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 canvas_actions: &mut canvas_actions,
                 route_requests: &mut route_requests,
                 checkboxes: &mut checkboxes,
+                selects: &mut selects,
                 positions: &mut positions,
                 watch_positions: &mut watch_positions,
                 action_handler,

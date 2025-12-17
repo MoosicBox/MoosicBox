@@ -16,15 +16,15 @@ fn test_sequential_literal_splice() {
 
     assert_eq!(div.children.len(), 2);
 
-    let Element::Raw { value } = &div.children[0].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[0].element);
+    let Element::Text { value } = &div.children[0].element else {
+        panic!("Expected Text element, got: {:?}", div.children[0].element);
     };
 
     println!("Sequential concatenation result: '{value}'");
     assert_eq!(value, "Name: ");
 
-    let Element::Raw { value } = &div.children[1].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[1].element);
+    let Element::Text { value } = &div.children[1].element else {
+        panic!("Expected Text element, got: {:?}", div.children[1].element);
     };
 
     println!("Sequential concatenation result: '{value}'");
@@ -52,36 +52,36 @@ fn test_multiple_sequential_concatenations() {
 
     assert_eq!(div.children.len(), 5);
 
-    let Element::Raw { value } = &div.children[0].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[0].element);
+    let Element::Text { value } = &div.children[0].element else {
+        panic!("Expected Text element, got: {:?}", div.children[0].element);
     };
 
     println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "Before: ");
 
-    let Element::Raw { value } = &div.children[1].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[1].element);
+    let Element::Text { value } = &div.children[1].element else {
+        panic!("Expected Text element, got: {:?}", div.children[1].element);
     };
 
     println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "first");
 
-    let Element::Raw { value } = &div.children[2].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[2].element);
+    let Element::Text { value } = &div.children[2].element else {
+        panic!("Expected Text element, got: {:?}", div.children[2].element);
     };
 
     println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, " Middle: ");
 
-    let Element::Raw { value } = &div.children[3].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[3].element);
+    let Element::Text { value } = &div.children[3].element else {
+        panic!("Expected Text element, got: {:?}", div.children[3].element);
     };
 
     println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "second");
 
-    let Element::Raw { value } = &div.children[4].element else {
-        panic!("Expected Raw element, got: {:?}", div.children[4].element);
+    let Element::Text { value } = &div.children[4].element else {
+        panic!("Expected Text element, got: {:?}", div.children[4].element);
     };
 
     println!("Multiple concatenation result: '{value}'");
@@ -107,18 +107,18 @@ fn test_mixed_sequential_and_separate() {
 
     assert_eq!(div.children.len(), 5);
 
-    let Element::Raw { value } = &div.children[0].element else {
+    let Element::Text { value } = &div.children[0].element else {
         panic!(
-            "Expected first child to be Raw element, got: {:?}",
+            "Expected first child to be Text element, got: {:?}",
             div.children[0].element
         );
     };
 
     assert_eq!(value, "Label: ");
 
-    let Element::Raw { value } = &div.children[1].element else {
+    let Element::Text { value } = &div.children[1].element else {
         panic!(
-            "Expected first child to be Raw element, got: {:?}",
+            "Expected first child to be Text element, got: {:?}",
             div.children[1].element
         );
     };
@@ -132,18 +132,18 @@ fn test_mixed_sequential_and_separate() {
         );
     };
 
-    let Element::Raw { value } = &div.children[3].element else {
+    let Element::Text { value } = &div.children[3].element else {
         panic!(
-            "Expected third child to be Raw element, got: {:?}",
+            "Expected third child to be Text element, got: {:?}",
             div.children[3].element
         );
     };
 
     assert_eq!(value, "Another: ");
 
-    let Element::Raw { value } = &div.children[4].element else {
+    let Element::Text { value } = &div.children[4].element else {
         panic!(
-            "Expected third child to be Raw element, got: {:?}",
+            "Expected third child to be Text element, got: {:?}",
             div.children[4].element
         );
     };
@@ -161,43 +161,43 @@ fn test_unwrapped_sequential_concatenation() {
         25
     }
 
-    // Test raw sequential concatenation at the top level (unwrapped)
+    // Test text sequential concatenation at the top level (unwrapped)
     let result = container! {
         "Name: " (get_name()) ", Age: " (get_age()) " years old"
     };
 
     assert_eq!(result.len(), 5);
 
-    let Element::Raw { value } = &result[0].element else {
-        panic!("Expected Raw element, got: {:?}", result[0].element);
+    let Element::Text { value } = &result[0].element else {
+        panic!("Expected Text element, got: {:?}", result[0].element);
     };
 
     println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "Name: ");
 
-    let Element::Raw { value } = &result[1].element else {
-        panic!("Expected Raw element, got: {:?}", result[1].element);
+    let Element::Text { value } = &result[1].element else {
+        panic!("Expected Text element, got: {:?}", result[1].element);
     };
 
     println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "John");
 
-    let Element::Raw { value } = &result[2].element else {
-        panic!("Expected Raw element, got: {:?}", result[2].element);
+    let Element::Text { value } = &result[2].element else {
+        panic!("Expected Text element, got: {:?}", result[2].element);
     };
 
     println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, ", Age: ");
 
-    let Element::Raw { value } = &result[3].element else {
-        panic!("Expected Raw element, got: {:?}", result[3].element);
+    let Element::Text { value } = &result[3].element else {
+        panic!("Expected Text element, got: {:?}", result[3].element);
     };
 
     println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "25");
 
-    let Element::Raw { value } = &result[4].element else {
-        panic!("Expected Raw element, got: {:?}", result[4].element);
+    let Element::Text { value } = &result[4].element else {
+        panic!("Expected Text element, got: {:?}", result[4].element);
     };
 
     println!("Unwrapped concatenation result: '{value}'");
@@ -217,15 +217,15 @@ fn test_unwrapped_simple_literal_splice() {
 
     assert_eq!(result.len(), 2);
 
-    let Element::Raw { value } = &result[0].element else {
-        panic!("Expected Raw element, got: {:?}", result[0].element);
+    let Element::Text { value } = &result[0].element else {
+        panic!("Expected Text element, got: {:?}", result[0].element);
     };
 
     println!("Simple unwrapped result: '{value}'");
     assert_eq!(value, "Label: ");
 
-    let Element::Raw { value } = &result[1].element else {
-        panic!("Expected Raw element, got: {:?}", result[1].element);
+    let Element::Text { value } = &result[1].element else {
+        panic!("Expected Text element, got: {:?}", result[1].element);
     };
 
     println!("Simple unwrapped result: '{value}'");

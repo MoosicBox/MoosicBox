@@ -322,7 +322,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         // Handle different element types
         match &container.element {
-            Element::Raw { value } => {
+            Element::Raw { value } | Element::Text { value } => {
                 let font_size = container.calculated_font_size.unwrap_or(14.0);
                 let mut label = egui::Label::new(egui::RichText::new(value).size(font_size));
 
@@ -579,9 +579,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     /// Extracts text content from a container's first child if it's a raw text element.
     fn get_container_text(container: &Container) -> Option<String> {
-        // Look for text in children or raw elements
+        // Look for text in children or raw/text elements
         if let Some(child) = container.children.first()
-            && let Element::Raw { value } = &child.element
+            && let Element::Raw { value } | Element::Text { value } = &child.element
         {
             return Some(value.clone());
         }

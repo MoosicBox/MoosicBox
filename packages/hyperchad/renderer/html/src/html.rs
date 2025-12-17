@@ -230,6 +230,7 @@ pub fn element_style_to_html(
         }
         Element::Div
         | Element::Raw { .. }
+        | Element::Text { .. }
         | Element::Aside
         | Element::Main
         | Element::Header
@@ -253,7 +254,9 @@ pub fn element_style_to_html(
         | Element::TD { .. }
         | Element::Canvas
         | Element::Details { .. }
-        | Element::Summary => {}
+        | Element::Summary
+        | Element::Select { .. }
+        | Element::Option { .. } => {}
     }
 
     let is_grid = is_grid_container(container);
@@ -851,6 +854,51 @@ pub fn element_classes_to_html(
     Ok(())
 }
 
+/// Renders an option child element within a select, handling the selected state.
+///
+/// This function renders `<option>` elements that are children of a `<select>`,
+/// adding the `selected` attribute when the option's value matches the select's
+/// selected value.
+///
+/// # Errors
+///
+/// * If there were any IO errors writing the option as HTML
+fn render_option_child(
+    f: &mut dyn Write,
+    child: &Container,
+    tag_renderer: &dyn HtmlTagRenderer,
+    selected_value: Option<&str>,
+) -> Result<(), std::io::Error> {
+    if let Element::Option { value, disabled } = &child.element {
+        f.write_all(b"<option")?;
+
+        if let Some(value) = value {
+            f.write_all(b" value=\"")?;
+            f.write_all(value.as_bytes())?;
+            f.write_all(b"\"")?;
+
+            // Mark as selected if this option's value matches the select's selected value
+            if selected_value == Some(value.as_str()) {
+                f.write_all(b" selected")?;
+            }
+        }
+        if *disabled == Some(true) {
+            f.write_all(b" disabled")?;
+        }
+
+        tag_renderer.element_attrs_to_html(f, child, false)?;
+        f.write_all(b">")?;
+
+        elements_to_html(f, &child.children, tag_renderer, false)?;
+
+        f.write_all(b"</option>")?;
+    } else {
+        // For non-option children, render them normally
+        element_to_html(f, child, tag_renderer, false)?;
+    }
+    Ok(())
+}
+
 /// Writes a complete HTML element for a container to the output.
 ///
 /// Converts a container into its corresponding HTML element with all attributes,
@@ -874,6 +922,10 @@ pub fn element_to_html(
     match &container.element {
         Element::Raw { value } => {
             f.write_all(value.as_bytes())?;
+            return Ok(());
+        }
+        Element::Text { value } => {
+            f.write_all(html_escape::encode_text(value).as_bytes())?;
             return Ok(());
         }
         Element::Image {
@@ -1192,6 +1244,79 @@ pub fn element_to_html(
 
             if *open == Some(true) {
                 f.write_all(b" open")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
+        Element::Select {
+            name,
+            selected,
+            multiple,
+            disabled,
+            autofocus,
+        } => {
+            const TAG_NAME: &[u8] = b"select";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(name) = name {
+                f.write_all(b" name=\"")?;
+                f.write_all(name.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(selected) = selected {
+                f.write_all(b" data-selected=\"")?;
+                f.write_all(selected.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if *multiple == Some(true) {
+                f.write_all(b" multiple")?;
+            }
+            if *disabled == Some(true) {
+                f.write_all(b" disabled")?;
+            }
+            if *autofocus == Some(true) {
+                f.write_all(b" autofocus")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            // Render option children, marking the selected one
+            for child in &container.children {
+                render_option_child(f, child, tag_renderer, selected.as_deref())?;
+            }
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
+        Element::Option { value, disabled } => {
+            const TAG_NAME: &[u8] = b"option";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(value) = value {
+                f.write_all(b" value=\"")?;
+                f.write_all(value.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if *disabled == Some(true) {
+                f.write_all(b" disabled")?;
             }
 
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;

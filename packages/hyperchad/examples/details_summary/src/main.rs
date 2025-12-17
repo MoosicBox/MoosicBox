@@ -371,7 +371,7 @@ fn create_main_page() -> Containers {
                         }
                     }
 
-                    // Section 5: Styled Details (Settings Panel)
+                    // Section 5: Styled Details (Settings Panel with Select Dropdowns)
                     section
                         class="styled-section"
                         padding=24
@@ -379,8 +379,8 @@ fn create_main_page() -> Containers {
                         border-radius=8
                         gap=16
                     {
-                        h2 { "Styled Details" }
-                        span color=#6b7280 { "Custom appearance with HyperChad attributes" }
+                        h2 { "Styled Details with Select Dropdowns" }
+                        span color=#6b7280 { "Settings panel using <select> elements for options" }
 
                         details
                             margin-top=12
@@ -406,25 +406,48 @@ fn create_main_page() -> Containers {
                                     padding=12
                                     background=white
                                     border-radius=6
+                                    direction=row
+                                    align-items=center
+                                    gap=12
                                 {
-                                    span font-weight=bold color=#374151 { "Option 1:" }
-                                    span color=#6b7280 { " Enable auto-save functionality" }
+                                    span font-weight=bold color=#374151 width=120 { "Theme:" }
+                                    select name="theme" selected="system" {
+                                        option value="light" { "Light" }
+                                        option value="dark" { "Dark" }
+                                        option value="system" { "System Default" }
+                                    }
                                 }
                                 div
                                     padding=12
                                     background=white
                                     border-radius=6
+                                    direction=row
+                                    align-items=center
+                                    gap=12
                                 {
-                                    span font-weight=bold color=#374151 { "Option 2:" }
-                                    span color=#6b7280 { " Show advanced developer tools" }
+                                    span font-weight=bold color=#374151 width=120 { "Notifications:" }
+                                    select name="notifications" selected="daily" {
+                                        option value="never" { "Never" }
+                                        option value="daily" { "Daily Digest" }
+                                        option value="weekly" { "Weekly Summary" }
+                                        option value="realtime" { "Real-time" }
+                                    }
                                 }
                                 div
                                     padding=12
                                     background=white
                                     border-radius=6
+                                    direction=row
+                                    align-items=center
+                                    gap=12
                                 {
-                                    span font-weight=bold color=#374151 { "Option 3:" }
-                                    span color=#6b7280 { " Enable experimental features" }
+                                    span font-weight=bold color=#374151 width=120 { "Language:" }
+                                    select name="language" selected="en" {
+                                        option value="en" { "English" }
+                                        option value="es" { "Español" }
+                                        option value="fr" { "Français" }
+                                        option value="de" { "Deutsch" }
+                                    }
                                 }
                             }
                         }
@@ -507,7 +530,7 @@ fn create_main_page() -> Containers {
                         border-radius=8
                         gap=16
                     {
-                        h3 { "Element Info" }
+                        h3 { "Details/Summary Info" }
                         ul padding-left=20 gap=8 {
                             li {
                                 "<details> creates collapsible sections"
@@ -529,6 +552,28 @@ fn create_main_page() -> Containers {
                             }
                             li {
                                 "Only one <summary> allowed per <details>"
+                            }
+                        }
+
+                        h3 margin-top=16 { "Select/Option Info" }
+                        ul padding-left=20 gap=8 {
+                            li {
+                                "<select> creates dropdown selection menus"
+                            }
+                            li {
+                                "<option> defines individual choices within a select"
+                            }
+                            li {
+                                "`selected` on select sets the currently selected value"
+                            }
+                            li {
+                                "`value` on option defines the form submission value"
+                            }
+                            li {
+                                "`disabled` on option prevents selection (useful for placeholders)"
+                            }
+                            li {
+                                "<option> must be a direct child of <select>"
                             }
                         }
                     }

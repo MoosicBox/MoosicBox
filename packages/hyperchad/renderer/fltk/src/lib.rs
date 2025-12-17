@@ -200,6 +200,21 @@ pub struct FltkRenderer {
 }
 
 impl FltkRenderer {
+    /// Extracts text content from a container's children (Raw elements).
+    fn get_container_text(container: &Container) -> String {
+        container
+            .children
+            .iter()
+            .filter_map(|child| {
+                if let Element::Raw { value } | Element::Text { value } = &child.element {
+                    Some(value.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<String>()
+    }
+
     /// Creates a new FLTK renderer.
     ///
     /// # Arguments
@@ -956,7 +971,7 @@ impl FltkRenderer {
         let mut other_element: Option<widget::Widget> = None;
 
         match &container.element {
-            Element::Raw { value } => {
+            Element::Raw { value } | Element::Text { value } => {
                 app::set_font_size(context.size);
                 #[allow(unused_mut)]
                 let mut frame = frame::Frame::default()
@@ -1000,7 +1015,45 @@ impl FltkRenderer {
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Canvas | Element::Input { .. } => {}
+            Element::Canvas | Element::Input { .. } | Element::Option { .. } => {}
+            Element::Select { selected, .. } => {
+                let _context = context.with_container(container);
+
+                // Build choice options from children
+                let options: Vec<(String, String)> = container
+                    .children
+                    .iter()
+                    .filter_map(|child| {
+                        if let Element::Option { value, disabled } = &child.element {
+                            if *disabled == Some(true) {
+                                return None;
+                            }
+                            let display_text = Self::get_container_text(child);
+                            let option_value = value.clone().unwrap_or_default();
+                            Some((option_value, display_text))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let mut choice = fltk::menu::Choice::default();
+
+                // Add options to the choice widget
+                for (_option_value, option_text) in &options {
+                    choice.add_choice(option_text);
+                }
+
+                // Set the selected value
+                if let Some(selected_value) = selected
+                    && let Some(index) = options.iter().position(|(val, _)| val == selected_value)
+                {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                    choice.set_value(index as i32);
+                }
+
+                other_element = Some(choice.as_base_widget());
+            }
             Element::Image { source, .. } => {
                 context = context.with_container(container);
                 let width = container.calculated_width;

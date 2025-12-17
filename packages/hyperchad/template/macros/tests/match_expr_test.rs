@@ -25,8 +25,8 @@ fn test_basic_match() {
     assert_eq!(containers.len(), 1);
     let container = &containers[0];
 
-    let hyperchad_transformer::Element::Raw { value } = &container.element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &container.element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "A");
@@ -59,8 +59,8 @@ fn test_basic_match_with_div_child() {
     assert_eq!(container.children.len(), 1);
     let container = &container.children[0];
 
-    let hyperchad_transformer::Element::Raw { value } = &container.element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &container.element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "A");
@@ -92,14 +92,14 @@ fn test_basic_match_with_struct_enums() {
     // Verify that the srcset was concatenated correctly
     assert_eq!(containers.len(), 2);
 
-    let hyperchad_transformer::Element::Raw { value } = &containers[0].element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &containers[0].element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "A: ");
 
-    let hyperchad_transformer::Element::Raw { value } = &containers[1].element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &containers[1].element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "Bob");
@@ -132,14 +132,14 @@ fn test_basic_match_with_struct_enums_with_ellipses() {
     // Verify that the srcset was concatenated correctly
     assert_eq!(containers.len(), 2);
 
-    let hyperchad_transformer::Element::Raw { value } = &containers[0].element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &containers[0].element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "A: ");
 
-    let hyperchad_transformer::Element::Raw { value } = &containers[1].element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &containers[1].element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "Bob");
@@ -168,8 +168,8 @@ fn test_basic_match_with_direct_div() {
     assert_eq!(container.children.len(), 1);
     let container = &container.children[0];
 
-    let hyperchad_transformer::Element::Raw { value } = &container.element else {
-        panic!("Expected Raw element");
+    let hyperchad_transformer::Element::Text { value } = &container.element else {
+        panic!("Expected Text element");
     };
 
     assert_eq!(value, "A");

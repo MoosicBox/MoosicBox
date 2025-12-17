@@ -207,3 +207,44 @@ for (const method of methods) {
         return false;
     });
 }
+
+// Handle change events for elements with hx-trigger="change"
+// This enables <select>, <input>, and <textarea> elements to trigger HTTP requests on value change
+createEventDelegator('change', 'hx-trigger', (element, triggerValue, _e) => {
+    if (triggerValue !== 'change') return;
+
+    const inputElement = element as
+        | HTMLInputElement
+        | HTMLSelectElement
+        | HTMLTextAreaElement;
+    const name = inputElement.name;
+    const value = inputElement.value;
+
+    for (const method of METHODS) {
+        let route = element.getAttribute(`hx-${method.toLowerCase()}`);
+        if (!route) continue;
+
+        const options: RequestInit = {
+            method,
+            headers: { 'hx-request': 'true' },
+        };
+
+        if (method === 'GET') {
+            // Append as query parameter for GET requests
+            if (name) {
+                const separator = route.includes('?') ? '&' : '?';
+                route = `${route}${separator}${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+            }
+        } else {
+            // Use FormData for non-GET requests (matches form.ts pattern)
+            if (name) {
+                const formData = new FormData();
+                formData.append(name, value);
+                options.body = formData;
+            }
+        }
+
+        handleHtmlResponse(element, elementFetch(route, options, element));
+        return;
+    }
+});

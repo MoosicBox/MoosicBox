@@ -3601,9 +3601,22 @@ impl Container {
     ///
     /// Returns `true` if the element is [`Element::Raw`], which means it contains unescaped HTML
     /// that will be rendered directly without further processing.
+    ///
+    /// For escaped text content, see [`Self::is_text`].
     #[must_use]
     pub const fn is_raw(&self) -> bool {
         matches!(self.element, Element::Raw { .. })
+    }
+
+    /// Checks if this container contains escaped text content.
+    ///
+    /// Returns `true` if the element is [`Element::Text`], which means it contains text
+    /// that will be HTML-escaped when rendered to prevent XSS attacks.
+    ///
+    /// For raw unescaped HTML content, see [`Self::is_raw`].
+    #[must_use]
+    pub const fn is_text(&self) -> bool {
+        matches!(self.element, Element::Text { .. })
     }
 }
 
@@ -3627,6 +3640,7 @@ impl Container {
         matches!(
             self.element,
             Element::Raw { .. }
+                | Element::Text { .. }
                 | Element::Span
                 | Element::Anchor { .. }
                 | Element::Input { .. }
@@ -4064,9 +4078,20 @@ pub enum Element {
     /// Generic div container (default).
     #[default]
     Div,
-    /// Raw text content.
+    /// Raw HTML content (will NOT be escaped when rendered).
+    ///
+    /// Use this for intentionally injecting HTML markup. For regular text content
+    /// that should be safely escaped, use [`Element::Text`] instead.
     Raw {
-        /// The text value.
+        /// The raw HTML value (rendered without escaping).
+        value: String,
+    },
+    /// Escaped text content (HTML entities will be escaped when rendered).
+    ///
+    /// This is the safe default for displaying user-provided or dynamic text content.
+    /// Characters like `<`, `>`, and `&` will be escaped to prevent XSS attacks.
+    Text {
+        /// The text value (will be HTML-escaped in HTML renderer).
         value: String,
     },
     /// Aside element for sidebar content.
@@ -4175,6 +4200,26 @@ pub enum Element {
     },
     /// Summary element for details disclosure heading.
     Summary,
+    /// Select element for dropdown menus.
+    Select {
+        /// Form field name for submission.
+        name: Option<String>,
+        /// The value of the currently selected option.
+        selected: Option<String>,
+        /// Whether multiple options can be selected.
+        multiple: Option<bool>,
+        /// Whether the select is disabled.
+        disabled: Option<bool>,
+        /// Whether the select should automatically receive focus.
+        autofocus: Option<bool>,
+    },
+    /// Option element for select menus.
+    Option {
+        /// Option value for form submission.
+        value: Option<String>,
+        /// Whether this option is disabled.
+        disabled: Option<bool>,
+    },
 }
 
 #[derive(Default)]
@@ -4463,8 +4508,34 @@ impl Container {
             Element::Button { r#type } => {
                 attrs.add_opt("type", r#type.as_ref());
             }
+            Element::Select {
+                name,
+                selected,
+                multiple,
+                disabled,
+                autofocus,
+            } => {
+                attrs.add_opt("name", name.as_ref());
+                attrs.add_opt("sx-selected", selected.as_ref());
+                if *multiple == Some(true) {
+                    attrs.add("multiple", "multiple");
+                }
+                if *disabled == Some(true) {
+                    attrs.add("disabled", "disabled");
+                }
+                if *autofocus == Some(true) {
+                    attrs.add("autofocus", "autofocus");
+                }
+            }
+            Element::Option { value, disabled } => {
+                attrs.add_opt("value", value.as_ref());
+                if *disabled == Some(true) {
+                    attrs.add("disabled", "disabled");
+                }
+            }
             Element::Div
             | Element::Raw { .. }
+            | Element::Text { .. }
             | Element::Aside
             | Element::Main
             | Element::Header
@@ -5011,6 +5082,17 @@ impl Container {
                     f.write_fmt(format_args!("{value}"))?;
                 }
             }
+            Element::Text { value } => {
+                if wrap_raw_in_element {
+                    f.write_fmt(format_args!(
+                        "<text{attrs}>",
+                        attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                    ))?;
+                    f.write_fmt(format_args!("{value}</text>"))?;
+                } else {
+                    f.write_fmt(format_args!("{value}"))?;
+                }
+            }
             Element::Div => {
                 f.write_fmt(format_args!(
                     "<div{attrs}>",
@@ -5223,6 +5305,22 @@ impl Container {
                 ))?;
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</summary>"))?;
+            }
+            Element::Select { .. } => {
+                f.write_fmt(format_args!(
+                    "<select{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
+                f.write_fmt(format_args!("</select>"))?;
+            }
+            Element::Option { .. } => {
+                f.write_fmt(format_args!(
+                    "<option{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
+                f.write_fmt(format_args!("</option>"))?;
             }
         }
 
@@ -5524,10 +5622,14 @@ impl Element {
             | Self::TR
             | Self::TD { .. }
             | Self::Details { .. }
-            | Self::Summary => true,
-            Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } | Self::Textarea { .. } => {
-                false
-            }
+            | Self::Summary
+            | Self::Select { .. }
+            | Self::Option { .. } => true,
+            Self::Input { .. }
+            | Self::Raw { .. }
+            | Self::Text { .. }
+            | Self::Image { .. }
+            | Self::Textarea { .. } => false,
             #[cfg(feature = "canvas")]
             Self::Canvas => false,
         }
@@ -5541,6 +5643,7 @@ impl Element {
     pub const fn tag_display_str(&self) -> &'static str {
         match self {
             Self::Raw { .. } => "Raw",
+            Self::Text { .. } => "Text",
             Self::Div { .. } => "Div",
             Self::Aside { .. } => "Aside",
             Self::Main { .. } => "Main",
@@ -5568,6 +5671,8 @@ impl Element {
             Self::Textarea { .. } => "Textarea",
             Self::Details { .. } => "Details",
             Self::Summary { .. } => "Summary",
+            Self::Select { .. } => "Select",
+            Self::Option { .. } => "Option",
         }
     }
 }

@@ -220,7 +220,7 @@ macro_rules! calc_size_on_axis {
 
                         paste!(child.[<calculated_ $size>]) = Some(new_size);
                         (Some(new_size), new_size)
-                    } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
+                    } else if let (LayoutDirection::Row, crate::Element::Raw { value } | crate::Element::Text { value }) = (LayoutDirection::$axis, &child.element) {
                         log::trace!("{LABEL}: measuring text={value}");
                         let bounds = $self.font_metrics.measure_text(
                             value,
@@ -697,7 +697,7 @@ macro_rules! flex_on_axis {
                                 let align_items = parent.align_items;
 
                                 for child in parent.relative_positioned_elements_mut() {
-                                    if matches!(child.element, Element::Raw { .. }) {
+                                    if matches!(child.element, Element::Raw { .. } | Element::Text { .. }) {
                                         continue;
                                     }
 
@@ -1174,7 +1174,8 @@ mod pass_wrap_horizontal {
         pub fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
             let each_child =
                 |container: &mut Container, container_width, _view_width, _view_height| {
-                    let Element::Raw { value } = &container.element else {
+                    let (Element::Raw { value } | Element::Text { value }) = &container.element
+                    else {
                         return;
                     };
                     if float_lte!(
@@ -1594,7 +1595,7 @@ mod pass_positioning {
                         }
 
                         if let Some(text_align) = relative_container.text_align
-                            && visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))
+                            && visible_elements!().all(|x| matches!(x.element, Element::Raw { .. } | Element::Text { .. }))
                             {
                                 match text_align {
                                     TextAlign::Start => {}

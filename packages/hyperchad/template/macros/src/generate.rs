@@ -27,6 +27,8 @@ enum ParentContext {
     Generic,
     /// Inside a <details> element
     Details,
+    /// Inside a <select> element
+    Select,
 }
 
 impl ParentContext {
@@ -34,6 +36,7 @@ impl ParentContext {
     fn child_context(element_name: &str) -> Self {
         match element_name {
             "details" => Self::Details,
+            "select" => Self::Select,
             _ => Self::Generic,
         }
     }
@@ -117,11 +120,18 @@ struct ParentValidationRule {
     error_message: &'static str,
 }
 
-const PARENT_VALIDATION_RULES: &[ParentValidationRule] = &[ParentValidationRule {
-    element_name: "summary",
-    allowed_parents: &[ParentContext::Details],
-    error_message: "<summary> element can only be used as a direct child of <details>",
-}];
+const PARENT_VALIDATION_RULES: &[ParentValidationRule] = &[
+    ParentValidationRule {
+        element_name: "summary",
+        allowed_parents: &[ParentContext::Details],
+        error_message: "<summary> element can only be used as a direct child of <details>",
+    },
+    ParentValidationRule {
+        element_name: "option",
+        allowed_parents: &[ParentContext::Select],
+        error_message: "<option> element can only be used as a direct child of <select>",
+    },
+];
 
 /// Validate that an element is allowed in the given parent context
 fn validate_element_parent(
@@ -245,7 +255,7 @@ impl Generator {
                 if !value.is_empty() {
                     build.push_container(quote! {
                         hyperchad_transformer::Container {
-                            element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
+                            element: hyperchad_transformer::Element::Text { value: #value.to_string() },
                             ..Default::default()
                         }
                     });
@@ -255,7 +265,7 @@ impl Generator {
                 let value = &numeric_lit.value;
                 build.push_container(quote! {
                     hyperchad_transformer::Container {
-                        element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
+                        element: hyperchad_transformer::Element::Text { value: #value.to_string() },
                         ..Default::default()
                     }
                 });
@@ -319,6 +329,28 @@ impl Generator {
         });
 
         let element_name_str = element_name.name.to_string();
+
+        // Special handling for `raw` element - outputs unescaped HTML
+        if element_name_str == "raw" {
+            // `raw` cannot have attributes
+            if !element.attrs.is_empty() {
+                return Err("'raw' element cannot have attributes. Use raw { \"<html>\" } or raw { (expr) } only.".to_string());
+            }
+
+            // Collect all children as raw HTML content
+            let raw_value = match element.body {
+                ElementBody::Void(_) => quote! { String::new() },
+                ElementBody::Block(block) => Self::element_markups_to_string_tokens(block.markups),
+            };
+
+            build.push_container(quote! {
+                hyperchad_transformer::Container {
+                    element: hyperchad_transformer::Element::Raw { value: #raw_value },
+                    ..Default::default()
+                }
+            });
+            return Ok(());
+        }
 
         // VALIDATION 1: Check parent context
         validate_element_parent(&element_name_str, parent_context)?;
@@ -518,6 +550,11 @@ impl Generator {
                     "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
                 ),
                 "details" => matches!(name_str.as_str(), "open"),
+                "select" => matches!(
+                    name_str.as_str(),
+                    "name" | "selected" | "multiple" | "disabled" | "autofocus"
+                ),
+                "option" => matches!(name_str.as_str(), "value" | "disabled"),
                 _ => false,
             };
 
@@ -546,6 +583,8 @@ impl Generator {
             "td" => Self::generate_td_element(element_attrs),
             "th" => Self::generate_th_element(element_attrs),
             "details" => Self::generate_details_element(element_attrs),
+            "select" => Self::generate_select_element(element_attrs),
+            "option" => Self::generate_option_element(element_attrs),
             _ => Self::element_name_to_type(name), // Fallback to simple element generation
         })
     }
@@ -982,6 +1021,159 @@ impl Generator {
         quote! {
             hyperchad_transformer::Element::Details {
                 open: #open_field
+            }
+        }
+    }
+
+    fn generate_select_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut name = None;
+        let mut selected = None;
+        let mut multiple = None;
+        let mut disabled = None;
+        let mut autofocus = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "name" => {
+                        let name_tokens = Self::markup_to_string_tokens(attr_value);
+                        name = Some(quote! { Some(#name_tokens) });
+                    }
+                    "selected" => {
+                        let selected_tokens = Self::markup_to_string_tokens(attr_value);
+                        selected = Some(quote! { Some(#selected_tokens) });
+                    }
+                    "multiple" => {
+                        let multiple_tokens = Self::markup_to_bool_tokens(attr_value);
+                        multiple = Some(quote! { Some(#multiple_tokens) });
+                    }
+                    "disabled" => {
+                        let disabled_tokens = Self::markup_to_bool_tokens(attr_value);
+                        disabled = Some(quote! { Some(#disabled_tokens) });
+                    }
+                    "autofocus" => {
+                        let autofocus_tokens = Self::markup_to_bool_tokens(attr_value);
+                        autofocus = Some(quote! { Some(#autofocus_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "name" => {
+                            name = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "selected" => {
+                            selected = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "multiple" => {
+                            multiple = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val) } else { None } },
+                            );
+                        }
+                        "disabled" => {
+                            disabled = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val) } else { None } },
+                            );
+                        }
+                        "autofocus" => {
+                            autofocus = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => match name_str.as_str() {
+                    "multiple" => {
+                        multiple = Some(quote! { Some(true) });
+                    }
+                    "disabled" => {
+                        disabled = Some(quote! { Some(true) });
+                    }
+                    "autofocus" => {
+                        autofocus = Some(quote! { Some(true) });
+                    }
+                    _ => {}
+                },
+            }
+        }
+
+        let name_field = name.unwrap_or_else(|| quote! { None });
+        let selected_field = selected.unwrap_or_else(|| quote! { None });
+        let multiple_field = multiple.unwrap_or_else(|| quote! { None });
+        let disabled_field = disabled.unwrap_or_else(|| quote! { None });
+        let autofocus_field = autofocus.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Select {
+                name: #name_field,
+                selected: #selected_field,
+                multiple: #multiple_field,
+                disabled: #disabled_field,
+                autofocus: #autofocus_field,
+            }
+        }
+    }
+
+    fn generate_option_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut value = None;
+        let mut disabled = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "value" => {
+                        let value_tokens = Self::markup_to_string_tokens(attr_value);
+                        value = Some(quote! { Some(#value_tokens) });
+                    }
+                    "disabled" => {
+                        let disabled_tokens = Self::markup_to_bool_tokens(attr_value);
+                        disabled = Some(quote! { Some(#disabled_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "value" => {
+                            value = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "disabled" => {
+                            disabled = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {
+                    if name_str == "disabled" {
+                        disabled = Some(quote! { Some(true) });
+                    }
+                }
+            }
+        }
+
+        let value_field = value.unwrap_or_else(|| quote! { None });
+        let disabled_field = disabled.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Option {
+                value: #value_field,
+                disabled: #disabled_field,
             }
         }
     }

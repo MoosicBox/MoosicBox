@@ -6402,6 +6402,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_select_dropdown_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "hyperchad",
+ "log 0.4.29",
+ "switchy",
+]
+
+[[package]]
 name = "hyperchad_simulator"
 version = "0.1.0"
 dependencies = [

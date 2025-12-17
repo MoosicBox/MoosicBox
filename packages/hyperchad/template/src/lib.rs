@@ -421,7 +421,7 @@ impl RenderContainer for &str {
             return Ok(());
         }
         containers.push(Container {
-            element: hyperchad_transformer::Element::Raw {
+            element: hyperchad_transformer::Element::Text {
                 value: (*self).to_string(),
             },
             ..Default::default()
@@ -438,7 +438,7 @@ impl RenderContainer for String {
             return Ok(());
         }
         containers.push(Container {
-            element: hyperchad_transformer::Element::Raw {
+            element: hyperchad_transformer::Element::Text {
                 value: self.clone(),
             },
             ..Default::default()
@@ -465,7 +465,7 @@ impl RenderContainer for Arguments<'_> {
         let mut s = String::new();
         s.write_fmt(*self)?;
         containers.push(Container {
-            element: hyperchad_transformer::Element::Raw { value: s },
+            element: hyperchad_transformer::Element::Text { value: s },
             ..Default::default()
         });
         Ok(())

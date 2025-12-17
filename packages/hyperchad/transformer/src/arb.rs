@@ -571,7 +571,7 @@ prop_compose! {
 // Group 2: Element and layout direction
 prop_compose! {
     fn container_group2()(
-        element in any::<Element>().prop_filter("no raw elements", |e| !matches!(e, Element::Raw { .. })),
+        element in any::<Element>().prop_filter("no raw/text elements", |e| !matches!(e, Element::Raw { .. } | Element::Text { .. })),
         direction in any::<hyperchad_transformer_models::LayoutDirection>(),
         overflow_x in any::<hyperchad_transformer_models::LayoutOverflow>(),
         overflow_y in any::<hyperchad_transformer_models::LayoutOverflow>(),
