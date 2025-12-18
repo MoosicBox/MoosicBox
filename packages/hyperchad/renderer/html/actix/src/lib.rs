@@ -80,6 +80,17 @@ mod actions;
 #[cfg(feature = "sse")]
 mod sse;
 
+/// Generates the route pattern for a directory asset route.
+/// Handles the special case where route="/" or "" to avoid producing "//".
+#[cfg(feature = "assets")]
+fn directory_route_pattern(route: &str) -> String {
+    if route == "/" || route.is_empty() {
+        "/{path:.*}".to_string()
+    } else {
+        format!("{route}/{{path:.*}}")
+    }
+}
+
 /// Processes Actix HTTP requests and converts content to responses.
 #[async_trait]
 pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
@@ -317,7 +328,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                             AssetPathTarget::Directory(target) => {
                                 let target = target.clone();
                                 app = app.route(
-                                    &format!("{route}/{{path:.*}}"),
+                                    &directory_route_pattern(route),
                                     web::get().to(
                                         move |req: HttpRequest, path: web::Path<String>| {
                                             let target = target.clone();
@@ -488,5 +499,19 @@ mod tests {
             // Should have the last set action_tx (action_tx2)
             assert!(tx.same_channel(&action_tx2));
         }
+    }
+
+    #[cfg(feature = "assets")]
+    #[test_log::test]
+    fn test_directory_route_pattern() {
+        use super::directory_route_pattern;
+
+        assert_eq!(directory_route_pattern("/"), "/{path:.*}");
+        assert_eq!(directory_route_pattern(""), "/{path:.*}");
+        assert_eq!(directory_route_pattern("/assets"), "/assets/{path:.*}");
+        assert_eq!(
+            directory_route_pattern("/static/files"),
+            "/static/files/{path:.*}"
+        );
     }
 }
