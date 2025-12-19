@@ -996,7 +996,7 @@ impl FltkRenderer {
             | Element::Footer
             | Element::Main
             | Element::Section
-            | Element::Form
+            | Element::Form { .. }
             | Element::Span
             | Element::Table
             | Element::THead

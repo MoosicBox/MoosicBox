@@ -237,7 +237,10 @@ impl Arbitrary for Element {
             Just(Self::Header),
             Just(Self::Footer),
             Just(Self::Section),
-            Just(Self::Form),
+            Just(Self::Form {
+                action: None,
+                method: None,
+            }),
             Just(Self::Span),
             (
                 any::<Option<XmlString>>(),

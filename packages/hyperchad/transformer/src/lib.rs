@@ -1497,7 +1497,13 @@ mod test_element_methods {
         assert!(Element::Header.allows_children());
         assert!(Element::Footer.allows_children());
         assert!(Element::Section.allows_children());
-        assert!(Element::Form.allows_children());
+        assert!(
+            Element::Form {
+                action: None,
+                method: None
+            }
+            .allows_children()
+        );
         assert!(Element::Span.allows_children());
         assert!(Element::UnorderedList.allows_children());
         assert!(Element::OrderedList.allows_children());
@@ -4105,7 +4111,12 @@ pub enum Element {
     /// Section element for thematic grouping of content.
     Section,
     /// Form element for user input.
-    Form,
+    Form {
+        /// Form submission URL.
+        action: Option<String>,
+        /// HTTP method for form submission (GET, POST, etc.).
+        method: Option<String>,
+    },
     /// Inline span element for text styling.
     Span,
     /// Input element for form fields.
@@ -4541,7 +4552,7 @@ impl Container {
             | Element::Header
             | Element::Footer
             | Element::Section
-            | Element::Form
+            | Element::Form { .. }
             | Element::Span
             | Element::Heading { .. }
             | Element::UnorderedList
@@ -5142,9 +5153,17 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</section>"))?;
             }
-            Element::Form => {
+            Element::Form { action, method } => {
+                let action_attr = action
+                    .as_ref()
+                    .map_or_else(String::new, |a| format!(r#" action="{a}""#));
+                let method_attr = method
+                    .as_ref()
+                    .map_or_else(String::new, |m| format!(r#" method="{m}""#));
                 f.write_fmt(format_args!(
-                    "<form{attrs}>",
+                    "<form{action}{method}{attrs}>",
+                    action = action_attr,
+                    method = method_attr,
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
@@ -5607,7 +5626,7 @@ impl Element {
             | Self::Header
             | Self::Footer
             | Self::Section
-            | Self::Form
+            | Self::Form { .. }
             | Self::Span
             | Self::Button { .. }
             | Self::Anchor { .. }

@@ -544,6 +544,7 @@ impl Generator {
                         | "required"
                 ),
                 "button" => matches!(name_str.as_str(), "type" | "disabled"),
+                "form" => matches!(name_str.as_str(), "action" | "method"),
                 "anchor" => matches!(name_str.as_str(), "href" | "target"),
                 "image" => matches!(
                     name_str.as_str(),
@@ -578,6 +579,7 @@ impl Generator {
             "input" => Self::generate_input_element(element_attrs)?,
             "textarea" => Self::generate_textarea_element(element_attrs),
             "button" => Self::generate_button_element(element_attrs),
+            "form" => Self::generate_form_element(element_attrs),
             "anchor" => Self::generate_anchor_element(element_attrs),
             "image" => Self::generate_image_element(element_attrs),
             "td" => Self::generate_td_element(element_attrs),
@@ -1197,6 +1199,39 @@ impl Generator {
         quote! {
             hyperchad_transformer::Element::Button {
                 r#type: #type_field
+            }
+        }
+    }
+
+    fn generate_form_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut action = None;
+        let mut method = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            if let AttributeType::Normal {
+                value: attr_value, ..
+            } = attr_type
+            {
+                match name_str.as_str() {
+                    "action" => {
+                        action = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "method" => {
+                        method = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let action_field = action.map_or_else(|| quote! { None }, |a| quote! { Some(#a) });
+        let method_field = method.map_or_else(|| quote! { None }, |m| quote! { Some(#m) });
+
+        quote! {
+            hyperchad_transformer::Element::Form {
+                action: #action_field,
+                method: #method_field
             }
         }
     }
@@ -2299,7 +2334,9 @@ impl Generator {
             "main" => quote! { hyperchad_transformer::Element::Main },
             "header" => quote! { hyperchad_transformer::Element::Header },
             "footer" => quote! { hyperchad_transformer::Element::Footer },
-            "form" => quote! { hyperchad_transformer::Element::Form },
+            "form" => {
+                quote! { hyperchad_transformer::Element::Form { action: None, method: None } }
+            }
             "span" => quote! { hyperchad_transformer::Element::Span },
             "button" => quote! { hyperchad_transformer::Element::Button { r#type: None } },
             "anchor" => {
