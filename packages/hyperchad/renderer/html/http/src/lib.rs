@@ -197,6 +197,31 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     .to_string()
             }
 
+            /// Safely join a path within a directory, preventing directory traversal attacks.
+            /// Returns None if:
+            /// - The directory doesn't exist
+            /// - The resolved path escapes the directory
+            /// - The resolved path doesn't exist
+            fn safe_join_path(dir: &Path, path_match: &str) -> Option<PathBuf> {
+                // Get canonical path of the base directory
+                let canonical_dir = dir.canonicalize().ok()?;
+
+                // Join and canonicalize the full path
+                let file_path = dir.join(path_match);
+                let canonical_file = file_path.canonicalize().ok()?;
+
+                // Ensure the resolved path is within the directory
+                if !canonical_file.starts_with(&canonical_dir) {
+                    log::warn!(
+                        "Directory traversal attempt blocked: {path_match:?} resolved to {}",
+                        canonical_file.display()
+                    );
+                    return None;
+                }
+
+                Some(canonical_file)
+            }
+
             async fn asset_to_response(
                 path: &str,
                 target: &AssetPathTarget,
@@ -218,7 +243,13 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     }
                     AssetPathTarget::File(target) | AssetPathTarget::Directory(target) => {
                         let target = if is_directory {
-                            target.join(path_match)
+                            // Use safe path joining to prevent directory traversal
+                            match safe_join_path(target, path_match) {
+                                Some(path) => path,
+                                None => {
+                                    return Ok(Response::builder().status(404).body(vec![])?);
+                                }
+                            }
                         } else {
                             target.clone()
                         };
@@ -275,6 +306,22 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 // to allow the router to handle the root path
                 if matches!(target, AssetPathTarget::Directory(..)) && path_match.is_empty() {
                     continue;
+                }
+
+                // For directories, check if the target file exists before serving
+                // If not, fall through to the router
+                if let AssetPathTarget::Directory(dir) = target {
+                    match safe_join_path(dir, path_match) {
+                        Some(file_path) if file_path.is_file() => {
+                            // File exists and is safe to serve
+                        }
+                        _ => {
+                            log::debug!(
+                                "Skipping directory asset route {route_path:?} - file does not exist or path is invalid: {path_match:?}"
+                            );
+                            continue;
+                        }
+                    }
                 }
 
                 log::debug!("Matched route {route_path:?} for {req:?}");
@@ -574,6 +621,118 @@ mod tests {
         assert_eq!(directory_route_prefix(""), "/");
         assert_eq!(directory_route_prefix("/assets"), "/assets/");
         assert_eq!(directory_route_prefix("/static/files"), "/static/files/");
+    }
+
+    #[cfg(feature = "assets")]
+    mod safe_join_path_tests {
+        use std::fs::{self, File};
+        use std::path::PathBuf;
+        use switchy_fs::tempdir;
+
+        // Import safe_join_path - it's defined inside the process() method's #[cfg(feature = "assets")] block
+        // We need to test it by recreating the same function here since it's not accessible
+        fn safe_join_path(dir: &std::path::Path, path_match: &str) -> Option<std::path::PathBuf> {
+            // Get canonical path of the base directory
+            let canonical_dir = dir.canonicalize().ok()?;
+
+            // Join and canonicalize the full path
+            let file_path = dir.join(path_match);
+            let canonical_file = file_path.canonicalize().ok()?;
+
+            // Ensure the resolved path is within the directory
+            if !canonical_file.starts_with(&canonical_dir) {
+                return None;
+            }
+
+            Some(canonical_file)
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_valid_file() {
+            let temp_dir = tempdir().unwrap();
+            let file_path = temp_dir.path().join("test.txt");
+            File::create(&file_path).unwrap();
+
+            let result = safe_join_path(temp_dir.path(), "test.txt");
+            assert!(result.is_some());
+            assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_nonexistent_file() {
+            let temp_dir = tempdir().unwrap();
+
+            let result = safe_join_path(temp_dir.path(), "nonexistent.txt");
+            assert!(result.is_none());
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_blocks_parent_directory_traversal() {
+            let temp_dir = tempdir().unwrap();
+
+            // Create a file outside the temp_dir to try to access
+            let parent_file = temp_dir.path().parent().unwrap().join("outside.txt");
+            File::create(&parent_file).unwrap();
+
+            // Attempt directory traversal
+            let result = safe_join_path(temp_dir.path(), "../outside.txt");
+            assert!(result.is_none(), "Should block parent directory traversal");
+
+            // Cleanup
+            let _ = fs::remove_file(&parent_file);
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_blocks_absolute_path_traversal() {
+            let temp_dir = tempdir().unwrap();
+
+            // Attempt to escape using absolute-looking path
+            let result = safe_join_path(temp_dir.path(), "/../../../etc/passwd");
+            assert!(result.is_none(), "Should block traversal attempts");
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_blocks_various_traversal_patterns() {
+            let temp_dir = tempdir().unwrap();
+
+            // Various traversal attempts
+            let attempts = vec![
+                "../../../etc/passwd",
+                "foo/../../bar/../../../etc/passwd",
+                "./../../etc/passwd",
+            ];
+
+            for attempt in attempts {
+                let result = safe_join_path(temp_dir.path(), attempt);
+                assert!(
+                    result.is_none(),
+                    "Should block traversal attempt: {attempt}"
+                );
+            }
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_allows_nested_directories() {
+            let temp_dir = tempdir().unwrap();
+
+            // Create nested directory structure
+            let nested_dir = temp_dir.path().join("subdir").join("nested");
+            fs::create_dir_all(&nested_dir).unwrap();
+            let nested_file = nested_dir.join("file.txt");
+            File::create(&nested_file).unwrap();
+
+            let result = safe_join_path(temp_dir.path(), "subdir/nested/file.txt");
+            assert!(result.is_some());
+            assert_eq!(result.unwrap(), nested_file.canonicalize().unwrap());
+        }
+
+        #[test_log::test]
+        fn test_safe_join_path_nonexistent_directory() {
+            let nonexistent_dir = PathBuf::from("/nonexistent/directory/that/does/not/exist");
+
+            let result = safe_join_path(&nonexistent_dir, "file.txt");
+            assert!(result.is_none());
+        }
     }
 
     mod process_tests {
