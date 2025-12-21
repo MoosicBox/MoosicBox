@@ -92,6 +92,39 @@ fn directory_route_pattern(route: &str) -> String {
     }
 }
 
+/// Creates a guard that only matches if the requested file exists in the directory.
+///
+/// This is used for the `Fallthrough` behavior where we want non-existent files
+/// to fall through to the router's catchall handler instead of returning an error.
+#[cfg(feature = "assets")]
+fn file_exists_guard(
+    base_dir: std::path::PathBuf,
+    route_prefix: String,
+) -> impl actix_web::guard::Guard {
+    actix_web::guard::fn_guard(move |ctx| {
+        let uri_path = ctx.head().uri.path();
+
+        // Strip the route prefix to get the relative file path
+        let relative = if route_prefix.is_empty() {
+            uri_path.trim_start_matches('/')
+        } else {
+            uri_path
+                .strip_prefix(&route_prefix)
+                .unwrap_or(uri_path)
+                .trim_start_matches('/')
+        };
+
+        // Don't match empty paths (the directory route itself)
+        if relative.is_empty() {
+            return false;
+        }
+
+        // Check if the file exists
+        let file_path = base_dir.join(relative);
+        file_path.is_file()
+    })
+}
+
 /// Processes Actix HTTP requests and converts content to responses.
 #[async_trait]
 pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
@@ -140,6 +173,9 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     /// Static asset routes for serving files and directories (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    /// Default behavior when a requested asset file is not found (requires `assets` feature).
+    #[cfg(feature = "assets")]
+    pub asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
     _phantom: PhantomData<T>,
 }
 
@@ -154,6 +190,8 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             action_tx: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            #[cfg(feature = "assets")]
+            asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             _phantom: PhantomData,
         }
     }
@@ -182,6 +220,26 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         )>,
     ) {
         self.action_tx = Some(tx);
+    }
+
+    /// Sets the default behavior when a requested asset file is not found.
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub const fn with_asset_not_found_behavior(
+        mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        self.asset_not_found_behavior = behavior;
+        self
+    }
+
+    /// Sets the default behavior when a requested asset file is not found (in place).
+    #[cfg(feature = "assets")]
+    pub const fn set_asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        self.asset_not_found_behavior = behavior;
     }
 }
 
@@ -278,9 +336,20 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                     use std::path::PathBuf;
                     use std::str::FromStr as _;
 
-                    use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+                    use hyperchad_renderer::assets::{
+                        AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+                    };
 
-                    for StaticAssetRoute { route, target } in &html_app.static_asset_routes {
+                    for StaticAssetRoute {
+                        route,
+                        target,
+                        not_found_behavior,
+                    } in &html_app.static_asset_routes
+                    {
+                        // Determine the effective behavior: per-route override or global default
+                        let behavior =
+                            not_found_behavior.unwrap_or(html_app.asset_not_found_behavior);
+
                         match target {
                             AssetPathTarget::File(target) => {
                                 let target = target.clone();
@@ -328,27 +397,100 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                             }
                             AssetPathTarget::Directory(target) => {
                                 let target = target.clone();
-                                app = app.route(
-                                    &directory_route_pattern(route),
-                                    web::get().to(
-                                        move |req: HttpRequest, path: web::Path<String>| {
-                                            let target = target.clone();
-                                            async move {
-                                                let target = target.join(path.clone());
+                                let route_prefix = if route == "/" || route.is_empty() {
+                                    String::new()
+                                } else {
+                                    route.clone()
+                                };
 
-                                                let file = actix_files::NamedFile::open_async(
-                                                    target,
-                                                )
-                                                .await
-                                                .map_err(
-                                                    actix_web::error::ErrorInternalServerError,
-                                                )?;
-
-                                                Ok::<_, actix_web::Error>(file.into_response(&req))
-                                            }
-                                        },
-                                    ),
-                                );
+                                match behavior {
+                                    AssetNotFoundBehavior::Fallthrough => {
+                                        // Use a guard that only matches if the file exists
+                                        let guard_dir = target.clone();
+                                        let guard_prefix = route_prefix.clone();
+                                        app = app.route(
+                                            &directory_route_pattern(route),
+                                            web::get()
+                                                .guard(file_exists_guard(guard_dir, guard_prefix))
+                                                .to(
+                                                    move |req: HttpRequest,
+                                                          path: web::Path<String>| {
+                                                        let target = target.clone();
+                                                        async move {
+                                                            let file_path = target.join(path.as_str());
+                                                            let file =
+                                                                actix_files::NamedFile::open_async(
+                                                                    file_path,
+                                                                )
+                                                                .await
+                                                                .map_err(
+                                                                    actix_web::error::ErrorInternalServerError,
+                                                                )?;
+                                                            Ok::<_, actix_web::Error>(
+                                                                file.into_response(&req),
+                                                            )
+                                                        }
+                                                    },
+                                                ),
+                                        );
+                                    }
+                                    AssetNotFoundBehavior::NotFound => {
+                                        // Check in handler, return 404 if not found
+                                        app = app.route(
+                                            &directory_route_pattern(route),
+                                            web::get().to(
+                                                move |req: HttpRequest,
+                                                      path: web::Path<String>| {
+                                                    let target = target.clone();
+                                                    async move {
+                                                        let file_path = target.join(path.as_str());
+                                                        if !file_path.is_file() {
+                                                            return Ok(HttpResponse::NotFound()
+                                                                .finish());
+                                                        }
+                                                        let file =
+                                                            actix_files::NamedFile::open_async(
+                                                                file_path,
+                                                            )
+                                                            .await
+                                                            .map_err(
+                                                                actix_web::error::ErrorInternalServerError,
+                                                            )?;
+                                                        Ok::<_, actix_web::Error>(
+                                                            file.into_response(&req),
+                                                        )
+                                                    }
+                                                },
+                                            ),
+                                        );
+                                    }
+                                    AssetNotFoundBehavior::InternalServerError => {
+                                        // Original behavior - let NamedFile::open_async fail
+                                        app = app.route(
+                                            &directory_route_pattern(route),
+                                            web::get().to(
+                                                move |req: HttpRequest,
+                                                      path: web::Path<String>| {
+                                                    let target = target.clone();
+                                                    async move {
+                                                        let file_path = target.join(path.as_str());
+                                                        let file =
+                                                            actix_files::NamedFile::open_async(
+                                                                file_path,
+                                                            )
+                                                            .await
+                                                            .map_err(
+                                                                actix_web::error::ErrorInternalServerError,
+                                                            )?;
+                                                        Ok::<_, actix_web::Error>(
+                                                            file.into_response(&req),
+                                                        )
+                                                    }
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                         }
                     }

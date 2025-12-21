@@ -73,6 +73,23 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
         self.static_asset_routes.iter()
     }
 
+    #[cfg(feature = "assets")]
+    fn with_asset_not_found_behavior(
+        self,
+        _behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        // Stub doesn't use this behavior
+        self
+    }
+
+    #[cfg(feature = "assets")]
+    fn set_asset_not_found_behavior(
+        &mut self,
+        _behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        // Stub doesn't use this behavior
+    }
+
     fn with_viewport(self, _viewport: Option<String>) -> Self {
         self
     }
@@ -288,6 +305,7 @@ mod tests {
         let routes = vec![StaticAssetRoute {
             route: "/static".to_string(),
             target: AssetPathTarget::Directory(PathBuf::from("./assets")),
+            not_found_behavior: None,
         }];
         let app = StubApp::new(tag_renderer).with_static_asset_routes(routes);
         let mut routes_iter = app.static_asset_routes();

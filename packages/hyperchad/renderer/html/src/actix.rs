@@ -179,6 +179,23 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.static_asset_routes.iter()
     }
 
+    #[cfg(feature = "assets")]
+    fn with_asset_not_found_behavior(
+        mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        self.asset_not_found_behavior = behavior;
+        self
+    }
+
+    #[cfg(feature = "assets")]
+    fn set_asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        self.asset_not_found_behavior = behavior;
+    }
+
     fn with_css_url(mut self, url: impl Into<String>) -> Self {
         self.processor.css_urls.push(url.into());
         self

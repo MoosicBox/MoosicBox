@@ -178,6 +178,24 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.static_asset_routes.iter()
     }
 
+    #[cfg(feature = "assets")]
+    fn with_asset_not_found_behavior(
+        self,
+        _behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        // Lambda doesn't currently use this behavior - assets are typically
+        // served via CloudFront/S3 rather than the Lambda function
+        self
+    }
+
+    #[cfg(feature = "assets")]
+    fn set_asset_not_found_behavior(
+        &mut self,
+        _behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        // Lambda doesn't currently use this behavior
+    }
+
     fn with_css_url(mut self, url: impl Into<String>) -> Self {
         self.processor.css_urls.push(url.into());
         self

@@ -17,6 +17,7 @@
 //! let route = StaticAssetRoute {
 //!     route: "/static".to_string(),
 //!     target: AssetPathTarget::Directory(PathBuf::from("./public")),
+//!     not_found_behavior: None,
 //! };
 //! # Ok(())
 //! # }
@@ -27,6 +28,31 @@ use std::{path::PathBuf, sync::LazyLock};
 
 use bytes::Bytes;
 
+/// Behavior when a requested asset file is not found.
+///
+/// This enum controls how the server responds when a static asset request
+/// cannot be fulfilled because the file doesn't exist.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AssetNotFoundBehavior {
+    /// Return 404 Not Found error (default).
+    ///
+    /// This is the standard HTTP behavior for missing resources.
+    #[default]
+    NotFound,
+
+    /// Fall through to the next route (router catchall).
+    ///
+    /// This is useful for SPA-style applications where the router should
+    /// handle paths that don't correspond to static files.
+    Fallthrough,
+
+    /// Return 500 Internal Server Error.
+    ///
+    /// This preserves the legacy behavior where file system errors
+    /// are converted to internal server errors.
+    InternalServerError,
+}
+
 /// Static asset route configuration
 #[derive(Clone, Debug)]
 pub struct StaticAssetRoute {
@@ -34,6 +60,10 @@ pub struct StaticAssetRoute {
     pub route: String,
     /// Asset target (file, directory, or in-memory content)
     pub target: AssetPathTarget,
+    /// Behavior when the requested file is not found (per-route override).
+    ///
+    /// If `None`, uses the global default behavior configured on the app.
+    pub not_found_behavior: Option<AssetNotFoundBehavior>,
 }
 
 /// Target for static asset serving
@@ -178,9 +208,11 @@ mod tests {
         let route = StaticAssetRoute {
             route: "/static".to_string(),
             target,
+            not_found_behavior: None,
         };
 
         assert_eq!(route.route, "/static");
+        assert!(route.not_found_behavior.is_none());
         match &route.target {
             AssetPathTarget::Directory(path) => {
                 assert_eq!(path, temp_dir.path());
@@ -226,11 +258,49 @@ mod tests {
         let original = StaticAssetRoute {
             route: "/assets".to_string(),
             target,
+            not_found_behavior: Some(AssetNotFoundBehavior::Fallthrough),
         };
 
         #[allow(clippy::redundant_clone)]
         let cloned = original.clone();
 
         assert_eq!(original.route, cloned.route);
+        assert_eq!(original.not_found_behavior, cloned.not_found_behavior);
+    }
+
+    #[test_log::test]
+    fn test_asset_not_found_behavior_default() {
+        assert_eq!(
+            AssetNotFoundBehavior::default(),
+            AssetNotFoundBehavior::NotFound
+        );
+    }
+
+    #[test_log::test]
+    fn test_asset_not_found_behavior_variants() {
+        let not_found = AssetNotFoundBehavior::NotFound;
+        let fallthrough = AssetNotFoundBehavior::Fallthrough;
+        let internal_error = AssetNotFoundBehavior::InternalServerError;
+
+        assert_ne!(not_found, fallthrough);
+        assert_ne!(not_found, internal_error);
+        assert_ne!(fallthrough, internal_error);
+    }
+
+    #[test_log::test]
+    fn test_static_asset_route_with_behavior() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let target = AssetPathTarget::try_from(temp_dir.path().to_path_buf()).expect("Failed");
+
+        let route = StaticAssetRoute {
+            route: "/static".to_string(),
+            target,
+            not_found_behavior: Some(AssetNotFoundBehavior::Fallthrough),
+        };
+
+        assert_eq!(
+            route.not_found_behavior,
+            Some(AssetNotFoundBehavior::Fallthrough)
+        );
     }
 }

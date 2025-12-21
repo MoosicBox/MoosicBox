@@ -160,6 +160,9 @@ pub struct WebServerApp<
     /// Static asset routes for serving assets (when "assets" feature is enabled).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    /// Default behavior when a requested asset file is not found (when "assets" feature is enabled).
+    #[cfg(feature = "assets")]
+    pub asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
     _phantom: PhantomData<T>,
 }
 
@@ -179,6 +182,8 @@ impl<T: Send + Sync + Clone, R: WebServerResponseProcessor<T> + Send + Sync + Cl
             renderer_event_rx,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            #[cfg(feature = "assets")]
+            asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             _phantom: PhantomData,
         }
     }

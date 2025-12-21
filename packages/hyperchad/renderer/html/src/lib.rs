@@ -539,6 +539,21 @@ pub trait HtmlApp {
         &self,
     ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute>;
 
+    /// Sets the default behavior when a requested asset file is not found.
+    #[cfg(feature = "assets")]
+    #[must_use]
+    fn with_asset_not_found_behavior(
+        self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self;
+
+    /// Sets the default behavior when a requested asset file is not found (in place).
+    #[cfg(feature = "assets")]
+    fn set_asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    );
+
     /// Sets the viewport meta tag and returns the modified app.
     #[must_use]
     fn with_viewport(self, viewport: Option<String>) -> Self;
@@ -767,6 +782,26 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         &self,
     ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
         self.app.static_asset_routes()
+    }
+
+    /// Sets the default behavior when a requested asset file is not found.
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub fn with_asset_not_found_behavior(
+        mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        self.app = self.app.with_asset_not_found_behavior(behavior);
+        self
+    }
+
+    /// Sets the default behavior when a requested asset file is not found (in place).
+    #[cfg(feature = "assets")]
+    pub fn set_asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        self.app.set_asset_not_found_behavior(behavior);
     }
 
     /// Sets a custom HTML renderer extension and returns the modified renderer.

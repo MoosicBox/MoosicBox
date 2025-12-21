@@ -165,6 +165,8 @@ pub struct AppBuilder {
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    #[cfg(feature = "assets")]
+    asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
     #[cfg(feature = "html")]
     css_urls: Vec<String>,
     #[cfg(feature = "html")]
@@ -191,7 +193,10 @@ impl std::fmt::Debug for AppBuilder {
             .field("runtime", &self.runtime_handle);
 
         #[cfg(feature = "assets")]
-        builder.field("static_asset_routes", &self.static_asset_routes);
+        {
+            builder.field("static_asset_routes", &self.static_asset_routes);
+            builder.field("asset_not_found_behavior", &self.asset_not_found_behavior);
+        }
 
         #[cfg(feature = "html")]
         {
@@ -232,6 +237,8 @@ impl AppBuilder {
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            #[cfg(feature = "assets")]
+            asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             #[cfg(feature = "html")]
             css_urls: vec![],
             #[cfg(feature = "html")]
@@ -532,6 +539,27 @@ impl AppBuilder {
     ) -> Result<&mut Self, Path::Error> {
         self.static_asset_routes.push(path.try_into()?);
         Ok(self)
+    }
+
+    /// Sets the default behavior when a requested asset file is not found (builder pattern).
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub const fn with_asset_not_found_behavior(
+        mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        self.asset_not_found_behavior = behavior;
+        self
+    }
+
+    /// Sets the default behavior when a requested asset file is not found (mutable reference pattern).
+    #[cfg(feature = "assets")]
+    pub const fn asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> &mut Self {
+        self.asset_not_found_behavior = behavior;
+        self
     }
 
     /// Adds a CSS URL to be linked in the HTML head for HTML renderers (builder pattern).
