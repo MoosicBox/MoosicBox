@@ -15,13 +15,13 @@ This example demonstrates query parameter extraction and parsing with serde dese
 ### With Simulator (default)
 
 ```bash
-cargo run -p query_extractor_standalone_example
+cargo run -p switchy_web_server_example_query_extractor_standalone
 ```
 
 ### With Actix
 
 ```bash
-cargo run -p query_extractor_standalone_example --features actix --no-default-features
+cargo run -p switchy_web_server_example_query_extractor_standalone --features actix --no-default-features
 ```
 
 **Note:** The Actix backend demonstrates route registration but does not start an HTTP server in this example. For actual HTTP server usage with Actix, you would need to integrate with `actix-web`'s server builder.
