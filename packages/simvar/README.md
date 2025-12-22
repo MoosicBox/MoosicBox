@@ -92,6 +92,12 @@ By default, all features are enabled. Individual features can be selected:
 - **`pretty_env_logger`**: Pretty logging output
 - **`fail-on-warnings`**: Treat warnings as errors
 
+## Environment Variables
+
+- **`SIMULATOR_RUNS`**: Number of simulation runs to execute (default: 1)
+- **`SIMULATOR_MAX_PARALLEL`**: Maximum parallel runs (default: number of CPUs)
+- **`NO_TUI`**: Disable terminal UI when set
+
 ## Dependencies
 
 - **simvar_harness** (workspace): Core simulation testing framework
