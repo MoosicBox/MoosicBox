@@ -40,6 +40,7 @@ SIMULATOR_UUID_SEED=12345  # Default seed if not specified
 
 - `uuid` (default): Enable standard UUID generation using `uuid::Uuid::new_v4()`
 - `simulator` (default): Enable deterministic UUID generation with seeded RNG
+- `serde`: Enable serde serialization/deserialization support for the `Uuid` type
 - `fail-on-warnings`: Treat compiler warnings as errors
 
 **Note**: When both `uuid` and `simulator` are enabled, `simulator` takes precedence.
