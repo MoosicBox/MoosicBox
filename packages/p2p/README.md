@@ -30,22 +30,23 @@ The package includes a complete P2P network simulator with realistic network con
 ### Usage Example
 
 ```rust
-use switchy_p2p::simulator::{SimulatorP2P, SimulatorNodeId};
+use switchy_p2p::simulator::SimulatorP2P;
 
-// Create peers with deterministic IDs for testing
-let alice = SimulatorP2P::with_seed("alice");
-let bob = SimulatorP2P::with_seed("bob");
+// Create a P2P node with deterministic ID for testing
+let node = SimulatorP2P::with_seed("alice");
+let node_id = node.local_node_id().clone();
 
-// Register Bob for discovery
-bob.register_peer("bob-service", bob.local_node_id().clone()).await?;
-
-// Alice discovers and connects to Bob
-let mut conn = alice.connect_by_name("bob-service").await?;
-
-// Send and receive messages
-conn.send(b"Hello Bob!").await?;
-let response = conn.recv().await?;
+println!("Node ID: {}", node_id.fmt_short());
 ```
+
+The simulator provides methods for peer discovery and connection:
+
+- `register_peer(name, node_id)` - Register a name for discovery
+- `discover(name)` - Look up a node ID by name
+- `connect(node_id)` - Connect to a peer by node ID
+- `connect_by_name(name)` - Discover and connect in one step
+
+Connections support `send()` and `recv()` for async message passing.
 
 ## Cargo Features
 
