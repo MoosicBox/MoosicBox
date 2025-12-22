@@ -26,6 +26,7 @@ The HyperChad FLTK Renderer provides:
 - **Images**: `img` (with async loading, HTTP support, and local file support)
 - **Links**: `a` (anchor with navigation support)
 - **Buttons**: `button` (rendered as clickable containers)
+- **Dropdowns**: `select` with `option` children (rendered as FLTK Choice widget)
 
 ### Not Rendered
 
@@ -56,7 +57,8 @@ The HyperChad FLTK Renderer provides:
 - **Clickable Elements**: Buttons (rendered as containers) and anchors with navigation
 - **Scrollable Areas**: Horizontal and vertical scrolling with overflow support
 - **Event Handling**: Click events and navigation
-- **Planned**: Form inputs (text, checkbox, radio), selection widgets (dropdowns, list boxes)
+- **Dropdowns**: Select elements with option children
+- **Planned**: Form inputs (text, checkbox, radio)
 
 ### Image and Media
 
@@ -571,7 +573,6 @@ This renderer is designed for:
 ### Not Yet Implemented
 
 - **Form Inputs**: Text inputs, checkboxes, radio buttons are not rendered
-- **Selection Widgets**: Dropdowns and list boxes are not available
 - **Multi-Window Support**: Currently limited to single window applications
 - **Native Menus**: Menu bars and context menus not implemented
 - **Dialog Boxes**: File choosers and message boxes not integrated
