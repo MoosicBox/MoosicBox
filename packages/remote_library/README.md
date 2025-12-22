@@ -170,7 +170,7 @@ async fn get_album_versions() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     for version in versions_page.items() {
-        println!("Album version: {}", version.title);
+        println!("Album version format: {:?}", version.format);
     }
 
     Ok(())
