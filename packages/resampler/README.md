@@ -26,12 +26,10 @@ moosicbox_resampler = "0.1.4"
 
 ```rust
 use moosicbox_resampler::Resampler;
-use symphonia::core::audio::AudioBuffer;
-use symphonia::core::audio::SignalSpec;
-use symphonia::core::units::Duration;
+use symphonia::core::audio::{AudioBuffer, SignalSpec, Channels};
 
-// Configure signal spec for input
-let spec = SignalSpec::new(44100, channels);
+// Configure signal spec for stereo input
+let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
 
 // Create resampler: 44.1kHz -> 48kHz
 // duration = number of input samples per processing chunk
@@ -77,11 +75,11 @@ if let Some(output_buffer) = resampler.resample_to_audio_buffer(&input) {
 
 ```rust
 use moosicbox_resampler::to_audio_buffer;
-use symphonia::core::audio::SignalSpec;
+use symphonia::core::audio::{SignalSpec, Channels};
 
 // Convert interleaved samples to AudioBuffer
 let interleaved_samples: &[f32] = &[/* ... */];
-let spec = SignalSpec::new(48000, channels);
+let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
 
 let audio_buffer = to_audio_buffer(interleaved_samples, spec);
 ```
