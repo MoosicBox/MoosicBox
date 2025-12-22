@@ -269,25 +269,25 @@ let interactive_view = container! {
 
         div class="color-controls" {
             button
-                fx-click=fx { set_background_str_id("#ff0000", "display-box") }
+                fx-click=fx { set_background_by_id("#ff0000", "display-box") }
             {
                 "Red"
             }
 
             button
-                fx-click=fx { set_background_str_id("#00ff00", "display-box") }
+                fx-click=fx { set_background_by_id("#00ff00", "display-box") }
             {
                 "Green"
             }
 
             button
-                fx-click=fx { set_background_str_id("#0000ff", "display-box") }
+                fx-click=fx { set_background_by_id("#0000ff", "display-box") }
             {
                 "Blue"
             }
 
             button
-                fx-click=fx { remove_background_str_id("display-box") }
+                fx-click=fx { remove_background_by_id("display-box") }
             {
                 "Reset"
             }
@@ -363,11 +363,11 @@ let view = container! {
 
 // Add throttling (300ms) and delay_off (2000ms) using action modifiers
 let view_with_effects = container! {
-    button fx-click=fx { show("modal") }.throttle(300) {
+    button fx-click=fx { show("modal").throttle(300) } {
         "Show Modal (Throttled)"
     }
 
-    button fx-click=fx { show("notification") }.delay_off(2000) {
+    button fx-click=fx { show("notification").delay_off(2000) } {
         "Show Notification (Auto-hide)"
     }
 };
