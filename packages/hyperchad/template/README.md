@@ -52,7 +52,7 @@ The HyperChad Template package provides:
 - **RGB Functions**: `rgb()` color creation (3 or 4 arguments)
 - **RGBA Functions**: `rgba()` as alias for 4-argument `rgb()`
 - **Alpha Support**: Float (0.0-1.0), integer (0-255), or percentage ("50%")
-- **Hex Colors**: Support for 3, 6, and 8-digit hex colors (#fff, #ffffff, #ffffffff)
+- **Hex Colors**: Support for 3, 4, 6, and 8-digit hex colors (#fff, #ffff, #ffffff, #ffffffff)
 - **Named Colors**: Built-in color constants (`Color::BLACK`, `Color::WHITE`)
 
 ## Installation
