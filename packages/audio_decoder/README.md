@@ -306,7 +306,7 @@ Core dependencies:
 
 - **symphonia**: Media demuxing and decoding framework
 - **moosicbox_stream_utils**: Streaming utilities (remote bytestream, stalled monitoring)
-- **tokio**: Async runtime
+- **switchy_async**: Async runtime abstraction layer
 - **bytes**: Byte buffer utilities
 - **flume**: MPSC channels
 - **futures**: Async utilities
