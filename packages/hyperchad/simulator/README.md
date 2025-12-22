@@ -7,7 +7,7 @@ Simulation framework for HyperChad applications using simvar for deterministic t
 - **Simulation Framework**: Provides infrastructure for simulating HyperChad applications
 - **Multi-Renderer Support**: Supports HTML, Vanilla JS, egui, and FLTK renderer types
 - **Test Plan Execution**: Integrates with `hyperchad_test_utils` for test automation
-- **Web Server Simulation**: Uses `web_server_simulator` for backend mocking
+- **Web Server Simulation**: Uses `switchy_web_server_simulator` for backend mocking
 - **Configuration**: Supports app configuration, mock data, and multiple renderers
 
 **Note**: Renderer simulation implementations are currently placeholders. Full renderer testing capabilities are planned.
