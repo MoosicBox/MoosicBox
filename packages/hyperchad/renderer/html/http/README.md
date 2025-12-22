@@ -138,8 +138,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Advanced Routing
 
 ```rust
-use hyperchad_router::{Router, RoutePath};
-use hyperchad_template::container;
+use hyperchad_router::{RouteRequest, Router, RoutePath};
+use hyperchad_template::{ContainerVecExt, container};
 
 fn create_router() -> Router {
     let router = Router::new();
@@ -262,6 +262,7 @@ use hyperchad_renderer_html_http::HttpApp;
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
 use hyperchad_router::Router;
 use hyperchad_renderer::assets::AssetPathTarget;
+use hyperchad_template::{ContainerVecExt, container};
 use std::path::PathBuf;
 
 fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
@@ -321,6 +322,9 @@ fn render_page_with_assets() -> String {
 **Note:** Action handling requires the `actions` feature (enabled by default).
 
 ```rust
+use hyperchad_renderer_html_http::HttpApp;
+use hyperchad_renderer_html::DefaultHtmlTagRenderer;
+use hyperchad_router::Router;
 use hyperchad_renderer::transformer::actions::logic::Value;
 
 fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
@@ -356,7 +360,8 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
 ### Error Handling
 
 ```rust
-use http::StatusCode;
+use http::{Request, Response, StatusCode};
+use hyperchad_template::{ContainerVecExt, container};
 
 async fn handle_request_with_errors(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     match process_request(req).await {
@@ -404,6 +409,7 @@ fn handle_error(error: Box<dyn std::error::Error>) -> Response<Vec<u8>> {
 ### Middleware Integration
 
 ```rust
+use http::{Request, Response};
 use std::time::Instant;
 
 async fn logging_middleware<F, Fut>(
