@@ -134,9 +134,12 @@ let container = markdown_to_container_with_options(markdown, options);
 ### Integration with Router
 
 ```rust
+use hyperchad_router::RoutePath;
+
 Router::new()
-    .with_route("/blog/:slug", |req: RouteRequest| async move {
-        let markdown = load_blog_post(&req.params["slug"]).await;
+    .with_route(RoutePath::LiteralPrefix("/blog/".to_string()), |req: RouteRequest| async move {
+        let slug = req.path.strip_prefix("/blog/").unwrap_or("");
+        let markdown = load_blog_post(slug).await;
         let content = markdown_to_container(&markdown);
 
         View::builder()
@@ -238,7 +241,6 @@ This example uses:
 
 All markdown parsing happens:
 
-- At compile time (for const strings)
 - Once per request (for dynamic content)
 - No re-parsing on client side
 - Efficient Container tree generation
