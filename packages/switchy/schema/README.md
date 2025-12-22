@@ -7,7 +7,7 @@ A comprehensive schema migration system for the Switchy database ecosystem, prov
 - **Three Discovery Methods**: Embedded (compile-time), Directory (runtime), and Code (programmatic)
 - **Lifetime-Aware Architecture**: Support for both owned (`'static`) and borrowed (`'a`) data patterns
 - **Type-Safe Query Builders**: Integration with `switchy_database` query builders via the `Executable` trait
-- **Migration Runner**: Robust execution engine with transaction support and rollback capabilities
+- **Migration Runner**: Robust execution engine with rollback capabilities
 - **State Tracking**: Comprehensive migration status tracking with failure recovery
 - **CLI Tool**: Full-featured command-line interface for migration management
 - **Recovery System**: Built-in mechanisms for handling failed migrations and dirty states
