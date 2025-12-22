@@ -123,6 +123,7 @@ The `LocalPlayer` (available with the `local` feature) plays audio directly usin
 use moosicbox_player::{PlayerSource, PlaybackHandler};
 use moosicbox_player::local::LocalPlayer;
 use moosicbox_audio_output::default_output_factory;
+use moosicbox_music_models::PlaybackQuality;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
