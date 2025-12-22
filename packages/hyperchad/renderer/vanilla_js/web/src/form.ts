@@ -47,7 +47,6 @@ function initFormHandler() {
                 ).toUpperCase();
                 const fetchOptions: RequestInit = {
                     method,
-                    headers: { 'hx-request': 'true' },
                 };
 
                 let url = action;

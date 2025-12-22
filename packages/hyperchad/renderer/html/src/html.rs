@@ -1037,6 +1037,33 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
+        Element::Form { action, method } => {
+            const TAG_NAME: &[u8] = b"form";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+            if let Some(action) = action {
+                f.write_all(b" action=\"")?;
+                f.write_all(action.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(method) = method {
+                f.write_all(b" method=\"")?;
+                f.write_all(method.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
         Element::Input {
             name,
             input,
@@ -1344,7 +1371,6 @@ pub fn element_to_html(
         Element::Header => Some("header"),
         Element::Footer => Some("footer"),
         Element::Section => Some("section"),
-        Element::Form { .. } => Some("form"),
         Element::Span => Some("span"),
         Element::UnorderedList => Some("ul"),
         Element::OrderedList => Some("ol"),
