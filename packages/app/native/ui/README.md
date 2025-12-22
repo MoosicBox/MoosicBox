@@ -106,7 +106,7 @@ use moosicbox_music_models::{ApiSource, TrackApiSource, AlbumSort};
 // Play an album
 let action = Action::PlayAlbum {
     album_id: 123.into(),
-    api_source: ApiSource::Library,
+    api_source: ApiSource::library(),
     version_source: None,
     sample_rate: Some(44100),
     bit_depth: Some(16),
