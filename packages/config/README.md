@@ -7,7 +7,7 @@ Configuration utilities and file-based configuration system for MoosicBox applic
 The MoosicBox Config package provides:
 
 - **File-based Configuration**: JSON5-based configuration files with support for comments and trailing commas
-- **Directory Management**: Configuration and cache directory path utilities following XDG Base Directory specification
+- **Directory Management**: Configuration and cache directory path utilities
 - **Profile Support**: Multi-profile configuration directory management
 - **Database Integration**: Basic profile and server identity management
 - **App Type Support**: Configuration for different application types (app, server, local)
