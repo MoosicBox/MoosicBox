@@ -10,7 +10,9 @@ This package provides testing utilities for validating database migrations:
 - `verify_migrations_with_state` - Migration testing with pre-seeded state
 - `verify_migrations_with_mutations` - Testing with data mutations between migration steps
 - `MigrationTestBuilder` - Builder pattern for complex migration scenarios with breakpoints (requires `sqlite` feature)
+- `MigrationSnapshotTest` - Schema snapshot comparison testing (requires `snapshots` feature)
 - `assertions` module - Database schema and state assertion helpers (requires `sqlite` feature)
+- `create_empty_in_memory` - Create an in-memory SQLite database for testing (requires `sqlite` feature)
 
 ## Features
 
@@ -28,6 +30,20 @@ Add to your `Cargo.toml`:
 ```toml
 [dev-dependencies]
 switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
+```
+
+### Creating a Test Database
+
+Use `create_empty_in_memory` to create an in-memory SQLite database for testing (requires `sqlite` feature):
+
+```rust
+use switchy_schema_test_utils::create_empty_in_memory;
+
+#[tokio::test]
+async fn test_example() {
+    let db = create_empty_in_memory().await.unwrap();
+    // Use db for migration testing...
+}
 ```
 
 ### Basic Migration Testing
@@ -137,6 +153,24 @@ async fn test_migration_schema() {
 
     // Verify migrations applied
     assert_migrations_applied(db, &["001_initial", "002_add_users"]).await.unwrap();
+}
+```
+
+### Snapshot Testing (requires `snapshots` feature)
+
+```rust
+use switchy_schema_test_utils::MigrationSnapshotTest;
+
+#[tokio::test]
+async fn test_migration_snapshots() {
+    MigrationSnapshotTest::new("my_migration_test")
+        .migrations_dir("migrations")
+        .expected_tables(vec!["users".to_string(), "posts".to_string()])
+        .assert_schema(true)
+        .assert_sequence(true)
+        .run()
+        .await
+        .unwrap();
 }
 ```
 
