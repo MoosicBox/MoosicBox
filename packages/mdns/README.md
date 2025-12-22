@@ -1,106 +1,54 @@
-# Switchy mDNS
+# switchy_mdns
 
-Simple multicast DNS (mDNS) service registration library for the Switchy ecosystem, providing basic service announcement capabilities on local networks using the Zeroconf/Bonjour protocol.
+mDNS service registration and discovery for MoosicBox servers.
 
 ## Features
 
-- **Service Registration**: Register MoosicBox services on the local network
-- **mDNS Service Discovery**: Basic mDNS service announcement support
-- **Service Browsing**: Optional MoosicBox service discovery/browsing capabilities (via `scanner` feature)
-- **Error Handling**: Error handling for service registration and scanning
-- **Hostname Detection**: Automatic hostname detection for service registration
-- **Simulator Support**: Optional simulator mode for testing without real mDNS
+- **Service Registration**: Register MoosicBox servers on the local network via mDNS
+- **Service Discovery**: Discover MoosicBox servers on the local network (requires `scanner`
+  feature)
+- **Simulator**: Simulated mDNS daemon for testing (requires `simulator` feature)
 
-## Installation
+## Cargo Features
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-# Default includes scanner and simulator features
-switchy_mdns = "0.1.4"
-
-# Or customize features
-switchy_mdns = { version = "0.1.4", default-features = false }
-```
+| Feature     | Default | Description                                        |
+| ----------- | ------- | -------------------------------------------------- |
+| `scanner`   | Yes     | Enables mDNS service discovery for finding servers |
+| `simulator` | Yes     | Provides a simulated mDNS daemon for testing       |
 
 ## Usage
 
-### Service Registration
+### Registering a Service
 
-```rust
-use switchy_mdns::{register_service, RegisterServiceError};
+```rust,no_run
+use switchy_mdns::register_service;
 
-#[tokio::main]
-async fn main() -> Result<(), RegisterServiceError> {
-    // Register a MoosicBox service on the network
-    register_service(
-        "MyMusicServer",    // instance name
-        "192.168.1.100",    // IP address
-        8000,               // port
-    ).await?;
-
-    println!("MoosicBox service registered successfully!");
-
-    // Keep the service running
-    tokio::signal::ctrl_c().await.unwrap();
-
+async fn example() -> Result<(), switchy_mdns::RegisterServiceError> {
+    register_service("my-server", "192.168.1.100", 8080).await?;
     Ok(())
 }
 ```
 
-### Service Type
+### Discovering Servers
 
-The library uses a standard service type for MoosicBox servers:
+With the `scanner` feature enabled, you can discover MoosicBox servers on the network:
 
-```rust
-use switchy_mdns::SERVICE_TYPE;
+```rust,ignore
+use switchy_mdns::scanner::{Context, MoosicBox, service::Service};
 
-println!("Service type: {}", SERVICE_TYPE); // "_moosicboxserver._tcp.local."
-```
+// Create a channel to receive discovered servers
+let (tx, rx) = kanal::unbounded_async::<MoosicBox>();
 
-### Error Handling
+// Create the scanner context and service
+let context = Context::new(tx);
+// Start the service to begin scanning...
 
-```rust
-use switchy_mdns::RegisterServiceError;
-
-match register_service("MyServer", "192.168.1.100", 8000).await {
-    Ok(()) => println!("Service registered successfully"),
-    Err(RegisterServiceError::MdnsSd(e)) => {
-        eprintln!("mDNS error: {}", e);
-    }
-    Err(RegisterServiceError::IO(e)) => {
-        eprintln!("I/O error: {}", e);
-    }
+// Discovered servers will be sent through the channel
+while let Ok(server) = rx.recv().await {
+    println!("Found server: {} at {}", server.name, server.host);
 }
 ```
 
-## Cargo Features
+## License
 
-- **Default**: Includes both `scanner` and `simulator` features
-- **scanner**: MoosicBox service discovery/browsing capabilities
-- **simulator**: Use simulator instead of real mDNS for testing
-
-## Dependencies
-
-Core dependencies:
-
-- `mdns-sd`: Core mDNS service daemon functionality
-- `hostname`: System hostname detection
-- `thiserror`: Error handling utilities
-- `async-trait`: Async trait support
-- `log`: Logging functionality
-- `moosicbox_assert`: Assertion utilities
-
-Additional dependencies for `scanner` feature:
-
-- `kanal`: Async channel for service discovery events
-- `moosicbox_async_service`: Async service framework
-- `strum_macros`: Enum utilities
-- `switchy_async`: Async runtime utilities
-
-## Error Types
-
-- `RegisterServiceError`: Wraps mDNS and I/O errors during service registration
-
-The library provides a simple interface for announcing MoosicBox services on local networks, making them discoverable by other devices using standard mDNS/Bonjour protocols.
+This project is licensed under the MPL-2.0 License.
