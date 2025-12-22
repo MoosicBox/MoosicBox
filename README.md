@@ -276,6 +276,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 ### Web & Networking
 
 - **[switchy_web_server](packages/switchy/web_server)** - Web server abstraction and utilities
+- **[switchy_web_server_actix](packages/switchy/web_server/actix)** - Actix Web backend for switchy_web_server
 - **[switchy_web_server_core](packages/switchy/web_server/core)** - Core web server functionality
 - **[switchy_web_server_cors](packages/switchy/web_server/cors)** - CORS middleware for web servers
 - **[switchy_http](packages/http)** - Generic HTTP client abstraction
