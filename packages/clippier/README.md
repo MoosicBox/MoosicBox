@@ -32,11 +32,11 @@ Clippier supports multiple monorepo workspace types with automatic detection:
 
 Clippier supports three Node.js package managers:
 
-| Package Manager | Workspace Config | Lockfile |
-|-----------------|------------------|----------|
-| **npm** | `package.json` with `workspaces` field | `package-lock.json` |
-| **pnpm** | `pnpm-workspace.yaml` | `pnpm-lock.yaml` |
-| **bun** | `package.json` with `workspaces` field | `bun.lock` |
+| Package Manager | Workspace Config                       | Lockfile            |
+| --------------- | -------------------------------------- | ------------------- |
+| **npm**         | `package.json` with `workspaces` field | `package-lock.json` |
+| **pnpm**        | `pnpm-workspace.yaml`                  | `pnpm-lock.yaml`    |
+| **bun**         | `package.json` with `workspaces` field | `bun.lock`          |
 
 ### Auto-Detection and Priority
 
@@ -69,6 +69,8 @@ cargo install --path packages/clippier
 
 Clippier supports optional features:
 
+- **`cargo-workspace`** (default): Enable support for Cargo (Rust) workspaces
+- **`node-workspace`** (default): Enable support for Node.js workspaces (npm, pnpm, bun)
 - **`check`** (default): Enable the `check` command for running linters
 - **`format`** (default): Enable the `fmt` command for running formatters
 - **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
@@ -1140,9 +1142,9 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 ### Global Options
 
-| Option             | Description                                          |
-| ------------------ | ---------------------------------------------------- |
-| `--output`         | Output format: `json`, `raw`                         |
+| Option             | Description                                                           |
+| ------------------ | --------------------------------------------------------------------- |
+| `--output`         | Output format: `json`, `raw`                                          |
 | `--workspace-type` | Workspace type to use: `cargo`, `node` (auto-detect if not specified) |
 
 ### Features Command Options
@@ -1355,11 +1357,11 @@ chunked = 4
 
 Rust/Cargo-specific options are now namespaced under `[rust]` (workspace/package level) or `rust = {...}` (OS config level):
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `nightly` | Use nightly toolchain | `nightly = true` |
-| `cargo` | Cargo command arguments | `cargo = ["--locked"]` |
-| `skip-features` | Features to skip in CI | `skip-features = ["simd", "test-*"]` |
+| Option              | Description              | Example                              |
+| ------------------- | ------------------------ | ------------------------------------ |
+| `nightly`           | Use nightly toolchain    | `nightly = true`                     |
+| `cargo`             | Cargo command arguments  | `cargo = ["--locked"]`               |
+| `skip-features`     | Features to skip in CI   | `skip-features = ["simd", "test-*"]` |
 | `required-features` | Features required for CI | `required-features = ["production"]` |
 
 **Examples:**
@@ -1389,12 +1391,12 @@ os = "macos"
 
 Node.js-specific options are namespaced under `[node]` (workspace/package level) or `node = {...}` (OS config level):
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `package-manager` | Preferred package manager | `package-manager = "pnpm"` |
-| `node-version` | Node.js version to use | `node-version = "20"` |
-| `skip-packages` | Packages to skip in CI | `skip-packages = ["@myorg/deprecated-*"]` |
-| `args` | Additional package manager arguments | `args = ["--frozen-lockfile"]` |
+| Option            | Description                          | Example                                   |
+| ----------------- | ------------------------------------ | ----------------------------------------- |
+| `package-manager` | Preferred package manager            | `package-manager = "pnpm"`                |
+| `node-version`    | Node.js version to use               | `node-version = "20"`                     |
+| `skip-packages`   | Packages to skip in CI               | `skip-packages = ["@myorg/deprecated-*"]` |
+| `args`            | Additional package manager arguments | `args = ["--frozen-lockfile"]`            |
 
 **Examples:**
 
