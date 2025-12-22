@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_library::{favorite_albums, album, album_tracks, album_versions};
 use moosicbox_music_api_models::AlbumsRequest;
-use moosicbox_music_models::Id;
+use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
@@ -106,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use moosicbox_library::{favorite_tracks, track, add_favorite_track, remove_favorite_track};
-use moosicbox_music_models::Id;
+use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
@@ -145,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_library::{filter_albums, sort_albums};
 use moosicbox_music_api_models::{AlbumsRequest, AlbumFilters};
-use moosicbox_music_models::{AlbumSort, Id};
+use moosicbox_music_models::{AlbumSort, id::Id};
 
 fn example_filtering() {
     let albums = vec![]; // Your album collection
@@ -224,7 +224,7 @@ fn search_library() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_library::artist_albums;
 use moosicbox_library_models::LibraryAlbumType;
-use moosicbox_music_models::Id;
+use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
@@ -266,7 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use moosicbox_library::{track_file_url, LibraryAudioQuality};
-use moosicbox_music_models::Id;
+use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
