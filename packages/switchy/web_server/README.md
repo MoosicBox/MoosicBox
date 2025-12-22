@@ -20,11 +20,11 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-switchy_web_server = "0.1.4"
+switchy_web_server = "0.1.0"
 
 # Enable features as needed
 switchy_web_server = {
-    version = "0.1.4",
+    version = "0.1.0",
     features = ["actix", "cors", "compress", "openapi"]
 }
 ```
@@ -424,6 +424,7 @@ Available features:
 - `cors` - Enable CORS middleware support (enabled by default)
 - `compress` - Enable response compression (enabled by default)
 - `htmx` - Enable HTMX integration support (enabled by default)
+- `static-files` - Enable static file serving support
 - `tls` - Enable TLS/SSL support (OpenSSL) (enabled by default)
 - `openapi` - Enable OpenAPI documentation generation
 - `openapi-all` - Enable all OpenAPI UI variants (enabled by default)
