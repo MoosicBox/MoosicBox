@@ -1,3 +1,8 @@
+//! Database operations for `YouTube` Music configuration.
+//!
+//! This module provides database access functions for storing and retrieving
+//! `YouTube` Music OAuth tokens and user configuration.
+
 use moosicbox_json_utils::ToValueType;
 use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;

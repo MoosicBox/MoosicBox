@@ -1,3 +1,7 @@
+//! Database models for `YouTube` Music configuration.
+//!
+//! Contains the [`YtConfig`] type for persisting OAuth credentials and user settings.
+
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
