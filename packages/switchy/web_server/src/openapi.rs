@@ -165,6 +165,10 @@ mod openapi_spec {
 /// * `openapi-rapidoc` - Adds `RapiDoc` route at `/rapidoc`
 /// * `openapi-scalar` - Adds `Scalar` route at `/scalar`
 ///
+/// # Returns
+///
+/// The scope with documentation UI routes added based on enabled features.
+///
 /// # Example
 ///
 /// ```rust,ignore

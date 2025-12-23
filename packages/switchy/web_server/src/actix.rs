@@ -266,6 +266,10 @@ impl From<crate::Error> for Error {
 impl TryFrom<Error> for crate::Error {
     type Error = TryFromU16StatusCodeError;
 
+    /// # Errors
+    ///
+    /// Returns `TryFromU16StatusCodeError` if the Actix error's status code
+    /// cannot be converted to a valid `StatusCode`.
     fn try_from(value: Error) -> Result<Self, Self::Error> {
         // Convert actix_web::Error to a Send + Sync error
         let status_code = StatusCode::try_from_u16(value.error_response().status().as_u16())?;
