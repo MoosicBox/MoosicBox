@@ -1,4 +1,7 @@
 //! Static file serving for Actix Web backend.
+//!
+//! This module provides utilities for serving static files in Actix Web applications.
+//! It supports index files and SPA (Single Page Application) fallback behavior.
 
 use std::path::PathBuf;
 
@@ -16,6 +19,16 @@ pub trait StaticFilesExt {
 ///
 /// This function configures `actix_files::Files` based on the provided `StaticFiles`
 /// configuration, including support for index files and SPA fallback.
+///
+/// # Arguments
+///
+/// * `app` - The Actix web application to register static files with
+/// * `config` - Static file serving configuration
+///
+/// # Returns
+///
+/// Returns the application with static file serving configured.
+#[must_use]
 pub fn register_static_files<T>(app: actix_web::App<T>, config: &StaticFiles) -> actix_web::App<T>
 where
     T: actix_service::ServiceFactory<
@@ -36,6 +49,9 @@ where
 }
 
 /// Creates an `actix_files::Files` service from the configuration.
+///
+/// This internal function builds the files service with optional index file
+/// and SPA fallback support.
 #[allow(clippy::needless_pass_by_value)]
 fn create_files_service(
     mount_path: String,
