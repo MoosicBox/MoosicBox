@@ -11,6 +11,12 @@ pub struct Receiver<T> {
     inner: flume::Receiver<T>,
 }
 
+impl<T> std::fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Receiver").finish_non_exhaustive()
+    }
+}
+
 /// Sending end of an MPSC channel.
 ///
 /// This wraps a flume sender to provide both blocking and async send operations.
@@ -18,6 +24,12 @@ pub struct Receiver<T> {
 /// as long as at least one sender exists.
 pub struct Sender<T> {
     inner: flume::Sender<T>,
+}
+
+impl<T> std::fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sender").finish_non_exhaustive()
+    }
 }
 
 // Re-export error types
