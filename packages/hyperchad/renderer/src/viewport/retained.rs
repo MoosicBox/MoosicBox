@@ -116,6 +116,7 @@ impl Viewport {
     ///
     /// * `parent` - Optional parent viewport for hierarchical visibility checking
     /// * `position` - The position provider for this viewport
+    #[must_use]
     pub fn new(
         parent: Option<Self>,
         position: impl ViewportPosition + Send + Sync + 'static,
