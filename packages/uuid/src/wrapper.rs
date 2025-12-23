@@ -54,18 +54,45 @@ impl Uuid {
     }
 
     /// Creates a UUID from a 128-bit value in little-endian byte order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let uuid = Uuid::from_u128_le(0x550e8400_e29b_41d4_a716_446655440000);
+    /// ```
     #[must_use]
     pub const fn from_u128_le(v: u128) -> Self {
         Self(uuid::Uuid::from_u128_le(v))
     }
 
     /// Returns the UUID as a 128-bit value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let v: u128 = 0x550e_8400_e29b_41d4_a716_4466_5544_0000;
+    /// let uuid = Uuid::from_u128(v);
+    /// assert_eq!(uuid.as_u128(), v);
+    /// ```
     #[must_use]
     pub const fn as_u128(&self) -> u128 {
         self.0.as_u128()
     }
 
     /// Returns the UUID as a 128-bit value in little-endian byte order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let uuid = Uuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000);
+    /// let le_value = uuid.as_u128_le();
+    /// ```
     #[must_use]
     pub const fn as_u128_le(&self) -> u128 {
         self.0.to_u128_le()
@@ -124,6 +151,16 @@ impl Uuid {
     }
 
     /// Returns the bytes of the UUID as an owned array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let uuid = Uuid::nil();
+    /// let bytes: [u8; 16] = uuid.into_bytes();
+    /// assert_eq!(bytes, [0u8; 16]);
+    /// ```
     #[must_use]
     pub const fn into_bytes(self) -> [u8; 16] {
         *self.0.as_bytes()
@@ -163,12 +200,33 @@ impl Uuid {
     }
 
     /// Creates a max UUID (all ones).
+    ///
+    /// The max UUID is `ffffffff-ffff-ffff-ffff-ffffffffffff`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let max = Uuid::max();
+    /// assert!(max.is_max());
+    /// assert_eq!(max.as_bytes(), &[0xffu8; 16]);
+    /// ```
     #[must_use]
     pub const fn max() -> Self {
         Self(uuid::Uuid::max())
     }
 
     /// Returns `true` if this is a max UUID (all ones).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// assert!(Uuid::max().is_max());
+    /// assert!(!Uuid::nil().is_max());
+    /// ```
     #[must_use]
     pub const fn is_max(&self) -> bool {
         self.0.is_max()
@@ -222,18 +280,45 @@ impl Uuid {
     ///
     /// This method provides access to the underlying UUID type for interoperability
     /// with code that requires the standard `uuid::Uuid` type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let uuid = Uuid::nil();
+    /// let inner: &uuid::Uuid = uuid.inner();
+    /// ```
     #[must_use]
     pub const fn inner(&self) -> &uuid::Uuid {
         &self.0
     }
 
     /// Consumes the wrapper and returns the inner `uuid::Uuid`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let uuid = Uuid::nil();
+    /// let inner: uuid::Uuid = uuid.into_inner();
+    /// ```
     #[must_use]
     pub const fn into_inner(self) -> uuid::Uuid {
         self.0
     }
 
     /// Creates a wrapper from a `uuid::Uuid`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_uuid::Uuid;
+    ///
+    /// let inner = uuid::Uuid::nil();
+    /// let wrapped = Uuid::from_inner(inner);
+    /// ```
     #[must_use]
     pub const fn from_inner(uuid: uuid::Uuid) -> Self {
         Self(uuid)
