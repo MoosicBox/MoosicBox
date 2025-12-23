@@ -308,9 +308,12 @@ impl AudioOutputFactory {
         }
     }
 
+    /// Attempts to create an [`AudioOutput`] from this factory.
+    ///
     /// # Errors
     ///
-    /// * If fails to instantiate the `AudioOutput`
+    /// Returns an [`AudioOutputError`] if the underlying audio writer fails to initialize.
+    /// The specific error depends on the audio backend (e.g., CPAL device errors).
     pub fn try_into_output(&self) -> Result<AudioOutput, AudioOutputError> {
         self.try_into()
     }
@@ -516,9 +519,14 @@ fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: &AudioBuffer<f32>) 
 static AUDIO_OUTPUT_SCANNER: LazyLock<Arc<Mutex<AudioOutputScanner>>> =
     LazyLock::new(|| Arc::new(Mutex::new(AudioOutputScanner::new())));
 
+/// Scans for available audio output devices and populates the global scanner.
+///
+/// This function should be called before using [`output_factories()`], [`default_output_factory()`],
+/// or [`default_output()`] to ensure the list of available outputs is populated.
+///
 /// # Errors
 ///
-/// * If the `scan` fails
+/// * [`AudioOutputScannerError::Join`] if the spawned scan tasks fail to join
 pub async fn scan_outputs() -> Result<(), AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.scan().await
 }
@@ -543,9 +551,14 @@ pub async fn default_output_factory() -> Option<AudioOutputFactory> {
         .cloned()
 }
 
+/// Returns the default audio output device.
+///
+/// The default output is determined by calling [`scan_outputs()`] first.
+///
 /// # Errors
 ///
-/// * If there is no default output
+/// * [`AudioOutputScannerError::NoOutputs`] if no default output is available
+/// * [`AudioOutputScannerError::AudioOutput`] if the audio output fails to instantiate
 pub async fn default_output() -> Result<AudioOutput, AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.default_output()
 }
@@ -673,9 +686,12 @@ impl AudioOutputScanner {
         self.default_output.as_ref()
     }
 
+    /// Returns the default audio output device.
+    ///
     /// # Errors
     ///
-    /// * If there is no default output
+    /// * [`AudioOutputScannerError::NoOutputs`] if no default output factory is available
+    /// * [`AudioOutputScannerError::AudioOutput`] if the audio output fails to instantiate
     pub fn default_output(&self) -> Result<AudioOutput, AudioOutputScannerError> {
         self.default_output_factory()
             .map(TryInto::try_into)
