@@ -1,3 +1,9 @@
+//! `UPnP` device scanner implementations.
+//!
+//! This module provides traits and implementations for discovering `UPnP` devices on the network.
+//! It supports both real network discovery via the `rupnp` library and simulated discovery
+//! for testing purposes via the `simulator` feature.
+
 use std::{pin::Pin, time::Duration};
 
 use async_trait::async_trait;
