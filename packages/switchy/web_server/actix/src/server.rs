@@ -26,6 +26,16 @@ use crate::request::ActixRequest;
 ///
 /// This struct wraps an Actix `HttpServer` and provides an implementation of
 /// the [`WebServer`] trait for integration with the `switchy_web_server` framework.
+///
+/// The server is configured through the [`WebServerBuilderActixExt`] trait methods
+/// and can be started and stopped through the [`WebServer`] trait interface.
+///
+/// # Type Parameters
+///
+/// * `F` - Factory function that produces the service factory
+/// * `I` - The intermediate type returned by the factory
+/// * `S` - The service factory type
+/// * `B` - The response body type
 pub struct ActixWebServer<F, I, S, B>
 where
     F: Fn() -> I + Send + Clone + 'static,
@@ -53,6 +63,12 @@ where
     S::Response: Into<Response<B>>,
     B: MessageBody + 'static,
 {
+    /// Starts the Actix HTTP server and begins accepting connections.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the server fails to bind to the configured address or if the
+    /// internal handle lock is poisoned.
     fn start(&self) -> Pin<Box<dyn std::future::Future<Output = ()>>> {
         log::debug!("Starting actix server on '{}'", self.addr);
         let server = HttpServer::new(self.factory.clone());
@@ -67,6 +83,11 @@ where
         })
     }
 
+    /// Stops the running Actix server gracefully.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal handle lock is poisoned.
     fn stop(&self) -> Pin<Box<dyn std::future::Future<Output = ()>>> {
         log::debug!("Stopping actix server");
         let handle = self.handle.write().unwrap().take();
