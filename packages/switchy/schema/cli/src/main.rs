@@ -92,6 +92,10 @@ struct Cli {
     command: Commands,
 }
 
+/// Available CLI subcommands for managing database migrations.
+///
+/// Each command provides different functionality for creating, executing,
+/// rolling back, and managing database schema migrations.
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new migration file
