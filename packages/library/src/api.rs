@@ -38,6 +38,7 @@ use crate::{
 };
 
 /// Binds all library API service endpoints to an Actix-web scope.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
