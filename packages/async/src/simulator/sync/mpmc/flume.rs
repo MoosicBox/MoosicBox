@@ -65,13 +65,25 @@ impl<T> ChannelInner<T> {
     }
 }
 
-/// Receiver for simulator runtime with cooperative yielding
+/// Receiver for simulator runtime with cooperative yielding.
+///
+/// This wraps the internal channel state and provides both blocking and async
+/// receive operations with cooperative yielding to avoid deadlocks.
 pub struct Receiver<T> {
     inner: Arc<Mutex<ChannelInner<T>>>,
     counts: Arc<SharedCounts>,
 }
 
-/// Sender for simulator runtime
+impl<T> std::fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Receiver").finish_non_exhaustive()
+    }
+}
+
+/// Sender for simulator runtime.
+///
+/// This wraps the internal channel state and provides both blocking and async
+/// send operations with cooperative yielding to avoid deadlocks.
 pub struct Sender<T> {
     inner: Arc<Mutex<ChannelInner<T>>>,
     counts: Arc<SharedCounts>,

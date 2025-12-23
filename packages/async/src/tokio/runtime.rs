@@ -26,6 +26,7 @@ pub struct Handle {
 }
 
 impl Handle {
+    /// Creates a new Handle from an Arc-wrapped runtime.
     fn new(runtime: &Arc<tokio::runtime::Runtime>) -> Self {
         Self {
             inner: runtime.handle().clone(),
@@ -33,8 +34,10 @@ impl Handle {
         }
     }
 
-    /// Block on a future using the parent Runtime instead of Handle
-    /// This ensures proper IO/timer driver access for signal handling
+    /// Blocks on a future using the parent Runtime instead of Handle.
+    ///
+    /// This ensures proper I/O and timer driver access for signal handling.
+    /// If the runtime has been dropped, falls back to the inner handle's `block_on`.
     pub fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
         if let Some(runtime) = self.runtime.upgrade() {
             // Use Runtime::block_on which can drive IO/timers
@@ -46,7 +49,9 @@ impl Handle {
         }
     }
 
-    /// Spawn a future onto the runtime
+    /// Spawns a future onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn<T: Send + 'static>(
         &self,
         future: impl std::future::Future<Output = T> + Send + 'static,
@@ -54,7 +59,9 @@ impl Handle {
         self.inner.spawn(future)
     }
 
-    /// Spawn a named future onto the runtime
+    /// Spawns a named future onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_with_name<T: Send + 'static>(
         &self,
         name: &str,
@@ -74,7 +81,9 @@ impl Handle {
         }
     }
 
-    /// Spawn a blocking task onto the runtime
+    /// Spawns a blocking task onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the task's result.
     pub fn spawn_blocking<T: Send + 'static>(
         &self,
         f: impl FnOnce() -> T + Send + 'static,
@@ -82,7 +91,9 @@ impl Handle {
         self.inner.spawn_blocking(f)
     }
 
-    /// Spawn a named blocking task onto the runtime
+    /// Spawns a named blocking task onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_blocking_with_name<T: Send + 'static>(
         &self,
         name: &str,
@@ -102,7 +113,10 @@ impl Handle {
         }
     }
 
-    /// Spawn a local future onto the runtime
+    /// Spawns a non-Send future onto the current thread.
+    ///
+    /// This allows spawning futures that are not `Send`, which must run on the current thread.
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn_local<T: 'static>(
         &self,
         future: impl std::future::Future<Output = T> + 'static,
@@ -110,7 +124,9 @@ impl Handle {
         tokio::task::spawn_local(future)
     }
 
-    /// Spawn a named local future onto the runtime
+    /// Spawns a named non-Send future onto the current thread.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_local_with_name<T: 'static>(
         &self,
         name: &str,
@@ -130,7 +146,11 @@ impl Handle {
         }
     }
 
-    /// Get the current runtime handle if available
+    /// Returns a handle to the currently running runtime.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no runtime is currently running on this thread.
     #[must_use]
     pub fn current() -> Self {
         // We can't easily get the Runtime reference from a static context,
