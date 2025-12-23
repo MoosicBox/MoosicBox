@@ -15,10 +15,15 @@
     "homepage": "https://github.com/MoosicBox/MoosicBox#readme",
     "scripts": {
         "build": "tsc",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:ui": "vitest --ui",
+        "test:unit": "vitest run --project unit",
+        "test:browser": "vitest run --project browser",
         "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
-        "lint": "eslint src",
-        "lint:write": "eslint src --fix",
+        "lint": "eslint src tests",
+        "lint:write": "eslint src tests --fix",
         "typecheck": "tsc --noEmit",
         "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
         "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
@@ -27,15 +32,23 @@
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.3",
         "@eslint/js": "^9.39.2",
+        "@testing-library/dom": "^10.4.1",
+        "@testing-library/jest-dom": "^6.9.1",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^8.50.1",
         "@typescript-eslint/parser": "^8.50.1",
+        "@vitest/browser": "^4.0.16",
+        "@vitest/browser-playwright": "^4.0.16",
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^9.1.2",
         "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-node": "^11.1.0",
         "globals": "^16.5.0",
+        "jsdom": "^27.3.0",
+        "msw": "^2.12.4",
+        "playwright": "~1.56.1",
         "prettier": "^3.7.4",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.16"
     }
 }

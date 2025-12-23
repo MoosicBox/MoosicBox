@@ -5,3 +5,5 @@ document.addEventListener('keyup', (event) => {
         }),
     );
 });
+
+export {};

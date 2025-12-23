@@ -1,6 +1,6 @@
 import { processRoute } from './routing';
 
-document.addEventListener('DOMContentLoaded', () => {
+function initFormHandler() {
     document.body.addEventListener(
         'submit',
         (e) => {
@@ -33,4 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         true,
     );
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initFormHandler);
+} else {
+    initFormHandler();
+}

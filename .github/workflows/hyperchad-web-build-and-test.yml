@@ -1,0 +1,83 @@
+name: HyperChad Web Build and Test
+
+on:
+    push:
+        branches: ["master"]
+        paths:
+            - packages/hyperchad/renderer/vanilla_js/web/**
+            - .github/workflows/hyperchad-web-build-and-test.yml
+            - "!**/*.md"
+    pull_request:
+        branches: ["master"]
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    build-and-test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              name: Install node
+              with:
+                  node-version: latest
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: latest
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: |
+                  echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: Cache pnpm dependencies
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.STORE_PATH }}
+                  key: ${{ runner.os }}-pnpm-store-${{ hashFiles('packages/hyperchad/renderer/vanilla_js/web/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pnpm-store-
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: ${{ runner.os }}-playwright-${{ hashFiles('packages/hyperchad/renderer/vanilla_js/web/package.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-playwright-
+
+            - name: pnpm install
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm install
+
+            - name: Install Playwright Chromium
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm exec playwright install chromium
+
+            - name: TypeCheck
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm typecheck
+
+            - name: Lint
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm lint
+
+            - name: Format Check
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm pretty
+
+            - name: Unit Tests
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm test:unit
+
+            - name: Browser Tests
+              working-directory: packages/hyperchad/renderer/vanilla_js/web
+              run: pnpm test:browser

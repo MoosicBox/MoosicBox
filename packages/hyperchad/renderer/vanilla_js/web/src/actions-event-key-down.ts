@@ -5,3 +5,5 @@ document.addEventListener('keydown', (event) => {
         }),
     );
 });
+
+export {};

@@ -385,6 +385,44 @@
               ++ extraPackages;
           };
 
+        # HyperChad web development shell (with Playwright for testing)
+        mkHyperchadShell =
+          {
+            name,
+            extraPackages ? [ ],
+          }:
+          pkgs.mkShell {
+            buildInputs = [
+              rustToolchain
+              pkgs.fish
+              pkgs.nodejs
+              pkgs.nodePackages.pnpm
+              pkgs.playwright
+            ]
+            ++ baseBuildTools
+            ++ extraPackages;
+
+            shellHook = ''
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
+
+              export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright.browsers}
+              export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+
+              echo "🎵 MoosicBox HyperChad ${name} Environment"
+              echo "Rust: $(rustc --version)"
+              echo "Node: $(node --version)"
+              echo "Playwright browsers: $PLAYWRIGHT_BROWSERS_PATH"
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
+            '';
+          };
+
       in
       {
         devShells = {
@@ -630,6 +668,13 @@
 
           egui-player = mkEguiShell {
             name = "Egui Player";
+            extraPackages = [ ];
+          };
+
+          # ===== HYPERCHAD DEVELOPMENT =====
+
+          hyperchad-web = mkHyperchadShell {
+            name = "Web";
             extraPackages = [ ];
           };
 
