@@ -67,30 +67,39 @@ pub enum TrackPoolError {
 }
 
 /// Commands that can be sent to the track pool service.
+///
+/// These commands drive the track pool's caching and distribution system, allowing multiple
+/// clients to share the same track byte stream efficiently.
 #[derive(AsRefStr)]
 pub enum Command {
-    /// Fetch track bytes from cache or source
+    /// Fetches track bytes from cache or source.
+    ///
+    /// Checks if the track is already cached or being fetched. If not cached, invokes the
+    /// provided fetch function and caches the result for future requests.
     FetchTrackBytes {
-        /// Channel to send the result
+        /// Channel to send the resulting track bytes
         tx: Sender<TrackBytes>,
-        /// Track source location
+        /// Track source location (local file or remote URL)
         source: TrackSource,
         /// Desired output audio format
         output_format: AudioFormat,
-        /// Optional total size in bytes
+        /// Optional total size in bytes (used for progress tracking)
         size: Option<u64>,
-        /// Optional start byte offset
+        /// Optional start byte offset for range requests
         start: Option<u64>,
-        /// Optional end byte offset
+        /// Optional end byte offset for range requests
         end: Option<u64>,
-        /// Function to fetch track bytes if not cached
+        /// Callback function to fetch track bytes if not cached
         fetch: FetchTrackBytesFunc,
     },
-    /// Start fetching and distributing track bytes to writers
+    /// Starts fetching and distributing track bytes to all registered writers.
+    ///
+    /// Consumes bytes from the stream and distributes them to all writers that have
+    /// registered interest in this track. Used internally after a cache miss.
     StartFetchTrackBytes {
-        /// Cache key for the track
+        /// Cache key identifying the track
         key: String,
-        /// Stream of incoming bytes
+        /// Stream of incoming bytes to distribute
         stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
         /// Optional total size in bytes
         size: Option<u64>,
