@@ -61,6 +61,9 @@ pub fn bind_services<
 pub struct Api;
 
 /// Query parameters for retrieving credentials from a magic token.
+///
+/// Used with the `GET /magic-token` endpoint to exchange a magic token
+/// for client credentials.
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -117,6 +120,9 @@ pub async fn get_magic_token_endpoint(
 }
 
 /// Query parameters for creating a magic token.
+///
+/// Used with the `POST /magic-token` endpoint to create a new magic token
+/// for temporary credential exchange.
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateMagicTokenQuery {
