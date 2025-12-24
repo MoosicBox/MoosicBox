@@ -1109,6 +1109,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         table.remove-table-styles td {{
                             padding: 0;
                         }}
+                        * {{
+                            box-sizing: border-box;
+                        }}
                     "))}
                     (script)
                     (PreEscaped(responsive_css))

@@ -434,6 +434,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                         table.remove-table-styles td {{
                             padding: 0;
                         }}
+                        * {{
+                            box-sizing: border-box;
+                        }}
                     "))}
                     (PreEscaped(responsive_css))
                     @for css in inline_css {

@@ -547,7 +547,7 @@ fn player_play_button_from_state(state: &State) -> Containers {
 fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Containers {
     container! {
         div #player-current-playing direction=row align-items=center {
-            div width=(size) padding-x=20 align-items=center justify-content=center {
+            div padding-x=20 align-items=center justify-content=center {
                 anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) width=(size) height=(size) {
                     (album_cover_img_from_album(host, &track.into(), size))
                 }

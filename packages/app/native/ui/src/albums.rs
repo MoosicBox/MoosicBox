@@ -194,9 +194,9 @@ pub fn album_page_content(
 
     container! {
         div padding-x=60 padding-y=20 {
-            div direction=row {
+            div direction=row gap=15 {
                 @let size = 200;
-                div width=(size) height=(size) padding-right=15 {
+                div {
                     (album_cover_img_from_album(host, &album, size))
                 }
                 div {

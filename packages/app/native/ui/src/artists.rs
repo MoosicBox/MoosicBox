@@ -140,8 +140,8 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
             div padding-y=20 {
                 "Back"
             }
-            div direction=row {
-                div width=(size) height=(size) padding-right=15 {
+            div direction=row gap=15 {
+                div {
                     (artist_cover_img(&connection.api_url, &artist, size))
                 }
                 div {
