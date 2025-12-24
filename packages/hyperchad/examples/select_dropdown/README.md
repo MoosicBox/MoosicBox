@@ -9,7 +9,7 @@ This example demonstrates select/option dropdown elements in
 - Default selected value with `selected` attribute
 - Disabled placeholder option pattern
 - Dynamic options using `@for` iteration
-- Change event handling with htmx attributes (`hx-trigger`, `hx-get`)
+- Change event handling with `fx-change`
 - Styled dropdowns with HyperChad attributes
 - Form integration with `name` attribute
 - Visual feedback on selection change
@@ -29,7 +29,7 @@ Then open your browser to: <http://localhost:3133>
 - `<option>` elements must be direct children of `<select>`
 - `selected` attribute on select sets the currently selected value
 - `disabled` on option prevents selection (useful for placeholders)
-- `hx-trigger="change"` triggers actions when selection changes
+- `fx-change` triggers actions when selection changes
 - `value` on option defines the form submission value
 - `name` on select identifies the field in form submissions
 - Native HTML functionality - works in all browsers
@@ -66,15 +66,12 @@ select name="country" selected="" {
 }
 ```
 
-With htmx change handler:
+With change handler:
 
 ```rust,ignore
 select
     name="animal"
-    hx-get="/api/animal-display"
-    hx-trigger="change"
-    hx-target="#animal-display"
-    hx-swap="outerHTML"
+    fx-change=fx { http_get("/api/animal-display", Some("#animal-display")) }
 {
     option value="dog" { "Dog" }
     option value="cat" { "Cat" }
