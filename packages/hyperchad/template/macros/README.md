@@ -12,7 +12,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperchad_template_macros = { version = "0.1" }
+hyperchad_template_macros = { version = "0.1.4" }
 ```
 
 ## Usage
