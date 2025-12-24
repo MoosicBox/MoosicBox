@@ -49,6 +49,17 @@ pub use http;
 #[cfg(feature = "actions")]
 mod actions;
 
+/// Generates the prefix for a directory asset route.
+/// Handles the special case where route="/" or "" to avoid producing "//".
+#[cfg(feature = "assets")]
+fn directory_route_prefix(route: &str) -> String {
+    if route == "/" || route.is_empty() {
+        "/".to_string()
+    } else {
+        format!("{route}/")
+    }
+}
+
 /// Errors that can occur during HTTP request processing.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -251,7 +262,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                         hyperchad_router::RoutePath::from(route)
                     }
                     AssetPathTarget::Directory(..) => {
-                        hyperchad_router::RoutePath::LiteralPrefix(format!("{route}/"))
+                        hyperchad_router::RoutePath::LiteralPrefix(directory_route_prefix(route))
                     }
                 };
 
@@ -545,6 +556,17 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(json_str).unwrap_err();
         let err = Error::from(json_err);
         assert!(matches!(err, Error::SerdeJson(_)));
+    }
+
+    #[cfg(feature = "assets")]
+    #[test_log::test]
+    fn test_directory_route_prefix() {
+        use super::directory_route_prefix;
+
+        assert_eq!(directory_route_prefix("/"), "/");
+        assert_eq!(directory_route_prefix(""), "/");
+        assert_eq!(directory_route_prefix("/assets"), "/assets/");
+        assert_eq!(directory_route_prefix("/static/files"), "/static/files/");
     }
 
     mod process_tests {
