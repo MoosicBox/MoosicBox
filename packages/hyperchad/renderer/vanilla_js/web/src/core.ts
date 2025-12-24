@@ -7,6 +7,35 @@ export const EVENT = {
 
 export const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
+/**
+ * Appends form data or a single key/value pair as query parameters to a URL.
+ * Used for GET requests where body is not allowed.
+ */
+export function appendQueryParams(
+    url: string,
+    data: FormData | { name: string; value: string } | null,
+): string {
+    if (!data) return url;
+
+    const params = new URLSearchParams();
+
+    if (data instanceof FormData) {
+        for (const [key, value] of data.entries()) {
+            if (typeof value === 'string') {
+                params.append(key, value);
+            }
+        }
+    } else if (data.name) {
+        params.append(data.name, data.value);
+    }
+
+    const queryString = params.toString();
+    if (!queryString) return url;
+
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${queryString}`;
+}
+
 export type SwapStrategy =
     | 'children'
     | 'this'

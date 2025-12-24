@@ -1789,7 +1789,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "div" => container.element = crate::Element::Div,
                 "span" => container.element = crate::Element::Span,
                 "section" => container.element = crate::Element::Section,
-                "form" => container.element = crate::Element::Form,
+                "form" => {
+                    container.element = crate::Element::Form {
+                        action: get_tag_attr_value_owned(tag, "action"),
+                        method: get_tag_attr_value_owned(tag, "method"),
+                    }
+                }
                 "button" => {
                     container.element = crate::Element::Button {
                         r#type: get_tag_attr_value_owned(tag, "type"),

@@ -1,5 +1,6 @@
 import {
     SwapStrategy,
+    appendQueryParams,
     createEventDelegator,
     elementFetch,
     methods,
@@ -151,10 +152,10 @@ async function handleHtmlResponse(
 /**
  * This will mutate the options argument passed in
  */
-export function processRoute(
+export async function processRoute(
     element: HTMLElement,
     options: RequestInit = {},
-): boolean {
+): Promise<boolean> {
     const headers = new Headers(options.headers ?? {});
     if (!headers.has('hx-request')) {
         headers.set('hx-request', 'true');
@@ -162,14 +163,25 @@ export function processRoute(
     options.headers = headers;
 
     for (const method of METHODS) {
-        const route = element.getAttribute(`hx-${method}`);
+        let route = element.getAttribute(`hx-${method}`);
         if (route) {
             options.method = method;
-            handleHtmlResponse(element, elementFetch(route, options, element));
+
+            // GET requests can't have body - convert FormData to query params
+            if (method === 'GET' && options.body instanceof FormData) {
+                route = appendQueryParams(route, options.body);
+                delete options.body;
+            }
+
+            await handleHtmlResponse(
+                element,
+                elementFetch(route, options, element),
+            );
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 onAttr('hx-trigger', ({ element, attr }) => {
@@ -232,8 +244,7 @@ createEventDelegator('change', 'hx-trigger', (element, triggerValue, _e) => {
         if (method === 'GET') {
             // Append as query parameter for GET requests
             if (name) {
-                const separator = route.includes('?') ? '&' : '?';
-                route = `${route}${separator}${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+                route = appendQueryParams(route, { name, value });
             }
         } else {
             // Use FormData for non-GET requests (matches form.ts pattern)

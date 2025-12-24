@@ -236,7 +236,7 @@ pub fn element_style_to_html(
         | Element::Header
         | Element::Footer
         | Element::Section
-        | Element::Form
+        | Element::Form { .. }
         | Element::Span
         | Element::Input { .. }
         | Element::Textarea { .. }
@@ -1344,7 +1344,7 @@ pub fn element_to_html(
         Element::Header => Some("header"),
         Element::Footer => Some("footer"),
         Element::Section => Some("section"),
-        Element::Form => Some("form"),
+        Element::Form { .. } => Some("form"),
         Element::Span => Some("span"),
         Element::UnorderedList => Some("ul"),
         Element::OrderedList => Some("ol"),
@@ -2776,7 +2776,13 @@ mod tests {
             (hyperchad_transformer::Element::Header, "header"),
             (hyperchad_transformer::Element::Footer, "footer"),
             (hyperchad_transformer::Element::Section, "section"),
-            (hyperchad_transformer::Element::Form, "form"),
+            (
+                hyperchad_transformer::Element::Form {
+                    action: None,
+                    method: None,
+                },
+                "form",
+            ),
             (hyperchad_transformer::Element::UnorderedList, "ul"),
             (hyperchad_transformer::Element::OrderedList, "ol"),
             (hyperchad_transformer::Element::ListItem, "li"),
