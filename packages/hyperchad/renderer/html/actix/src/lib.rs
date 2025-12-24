@@ -81,11 +81,12 @@ mod actions;
 mod sse;
 
 /// Generates the route pattern for a directory asset route.
-/// Handles the special case where route="/" or "" to avoid producing "//".
+/// Handles the special case where route="/" or "" to avoid producing "//" and
+/// uses `.+` (one or more) instead of `.*` to prevent matching the root path itself.
 #[cfg(feature = "assets")]
 fn directory_route_pattern(route: &str) -> String {
     if route == "/" || route.is_empty() {
-        "/{path:.*}".to_string()
+        "/{path:.+}".to_string()
     } else {
         format!("{route}/{{path:.*}}")
     }
@@ -503,11 +504,14 @@ mod tests {
 
     #[cfg(feature = "assets")]
     #[test_log::test]
+    #[allow(clippy::literal_string_with_formatting_args)]
     fn test_directory_route_pattern() {
         use super::directory_route_pattern;
 
-        assert_eq!(directory_route_pattern("/"), "/{path:.*}");
-        assert_eq!(directory_route_pattern(""), "/{path:.*}");
+        // Root routes use .+ to avoid matching "/" itself
+        assert_eq!(directory_route_pattern("/"), "/{path:.+}");
+        assert_eq!(directory_route_pattern(""), "/{path:.+}");
+        // Non-root routes use .* since the prefix already prevents matching the route itself
         assert_eq!(directory_route_pattern("/assets"), "/assets/{path:.*}");
         assert_eq!(
             directory_route_pattern("/static/files"),

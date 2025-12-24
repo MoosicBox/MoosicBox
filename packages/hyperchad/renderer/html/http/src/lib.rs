@@ -270,6 +270,13 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 let Some(path_match) = route_path.strip_match(&req.path) else {
                     continue;
                 };
+
+                // Skip empty path matches for directories (e.g., "/" matching "/" exactly)
+                // to allow the router to handle the root path
+                if matches!(target, AssetPathTarget::Directory(..)) && path_match.is_empty() {
+                    continue;
+                }
+
                 log::debug!("Matched route {route_path:?} for {req:?}");
 
                 return asset_to_response(route, target, path_match).await;
