@@ -93,6 +93,7 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
             target: hyperchad::renderer::assets::AssetPathTarget::FileContents(
                 hyperchad::renderer_vanilla_js::SCRIPT.as_bytes().into(),
             ),
+            not_found_behavior: None,
         },
     ]
 });

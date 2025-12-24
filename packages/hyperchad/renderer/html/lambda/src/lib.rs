@@ -564,6 +564,7 @@ mod tests {
                 target: hyperchad_renderer::assets::AssetPathTarget::FileContents(
                     Bytes::from_static(b"body { margin: 0; }"),
                 ),
+                not_found_behavior: None,
             });
 
         assert_eq!(app.static_asset_routes.len(), 1);

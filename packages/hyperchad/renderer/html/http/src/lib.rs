@@ -116,6 +116,9 @@ pub struct HttpApp<R: HtmlTagRenderer + Sync> {
             >,
         >,
     >,
+    /// Default behavior when a requested asset file is not found.
+    #[cfg(feature = "assets")]
+    pub asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
     background: Option<Color>,
     title: Option<String>,
     description: Option<String>,
@@ -188,7 +191,9 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 str::FromStr as _,
             };
 
-            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
             use switchy_async::io::AsyncReadExt as _;
 
             fn content_type_from_path(path: &Path) -> String {
@@ -287,7 +292,15 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 return asset_to_response(&req.path, &target, "").await;
             }
 
-            for StaticAssetRoute { route, target } in &self.static_asset_routes {
+            for StaticAssetRoute {
+                route,
+                target,
+                not_found_behavior,
+            } in &self.static_asset_routes
+            {
+                // Determine the effective behavior: per-route override or global default
+                let behavior = not_found_behavior.unwrap_or(self.asset_not_found_behavior);
+
                 let route_path = match target {
                     AssetPathTarget::File(..) | AssetPathTarget::FileContents(..) => {
                         hyperchad_router::RoutePath::from(route)
@@ -309,17 +322,33 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 }
 
                 // For directories, check if the target file exists before serving
-                // If not, fall through to the router
                 if let AssetPathTarget::Directory(dir) = target {
                     match safe_join_path(dir, path_match) {
                         Some(file_path) if file_path.is_file() => {
                             // File exists and is safe to serve
                         }
                         _ => {
-                            log::debug!(
-                                "Skipping directory asset route {route_path:?} - file does not exist or path is invalid: {path_match:?}"
-                            );
-                            continue;
+                            // File doesn't exist - handle according to behavior
+                            match behavior {
+                                AssetNotFoundBehavior::Fallthrough => {
+                                    log::debug!(
+                                        "Skipping directory asset route {route_path:?} - file does not exist or path is invalid: {path_match:?}"
+                                    );
+                                    continue;
+                                }
+                                AssetNotFoundBehavior::NotFound => {
+                                    log::debug!(
+                                        "Returning 404 for directory asset route {route_path:?} - file does not exist: {path_match:?}"
+                                    );
+                                    return Ok(Response::builder().status(404).body(vec![])?);
+                                }
+                                AssetNotFoundBehavior::InternalServerError => {
+                                    log::debug!(
+                                        "Returning 500 for directory asset route {route_path:?} - file does not exist: {path_match:?}"
+                                    );
+                                    return Ok(Response::builder().status(500).body(vec![])?);
+                                }
+                            }
                         }
                     }
                 }
@@ -436,6 +465,8 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             static_asset_routes: vec![],
             #[cfg(feature = "assets")]
             static_asset_route_handlers: vec![],
+            #[cfg(feature = "assets")]
+            asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             background: None,
             title: None,
             description: None,
@@ -547,6 +578,26 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         self.static_asset_route_handlers
             .push(std::sync::Arc::new(Box::new(handler)));
         self
+    }
+
+    /// Sets the default behavior when a requested asset file is not found.
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub const fn with_asset_not_found_behavior(
+        mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) -> Self {
+        self.asset_not_found_behavior = behavior;
+        self
+    }
+
+    /// Sets the default behavior when a requested asset file is not found (in place).
+    #[cfg(feature = "assets")]
+    pub const fn set_asset_not_found_behavior(
+        &mut self,
+        behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    ) {
+        self.asset_not_found_behavior = behavior;
     }
 
     /// Sets the action sender channel by mutable reference.
@@ -962,6 +1013,7 @@ mod tests {
             app.static_asset_routes.push(StaticAssetRoute {
                 route: "/style.css".to_string(),
                 target: AssetPathTarget::FileContents(Bytes::from_static(b"body { color: red; }")),
+                not_found_behavior: None,
             });
 
             let req = create_route_request("/style.css");

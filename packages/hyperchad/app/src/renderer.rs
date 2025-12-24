@@ -726,7 +726,9 @@ pub mod html {
                 );
 
                 #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
+                let renderer = renderer
+                    .with_static_asset_routes(self.static_asset_routes.clone())
+                    .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                 #[cfg(feature = "html")]
                 let renderer = renderer
@@ -788,8 +790,9 @@ pub mod html {
 
                     #[cfg(feature = "assets")]
                     #[allow(unused_mut)]
-                    let mut renderer =
-                        renderer.with_static_asset_routes(self.static_asset_routes.clone());
+                    let mut renderer = renderer
+                        .with_static_asset_routes(self.static_asset_routes.clone())
+                        .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                     #[cfg(feature = "html")]
                     #[allow(unused_mut)]
@@ -855,7 +858,9 @@ pub mod html {
                 );
 
                 #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
+                let renderer = renderer
+                    .with_static_asset_routes(self.static_asset_routes.clone())
+                    .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                 #[cfg(feature = "html")]
                 let renderer = renderer
@@ -915,8 +920,9 @@ pub mod html {
                     .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
 
                     #[cfg(feature = "assets")]
-                    let renderer =
-                        renderer.with_static_asset_routes(self.static_asset_routes.clone());
+                    let renderer = renderer
+                        .with_static_asset_routes(self.static_asset_routes.clone())
+                        .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                     #[cfg(feature = "html")]
                     let renderer = renderer
@@ -976,7 +982,9 @@ pub mod html {
                 );
 
                 #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
+                let renderer = renderer
+                    .with_static_asset_routes(self.static_asset_routes.clone())
+                    .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                 self.build(renderer)
             }

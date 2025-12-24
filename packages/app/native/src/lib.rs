@@ -85,14 +85,17 @@ pub mod assets {
                 target: renderer::assets::AssetPathTarget::FileContents(
                     hyperchad::renderer_vanilla_js::SCRIPT.as_bytes().into(),
                 ),
+                not_found_behavior: None,
             },
             renderer::assets::StaticAssetRoute {
                 route: "/favicon.ico".to_string(),
                 target: ASSETS_DIR.join("favicon.ico").try_into().unwrap(),
+                not_found_behavior: None,
             },
             renderer::assets::StaticAssetRoute {
                 route: "/public".to_string(),
                 target: ASSETS_DIR.clone().try_into().unwrap(),
+                not_found_behavior: None,
             },
         ]
     });
