@@ -15,6 +15,9 @@
         "lib": ["ESNext.Array", "DOM", "ESNext", "DOM.iterable"],
         "paths": {
             "~/*": ["./src/*"]
-        }
-    }
+        },
+        "types": ["vitest/globals", "@testing-library/jest-dom"]
+    },
+    "include": ["src/**/*", "tests/**/*"],
+    "exclude": ["node_modules", "dist"]
 }

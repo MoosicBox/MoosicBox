@@ -14,7 +14,12 @@ const compat = new FlatCompat({
     allConfig: js.configs.all,
 });
 
-const tsFiles = ['src/**/*.ts', 'src/**/*.tsx'];
+const tsFiles = [
+    'src/**/*.ts',
+    'src/**/*.tsx',
+    'tests/**/*.ts',
+    'tests/**/*.tsx',
+];
 const jsFiles = ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.cjs', 'src/**/*.mjs'];
 
 export default [
