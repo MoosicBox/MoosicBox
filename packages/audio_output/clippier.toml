@@ -6,15 +6,8 @@ command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-de
 features = ["jack"]
 
 [[config.dependencies]]
-command = "sudo apt-get update && sudo apt-get install libasound2-dev"
-features = [
-    "asio",
-    "cpal",
-    "default",
-    "default-windows",
-    "jack",
-    "oboe-shared-stdcxx",
-]
+command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
+features = ["asio", "cpal", "default", "default-windows", "jack"]
 
 [[config]]
 os = "macos"

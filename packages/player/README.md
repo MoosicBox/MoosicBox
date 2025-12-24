@@ -377,7 +377,6 @@ The player supports various feature flags for customization:
 - `cpal` - Cross-platform audio output (default)
 - `jack` - JACK audio server support
 - `asio` - ASIO low-latency support (Windows)
-- `oboe-shared-stdcxx` - Oboe audio output (Android)
 
 **Audio Decoders:**
 

@@ -201,7 +201,7 @@ format-mp3 = [
 
 # Player audio outputs
 asio = ["moosicbox_player/asio"]
-cpal = ["moosicbox_player/cpal", "moosicbox_player/oboe-shared-stdcxx"]
+cpal = ["moosicbox_player/cpal"]
 jack = ["moosicbox_player/jack"]
 
 devtools = ["tauri/devtools"]

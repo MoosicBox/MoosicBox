@@ -58,15 +58,7 @@ switchy_time  = { workspace = true, features = ["std"] }
 test-log      = { workspace = true }
 
 [features]
-default = [
-    "all-decoders",
-    "all-encoders",
-    "api",
-    "cpal",
-    "local",
-    "oboe-shared-stdcxx",
-    "openapi",
-]
+default = ["all-decoders", "all-encoders", "api", "cpal", "local", "openapi"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
@@ -112,10 +104,9 @@ openapi = [
 ]
 
 # Player audio outputs
-asio               = ["moosicbox_audio_output/asio"]
-cpal               = ["moosicbox_audio_output/cpal"]
-jack               = ["moosicbox_audio_output/jack"]
-oboe-shared-stdcxx = ["moosicbox_audio_output/oboe-shared-stdcxx"]
+asio = ["moosicbox_audio_output/asio"]
+cpal = ["moosicbox_audio_output/cpal"]
+jack = ["moosicbox_audio_output/jack"]
 
 all-encoders    = ["all-os-encoders", "encoder-mp3"]
 all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]

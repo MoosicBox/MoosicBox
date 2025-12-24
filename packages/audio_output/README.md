@@ -147,7 +147,6 @@ async fn progress_tracking_example() -> Result<(), Box<dyn std::error::Error>> {
 - `cpal` - Enable CPAL backend (cross-platform, enabled by default)
 - `jack` - Enable JACK backend via CPAL (professional audio)
 - `asio` - Enable ASIO backend via CPAL (Windows professional audio)
-- `oboe-shared-stdcxx` - Enable Oboe backend via CPAL (Android)
 
 ### Audio Encoding Formats
 
@@ -165,7 +164,7 @@ async fn progress_tracking_example() -> Result<(), Box<dyn std::error::Error>> {
 
 The `default` feature enables: `api`, `default-windows`, and `openapi`.
 
-The `default-windows` feature enables: `aac`, `cpal`, `flac`, `mp3`, `oboe-shared-stdcxx`, and `opus`.
+The `default-windows` feature enables: `aac`, `cpal`, `flac`, `mp3`, and `opus`.
 
 ## Architecture
 

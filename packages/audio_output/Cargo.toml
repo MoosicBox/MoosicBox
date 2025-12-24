@@ -54,7 +54,7 @@ test-log      = { workspace = true }
 [features]
 default = ["api", "default-windows", "openapi"]
 
-default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
+default-windows = ["aac", "cpal", "flac", "mp3", "opus"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
@@ -71,10 +71,9 @@ fail-on-warnings = [
 api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
 
-asio               = ["cpal/asio"]
-cpal               = ["dep:cpal", "dep:rb"]
-jack               = ["cpal/jack"]
-oboe-shared-stdcxx = ["cpal/oboe-shared-stdcxx"]
+asio = ["cpal/asio"]
+cpal = ["dep:cpal", "dep:rb"]
+jack = ["cpal/jack"]
 
 aac = [
     "dep:fdk-aac",
