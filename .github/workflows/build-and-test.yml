@@ -131,12 +131,14 @@ jobs:
                       | reduce .[] as $item ({result: [], counters: {}};
                           ($item.value.name + "|" + $item.value.os) as $key |
                           ((.counters[$key] // 0) + 1) as $idx |
+                          ($item.value.os | gsub("-latest$"; "")) as $osShort |
                           {
                               result: (.result + [$item.value + {
                                   osIndex: $idx,
                                   osCount: $osCounts[$key],
                                   hasMultipleOs: $multiOs[$item.value.name],
-                                  osShort: ($item.value.os | gsub("-latest$"; ""))
+                                  osShort: $osShort,
+                                  osEmoji: (if $osShort == "ubuntu" then "🐧" elif $osShort == "macos" then "🍎" elif $osShort == "windows" then "🪟" else $osShort end)
                               }]),
                               counters: (.counters + {($key): $idx})
                           }
@@ -275,7 +277,7 @@ jobs:
                   path: validation-report.json
 
     build:
-        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' ({0})', matrix.package.osShort) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
+        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
         runs-on: ${{ matrix.package.os }}
 
         needs: [determine-affected-packages, build-cargo-machete]
