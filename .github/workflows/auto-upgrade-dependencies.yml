@@ -238,9 +238,30 @@ jobs:
                   git-strategy: branch-comparison
                   git-compare-branch: master
                   os-suffix: -latest
+                  jq-filter: |
+                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli" and . != "cargo-machete" and . != "machete")) | join("\n")))
+                      | (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
+                      | (group_by([.name, .os]) | map({key: "\(.[0].name)|\(.[0].os)", value: length}) | from_entries) as $osCounts
+                      | to_entries
+                      | reduce .[] as $item ({result: [], counters: {}};
+                          ($item.value.name + "|" + $item.value.os) as $key |
+                          ((.counters[$key] // 0) + 1) as $idx |
+                          ($item.value.os | gsub("-latest$"; "")) as $osShort |
+                          {
+                              result: (.result + [$item.value + {
+                                  osIndex: $idx,
+                                  osCount: $osCounts[$key],
+                                  hasMultipleOs: $multiOs[$item.value.name],
+                                  osShort: $osShort,
+                                  osEmoji: (if $osShort == "ubuntu" then "🐧" elif $osShort == "macos" then "🍎" elif $osShort == "windows" then "🪟" else $osShort end)
+                              }]),
+                              counters: (.counters + {($key): $idx})
+                          }
+                      )
+                      | .result
 
     test-compatible:
-        name: Test compatible upgrades
+        name: 👶 ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
         runs-on: ${{ matrix.package.os }}
         needs: [upgrade-dependencies, validate-compatible, build-cargo-machete]
         if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
@@ -417,9 +438,30 @@ jobs:
                   git-strategy: branch-comparison
                   git-compare-branch: master
                   os-suffix: -latest
+                  jq-filter: |
+                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli" and . != "cargo-machete" and . != "machete")) | join("\n")))
+                      | (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
+                      | (group_by([.name, .os]) | map({key: "\(.[0].name)|\(.[0].os)", value: length}) | from_entries) as $osCounts
+                      | to_entries
+                      | reduce .[] as $item ({result: [], counters: {}};
+                          ($item.value.name + "|" + $item.value.os) as $key |
+                          ((.counters[$key] // 0) + 1) as $idx |
+                          ($item.value.os | gsub("-latest$"; "")) as $osShort |
+                          {
+                              result: (.result + [$item.value + {
+                                  osIndex: $idx,
+                                  osCount: $osCounts[$key],
+                                  hasMultipleOs: $multiOs[$item.value.name],
+                                  osShort: $osShort,
+                                  osEmoji: (if $osShort == "ubuntu" then "🐧" elif $osShort == "macos" then "🍎" elif $osShort == "windows" then "🪟" else $osShort end)
+                              }]),
+                              counters: (.counters + {($key): $idx})
+                          }
+                      )
+                      | .result
 
     test-incompatible:
-        name: Test incompatible upgrades
+        name: 👴 ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
         runs-on: ${{ matrix.package.os }}
         needs:
             [upgrade-dependencies, validate-incompatible, build-cargo-machete]
