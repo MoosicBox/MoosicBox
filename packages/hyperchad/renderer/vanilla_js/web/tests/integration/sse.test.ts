@@ -124,8 +124,11 @@ describe('SSE', () => {
         test('partial_view message triggers swapHtml with style', async ({
             worker,
         }) => {
-            // Only send HTML content without style for simpler test
+            // Test multi-line SSE data with style and HTML separated by blank line.
+            // This verifies MSW correctly handles \n\n in SSE messages (fixed in v2.12.5).
+            const styleContent = '<style>.test{color:red}</style>';
             const htmlContent = '<div>Updated Content</div>';
+            const fullContent = `${styleContent}\n\n${htmlContent}`;
 
             worker.use(
                 sse('/$sse', ({ client }) => {
@@ -133,7 +136,7 @@ describe('SSE', () => {
                         client.send({
                             event: 'partial_view' as 'message',
                             id: 'target-element',
-                            data: htmlContent,
+                            data: fullContent,
                         });
                     }, 50);
                 }),
@@ -147,11 +150,23 @@ describe('SSE', () => {
                 strategy: string;
             }> = [];
 
+            const swapStyleResults: Array<{
+                style: string;
+                id: string;
+            }> = [];
+
             on('swapHtml', (payload) => {
                 swapHtmlResults.push({
                     target: payload.target as string,
                     html: payload.html as string,
                     strategy: payload.strategy,
+                });
+            });
+
+            on('swapStyle', (payload) => {
+                swapStyleResults.push({
+                    style: payload.style as string,
+                    id: payload.id as string,
                 });
             });
 
@@ -162,13 +177,19 @@ describe('SSE', () => {
             await vi.waitFor(
                 () => {
                     expect(swapHtmlResults.length).toBeGreaterThan(0);
+                    expect(swapStyleResults.length).toBeGreaterThan(0);
                 },
                 { timeout: 5000 },
             );
 
+            // Verify the HTML was correctly split and received
             expect(swapHtmlResults[0].target).toBe('#target-element');
             expect(swapHtmlResults[0].html).toBe(htmlContent);
             expect(swapHtmlResults[0].strategy).toBe('this');
+
+            // Verify the style was correctly split and received
+            expect(swapStyleResults[0].style).toBe(styleContent);
+            expect(swapStyleResults[0].id).toBe('target-element');
         });
 
         test('event message dispatches custom event', async ({ worker }) => {
