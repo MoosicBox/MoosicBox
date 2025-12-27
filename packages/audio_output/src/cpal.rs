@@ -161,12 +161,14 @@ impl TryFrom<Device> for AudioOutputFactory {
             log::trace!("\tinput: {input:?}",);
         }
 
-        let name = device.name().unwrap_or_else(|_| "(Unknown)".into());
+        let name = device
+            .description()
+            .map_or_else(|_| "(Unknown)".into(), |d| d.to_string());
         let config = device
             .default_output_config()
             .map_err(|_e| AudioOutputError::NoOutputs)?;
         let spec = SignalSpec {
-            rate: config.sample_rate().0,
+            rate: config.sample_rate(),
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         };
 
@@ -227,7 +229,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         };
 
         let spec = SignalSpec {
-            rate: config.sample_rate.0,
+            rate: config.sample_rate,
             channels: if num_channels >= 2 {
                 Layout::Stereo.into_channels()
             } else {
@@ -236,11 +238,11 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         };
 
         // Create a ring buffer with a capacity for up-to 30 seconds of audio (larger buffer to prevent underruns).
-        let ring_len = (30 * config.sample_rate.0 as usize) * num_channels;
+        let ring_len = (30 * config.sample_rate as usize) * num_channels;
         log::debug!(
             "Creating ring buffer with {} samples capacity (30 seconds at {}Hz, {} channels)",
             ring_len,
-            config.sample_rate.0,
+            config.sample_rate,
             num_channels
         );
 
@@ -256,7 +258,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Track the actual CPAL output sample rate and channels for accurate progress calculation
         let cpal_output_sample_rate =
-            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(config.sample_rate.0));
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(config.sample_rate));
         #[allow(clippy::cast_possible_truncation)]
         let cpal_output_channels =
             std::sync::Arc::new(std::sync::atomic::AtomicU32::new(num_channels as u32));
@@ -272,7 +274,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Progress tracking setup using ProgressTracker
         let progress_tracker = ProgressTracker::new(Some(0.1)); // 0.1 second threshold
-        progress_tracker.set_audio_spec(config.sample_rate.0, u32::try_from(num_channels).unwrap());
+        progress_tracker.set_audio_spec(config.sample_rate, u32::try_from(num_channels).unwrap());
 
         // Command handling setup
         let (command_sender, command_receiver) = flume::unbounded();
@@ -282,12 +284,12 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Calculate buffering threshold for 10 seconds of audio (REQUIRED to prevent start truncation)
         let buffering_threshold =
-            INITIAL_BUFFER_SECONDS * config.sample_rate.0 as usize * num_channels;
+            INITIAL_BUFFER_SECONDS * config.sample_rate as usize * num_channels;
 
         // Debug the actual config vs expected spec for progress calculation
         log::debug!(
             "🔍 CPAL CONFIG: actual_sample_rate={}, actual_channels={}, expected_spec_rate={}, expected_spec_channels={}",
-            config.sample_rate.0,
+            config.sample_rate,
             num_channels,
             spec.rate,
             spec.channels.count()
@@ -295,9 +297,9 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Check for potential sample rate mismatch that could cause progress calculation issues
         moosicbox_assert::assert!(
-            config.sample_rate.0 == spec.rate,
+            config.sample_rate == spec.rate,
             "🚨 SAMPLE RATE MISMATCH: CPAL config sample rate ({}) != expected spec rate ({}) - this will cause progress calculation errors!",
-            config.sample_rate.0,
+            config.sample_rate,
             spec.rate
         );
 
@@ -440,7 +442,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         log::debug!(
             "🔍 CPAL stream daemon created - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
             buffering_threshold,
-            config.sample_rate.0,
+            config.sample_rate,
             num_channels
         );
 
@@ -866,7 +868,11 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 #[allow(unused)]
 fn list_devices(host: &Host) {
     for dv in host.output_devices().unwrap() {
-        log::debug!("device: {}", dv.name().unwrap());
+        log::debug!(
+            "device: {}",
+            dv.description()
+                .map_or_else(|_| "(Unknown)".into(), |d| d.to_string())
+        );
         for output in dv.supported_output_configs().unwrap() {
             log::trace!("\toutput: {output:?}",);
         }
