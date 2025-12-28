@@ -270,6 +270,10 @@ jobs:
             matrix:
                 package: ${{ fromJson(needs.validate-compatible.outputs.matrix) }}
         steps:
+            - name: Print matrix
+              shell: bash
+              run: echo '${{ toJson(matrix) }}'
+
             - name: Checkout
               uses: actions/checkout@v4
               with:
@@ -471,6 +475,10 @@ jobs:
             matrix:
                 package: ${{ fromJson(needs.validate-incompatible.outputs.matrix) }}
         steps:
+            - name: Print matrix
+              shell: bash
+              run: echo '${{ toJson(matrix) }}'
+
             - name: Checkout
               uses: actions/checkout@v4
               with:
