@@ -19,7 +19,7 @@ The HyperChad FLTK Renderer provides:
 
 ### Fully Supported
 
-- **Containers**: `div`, `aside`, `header`, `footer`, `main`, `section`, `form`, `span`
+- **Containers**: `div`, `aside`, `header`, `footer`, `main`, `section`, `form`, `span`, `details`, `summary`
 - **Lists**: `ul` (unordered list), `ol` (ordered list), `li` (list item)
 - **Tables**: `table`, `thead`, `th`, `tbody`, `tr`, `td`
 - **Text**: `h1`, `h2`, `h3`, `h4`, `h5`, `h6` (headings), raw text
