@@ -254,6 +254,15 @@ Adds JSON serialization/deserialization support using `serde_json`.
 
 Enables streaming response support for handling large responses.
 
+### Compression Features
+
+Enable automatic decompression of HTTP responses (requires `reqwest` feature):
+
+- `brotli` - Brotli decompression
+- `deflate` - Deflate decompression
+- `gzip` - Gzip decompression
+- `zstd` - Zstandard decompression
+
 ## Error Types
 
 - `Error::Decode` - Response decoding failures
