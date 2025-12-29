@@ -411,6 +411,7 @@ mod asset_example {
                 target: AssetPathTarget::FileContents(
                     Bytes::from_static(include_bytes!("../assets/style.css"))
                 ),
+                not_found_behavior: None,
             },
         ];
         app
