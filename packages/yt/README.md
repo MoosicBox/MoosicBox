@@ -396,7 +396,7 @@ Core dependencies:
 - `switchy_database` - Database integration (required for most features)
 - `switchy_http` - HTTP client functionality
 - `serde_json` - JSON serialization and deserialization
-- `tokio` - Async runtime support
+- `switchy_async` - Async runtime abstraction
 - `async-trait` - Async trait support for MusicApi implementation
 
 Optional dependencies:
