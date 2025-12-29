@@ -30,13 +30,11 @@ moosicbox_library = { version = "0.1.4", features = ["api"] }
 ### Working with Artists
 
 ```rust
-use moosicbox_library::{favorite_artists, add_favorite_artist, remove_favorite_artist};
+use moosicbox_library::favorite_artists;
 use switchy_database::profiles::LibraryDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
-
+// LibraryDatabase is obtained from the PROFILES registry or via actix-web request extraction
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Get favorite artists with pagination
     let artists_result = favorite_artists(
         &db,
@@ -64,10 +62,8 @@ use moosicbox_music_api_models::AlbumsRequest;
 use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
-
+// LibraryDatabase is obtained from the PROFILES registry or via actix-web request extraction
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Get favorite albums
     let request = AlbumsRequest::default();
     let albums_result = favorite_albums(&db, &request).await?;
@@ -105,14 +101,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Track Management
 
 ```rust
-use moosicbox_library::{favorite_tracks, track, add_favorite_track, remove_favorite_track};
+use moosicbox_library::{favorite_tracks, track};
 use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
-
+// LibraryDatabase is obtained from the PROFILES registry or via actix-web request extraction
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Get favorite tracks
     let tracks_result = favorite_tracks(
         &db,
@@ -227,9 +221,8 @@ use moosicbox_library_models::LibraryAlbumType;
 use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
+// LibraryDatabase is obtained from the PROFILES registry or via actix-web request extraction
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let artist_id = Id::Number(123);
 
     // Get all albums by artist
@@ -269,9 +262,8 @@ use moosicbox_library::{track_file_url, LibraryAudioQuality};
 use moosicbox_music_models::id::Id;
 use switchy_database::profiles::LibraryDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
+// LibraryDatabase is obtained from the PROFILES registry or via actix-web request extraction
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let track_id = Id::Number(456);
 
     // Get high quality track URL
