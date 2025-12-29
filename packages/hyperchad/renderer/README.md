@@ -258,6 +258,7 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
     let asset_route = StaticAssetRoute {
         route: "/static/style.css".to_string(),
         target: AssetPathTarget::File("path/to/style.css".into()),
+        not_found_behavior: None,
     };
 }
 ```
