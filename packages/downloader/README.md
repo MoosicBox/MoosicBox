@@ -210,7 +210,7 @@ async fn manual_downloads(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let speed = Arc::new(AtomicF64::new(0.0));
 
-    let on_progress = Arc::new(tokio::sync::Mutex::new(Box::new(|event| {
+    let on_progress = Arc::new(switchy_async::sync::Mutex::new(Box::new(|event| {
         Box::pin(async move {
             // Handle progress events
         }) as Pin<Box<dyn Future<Output = ()> + Send>>
@@ -433,7 +433,7 @@ pub async fn download_track_id(
     track_id: &Id,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<Track, DownloadTrackError>
@@ -448,7 +448,7 @@ pub async fn download_album_id(
     try_download_artist_cover: bool,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError>
@@ -459,7 +459,7 @@ pub async fn download_album_cover(
     db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<Album, DownloadAlbumError>
 
@@ -469,7 +469,7 @@ pub async fn download_artist_cover(
     db: &LibraryDatabase,
     path: &str,
     album_id: &Id,
-    on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
+    on_progress: Arc<switchy_async::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
 ) -> Result<Artist, DownloadAlbumError>
 
