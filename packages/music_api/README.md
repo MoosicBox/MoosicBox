@@ -64,14 +64,25 @@ impl MusicApi for MyMusicService {
 
 ```rust
 use moosicbox_music_api::MusicApi;
+use moosicbox_music_api::models::search::api::ApiGlobalSearchResult;
 
 // Check if API supports search
 if api.supports_search() {
-    let results = api.search("Pink Floyd", Some(0), Some(20)).await?;
+    let response = api.search("Pink Floyd", Some(0), Some(20)).await?;
 
     // Process search results
-    for artist in results.artists {
-        println!("Artist: {}", artist.title);
+    for result in response.results {
+        match result {
+            ApiGlobalSearchResult::Artist(artist) => {
+                println!("Artist: {}", artist.title);
+            }
+            ApiGlobalSearchResult::Album(album) => {
+                println!("Album: {}", album.title);
+            }
+            ApiGlobalSearchResult::Track(track) => {
+                println!("Track: {}", track.title);
+            }
+        }
     }
 }
 ```
@@ -271,7 +282,7 @@ let mut apis = MusicApis::new();
 apis.add_source(Arc::new(Box::new(my_api)));
 
 // Retrieve an API by source
-if let Some(api) = apis.get(&ApiSource::Library) {
+if let Some(api) = apis.get(&ApiSource::library()) {
     let artist = api.artist(&artist_id).await?;
 }
 
