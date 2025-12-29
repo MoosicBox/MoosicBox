@@ -223,14 +223,17 @@ let renderer = router_to_actix(tag_renderer, router)
         StaticAssetRoute {
             route: "/css/style.css".to_string(),
             target: AssetPathTarget::File(PathBuf::from("assets/style.css")),
+            not_found_behavior: None,
         },
         StaticAssetRoute {
             route: "/js/app.js".to_string(),
             target: AssetPathTarget::File(PathBuf::from("assets/app.js")),
+            not_found_behavior: None,
         },
         StaticAssetRoute {
             route: "/images/".to_string(),
             target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
+            not_found_behavior: None,
         },
     ]);
 ```
