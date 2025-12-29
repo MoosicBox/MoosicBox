@@ -8,6 +8,7 @@ The HyperChad Template package provides:
 
 - **Container Macro**: `container!` macro for declarative UI construction
 - **Template DSL**: Domain-specific language for UI component definition with CSS-like syntax
+- **Control Flow**: `@if`, `@else`, `@for`, `@while`, `@match`, `@let` for dynamic templates
 - **Rendering System**: Convert containers to HTML strings
 - **Extension Traits**: Utility methods for container collections (`ContainerVecMethods`, `ContainerVecExt`)
 - **Calculation Functions**: CSS `calc()`, `min()`, `max()`, `clamp()` with viewport units
@@ -23,6 +24,15 @@ The HyperChad Template package provides:
 - **Nested Elements**: Support for nested container hierarchies
 - **Attribute Syntax**: CSS-like attribute specification
 - **Dynamic Content**: Runtime content generation and insertion
+
+### Control Flow
+
+- **Conditionals**: `@if`, `@else if`, `@else` for conditional rendering
+- **If-Let**: `@if let` for pattern matching with Option/Result types
+- **Loops**: `@for` for iterating over collections
+- **While**: `@while` for condition-based loops
+- **Match**: `@match` for pattern matching expressions
+- **Let**: `@let` for local variable bindings within templates
 
 ### Rendering System
 
@@ -149,6 +159,38 @@ let user = UserCard {
 let template = container! {
     div class="users" {
         (user) // Renders the UserCard
+    }
+};
+```
+
+### Control Flow
+
+```rust
+use hyperchad_template::container;
+
+let show_header = true;
+let items = vec!["Apple", "Banana", "Cherry"];
+
+let template = container! {
+    div {
+        // Conditional rendering
+        @if show_header {
+            h1 { "Shopping List" }
+        }
+
+        // Iterating over collections
+        ul {
+            @for item in &items {
+                li { (item) }
+            }
+        }
+
+        // Pattern matching
+        @match items.len() {
+            0 => p { "No items" },
+            1 => p { "One item" },
+            n => p { (n) " items" },
+        }
     }
 };
 ```
