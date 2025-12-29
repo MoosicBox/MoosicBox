@@ -1,0 +1,2 @@
+[parallelization]
+chunked = 10
