@@ -1,35 +1,58 @@
-# Temp Directory Example
+# Temp Dir Example
 
-This example demonstrates the `switchy_fs` temp directory functionality across different feature configurations.
+Example demonstrating temporary directory functionality using `switchy_fs`.
 
-## Features
+## Description
 
-- **`std`** - Standard filesystem operations
-- **`simulator`** - Simulated filesystem for testing
-- **`simulator-real-fs`** - Simulator with real filesystem backing
+This example shows how to use `switchy_fs` temporary directory features including:
+
+- Creating basic temporary directories that auto-cleanup on drop
+- Using custom prefixes for temp directory names
+- Keeping temp directories (preventing automatic cleanup)
+- Manually closing temp directories for immediate cleanup
 
 ## Usage
 
-Run with different feature combinations:
-
 ```bash
-# Standard mode (default)
-cargo run
+# Run with default std feature
+cargo run -p temp_dir_example
 
-# Simulator mode
-cargo run --no-default-features --features simulator
+# Run with simulator mode
+cargo run -p temp_dir_example --no-default-features --features simulator
 
-# Simulator with real filesystem
-cargo run --no-default-features --features simulator-real-fs
+# Run with simulator-real-fs mode
+cargo run -p temp_dir_example --no-default-features --features simulator-real-fs
+
+# Run with async feature
+cargo run -p temp_dir_example --features async
 ```
 
-## Examples
+## Features
 
-The demo shows:
+| Feature             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `default`           | Enables `std`                              |
+| `std`               | Standard filesystem with sync operations   |
+| `async`             | Async filesystem operations with tokio     |
+| `simulator`         | Simulated filesystem (sync)                |
+| `simulator-real-fs` | Simulator backed by real filesystem (sync) |
+| `fail-on-warnings`  | Treat warnings as errors                   |
 
-1. Basic temp directory creation
-2. Temp directory with custom prefix
-3. Keeping a directory (preventing automatic cleanup)
-4. Manual close (immediate cleanup)
+## Examples Demonstrated
 
-Examples include conditional code to demonstrate behavior differences between std and simulator modes.
+1. **Basic temp directory creation** - Creates a temporary directory using `tempdir()` that automatically cleans up when dropped
+2. **Temp directory with prefix** - Creates a temp directory with a custom prefix using `TempDir::with_prefix("my-app-")`
+3. **Keeping a temp directory** - Shows how to use `temp_dir.keep()` to prevent automatic cleanup
+4. **Manual close** - Demonstrates immediate cleanup using `temp_dir.close()`
+
+## License
+
+Copyright (c) 2024 MoosicBox
+
+This file is part of MoosicBox.
+
+MoosicBox is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+MoosicBox is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with MoosicBox. If not, see <http://www.gnu.org/licenses/>.
