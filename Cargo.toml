@@ -16,11 +16,6 @@ members = [
     "packages/app/tauri/ws",
     "packages/arb",
     "packages/assert",
-    "packages/async",
-    "packages/async/cargo",
-    "packages/async/examples/cancel",
-    "packages/async/examples/simulated",
-    "packages/async/macros",
     "packages/async_service",
     "packages/audio_decoder",
     "packages/audio_encoder",
@@ -32,22 +27,12 @@ members = [
     "packages/channel_utils",
     "packages/clippier",
     "packages/config",
-    "packages/database",
-    "packages/database/examples/turso_basic",
-    "packages/database/examples/turso_transactions",
-    "packages/database_connection",
     "packages/date_utils",
     "packages/downloader",
-    "packages/env",
     "packages/env_utils",
     "packages/files",
-    "packages/fs",
-    "packages/fs/examples/temp_dir",
     "packages/gpipe",
     "packages/gpipe/ast",
-    "packages/http",
-    "packages/http/examples/simple_get",
-    "packages/http/models",
     "packages/hyperchad",
     "packages/hyperchad/actions",
     "packages/hyperchad/app",
@@ -88,7 +73,6 @@ members = [
     "packages/logging",
     "packages/marketing_site",
     "packages/marketing_site/ui",
-    "packages/mdns",
     "packages/menu",
     "packages/menu/models",
     "packages/middleware",
@@ -103,13 +87,11 @@ members = [
     "packages/opus_native",
     "packages/opus_native/libopus",
     "packages/opus_native/test_vectors",
-    "packages/p2p",
     "packages/paging",
     "packages/parsing_utils",
     "packages/player",
     "packages/profiles",
     "packages/qobuz",
-    "packages/random",
     "packages/remote_library",
     "packages/resampler",
     "packages/scan",
@@ -127,6 +109,24 @@ members = [
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
+    "packages/switchy/async",
+    "packages/switchy/async/cargo",
+    "packages/switchy/async/examples/cancel",
+    "packages/switchy/async/examples/simulated",
+    "packages/switchy/async/macros",
+    "packages/switchy/database",
+    "packages/switchy/database/examples/turso_basic",
+    "packages/switchy/database/examples/turso_transactions",
+    "packages/switchy/database_connection",
+    "packages/switchy/env",
+    "packages/switchy/fs",
+    "packages/switchy/fs/examples/temp_dir",
+    "packages/switchy/http",
+    "packages/switchy/http/examples/simple_get",
+    "packages/switchy/http/models",
+    "packages/switchy/mdns",
+    "packages/switchy/p2p",
+    "packages/switchy/random",
     "packages/switchy/schema",
     "packages/switchy/schema/cli",
     "packages/switchy/schema/examples/basic_migration_test",
@@ -136,6 +136,11 @@ members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/tcp",
+    "packages/switchy/telemetry",
+    "packages/switchy/time",
+    "packages/switchy/upnp",
+    "packages/switchy/uuid",
     "packages/switchy/web_server",
     "packages/switchy/web_server/actix",
     "packages/switchy/web_server/core",
@@ -151,15 +156,10 @@ members = [
     "packages/switchy/web_server/examples/query_extractor_standalone",
     "packages/switchy/web_server/examples/simple_get",
     "packages/switchy/web_server/simulator",
-    "packages/tcp",
-    "packages/telemetry",
     "packages/tidal",
-    "packages/time",
     "packages/tunnel",
     "packages/tunnel_sender",
     "packages/tunnel_server",
-    "packages/upnp",
-    "packages/uuid",
     "packages/ws",
     "packages/yt",
 ]
@@ -286,25 +286,25 @@ switchy_web_server_simulator       = { version = "0.1.0", default-features = fal
 
 # Internal Switchy
 switchy                     = { version = "0.1.3", default-features = false, path = "packages/switchy" }
-switchy_async               = { version = "0.1.3", default-features = false, path = "packages/async" }
-switchy_async_macros        = { version = "0.1.3", default-features = false, path = "packages/async/macros" }
-switchy_database            = { version = "0.1.3", default-features = false, path = "packages/database" }
-switchy_database_connection = { version = "0.1.3", default-features = false, path = "packages/database_connection" }
-switchy_env                 = { version = "0.1.0", default-features = false, path = "packages/env" }
-switchy_fs                  = { version = "0.1.3", default-features = false, path = "packages/fs" }
-switchy_http                = { version = "0.1.3", default-features = false, path = "packages/http" }
-switchy_http_models         = { version = "0.1.3", default-features = false, path = "packages/http/models" }
-switchy_mdns                = { version = "0.1.3", default-features = false, path = "packages/mdns" }
-switchy_p2p                 = { version = "0.1.0", default-features = false, path = "packages/p2p" }
-switchy_random              = { version = "0.1.3", default-features = false, path = "packages/random" }
+switchy_async               = { version = "0.1.3", default-features = false, path = "packages/switchy/async" }
+switchy_async_macros        = { version = "0.1.3", default-features = false, path = "packages/switchy/async/macros" }
+switchy_database            = { version = "0.1.3", default-features = false, path = "packages/switchy/database" }
+switchy_database_connection = { version = "0.1.3", default-features = false, path = "packages/switchy/database_connection" }
+switchy_env                 = { version = "0.1.0", default-features = false, path = "packages/switchy/env" }
+switchy_fs                  = { version = "0.1.3", default-features = false, path = "packages/switchy/fs" }
+switchy_http                = { version = "0.1.3", default-features = false, path = "packages/switchy/http" }
+switchy_http_models         = { version = "0.1.3", default-features = false, path = "packages/switchy/http/models" }
+switchy_mdns                = { version = "0.1.3", default-features = false, path = "packages/switchy/mdns" }
+switchy_p2p                 = { version = "0.1.0", default-features = false, path = "packages/switchy/p2p" }
+switchy_random              = { version = "0.1.3", default-features = false, path = "packages/switchy/random" }
 switchy_schema              = { version = "0.1.0", default-features = false, path = "packages/switchy/schema" }
 switchy_schema_cli          = { version = "0.1.0", default-features = false, path = "packages/switchy/schema/cli" }
 switchy_schema_test_utils   = { version = "0.1.0", default-features = false, path = "packages/switchy/schema/test_utils" }
-switchy_tcp                 = { version = "0.1.3", default-features = false, path = "packages/tcp" }
-switchy_telemetry           = { version = "0.1.3", default-features = false, path = "packages/telemetry" }
-switchy_time                = { version = "0.1.3", default-features = false, path = "packages/time" }
-switchy_upnp                = { version = "0.1.3", default-features = false, path = "packages/upnp" }
-switchy_uuid                = { version = "0.1.0", default-features = false, path = "packages/uuid" }
+switchy_tcp                 = { version = "0.1.3", default-features = false, path = "packages/switchy/tcp" }
+switchy_telemetry           = { version = "0.1.3", default-features = false, path = "packages/switchy/telemetry" }
+switchy_time                = { version = "0.1.3", default-features = false, path = "packages/switchy/time" }
+switchy_upnp                = { version = "0.1.3", default-features = false, path = "packages/switchy/upnp" }
+switchy_uuid                = { version = "0.1.0", default-features = false, path = "packages/switchy/uuid" }
 
 # Internal HyperChad
 hyperchad                          = { version = "0.1.0", default-features = false, path = "packages/hyperchad" }

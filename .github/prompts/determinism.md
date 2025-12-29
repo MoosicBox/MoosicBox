@@ -87,15 +87,15 @@ Find and replace non-deterministic patterns across the workspace with determinis
 
 ## Switchy Package Reference
 
-**Legacy locations (still valid, use these):**
+**Package locations:**
 
-- `switchy_fs` (`packages/fs/`) - Filesystem operations (sync and async)
-- `switchy_time` (`packages/time/`) - Time operations (`now()`, `instant_now()`)
-- `switchy_random` (`packages/random/`) - Random number generation
-- `switchy_tcp` (`packages/tcp/`) - TCP networking
-- `switchy_async` (`packages/async/`) - Async runtime primitives
+- `switchy_fs` (`packages/switchy/fs/`) - Filesystem operations (sync and async)
+- `switchy_time` (`packages/switchy/time/`) - Time operations (`now()`, `instant_now()`)
+- `switchy_random` (`packages/switchy/random/`) - Random number generation
+- `switchy_tcp` (`packages/switchy/tcp/`) - TCP networking
+- `switchy_async` (`packages/switchy/async/`) - Async runtime primitives
 
-**New packages should go under `packages/switchy/<domain>/`**
+**All switchy packages are located under `packages/switchy/<domain>/`**
 
 ## What NOT to Change
 

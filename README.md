@@ -279,8 +279,8 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[switchy_web_server_actix](packages/switchy/web_server/actix)** - Actix Web backend for switchy_web_server
 - **[switchy_web_server_core](packages/switchy/web_server/core)** - Core web server functionality
 - **[switchy_web_server_cors](packages/switchy/web_server/cors)** - CORS middleware for web servers
-- **[switchy_http](packages/http)** - Generic HTTP client abstraction
-- **[switchy_http_models](packages/http/models)** - HTTP protocol models and types
+- **[switchy_http](packages/switchy/http)** - Generic HTTP client abstraction
+- **[switchy_http_models](packages/switchy/http/models)** - HTTP protocol models and types
 - **[moosicbox_ws](packages/ws)** - WebSocket utilities and abstractions
 - **[moosicbox_middleware](packages/middleware)** - HTTP middleware collection
 
@@ -289,10 +289,10 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_tunnel](packages/tunnel)** - Tunneling utilities and protocols
 - **[moosicbox_tunnel_sender](packages/tunnel_sender)** - WebSocket-based tunneling client
 - **[moosicbox_tunnel_server](packages/tunnel_server)** - WebSocket-based tunneling server
-- **[switchy_tcp](packages/tcp)** - Generic TCP networking abstraction
-- **[switchy_upnp](packages/upnp)** - UPnP device discovery and communication
-- **[switchy_mdns](packages/mdns)** - mDNS service registration and discovery
-- **[switchy_p2p](packages/p2p)** - Peer-to-peer networking utilities
+- **[switchy_tcp](packages/switchy/tcp)** - Generic TCP networking abstraction
+- **[switchy_upnp](packages/switchy/upnp)** - UPnP device discovery and communication
+- **[switchy_mdns](packages/switchy/mdns)** - mDNS service registration and discovery
+- **[switchy_p2p](packages/switchy/p2p)** - Peer-to-peer networking utilities
 - **[moosicbox_load_balancer](packages/load_balancer)** - Load balancing utilities
 - **[openport](packages/openport)** - Find free unused network ports
 
@@ -305,24 +305,24 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 ### Database & Storage
 
-- **[switchy_database](packages/database)** - Database abstraction layer
-- **[switchy_database_connection](packages/database_connection)** - Database connection management
+- **[switchy_database](packages/switchy/database)** - Database abstraction layer
+- **[switchy_database_connection](packages/switchy/database_connection)** - Database connection management
 - **[switchy_schema](packages/switchy/schema)** - Database schema and migration framework
 - **[switchy_schema_cli](packages/switchy/schema/cli)** - CLI tool for schema migrations
 - **[moosicbox_schema](packages/schema)** - Database migration system
-- **[switchy_fs](packages/fs)** - Cross-platform filesystem abstraction
+- **[switchy_fs](packages/switchy/fs)** - Cross-platform filesystem abstraction
 
 ### Utilities & Infrastructure
 
 - **[moosicbox_config](packages/config)** - Configuration utilities for applications
-- **[switchy_env](packages/env)** - Environment configuration utilities
+- **[switchy_env](packages/switchy/env)** - Environment configuration utilities
 - **[moosicbox_env_utils](packages/env_utils)** - Environment variable parsing utilities
 - **[moosicbox_logging](packages/logging)** - Logging utilities with feature-gated modules
-- **[switchy_telemetry](packages/telemetry)** - OpenTelemetry integration for distributed tracing
+- **[switchy_telemetry](packages/switchy/telemetry)** - OpenTelemetry integration for distributed tracing
 - **[moosicbox_async_service](packages/async_service)** - Service framework for async applications
-- **[switchy_time](packages/time)** - Time abstraction utilities
-- **[switchy_random](packages/random)** - Random number generation utilities
-- **[switchy_uuid](packages/uuid)** - UUID generation and handling utilities
+- **[switchy_time](packages/switchy/time)** - Time abstraction utilities
+- **[switchy_random](packages/switchy/random)** - Random number generation utilities
+- **[switchy_uuid](packages/switchy/uuid)** - UUID generation and handling utilities
 
 ### Data Processing & Parsing
 
@@ -363,9 +363,9 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 ### Core Libraries
 
 - **[switchy](packages/switchy)** - Feature-gated re-exports for cross-platform compatibility
-- **[switchy_async](packages/async)** - Async runtime abstraction
-- **[switchy_async_cargo](packages/async/cargo)** - Cargo integration for async runtime
-- **[switchy_async_macros](packages/async/macros)** - Macros for async runtime
+- **[switchy_async](packages/switchy/async)** - Async runtime abstraction
+- **[switchy_async_cargo](packages/switchy/async/cargo)** - Cargo integration for async runtime
+- **[switchy_async_macros](packages/switchy/async/macros)** - Macros for async runtime
 - **[moosicbox_assert](packages/assert)** - Conditional assertion macros
 
 ### Transpiler & Code Generation
@@ -379,13 +379,13 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 #### Async & Concurrency
 
-- **[cancel](packages/async/examples/cancel)** - Async cancellation examples
-- **[simulated](packages/async/examples/simulated)** - Simulated async examples
+- **[cancel](packages/switchy/async/examples/cancel)** - Async cancellation examples
+- **[simulated](packages/switchy/async/examples/simulated)** - Simulated async examples
 
 #### Database & Persistence
 
-- **[turso_basic](packages/database/examples/turso_basic)** - Turso database basic usage
-- **[turso_transactions](packages/database/examples/turso_transactions)** - Turso transaction handling
+- **[turso_basic](packages/switchy/database/examples/turso_basic)** - Turso database basic usage
+- **[turso_transactions](packages/switchy/database/examples/turso_transactions)** - Turso transaction handling
 
 #### Schema & Migrations
 
@@ -398,7 +398,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 #### HTTP & Web Server
 
-- **[simple_get](packages/http/examples/simple_get)** - Simple HTTP GET example
+- **[simple_get](packages/switchy/http/examples/simple_get)** - Simple HTTP GET example
 - **[basic_handler](packages/switchy/web_server/examples/basic_handler)** - Basic web server handler example
 - **[basic_handler_standalone](packages/switchy/web_server/examples/basic_handler_standalone)** - Standalone basic handler
 - **[nested_get](packages/switchy/web_server/examples/nested_get)** - Nested GET routes
@@ -423,7 +423,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 #### Filesystem
 
-- **[temp_dir](packages/fs/examples/temp_dir)** - Temporary directory usage
+- **[temp_dir](packages/switchy/fs/examples/temp_dir)** - Temporary directory usage
 
 For a complete list of examples, see the workspace members in `Cargo.toml`.
 
