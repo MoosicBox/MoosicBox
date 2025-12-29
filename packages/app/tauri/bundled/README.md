@@ -41,7 +41,7 @@ use tauri::RunEvent;
 
 fn handle_run_event(handle: &service::Handle, event: RunEvent) {
     let cmd = Command::RunEvent { event: Arc::new(event) };
-    handle.send(cmd);
+    handle.send_command(cmd).expect("Failed to send command");
 }
 ```
 
@@ -53,7 +53,7 @@ use switchy_async::sync::oneshot;
 
 async fn wait_for_startup(handle: &moosicbox_app_tauri_bundled::service::Handle) {
     let (sender, receiver) = oneshot::channel();
-    handle.send(Command::WaitForStartup { sender });
+    handle.send_command(Command::WaitForStartup { sender }).expect("Failed to send command");
     receiver.await.expect("Failed to wait for startup");
 }
 ```
