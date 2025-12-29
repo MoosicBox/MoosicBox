@@ -17,6 +17,26 @@ The MoosicBox Opus package provides an Opus audio codec decoder that integrates 
 - ✅ Support for all Opus modes (SILK, CELT, Hybrid) via libopus
 - ✅ Codec registry integration
 
+## Usage
+
+Register the Opus decoder with a Symphonia codec registry:
+
+```rust
+use symphonia::core::codecs::CodecRegistry;
+use moosicbox_opus::register_opus_codec;
+
+let mut registry = CodecRegistry::new();
+register_opus_codec(&mut registry);
+```
+
+Or create a registry with default Symphonia codecs plus Opus:
+
+```rust
+use moosicbox_opus::create_opus_registry;
+
+let registry = create_opus_registry();
+```
+
 ## Implementation
 
 This package implements:
