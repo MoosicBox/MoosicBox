@@ -159,7 +159,7 @@ cargo fmt
 ### Project Structure
 
 - **`packages/`** - Modular Rust packages (audio, networking, UI, etc.)
-- **`app-website/`** - Marketing website source
+- **`app-website/`** - Web application interface source
 - **`kubernetes/`** - Kubernetes deployment manifests
 - **`terraform/`** - Infrastructure as code
 
