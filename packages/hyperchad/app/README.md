@@ -156,12 +156,14 @@ let app = AppBuilder::new()
         target: AssetPathTarget::FileContents(
             Bytes::from(include_str!("../assets/style.css"))
         ),
+        not_found_behavior: None,
     })
     .with_static_asset_route(StaticAssetRoute {
         route: "/static/js/app.js".to_string(),
         target: AssetPathTarget::FileContents(
             Bytes::from(include_str!("../assets/app.js"))
         ),
+        not_found_behavior: None,
     })
     .build_default()?;
 ```
