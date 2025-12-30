@@ -9,10 +9,11 @@ use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue};
 ///
 /// Profiles allow users to organize settings and preferences into separate
 /// configurations, such as for different users or environments.
+#[derive(Debug, Clone)]
 pub struct Profile {
-    /// Unique identifier for the profile
+    /// Unique database identifier for the profile.
     pub id: u64,
-    /// Name of the profile
+    /// User-defined name of the profile.
     pub name: String,
 }
 
