@@ -50,6 +50,7 @@ pub mod models;
 /// * POST `/` - Create a new audio zone
 /// * PATCH `/` - Update an existing audio zone
 /// * DELETE `/` - Delete an audio zone
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

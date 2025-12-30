@@ -65,16 +65,25 @@ pub fn disable_interval() {
 }
 
 /// Represents the currently playing track for visualization purposes.
+///
+/// This struct holds the information needed to render and update the audio waveform
+/// visualization, including the track's identifier, playback position, and timing
+/// information for calculating the cursor position.
 #[derive(Debug, Clone)]
 pub struct CurrentTrack {
+    /// Unique identifier for the track.
     #[allow(unused)]
     id: Id,
+    /// The API source the track belongs to (e.g., Library, Tidal, Qobuz).
     #[allow(unused)]
     api_source: ApiSource,
+    /// Current playback position in seconds.
     #[allow(unused)]
     seek: f64,
+    /// Total track duration in seconds.
     #[allow(unused)]
     duration: f64,
+    /// Timestamp when the playback state was captured, used for calculating elapsed time.
     #[allow(unused)]
     time: SystemTime,
 }

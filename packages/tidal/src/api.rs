@@ -40,6 +40,7 @@ use crate::{
 ///
 /// This function registers all available Tidal endpoints including authentication,
 /// favorites management, track retrieval, and search functionality.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

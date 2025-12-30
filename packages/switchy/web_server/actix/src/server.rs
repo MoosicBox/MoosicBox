@@ -205,7 +205,10 @@ fn build_actix_server(
     })
 }
 
-/// Register a scope and its routes with the Actix app.
+/// Registers a scope and its routes with the Actix app.
+///
+/// This function converts a `switchy_web_server::Scope` into an `actix_web::Scope`,
+/// setting up all HTTP routes and recursively registering any nested scopes.
 fn register_scope<T>(app: actix_web::App<T>, scope: &Scope) -> actix_web::App<T>
 where
     T: actix_service::ServiceFactory<
@@ -274,7 +277,10 @@ where
     app.service(actix_scope)
 }
 
-/// Register a nested scope with the Actix scope.
+/// Registers a nested scope within a parent Actix scope.
+///
+/// This function recursively registers child scopes and their routes,
+/// enabling deeply nested URL path hierarchies.
 fn register_nested_scope(parent_scope: actix_web::Scope, scope: &Scope) -> actix_web::Scope {
     let mut actix_scope = actix_web::web::scope(scope.path());
 
@@ -330,7 +336,10 @@ fn register_nested_scope(parent_scope: actix_web::Scope, scope: &Scope) -> actix
     parent_scope.service(actix_scope)
 }
 
-/// Convert an `HttpResponse` to an Actix response.
+/// Converts a `switchy_web_server::HttpResponse` to an `actix_web::HttpResponse`.
+///
+/// This function maps status codes, headers, and body content from the
+/// framework-agnostic response type to the Actix-specific response type.
 fn convert_response(resp: HttpResponse) -> actix_web::HttpResponse {
     let mut actix_resp = actix_web::HttpResponseBuilder::new(resp.status_code.into());
 
@@ -350,7 +359,11 @@ fn convert_response(resp: HttpResponse) -> actix_web::HttpResponse {
     }
 }
 
-/// Build CORS configuration for Actix.
+/// Builds an `actix_cors::Cors` middleware from the framework-agnostic CORS config.
+///
+/// This function translates the `switchy_web_server_cors::Cors` configuration
+/// into an Actix-compatible CORS middleware with the appropriate origins,
+/// methods, headers, and credentials settings.
 #[cfg(feature = "cors")]
 fn build_cors(config: &switchy_web_server_cors::Cors) -> actix_cors::Cors {
     let cors = actix_cors::Cors::default().max_age(config.max_age.map(|x| x as usize));
