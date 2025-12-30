@@ -234,7 +234,6 @@ jobs:
                   max-parallel: 256
                   spread: true
                   skip-features: fail-on-warnings
-                  transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   git-strategy: branch-comparison
                   git-compare-branch: master
                   os-suffix: -latest
@@ -438,7 +437,6 @@ jobs:
                   max-parallel: 256
                   spread: true
                   skip-features: fail-on-warnings
-                  transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   git-strategy: branch-comparison
                   git-compare-branch: master
                   os-suffix: -latest
