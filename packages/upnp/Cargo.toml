@@ -33,16 +33,11 @@ switchy_http = { workspace = true, features = ["reqwest"] }
 switchy_random = { workspace = true, features = ["rand"] }
 switchy_upnp = { workspace = true }
 
-# API Dependencies
-actix-web = { workspace = true, optional = true }
-utoipa    = { workspace = true, optional = true }
-
 async-trait  = { workspace = true }
 flume        = { workspace = true }
 futures      = { workspace = true }
 log          = { workspace = true }
 rupnp        = { workspace = true }
-strum        = { workspace = true }
 strum_macros = { workspace = true }
 symphonia    = { workspace = true }
 thiserror    = { workspace = true }
@@ -73,7 +68,6 @@ fail-on-warnings = [
 ]
 
 api = [
-    "dep:actix-web",
     "moosicbox_audio_output/api",
     "moosicbox_logging/api",
     "moosicbox_music_api/api",
@@ -83,7 +77,6 @@ api = [
 ]
 listener = []
 openapi = [
-    "dep:utoipa",
     "moosicbox_audio_output/openapi",
     "moosicbox_music_api/openapi",
     "moosicbox_player/openapi",

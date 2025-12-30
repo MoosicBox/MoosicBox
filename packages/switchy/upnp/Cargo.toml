@@ -28,7 +28,6 @@ switchy_async = { workspace = true, features = [
     "time",
     "tokio",
 ] }
-switchy_env = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -59,10 +58,9 @@ default = ["api", "openapi", "simulator"]
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
     "switchy_async/fail-on-warnings",
-    "switchy_env/fail-on-warnings",
 ]
 
 api     = ["dep:actix-web"]
 openapi = ["dep:utoipa"]
 
-simulator = ["switchy_async/simulator", "switchy_env/simulator"]
+simulator = ["switchy_async/simulator"]

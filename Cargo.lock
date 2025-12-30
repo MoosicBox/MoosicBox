@@ -9719,7 +9719,6 @@ dependencies = [
 name = "moosicbox_upnp"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "async-trait",
  "flume 0.12.0",
  "futures",
@@ -9732,7 +9731,6 @@ dependencies = [
  "moosicbox_player",
  "moosicbox_session",
  "rupnp",
- "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_async",
  "switchy_env",
@@ -9743,7 +9741,6 @@ dependencies = [
  "test-log",
  "thiserror 2.0.17",
  "tokio",
- "utoipa",
  "xml",
 ]
 
@@ -15732,7 +15729,6 @@ dependencies = [
  "rupnp",
  "serde",
  "switchy_async",
- "switchy_env",
  "test-log",
  "thiserror 2.0.17",
  "tokio",
