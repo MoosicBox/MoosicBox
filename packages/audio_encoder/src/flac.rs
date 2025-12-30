@@ -19,8 +19,11 @@ use crate::EncodeInfo;
 ///
 /// Maintains a byte sink for output and position tracking across multiple encode calls.
 pub struct Encoder {
+    /// Internal byte sink for accumulating encoded output
     sink: ByteSink,
+    /// Current position in the output sink (bytes written so far)
     pos: usize,
+    /// Verified FLAC encoder configuration
     encoder: Verified<flacenc::config::Encoder>,
 }
 
