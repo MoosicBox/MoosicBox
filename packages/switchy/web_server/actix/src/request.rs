@@ -1,4 +1,9 @@
 //! Actix-specific HTTP request implementation.
+//!
+//! This module provides the [`ActixRequest`] type, which extracts data from an
+//! `actix_web::HttpRequest` and stores it in a `Send + Sync` compatible format.
+//! This is necessary because Actix's native request type uses `Rc` internally
+//! and cannot be shared across threads.
 
 use std::{any::TypeId, collections::BTreeMap};
 

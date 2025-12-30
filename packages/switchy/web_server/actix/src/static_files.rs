@@ -11,6 +11,14 @@ use switchy_web_server::StaticFiles;
 /// Extension trait for adding static file serving to Actix apps.
 pub trait StaticFilesExt {
     /// Registers static file serving with the application.
+    ///
+    /// This method configures the application to serve static files from a
+    /// directory, optionally with an index file and SPA fallback behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Static file serving configuration specifying the mount path,
+    ///   source directory, and optional SPA settings
     #[must_use]
     fn with_static_files(self, config: &StaticFiles) -> Self;
 }
@@ -51,7 +59,8 @@ where
 /// Creates an `actix_files::Files` service from the configuration.
 ///
 /// This internal function builds the files service with optional index file
-/// and SPA fallback support.
+/// and SPA fallback support. When SPA fallback is enabled, requests for
+/// non-existent files return the index file instead of a 404 error.
 #[allow(clippy::needless_pass_by_value)]
 fn create_files_service(
     mount_path: String,

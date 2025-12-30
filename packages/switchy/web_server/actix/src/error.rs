@@ -1,4 +1,8 @@
 //! Error conversion utilities for Actix Web backend.
+//!
+//! This module provides functions and traits to convert between `switchy_web_server::Error`
+//! and `actix_web::Error`. These utilities enable seamless error handling when using the
+//! Actix Web backend with the `switchy_web_server` framework.
 
 use actix_web::{Error, error};
 use switchy_http_models::{StatusCode, TryFromU16StatusCodeError};
@@ -106,7 +110,10 @@ pub fn try_from_actix_error(
 
 /// Extension trait for converting `switchy_web_server::Error` to `actix_web::Error`.
 pub trait IntoActixError {
-    /// Converts the error to an Actix web error.
+    /// Converts this error into an Actix web error.
+    ///
+    /// This method maps the HTTP status code to the appropriate Actix error
+    /// constructor, preserving the original error message.
     fn into_actix_error(self) -> Error;
 }
 
@@ -118,11 +125,15 @@ impl IntoActixError for switchy_web_server::Error {
 
 /// Extension trait for converting `actix_web::Error` to `switchy_web_server::Error`.
 pub trait TryIntoWebServerError {
-    /// Attempts to convert the error to a `switchy_web_server::Error`.
+    /// Attempts to convert this Actix error to a `switchy_web_server::Error`.
+    ///
+    /// This method extracts the HTTP status code from the Actix error response
+    /// and constructs a framework-agnostic error.
     ///
     /// # Errors
     ///
-    /// Returns `TryFromU16StatusCodeError` if the status code conversion fails.
+    /// Returns `TryFromU16StatusCodeError` if the HTTP status code cannot be
+    /// converted to a known `StatusCode` variant.
     fn try_into_web_server_error(
         self,
     ) -> Result<switchy_web_server::Error, TryFromU16StatusCodeError>;
