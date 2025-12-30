@@ -1138,9 +1138,14 @@ pub enum SearchError {
     /// Invalid `api_source`
     #[error("Invalid api_source: {0}")]
     InvalidApiSource(ApiSource),
-    /// Serach request failed
+    /// Search request failed.
     #[error("Search request failed for '{url}': {message}")]
-    RequestFailed { url: String, message: String },
+    RequestFailed {
+        /// The URL that was requested.
+        url: String,
+        /// The error message from the failed request.
+        message: String,
+    },
 }
 
 /// Handles music search across all registered API sources.
