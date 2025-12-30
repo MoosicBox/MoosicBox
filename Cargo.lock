@@ -8265,9 +8265,11 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_env_utils",
  "moosicbox_logging",
+ "moosicbox_mdns",
  "moosicbox_music_models",
  "moosicbox_player",
  "moosicbox_session",
+ "moosicbox_upnp",
  "moosicbox_ws",
  "qstring",
  "serde",
@@ -8421,6 +8423,7 @@ dependencies = [
  "moosicbox_player",
  "moosicbox_remote_library",
  "moosicbox_session",
+ "moosicbox_upnp",
  "moosicbox_ws",
  "nanoid",
  "serde",
@@ -8972,6 +8975,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_mdns"
+version = "0.1.0"
+dependencies = [
+ "kanal",
+ "log 0.4.29",
+ "mdns-sd",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "strum_macros 0.27.2",
+ "switchy_async",
+ "test-log",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_menu"
 version = "0.1.4"
 dependencies = [
@@ -9443,6 +9462,7 @@ dependencies = [
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
+ "moosicbox_upnp",
  "moosicbox_ws",
  "moosicbox_yt",
  "openssl",
@@ -9693,6 +9713,38 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "moosicbox_upnp"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "flume 0.12.0",
+ "futures",
+ "log 0.4.29",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_audio_output",
+ "moosicbox_logging",
+ "moosicbox_music_api",
+ "moosicbox_player",
+ "moosicbox_session",
+ "rupnp",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "switchy_async",
+ "switchy_env",
+ "switchy_http",
+ "switchy_random",
+ "switchy_upnp",
+ "symphonia",
+ "test-log",
+ "thiserror 2.0.17",
+ "tokio",
+ "utoipa",
+ "xml",
 ]
 
 [[package]]
@@ -15513,12 +15565,9 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "hostname",
- "kanal",
  "log 0.4.29",
  "mdns-sd",
  "moosicbox_assert",
- "moosicbox_async_service",
- "strum_macros 0.27.2",
  "switchy_async",
  "test-log",
  "thiserror 2.0.17",
@@ -15673,29 +15722,17 @@ dependencies = [
  "actix-web",
  "async-recursion",
  "async-trait",
- "flume 0.12.0",
  "futures",
  "itertools 0.14.0",
  "log 0.4.29",
  "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_audio_output",
- "moosicbox_logging",
- "moosicbox_music_api",
- "moosicbox_player",
- "moosicbox_session",
  "pin-utils",
  "regex",
  "roxmltree 0.21.1",
  "rupnp",
  "serde",
- "strum 0.27.2",
- "strum_macros 0.27.2",
  "switchy_async",
  "switchy_env",
- "switchy_http",
- "switchy_random",
- "symphonia",
  "test-log",
  "thiserror 2.0.17",
  "tokio",

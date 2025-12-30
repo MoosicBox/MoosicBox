@@ -61,10 +61,6 @@
 
 #[cfg(feature = "api")]
 pub mod api;
-#[cfg(feature = "listener")]
-pub mod listener;
-#[cfg(feature = "player")]
-pub mod player;
 
 pub mod models;
 
@@ -631,11 +627,11 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TransportInfo {
     /// Current transport status (e.g., "OK", "`ERROR_OCCURRED`").
-    current_transport_status: String,
+    pub current_transport_status: String,
     /// Current transport state (e.g., "PLAYING", "`PAUSED_PLAYBACK`", "STOPPED").
-    current_transport_state: String,
+    pub current_transport_state: String,
     /// Current playback speed (typically "1" for normal speed).
-    current_speed: String,
+    pub current_speed: String,
 }
 
 /// Retrieves transport information from a `UPnP` `AVTransport` service.
@@ -681,21 +677,21 @@ pub async fn get_transport_info(
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PositionInfo {
     /// Current track number in the playlist (1-based).
-    track: u32,
+    pub track: u32,
     /// Relative playback position in seconds within the current track.
-    rel_time: u32,
+    pub rel_time: u32,
     /// Absolute playback position in seconds across the entire playlist.
-    abs_time: u32,
+    pub abs_time: u32,
     /// URI of the current track.
-    track_uri: String,
+    pub track_uri: String,
     /// Metadata for the current track.
-    track_metadata: TrackMetadata,
+    pub track_metadata: TrackMetadata,
     /// Relative counter value.
-    rel_count: u32,
+    pub rel_count: u32,
     /// Absolute counter value.
-    abs_count: u32,
+    pub abs_count: u32,
     /// Total duration of the current track in seconds.
-    track_duration: u32,
+    pub track_duration: u32,
 }
 
 /// Retrieves position information from a `UPnP` `AVTransport` service.

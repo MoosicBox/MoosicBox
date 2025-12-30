@@ -32,6 +32,10 @@ use moosicbox_player::{
 };
 use symphonia::core::audio::AudioBuffer;
 
+use switchy_upnp::{
+    get_transport_info, pause, play, seek as upnp_seek, set_av_transport_uri, stop,
+};
+
 use crate::listener::Handle;
 
 /// Default retry options for seeking operations on `UPnP` devices.
@@ -126,7 +130,7 @@ impl Player for UpnpPlayer {
             self.trigger_seek(seek).await?;
         }
 
-        crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
+        play(&self.service, self.device.url(), self.instance_id, 1.0)
             .await
             .map_err(|e| {
                 log::error!("play failed: {e:?}");
@@ -184,7 +188,7 @@ impl Player for UpnpPlayer {
         if let Err(e) = self.wait_for_expected_transport_state().await {
             log::warn!("Playback not in a stoppable state: {e:?}");
         }
-        crate::stop(&self.service, self.device.url(), self.instance_id)
+        stop(&self.service, self.device.url(), self.instance_id)
             .await
             .map_err(|e| {
                 log::error!("stop failed: {e:?}");
@@ -240,7 +244,7 @@ impl Player for UpnpPlayer {
         }
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        crate::seek(
+        upnp_seek(
             &self.service,
             self.device.url(),
             self.instance_id,
@@ -266,7 +270,7 @@ impl Player for UpnpPlayer {
             log::error!("Playback not in a pauseable state: {e:?}");
             return Ok(());
         }
-        crate::pause(&self.service, self.device.url(), self.instance_id)
+        pause(&self.service, self.device.url(), self.instance_id)
             .await
             .map_err(|e| {
                 log::error!("pause failed: {e:?}");
@@ -296,7 +300,7 @@ impl Player for UpnpPlayer {
         let id = playback.id;
 
         self.wait_for_expected_transport_state().await?;
-        crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
+        play(&self.service, self.device.url(), self.instance_id, 1.0)
             .await
             .map_err(|e| {
                 log::error!("resume failed: {e:?}");
@@ -427,7 +431,7 @@ impl UpnpPlayer {
         let album = track.album.clone();
         let track_number = track.number;
 
-        crate::set_av_transport_uri(
+        set_av_transport_uri(
             &self.service,
             self.device.url(),
             self.instance_id,
@@ -451,13 +455,12 @@ impl UpnpPlayer {
     }
 
     async fn init_transport_state(&self) -> Result<(), PlayerError> {
-        let transport_info =
-            crate::get_transport_info(&self.service, self.device.url(), self.instance_id)
-                .await
-                .map_err(|e| {
-                    log::error!("get_transport_info failed: {e:?}");
-                    PlayerError::InvalidState
-                })?;
+        let transport_info = get_transport_info(&self.service, self.device.url(), self.instance_id)
+            .await
+            .map_err(|e| {
+                log::error!("get_transport_info failed: {e:?}");
+                PlayerError::InvalidState
+            })?;
 
         log::trace!("update_av_transport: transport_info={transport_info:?}");
 
@@ -485,10 +488,9 @@ impl UpnpPlayer {
         let mut attempt = 0;
 
         while state.as_str() != desired_state {
-            let info =
-                crate::get_transport_info(&self.service, self.device.url(), self.instance_id)
-                    .await
-                    .expect("failed to get transport info");
+            let info = get_transport_info(&self.service, self.device.url(), self.instance_id)
+                .await
+                .expect("failed to get transport info");
 
             log::debug!("Waiting for state={desired_state} (current info={info:?})",);
 

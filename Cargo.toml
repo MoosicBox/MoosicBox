@@ -73,6 +73,7 @@ members = [
     "packages/logging",
     "packages/marketing_site",
     "packages/marketing_site/ui",
+    "packages/mdns",
     "packages/menu",
     "packages/menu/models",
     "packages/middleware",
@@ -160,6 +161,7 @@ members = [
     "packages/tunnel",
     "packages/tunnel_sender",
     "packages/tunnel_server",
+    "packages/upnp",
     "packages/ws",
     "packages/yt",
 ]
@@ -247,6 +249,7 @@ moosicbox_load_balancer            = { version = "0.1.1", default-features = fal
 moosicbox_logging                  = { version = "0.1.1", default-features = false, path = "packages/logging" }
 moosicbox_marketing_site           = { version = "0.1.1", default-features = false, path = "packages/marketing_site" }
 moosicbox_marketing_site_ui        = { version = "0.1.1", default-features = false, path = "packages/marketing_site/ui" }
+moosicbox_mdns                     = { version = "0.1.0", default-features = false, path = "packages/mdns" }
 moosicbox_menu                     = { version = "0.1.1", default-features = false, path = "packages/menu" }
 moosicbox_menu_models              = { version = "0.1.1", default-features = false, path = "packages/menu/models" }
 moosicbox_middleware               = { version = "0.1.1", default-features = false, path = "packages/middleware" }
@@ -276,6 +279,7 @@ moosicbox_stream_utils             = { version = "0.1.1", default-features = fal
 moosicbox_tidal                    = { version = "0.1.1", default-features = false, path = "packages/tidal" }
 moosicbox_tunnel                   = { version = "0.1.1", default-features = false, path = "packages/tunnel" }
 moosicbox_tunnel_sender            = { version = "0.1.1", default-features = false, path = "packages/tunnel_sender" }
+moosicbox_upnp                     = { version = "0.1.0", default-features = false, path = "packages/upnp" }
 moosicbox_ws                       = { version = "0.1.1", default-features = false, path = "packages/ws" }
 moosicbox_yt                       = { version = "0.1.1", default-features = false, path = "packages/yt" }
 switchy_web_server                 = { version = "0.1.0", default-features = false, path = "packages/switchy/web_server" }

@@ -33,20 +33,18 @@ tauri-build = { workspace = true, features = [] }
 [dependencies]
 moosicbox_app_state = { workspace = true, features = ["upnp"] }
 
-moosicbox_assert = { workspace = true }
-moosicbox_config = { workspace = true }
-moosicbox_env_utils = { workspace = true }
-moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_assert       = { workspace = true }
+moosicbox_config       = { workspace = true }
+moosicbox_env_utils    = { workspace = true }
+moosicbox_logging      = { workspace = true, features = ["free_log"] }
+moosicbox_mdns         = { workspace = true }
 moosicbox_music_models = { workspace = true }
-moosicbox_player = { workspace = true, features = ["local"] }
-moosicbox_session = { workspace = true }
-moosicbox_ws = { workspace = true }
-switchy = { workspace = true, features = [
-    "async-tokio",
-    "mdns-scanner",
-    "upnp-player",
-] }
-switchy_env = { workspace = true, features = ["std"] }
+moosicbox_player       = { workspace = true, features = ["local"] }
+moosicbox_session      = { workspace = true }
+moosicbox_upnp         = { workspace = true, features = ["listener", "player"] }
+moosicbox_ws           = { workspace = true }
+switchy                = { workspace = true, features = ["async-tokio"] }
+switchy_env            = { workspace = true, features = ["std"] }
 
 # Bundled Dependencies
 moosicbox_app_tauri_bundled = { workspace = true, optional = true }
@@ -107,9 +105,11 @@ fail-on-warnings = [
     "moosicbox_config/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
+    "moosicbox_mdns/fail-on-warnings",
     "moosicbox_music_models/fail-on-warnings",
     "moosicbox_player/fail-on-warnings",
     "moosicbox_session/fail-on-warnings",
+    "moosicbox_upnp/fail-on-warnings",
     "moosicbox_ws/fail-on-warnings",
     "switchy/fail-on-warnings",
     "switchy_env/fail-on-warnings",

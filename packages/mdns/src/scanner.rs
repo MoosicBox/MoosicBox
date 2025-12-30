@@ -1,6 +1,6 @@
-//! mDNS service scanner for discovering `MoosicBox` servers on the network.
+//! mDNS service scanner for discovering MoosicBox servers on the network.
 //!
-//! This module provides functionality to scan the local network for `MoosicBox` servers
+//! This module provides functionality to scan the local network for MoosicBox servers
 //! using mDNS service discovery, returning discovered servers through an async channel.
 
 use std::net::SocketAddr;
@@ -103,7 +103,7 @@ impl service::Processor for service::Service {
 
         ctx.handle
             .replace(switchy_async::runtime::Handle::current().spawn_with_name(
-                "switchy_mdns scanner",
+                "moosicbox_mdns scanner",
                 async move {
                     let mdns = ServiceDaemon::new()?;
                     let service_type = "_moosicboxserver._tcp.local.";

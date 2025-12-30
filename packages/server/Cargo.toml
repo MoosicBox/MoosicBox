@@ -77,12 +77,12 @@ moosicbox_scan = { workspace = true, features = [
 ], optional = true }
 moosicbox_search = { workspace = true, features = ["api"], optional = true }
 moosicbox_tidal = { workspace = true, features = ["db"], optional = true }
-moosicbox_yt = { workspace = true, features = ["db"], optional = true }
-switchy_upnp = { workspace = true, optional = true, features = [
-    "api",
+moosicbox_upnp = { workspace = true, optional = true, features = [
     "listener",
     "player",
 ] }
+moosicbox_yt = { workspace = true, features = ["db"], optional = true }
+switchy_upnp = { workspace = true, optional = true, features = ["api"] }
 
 # Tunnel dependencies
 moosicbox_tunnel        = { workspace = true, optional = true }
@@ -173,6 +173,7 @@ fail-on-warnings = [
     "moosicbox_tidal?/fail-on-warnings",
     "moosicbox_tunnel?/fail-on-warnings",
     "moosicbox_tunnel_sender?/fail-on-warnings",
+    "moosicbox_upnp?/fail-on-warnings",
     "moosicbox_ws/fail-on-warnings",
     "moosicbox_yt?/fail-on-warnings",
     "switchy_async/fail-on-warnings",
@@ -425,7 +426,7 @@ library = ["moosicbox_library/api", "moosicbox_library_music_api/api"]
 player = [
     "dep:moosicbox_library",
     "dep:moosicbox_player",
-    "switchy_upnp?/player",
+    "moosicbox_upnp?/player",
 ]
 scan = [
     "dep:throttle",
@@ -436,7 +437,7 @@ scan = [
     "moosicbox_yt?/scan",
 ]
 search = ["moosicbox_search/api"]
-upnp = ["dep:switchy_upnp", "player"]
+upnp = ["dep:moosicbox_upnp", "dep:switchy_upnp", "player"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
@@ -493,7 +494,7 @@ scan-api = ["dep:moosicbox_scan", "scan"]
 search-api = ["dep:moosicbox_search", "search"]
 session-api = ["moosicbox_session/api"]
 tidal-api = ["moosicbox_tidal?/api"]
-upnp-api = ["dep:switchy_upnp", "upnp"]
+upnp-api = ["dep:moosicbox_upnp", "dep:switchy_upnp", "upnp"]
 yt-api = ["moosicbox_yt?/api"]
 
 openapi = [
@@ -519,6 +520,7 @@ openapi = [
     "moosicbox_search?/openapi",
     "moosicbox_session/openapi",
     "moosicbox_tidal?/openapi",
+    "moosicbox_upnp?/openapi",
     "moosicbox_yt?/openapi",
     "switchy_upnp?/openapi",
 ]
@@ -544,6 +546,7 @@ profiling-tracy = [
 simulator = [
     "moosicbox_library_music_api?/simulator",
     "moosicbox_search?/simulator",
+    "moosicbox_upnp?/simulator",
     "switchy_async/simulator",
     "switchy_database/simulator",
     "switchy_database_connection/simulator",

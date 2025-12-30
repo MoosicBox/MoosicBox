@@ -14,7 +14,10 @@ use switchy_async::sync::RwLock;
 use switchy_async::{task::JoinError, util::CancellationToken};
 use thiserror::Error;
 
-use crate::{MediaInfo, PositionInfo, TransportInfo};
+use switchy_upnp::{
+    MediaInfo, PositionInfo, TransportInfo, get_device, get_media_info, get_position_info,
+    get_service, get_transport_info,
+};
 
 impl From<flume::SendError<usize>> for ListenerError {
     fn from(_value: flume::SendError<usize>) -> Self {
@@ -269,9 +272,9 @@ impl Processor for Service {
                             let udn = udn.clone();
                             let service_id = service_id.clone();
                             Box::pin(async move {
-                                if let Ok(device) = super::get_device(&udn) {
-                                    if let Ok(service) = super::get_service(&udn, &service_id) {
-                                        match super::get_media_info(
+                                if let Ok(device) = get_device(&udn) {
+                                    if let Ok(service) = get_service(&udn, &service_id) {
+                                        match get_media_info(
                                             &service,
                                             device.url(),
                                             instance_id,
@@ -319,9 +322,9 @@ impl Processor for Service {
                             let udn = udn.clone();
                             let service_id = service_id.clone();
                             Box::pin(async move {
-                                if let Ok(device) = super::get_device(&udn) {
-                                    if let Ok(service) = super::get_service(&udn, &service_id) {
-                                        match super::get_position_info(
+                                if let Ok(device) = get_device(&udn) {
+                                    if let Ok(service) = get_service(&udn, &service_id) {
+                                        match get_position_info(
                                             &service,
                                             device.url(),
                                             instance_id,
@@ -369,9 +372,9 @@ impl Processor for Service {
                             let udn = udn.clone();
                             let service_id = service_id.clone();
                             Box::pin(async move {
-                                if let Ok(device) = super::get_device(&udn) {
-                                    if let Ok(service) = super::get_service(&udn, &service_id) {
-                                        match super::get_transport_info(
+                                if let Ok(device) = get_device(&udn) {
+                                    if let Ok(service) = get_service(&udn, &service_id) {
+                                        match get_transport_info(
                                             &service,
                                             device.url(),
                                             instance_id,

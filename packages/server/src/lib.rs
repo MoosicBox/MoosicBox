@@ -81,7 +81,7 @@ use tokio::try_join;
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
 static UPNP_LISTENER_HANDLE: LazyLock<
-    Arc<std::sync::RwLock<Option<switchy_upnp::listener::Handle>>>,
+    Arc<std::sync::RwLock<Option<moosicbox_upnp::listener::Handle>>>,
 > = LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
 static WS_SERVER_HANDLE: LazyLock<switchy_async::sync::RwLock<Option<ws::server::WsServerHandle>>> =
@@ -325,7 +325,7 @@ pub async fn run<T>(
     #[cfg(feature = "upnp")]
     let (upnp_service_handle, join_upnp_service) = if upnp_players {
         let upnp_service =
-            switchy_upnp::listener::Service::new(switchy_upnp::listener::UpnpContext::new());
+            moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
         let upnp_service_handle = upnp_service.handle();
         let join_upnp_service = upnp_service.start();
 
@@ -809,7 +809,7 @@ pub async fn run<T>(
 
             #[cfg(feature = "upnp")]
             if let Some(upnp_service_handle) = upnp_service_handle {
-                use switchy_upnp::listener::Commander as _;
+                use moosicbox_upnp::listener::Commander as _;
 
                 log::debug!("Shutting down UpnpListener...");
                 if let Err(e) = upnp_service_handle.shutdown() {

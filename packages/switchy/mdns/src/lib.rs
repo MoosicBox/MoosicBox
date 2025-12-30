@@ -28,10 +28,6 @@ use mdns_sd::ServiceInfo;
 use service::MdnsServiceDaemon;
 use thiserror::Error;
 
-#[cfg(feature = "scanner")]
-/// mDNS service scanner for discovering `MoosicBox` servers on the network.
-pub mod scanner;
-
 /// mDNS service registration and daemon management.
 pub mod service;
 

@@ -303,10 +303,9 @@ http-models-actix   = ["http-models", "switchy_http_models?/actix"]
 http-models-reqwest = ["http-models", "switchy_http_models?/reqwest"]
 http-models-serde   = ["http-models", "switchy_http_models?/serde"]
 
-all-mdns = ["mdns", "mdns-scanner", "mdns-simulator"]
+all-mdns = ["mdns", "mdns-simulator"]
 
 mdns           = ["dep:switchy_mdns"]
-mdns-scanner   = ["mdns", "switchy_mdns?/scanner"]
 mdns-simulator = ["mdns", "switchy_mdns?/simulator"]
 
 all-random = ["random", "random-rand", "random-simulator"]
@@ -333,20 +332,11 @@ time           = ["dep:switchy_time", "switchy_async?/time"]
 time-simulator = ["switchy_time?/simulator", "time"]
 time-std       = ["switchy_time?/std", "time"]
 
-all-upnp = [
-    "upnp",
-    "upnp-api",
-    "upnp-listener",
-    "upnp-openapi",
-    "upnp-player",
-    "upnp-simulator",
-]
+all-upnp = ["upnp", "upnp-api", "upnp-openapi", "upnp-simulator"]
 
 upnp           = ["dep:switchy_upnp"]
 upnp-api       = ["switchy_upnp?/api", "upnp"]
-upnp-listener  = ["switchy_upnp?/listener", "upnp"]
 upnp-openapi   = ["switchy_upnp?/openapi", "upnp"]
-upnp-player    = ["switchy_upnp?/player", "upnp"]
 upnp-simulator = ["switchy_upnp?/simulator", "upnp"]
 
 all-uuid = ["uuid", "uuid-serde", "uuid-simulator", "uuid-uuid"]

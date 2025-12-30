@@ -27,8 +27,8 @@ pub struct MoosicBox {
     pub dns: String,
 }
 
-impl From<switchy::mdns::scanner::MoosicBox> for MoosicBox {
-    fn from(value: switchy::mdns::scanner::MoosicBox) -> Self {
+impl From<moosicbox_mdns::scanner::MoosicBox> for MoosicBox {
+    fn from(value: moosicbox_mdns::scanner::MoosicBox) -> Self {
         Self {
             id: value.id,
             name: value.name,
@@ -69,13 +69,13 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
 pub fn spawn_mdns_scanner(
     runtime_handle: &switchy::unsync::runtime::Handle,
 ) -> (
-    switchy::mdns::scanner::service::Handle,
-    switchy::unsync::task::JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>,
+    moosicbox_mdns::scanner::service::Handle,
+    switchy::unsync::task::JoinHandle<Result<(), moosicbox_mdns::scanner::service::Error>>,
 ) {
     let (tx, rx) = kanal::unbounded_async();
 
-    let context = switchy::mdns::scanner::Context::new(tx);
-    let service = switchy::mdns::scanner::service::Service::new(context);
+    let context = moosicbox_mdns::scanner::Context::new(tx);
+    let service = moosicbox_mdns::scanner::service::Service::new(context);
 
     let handle = service.handle();
 

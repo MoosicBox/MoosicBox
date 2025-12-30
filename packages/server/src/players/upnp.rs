@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 use std::{collections::BTreeMap, sync::Arc};
 
 use moosicbox_session::update_session_audio_output_ids;
+use moosicbox_upnp::player::UpnpPlayer;
 use switchy_database::profiles::PROFILES;
 use switchy_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
@@ -17,7 +18,7 @@ pub static UPNP_PLAYERS: LazyLock<
     switchy_async::sync::RwLock<
         Vec<(
             moosicbox_audio_output::AudioOutputFactory,
-            switchy_upnp::player::UpnpPlayer,
+            UpnpPlayer,
             moosicbox_player::PlaybackHandler,
         )>,
     >,
@@ -118,7 +119,7 @@ pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerEr
                 continue;
             };
 
-            let player = switchy_upnp::player::UpnpPlayer::new(
+            let player = UpnpPlayer::new(
                 Arc::new(Box::new(music_apis)),
                 device.clone(),
                 service.clone(),

@@ -44,6 +44,7 @@ use std::{
 use moosicbox_app_state::{
     AppStateError, UPNP_LISTENER_HANDLE, UpdateAppState, ws::WsConnectMessage,
 };
+use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_music_models::{ApiSource, PlaybackQuality, api::ApiTrack, id::Id};
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession, PlaybackTarget, UpdateSession};
@@ -52,7 +53,6 @@ use moosicbox_ws::models::{
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
-use switchy::mdns::scanner::service::Commander;
 use tauri::{AppHandle, Emitter, Manager as _};
 use tauri_plugin_fs::FsExt as _;
 use thiserror::Error;
@@ -930,7 +930,7 @@ pub fn run() {
         std::sync::Mutex<
             Option<
                 switchy::unsync::task::JoinHandle<
-                    Result<(), switchy::mdns::scanner::service::Error>,
+                    Result<(), moosicbox_mdns::scanner::service::Error>,
                 >,
             >,
         >,
@@ -939,13 +939,13 @@ pub fn run() {
     #[allow(clippy::type_complexity)]
     static JOIN_UPNP_SERVICE: LazyLock<
         std::sync::Mutex<
-            Option<switchy::unsync::task::JoinHandle<Result<(), switchy::upnp::listener::Error>>>,
+            Option<switchy::unsync::task::JoinHandle<Result<(), moosicbox_upnp::listener::Error>>>,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[allow(clippy::type_complexity)]
     static MDNS_HANDLE: LazyLock<
-        std::sync::Mutex<Option<switchy::mdns::scanner::service::Handle>>,
+        std::sync::Mutex<Option<moosicbox_mdns::scanner::service::Handle>>,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[cfg(not(feature = "tauri-logger"))]
@@ -1215,7 +1215,7 @@ pub fn run() {
             moosicbox_player::on_playback_event(crate::on_playback_event);
 
             let upnp_service =
-                switchy::upnp::listener::Service::new(switchy::upnp::listener::UpnpContext::new());
+                moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
 
             let upnp_service_handle = upnp_service.handle();
             *JOIN_UPNP_SERVICE.lock().unwrap() = Some(upnp_service.start_on(&runtime_handle));

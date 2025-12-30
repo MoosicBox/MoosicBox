@@ -1,0 +1,45 @@
+[package]
+authors     = { workspace = true }
+categories  = ["network-programming"]
+description = "MoosicBox mDNS service scanner package"
+edition     = { workspace = true }
+keywords    = ["discovery", "dns", "mdns", "moosicbox", "scanner"]
+license     = { workspace = true }
+name        = "moosicbox_mdns"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
+[dependencies]
+moosicbox_assert        = { workspace = true }
+moosicbox_async_service = { workspace = true }
+
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
+
+kanal        = { workspace = true }
+log          = { workspace = true }
+mdns-sd      = { workspace = true }
+strum_macros = { workspace = true }
+thiserror    = { workspace = true }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[features]
+default = ["simulator"]
+
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]
+
+simulator = ["switchy_async/simulator"]

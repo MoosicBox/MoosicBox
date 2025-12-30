@@ -1,9 +1,9 @@
 {
-  "name": "@myorg/client",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "dependencies": {
-    "@myorg/models": "workspace:*",
-    "lodash": "^4.17.21"
-  }
+    "name": "@myorg/client",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "dependencies": {
+        "@myorg/models": "workspace:*",
+        "lodash": "^4.17.21"
+    }
 }

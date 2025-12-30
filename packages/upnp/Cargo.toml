@@ -1,0 +1,101 @@
+[package]
+authors     = { workspace = true }
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox UPnP player package"
+edition     = { workspace = true }
+keywords    = ["audio", "dlna", "moosicbox", "player", "upnp"]
+license     = { workspace = true }
+name        = "moosicbox_upnp"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[dependencies]
+moosicbox_assert        = { workspace = true }
+moosicbox_async_service = { workspace = true }
+moosicbox_audio_output  = { workspace = true }
+moosicbox_logging       = { workspace = true, features = ["macros"] }
+moosicbox_music_api     = { workspace = true }
+moosicbox_player        = { workspace = true }
+moosicbox_session       = { workspace = true }
+
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+switchy_env = { workspace = true, features = ["std"] }
+switchy_http = { workspace = true, features = ["reqwest"] }
+switchy_random = { workspace = true, features = ["rand"] }
+switchy_upnp = { workspace = true }
+
+# API Dependencies
+actix-web = { workspace = true, optional = true }
+utoipa    = { workspace = true, optional = true }
+
+async-trait  = { workspace = true }
+flume        = { workspace = true }
+futures      = { workspace = true }
+log          = { workspace = true }
+rupnp        = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+symphonia    = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { workspace = true, features = ["macros", "tracing"] }
+xml          = { workspace = true }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "net", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[features]
+default = ["api", "listener", "openapi", "player", "simulator"]
+
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service/fail-on-warnings",
+    "moosicbox_audio_output/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_player/fail-on-warnings",
+    "moosicbox_session/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+    "switchy_upnp/fail-on-warnings",
+]
+
+api = [
+    "dep:actix-web",
+    "moosicbox_audio_output/api",
+    "moosicbox_logging/api",
+    "moosicbox_music_api/api",
+    "moosicbox_player/api",
+    "moosicbox_session/api",
+    "switchy_upnp/api",
+]
+listener = []
+openapi = [
+    "dep:utoipa",
+    "moosicbox_audio_output/openapi",
+    "moosicbox_music_api/openapi",
+    "moosicbox_player/openapi",
+    "moosicbox_session/openapi",
+    "switchy_upnp/openapi",
+]
+player = ["listener"]
+
+simulator = [
+    "switchy_async/simulator",
+    "switchy_env/simulator",
+    "switchy_http/simulator",
+    "switchy_random/simulator",
+    "switchy_upnp/simulator",
+]

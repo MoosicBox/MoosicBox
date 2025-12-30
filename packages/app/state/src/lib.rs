@@ -84,7 +84,7 @@ static PROXY_CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http
 /// This handle is initialized once when `UPnP` support is enabled and used throughout
 /// the application to interact with `UPnP`/DLNA devices on the network.
 #[cfg(feature = "upnp")]
-pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<switchy_upnp::listener::Handle> =
+pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
 /// Adapter for mapping music sources to remote library API instances.
@@ -300,7 +300,7 @@ pub enum PlayerType {
         /// `UPnP` service interface
         service: Box<switchy_upnp::Service>,
         /// Handle for `UPnP` event listener
-        handle: switchy_upnp::listener::Handle,
+        handle: moosicbox_upnp::listener::Handle,
     },
 }
 
@@ -427,7 +427,8 @@ pub struct AppState {
     pub current_players: Arc<RwLock<Vec<ApiPlayersMap>>>,
     /// `UPnP` AV transport services for DLNA playback
     #[cfg(feature = "upnp")]
-    pub upnp_av_transport_services: Arc<RwLock<Vec<switchy_upnp::player::UpnpAvTransportService>>>,
+    pub upnp_av_transport_services:
+        Arc<RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>>,
     /// Listeners called before handling playback updates
     #[allow(clippy::type_complexity)]
     pub on_before_handle_playback_update_listeners: Vec<
@@ -900,7 +901,7 @@ impl AppState {
                 service,
                 handle,
             } => {
-                let upnp_player = switchy_upnp::player::UpnpPlayer::new(
+                let upnp_player = moosicbox_upnp::player::UpnpPlayer::new(
                     source_to_music_api,
                     *device,
                     *service,
@@ -1287,7 +1288,7 @@ impl AppState {
                     switchy_upnp::get_device_and_service(&device.udn, service_id)
                 {
                     av_transport_services
-                        .push(switchy_upnp::player::UpnpAvTransportService { device, service });
+                        .push(moosicbox_upnp::player::UpnpAvTransportService { device, service });
                 }
             }
 
