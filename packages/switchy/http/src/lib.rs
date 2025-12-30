@@ -273,15 +273,19 @@ macro_rules! impl_http {
             use crate::*;
 
             paste::paste! {
+                #[doc = concat!("HTTP response type for the ", stringify!($module), " backend.")]
                 pub type [< $module:camel Response >] = ResponseWrapper<$module::Response>;
                 type ModuleResponse = [< $module:camel Response >];
 
+                #[doc = concat!("Request builder type for the ", stringify!($module), " backend.")]
                 pub type [< $module:camel RequestBuilder >] = RequestBuilderWrapper<ModuleResponse, $module::RequestBuilder>;
                 type ModuleRequestBuilder = [< $module:camel RequestBuilder >];
 
+                #[doc = concat!("HTTP client type for the ", stringify!($module), " backend.")]
                 pub type [< $module:camel Client >] = ClientWrapper<ModuleRequestBuilder, $module::Client>;
                 type ModuleClient = [< $module:camel Client >];
 
+                #[doc = concat!("Client builder type for the ", stringify!($module), " backend.")]
                 pub type [< $module:camel ClientBuilder >] = ClientBuilderWrapper<ModuleRequestBuilder, ModuleClient, $module::ClientBuilder>;
                 type ModuleClientBuilder = [< $module:camel ClientBuilder >];
             }
@@ -593,8 +597,22 @@ impl_http!(reqwest, impl_reqwest);
 macro_rules! impl_gen_types {
     ($module:ident $(,)?) => {
         paste::paste! {
+            /// Default request builder type alias for the enabled backend.
+            ///
+            /// This type alias points to the request builder implementation for the currently
+            /// active HTTP backend (simulator or reqwest, depending on enabled features).
             pub type RequestBuilder = [< $module:camel RequestBuilder >];
+
+            /// Default HTTP client type alias for the enabled backend.
+            ///
+            /// This type alias points to the client implementation for the currently
+            /// active HTTP backend (simulator or reqwest, depending on enabled features).
             pub type Client = [< $module:camel Client >];
+
+            /// Default HTTP response type alias for the enabled backend.
+            ///
+            /// This type alias points to the response implementation for the currently
+            /// active HTTP backend (simulator or reqwest, depending on enabled features).
             pub type Response = [< $module:camel Response >];
         }
     };
