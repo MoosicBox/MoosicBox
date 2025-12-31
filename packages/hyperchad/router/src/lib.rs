@@ -980,13 +980,21 @@ impl RouteRequest {
             Ok(map)
         }
 
-        if let Some(form) = &self.body {
-            let data = parse_multipart_form_data(
-                form,
-                self.content_type().ok_or(ParseError::InvalidContentType)?,
-            )?;
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            T::deserialize(deserializer).map_err(|e| ParseError::CustomDeserialize(e.to_string()))
+        let content_type = self.content_type().ok_or(ParseError::InvalidContentType)?;
+
+        if let Some(body) = &self.body {
+            if content_type.starts_with("application/x-www-form-urlencoded") {
+                // Handle URL-encoded forms (standard HTML forms)
+                serde_urlencoded::from_bytes(body).map_err(ParseError::SerdeUrlEncoded)
+            } else if content_type.starts_with("multipart/form-data") {
+                // Handle multipart forms (file uploads)
+                let data = parse_multipart_form_data(body, content_type)?;
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                T::deserialize(deserializer)
+                    .map_err(|e| ParseError::CustomDeserialize(e.to_string()))
+            } else {
+                Err(ParseError::InvalidContentType)
+            }
         } else {
             Err(ParseError::MissingBody)
         }
@@ -3101,6 +3109,136 @@ mod tests {
             let result = deserializer.deserialize_option(OptionVisitor);
             assert!(result.is_ok());
             assert!(result.unwrap().is_some());
+        }
+    }
+
+    #[cfg(feature = "form")]
+    mod parse_form_tests {
+        use super::*;
+        use bytes::Bytes;
+        use serde::Deserialize;
+        use std::sync::Arc;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct TestForm {
+            name: String,
+            age: u32,
+        }
+
+        #[test_log::test]
+        fn test_parse_urlencoded_form() {
+            let body = b"name=Alice&age=30";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+            req.headers.insert(
+                "content-type".to_string(),
+                "application/x-www-form-urlencoded".to_string(),
+            );
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.name, "Alice");
+            assert_eq!(form.age, 30);
+        }
+
+        #[test_log::test]
+        fn test_parse_urlencoded_form_with_special_chars() {
+            // URL-encoded: name=Hello%20World&age=25
+            let body = b"name=Hello%20World&age=25";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+            req.headers.insert(
+                "content-type".to_string(),
+                "application/x-www-form-urlencoded".to_string(),
+            );
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.name, "Hello World");
+            assert_eq!(form.age, 25);
+        }
+
+        #[test_log::test]
+        fn test_parse_urlencoded_form_with_charset() {
+            let body = b"name=Bob&age=42";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+            req.headers.insert(
+                "content-type".to_string(),
+                "application/x-www-form-urlencoded; charset=UTF-8".to_string(),
+            );
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.name, "Bob");
+            assert_eq!(form.age, 42);
+        }
+
+        #[test_log::test]
+        fn test_parse_form_missing_body() {
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.headers.insert(
+                "content-type".to_string(),
+                "application/x-www-form-urlencoded".to_string(),
+            );
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(matches!(result, Err(ParseError::MissingBody)));
+        }
+
+        #[test_log::test]
+        fn test_parse_form_missing_content_type() {
+            let body = b"name=Alice&age=30";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(matches!(result, Err(ParseError::InvalidContentType)));
+        }
+
+        #[test_log::test]
+        fn test_parse_form_unsupported_content_type() {
+            let body = b"name=Alice&age=30";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+            req.headers
+                .insert("content-type".to_string(), "text/plain".to_string());
+
+            let result: Result<TestForm, _> = req.parse_form();
+
+            assert!(matches!(result, Err(ParseError::InvalidContentType)));
+        }
+
+        #[test_log::test]
+        fn test_parse_urlencoded_form_with_optional_fields() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct FormWithOptional {
+                name: String,
+                email: Option<String>,
+            }
+
+            let body = b"name=Alice";
+            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from_static(body)));
+            req.headers.insert(
+                "content-type".to_string(),
+                "application/x-www-form-urlencoded".to_string(),
+            );
+
+            let result: Result<FormWithOptional, _> = req.parse_form();
+
+            assert!(result.is_ok());
+            let form = result.unwrap();
+            assert_eq!(form.name, "Alice");
+            assert_eq!(form.email, None);
         }
     }
 
