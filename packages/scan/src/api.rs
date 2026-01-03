@@ -557,3 +557,144 @@ pub async fn remove_scan_path_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(test)]
+#[cfg(feature = "local")]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_validate_path_rejects_path_traversal_with_double_dots() {
+        let result = validate_path("/some/path/../../../etc/passwd");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_path_with_embedded_double_dots() {
+        let result = validate_path("/some/../sneaky/path");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_only_double_dots() {
+        let result = validate_path("..");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_nonexistent_path() {
+        // A path that doesn't exist cannot be canonicalized
+        let result = validate_path("/nonexistent/path/that/surely/does/not/exist");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Invalid path"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_accepts_valid_existing_path() {
+        // /tmp always exists on Unix systems
+        let result = validate_path("/tmp");
+        assert!(result.is_ok());
+        let canonical = result.unwrap();
+        // On Linux, /tmp might be a symlink to /private/tmp on macOS
+        // but on Linux it should just be /tmp
+        assert!(canonical.starts_with('/'));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_canonicalizes_to_absolute_path() {
+        // Using current directory which exists
+        let result = validate_path(".");
+        assert!(result.is_ok());
+        let canonical = result.unwrap();
+        // Should be an absolute path
+        assert!(canonical.starts_with('/'));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_path_traversal_at_start() {
+        let result = validate_path("../../../etc/passwd");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_path_traversal_at_end() {
+        let result = validate_path("/tmp/..");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_windows_path_conversion_regex_pattern() {
+        // Test the regex pattern used for Windows path conversion
+        let regex = regex::Regex::new(r"/mnt/(\w+)").unwrap();
+
+        // Should match /mnt/ followed by drive letter
+        assert!(regex.is_match("/mnt/c"));
+        assert!(regex.is_match("/mnt/d/some/path"));
+        assert!(regex.is_match("/mnt/x/folder"));
+
+        // Should not match paths without /mnt/
+        assert!(!regex.is_match("/home/user"));
+        assert!(!regex.is_match("/some/path"));
+
+        // Test capture group extraction
+        let caps = regex.captures("/mnt/c/Users/test").unwrap();
+        assert_eq!(&caps[1], "c");
+
+        let caps = regex.captures("/mnt/d/Documents").unwrap();
+        assert_eq!(&caps[1], "d");
+    }
+
+    #[test_log::test]
+    fn test_windows_path_conversion_replacement_logic() {
+        // Test the replacement logic used in add_scan_path_endpoint
+        let regex = regex::Regex::new(r"/mnt/(\w+)").unwrap();
+
+        // Simulate the conversion logic
+        let test_cases = [
+            ("/mnt/c/Users/test", "C:/Users/test"),
+            ("/mnt/d/Documents/Music", "D:/Documents/Music"),
+            ("/mnt/x/folder/subfolder", "X:/folder/subfolder"),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = regex
+                .replace(input, |caps: &regex::Captures| {
+                    format!("{}:", caps[1].to_uppercase())
+                })
+                .replace('/', "\\");
+
+            // Replace forward slashes to match the actual code behavior
+            let expected_with_backslashes = expected.replace('/', "\\");
+            assert_eq!(
+                result, expected_with_backslashes,
+                "Failed for input: {input}"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_windows_path_conversion_does_not_modify_unix_paths() {
+        let regex = regex::Regex::new(r"/mnt/(\w+)").unwrap();
+
+        // Unix paths without /mnt should remain unchanged (except for slash replacement)
+        let unix_path = "/home/user/music";
+        let result = regex
+            .replace(unix_path, |caps: &regex::Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .to_string();
+
+        assert_eq!(result, "/home/user/music");
+    }
+}
