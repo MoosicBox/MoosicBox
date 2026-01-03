@@ -735,4 +735,386 @@ mod tests {
         assert!(response.is_some());
         assert_eq!(response.unwrap().exit_code, 99);
     }
+
+    #[test_log::test]
+    fn mock_response_matches_with_args() {
+        let response = MockResponse::success()
+            .for_program("cargo")
+            .for_args(["build", "--release"]);
+
+        // Matches exact args
+        assert!(response.matches("cargo", &["build".to_string(), "--release".to_string()]));
+
+        // Doesn't match wrong args
+        assert!(!response.matches("cargo", &["test".to_string()]));
+
+        // Doesn't match extra args
+        assert!(!response.matches(
+            "cargo",
+            &[
+                "build".to_string(),
+                "--release".to_string(),
+                "--verbose".to_string()
+            ]
+        ));
+    }
+
+    #[test_log::test]
+    fn mock_response_matches_program_only() {
+        // Match program, any args
+        let response = MockResponse::success().for_program("cargo");
+        assert!(response.matches("cargo", &[]));
+        assert!(response.matches("cargo", &["build".to_string()]));
+        assert!(!response.matches("rustc", &[]));
+    }
+
+    #[test_log::test]
+    fn registry_remaining_tracks_count() {
+        let registry = ProcessRegistry::new();
+        assert_eq!(registry.remaining(), 0);
+
+        registry.register(MockResponse::success());
+        assert_eq!(registry.remaining(), 1);
+
+        registry.register(MockResponse::success());
+        assert_eq!(registry.remaining(), 2);
+
+        registry.take_response("any", &[]);
+        assert_eq!(registry.remaining(), 1);
+
+        registry.take_response("any", &[]);
+        assert_eq!(registry.remaining(), 0);
+    }
+
+    #[test_log::test]
+    fn registry_clear_removes_all_responses() {
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::success().for_program("first"));
+        registry.register(MockResponse::success().for_program("second"));
+        registry.set_default(MockResponse::failure(1));
+
+        assert_eq!(registry.remaining(), 2);
+
+        registry.clear();
+
+        assert_eq!(registry.remaining(), 0);
+        // Default should also be cleared
+        assert!(registry.take_response("any", &[]).is_none());
+    }
+
+    #[test_log::test]
+    fn registry_register_all() {
+        let registry = ProcessRegistry::new();
+        registry.register_all([
+            MockResponse::success().for_program("first"),
+            MockResponse::success().for_program("second"),
+            MockResponse::success().for_program("third"),
+        ]);
+
+        assert_eq!(registry.remaining(), 3);
+    }
+
+    #[test_log::test]
+    fn thread_local_registry_operations() {
+        // Clear any existing registry
+        clear_registry();
+        assert!(get_registry().is_none());
+
+        // Set a registry
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::success().for_program("test_cmd"));
+        set_registry(registry);
+
+        // Get registry should return it
+        let retrieved = get_registry();
+        assert!(retrieved.is_some());
+
+        // Clear registry
+        clear_registry();
+        assert!(get_registry().is_none());
+    }
+
+    #[test_log::test]
+    fn mock_response_fail_spawn() {
+        let response = MockResponse::success().fail_spawn("command not in PATH");
+
+        assert!(response.fail_to_spawn);
+        assert_eq!(
+            response.spawn_error,
+            Some("command not in PATH".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn exit_status_default() {
+        let status = ExitStatus::default();
+        assert!(status.success());
+        assert_eq!(status.code(), Some(0));
+    }
+
+    #[test_log::test]
+    fn output_default() {
+        let output = Output::default();
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+    }
+
+    #[test_log::test]
+    fn mock_response_default() {
+        let response = MockResponse::default();
+        assert_eq!(response.exit_code, 0);
+        assert!(response.stdout.is_empty());
+        assert!(response.stderr.is_empty());
+        assert!(response.program.is_none());
+        assert!(response.args.is_none());
+    }
+
+    #[test_log::test]
+    fn child_stdout_async_read() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+        use tokio::io::ReadBuf;
+
+        let data = b"hello world";
+        let mut stdout = ChildStdout::new(data.to_vec());
+
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // Read into a buffer
+        let mut buf = [0u8; 5];
+        let mut read_buf = ReadBuf::new(&mut buf);
+
+        let result = Pin::new(&mut stdout).poll_read(&mut cx, &mut read_buf);
+        assert!(matches!(result, Poll::Ready(Ok(()))));
+        assert_eq!(read_buf.filled(), b"hello");
+
+        // Read remaining
+        let mut buf2 = [0u8; 20];
+        let mut read_buf2 = ReadBuf::new(&mut buf2);
+        let result2 = Pin::new(&mut stdout).poll_read(&mut cx, &mut read_buf2);
+        assert!(matches!(result2, Poll::Ready(Ok(()))));
+        assert_eq!(read_buf2.filled(), b" world");
+
+        // Read when exhausted returns empty
+        let mut buf3 = [0u8; 5];
+        let mut read_buf3 = ReadBuf::new(&mut buf3);
+        let result3 = Pin::new(&mut stdout).poll_read(&mut cx, &mut read_buf3);
+        assert!(matches!(result3, Poll::Ready(Ok(()))));
+        assert_eq!(read_buf3.filled().len(), 0);
+    }
+
+    #[test_log::test]
+    fn child_stderr_async_read() {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+        use tokio::io::ReadBuf;
+
+        let data = b"error message";
+        let mut stderr = ChildStderr::new(data.to_vec());
+
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        let mut buf = [0u8; 20];
+        let mut read_buf = ReadBuf::new(&mut buf);
+
+        let result = Pin::new(&mut stderr).poll_read(&mut cx, &mut read_buf);
+        assert!(matches!(result, Poll::Ready(Ok(()))));
+        assert_eq!(read_buf.filled(), b"error message");
+    }
+
+    #[test_log::test]
+    fn command_builder_args() {
+        let mut cmd = Command::new("git");
+        cmd.arg("commit").arg("-m").args(["Initial commit"]);
+
+        assert_eq!(cmd.program, "git");
+        assert_eq!(
+            cmd.args,
+            vec!["commit", "-m", "Initial commit"]
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test_log::test]
+    fn command_builder_current_dir() {
+        let mut cmd = Command::new("ls");
+        cmd.current_dir("/tmp");
+
+        assert_eq!(cmd.current_dir, Some(std::path::PathBuf::from("/tmp")));
+    }
+
+    #[test_log::test]
+    fn command_builder_stdio() {
+        let mut cmd = Command::new("cat");
+        cmd.stdin(Stdio::Piped)
+            .stdout(Stdio::Null)
+            .stderr(Stdio::Inherit);
+
+        assert!(matches!(cmd.stdin, Stdio::Piped));
+        assert!(matches!(cmd.stdout, Stdio::Null));
+        assert!(matches!(cmd.stderr, Stdio::Inherit));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn command_spawn_creates_child() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(
+            MockResponse::success()
+                .for_program("echo")
+                .with_stdout(b"hello".to_vec()),
+        );
+        set_registry(registry);
+
+        let mut cmd = Command::new("echo");
+        cmd.stdout(Stdio::Piped);
+        let child = cmd.spawn();
+
+        assert!(child.is_ok());
+        let child = child.unwrap();
+        assert!(child.stdout.is_some());
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn command_spawn_fails_when_configured() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::success().fail_spawn("not found"));
+        set_registry(registry);
+
+        let mut cmd = Command::new("nonexistent");
+        let result = cmd.spawn();
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("not found"));
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn command_output_returns_mocked_response() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(
+            MockResponse::success()
+                .for_program("echo")
+                .with_stdout(b"hello\n".to_vec())
+                .with_stderr(b"warning".to_vec())
+                .with_exit_code(0),
+        );
+        set_registry(registry);
+
+        let mut cmd = Command::new("echo");
+        let output = cmd.output().await.unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"hello\n");
+        assert_eq!(output.stderr, b"warning");
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn command_output_fails_when_configured() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::success().fail_spawn("permission denied"));
+        set_registry(registry);
+
+        let mut cmd = Command::new("restricted");
+        let result = cmd.output().await;
+
+        assert!(result.is_err());
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn command_uses_default_when_no_match() {
+        clear_registry();
+
+        let mut cmd = Command::new("any_command");
+        let output = cmd.output().await.unwrap();
+
+        // Default is success with empty output
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn child_wait_returns_exit_status() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::failure(42).for_program("failing_cmd"));
+        set_registry(registry);
+
+        let mut cmd = Command::new("failing_cmd");
+        let mut child = cmd.spawn().unwrap();
+        let status = child.wait().await.unwrap();
+
+        assert!(!status.success());
+        assert_eq!(status.code(), Some(42));
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn child_wait_with_output_returns_full_output() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(
+            MockResponse::success()
+                .for_program("cmd")
+                .with_stdout(b"out".to_vec())
+                .with_stderr(b"err".to_vec()),
+        );
+        set_registry(registry);
+
+        let mut cmd = Command::new("cmd");
+        let child = cmd.spawn().unwrap();
+        let output = child.wait_with_output().await.unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"out");
+        assert_eq!(output.stderr, b"err");
+
+        clear_registry();
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn child_kill_is_noop() {
+        clear_registry();
+        let registry = ProcessRegistry::new();
+        registry.register(MockResponse::success());
+        set_registry(registry);
+
+        let mut cmd = Command::new("long_running");
+        let mut child = cmd.spawn().unwrap();
+
+        // Kill should succeed (no-op in simulator)
+        let result = child.kill().await;
+        assert!(result.is_ok());
+
+        clear_registry();
+    }
+
+    #[test_log::test]
+    fn stdio_from_std_process_stdio() {
+        // Converting from std::process::Stdio defaults to Inherit
+        let std_piped = std::process::Stdio::piped();
+        let switchy_stdio: Stdio = std_piped.into();
+        assert!(matches!(switchy_stdio, Stdio::Inherit));
+    }
 }
