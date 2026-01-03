@@ -2012,6 +2012,24 @@ mod tests {
             };
             assert_eq!(expression_to_js(&expr), "(- 42)");
         }
+
+        #[test_log::test]
+        fn test_expression_element_by_id_ref_literal() {
+            let expr = Expression::ElementByIdRef(Box::new(Expression::Literal(Literal::String(
+                "myElementId".to_string(),
+            ))));
+            assert_eq!(
+                expression_to_js(&expr),
+                "document.getElementById('myElementId')"
+            );
+        }
+
+        #[test_log::test]
+        fn test_expression_element_by_id_ref_variable() {
+            let expr =
+                Expression::ElementByIdRef(Box::new(Expression::Variable("idVar".to_string())));
+            assert_eq!(expression_to_js(&expr), "document.getElementById(idVar)");
+        }
     }
 
     #[cfg(test)]
@@ -2560,6 +2578,43 @@ mod tests {
             let result = action_effect_to_js_attr(&effect);
             assert!(result.contains("ctx.throttle("));
             assert!(result.contains("ctx.delay("));
+        }
+
+        #[test_log::test]
+        fn test_action_effect_delay_off_without_reset() {
+            // Tests the edge case where delay_off is set but the action doesn't produce a reset
+            // (e.g., Log action has no reset)
+            let effect = ActionEffect {
+                action: ActionType::Log {
+                    message: "test".to_string(),
+                    level: LogLevel::Info,
+                },
+                throttle: None,
+                delay_off: Some(500),
+                unique: None,
+            };
+            let result = action_effect_to_js_attr(&effect);
+            // Should NOT contain ctx.delay since there's no reset action to delay
+            assert!(!result.contains("ctx.delay("));
+            // Should contain the log action
+            assert!(result.contains("console.log"));
+        }
+
+        #[test_log::test]
+        fn test_action_effect_reset_format() {
+            // Tests that reset actions are properly formatted with backticks
+            let effect = ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::SelfTarget,
+                    action: StyleAction::SetDisplay(true),
+                },
+                throttle: None,
+                delay_off: None,
+                unique: None,
+            };
+            let result = action_effect_to_js_attr(&effect);
+            // Reset should be wrapped in backticks
+            assert!(result.contains("`ctx.rs("));
         }
     }
 
@@ -3120,6 +3175,58 @@ mod tests {
             assert!(result.contains("&lt;"));
             assert!(result.contains("&gt;"));
             assert!(result.contains("&quot;"));
+        }
+
+        #[test_log::test]
+        fn test_action_parameterized_with_nested_parameterized() {
+            // Tests the case where a Parameterized action wraps another Parameterized action
+            // This exercises the strip_prefix/strip_suffix logic for nested {action:...} wrappers
+            let inner_action = ActionType::Parameterized {
+                action: Box::new(ActionType::Custom {
+                    action: "innerAction".to_string(),
+                }),
+                value: Value::Real(10.0),
+            };
+            let outer_action = ActionType::Parameterized {
+                action: Box::new(inner_action),
+                value: Value::Real(20.0),
+            };
+            let (result, _) = action_to_js(&outer_action, true);
+            // Should properly wrap the nested action
+            assert!(result.contains("innerAction"));
+            assert!(result.contains("20")); // outer value
+        }
+
+        #[test_log::test]
+        fn test_action_custom_escapes_newlines() {
+            // Tests that newlines in custom actions are properly escaped to &#10;
+            let action = ActionType::Custom {
+                action: "line1\nline2".to_string(),
+            };
+            let (result, _) = action_to_js(&action, true);
+            // Newlines should be replaced with &#10;
+            assert!(
+                result.contains("&#10;"),
+                "Expected &#10; in result but got: {result}"
+            );
+            // Should not contain a literal newline
+            assert!(!result.contains('\n'));
+        }
+
+        #[test_log::test]
+        fn test_action_let_with_complex_expression() {
+            // Tests Let action with a more complex expression
+            let action = ActionType::Let {
+                name: "result".to_string(),
+                value: Expression::Binary {
+                    left: Box::new(Expression::Variable("a".to_string())),
+                    op: BinaryOp::Add,
+                    right: Box::new(Expression::Variable("b".to_string())),
+                },
+            };
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "let result=(a + b);");
+            assert_eq!(reset, None);
         }
     }
 
