@@ -1348,8 +1348,7 @@ mod tests {
 
     #[test_log::test]
     fn test_stripped_api_download_item_to_value_type_track_from_json() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "type": "TRACK",
             "track_id": 123,
@@ -1412,8 +1411,7 @@ mod tests {
 
     #[test_log::test]
     fn test_api_download_item_to_value_type_track_from_json() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "type": "TRACK",
             "source": source,
@@ -1453,8 +1451,7 @@ mod tests {
 
     #[test_log::test]
     fn test_api_download_item_to_value_type_album_cover_from_json() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "type": "ALBUM_COVER",
             "source": source,
@@ -1489,8 +1486,7 @@ mod tests {
 
     #[test_log::test]
     fn test_api_download_item_to_value_type_artist_cover_from_json() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "type": "ARTIST_COVER",
             "source": source,
@@ -1522,8 +1518,7 @@ mod tests {
 
     #[test_log::test]
     fn test_api_download_task_to_value_type_from_json() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "id": 99,
             "state": "PENDING",
@@ -1556,8 +1551,7 @@ mod tests {
 
     #[test_log::test]
     fn test_api_download_task_to_value_type_from_json_with_null_total_bytes() {
-        let source =
-            serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
+        let source = serde_json::to_value(DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
         let json = serde_json::json!({
             "id": 100,
             "state": "STARTED",
