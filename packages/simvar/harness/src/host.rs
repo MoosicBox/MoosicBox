@@ -141,3 +141,78 @@ impl Actor for &Host {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_host_returns_none_outside_context() {
+        // When not in a host context, current_host should return None
+        assert_eq!(current_host(), None);
+    }
+
+    #[test_log::test]
+    fn test_current_host_returns_name_inside_context() {
+        // When inside a host context via with_host, current_host should return the host name
+        let result = with_host("test-server".to_string(), |_name| current_host());
+
+        assert_eq!(result, Some("test-server".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_host_returns_correct_name_for_different_hosts() {
+        // Verify different host names are correctly returned
+        let result1 = with_host("server-1".to_string(), |_| current_host());
+        let result2 = with_host("server-2".to_string(), |_| current_host());
+
+        assert_eq!(result1, Some("server-1".to_string()));
+        assert_eq!(result2, Some("server-2".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_host_nested_contexts() {
+        // When nested, the innermost context should be visible
+        let outer_result = with_host("outer-host".to_string(), |_| {
+            // First, verify outer context is visible
+            let outer_visible = current_host();
+
+            // Now nest another context
+            let inner_result = with_host("inner-host".to_string(), |_| current_host());
+
+            // After inner context exits, outer should be visible again
+            let after_inner = current_host();
+
+            (outer_visible, inner_result, after_inner)
+        });
+
+        assert_eq!(outer_result.0, Some("outer-host".to_string()));
+        assert_eq!(outer_result.1, Some("inner-host".to_string()));
+        assert_eq!(outer_result.2, Some("outer-host".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_with_host_closure_receives_name() {
+        // Verify that the closure passed to with_host receives the correct name
+        let received_name = with_host("my-server".to_string(), str::to_owned);
+
+        assert_eq!(received_name, "my-server");
+    }
+
+    #[test_log::test]
+    fn test_current_host_empty_name() {
+        // Verify empty string is handled correctly
+        let result = with_host(String::new(), |_| current_host());
+
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_current_host_special_characters_in_name() {
+        // Verify host names with special characters work correctly
+        let special_name = "host:8080/path?query=1&other=2".to_string();
+        let result = with_host(special_name.clone(), |_| current_host());
+
+        assert_eq!(result, Some(special_name));
+    }
+}

@@ -128,3 +128,78 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_context() {
+        // When not in a client context, current_client should return None
+        assert_eq!(current_client(), None);
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_name_inside_context() {
+        // When inside a client context via with_client, current_client should return the client name
+        let result = with_client("test-client".to_string(), |_name| current_client());
+
+        assert_eq!(result, Some("test-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_correct_name_for_different_clients() {
+        // Verify different client names are correctly returned
+        let result1 = with_client("client-1".to_string(), |_| current_client());
+        let result2 = with_client("client-2".to_string(), |_| current_client());
+
+        assert_eq!(result1, Some("client-1".to_string()));
+        assert_eq!(result2, Some("client-2".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_nested_contexts() {
+        // When nested, the innermost context should be visible
+        let outer_result = with_client("outer-client".to_string(), |_| {
+            // First, verify outer context is visible
+            let outer_visible = current_client();
+
+            // Now nest another context
+            let inner_result = with_client("inner-client".to_string(), |_| current_client());
+
+            // After inner context exits, outer should be visible again
+            let after_inner = current_client();
+
+            (outer_visible, inner_result, after_inner)
+        });
+
+        assert_eq!(outer_result.0, Some("outer-client".to_string()));
+        assert_eq!(outer_result.1, Some("inner-client".to_string()));
+        assert_eq!(outer_result.2, Some("outer-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_with_client_closure_receives_name() {
+        // Verify that the closure passed to with_client receives the correct name
+        let received_name = with_client("my-client".to_string(), str::to_owned);
+
+        assert_eq!(received_name, "my-client");
+    }
+
+    #[test_log::test]
+    fn test_current_client_empty_name() {
+        // Verify empty string is handled correctly
+        let result = with_client(String::new(), |_| current_client());
+
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_special_characters_in_name() {
+        // Verify client names with special characters work correctly
+        let special_name = "client:8080/path?query=1&other=2".to_string();
+        let result = with_client(special_name.clone(), |_| current_client());
+
+        assert_eq!(result, Some(special_name));
+    }
+}
