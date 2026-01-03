@@ -1046,6 +1046,341 @@ mod tests {
             "Nested vs single transaction savepoints should produce different checksums"
         );
     }
+
+    #[switchy_async::test]
+    async fn test_savepoint_empty_name_error() {
+        let db = ChecksumDatabase::new();
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Attempting to create a savepoint with an empty name should fail
+        let result = tx.savepoint("").await;
+
+        assert!(result.is_err(), "Empty savepoint name should produce error");
+        let err = result.err().unwrap();
+        match err {
+            DatabaseError::InvalidSavepointName(msg) => {
+                assert!(
+                    msg.contains("empty"),
+                    "Error message should mention 'empty', got: {msg}",
+                );
+            }
+            other => panic!("Expected InvalidSavepointName error, got: {other}"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_exec_raw_params_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Execute with same query but different params
+        db1.exec_raw_params(
+            "INSERT INTO users (id) VALUES (?)",
+            &[DatabaseValue::Int64(1)],
+        )
+        .await
+        .unwrap();
+        db2.exec_raw_params(
+            "INSERT INTO users (id) VALUES (?)",
+            &[DatabaseValue::Int64(2)],
+        )
+        .await
+        .unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Different params should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_exec_raw_params_same_produces_identical_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Execute with same query and same params
+        db1.exec_raw_params(
+            "INSERT INTO users (id, name) VALUES (?, ?)",
+            &[
+                DatabaseValue::Int64(42),
+                DatabaseValue::String("Alice".to_string()),
+            ],
+        )
+        .await
+        .unwrap();
+        db2.exec_raw_params(
+            "INSERT INTO users (id, name) VALUES (?, ?)",
+            &[
+                DatabaseValue::Int64(42),
+                DatabaseValue::String("Alice".to_string()),
+            ],
+        )
+        .await
+        .unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_eq!(
+            checksum1, checksum2,
+            "Same query and params should produce identical checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_query_raw_params_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Query with same SQL but different params
+        db1.query_raw_params(
+            "SELECT * FROM users WHERE id = ?",
+            &[DatabaseValue::Int64(1)],
+        )
+        .await
+        .unwrap();
+        db2.query_raw_params(
+            "SELECT * FROM users WHERE id = ?",
+            &[DatabaseValue::Int64(2)],
+        )
+        .await
+        .unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Different query params should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_query_raw_params_same_produces_identical_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Query with same SQL and params
+        db1.query_raw_params(
+            "SELECT * FROM users WHERE active = ?",
+            &[DatabaseValue::Bool(true)],
+        )
+        .await
+        .unwrap();
+        db2.query_raw_params(
+            "SELECT * FROM users WHERE active = ?",
+            &[DatabaseValue::Bool(true)],
+        )
+        .await
+        .unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_eq!(
+            checksum1, checksum2,
+            "Same query and params should produce identical checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_exec_raw_params_vs_query_raw_params_different_checksums() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Same query text and params but different methods
+        let query = "SELECT * FROM users WHERE id = ?";
+        let params = &[DatabaseValue::Int64(1)];
+
+        db1.exec_raw_params(query, params).await.unwrap();
+        db2.query_raw_params(query, params).await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "exec_raw_params vs query_raw_params should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_find_cascade_targets_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call find_cascade_targets on different tables
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.find_cascade_targets("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.find_cascade_targets("posts").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "find_cascade_targets on different tables should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_find_cascade_targets_same_produces_identical_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call find_cascade_targets on the same table
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.find_cascade_targets("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.find_cascade_targets("users").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_eq!(
+            checksum1, checksum2,
+            "find_cascade_targets on same table should produce identical checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_has_any_dependents_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call has_any_dependents on different tables
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.has_any_dependents("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.has_any_dependents("posts").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "has_any_dependents on different tables should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_has_any_dependents_same_produces_identical_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call has_any_dependents on the same table
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.has_any_dependents("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.has_any_dependents("users").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_eq!(
+            checksum1, checksum2,
+            "has_any_dependents on same table should produce identical checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_get_direct_dependents_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call get_direct_dependents on different tables
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.get_direct_dependents("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.get_direct_dependents("posts").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "get_direct_dependents on different tables should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_get_direct_dependents_same_produces_identical_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Call get_direct_dependents on the same table
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.get_direct_dependents("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.get_direct_dependents("users").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_eq!(
+            checksum1, checksum2,
+            "get_direct_dependents on same table should produce identical checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_cascade_methods_produce_different_checksums() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+        let db3 = ChecksumDatabase::new();
+
+        // Call different CASCADE methods on the same table
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _result1 = tx1.find_cascade_targets("users").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _result2 = tx2.has_any_dependents("users").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        let tx3 = db3.begin_transaction().await.unwrap();
+        let _result3 = tx3.get_direct_dependents("users").await.unwrap();
+        tx3.commit().await.unwrap();
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+        let checksum3 = db3.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "find_cascade_targets vs has_any_dependents should produce different checksums"
+        );
+        assert_ne!(
+            checksum1, checksum3,
+            "find_cascade_targets vs get_direct_dependents should produce different checksums"
+        );
+        assert_ne!(
+            checksum2, checksum3,
+            "has_any_dependents vs get_direct_dependents should produce different checksums"
+        );
+    }
 }
 
 // Digest implementations for database types
