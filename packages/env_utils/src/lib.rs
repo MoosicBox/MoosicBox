@@ -727,4 +727,57 @@ mod test {
         assert_eq!(parse_isize("+999999").unwrap(), 999_999);
         assert_eq!(parse_isize("-999999").unwrap(), -999_999);
     }
+
+    // POW10 constant verification tests
+
+    #[test_log::test]
+    fn pow10_table_contains_correct_powers_of_ten() {
+        use super::POW10;
+
+        // Verify POW10 contains 10^19 down to 10^0 in the correct positions
+        // POW10[0] should be 10^19 (largest), POW10[19] should be 10^0 = 1 (smallest)
+        assert_eq!(POW10[19], 1); // 10^0
+        assert_eq!(POW10[18], 10); // 10^1
+        assert_eq!(POW10[17], 100); // 10^2
+        assert_eq!(POW10[16], 1_000); // 10^3
+        assert_eq!(POW10[15], 10_000); // 10^4
+        assert_eq!(POW10[14], 100_000); // 10^5
+        assert_eq!(POW10[13], 1_000_000); // 10^6
+        assert_eq!(POW10[12], 10_000_000); // 10^7
+        assert_eq!(POW10[11], 100_000_000); // 10^8
+        assert_eq!(POW10[10], 1_000_000_000); // 10^9
+        assert_eq!(POW10[9], 10_000_000_000); // 10^10
+        assert_eq!(POW10[8], 100_000_000_000); // 10^11
+        assert_eq!(POW10[7], 1_000_000_000_000); // 10^12
+        assert_eq!(POW10[6], 10_000_000_000_000); // 10^13
+        assert_eq!(POW10[5], 100_000_000_000_000); // 10^14
+        assert_eq!(POW10[4], 1_000_000_000_000_000); // 10^15
+        assert_eq!(POW10[3], 10_000_000_000_000_000); // 10^16
+        assert_eq!(POW10[2], 100_000_000_000_000_000); // 10^17
+        assert_eq!(POW10[1], 1_000_000_000_000_000_000); // 10^18
+        assert_eq!(POW10[0], 10_000_000_000_000_000_000); // 10^19
+    }
+
+    #[test_log::test]
+    fn pow10_table_has_correct_length() {
+        use super::POW10;
+
+        assert_eq!(POW10.len(), 20);
+    }
+
+    #[test_log::test]
+    fn pow10_values_are_consecutive_powers() {
+        use super::POW10;
+
+        // Verify that each consecutive entry is 10x larger (going backwards from index 19 to 0)
+        for i in (0..19).rev() {
+            assert_eq!(
+                POW10[i],
+                POW10[i + 1] * 10,
+                "POW10[{}] should be 10 * POW10[{}]",
+                i,
+                i + 1
+            );
+        }
+    }
 }
