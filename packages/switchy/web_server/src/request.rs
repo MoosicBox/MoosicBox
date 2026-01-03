@@ -406,4 +406,162 @@ mod tests {
         assert!(debug_str.contains("/test"));
         assert!(debug_str.contains("Post"));
     }
+
+    #[test]
+    fn test_http_request_path_param() {
+        let mut mock = MockRequest::new("/users/123", Method::Get);
+        mock.path_params.insert("id".to_string(), "123".to_string());
+        mock.path_params
+            .insert("name".to_string(), "john".to_string());
+        let request = HttpRequest::new(mock);
+
+        // Test existing path param
+        assert_eq!(request.path_param("id"), Some("123"));
+        assert_eq!(request.path_param("name"), Some("john"));
+
+        // Test non-existing path param
+        assert_eq!(request.path_param("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_http_request_parse_query() {
+        #[derive(Debug, PartialEq, serde::Deserialize)]
+        struct Params {
+            name: String,
+            age: u32,
+        }
+
+        let mut mock = MockRequest::new("/search", Method::Get);
+        mock.query_string = "name=alice&age=25".to_string();
+        let request = HttpRequest::new(mock);
+
+        let params: Params = request.parse_query().unwrap();
+        assert_eq!(params.name, "alice");
+        assert_eq!(params.age, 25);
+    }
+
+    #[test]
+    fn test_http_request_parse_query_optional_fields() {
+        #[derive(Debug, PartialEq, serde::Deserialize)]
+        struct Params {
+            name: String,
+            age: Option<u32>,
+        }
+
+        let mut mock = MockRequest::new("/search", Method::Get);
+        mock.query_string = "name=bob".to_string();
+        let request = HttpRequest::new(mock);
+
+        let params: Params = request.parse_query().unwrap();
+        assert_eq!(params.name, "bob");
+        assert_eq!(params.age, None);
+    }
+
+    #[test]
+    fn test_http_request_parse_query_empty() {
+        #[derive(Debug, PartialEq, serde::Deserialize)]
+        struct Params {
+            name: Option<String>,
+        }
+
+        let mock = MockRequest::new("/search", Method::Get);
+        let request = HttpRequest::new(mock);
+
+        let params: Params = request.parse_query().unwrap();
+        assert_eq!(params.name, None);
+    }
+
+    #[test]
+    fn test_http_request_parse_query_error() {
+        #[derive(Debug, PartialEq, serde::Deserialize)]
+        struct Params {
+            age: u32,
+        }
+
+        let mut mock = MockRequest::new("/search", Method::Get);
+        mock.query_string = "age=not_a_number".to_string();
+        let request = HttpRequest::new(mock);
+
+        let result = request.parse_query::<Params>();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_http_request_clone() {
+        let mock = MockRequest::new("/test", Method::Get);
+        let request = HttpRequest::new(mock);
+        let cloned = request.clone();
+
+        assert_eq!(request.path(), cloned.path());
+        assert_eq!(request.method(), cloned.method());
+    }
+
+    #[test]
+    fn test_http_request_headers() {
+        let mut mock = MockRequest::new("/test", Method::Get);
+        mock.headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
+        mock.headers
+            .insert("Accept".to_string(), "text/html".to_string());
+        let request = HttpRequest::new(mock);
+
+        // Test single header
+        assert_eq!(request.header("Content-Type"), Some("application/json"));
+        assert_eq!(request.header("Accept"), Some("text/html"));
+        assert_eq!(request.header("Missing"), None);
+
+        // Test all headers
+        let headers = request.headers();
+        assert_eq!(headers.len(), 2);
+        assert_eq!(
+            headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+    }
+
+    #[test]
+    fn test_http_request_body() {
+        let mut mock = MockRequest::new("/test", Method::Post);
+        mock.body = Some(Bytes::from("test body content"));
+        let request = HttpRequest::new(mock);
+
+        assert!(request.body().is_some());
+        assert_eq!(request.body().unwrap().as_ref(), b"test body content");
+    }
+
+    #[test]
+    fn test_http_request_cookies() {
+        let mut mock = MockRequest::new("/test", Method::Get);
+        mock.cookies
+            .insert("session".to_string(), "abc123".to_string());
+        mock.cookies.insert("theme".to_string(), "dark".to_string());
+        let request = HttpRequest::new(mock);
+
+        // Test single cookie
+        assert_eq!(request.cookie("session"), Some("abc123".to_string()));
+        assert_eq!(request.cookie("theme"), Some("dark".to_string()));
+        assert_eq!(request.cookie("missing"), None);
+
+        // Test all cookies
+        let cookies = request.cookies();
+        assert_eq!(cookies.len(), 2);
+    }
+
+    #[test]
+    fn test_empty_request() {
+        let empty = EmptyRequest;
+        let request = HttpRequest::new(empty);
+
+        assert_eq!(request.path(), "");
+        assert_eq!(request.query_string(), "");
+        assert_eq!(request.method(), Method::Get);
+        assert_eq!(request.header("Any"), None);
+        assert!(request.headers().is_empty());
+        assert!(request.body().is_none());
+        assert_eq!(request.cookie("Any"), None);
+        assert!(request.cookies().is_empty());
+        assert!(request.remote_addr().is_none());
+        assert!(request.path_params().is_empty());
+        assert!(request.app_state::<String>().is_none());
+    }
 }
