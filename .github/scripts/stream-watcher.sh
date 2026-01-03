@@ -266,7 +266,7 @@ watch_stream() {
     local stream_dir=$(dirname "$STREAM_FILE")
     local stream_file=$(basename "$STREAM_FILE")
 
-    log "Using inotify to watch stream file: $STREAM_FILE"
+    log "Using file watcher to watch stream file: $STREAM_FILE"
 
     mkdir -p "$stream_dir"
 
@@ -277,14 +277,14 @@ watch_stream() {
     local last_update=$(date +%s)
     local last_modification=$(stat -c %Y "$STREAM_FILE" 2>/dev/null || echo "0")
 
-    # Start inotifywait in background (without subshell pipe)
-    log "Starting inotifywait for stream monitoring..."
-    inotifywait -q -m -e modify,close_write "$stream_dir" >/dev/null 2>&1 &
-    local inotify_pid=$!
-    log "Stream inotifywait PID: $inotify_pid"
+    # Start file watcher in background (without subshell pipe)
+    log "Starting file watcher for stream monitoring..."
+    moosicbox-file-watcher -q -m -e modify,close_write "$stream_dir" >/dev/null 2>&1 &
+    local watcher_pid=$!
+    log "Stream file-watcher PID: $watcher_pid"
 
     # Poll for changes indefinitely until killed by workflow
-    while kill -0 $inotify_pid 2>/dev/null; do
+    while kill -0 $watcher_pid 2>/dev/null; do
         # Check for understanding file
         insert_understanding_if_available
 
@@ -311,7 +311,7 @@ watch_stream() {
         sleep 1
     done
 
-    log "inotifywait process ended, finishing up..."
+    log "file-watcher process ended, finishing up..."
 
     # Final update (don't finalize - let workflow fallback enhance with details)
     process_new_events
