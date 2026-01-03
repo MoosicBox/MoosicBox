@@ -428,4 +428,150 @@ mod test {
 
         runtime.wait().unwrap();
     }
+
+    #[test]
+    fn handle_try_current_returns_error_outside_runtime() {
+        // Outside of any runtime context, try_current should fail
+        let result = super::Handle::try_current();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_try_current_returns_ok_inside_runtime() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            // Inside runtime context, try_current should succeed
+            let result = super::Handle::try_current();
+            assert!(result.is_ok());
+
+            let handle = result.unwrap();
+            // Verify we can use the handle
+            let join_handle = handle.spawn(async { 42 });
+            let value = join_handle.await.unwrap();
+            assert_eq!(value, 42);
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_default_creates_working_runtime() {
+        // Test that Default trait works correctly
+        let runtime = super::Runtime::default();
+
+        let result = runtime.block_on(async { "hello" });
+        assert_eq!(result, "hello");
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_local_works_with_non_send() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+
+            // Create a local task set to run spawn_local
+            let local = tokio::task::LocalSet::new();
+
+            local
+                .run_until(async {
+                    // Rc is not Send
+                    let data = Rc::new(RefCell::new(42));
+                    let data_clone = data.clone();
+
+                    let handle = super::Handle::current();
+                    let join_handle = handle.spawn_local(async move {
+                        *data_clone.borrow_mut() += 1;
+                        *data_clone.borrow()
+                    });
+
+                    let result = join_handle.await.unwrap();
+                    assert_eq!(result, 43);
+                    assert_eq!(*data.borrow(), 43);
+                })
+                .await;
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_local_with_name_works() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            let local = tokio::task::LocalSet::new();
+
+            local
+                .run_until(async {
+                    let handle = super::Handle::current();
+                    let join_handle = handle.spawn_local_with_name("test_task", async { 99 });
+
+                    let result = join_handle.await.unwrap();
+                    assert_eq!(result, 99);
+                })
+                .await;
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_with_name_works() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let join_handle = runtime.spawn_with_name("named_task", async { "named_result" });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "named_result");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_blocking_with_name_works() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let join_handle = runtime.spawn_blocking_with_name("blocking_task", || {
+            // Simulate some blocking work
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            "blocking_result"
+        });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "blocking_result");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_with_name_works() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn_with_name("handle_named_task", async { 123 });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 123);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_blocking_with_name_works() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle =
+            handle.spawn_blocking_with_name("handle_blocking_task", || "handle_blocking_result");
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "handle_blocking_result");
+        runtime.wait().unwrap();
+    }
 }
