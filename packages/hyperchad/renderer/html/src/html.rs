@@ -3606,4 +3606,388 @@ mod tests {
         assert!(!html.contains(" open"));
         assert!(html.ends_with("</details>"));
     }
+
+    // Test select element with options and selected value
+    #[test_log::test]
+    fn test_element_to_html_select_with_selected_value() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("country".to_string()),
+                selected: Some("us".to_string()),
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("uk".to_string()),
+                        disabled: None,
+                    },
+                    children: vec![Container {
+                        element: hyperchad_transformer::Element::Text {
+                            value: "United Kingdom".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("us".to_string()),
+                        disabled: None,
+                    },
+                    children: vec![Container {
+                        element: hyperchad_transformer::Element::Text {
+                            value: "United States".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<select"));
+        assert!(html.contains("name=\"country\""));
+        assert!(html.contains("data-selected=\"us\""));
+        // The "us" option should have the selected attribute
+        assert!(html.contains("value=\"us\" selected"));
+        // The "uk" option should NOT have the selected attribute
+        assert!(!html.contains("value=\"uk\" selected"));
+        assert!(html.contains("United Kingdom"));
+        assert!(html.contains("United States"));
+        assert!(html.ends_with("</select>"));
+    }
+
+    // Test select element with multiple and disabled attributes
+    #[test_log::test]
+    fn test_element_to_html_select_multiple_disabled() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("items".to_string()),
+                selected: None,
+                multiple: Some(true),
+                disabled: Some(true),
+                autofocus: Some(true),
+            },
+            children: vec![],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains(" multiple"));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains(" autofocus"));
+    }
+
+    // Test option element with disabled attribute
+    #[test_log::test]
+    fn test_element_to_html_option_disabled() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("disabled-value".to_string()),
+                disabled: Some(true),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "Disabled Option".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<option"));
+        assert!(html.contains("value=\"disabled-value\""));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains("Disabled Option"));
+        assert!(html.ends_with("</option>"));
+    }
+
+    // Test form element with action and method
+    #[test_log::test]
+    fn test_element_to_html_form_with_action_method() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Form {
+                action: Some("/submit".to_string()),
+                method: Some("POST".to_string()),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Input {
+                    input: hyperchad_transformer::Input::Text {
+                        value: None,
+                        placeholder: None,
+                    },
+                    name: Some("field".to_string()),
+                    autofocus: None,
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<form"));
+        assert!(html.contains("action=\"/submit\""));
+        assert!(html.contains("method=\"POST\""));
+        assert!(html.contains("<input"));
+        assert!(html.ends_with("</form>"));
+    }
+
+    // Test text element with HTML escaping
+    #[test_log::test]
+    fn test_element_to_html_text_escaping() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Text {
+                value: "Hello <script>alert('xss')</script> & \"world\"".to_string(),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Text should be escaped - no raw script tags
+        assert!(!html.contains("<script>"));
+        assert!(!html.contains("</script>"));
+        // Should contain escaped versions
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(html.contains("&lt;/script&gt;"));
+        // Ampersand should be escaped
+        assert!(html.contains("&amp;"));
+        // encode_text doesn't escape quotes in text content (only in attributes)
+        // so the text content should contain the literal quote character
+        assert!(html.contains("\"world\""));
+    }
+
+    // Test text element with special characters
+    #[test_log::test]
+    fn test_element_to_html_text_special_characters() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Text {
+                value: "2 > 1 && 1 < 2".to_string(),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Greater than and less than should be escaped
+        assert!(!html.contains("2 > 1"));
+        assert!(html.contains("&gt;"));
+        assert!(html.contains("&lt;"));
+        // Ampersand should be escaped
+        assert!(html.contains("&amp;"));
+    }
+
+    // Test visibility visible doesn't add style attribute
+    #[test_log::test]
+    fn test_element_style_to_html_visibility_visible() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Visibility;
+
+        let container = Container {
+            visibility: Some(Visibility::Visible),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        // Visible is the default, so no visibility style should be added
+        assert!(!style.contains("visibility"));
+    }
+
+    // Test min/max dimensions
+    #[test_log::test]
+    fn test_element_style_to_html_min_max_dimensions() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            min_width: Some(Number::Integer(100)),
+            max_width: Some(Number::RealPercent(80.0)),
+            min_height: Some(Number::RealVh(10.0)),
+            max_height: Some(Number::Integer(500)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("min-width:100px"));
+        assert!(style.contains("max-width:80%"));
+        assert!(style.contains("min-height:10vh"));
+        assert!(style.contains("max-height:500px"));
+    }
+
+    // Test all translateY (with just X tested previously)
+    #[test_log::test]
+    fn test_element_style_to_html_translate_y_only() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            translate_y: Some(Number::RealPercent(-50.0)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("transform:translateY(-50%)"));
+        assert!(!style.contains("translateX"));
+    }
+
+    // Test position relative doesn't add top/left defaults
+    #[test_log::test]
+    fn test_element_style_to_html_position_relative_no_defaults() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::Position;
+
+        let container = Container {
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("position:relative"));
+        // Relative position should NOT add default top/left
+        assert!(!style.contains("top:0"));
+        assert!(!style.contains("left:0"));
+    }
+
+    // Test elements_to_html with empty containers
+    #[test_log::test]
+    fn test_elements_to_html_empty() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let containers: Vec<Container> = vec![];
+
+        let mut buffer = Vec::new();
+        elements_to_html(&mut buffer, &containers, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.is_empty());
+    }
+
+    // Test font size
+    #[test_log::test]
+    fn test_element_style_to_html_font_size() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            font_size: Some(Number::Integer(16)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("font-size:16px"));
+    }
+
+    // Test color
+    #[test_log::test]
+    fn test_element_style_to_html_color() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            color: Some(hyperchad_renderer::Color {
+                r: 255,
+                g: 0,
+                b: 128,
+                a: None,
+            }),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("color:rgb(255,0,128)"));
+    }
+
+    // Test background color
+    #[test_log::test]
+    fn test_element_style_to_html_background() {
+        use hyperchad_router::Container;
+
+        let container = Container {
+            background: Some(hyperchad_renderer::Color {
+                r: 0,
+                g: 128,
+                b: 255,
+                a: Some(128),
+            }),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("background:rgba(0,128,255,"));
+    }
+
+    // Test number_to_html_string with all integer viewport units
+    #[test_log::test]
+    fn test_number_to_html_string_integer_viewport_units() {
+        assert_eq!(number_to_html_string(&Number::IntegerVw(50), false), "50vw");
+        assert_eq!(
+            number_to_html_string(&Number::IntegerDvw(100), false),
+            "100dvw"
+        );
+    }
 }
