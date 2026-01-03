@@ -436,4 +436,71 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), AudioError::ChannelReceive));
     }
+
+    #[test_log::test]
+    fn test_audio_handle_clone_sends_via_same_channel() {
+        // Test that cloned handles share the same underlying channel
+        // This is important because it means multiple components can hold handles
+        // and all commands go to the same receiver
+        let (tx, rx) = flume::bounded(10);
+        let handle = AudioHandle::new(tx);
+
+        let cloned = handle.clone();
+
+        // Send from cloned handle
+        let result = cloned.pause_immediate();
+        assert!(result.is_ok());
+
+        // Send from original handle
+        let result = handle.resume_immediate();
+        assert!(result.is_ok());
+
+        // Both messages should be received in order
+        let msg1 = rx.try_recv();
+        assert!(msg1.is_ok());
+        assert!(matches!(msg1.unwrap().command, AudioCommand::Pause));
+
+        let msg2 = rx.try_recv();
+        assert!(msg2.is_ok());
+        assert!(matches!(msg2.unwrap().command, AudioCommand::Resume));
+    }
+
+    #[test_log::test]
+    fn test_command_message_without_response_sender() {
+        // Verify that fire-and-forget commands work properly with None response_sender
+        let (tx, rx) = flume::bounded(10);
+        let handle = AudioHandle::new(tx);
+
+        // Fire-and-forget commands should have response_sender = None
+        let result = handle.set_volume_immediate(0.8);
+        assert!(result.is_ok());
+
+        let msg = rx.try_recv().unwrap();
+        assert!(msg.response_sender.is_none());
+        assert!(matches!(msg.command, AudioCommand::SetVolume(v) if (v - 0.8).abs() < 0.001));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_commands_have_response_sender() {
+        // Verify that async commands include a response_sender for getting responses
+        let (tx, rx) = flume::bounded(10);
+        let handle = AudioHandle::new(tx);
+
+        // Spawn a responder
+        switchy_async::task::spawn({
+            let rx = rx.clone();
+            async move {
+                if let Ok(msg) = rx.recv_async().await {
+                    // Verify response_sender is present for async commands
+                    assert!(msg.response_sender.is_some());
+                    if let Some(resp_tx) = msg.response_sender {
+                        resp_tx.send_async(AudioResponse::Success).await.unwrap();
+                    }
+                }
+            }
+        });
+
+        let result = handle.pause().await;
+        assert!(result.is_ok());
+    }
 }

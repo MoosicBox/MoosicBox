@@ -441,4 +441,46 @@ mod tests {
             StreamDaemonError::DaemonStopped
         ));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_set_volume_success() {
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Spawn a mock responder that verifies the volume value
+        switchy_async::task::spawn(async move {
+            if let Ok((cmd, response_tx)) = rx.recv_async().await {
+                // Verify the volume command contains the correct value
+                if let StreamCommand::SetVolume(vol) = cmd {
+                    assert!((vol - 0.75).abs() < 0.001);
+                    let _ = response_tx.send_async(StreamResponse::Success).await;
+                }
+            }
+        });
+
+        let result = handle.set_volume(0.75).await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_handle_multiple_commands_in_sequence() {
+        // Test that multiple commands can be sent in sequence and
+        // the handle correctly waits for each response before proceeding
+        let (tx, rx) = flume::unbounded::<(StreamCommand, flume::Sender<StreamResponse>)>();
+        let handle = StreamHandle { command_sender: tx };
+
+        // Spawn a mock responder that handles multiple commands
+        switchy_async::task::spawn(async move {
+            for _ in 0..3 {
+                if let Ok((_cmd, response_tx)) = rx.recv_async().await {
+                    let _ = response_tx.send_async(StreamResponse::Success).await;
+                }
+            }
+        });
+
+        // Send multiple commands in sequence - verifies blocking behavior
+        assert!(handle.pause().await.is_ok());
+        assert!(handle.set_volume(0.5).await.is_ok());
+        assert!(handle.resume().await.is_ok());
+    }
 }
