@@ -966,4 +966,129 @@ mod tests {
 
         // Test passes if no panics occur
     }
+
+    #[test_log::test]
+    fn test_fill_bytes_empty_buffer() {
+        let rng = Rng::from_seed(42_u64);
+        let mut empty_buffer: [u8; 0] = [];
+
+        // Should not panic with empty buffer
+        rng.fill_bytes(&mut empty_buffer);
+    }
+
+    #[test_log::test]
+    fn test_fill_bytes_single_byte() {
+        let rng = Rng::from_seed(42_u64);
+        let mut single = [0_u8; 1];
+
+        rng.fill_bytes(&mut single);
+        // Single byte may or may not be zero, but the operation should succeed
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_f64_with_zero_value() {
+        let rng = Rng::from_seed(42_u64);
+
+        // When the input value is zero, the result should also be zero
+        // regardless of the power
+        let result = non_uniform_distribute_f64(0.0, 1.0, &rng);
+        assert!(
+            result.abs() < f64::EPSILON,
+            "Distributing zero should result in zero, got {result}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_i32_with_zero_value() {
+        let rng = Rng::from_seed(42_u64);
+
+        // When the input value is zero, the result should also be zero
+        let result = non_uniform_distribute_i32(0.0, 1, &rng);
+        assert!(
+            result.abs() < f64::EPSILON,
+            "Distributing zero should result in zero, got {result}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_f64_with_large_positive_power() {
+        let rng = Rng::from_seed(42_u64);
+        let value = 100.0;
+
+        // With a very large positive power, the random factor becomes very small
+        // (e.g., 0.5^10 = ~0.001), so the result should be much smaller than input
+        let distributed = non_uniform_distribute_f64(value, 10.0, &rng);
+        assert!(
+            distributed > 0.0,
+            "Result should be positive, got {distributed}"
+        );
+        assert!(
+            distributed <= value,
+            "With large power, result should be <= original"
+        );
+    }
+
+    #[test_log::test]
+    fn test_non_uniform_distribute_i32_with_large_positive_power() {
+        let rng = Rng::from_seed(42_u64);
+        let value = 100.0;
+
+        // With a very large positive power, the result should be much smaller
+        let distributed = non_uniform_distribute_i32(value, 10, &rng);
+        assert!(
+            distributed > 0.0,
+            "Result should be positive, got {distributed}"
+        );
+        assert!(
+            distributed <= value,
+            "With large power, result should be <= original"
+        );
+    }
+
+    #[test_log::test]
+    fn test_gen_range_single_element_range() {
+        let rng = Rng::from_seed(42_u64);
+
+        // Inclusive range with same start and end should always return that value
+        let value: i32 = rng.gen_range(42..=42);
+        assert_eq!(value, 42, "Single element range should return that element");
+
+        let value2: i32 = rng.gen_range(42..=42);
+        assert_eq!(
+            value2, 42,
+            "Single element range should always return that element"
+        );
+    }
+
+    #[test_log::test]
+    fn test_try_fill_empty_buffer() {
+        let rng = Rng::from_seed(42_u64);
+        let mut empty_buffer: [u8; 0] = [];
+
+        // Should succeed with empty buffer
+        let result = rng.try_fill_bytes(&mut empty_buffer);
+        assert!(
+            result.is_ok(),
+            "try_fill_bytes with empty buffer should succeed"
+        );
+    }
+
+    #[test_log::test]
+    fn test_fill_empty_slice() {
+        let rng = Rng::from_seed(42_u64);
+        let mut empty: [u32; 0] = [];
+
+        // Should not panic with empty slice
+        rng.fill(&mut empty[..]);
+    }
+
+    #[test_log::test]
+    fn test_try_fill_empty_slice() {
+        let rng = Rng::from_seed(42_u64);
+        let mut empty: [u32; 0] = [];
+
+        // Should succeed with empty slice
+        let result = rng.try_fill(&mut empty[..]);
+        assert!(result.is_ok(), "try_fill with empty slice should succeed");
+    }
 }
