@@ -15496,12 +15496,14 @@ dependencies = [
  "postgres-native-tls",
  "postgres-openssl",
  "rusqlite",
+ "serial_test",
  "sqlx",
  "switchy_async",
  "switchy_database",
  "switchy_env",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-postgres",
 ]
 
