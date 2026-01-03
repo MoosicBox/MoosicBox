@@ -91,3 +91,39 @@ pub fn spawn_mdns_scanner(
 
     (handle, service.start_on(runtime_handle))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_moosicbox_from_scanner_moosicbox_formats_host_with_http_prefix() {
+        let scanner_moosicbox = moosicbox_mdns::scanner::MoosicBox {
+            id: "server-123".to_string(),
+            name: "My MoosicBox Server".to_string(),
+            host: "192.168.1.100:8080".parse().unwrap(),
+            dns: "moosicbox.local".to_string(),
+        };
+
+        let result: MoosicBox = scanner_moosicbox.into();
+
+        assert_eq!(result.id, "server-123");
+        assert_eq!(result.name, "My MoosicBox Server");
+        assert_eq!(result.host, "http://192.168.1.100:8080");
+        assert_eq!(result.dns, "moosicbox.local");
+    }
+
+    #[test_log::test]
+    fn test_moosicbox_from_scanner_moosicbox_handles_ipv6_address() {
+        let scanner_moosicbox = moosicbox_mdns::scanner::MoosicBox {
+            id: "ipv6-server".to_string(),
+            name: "IPv6 Server".to_string(),
+            host: "[::1]:9000".parse().unwrap(),
+            dns: "ipv6.moosicbox.local".to_string(),
+        };
+
+        let result: MoosicBox = scanner_moosicbox.into();
+
+        assert_eq!(result.host, "http://[::1]:9000");
+    }
+}
