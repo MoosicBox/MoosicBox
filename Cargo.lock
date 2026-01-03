@@ -8885,6 +8885,7 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "test-log",
+ "tokio",
 ]
 
 [[package]]

@@ -828,37 +828,37 @@ impl MusicApi for LibraryMusicApi {
 mod tests {
     use regex::{Captures, Regex};
 
+    /// Helper function that applies Windows path conversion logic.
+    /// This mirrors the conversion logic used in `track_source()`.
+    fn convert_to_windows_path(regex: &Regex, path: &str) -> String {
+        regex
+            .replace(path, |caps: &Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .replace('/', "\\")
+    }
+
     /// Tests the Windows path conversion logic used in `track_source()`.
     /// Verifies that Unix-style mount paths like "/mnt/c" are correctly
     /// converted to Windows drive letters like "C:".
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_single_drive() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/c/Users/test/file.mp3";
 
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
+        let result = convert_to_windows_path(&regex, path);
 
         assert_eq!(result, "C:\\Users\\test\\file.mp3");
     }
 
     /// Tests Windows path conversion with lowercase drive letters.
     /// Ensures that the drive letter is properly uppercased during conversion.
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_lowercase_drive() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/d/data/music.flac";
 
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
+        let result = convert_to_windows_path(&regex, path);
 
         assert_eq!(result, "D:\\data\\music.flac");
     }
@@ -866,57 +866,214 @@ mod tests {
     /// Tests Windows path conversion when no mount point is present.
     /// Verifies that paths without "/mnt/" are still processed correctly
     /// (slashes converted to backslashes).
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_no_mount() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/some/other/path.mp3";
 
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
+        let result = convert_to_windows_path(&regex, path);
 
         assert_eq!(result, "\\some\\other\\path.mp3");
     }
 
-    /// Tests that Unix systems don't perform Windows path conversion.
-    /// Paths should remain unchanged on non-Windows platforms.
-    #[cfg(not(target_os = "windows"))]
-    #[test_log::test]
-    fn test_unix_path_no_conversion() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/c/Users/test/file.mp3";
-
-        // On Unix, no conversion should happen
-        let result = if std::env::consts::OS == "windows" {
-            regex
-                .replace(path, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\")
-        } else {
-            path.to_string()
-        };
-
-        assert_eq!(result, path);
-    }
-
     /// Tests path conversion with multiple directory levels.
     /// Ensures deep directory structures are handled correctly.
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_deep_directory() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/e/Music/Albums/2023/Best/track.flac";
 
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
+        let result = convert_to_windows_path(&regex, path);
 
         assert_eq!(result, "E:\\Music\\Albums\\2023\\Best\\track.flac");
+    }
+
+    /// Tests path conversion with various drive letters.
+    /// Ensures all common drive letters are handled correctly.
+    #[test_log::test]
+    fn test_windows_path_conversion_various_drive_letters() {
+        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
+
+        // Test drive A
+        assert_eq!(
+            convert_to_windows_path(&regex, "/mnt/a/file.mp3"),
+            "A:\\file.mp3"
+        );
+
+        // Test drive Z
+        assert_eq!(
+            convert_to_windows_path(&regex, "/mnt/z/file.mp3"),
+            "Z:\\file.mp3"
+        );
+
+        // Test uppercase in path (should work since \w matches word chars)
+        assert_eq!(
+            convert_to_windows_path(&regex, "/mnt/C/file.mp3"),
+            "C:\\file.mp3"
+        );
+    }
+
+    /// Tests path conversion with special characters in filename.
+    /// Ensures filenames with spaces and special chars are preserved.
+    #[test_log::test]
+    fn test_windows_path_conversion_special_characters_in_filename() {
+        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
+
+        let path = "/mnt/c/Music/Artist Name - Album (2023)/01 - Track Name.flac";
+        let result = convert_to_windows_path(&regex, path);
+
+        assert_eq!(
+            result,
+            "C:\\Music\\Artist Name - Album (2023)\\01 - Track Name.flac"
+        );
+    }
+
+    /// Tests that the regex only matches the first /mnt/ prefix.
+    /// Verifies that subsequent path components are not affected.
+    #[test_log::test]
+    fn test_windows_path_conversion_only_replaces_first_mnt() {
+        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
+
+        // Path that might look confusing but /mnt/ should only be replaced at start
+        let path = "/mnt/c/backup/mnt/old/file.mp3";
+        let result = convert_to_windows_path(&regex, path);
+
+        // Only the first /mnt/c is replaced, the "mnt" in path stays (as \mnt)
+        assert_eq!(result, "C:\\backup\\mnt\\old\\file.mp3");
+    }
+
+    /// Tests path conversion with file at root of drive.
+    /// Ensures paths directly at drive root work correctly.
+    #[test_log::test]
+    fn test_windows_path_conversion_file_at_root() {
+        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
+
+        let path = "/mnt/d/file.mp3";
+        let result = convert_to_windows_path(&regex, path);
+
+        assert_eq!(result, "D:\\file.mp3");
+    }
+
+    /// Tests path conversion with empty path after mount point.
+    /// Edge case where path ends right after drive letter.
+    #[test_log::test]
+    fn test_windows_path_conversion_just_drive() {
+        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
+
+        let path = "/mnt/c";
+        let result = convert_to_windows_path(&regex, path);
+
+        assert_eq!(result, "C:");
+    }
+}
+
+#[cfg(all(test, feature = "simulator"))]
+mod simulator_tests {
+    use std::sync::Arc;
+
+    use moosicbox_music_api::{MusicApi, models::ImageCoverSize};
+    use moosicbox_music_models::{Album, Artist};
+    use switchy_database::{Database, profiles::LibraryDatabase, simulator::SimulationDatabase};
+
+    use super::LibraryMusicApi;
+
+    /// Creates a test `LibraryDatabase` using a simulation database.
+    fn create_test_db() -> LibraryDatabase {
+        let db = Arc::new(Box::new(SimulationDatabase::new().unwrap()) as Box<dyn Database>);
+        LibraryDatabase::from(db)
+    }
+
+    /// Tests that `artist_cover_source` returns a `LocalFilePath` when artist has a cover.
+    /// This differs from the default `MusicApi` trait which returns `RemoteUrl`.
+    #[test_log::test(switchy_async::test)]
+    async fn test_artist_cover_source_returns_local_file_path_when_cover_exists() {
+        let db = create_test_db();
+        let api = LibraryMusicApi::new(db);
+
+        let artist = Artist {
+            id: 1.into(),
+            title: "Test Artist".into(),
+            cover: Some("/path/to/cover.jpg".to_owned()),
+            ..Default::default()
+        };
+
+        let result = api
+            .artist_cover_source(&artist, ImageCoverSize::Max)
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            result,
+            Some(moosicbox_music_api::models::ImageCoverSource::LocalFilePath(path))
+            if path == "/path/to/cover.jpg"
+        ));
+    }
+
+    /// Tests that `artist_cover_source` returns `None` when artist has no cover.
+    #[test_log::test(switchy_async::test)]
+    async fn test_artist_cover_source_returns_none_when_no_cover() {
+        let db = create_test_db();
+        let api = LibraryMusicApi::new(db);
+
+        let artist = Artist {
+            id: 1.into(),
+            title: "Test Artist".into(),
+            cover: None,
+            ..Default::default()
+        };
+
+        let result = api
+            .artist_cover_source(&artist, ImageCoverSize::Max)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    /// Tests that `album_cover_source` returns a `LocalFilePath` when album has artwork.
+    /// This differs from the default `MusicApi` trait which returns `RemoteUrl`.
+    #[test_log::test(switchy_async::test)]
+    async fn test_album_cover_source_returns_local_file_path_when_artwork_exists() {
+        let db = create_test_db();
+        let api = LibraryMusicApi::new(db);
+
+        let album = Album {
+            id: 1.into(),
+            title: "Test Album".into(),
+            artwork: Some("/path/to/artwork.jpg".to_owned()),
+            ..Default::default()
+        };
+
+        let result = api
+            .album_cover_source(&album, ImageCoverSize::Max)
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            result,
+            Some(moosicbox_music_api::models::ImageCoverSource::LocalFilePath(path))
+            if path == "/path/to/artwork.jpg"
+        ));
+    }
+
+    /// Tests that `album_cover_source` returns `None` when album has no artwork.
+    #[test_log::test(switchy_async::test)]
+    async fn test_album_cover_source_returns_none_when_no_artwork() {
+        let db = create_test_db();
+        let api = LibraryMusicApi::new(db);
+
+        let album = Album {
+            id: 1.into(),
+            title: "Test Album".into(),
+            artwork: None,
+            ..Default::default()
+        };
+
+        let result = api
+            .album_cover_source(&album, ImageCoverSize::Max)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
     }
 }
