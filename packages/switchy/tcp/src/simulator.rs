@@ -1488,4 +1488,73 @@ mod test {
         // Second call should panic because we're out of IPs
         let _ip2 = next_ip();
     }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_invalid_port_returns_parse_int_error() {
+        // Test that an invalid port number returns a ParseIntError
+        let result = parse_addr("hostname:not_a_port".to_string(), false);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            Error::ParseInt(_) => { /* expected */ }
+            other => panic!("Expected ParseInt error, got {other:?}"),
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_port_overflow_returns_parse_int_error() {
+        // Port numbers larger than u16::MAX should fail to parse
+        let result = parse_addr("hostname:99999".to_string(), false);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            Error::ParseInt(_) => { /* expected */ }
+            other => panic!("Expected ParseInt error, got {other:?}"),
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_read_from_non_empty_internal_buffer() {
+        // Test that TcpStreamReadHalf correctly returns data from the internal buffer
+        // when it has leftover data from a previous read operation
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+            task::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+
+                // Send a message that will be read in multiple chunks
+                stream.write_all(b"abcdefghij").await.unwrap();
+                stream.flush().await.unwrap();
+            });
+
+            let mut connection = TcpStream::connect(server_addr.to_string()).await.unwrap();
+
+            // Read only 3 bytes first - this will leave data in the internal buffer
+            let mut buf1 = [0u8; 3];
+            let count1 = connection.read(&mut buf1).await.unwrap();
+            assert_eq!(count1, 3);
+            assert_eq!(&buf1, b"abc");
+
+            // Read another 3 bytes - this should come from the internal buffer
+            let mut buf2 = [0u8; 3];
+            let count2 = connection.read(&mut buf2).await.unwrap();
+            assert_eq!(count2, 3);
+            assert_eq!(&buf2, b"def");
+
+            // Read the remaining 4 bytes
+            let mut buf3 = [0u8; 4];
+            let count3 = connection.read(&mut buf3).await.unwrap();
+            assert_eq!(count3, 4);
+            assert_eq!(&buf3, b"ghij");
+        });
+
+        runtime.wait().unwrap();
+    }
 }
