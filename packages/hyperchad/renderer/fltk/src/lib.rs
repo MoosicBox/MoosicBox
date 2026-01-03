@@ -2159,6 +2159,215 @@ mod tests {
         }
     }
 
+    mod get_container_text_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_container_returns_empty_string() {
+            let container = Container::default();
+            let result = FltkRenderer::get_container_text(&container);
+            assert!(result.is_empty());
+        }
+
+        #[test_log::test]
+        fn test_single_raw_element_extracts_value() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Raw {
+                        value: "raw content".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "raw content");
+        }
+
+        #[test_log::test]
+        fn test_single_text_element_extracts_value() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "text content".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "text content");
+        }
+
+        #[test_log::test]
+        fn test_multiple_text_elements_concatenated() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Text {
+                            value: "Hello ".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "World".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "Hello World");
+        }
+
+        #[test_log::test]
+        fn test_mixed_raw_and_text_elements_concatenated() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "raw".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: " and text".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "raw and text");
+        }
+
+        #[test_log::test]
+        fn test_non_text_elements_ignored() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "visible".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Span,
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "visible");
+        }
+
+        #[test_log::test]
+        fn test_only_non_text_elements_returns_empty() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Span,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Button { r#type: None },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert!(result.is_empty());
+        }
+
+        #[test_log::test]
+        fn test_empty_text_values_included() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Text {
+                            value: "".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "content".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "content");
+        }
+
+        #[test_log::test]
+        fn test_preserves_whitespace_in_text() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "  text with   spaces  ".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "  text with   spaces  ");
+        }
+
+        #[test_log::test]
+        fn test_preserves_newlines_in_text() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "line1\nline2\r\nline3".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            assert_eq!(result, "line1\nline2\r\nline3");
+        }
+
+        #[test_log::test]
+        fn test_ignores_nested_children_text() {
+            // get_container_text only looks at direct children, not nested ones
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Div,
+                    children: vec![Container {
+                        element: Element::Text {
+                            value: "nested".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let result = FltkRenderer::get_container_text(&container);
+            // Nested text in a Div child is not extracted (Div is filtered out)
+            assert!(result.is_empty());
+        }
+    }
+
     mod context_with_container_asymmetric {
         use super::*;
         use hyperchad_transformer::Number;
