@@ -134,7 +134,7 @@ let container = markdown_to_container_with_options(markdown, options);
 ### Integration with Router
 
 ```rust
-use hyperchad_router::RoutePath;
+use hyperchad::router::RoutePath;
 
 Router::new()
     .with_route(RoutePath::LiteralPrefix("/blog/".to_string()), |req: RouteRequest| async move {
