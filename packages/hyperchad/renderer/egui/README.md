@@ -138,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).await?;
 
         // Create and run the application
-        let runner = renderer.to_runner(Handle::current())?;
+        let mut runner = renderer.to_runner(Handle::current())?;
         runner.run()?;
 
         Ok(())
