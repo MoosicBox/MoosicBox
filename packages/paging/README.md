@@ -110,18 +110,18 @@ let numbers = Page::WithTotal {
 
 let parsed: Page<i32> = numbers.map(|s| s.parse().unwrap());
 
-// Try converting with error handling
-let strings = Page::WithTotal {
-    items: vec!["1", "2", "invalid", "4"],
+// Try converting with error handling (i64 -> i32 can fail on overflow)
+let large_numbers = Page::WithTotal {
+    items: vec![1i64, 2, i64::MAX, 4],
     offset: 0,
     limit: 4,
     total: 4,
 };
 
-let result: Result<Page<i32>, _> = strings.try_into();
+let result: Result<Page<i32>, _> = large_numbers.try_into();
 match result {
-    Ok(numbers) => println!("All parsed successfully"),
-    Err(e) => println!("Parse error: {:?}", e),
+    Ok(numbers) => println!("All converted successfully"),
+    Err(e) => println!("Conversion error: {:?}", e),
 }
 ```
 
