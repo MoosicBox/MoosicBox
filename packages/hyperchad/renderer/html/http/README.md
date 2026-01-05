@@ -57,11 +57,12 @@ hyperchad_renderer_html_http = {
 
 ### Basic HTTP Application
 
+**Note:** This example shows integration with external HTTP server frameworks. The `qstring`, `hyper`, and `bytes` crates are not dependencies of this package and must be added separately.
+
 ```rust
 use hyperchad_renderer_html_http::HttpApp;
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
 use hyperchad_router::{Router, RouteRequest};
-use hyperchad_template::container;
 use http::{Request, Response, StatusCode};
 use bytes::Bytes;
 use qstring::QString;
@@ -136,6 +137,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ### Advanced Routing
+
+**Note:** This example uses the `hyperchad_template` crate for HTML templating, which must be added as a separate dependency.
 
 ```rust
 use hyperchad_router::{RouteRequest, Router, RoutePath};
@@ -255,7 +258,7 @@ async fn handle_api_users(req: &RouteRequest) -> Result<Content, Box<dyn std::er
 
 ### Static Asset Serving
 
-**Note:** Static asset serving requires the `assets` feature (enabled by default).
+**Note:** Static asset serving requires the `assets` feature (enabled by default). The `hyperchad_template` crate used for HTML templating in this example must be added as a separate dependency.
 
 ```rust
 use hyperchad_renderer_html_http::HttpApp;
@@ -359,6 +362,8 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
 
 ### Error Handling
 
+**Note:** The `hyperchad_template` crate used for HTML templating in this example must be added as a separate dependency.
+
 ```rust
 use http::{Request, Response, StatusCode};
 use hyperchad_template::{ContainerVecExt, container};
@@ -406,63 +411,6 @@ fn handle_error(error: Box<dyn std::error::Error>) -> Response<Vec<u8>> {
 }
 ```
 
-### Middleware Integration
-
-```rust
-use http::{Request, Response};
-use std::time::Instant;
-
-async fn logging_middleware<F, Fut>(
-    req: Request<Vec<u8>>,
-    handler: F,
-) -> Response<Vec<u8>>
-where
-    F: FnOnce(Request<Vec<u8>>) -> Fut,
-    Fut: std::future::Future<Output = Response<Vec<u8>>>,
-{
-    let start = Instant::now();
-    let method = req.method().clone();
-    let path = req.uri().path().to_string();
-
-    println!("→ {} {}", method, path);
-
-    let response = handler(req).await;
-
-    let duration = start.elapsed();
-    let status = response.status();
-
-    println!("← {} {} {} {:?}", method, path, status.as_u16(), duration);
-
-    response
-}
-
-async fn cors_middleware<F, Fut>(
-    req: Request<Vec<u8>>,
-    handler: F,
-) -> Response<Vec<u8>>
-where
-    F: FnOnce(Request<Vec<u8>>) -> Fut,
-    Fut: std::future::Future<Output = Response<Vec<u8>>>,
-{
-    let mut response = handler(req).await;
-
-    let headers = response.headers_mut();
-    headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
-    headers.insert("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS".parse().unwrap());
-    headers.insert("Access-Control-Allow-Headers", "Content-Type, Authorization".parse().unwrap());
-
-    response
-}
-
-async fn handle_with_middleware(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
-    cors_middleware(req, |req| {
-        logging_middleware(req, |req| {
-            handle_request(req)
-        })
-    }).await
-}
-```
-
 ## Feature Flags
 
 Default features: `actions`, `assets`, `debug`, `json`
@@ -475,27 +423,19 @@ Default features: `actions`, `assets`, `debug`, `json`
 
 ## HTTP Standards Compliance
 
-### Supported Methods
-
-- **GET**: Retrieve resources
-- **POST**: Create resources
-- **PUT**: Update resources
-- **DELETE**: Delete resources
-- **PATCH**: Partial updates
-- **HEAD**: Headers only
-- **OPTIONS**: CORS preflight
-
 ### Status Codes
 
-- **2xx Success**: 200 OK, 201 Created, 204 No Content
-- **3xx Redirection**: 301 Moved Permanently, 302 Found, 304 Not Modified
-- **4xx Client Error**: 400 Bad Request, 401 Unauthorized, 404 Not Found
-- **5xx Server Error**: 500 Internal Server Error, 503 Service Unavailable
+The `HttpApp::process` method returns the following HTTP status codes:
+
+- **200 OK**: Successful HTML, JSON, or raw content responses
+- **204 No Content**: When a route returns no content or action processing completes
+- **400 Bad Request**: Invalid action request body
+- **404 Not Found**: Requested static asset file does not exist
+- **500 Internal Server Error**: Asset file access failure (configurable via `AssetNotFoundBehavior`)
 
 ### Headers
 
 - **Content-Type**: Automatic content type detection for assets and responses
-- Custom headers can be added via middleware (see middleware example)
 
 ## Dependencies
 
