@@ -516,8 +516,8 @@ Downloaded files are automatically organized in the following structure:
 {download_path}/
   {artist_name}/
     {album_name}/
-      01_track_name.flac
-      02_track_name.flac
+      1_track_name.flac
+      2_track_name.flac
       cover.jpg
     artist.jpg
 ```
