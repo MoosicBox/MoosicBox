@@ -96,6 +96,8 @@ By default, all features are enabled. Individual features can be selected:
 
 - **`SIMULATOR_RUNS`**: Number of simulation runs to execute (default: 1)
 - **`SIMULATOR_MAX_PARALLEL`**: Maximum parallel runs (default: number of CPUs)
+- **`SIMULATOR_DURATION`**: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
+- **`SIMULATOR_SEED`**: Fixed seed for deterministic runs
 - **`NO_TUI`**: Disable terminal UI when set
 
 ## Dependencies
