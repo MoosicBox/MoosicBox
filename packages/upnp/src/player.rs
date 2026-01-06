@@ -48,6 +48,12 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 };
 
 /// `UPnP` player implementation that controls playback on `UPnP`/DLNA devices.
+///
+/// This player implements the [`Player`] trait to provide playback control operations
+/// (play, pause, stop, seek, resume) on `UPnP`-compatible media renderers. It maintains
+/// the current playback state and handles `AVTransport` service interactions.
+///
+/// [`Player`]: moosicbox_player::Player
 #[derive(Clone)]
 pub struct UpnpPlayer {
     /// Music API provider for retrieving track information and URLs.
@@ -669,6 +675,13 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
 }
 
 /// Represents a `UPnP` `AVTransport` service for audio output.
+///
+/// This struct wraps a `UPnP` device and its `AVTransport` service, providing
+/// an [`AudioWrite`] implementation for integration with the audio output system.
+/// It can be converted into an [`AudioOutputFactory`] for use in the playback pipeline.
+///
+/// [`AudioWrite`]: moosicbox_audio_output::AudioWrite
+/// [`AudioOutputFactory`]: moosicbox_audio_output::AudioOutputFactory
 #[derive(Clone)]
 pub struct UpnpAvTransportService {
     /// The `UPnP` device providing the `AVTransport` service.
