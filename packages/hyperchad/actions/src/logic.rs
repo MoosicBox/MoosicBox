@@ -2042,4 +2042,168 @@ mod tests {
 
         assert_eq!(deserialized, original);
     }
+
+    // ============================================
+    // Arithmetic division by zero edge cases
+    // ============================================
+    //
+    // These tests document the behavior of arithmetic operations when dividing
+    // by zero. Rust/IEEE 754 floating-point semantics apply: dividing a positive
+    // number by zero yields positive infinity, dividing a negative number by
+    // zero yields negative infinity, and dividing zero by zero yields NaN.
+
+    #[test_log::test]
+    fn test_arithmetic_divide_by_zero_positive() {
+        // 10.0 / 0.0 = +infinity
+        let arith = Arithmetic::Divide(Value::Real(10.0), Value::Real(0.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+
+        let value = result.expect("Should return a value");
+        assert!(value.is_infinite(), "Expected infinity, got {value}");
+        assert!(value.is_sign_positive(), "Expected positive infinity");
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_divide_by_zero_negative() {
+        // -10.0 / 0.0 = -infinity
+        let arith = Arithmetic::Divide(Value::Real(-10.0), Value::Real(0.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+
+        let value = result.expect("Should return a value");
+        assert!(value.is_infinite(), "Expected infinity, got {value}");
+        assert!(value.is_sign_negative(), "Expected negative infinity");
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_divide_zero_by_zero_is_nan() {
+        // 0.0 / 0.0 = NaN
+        let arith = Arithmetic::Divide(Value::Real(0.0), Value::Real(0.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+
+        let value = result.expect("Should return a value");
+        assert!(value.is_nan(), "Expected NaN, got {value}");
+    }
+
+    // ============================================
+    // Value::as_f32 with nested calc_func evaluation
+    // ============================================
+    //
+    // These tests verify that the calc_func callback is properly used to
+    // recursively evaluate Calc values, including nested arithmetic
+    // expressions that contain Calc values.
+
+    #[test_log::test]
+    fn test_value_as_f32_calc_returns_arithmetic_which_contains_calc() {
+        // Test a nested scenario: Calc -> Arithmetic -> Calc
+        // The calc_func should be called recursively to evaluate the inner Calc
+        let outer_calc = CalcValue::WidthPx {
+            target: ElementTarget::Id(1),
+        };
+        let value = Value::Calc(outer_calc);
+
+        // Create a calc_func that returns an Arithmetic containing another Calc
+        let inner_calc_value = Value::Calc(CalcValue::HeightPx {
+            target: ElementTarget::Id(2),
+        });
+        let calc_func = |calc: &CalcValue| -> Option<Value> {
+            match calc {
+                CalcValue::WidthPx { .. } => {
+                    // Return an arithmetic expression that adds a Calc value
+                    Some(Value::Arithmetic(Box::new(Arithmetic::Plus(
+                        Value::Real(100.0),
+                        inner_calc_value.clone(),
+                    ))))
+                }
+                CalcValue::HeightPx { .. } => {
+                    // Return a real value for the inner calc
+                    Some(Value::Real(50.0))
+                }
+                _ => None,
+            }
+        };
+
+        // This should evaluate: WidthPx -> (100.0 + HeightPx) -> (100.0 + 50.0) = 150.0
+        let result = value.as_f32(Some(&calc_func));
+        assert_eq!(result, Some(150.0));
+    }
+
+    #[test_log::test]
+    fn test_value_as_f32_calc_func_returns_none_propagates() {
+        // When calc_func returns None, the entire evaluation should return None
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::Id(1),
+        };
+        let value = Value::Calc(calc);
+
+        let calc_func = |_: &CalcValue| -> Option<Value> { None };
+
+        let result = value.as_f32(Some(&calc_func));
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_with_calc_operand_uses_calc_func() {
+        // Test that arithmetic operations properly use calc_func for Calc operands
+        let calc = CalcValue::MouseX { target: None };
+        let arith = Arithmetic::Plus(Value::Calc(calc), Value::Real(25.0));
+
+        let calc_func = |calc: &CalcValue| -> Option<Value> {
+            match calc {
+                CalcValue::MouseX { .. } => Some(Value::Real(75.0)),
+                _ => None,
+            }
+        };
+
+        // 75.0 (from calc) + 25.0 = 100.0
+        let result = arith.as_f32(Some(&calc_func));
+        assert_eq!(result, Some(100.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_with_calc_operand_none_propagates() {
+        // When a Calc operand's calc_func returns None, the arithmetic should return None
+        let calc = CalcValue::MouseX { target: None };
+        let arith = Arithmetic::Plus(Value::Calc(calc), Value::Real(25.0));
+
+        let calc_func = |_: &CalcValue| -> Option<Value> { None };
+
+        let result = arith.as_f32(Some(&calc_func));
+        assert_eq!(result, None);
+    }
+
+    // ============================================
+    // Arithmetic Min/Max edge cases
+    // ============================================
+
+    #[test_log::test]
+    fn test_arithmetic_min_with_equal_values() {
+        // min(5.0, 5.0) should return 5.0
+        let arith = Arithmetic::Min(Value::Real(5.0), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_max_with_equal_values() {
+        // max(5.0, 5.0) should return 5.0
+        let arith = Arithmetic::Max(Value::Real(5.0), Value::Real(5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(5.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_min_with_negative_values() {
+        // min(-10.0, -5.0) should return -10.0
+        let arith = Arithmetic::Min(Value::Real(-10.0), Value::Real(-5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(-10.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_max_with_negative_values() {
+        // max(-10.0, -5.0) should return -5.0
+        let arith = Arithmetic::Max(Value::Real(-10.0), Value::Real(-5.0));
+        let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(-5.0));
+    }
 }
