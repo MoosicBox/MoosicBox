@@ -3606,4 +3606,638 @@ mod tests {
         assert!(!html.contains(" open"));
         assert!(html.ends_with("</details>"));
     }
+
+    // Test for Select element with options and selected value matching
+    #[test_log::test]
+    fn test_element_to_html_select_with_options_and_selected() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Create a select with options where selected value matches one option
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("color".to_string()),
+                selected: Some("blue".to_string()),
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("red".to_string()),
+                        disabled: None,
+                    },
+                    children: vec![Container {
+                        element: hyperchad_transformer::Element::Raw {
+                            value: "Red".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("blue".to_string()),
+                        disabled: None,
+                    },
+                    children: vec![Container {
+                        element: hyperchad_transformer::Element::Raw {
+                            value: "Blue".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("green".to_string()),
+                        disabled: None,
+                    },
+                    children: vec![Container {
+                        element: hyperchad_transformer::Element::Raw {
+                            value: "Green".to_string(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Verify select element structure
+        assert!(html.starts_with("<select"));
+        assert!(html.contains("name=\"color\""));
+        assert!(html.contains("data-selected=\"blue\""));
+
+        // Verify the blue option is marked as selected
+        assert!(html.contains("<option value=\"blue\" selected>Blue</option>"));
+
+        // Verify other options are NOT marked as selected
+        assert!(html.contains("<option value=\"red\">Red</option>"));
+        assert!(html.contains("<option value=\"green\">Green</option>"));
+        assert!(html.ends_with("</select>"));
+    }
+
+    // Test for Select element with unmatched selected value
+    #[test_log::test]
+    fn test_element_to_html_select_with_unmatched_selected_value() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Selected value doesn't match any option
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("size".to_string()),
+                selected: Some("xlarge".to_string()), // No option has this value
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("small".to_string()),
+                        disabled: None,
+                    },
+                    ..Default::default()
+                },
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("medium".to_string()),
+                        disabled: None,
+                    },
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // data-selected should still be present
+        assert!(html.contains("data-selected=\"xlarge\""));
+
+        // No option should have selected attribute since none match
+        assert!(!html.contains(" selected"));
+    }
+
+    // Test for Select element with all attributes
+    #[test_log::test]
+    fn test_element_to_html_select_with_all_attributes() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("multi-select".to_string()),
+                selected: Some("opt1".to_string()),
+                multiple: Some(true),
+                disabled: Some(true),
+                autofocus: Some(true),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Option {
+                    value: Some("opt1".to_string()),
+                    disabled: Some(true),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("name=\"multi-select\""));
+        assert!(html.contains(" multiple"));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains(" autofocus"));
+        // Option should also have disabled
+        assert!(html.contains("<option value=\"opt1\" selected disabled>"));
+    }
+
+    // Test for Form element with action and method
+    #[test_log::test]
+    fn test_element_to_html_form_with_action_and_method() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Form {
+                action: Some("/submit".to_string()),
+                method: Some("POST".to_string()),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Input {
+                    input: hyperchad_transformer::Input::Text {
+                        value: None,
+                        placeholder: None,
+                    },
+                    name: Some("field".to_string()),
+                    autofocus: None,
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<form"));
+        assert!(html.contains("action=\"/submit\""));
+        assert!(html.contains("method=\"POST\""));
+        assert!(html.contains("<input"));
+        assert!(html.ends_with("</form>"));
+    }
+
+    // Test for Form element without action/method (both optional)
+    #[test_log::test]
+    fn test_element_to_html_form_without_action_method() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Form {
+                action: None,
+                method: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<form"));
+        assert!(!html.contains("action="));
+        assert!(!html.contains("method="));
+        assert!(html.ends_with("</form>"));
+    }
+
+    // Test for checkbox input with None checked (indeterminate state)
+    #[test_log::test]
+    fn test_element_to_html_input_checkbox_none_checked() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Checkbox { checked: None },
+                name: Some("optional".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"checkbox\""));
+        // checked attribute should NOT be present when checked is None
+        assert!(!html.contains("checked"));
+        assert!(html.contains("name=\"optional\""));
+    }
+
+    // Test for grid layout without explicit grid_cell_size
+    #[test_log::test]
+    fn test_element_style_to_html_grid_without_cell_size() {
+        use hyperchad_router::Container;
+        use hyperchad_transformer::models::LayoutOverflow;
+
+        let container = Container {
+            overflow_x: LayoutOverflow::Wrap { grid: true },
+            grid_cell_size: None, // No cell size specified
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        // Should have display:grid but NOT grid-template-columns
+        assert!(style.contains("display:grid"));
+        assert!(
+            !style.contains("grid-template-columns"),
+            "grid-template-columns should not be set without cell size"
+        );
+    }
+
+    // Test for deeply nested calculations with grouping and mixed units
+    #[test_log::test]
+    fn test_calc_to_css_string_nested_with_grouping() {
+        // calc(100vh - (50px + 10%))
+        let calc = Calculation::Subtract(
+            Box::new(Calculation::Number(Box::new(Number::IntegerVh(100)))),
+            Box::new(Calculation::Grouping(Box::new(Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(50)))),
+                Box::new(Calculation::Number(Box::new(Number::IntegerPercent(10)))),
+            )))),
+        );
+
+        let result = calc_to_css_string(&calc, true);
+        assert_eq!(result, "100vh - (50px + 10%)");
+    }
+
+    // Test for multiply with grouping to ensure correct precedence
+    #[test_log::test]
+    fn test_calc_to_css_string_multiply_with_grouping() {
+        // (100% - 20px) * 0.5 - ensures grouping is preserved before multiplication
+        let calc = Calculation::Multiply(
+            Box::new(Calculation::Grouping(Box::new(Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::IntegerPercent(100)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+            )))),
+            Box::new(Calculation::Number(Box::new(Number::Real(0.5)))),
+        );
+
+        let result = calc_to_css_string(&calc, true);
+        assert_eq!(result, "(100% - 20px) * 0.5");
+    }
+
+    // Test for min/max with calculations inside
+    #[test_log::test]
+    fn test_calc_to_css_string_min_with_calculation() {
+        // min(100%, 500px - 20px)
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(100)))),
+            Box::new(Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(500)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(20)))),
+            )),
+        );
+
+        let result = calc_to_css_string(&calc, true);
+        assert_eq!(result, "min(100%, 500px - 20px)");
+    }
+
+    // Test for Option element rendered directly (outside of Select)
+    #[test_log::test]
+    fn test_element_to_html_option_standalone() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("standalone".to_string()),
+                disabled: Some(true),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Raw {
+                    value: "Standalone Option".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<option"));
+        assert!(html.contains("value=\"standalone\""));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains("Standalone Option"));
+        assert!(html.ends_with("</option>"));
+    }
+
+    // Test for Select with non-option children (mixed content)
+    #[test_log::test]
+    fn test_element_to_html_select_with_mixed_children() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Select with a mix of Option and non-Option children
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("mixed".to_string()),
+                selected: None,
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![
+                Container {
+                    element: hyperchad_transformer::Element::Option {
+                        value: Some("opt1".to_string()),
+                        disabled: None,
+                    },
+                    ..Default::default()
+                },
+                // A non-option child (like a div) - should be rendered normally
+                Container {
+                    element: hyperchad_transformer::Element::Div,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Should contain the option
+        assert!(html.contains("<option value=\"opt1\">"));
+        // Should also contain the div (rendered as a non-option child)
+        assert!(html.contains("<div"));
+        assert!(html.contains("</div>"));
+    }
+
+    // Test for TH and TD without rowspan/colspan
+    #[test_log::test]
+    fn test_element_to_html_table_cells_without_spans() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // TH without spans
+        let th_container = Container {
+            element: hyperchad_transformer::Element::TH {
+                rows: None,
+                columns: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Raw {
+                    value: "Header".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &th_container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<th"));
+        assert!(!html.contains("rowspan"));
+        assert!(!html.contains("colspan"));
+        assert!(html.contains("Header"));
+
+        // TD without spans
+        let td_container = Container {
+            element: hyperchad_transformer::Element::TD {
+                rows: None,
+                columns: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &td_container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<td"));
+        assert!(!html.contains("rowspan"));
+        assert!(!html.contains("colspan"));
+    }
+
+    // Test for text input without value or placeholder
+    #[test_log::test]
+    fn test_element_to_html_input_text_minimal() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Text {
+                    value: None,
+                    placeholder: None,
+                },
+                name: None,
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"text\""));
+        assert!(!html.contains("value="));
+        assert!(!html.contains("placeholder="));
+        assert!(!html.contains("name="));
+        assert!(!html.contains("autofocus"));
+    }
+
+    // Test for password input without value or placeholder
+    #[test_log::test]
+    fn test_element_to_html_input_password_minimal() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Password {
+                    value: None,
+                    placeholder: None,
+                },
+                name: None,
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"password\""));
+        assert!(!html.contains("value="));
+        assert!(!html.contains("placeholder="));
+    }
+
+    // Test for hidden input without value
+    #[test_log::test]
+    fn test_element_to_html_input_hidden_without_value() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Input;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Input {
+                input: Input::Hidden { value: None },
+                name: Some("token".to_string()),
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("type=\"hidden\""));
+        assert!(!html.contains("value="));
+        assert!(html.contains("name=\"token\""));
+    }
+
+    // Test for textarea without optional attributes
+    #[test_log::test]
+    fn test_element_to_html_textarea_minimal() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Textarea {
+                value: String::new(),
+                placeholder: None,
+                rows: None,
+                cols: None,
+                name: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<textarea"));
+        assert!(!html.contains("name="));
+        assert!(!html.contains("placeholder="));
+        assert!(!html.contains("rows="));
+        assert!(!html.contains("cols="));
+        assert!(html.ends_with("</textarea>"));
+    }
+
+    // Test anchor without href or target
+    #[test_log::test]
+    fn test_element_to_html_anchor_minimal() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Anchor {
+                href: None,
+                target: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Raw {
+                    value: "Click me".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<a"));
+        assert!(!html.contains("href="));
+        assert!(!html.contains("target="));
+        assert!(html.contains("Click me"));
+        assert!(html.ends_with("</a>"));
+    }
+
+    // Test image without source (edge case)
+    #[test_log::test]
+    fn test_element_to_html_image_minimal() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Image {
+                source: None,
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<img"));
+        assert!(!html.contains("src="));
+        assert!(!html.contains("alt="));
+        assert!(!html.contains("srcset="));
+        assert!(!html.contains("sizes="));
+        assert!(!html.contains("loading="));
+    }
 }
