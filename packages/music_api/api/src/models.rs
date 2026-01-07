@@ -111,7 +111,271 @@ pub enum AuthValues {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
+    use async_trait::async_trait;
+    use moosicbox_menu_models::AlbumVersion;
+    use moosicbox_music_api::{
+        Error as MusicApiError, MusicApi, TrackOrId,
+        auth::ApiAuth,
+        models::{
+            AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+            TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
+        },
+    };
+    use moosicbox_music_models::{
+        Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track, id::Id,
+    };
+    use moosicbox_paging::{PagingResponse, PagingResult};
+
     use super::*;
+
+    static TEST_SOURCE: LazyLock<ApiSource> =
+        LazyLock::new(|| ApiSource::register("convert_test", "Convert Test API"));
+
+    struct MockMusicApi {
+        source: &'static ApiSource,
+        auth: Option<ApiAuth>,
+        supports_scan: bool,
+        scan_enabled: bool,
+    }
+
+    impl MockMusicApi {
+        fn new(source: &'static ApiSource) -> Self {
+            Self {
+                source,
+                auth: None,
+                supports_scan: false,
+                scan_enabled: false,
+            }
+        }
+
+        fn with_scan_support(mut self, supports_scan: bool, scan_enabled: bool) -> Self {
+            self.supports_scan = supports_scan;
+            self.scan_enabled = scan_enabled;
+            self
+        }
+
+        fn with_auth(mut self, auth: ApiAuth) -> Self {
+            self.auth = Some(auth);
+            self
+        }
+    }
+
+    #[async_trait]
+    impl MusicApi for MockMusicApi {
+        fn source(&self) -> &ApiSource {
+            self.source
+        }
+
+        async fn artists(
+            &self,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<ArtistOrder>,
+            _order_direction: Option<ArtistOrderDirection>,
+        ) -> PagingResult<Artist, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, MusicApiError> {
+            Ok(None)
+        }
+
+        async fn add_artist(&self, _artist_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn remove_artist(&self, _artist_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn album(&self, _album_id: &Id) -> Result<Option<Album>, MusicApiError> {
+            Ok(None)
+        }
+
+        async fn album_versions(
+            &self,
+            _album_id: &Id,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+        ) -> PagingResult<AlbumVersion, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn artist_albums(
+            &self,
+            _artist_id: &Id,
+            _album_type: Option<AlbumType>,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<AlbumOrder>,
+            _order_direction: Option<AlbumOrderDirection>,
+        ) -> PagingResult<Album, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn add_album(&self, _album_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn remove_album(&self, _album_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn tracks(
+            &self,
+            _track_ids: Option<&[Id]>,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<TrackOrder>,
+            _order_direction: Option<TrackOrderDirection>,
+        ) -> PagingResult<Track, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn track(&self, _track_id: &Id) -> Result<Option<Track>, MusicApiError> {
+            Ok(None)
+        }
+
+        async fn album_tracks(
+            &self,
+            _album_id: &Id,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<TrackOrder>,
+            _order_direction: Option<TrackOrderDirection>,
+        ) -> PagingResult<Track, MusicApiError> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn add_track(&self, _track_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn remove_track(&self, _track_id: &Id) -> Result<(), MusicApiError> {
+            Ok(())
+        }
+
+        async fn track_source(
+            &self,
+            _track: TrackOrId,
+            _quality: TrackAudioQuality,
+        ) -> Result<Option<TrackSource>, MusicApiError> {
+            Ok(None)
+        }
+
+        async fn track_size(
+            &self,
+            _track: TrackOrId,
+            _source: &TrackSource,
+            _quality: PlaybackQuality,
+        ) -> Result<Option<u64>, MusicApiError> {
+            Ok(None)
+        }
+
+        fn auth(&self) -> Option<&ApiAuth> {
+            self.auth.as_ref()
+        }
+
+        fn supports_scan(&self) -> bool {
+            self.supports_scan
+        }
+
+        async fn scan_enabled(&self) -> Result<bool, MusicApiError> {
+            Ok(self.scan_enabled)
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_without_auth_sets_logged_in_false() {
+        let api = MockMusicApi::new(&TEST_SOURCE);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(!result.logged_in);
+        assert!(result.auth_method.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_without_scan_support_sets_scan_fields_false() {
+        let api = MockMusicApi::new(&TEST_SOURCE);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(!result.supports_scan);
+        assert!(!result.scan_enabled);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_with_scan_enabled_returns_true() {
+        let api = MockMusicApi::new(&TEST_SOURCE).with_scan_support(true, true);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(result.supports_scan);
+        assert!(result.scan_enabled);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_with_scan_disabled_returns_false() {
+        let api = MockMusicApi::new(&TEST_SOURCE).with_scan_support(true, false);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(result.supports_scan);
+        assert!(!result.scan_enabled);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_uses_source_for_id_and_name() {
+        let api = MockMusicApi::new(&TEST_SOURCE);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert_eq!(result.id, "convert_test");
+        assert_eq!(result.name, "Convert Test API");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_with_logged_in_auth_returns_logged_in_true() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_logged_in(true)
+            .build();
+        let api = MockMusicApi::new(&TEST_SOURCE).with_auth(auth);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(result.logged_in);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_with_logged_out_auth_returns_logged_in_false() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_logged_in(false)
+            .build();
+        let api = MockMusicApi::new(&TEST_SOURCE).with_auth(auth);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(!result.logged_in);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn convert_to_api_music_api_with_auth_none_returns_auth_method_none() {
+        let auth = ApiAuth::builder().without_auth().build();
+        let api = MockMusicApi::new(&TEST_SOURCE).with_auth(auth);
+
+        let result = convert_to_api_music_api(&api).await.unwrap();
+
+        assert!(result.auth_method.is_none());
+    }
 
     #[test_log::test]
     fn test_api_music_api_serialization() {
