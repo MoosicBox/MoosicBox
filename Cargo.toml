@@ -389,7 +389,7 @@ chrono = { version = "0.4.42", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4.5.54", features = ["derive"] }
 cmake = "0.1.57"
 color-backtrace = { version = "0.7.2", default-features = false, features = [
     "use-btparse-crate",
@@ -400,7 +400,7 @@ console-subscriber = "0.5.0"
 const-hex = "1.17.0"
 const_format = "0.2.35"
 convert_case = "0.10.0"
-cpal = "0.17.0"
+cpal = "0.17.1"
 ctrlc = "3.5.1"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
@@ -435,7 +435,7 @@ http = "1.4.0"
 id3 = "1.16.3"
 image = "0.25.9"
 include_dir = "0.7.4"
-insta = "1.45.1"
+insta = "1.46.0"
 itertools = "0.14.0"
 itoa = "1.0.17"
 json5 = { version = "1.3.0", default-features = false }
@@ -469,7 +469,7 @@ openssl = { version = "0.10.75", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.31.0", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
-opus = "0.3.0"
+opus = "0.3.1"
 os_info = { version = "3.14.0", default-features = false }
 paste = "1.0.15"
 pin-project = "1.1.10"
@@ -486,7 +486,7 @@ postgres-protocol = "0.6.9"
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5.0"
-proc-macro2 = "1.0.104"
+proc-macro2 = "1.0.105"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
 proptest = { version = "1.9.0", default-features = false, features = ["std"] }
@@ -496,7 +496,7 @@ pulldown-cmark = { version = "0.13.0", default-features = false }
 qstring = "0.7.2"
 test-strategy = { version = "0.4.3", default-features = false }
 
-quote = "1.0.42"
+quote = "1.0.43"
 rand = "0.9.2"
 rangemap = "1.7.1"
 ratatui = "0.30.0"
@@ -521,11 +521,11 @@ scoped-tls = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
-serde_json = "1.0.148"
+serde_json = "1.0.149"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.16.1", default-features = false }
 serde_yaml = "0.9.34"
-serial_test = "3.2.0"
+serial_test = "3.3.1"
 sha2 = "0.10.9"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.1"
@@ -554,7 +554,7 @@ swc_ecma_transforms_base = "34.0.0"
 swc_ecma_transforms_typescript = "37.0.0"
 swc_ecma_visit = "19.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
-syn = "2.0.111"
+syn = "2.0.114"
 syntect = "5.3.0"
 tantivy = "0.25.0"
 tauri = { version = "2.9.5", features = ["protocol-asset"] }
@@ -570,26 +570,26 @@ test-log = "0.2.19"
 thiserror = "2.0.17"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.48.0" }
+tokio = { version = "1.49.0" }
 tokio-postgres = { version = "0.7.15", features = [
     "with-chrono-0_4",
     "with-uuid-1",
 ] }
-tokio-stream = "0.1.17"
-tokio-test = "0.4.4"
+tokio-stream = "0.1.18"
+tokio-test = "0.4.5"
 tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-webpki-roots",
 ] }
-tokio-util = "0.7.17"
+tokio-util = "0.7.18"
 toml = "0.9.10"
 tracing = "0.1.44"
 tracing-opentelemetry = { version = "0.32.0" }
 tracing-subscriber = "0.3.22"
-tracy-client = { version = "0.18.3", default-features = false }
+tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.114"
 turso = "0.3.2"
 uaparser = "0.6.4"
-url = "2.5.7"
+url = "2.5.8"
 urlencoding = "2.1.3"
 utoipa = { version = "5.4.0", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
