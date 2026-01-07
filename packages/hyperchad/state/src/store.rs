@@ -459,4 +459,212 @@ mod tests {
 
         Ok(())
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_concurrent_reads_and_writes() -> Result<(), Error> {
+        // Test that concurrent read and write operations don't cause data corruption
+        // or race conditions with the RwLock-protected cache
+        use std::sync::Arc;
+        use switchy_async::task::spawn;
+
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = Arc::new(StateStore::new(persistence));
+
+        // Pre-populate some data
+        for i in 0..10 {
+            let data = TestData {
+                id: i,
+                name: format!("item_{i}"),
+            };
+            store.set(format!("key_{i}"), &data).await?;
+        }
+
+        // Spawn multiple concurrent tasks that read and write
+        let mut handles = vec![];
+
+        // Readers
+        for i in 0..10 {
+            let store_clone = Arc::clone(&store);
+            handles.push(spawn(async move {
+                for _ in 0..5 {
+                    let _: Option<TestData> = store_clone
+                        .get(format!("key_{i}"))
+                        .await
+                        .expect("get should not fail");
+                }
+            }));
+        }
+
+        // Writers
+        for i in 0..5 {
+            let store_clone = Arc::clone(&store);
+            handles.push(spawn(async move {
+                for j in 0..5 {
+                    let data = TestData {
+                        id: i * 100 + j,
+                        name: format!("concurrent_write_{i}_{j}"),
+                    };
+                    store_clone
+                        .set(format!("concurrent_key_{i}"), &data)
+                        .await
+                        .expect("set should not fail");
+                }
+            }));
+        }
+
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+
+        // Verify data integrity - original keys should still be readable
+        for i in 0..10 {
+            let result: Option<TestData> = store.get(format!("key_{i}")).await?;
+            assert!(result.is_some(), "Original key_{i} should still exist");
+            assert_eq!(result.as_ref().unwrap().id, i);
+        }
+
+        // Verify concurrent writes completed - each should have last write value
+        for i in 0..5 {
+            let result: Option<TestData> = store.get(format!("concurrent_key_{i}")).await?;
+            assert!(
+                result.is_some(),
+                "Concurrent key_{i} should exist after writes"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_concurrent_read_and_update_same_key() -> Result<(), Error> {
+        // Test that concurrent reads and updates to the same key maintain consistency
+        use std::sync::Arc;
+        use switchy_async::task::spawn;
+
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = Arc::new(StateStore::new(persistence));
+
+        // Set initial value
+        let initial = TestData {
+            id: 0,
+            name: "initial".to_string(),
+        };
+        store.set("shared_key", &initial).await?;
+
+        let mut handles = vec![];
+
+        // Multiple readers continuously reading the same key
+        for _ in 0..5 {
+            let store_clone = Arc::clone(&store);
+            handles.push(spawn(async move {
+                for _ in 0..10 {
+                    let result: Option<TestData> = store_clone
+                        .get("shared_key")
+                        .await
+                        .expect("get should not fail");
+                    // The value might be any of the updates, but it should be valid
+                    assert!(result.is_some(), "shared_key should always exist");
+                }
+            }));
+        }
+
+        // A single writer updating the key repeatedly
+        let store_clone = Arc::clone(&store);
+        handles.push(spawn(async move {
+            for i in 1..=20 {
+                let data = TestData {
+                    id: i,
+                    name: format!("update_{i}"),
+                };
+                store_clone
+                    .set("shared_key", &data)
+                    .await
+                    .expect("set should not fail");
+            }
+        }));
+
+        for handle in handles {
+            let _ = handle.await;
+        }
+
+        // Final value should be the last write
+        let final_value: Option<TestData> = store.get("shared_key").await?;
+        assert!(final_value.is_some());
+        assert_eq!(final_value.unwrap().id, 20);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_option_value_roundtrip() -> Result<(), Error> {
+        // Test that Option<T> values serialize and deserialize correctly,
+        // distinguishing between Some(value) and None stored values
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        // Store Some(value)
+        let some_value: Option<TestData> = Some(TestData {
+            id: 42,
+            name: "optional".to_string(),
+        });
+        store.set("optional_some", &some_value).await?;
+
+        // Store None explicitly
+        let none_value: Option<TestData> = None;
+        store.set("optional_none", &none_value).await?;
+
+        // Retrieve and verify Some
+        let retrieved_some: Option<Option<TestData>> = store.get("optional_some").await?;
+        assert_eq!(
+            retrieved_some,
+            Some(Some(TestData {
+                id: 42,
+                name: "optional".to_string()
+            }))
+        );
+
+        // Retrieve and verify None (stored value, not missing key)
+        let retrieved_none: Option<Option<TestData>> = store.get("optional_none").await?;
+        assert_eq!(retrieved_none, Some(None));
+
+        // Compare with truly nonexistent key (outer None)
+        let nonexistent: Option<Option<TestData>> = store.get("nonexistent").await?;
+        assert_eq!(nonexistent, None);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_primitive_type_values() -> Result<(), Error> {
+        // Test storing and retrieving primitive types directly
+        let persistence = SqlitePersistence::new_in_memory().await?;
+        let store = StateStore::new(persistence);
+
+        // String
+        let string_val = "hello world".to_string();
+        store.set("string_key", &string_val).await?;
+        let retrieved_string: Option<String> = store.get("string_key").await?;
+        assert_eq!(retrieved_string, Some(string_val));
+
+        // Integer
+        let int_val: i64 = -42;
+        store.set("int_key", &int_val).await?;
+        let retrieved_int: Option<i64> = store.get("int_key").await?;
+        assert_eq!(retrieved_int, Some(int_val));
+
+        // Boolean
+        let bool_val = true;
+        store.set("bool_key", &bool_val).await?;
+        let retrieved_bool: Option<bool> = store.get("bool_key").await?;
+        assert_eq!(retrieved_bool, Some(bool_val));
+
+        // Float
+        let float_val: f64 = 1.23456;
+        store.set("float_key", &float_val).await?;
+        let retrieved_float: Option<f64> = store.get("float_key").await?;
+        assert_eq!(retrieved_float, Some(float_val));
+
+        Ok(())
+    }
 }
