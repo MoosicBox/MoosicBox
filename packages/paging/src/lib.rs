@@ -3477,4 +3477,311 @@ mod tests {
         let all = converted.with_rest_of_items().await.unwrap();
         assert_eq!(all, vec![To(100), To(200), To(300), To(400)]);
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_subsequent_page_conversion_failure() {
+        // Test that when items in subsequent pages fail TryInto conversion,
+        // the error is properly propagated through the fetch chain
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err(format!("cannot convert negative value: {}", self.0))
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)], // Initial page succeeds
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    // Subsequent page contains an item that will fail conversion
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(-99)], // -99 will fail
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        // Initial conversion succeeds
+        let result: Result<PagingResponse<ItemTo, String>, String> = response.ok_try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        // Fetching subsequent pages should fail due to the negative item
+        let fetch_result = converted.rest_of_items().await;
+        assert!(fetch_result.is_err());
+        assert_eq!(
+            fetch_result.unwrap_err(),
+            "cannot convert negative value: -99"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_subsequent_page_conversion_failure() {
+        // Test that inner_try_into correctly handles conversion failures in subsequent pages
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err(format!("negative: {}", self.0))
+                }
+            }
+        }
+
+        impl From<String> for ErrorTo {
+            fn from(s: String) -> Self {
+                Self(format!("converted: {s}"))
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(format!("from_error: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)], // Initial page succeeds
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    // Subsequent page contains an item that will fail conversion
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(-42), ItemFrom(4)], // -42 will fail
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        // Initial conversion succeeds
+        let result: Result<PagingResponse<ItemTo, ErrorTo>, String> = response.inner_try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        // Fetching subsequent pages should fail due to the negative item
+        let fetch_result = converted.rest_of_items().await;
+        assert!(fetch_result.is_err());
+        // The error should be converted via Into<ErrorTo>
+        let err = fetch_result.unwrap_err();
+        assert!(err.0.contains("negative: -42"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_inner_try_into_map_err_subsequent_page_conversion_failure() {
+        // Test that inner_try_into_map_err correctly maps conversion errors from subsequent pages
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorFrom(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorTo(String);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = String;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err(format!("negative: {}", self.0))
+                }
+            }
+        }
+
+        impl From<ErrorFrom> for ErrorTo {
+            fn from(e: ErrorFrom) -> Self {
+                Self(format!("from_error: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)], // Initial page succeeds
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, ErrorFrom> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(-77)], // -77 will fail
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        // Initial conversion succeeds with custom error mapper
+        let result: Result<PagingResponse<ItemTo, ErrorTo>, ErrorTo> =
+            response.inner_try_into_map_err(|e| ErrorTo(format!("mapped: {e}")));
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        // Fetching subsequent pages should fail with mapped error
+        let fetch_result = converted.rest_of_items().await;
+        assert!(fetch_result.is_err());
+        let err = fetch_result.unwrap_err();
+        assert!(err.0.contains("negative: -77"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_try_into_map_err_subsequent_page_conversion_failure() {
+        // Test that ok_try_into_map_err correctly maps conversion errors from subsequent pages
+        #[derive(Debug, Clone)]
+        struct ItemFrom(i32);
+        #[derive(Debug, PartialEq)]
+        struct ItemTo(i32);
+
+        impl TryInto<ItemTo> for ItemFrom {
+            type Error = &'static str;
+
+            fn try_into(self) -> Result<ItemTo, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(ItemTo(self.0 * 10))
+                } else {
+                    Err("negative value")
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![ItemFrom(1), ItemFrom(2)], // Initial page succeeds
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<ItemFrom, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![ItemFrom(3), ItemFrom(-5)], // -5 will fail
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        // Initial conversion succeeds with custom error mapper
+        let result: Result<PagingResponse<ItemTo, String>, String> =
+            response.ok_try_into_map_err(|e| format!("custom_mapped: {e}"));
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[ItemTo(10), ItemTo(20)]);
+
+        // Fetching subsequent pages should fail with mapped error
+        let fetch_result = converted.rest_of_items().await;
+        assert!(fetch_result.is_err());
+        assert_eq!(fetch_result.unwrap_err(), "custom_mapped: negative value");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_err_into_nested_error_conversion() {
+        // Test that err_into correctly converts errors from nested responses
+        // (errors returned by the inner PagingResponse's fetch function)
+        #[derive(Debug, PartialEq, Clone)]
+        struct ErrorA(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorB(String);
+
+        impl std::convert::From<ErrorA> for ErrorB {
+            fn from(e: ErrorA) -> Self {
+                Self(format!("outer_converted: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, ErrorA> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 2 {
+                    // First subsequent page succeeds but sets up error for next fetch
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Err(ErrorA("nested fetch error".to_string())) }),
+                    ))
+                } else {
+                    Err(ErrorA("direct error".to_string()))
+                }
+            })
+        });
+
+        let converted: PagingResponse<i32, ErrorB> = response.err_into();
+
+        // First page of items should be accessible
+        assert_eq!(converted.items(), &[1, 2]);
+
+        // Fetch all items, which will eventually hit the nested error
+        let result = converted.with_rest_of_items().await;
+        assert!(result.is_err());
+        // The nested error should be converted
+        let err = result.unwrap_err();
+        assert!(err.0.contains("nested fetch error") || err.0.contains("direct error"));
+    }
 }
