@@ -6431,4 +6431,315 @@ mod tests {
         assert!(result_str.contains("Option"));
         assert!(result_str.contains("Some"));
     }
+
+    // Tests for Expression::ElementByIdRef code generation
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_by_id_ref_with_string_literal() {
+        let mut context = Context::default();
+        let expr = Expression::ElementByIdRef(Box::new(Expression::Literal(Literal::String(
+            "my-element".to_string(),
+        ))));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementByIdRef"));
+        assert!(result_str.contains("my-element"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_by_id_ref_with_variable() {
+        let mut context = Context::default();
+        let expr =
+            Expression::ElementByIdRef(Box::new(Expression::Variable("element_id".to_string())));
+        let result = generate_expression_code(&mut context, &expr).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementByIdRef"));
+        assert!(result_str.contains("element_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_expression_code_for_element_by_id_ref_with_invalid_expr_returns_error() {
+        let mut context = Context::default();
+        let expr = Expression::ElementByIdRef(Box::new(Expression::Literal(Literal::Integer(42))));
+        let result = generate_expression_code(&mut context, &expr);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Invalid element_by_id selector")
+        );
+    }
+
+    // Tests for generate_action_for_by_id function
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_show_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "show", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ActionType :: Style"));
+        assert!(result_str.contains("Visibility :: Visible"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_show_with_args_returns_error() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let args = vec![Expression::Literal(Literal::String("extra".to_string()))];
+        let result = generate_action_for_by_id(&mut context, &id, "show", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_hide_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "hide", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ActionType :: Style"));
+        assert!(result_str.contains("Visibility :: Hidden"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_toggle_visibility_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result =
+            generate_action_for_by_id(&mut context, &id, "toggle_visibility", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_visibility_by_id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_set_visibility_with_correct_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let args = vec![Expression::Variable("Visibility::Hidden".to_string())];
+        let result = generate_action_for_by_id(&mut context, &id, "set_visibility", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetVisibility"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_set_visibility_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "set_visibility", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_focus_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "focus", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Focus"));
+        assert!(result_str.contains("ById"));
+        assert!(result_str.contains("focus : true"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_display_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay (true)"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_no_display_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "no_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay (false)"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_toggle_display_no_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "toggle_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ToggleDisplay"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_set_display_with_correct_args() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let args = vec![Expression::Literal(Literal::Bool(true))];
+        let result = generate_action_for_by_id(&mut context, &id, "set_display", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay"));
+        assert!(result_str.contains("ById"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_set_display_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "set_display", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_by_id_unknown_method_returns_error() {
+        let mut context = Context::default();
+        let id = quote! { "my-id" };
+        let result = generate_action_for_by_id(&mut context, &id, "unknown_method", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown method"));
+    }
+
+    // Tests for generate_action_for_selector function
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_show_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "show", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ActionType :: Style"));
+        assert!(result_str.contains("Visibility :: Visible"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_show_with_args_returns_error() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let args = vec![Expression::Literal(Literal::String("extra".to_string()))];
+        let result = generate_action_for_selector(&mut context, &selector, "show", &args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects no arguments"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_hide_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "hide", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ActionType :: Style"));
+        assert!(result_str.contains("Visibility :: Hidden"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_toggle_visibility_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result =
+            generate_action_for_selector(&mut context, &selector, "toggle_visibility", &[])
+                .unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("toggle_visibility_selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_set_visibility_with_correct_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let args = vec![Expression::Variable("Visibility::Hidden".to_string())];
+        let result =
+            generate_action_for_selector(&mut context, &selector, "set_visibility", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetVisibility"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_set_visibility_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "set_visibility", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_focus_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "focus", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Focus"));
+        assert!(result_str.contains("Selector"));
+        assert!(result_str.contains("focus : true"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_display_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay (true)"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_no_display_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result =
+            generate_action_for_selector(&mut context, &selector, "no_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay (false)"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_toggle_display_no_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result =
+            generate_action_for_selector(&mut context, &selector, "toggle_display", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ToggleDisplay"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_set_display_with_correct_args() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let args = vec![Expression::Literal(Literal::Bool(true))];
+        let result =
+            generate_action_for_selector(&mut context, &selector, "set_display", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("SetDisplay"));
+        assert!(result_str.contains("Selector"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_set_display_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "set_display", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    #[test_log::test]
+    fn test_generate_action_for_selector_unknown_method_returns_error() {
+        let mut context = Context::default();
+        let selector = quote! { ".my-class" };
+        let result = generate_action_for_selector(&mut context, &selector, "unknown_method", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown method"));
+    }
 }
