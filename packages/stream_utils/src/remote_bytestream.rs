@@ -1485,4 +1485,196 @@ mod tests {
         // Verify position was updated
         assert_eq!(stream.read_position, 500);
     }
+
+    /// Test stream with unknown size handles premature end gracefully
+    #[test_log::test(switchy_async::test)]
+    async fn test_unknown_size_stream_end() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("complete data")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            None,  // Unknown size
+            true,  // Auto-start fetch
+            false, // Not seekable (unknown size)
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read all data
+        let mut buf = [0u8; 20];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 13);
+        assert_eq!(&buf[..bytes_read], b"complete data");
+
+        // Stream should finish gracefully without error
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 0);
+        assert!(stream.finished);
+    }
+
+    // ==== Chunked Data Delivery Tests ====
+
+    /// HTTP fetcher that delivers data in multiple small chunks
+    #[derive(Clone)]
+    struct ChunkedHttpFetcher {
+        chunks: Vec<Bytes>,
+    }
+
+    impl ChunkedHttpFetcher {
+        pub fn new(chunks: Vec<&[u8]>) -> Self {
+            Self {
+                chunks: chunks.into_iter().map(Bytes::copy_from_slice).collect(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HttpFetcher for ChunkedHttpFetcher {
+        async fn fetch_range(
+            &self,
+            _url: &str,
+            _start: u64,
+            _end: Option<u64>,
+        ) -> Result<
+            Box<
+                dyn futures::Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send
+                    + Unpin,
+            >,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            let chunks = self.chunks.clone();
+            let stream = stream::iter(chunks.into_iter().map(Ok));
+            Ok(Box::new(Box::pin(stream)))
+        }
+    }
+
+    /// Test that multiple small chunks are properly accumulated and read
+    #[test_log::test(switchy_async::test)]
+    async fn test_chunked_data_accumulation() {
+        let abort_token = CancellationToken::new();
+        let fetcher =
+            ChunkedHttpFetcher::new(vec![b"chunk1", b"chunk2", b"chunk3", b"chunk4", b"chunk5"]);
+        let total_size = 30; // 6*5 = 30 bytes
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(total_size),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read all chunks in one large buffer
+        let mut buf = [0u8; 50];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 30);
+        assert_eq!(&buf[..bytes_read], b"chunk1chunk2chunk3chunk4chunk5");
+
+        assert!(stream.finished);
+    }
+
+    /// Test reading chunks one at a time with small buffer
+    #[test_log::test(switchy_async::test)]
+    async fn test_chunked_data_small_buffer_reads() {
+        let abort_token = CancellationToken::new();
+        let fetcher = ChunkedHttpFetcher::new(vec![b"AAAA", b"BBBB", b"CCCC"]);
+        let total_size = 12;
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(total_size),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read with buffer smaller than a single chunk
+        let mut all_data = Vec::new();
+        loop {
+            let mut buf = [0u8; 3]; // Smaller than chunk size
+            let bytes_read = stream.read(&mut buf).unwrap();
+            if bytes_read == 0 {
+                break;
+            }
+            all_data.extend_from_slice(&buf[..bytes_read]);
+        }
+
+        assert_eq!(all_data, b"AAAABBBBCCCC");
+        assert!(stream.finished);
+    }
+
+    // ==== Seek After Read Tests ====
+
+    /// Test seeking after partial read preserves and reuses buffer data
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_after_partial_read_within_buffer() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("0123456789ABCDEFGHIJ")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(20),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read first 10 bytes
+        let mut buf = [0u8; 10];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 10);
+        assert_eq!(&buf[..bytes_read], b"0123456789");
+
+        // Seek back to beginning (still within buffer)
+        stream.seek(SeekFrom::Start(0)).unwrap();
+        assert_eq!(stream.read_position, 0);
+        assert!(!stream.finished);
+
+        // Read again - should get same data from buffer
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 10);
+        assert_eq!(&buf2[..bytes_read2], b"0123456789");
+    }
+
+    /// Test seeking to middle of buffer and reading
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_to_middle_of_buffer() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("ABCDEFGHIJKLMNOP")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(16),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read all data to fill buffer
+        let mut buf = [0u8; 20];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 16);
+
+        // Seek to position 5
+        stream.seek(SeekFrom::Start(5)).unwrap();
+
+        // Read from middle
+        let mut buf2 = [0u8; 5];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 5);
+        assert_eq!(&buf2[..bytes_read2], b"FGHIJ");
+    }
 }

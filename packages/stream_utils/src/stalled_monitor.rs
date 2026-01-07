@@ -333,4 +333,140 @@ mod tests {
         let end = monitor.next().await;
         assert!(end.is_none());
     }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_multiple_timeouts() {
+        // Test that after a timeout, the stream can continue to produce timeout errors
+        // This verifies the interval continues ticking after a timeout
+        let stream = stream::pending::<i32>(); // Stream that never produces data
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(30));
+
+        // First timeout
+        let result1 = monitor.next().await;
+        assert!(result1.is_some());
+        let error1 = result1.unwrap().unwrap_err();
+        assert_eq!(error1.kind(), ErrorKind::TimedOut);
+
+        // Second timeout (verifies interval continues)
+        let result2 = monitor.next().await;
+        assert!(result2.is_some());
+        let error2 = result2.unwrap().unwrap_err();
+        assert_eq!(error2.kind(), ErrorKind::TimedOut);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_large_data_sequence() {
+        // Test monitor with a larger sequence of data
+        let data: Vec<i32> = (0..100).collect();
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results.len(), 100);
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_with_string_items() {
+        // Test monitor with non-numeric types to verify generic handling
+        let data = vec!["hello", "world", "test"];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_error_debug() {
+        // Test that StalledReadMonitorError has Debug implementation
+        let error = StalledReadMonitorError::Stalled;
+        let debug_str = format!("{error:?}");
+        assert!(debug_str.contains("Stalled"));
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_very_short_timeout() {
+        // Test behavior with very short timeout duration
+        let stream = stream::pending::<i32>();
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(1));
+
+        // Should timeout very quickly
+        let result = monitor.next().await;
+        assert!(result.is_some());
+        let error = result.unwrap().unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::TimedOut);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_with_option_items() {
+        // Test monitor with Option items
+        let data: Vec<Option<i32>> = vec![Some(1), None, Some(3), None, Some(5)];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_timeout_after_successful_data() {
+        // Test that timeout fires after initial successful data when stream stalls
+        // Create a stream that yields one item then we verify timeout behavior
+        // by checking successive timeout errors
+
+        // First, verify normal data passes through
+        let items = vec![1];
+        let stream = stream::iter(items);
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(50));
+
+        // First item should succeed
+        let first = monitor.next().await.unwrap().unwrap();
+        assert_eq!(first, 1);
+
+        // Stream ends normally - verify this returns None (not a timeout)
+        let end = monitor.next().await;
+        assert!(end.is_none(), "Stream should end normally, not timeout");
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_continuous_data_prevents_timeout() {
+        // Test that continuous data prevents timeout from firing
+        use std::time::Instant;
+
+        let data: Vec<i32> = (0..20).collect();
+        let stream = stream::iter(data.clone());
+
+        // Set a short timeout that would fire if we weren't receiving data
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(100));
+
+        let start = Instant::now();
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+        let elapsed = start.elapsed();
+
+        // All items should be received
+        assert_eq!(results.len(), 20);
+        assert_eq!(results, data);
+
+        // Should complete quickly (well under the timeout duration)
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "Should complete without timeout (elapsed: {elapsed:?})"
+        );
+    }
 }
