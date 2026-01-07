@@ -756,4 +756,34 @@ mod tests {
             assert!(!reservation_is_free(&reserved, port));
         }
     }
+
+    #[test_log::test]
+    fn test_empty_range_reservation() {
+        // Test with an empty exclusive range (start == end)
+        let range = 15000..15000;
+        let reservation = PortReservation::new(range);
+
+        // Reserving from an empty range should return None
+        assert!(reservation.reserve_port().is_none());
+
+        // reserve_ports should return empty vec
+        let ports = reservation.reserve_ports(5);
+        assert!(ports.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_is_free_after_reserve_and_release() {
+        let range = next_port_range(100);
+        let reservation = PortReservation::new(range);
+
+        // Initially, port should be free (from reservation perspective)
+        let port = reservation.reserve_port().unwrap();
+
+        // After reserving, port should not be free
+        assert!(!reservation.is_free(port));
+
+        // After releasing, port should be free again
+        reservation.release_port(port);
+        assert!(reservation.is_free(port));
+    }
 }
