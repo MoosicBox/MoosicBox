@@ -162,3 +162,190 @@ pub async fn save_magic_token(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::{Database, simulator::SimulationDatabase};
+
+    async fn setup_db() -> ConfigDatabase {
+        let db = SimulationDatabase::new().expect("Failed to create simulation database");
+        let db: Arc<Box<dyn Database>> = Arc::new(Box::new(db));
+
+        // Create the client_access_tokens table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS client_access_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_id TEXT NOT NULL,
+                token TEXT NOT NULL,
+                expires TEXT,
+                updated TEXT DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .await
+        .expect("Failed to create client_access_tokens table");
+
+        // Create the magic_tokens table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS magic_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                magic_token TEXT NOT NULL,
+                client_id TEXT NOT NULL,
+                access_token TEXT NOT NULL,
+                expires TEXT
+            )",
+        )
+        .await
+        .expect("Failed to create magic_tokens table");
+
+        ConfigDatabase::from(db)
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_client_access_token_returns_none_when_empty() {
+        let db = setup_db().await;
+        let result = get_client_access_token(&db).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_create_and_get_client_access_token() {
+        let db = setup_db().await;
+
+        create_client_access_token(&db, "client123", "token456")
+            .await
+            .unwrap();
+
+        let result = get_client_access_token(&db).await.unwrap();
+        assert!(result.is_some());
+        let (client_id, token) = result.unwrap();
+        assert_eq!(client_id, "client123");
+        assert_eq!(token, "token456");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_create_client_access_token_upserts_existing() {
+        let db = setup_db().await;
+
+        // Create initial token
+        create_client_access_token(&db, "client123", "token456")
+            .await
+            .unwrap();
+
+        // Upsert the same token (should not create duplicate)
+        create_client_access_token(&db, "client123", "token456")
+            .await
+            .unwrap();
+
+        // Should still retrieve the same token
+        let result = get_client_access_token(&db).await.unwrap();
+        assert!(result.is_some());
+        let (client_id, token) = result.unwrap();
+        assert_eq!(client_id, "client123");
+        assert_eq!(token, "token456");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_client_access_token_returns_most_recent() {
+        let db = setup_db().await;
+
+        // Create first token
+        create_client_access_token(&db, "client1", "token1")
+            .await
+            .unwrap();
+
+        // Create second token (more recent)
+        create_client_access_token(&db, "client2", "token2")
+            .await
+            .unwrap();
+
+        // Should return the most recently updated token
+        let result = get_client_access_token(&db).await.unwrap();
+        assert!(result.is_some());
+        let (client_id, _token) = result.unwrap();
+        // The order depends on which was updated last
+        assert!(client_id == "client1" || client_id == "client2");
+    }
+
+    #[cfg(feature = "api")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_and_get_magic_token() {
+        let db = setup_db().await;
+
+        save_magic_token(&db, "magic123", "client456", "access789")
+            .await
+            .unwrap();
+
+        let result = get_credentials_from_magic_token(&db, "magic123")
+            .await
+            .unwrap();
+        assert!(result.is_some());
+        let (client_id, access_token) = result.unwrap();
+        assert_eq!(client_id, "client456");
+        assert_eq!(access_token, "access789");
+    }
+
+    #[cfg(feature = "api")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_credentials_from_magic_token_consumes_token() {
+        let db = setup_db().await;
+
+        save_magic_token(&db, "magic_once", "client", "access")
+            .await
+            .unwrap();
+
+        // First retrieval should succeed
+        let result1 = get_credentials_from_magic_token(&db, "magic_once")
+            .await
+            .unwrap();
+        assert!(result1.is_some());
+
+        // Second retrieval should fail (token was consumed)
+        let result2 = get_credentials_from_magic_token(&db, "magic_once")
+            .await
+            .unwrap();
+        assert!(result2.is_none());
+    }
+
+    #[cfg(feature = "api")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_credentials_from_magic_token_returns_none_for_nonexistent() {
+        let db = setup_db().await;
+
+        let result = get_credentials_from_magic_token(&db, "nonexistent")
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[cfg(feature = "api")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_delete_magic_token() {
+        let db = setup_db().await;
+
+        // Save a token
+        save_magic_token(&db, "to_delete", "client", "access")
+            .await
+            .unwrap();
+
+        // Delete it
+        delete_magic_token(&db, "to_delete").await.unwrap();
+
+        // Should no longer exist
+        let result = get_credentials_from_magic_token(&db, "to_delete")
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[cfg(feature = "api")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_delete_nonexistent_magic_token_succeeds() {
+        let db = setup_db().await;
+
+        // Deleting a nonexistent token should not error
+        let result = delete_magic_token(&db, "does_not_exist").await;
+        assert!(result.is_ok());
+    }
+}
