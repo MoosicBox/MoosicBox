@@ -2012,6 +2012,128 @@ mod tests {
             };
             assert_eq!(expression_to_js(&expr), "(- 42)");
         }
+
+        #[test_log::test]
+        fn test_expression_element_by_id_ref_literal() {
+            let expr = Expression::ElementByIdRef(Box::new(Expression::Literal(Literal::String(
+                "myElement".to_string(),
+            ))));
+            assert_eq!(
+                expression_to_js(&expr),
+                "document.getElementById('myElement')"
+            );
+        }
+
+        #[test_log::test]
+        fn test_expression_element_by_id_ref_variable() {
+            let expr =
+                Expression::ElementByIdRef(Box::new(Expression::Variable("elementId".to_string())));
+            assert_eq!(
+                expression_to_js(&expr),
+                "document.getElementById(elementId)"
+            );
+        }
+
+        #[test_log::test]
+        fn test_expression_range_both_none() {
+            let expr = Expression::Range {
+                start: None,
+                end: None,
+                inclusive: false,
+            };
+            assert_eq!(expression_to_js(&expr), "ctx.range(0,0,false)");
+        }
+
+        #[test_log::test]
+        fn test_expression_range_both_none_inclusive() {
+            let expr = Expression::Range {
+                start: None,
+                end: None,
+                inclusive: true,
+            };
+            assert_eq!(expression_to_js(&expr), "ctx.range(0,0,true)");
+        }
+
+        #[test_log::test]
+        fn test_expression_chained_method_calls() {
+            // Test obj.method1().method2()
+            let expr = Expression::MethodCall {
+                receiver: Box::new(Expression::MethodCall {
+                    receiver: Box::new(Expression::Variable("obj".to_string())),
+                    method: "first".to_string(),
+                    args: vec![],
+                }),
+                method: "second".to_string(),
+                args: vec![Expression::Literal(Literal::Integer(1))],
+            };
+            assert_eq!(expression_to_js(&expr), "obj.first().second(1)");
+        }
+
+        #[test_log::test]
+        fn test_expression_field_after_method() {
+            // Test obj.method().field
+            let expr = Expression::Field {
+                object: Box::new(Expression::MethodCall {
+                    receiver: Box::new(Expression::Variable("obj".to_string())),
+                    method: "getData".to_string(),
+                    args: vec![],
+                }),
+                field: "value".to_string(),
+            };
+            assert_eq!(expression_to_js(&expr), "obj.getData().value");
+        }
+
+        #[test_log::test]
+        fn test_expression_method_on_field() {
+            // Test obj.field.method()
+            let expr = Expression::MethodCall {
+                receiver: Box::new(Expression::Field {
+                    object: Box::new(Expression::Variable("obj".to_string())),
+                    field: "inner".to_string(),
+                }),
+                method: "process".to_string(),
+                args: vec![],
+            };
+            assert_eq!(expression_to_js(&expr), "obj.inner.process()");
+        }
+
+        #[test_log::test]
+        fn test_expression_deeply_nested_binary() {
+            // Test ((1 + 2) * 3) / 4
+            let add = Expression::Binary {
+                left: Box::new(Expression::Literal(Literal::Integer(1))),
+                op: BinaryOp::Add,
+                right: Box::new(Expression::Literal(Literal::Integer(2))),
+            };
+            let mult = Expression::Binary {
+                left: Box::new(add),
+                op: BinaryOp::Multiply,
+                right: Box::new(Expression::Literal(Literal::Integer(3))),
+            };
+            let expr = Expression::Binary {
+                left: Box::new(mult),
+                op: BinaryOp::Divide,
+                right: Box::new(Expression::Literal(Literal::Integer(4))),
+            };
+            assert_eq!(expression_to_js(&expr), "(((1 + 2) * 3) / 4)");
+        }
+
+        #[test_log::test]
+        fn test_expression_if_with_complex_condition() {
+            let expr = Expression::If {
+                condition: Box::new(Expression::Binary {
+                    left: Box::new(Expression::Variable("x".to_string())),
+                    op: BinaryOp::Greater,
+                    right: Box::new(Expression::Literal(Literal::Integer(0))),
+                }),
+                then_branch: Box::new(Expression::Variable("x".to_string())),
+                else_branch: Some(Box::new(Expression::Unary {
+                    op: UnaryOp::Minus,
+                    expr: Box::new(Expression::Variable("x".to_string())),
+                })),
+            };
+            assert_eq!(expression_to_js(&expr), "if((x > 0)){x}else {(- x)}");
+        }
     }
 
     #[cfg(test)]
@@ -2492,6 +2614,196 @@ mod tests {
             assert!(result.contains("if(true)"));
             // Logic actions return Some("") when there are resets
             assert_eq!(reset, Some(String::new()));
+        }
+
+        #[test_log::test]
+        fn test_action_multi_mixed_resettable_actions() {
+            // Test Multi with some actions that have reset and some that don't
+            let action = ActionType::Multi(vec![
+                ActionType::Log {
+                    message: "no reset".to_string(),
+                    level: LogLevel::Info,
+                },
+                ActionType::Style {
+                    target: ElementTarget::SelfTarget,
+                    action: StyleAction::SetVisibility(Visibility::Visible),
+                },
+                ActionType::Navigate {
+                    url: "/home".to_string(),
+                },
+            ]);
+            let (result, reset) = action_to_js(&action, true);
+            // Result should have all actions
+            assert!(result.contains("console.log"));
+            assert!(result.contains("visibility"));
+            assert!(result.contains("navigate"));
+            // Reset should only contain the visibility reset
+            assert!(reset.is_some());
+            let reset_str = reset.unwrap();
+            assert!(reset_str.contains("visibility"));
+            assert!(!reset_str.contains("console"));
+            assert!(!reset_str.contains("navigate"));
+        }
+
+        #[test_log::test]
+        fn test_action_multi_effect_mixed_resettable() {
+            // Test MultiEffect with some effects having reset
+            let action = ActionType::MultiEffect(vec![
+                ActionEffect {
+                    action: ActionType::Log {
+                        message: "log".to_string(),
+                        level: LogLevel::Info,
+                    },
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                },
+                ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::SelfTarget,
+                        action: StyleAction::SetDisplay(true),
+                    },
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                },
+            ]);
+            let (result, reset) = action_to_js(&action, true);
+            assert!(result.contains("console.log"));
+            assert!(result.contains("display"));
+            // Reset should only have the display reset
+            assert!(reset.is_some());
+            let reset_str = reset.unwrap();
+            assert!(reset_str.contains("display"));
+        }
+
+        #[test_log::test]
+        fn test_action_logic_else_only_reset() {
+            // Test Logic where only else branch has resettable actions
+            let action = ActionType::Logic(If {
+                condition: Condition::Bool(true),
+                actions: vec![ActionEffect {
+                    action: ActionType::Log {
+                        message: "true branch".to_string(),
+                        level: LogLevel::Info,
+                    },
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                }],
+                else_actions: vec![ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::SelfTarget,
+                        action: StyleAction::SetBackground(Some("red".to_string())),
+                    },
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                }],
+            });
+            let (result, reset) = action_to_js(&action, true);
+            assert!(result.contains("console.log"));
+            assert!(result.contains("background"));
+            // Should have Some("") because false branch has reset
+            assert_eq!(reset, Some(String::new()));
+        }
+
+        #[test_log::test]
+        fn test_action_logic_with_calc_condition() {
+            // Test Logic with a CalcValue condition
+            let action = ActionType::Logic(If {
+                condition: Condition::Eq(
+                    Value::Calc(CalcValue::EventValue),
+                    Value::String("expected".to_string()),
+                ),
+                actions: vec![ActionEffect {
+                    action: ActionType::NoOp,
+                    throttle: None,
+                    delay_off: None,
+                    unique: None,
+                }],
+                else_actions: vec![],
+            });
+            let (result, _) = action_to_js(&action, true);
+            assert!(result.contains("ctx.value"));
+            assert!(result.contains("'expected'"));
+        }
+
+        #[test_log::test]
+        fn test_action_parameterized_with_newlines() {
+            // Test that newlines in custom action are properly escaped
+            // Inner Custom action converts \n to &#10;
+            // Then Parameterized runs html_escape on it, converting & to &amp;
+            let action = ActionType::Parameterized {
+                action: Box::new(ActionType::Custom {
+                    action: "line1();\nline2();".to_string(),
+                }),
+                value: Value::Real(1.0),
+            };
+            let (result, _) = action_to_js(&action, true);
+            // After double escaping: \n -> &#10; -> &amp;#10;
+            assert!(
+                result.contains("&amp;#10;"),
+                "Expected newlines to be double-escaped as &amp;#10;, got: {result}"
+            );
+            assert!(
+                !result.contains('\n'),
+                "Should not contain literal newlines"
+            );
+        }
+
+        #[test_log::test]
+        fn test_action_custom_with_newlines() {
+            // Test that newlines in custom action are properly escaped
+            let action = ActionType::Custom {
+                action: "doSomething();\nalert('test');".to_string(),
+            };
+            let (result, _) = action_to_js(&action, true);
+            // Newlines should be encoded as &#10;
+            assert!(result.contains("&#10;"));
+            assert!(!result.contains('\n'));
+        }
+
+        #[test_log::test]
+        fn test_action_let_with_complex_expression() {
+            // Test Let action with a complex expression
+            let action = ActionType::Let {
+                name: "result".to_string(),
+                value: Expression::Binary {
+                    left: Box::new(Expression::Variable("a".to_string())),
+                    op: BinaryOp::Add,
+                    right: Box::new(Expression::Variable("b".to_string())),
+                },
+            };
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "let result=(a + b);");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
+        fn test_action_nested_multi() {
+            // Test nested Multi actions
+            let inner_multi = ActionType::Multi(vec![
+                ActionType::Log {
+                    message: "inner1".to_string(),
+                    level: LogLevel::Info,
+                },
+                ActionType::Log {
+                    message: "inner2".to_string(),
+                    level: LogLevel::Debug,
+                },
+            ]);
+            let action = ActionType::Multi(vec![
+                ActionType::Log {
+                    message: "outer".to_string(),
+                    level: LogLevel::Info,
+                },
+                inner_multi,
+            ]);
+            let (result, _) = action_to_js(&action, true);
+            assert!(result.contains("outer"));
+            assert!(result.contains("inner1"));
+            assert!(result.contains("inner2"));
         }
     }
 
@@ -3225,6 +3537,71 @@ mod tests {
             let result = calc_value_to_js(&calc, false);
             assert!(result.contains("[document.getElementById(myRef)]"));
             assert!(result.contains("getBoundingClientRect().left"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_data_attr_with_underscores() {
+            // Underscores should also be converted to camelCase
+            let calc = CalcValue::DataAttrValue {
+                target: ElementTarget::SelfTarget,
+                attr: "my_custom_data".to_string(),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(
+                result.contains(".dataset.myCustomData"),
+                "Expected underscore conversion to camelCase, got: {result}"
+            );
+        }
+
+        #[test_log::test]
+        fn test_calc_value_data_attr_uppercase() {
+            // SCREAMING_CASE should be converted to lowercase camelCase
+            let calc = CalcValue::DataAttrValue {
+                target: ElementTarget::SelfTarget,
+                attr: "MY_CUSTOM_ATTR".to_string(),
+            };
+            let result = calc_value_to_js(&calc, false);
+            // convert_case::Camel converts MY_CUSTOM_ATTR to myCustomAttr
+            assert!(result.contains(".dataset.myCustomAttr"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_data_attr_simple_name() {
+            // Simple single-word attribute without separators
+            let calc = CalcValue::DataAttrValue {
+                target: ElementTarget::SelfTarget,
+                attr: "value".to_string(),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains(".dataset.value"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_with_selector_target() {
+            let calc = CalcValue::Display {
+                target: ElementTarget::Selector(Target::Literal("#my-selector".to_string())),
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert!(result.contains("querySelectorAll('#my-selector')"));
+            assert!(result.contains(".style.display"));
+        }
+
+        #[test_log::test]
+        fn test_calc_value_visibility_with_self_target() {
+            let calc = CalcValue::Visibility {
+                target: ElementTarget::SelfTarget,
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert_eq!(result, "[ctx.element][0]?.style.visibility");
+        }
+
+        #[test_log::test]
+        fn test_calc_value_id_with_self_target() {
+            let calc = CalcValue::Id {
+                target: ElementTarget::SelfTarget,
+            };
+            let result = calc_value_to_js(&calc, false);
+            assert_eq!(result, "[ctx.element][0]?.id");
         }
     }
 
