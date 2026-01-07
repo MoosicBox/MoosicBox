@@ -1716,4 +1716,103 @@ mod tests {
         assert_eq!(result.artist, "Famous Artist");
         assert!(result.artist_cover.is_none());
     }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_some_values() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: Some("conn-123".to_string()),
+            connection_name: Some("My Connection".to_string()),
+            api_url: Some("http://localhost:8080".to_string()),
+            client_id: Some("client-abc".to_string()),
+            signature_token: Some("sig-xyz".to_string()),
+            api_token: Some("token-123".to_string()),
+            profile: Some("default".to_string()),
+            playback_target: Some(PlaybackTarget::default()),
+            current_session_id: Some(42),
+        };
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // All values should be wrapped in Some(Some(...))
+        assert_eq!(result.connection_id, Some(Some("conn-123".to_string())));
+        assert_eq!(
+            result.connection_name,
+            Some(Some("My Connection".to_string()))
+        );
+        assert_eq!(
+            result.api_url,
+            Some(Some("http://localhost:8080".to_string()))
+        );
+        assert_eq!(result.client_id, Some(Some("client-abc".to_string())));
+        assert_eq!(result.signature_token, Some(Some("sig-xyz".to_string())));
+        assert_eq!(result.api_token, Some(Some("token-123".to_string())));
+        assert_eq!(result.profile, Some(Some("default".to_string())));
+        assert!(result.playback_target.is_some());
+        assert!(result.playback_target.unwrap().is_some());
+        assert_eq!(result.current_session_id, Some(Some(42)));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_none_values() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: None,
+            connection_name: None,
+            api_url: None,
+            client_id: None,
+            signature_token: None,
+            api_token: None,
+            profile: None,
+            playback_target: None,
+            current_session_id: None,
+        };
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // None values should become Some(None) to indicate "clear this field"
+        assert_eq!(result.connection_id, Some(None));
+        assert_eq!(result.connection_name, Some(None));
+        assert_eq!(result.api_url, Some(None));
+        assert_eq!(result.client_id, Some(None));
+        assert_eq!(result.signature_token, Some(None));
+        assert_eq!(result.api_token, Some(None));
+        assert_eq!(result.profile, Some(None));
+        assert_eq!(result.playback_target, Some(None));
+        assert_eq!(result.current_session_id, Some(None));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_mixed_values() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: Some("active-conn".to_string()),
+            connection_name: None,
+            api_url: Some("http://api.example.com".to_string()),
+            client_id: None,
+            signature_token: Some("my-signature".to_string()),
+            api_token: None,
+            profile: Some("user-profile".to_string()),
+            playback_target: None,
+            current_session_id: Some(100),
+        };
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // Some values should be wrapped in Some(Some(...))
+        assert_eq!(result.connection_id, Some(Some("active-conn".to_string())));
+        assert_eq!(
+            result.api_url,
+            Some(Some("http://api.example.com".to_string()))
+        );
+        assert_eq!(
+            result.signature_token,
+            Some(Some("my-signature".to_string()))
+        );
+        assert_eq!(result.profile, Some(Some("user-profile".to_string())));
+        assert_eq!(result.current_session_id, Some(Some(100)));
+
+        // None values should become Some(None)
+        assert_eq!(result.connection_name, Some(None));
+        assert_eq!(result.client_id, Some(None));
+        assert_eq!(result.api_token, Some(None));
+        assert_eq!(result.playback_target, Some(None));
+    }
 }
