@@ -1451,4 +1451,68 @@ mod tests {
             assert_eq!(*value, 127);
         }
     }
+
+    #[test_log::test]
+    fn test_track_source_to_content_type_local_file_source_format() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Source,
+            path: "/music/track.flac".to_string(),
+            track_id: Some("123".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        // Source format returns None (format unknown until file is read)
+        assert_eq!(track_source_to_content_type(&source), None);
+    }
+
+    #[cfg(feature = "format-flac")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_local_file_flac() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Flac,
+            path: "/music/track.flac".to_string(),
+            track_id: Some("123".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/flac".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-mp3")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_url_mp3() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Mp3,
+            url: "https://example.com/track.mp3".to_string(),
+            track_id: Some("456".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: None,
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/mp3".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_url_source_format() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Source,
+            url: "https://example.com/track.unknown".to_string(),
+            track_id: None,
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: Some(vec![("Authorization".to_string(), "Bearer x".to_string())]),
+        };
+        // Source format returns None
+        assert_eq!(track_source_to_content_type(&source), None);
+    }
 }
