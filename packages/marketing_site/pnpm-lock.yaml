@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.2
         version: 6.83.2(typescript@5.9.3)
       '@pulumi/pulumi':
-        specifier: ^3.214.1
-        version: 3.214.1(typescript@5.9.3)
+        specifier: ^3.215.0
+        version: 3.215.0(typescript@5.9.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -308,8 +308,8 @@ packages:
   '@pulumi/aws@6.83.2':
     resolution: {integrity: sha512-FggAx+LxANUwD9KPlKy4U8uvVjhR8B6vw+doDq7zP3bRWz7CCCd4sXZT2k/ou0erZN78MTzOXYa1nsN0TBEDJg==}
 
-  '@pulumi/pulumi@3.214.1':
-    resolution: {integrity: sha512-SgUrYq6tRn8EeZ0PszVVXVfeCms/tUkjLnt9pcRp/f9+5fIDKy8ak3ehlJcdqQCEOsn9lg/q/mZBjqy7CaPB7g==}
+  '@pulumi/pulumi@3.215.0':
+    resolution: {integrity: sha512-Q4yx/CUyyX8iHRGS4OpUNdS8ZxRnGRADsh6XrqBfqXzrWOd2K3SIivVPDwCKgcIFpHm/WgN6UTSYba0m7aLmjw==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -569,8 +569,8 @@ packages:
     resolution: {integrity: sha512-cMtq4W5ZsEwcutJrVId+a/tjt8GSbS+h0oNkdl6+6rBuEv8Ot33Bevj5KPm40t309zuhVic8NjpuL42QCiJWWA==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  body-parser@2.2.1:
-    resolution: {integrity: sha512-nfDwkulwiZYQIGwxdy0RUmowMhKcFVcYXUU7m4QlKYim1rUtg83xm2yjZ40QjDuc291AJjjeSc9b++AWHSgSHw==}
+  body-parser@2.2.2:
+    resolution: {integrity: sha512-oP5VkATKlNwcgvxi0vM0p/D3n2C3EReYVX+DNYs5TjZFn/oQt2j+4sVJtSMr18pdRr8wjTcBl6LoV+FUwzPmNA==}
     engines: {node: '>=18'}
 
   brace-expansion@1.1.12:
@@ -2608,7 +2608,7 @@ snapshots:
 
   '@pulumi/aws@6.83.2(typescript@5.9.3)':
     dependencies:
-      '@pulumi/pulumi': 3.214.1(typescript@5.9.3)
+      '@pulumi/pulumi': 3.215.0(typescript@5.9.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - bluebird
@@ -2616,7 +2616,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.214.1(typescript@5.9.3)':
+  '@pulumi/pulumi@3.215.0(typescript@5.9.3)':
     dependencies:
       '@grpc/grpc-js': 1.14.3
       '@logdna/tail-file': 2.2.0
@@ -2958,7 +2958,7 @@ snapshots:
       read-cmd-shim: 4.0.0
       write-file-atomic: 5.0.1
 
-  body-parser@2.2.1:
+  body-parser@2.2.2:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
@@ -3432,7 +3432,7 @@ snapshots:
   express@5.2.1:
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.2.1
+      body-parser: 2.2.2
       content-disposition: 1.0.1
       content-type: 1.0.5
       cookie: 0.7.2
