@@ -122,8 +122,8 @@ packages:
     peerDependencies:
       '@csstools/css-tokenizer': ^3.0.4
 
-  '@csstools/css-syntax-patches-for-csstree@1.0.23':
-    resolution: {integrity: sha512-YEmgyklR6l/oKUltidNVYdjSmLSW88vMsKx0pmiS3r71s8ZZRpd8A0Yf0U+6p/RzElmMnPBv27hNWjDQMSZRtQ==}
+  '@csstools/css-syntax-patches-for-csstree@1.0.24':
+    resolution: {integrity: sha512-T0pSTcd9eYEHV+llVPSkZU7URdVGu87BpSvozMwRoLJYXmLXvEHgYfv0yDsQH9+DIdLzkJCOJBABqWWnwTGPvg==}
     engines: {node: '>=18'}
 
   '@csstools/css-tokenizer@3.0.4':
@@ -2026,7 +2026,7 @@ snapshots:
     dependencies:
       '@csstools/css-tokenizer': 3.0.4
 
-  '@csstools/css-syntax-patches-for-csstree@1.0.23': {}
+  '@csstools/css-syntax-patches-for-csstree@1.0.24': {}
 
   '@csstools/css-tokenizer@3.0.4': {}
 
@@ -2654,7 +2654,7 @@ snapshots:
   cssstyle@5.3.7:
     dependencies:
       '@asamuzakjp/css-color': 4.1.1
-      '@csstools/css-syntax-patches-for-csstree': 1.0.23
+      '@csstools/css-syntax-patches-for-csstree': 1.0.24
       css-tree: 3.1.0
       lru-cache: 11.2.4
 
