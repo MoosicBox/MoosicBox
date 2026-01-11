@@ -215,17 +215,70 @@ mod tests {
         }
 
         #[test_log::test]
-        fn plan_does_not_clear_when_generating_more_interactions() {
+        fn gen_interactions_appends_to_existing_plan_without_clearing() {
             let mut plan = FaultInjectionInteractionPlan::new();
             plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
             plan.add_interaction(Interaction::Bounce("initial".to_string()));
             let initial_len = plan.plan.len();
 
-            // FaultInjectionInteractionPlan does NOT clear the plan on gen_interactions
-            // It appends to the existing plan
-            // We cannot test gen_interactions directly due to random behavior,
-            // but we can verify initial interactions are preserved
-            assert_eq!(plan.plan.len(), initial_len);
+            // Generate additional interactions - they should append, not replace
+            plan.gen_interactions(5);
+
+            // Verify initial interactions are preserved at the start
+            assert!(plan.plan.len() >= initial_len + 5);
+            assert!(
+                matches!(&plan.plan[0], Interaction::Sleep(d) if *d == Duration::from_millis(100))
+            );
+            assert!(matches!(&plan.plan[1], Interaction::Bounce(h) if h == "initial"));
+        }
+
+        #[test_log::test]
+        fn gen_interactions_preserves_step_counter() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(100)));
+            plan.add_interaction(Interaction::Sleep(Duration::from_millis(200)));
+
+            // Advance step counter
+            plan.step();
+            assert!(plan.step().is_some()); // Second interaction
+
+            // Generate more interactions
+            plan.gen_interactions(3);
+
+            // Step counter should NOT be reset, so next step should return new interactions
+            // (unlike HealthCheckInteractionPlan which resets step to 0)
+            let next = plan.step();
+            assert!(next.is_some());
+        }
+
+        #[test_log::test]
+        fn gen_interactions_generates_requested_count() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            let initial_len = plan.plan.len();
+
+            plan.gen_interactions(10);
+
+            assert_eq!(plan.plan.len(), initial_len + 10);
+        }
+
+        #[test_log::test]
+        fn gen_interactions_generates_valid_interaction_types() {
+            let mut plan = FaultInjectionInteractionPlan::new();
+            plan.gen_interactions(20);
+
+            // All generated interactions should be either Sleep or Bounce
+            for interaction in &plan.plan {
+                match interaction {
+                    Interaction::Sleep(duration) => {
+                        // Duration should be non-negative (implicitly true for Duration)
+                        assert!(*duration >= Duration::ZERO);
+                    }
+                    Interaction::Bounce(host) => {
+                        // Host should be the HOST constant
+                        assert_eq!(host, crate::host::moosicbox_server::HOST);
+                    }
+                }
+            }
         }
     }
 }

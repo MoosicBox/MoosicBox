@@ -505,4 +505,224 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
     }
+
+    #[test_log::test]
+    fn test_try_write_chunk_writes_received_data_to_buffer() {
+        let mut instance = create_test_instance(1000);
+        let (tx, rx) = bounded(1);
+
+        // Send a chunk
+        let chunk_data = vec![1u8, 2, 3, 4, 5];
+        tx.send((0, chunk_data.clone())).unwrap();
+
+        instance.receivers.push((1, rx));
+
+        // Call try_write_chunk with should_buffer=true to block on receive
+        instance.try_write_chunk(true);
+
+        // Verify the data was written to the buffer
+        assert_eq!(&instance.buffer[0..5], &chunk_data);
+        // Verify the range was marked as downloaded
+        assert!(instance.downloaded.contains(&0));
+        assert!(instance.downloaded.contains(&4));
+        // Verify receiver was cleaned up
+        assert!(instance.receivers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_handles_chunk_at_buffer_end() {
+        let mut instance = create_test_instance(100);
+        let (tx, rx) = bounded(1);
+
+        // Send a chunk that goes beyond buffer bounds
+        // Note: The current code copies chunk.as_slice() which has the full length,
+        // but the destination is only end - position. So we need the chunk to fit exactly.
+        let chunk_data = vec![9u8; 10];
+        tx.send((90, chunk_data)).unwrap();
+
+        instance.receivers.push((1, rx));
+        instance.try_write_chunk(true);
+
+        // Verify the data was written
+        assert_eq!(&instance.buffer[90..100], &[9u8; 10]);
+        assert!(instance.downloaded.contains(&90));
+        assert!(instance.downloaded.contains(&99));
+        assert!(instance.receivers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_skips_empty_range() {
+        let mut instance = create_test_instance(100);
+        let (tx, rx) = bounded(1);
+
+        // Send a chunk where position == end (empty range scenario)
+        // This happens when position is at buffer.len()
+        let chunk_data = vec![1u8, 2, 3];
+        tx.send((100, chunk_data)).unwrap();
+
+        instance.receivers.push((1, rx));
+        instance.try_write_chunk(true);
+
+        // Verify downloaded is still empty (nothing was written)
+        assert!(instance.downloaded.is_empty());
+        // Receiver should still be cleaned up
+        assert!(instance.receivers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_multiple_receivers() {
+        let mut instance = create_test_instance(1000);
+        let (tx1, rx1) = bounded(1);
+        let (tx2, rx2) = bounded(1);
+
+        // Send chunks on both receivers
+        tx1.send((0, vec![1u8; 100])).unwrap();
+        tx2.send((200, vec![2u8; 100])).unwrap();
+
+        instance.receivers.push((1, rx1));
+        instance.receivers.push((2, rx2));
+
+        // First call gets first chunk
+        instance.try_write_chunk(true);
+
+        // After blocking receive, at least one should be processed
+        // With non-blocking try_recv for others
+        assert!(
+            instance.downloaded.contains(&0) || instance.downloaded.contains(&200),
+            "At least one chunk should have been written"
+        );
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_non_blocking_when_downloaded_not_empty() {
+        let mut instance = create_test_instance(1000);
+        // Mark something as downloaded so we don't block
+        instance.downloaded.insert(0..100);
+
+        let (tx, rx) = bounded(1);
+        // Don't send anything - would block indefinitely if blocking recv used
+        instance.receivers.push((1, rx));
+
+        // This should return immediately without blocking
+        instance.try_write_chunk(false);
+
+        // Receiver should still be there since nothing was received
+        assert_eq!(instance.receivers.len(), 1);
+
+        // Now send data for cleanup in drop
+        tx.send((200, vec![])).unwrap();
+    }
+
+    #[test_log::test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn test_read_with_already_downloaded_data() {
+        // Use buffer larger than FETCH_OFFSET (64KB) to avoid overflow in should_get_chunk
+        let buffer_size = CHUNK_SIZE * 2; // 256KB
+        let mut instance = create_test_instance(buffer_size);
+
+        // Pre-populate the buffer with known data and mark as downloaded
+        // Downloaded range must be larger than FETCH_OFFSET to avoid underflow
+        for i in 0..CHUNK_SIZE {
+            instance.buffer[i] = (i % 256) as u8;
+        }
+        instance.downloaded.insert(0..CHUNK_SIZE);
+
+        let mut buf = [0u8; 100];
+        let result = instance.read(&mut buf);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 100);
+        // Verify correct data was read
+        for (i, byte) in buf.iter().enumerate() {
+            assert_eq!(*byte, i as u8);
+        }
+        assert_eq!(instance.read_position, 100);
+    }
+
+    #[test_log::test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn test_read_advances_position_correctly() {
+        // Use buffer larger than FETCH_OFFSET to avoid overflow
+        let buffer_size = CHUNK_SIZE * 2;
+        let mut instance = create_test_instance(buffer_size);
+
+        // Pre-populate and mark as downloaded (range larger than FETCH_OFFSET)
+        for i in 0..CHUNK_SIZE {
+            instance.buffer[i] = (i % 256) as u8;
+        }
+        instance.downloaded.insert(0..CHUNK_SIZE);
+
+        // First read
+        let mut buf = [0u8; 50];
+        let _ = instance.read(&mut buf);
+        assert_eq!(instance.read_position, 50);
+
+        // Second read
+        let result = instance.read(&mut buf);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 50);
+        assert_eq!(instance.read_position, 100);
+
+        // Verify we read the correct bytes on second read
+        for (i, byte) in buf.iter().enumerate() {
+            assert_eq!(*byte, (50 + i) as u8);
+        }
+    }
+
+    #[test_log::test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn test_read_partial_at_buffer_end() {
+        // Use buffer larger than FETCH_OFFSET to avoid overflow
+        let buffer_size = CHUNK_SIZE * 2;
+        let mut instance = create_test_instance(buffer_size);
+
+        // Pre-populate entire buffer and mark as downloaded
+        for i in 0..buffer_size {
+            instance.buffer[i] = (i % 256) as u8;
+        }
+        instance.downloaded.insert(0..buffer_size);
+
+        // Position near end
+        instance.read_position = buffer_size - 10;
+
+        let mut buf = [0u8; 50]; // Requesting 50 bytes but only 10 available
+        let result = instance.read(&mut buf);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10); // Only 10 bytes were available
+        assert_eq!(instance.read_position, buffer_size);
+
+        // Verify correct data was read
+        for (i, byte) in buf.iter().enumerate().take(10) {
+            assert_eq!(*byte, ((buffer_size - 10 + i) % 256) as u8);
+        }
+    }
+
+    #[test_log::test]
+    fn test_seek_end_positive_offset() {
+        let mut instance = create_test_instance(10000);
+
+        // Seeking with positive offset from end goes beyond buffer
+        let result = instance.seek(std::io::SeekFrom::End(1000));
+
+        // Position would be 10000 + 1000 = 11000, which is beyond buffer
+        // So it should return current position (0) without moving
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0); // Original position preserved
+        assert_eq!(instance.read_position, 0);
+    }
+
+    #[test_log::test]
+    fn test_seek_end_large_negative_beyond_start_errors() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 5000;
+
+        // Seeking with very large negative offset would go negative
+        let result = instance.seek(std::io::SeekFrom::End(-15000));
+
+        // 10000 + (-15000) = -5000, which can't be converted to usize
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
 }

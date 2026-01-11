@@ -449,4 +449,151 @@ mod tests {
         let result = tx.try_send(42);
         assert!(matches!(result, Err(TrySendError::Disconnected(42))));
     }
+
+    #[test_log::test]
+    fn try_recv_error_from_recv_error_is_disconnected() {
+        // Test From<RecvError> for TryRecvError
+        let recv_err = RecvError::Disconnected;
+        let try_recv_err: TryRecvError = recv_err.into();
+        assert!(matches!(try_recv_err, TryRecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn try_recv_error_from_recv_timeout_error_is_disconnected() {
+        // Test From<RecvTimeoutError> for TryRecvError
+        // Both Timeout and Disconnected map to Disconnected
+        let timeout_err = RecvTimeoutError::Timeout;
+        let try_recv_err: TryRecvError = timeout_err.into();
+        assert!(matches!(try_recv_err, TryRecvError::Disconnected));
+
+        let disconnected_err = RecvTimeoutError::Disconnected;
+        let try_recv_err2: TryRecvError = disconnected_err.into();
+        assert!(matches!(try_recv_err2, TryRecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn recv_error_from_recv_timeout_error_is_disconnected() {
+        // Test From<RecvTimeoutError> for RecvError
+        let timeout_err = RecvTimeoutError::Timeout;
+        let recv_err: RecvError = timeout_err.into();
+        assert!(matches!(recv_err, RecvError::Disconnected));
+
+        let disconnected_err = RecvTimeoutError::Disconnected;
+        let recv_err2: RecvError = disconnected_err.into();
+        assert!(matches!(recv_err2, RecvError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn recv_timeout_error_from_recv_error_is_disconnected() {
+        // Test From<RecvError> for RecvTimeoutError
+        let recv_err = RecvError::Disconnected;
+        let timeout_err: RecvTimeoutError = recv_err.into();
+        assert!(matches!(timeout_err, RecvTimeoutError::Disconnected));
+    }
+
+    #[test_log::test]
+    fn send_error_debug_format() {
+        // Test Debug impl for SendError (only variant is Disconnected)
+        let err: SendError<i32> = SendError::Disconnected(42);
+        let debug_str = format!("{err:?}");
+        assert!(debug_str.contains("SendError::Disconnected"));
+    }
+
+    #[test_log::test]
+    fn try_send_error_debug_format() {
+        // Test Debug impl for TrySendError
+        let full_err: TrySendError<i32> = TrySendError::Full(10);
+        let debug_str = format!("{full_err:?}");
+        assert!(debug_str.contains("TrySendError::Full"));
+
+        let disconnected_err: TrySendError<i32> = TrySendError::Disconnected(20);
+        let debug_str2 = format!("{disconnected_err:?}");
+        assert!(debug_str2.contains("TrySendError::Disconnected"));
+    }
+
+    #[test_log::test]
+    fn try_send_error_from_send_error() {
+        // Test From<SendError<T>> for TrySendError<T>
+        let send_err: SendError<i32> = SendError::Disconnected(42);
+        let try_send_err: TrySendError<i32> = send_err.into();
+        assert!(matches!(try_send_err, TrySendError::Disconnected(42)));
+    }
+
+    #[test_log::test]
+    fn recv_error_display() {
+        assert_eq!(RecvError::Disconnected.to_string(), "Disconnected");
+    }
+
+    #[test_log::test]
+    fn try_recv_error_display() {
+        assert_eq!(TryRecvError::Empty.to_string(), "Empty");
+        assert_eq!(TryRecvError::Disconnected.to_string(), "Disconnected");
+    }
+
+    #[test_log::test]
+    fn recv_timeout_error_display() {
+        assert_eq!(RecvTimeoutError::Timeout.to_string(), "Timeout");
+        assert_eq!(RecvTimeoutError::Disconnected.to_string(), "Disconnected");
+    }
+
+    #[test_log::test]
+    fn send_error_display() {
+        let err: SendError<i32> = SendError::Disconnected(42);
+        assert_eq!(err.to_string(), "Disconnected");
+    }
+
+    #[test_log::test]
+    fn try_send_error_display() {
+        let full_err: TrySendError<i32> = TrySendError::Full(10);
+        assert_eq!(full_err.to_string(), "Full");
+
+        let disconnected_err: TrySendError<i32> = TrySendError::Disconnected(20);
+        assert_eq!(disconnected_err.to_string(), "Disconnected");
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn poll_recv_returns_pending_then_ready() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Empty channel returns Pending
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Pending));
+
+        // Send a value
+        tx.send(42).unwrap();
+
+        // Now should return Ready
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(Some(42))));
+    }
+
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn poll_recv_returns_none_when_disconnected() {
+        use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+        static VTABLE: RawWakerVTable =
+            RawWakerVTable::new(|data| RawWaker::new(data, &VTABLE), |_| {}, |_| {}, |_| {});
+
+        let raw_waker = RawWaker::new(std::ptr::null(), &VTABLE);
+        let waker = unsafe { Waker::from_raw(raw_waker) };
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, mut rx) = unbounded::<i32>();
+
+        // Drop sender
+        drop(tx);
+
+        // Should return Ready(None) when disconnected
+        let result = rx.poll_recv(&mut cx);
+        assert!(matches!(result, Poll::Ready(None)));
+    }
 }

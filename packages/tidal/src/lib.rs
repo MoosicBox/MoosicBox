@@ -3408,4 +3408,88 @@ mod tests {
         let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
         assert!(result.is_err());
     }
+
+    // TidalTrackPlaybackInfo deserialization tests
+    #[test_log::test]
+    fn test_tidal_track_playback_info_deserialization() {
+        let json = serde_json::json!({
+            "albumPeakAmplitude": 0.987_654,
+            "albumReplayGain": -8.5,
+            "assetPresentation": "FULL",
+            "audioMode": "STEREO",
+            "audioQuality": "HI_RES_LOSSLESS",
+            "bitDepth": 24,
+            "manifest": "base64encodedmanifestdata",
+            "manifestHash": "abc123def456",
+            "manifestMimeType": "application/dash+xml",
+            "sampleRate": 96000,
+            "trackId": 123_456_789,
+            "trackPeakAmplitude": 0.999_999,
+            "trackReplayGain": -7.2
+        });
+
+        let info: TidalTrackPlaybackInfo = serde_json::from_value(json).unwrap();
+        assert!((info.album_peak_amplitude - 0.987_654).abs() < f64::EPSILON);
+        assert!((info.album_replay_gain - (-8.5)).abs() < f64::EPSILON);
+        assert_eq!(info.asset_presentation, "FULL");
+        assert_eq!(info.audio_mode, "STEREO");
+        assert_eq!(info.audio_quality, "HI_RES_LOSSLESS");
+        assert_eq!(info.bit_depth, Some(24));
+        assert_eq!(info.manifest, "base64encodedmanifestdata");
+        assert_eq!(info.manifest_hash, "abc123def456");
+        assert_eq!(info.manifest_mime_type, "application/dash+xml");
+        assert_eq!(info.sample_rate, Some(96000));
+        assert_eq!(info.track_id, 123_456_789);
+        assert!((info.track_peak_amplitude - 0.999_999).abs() < f64::EPSILON);
+        assert!((info.track_replay_gain - (-7.2)).abs() < f64::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_playback_info_deserialization_with_optional_fields_null() {
+        let json = serde_json::json!({
+            "albumPeakAmplitude": 0.5,
+            "albumReplayGain": -6.0,
+            "assetPresentation": "FULL",
+            "audioMode": "STEREO",
+            "audioQuality": "LOSSLESS",
+            "bitDepth": null,
+            "manifest": "manifestdata",
+            "manifestHash": "hash123",
+            "manifestMimeType": "application/vnd.tidal.bts",
+            "sampleRate": null,
+            "trackId": 987_654_321,
+            "trackPeakAmplitude": 0.75,
+            "trackReplayGain": -5.0
+        });
+
+        let info: TidalTrackPlaybackInfo = serde_json::from_value(json).unwrap();
+        assert_eq!(info.bit_depth, None);
+        assert_eq!(info.sample_rate, None);
+        assert_eq!(info.audio_quality, "LOSSLESS");
+        assert_eq!(info.track_id, 987_654_321);
+    }
+
+    #[test_log::test]
+    fn test_tidal_track_playback_info_deserialization_with_standard_quality() {
+        let json = serde_json::json!({
+            "albumPeakAmplitude": 1.0,
+            "albumReplayGain": 0.0,
+            "assetPresentation": "FULL",
+            "audioMode": "STEREO",
+            "audioQuality": "HIGH",
+            "bitDepth": 16,
+            "manifest": "data",
+            "manifestHash": "hash",
+            "manifestMimeType": "audio/mpeg",
+            "sampleRate": 44100,
+            "trackId": 111,
+            "trackPeakAmplitude": 1.0,
+            "trackReplayGain": 0.0
+        });
+
+        let info: TidalTrackPlaybackInfo = serde_json::from_value(json).unwrap();
+        assert_eq!(info.audio_quality, "HIGH");
+        assert_eq!(info.bit_depth, Some(16));
+        assert_eq!(info.sample_rate, Some(44100));
+    }
 }

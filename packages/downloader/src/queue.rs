@@ -1438,4 +1438,35 @@ mod tests {
 
         assert!(queue.scan);
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_task_without_database_returns_error() {
+        let queue = DownloadQueue::new();
+        let mut task = DownloadTask {
+            id: 1,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                track_id: 1.into(),
+                source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 1.into(),
+                artist: "artist".into(),
+                album_id: 1.into(),
+                album: "album".into(),
+                title: "title".into(),
+                contains_cover: false,
+            },
+            file_path: "/test/path.flac".to_string(),
+            created: String::new(),
+            updated: String::new(),
+            total_bytes: None,
+        };
+
+        let result = queue
+            .update_task_state(&mut task, DownloadTaskState::Started)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UpdateTaskError::NoDatabase));
+    }
 }

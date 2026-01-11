@@ -1385,4 +1385,153 @@ mod tests {
         assert!((x - 0.0).abs() < f32::EPSILON);
         assert!((y - 0.0).abs() < f32::EPSILON);
     }
+
+    // ==================== get_container_text tests ====================
+    // Note: get_container_text is a private helper method on EguiApp.
+    // Since it is a generic static function that extracts text from children,
+    // we can test it by invoking it on a mock calculator type.
+
+    // Create a test calculator type to access get_container_text
+    #[derive(Clone)]
+    struct TestCalc;
+
+    impl hyperchad_transformer::layout::Calc for TestCalc {
+        fn calc(&self, _container: &mut Container) -> bool {
+            false
+        }
+    }
+
+    impl crate::layout::EguiCalc for TestCalc {
+        fn with_context(self, _context: egui::Context) -> Self {
+            self
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_extracts_raw_text_from_first_child() {
+        let text_child = Container {
+            id: 2,
+            element: Element::Raw {
+                value: "Hello World".to_string(),
+            },
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![text_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert_eq!(result, Some("Hello World".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_extracts_text_element_from_first_child() {
+        let text_child = Container {
+            id: 2,
+            element: Element::Text {
+                value: "Escaped Text".to_string(),
+            },
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![text_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert_eq!(result, Some("Escaped Text".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_returns_none_for_empty_children() {
+        let container = Container {
+            id: 1,
+            children: vec![],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_returns_none_for_non_text_first_child() {
+        let div_child = Container {
+            id: 2,
+            element: Element::Div,
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![div_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_only_checks_first_child() {
+        // First child is not text, second child is text - should return None
+        let div_child = Container {
+            id: 2,
+            element: Element::Div,
+            ..Default::default()
+        };
+        let text_child = Container {
+            id: 3,
+            element: Element::Text {
+                value: "Second child text".to_string(),
+            },
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![div_child, text_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_handles_button_element() {
+        let button_child = Container {
+            id: 2,
+            element: Element::Button { r#type: None },
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![button_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_get_container_text_handles_empty_string() {
+        let text_child = Container {
+            id: 2,
+            element: Element::Text {
+                value: String::new(),
+            },
+            ..Default::default()
+        };
+        let container = Container {
+            id: 1,
+            children: vec![text_child],
+            ..Default::default()
+        };
+
+        let result = EguiApp::<TestCalc>::get_container_text(&container);
+        assert_eq!(result, Some(String::new()));
+    }
 }
