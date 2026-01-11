@@ -302,8 +302,8 @@ pub type TcpStreamWriteHalf = TokioTcpStreamWriteHalf;
 To access specific implementations when both features are enabled:
 
 ```rust
-use switchy_tcp::tokio::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
-use switchy_tcp::simulator::{TcpListener as SimTcpListener, TcpStream as SimTcpStream};
+use switchy_tcp::{TokioTcpListener, TokioTcpStream};
+use switchy_tcp::{SimulatorTcpListener, SimulatorTcpStream};
 ```
 
 ## Dependencies

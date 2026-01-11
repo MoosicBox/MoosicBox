@@ -210,8 +210,6 @@ pub struct MediaInfo {
 ## Feature Flags
 
 - `api`: Enable Actix Web API endpoints
-- `listener`: Enable UPnP event listener functionality
-- `player`: Enable media player integration
 - `openapi`: Enable OpenAPI documentation
 - `simulator`: Enable device simulation for testing
 
