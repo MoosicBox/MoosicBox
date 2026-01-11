@@ -1385,4 +1385,163 @@ mod tests {
         assert!((x - 0.0).abs() < f32::EPSILON);
         assert!((y - 0.0).abs() < f32::EPSILON);
     }
+
+    // ==================== EguiActionContext tests ====================
+
+    #[test_log::test]
+    fn test_action_context_navigate_returns_error_when_sender_unavailable() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None, // No sender
+            action_sender: None,
+        };
+
+        let result = ctx.navigate("https://example.com".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_action_context_navigate_succeeds_with_sender() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let (tx, rx) = flume::unbounded();
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: Some(tx),
+            action_sender: None,
+        };
+
+        let result = ctx.navigate("https://example.com".to_string());
+        assert!(result.is_ok());
+
+        // Verify the URL was sent
+        let received = rx.try_recv();
+        assert!(received.is_ok());
+        assert_eq!(received.unwrap(), "https://example.com");
+    }
+
+    #[test_log::test]
+    fn test_action_context_request_custom_action_returns_error_when_sender_unavailable() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None,
+            action_sender: None, // No sender
+        };
+
+        let result = ctx.request_custom_action("test-action".to_string(), None);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn test_action_context_request_custom_action_succeeds_with_sender() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let (tx, rx) = flume::unbounded();
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None,
+            action_sender: Some(tx),
+        };
+
+        let result = ctx.request_custom_action("test-action".to_string(), None);
+        assert!(result.is_ok());
+
+        // Verify the action was sent
+        let received = rx.try_recv();
+        assert!(received.is_ok());
+        let (action, value) = received.unwrap();
+        assert_eq!(action, "test-action");
+        assert!(value.is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_context_request_custom_action_with_value() {
+        use hyperchad_actions::handler::ActionContext;
+        use hyperchad_actions::logic::Value;
+
+        let (tx, rx) = flume::unbounded();
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None,
+            action_sender: Some(tx),
+        };
+
+        let value = Value::Real(42.0);
+        let result = ctx.request_custom_action("test-action".to_string(), Some(value));
+        assert!(result.is_ok());
+
+        // Verify the action and value were sent
+        let received = rx.try_recv();
+        assert!(received.is_ok());
+        let (action, recv_value) = received.unwrap();
+        assert_eq!(action, "test-action");
+        assert!(recv_value.is_some());
+        assert!(matches!(recv_value.unwrap(), Value::Real(v) if (v - 42.0).abs() < f32::EPSILON));
+    }
+
+    #[test_log::test]
+    fn test_action_context_get_mouse_position_returns_none() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None,
+            action_sender: None,
+        };
+
+        // Mouse position tracking is not yet implemented, should return None
+        let result = ctx.get_mouse_position();
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_context_get_mouse_position_relative_returns_none() {
+        use hyperchad_actions::handler::ActionContext;
+
+        let ctx = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)),
+            navigation_sender: None,
+            action_sender: None,
+        };
+
+        // Relative mouse position tracking is not yet implemented, should return None
+        let result = ctx.get_mouse_position_relative(1);
+        assert!(result.is_none());
+    }
+
+    // ==================== EguiElementFinder find_by_id additional tests ====================
+
+    #[test_log::test]
+    fn test_find_by_id_finds_first_matching_element_in_tree() {
+        // When multiple elements could potentially match, ensure we get
+        // the correct one based on the search algorithm (DFS)
+        let child1 = make_container(2, None, vec![], vec![]);
+        let child2 = make_container(3, None, vec![], vec![]);
+        let child3 = make_container(4, None, vec![], vec![]);
+        let container = make_container(1, None, vec![], vec![child1, child2, child3]);
+
+        let result = EguiElementFinder::find_by_id(&container, 3);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 3);
+    }
+
+    #[test_log::test]
+    fn test_find_element_recursive_finds_deeply_nested() {
+        // Test finding element at depth > 3
+        let level4 = make_container(5, Some("deep-target"), vec![], vec![]);
+        let level3 = make_container(4, None, vec![], vec![level4]);
+        let level2 = make_container(3, None, vec![], vec![level3]);
+        let level1 = make_container(2, None, vec![], vec![level2]);
+        let container = make_container(1, None, vec![], vec![level1]);
+
+        let result = EguiElementFinder::find_element_recursive(&container, &|c| {
+            c.str_id.as_deref() == Some("deep-target")
+        });
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 5);
+    }
 }

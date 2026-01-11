@@ -2561,4 +2561,725 @@ mod tests {
             assert_eq!(logged_level, expected_level);
         }
     }
+
+    // ============================================
+    // Multi action failure propagation tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_multi_stops_on_failure() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a Multi action where the second action fails (invalid hex color)
+        let action = ActionType::Multi(vec![
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            },
+            // This action should fail - invalid hex color
+            ActionType::Style {
+                target: ElementTarget::Id(20),
+                action: StyleAction::SetBackground(Some("not-a-valid-color".to_string())),
+            },
+            // This action should NOT execute because the previous one failed
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetDisplay(false),
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Multi should return false because the second action failed
+        assert!(!success);
+
+        // First action should have executed
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+
+        // Third action should NOT have executed (because second failed)
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_multi_effect_stops_on_failure() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a MultiEffect action where the second effect fails
+        let action = ActionType::MultiEffect(vec![
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetBackground(Some("invalid-color".to_string())),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should fail
+        assert!(!success);
+
+        // First effect executed
+        assert!(handler.get_visibility_override(10).is_some());
+
+        // Third effect should not have executed
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    // ============================================
+    // calc_value with CalcValue::Visibility and CalcValue::Display tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_visibility_returns_stored_override() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First, set a visibility override for element 10
+        handler.handle_style_action(
+            &StyleAction::SetVisibility(Visibility::Hidden),
+            &ElementTarget::Id(10),
+            StyleTrigger::UiEvent,
+            1,
+        );
+
+        // Now test that CalcValue::Visibility retrieves this override
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Visibility(Visibility::Hidden)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_visibility_returns_default_when_no_override() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has no visibility override set
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        // Should return default visibility (Visible)
+        assert_eq!(result, Some(Value::Visibility(Visibility::Visible)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_display_returns_stored_override() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First, set a display override for element 10
+        handler.handle_style_action(
+            &StyleAction::SetDisplay(false),
+            &ElementTarget::Id(10),
+            StyleTrigger::UiEvent,
+            1,
+        );
+
+        // Now test that CalcValue::Display retrieves this override
+        let value = Value::Calc(crate::logic::CalcValue::Display {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Display(false)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_display_returns_default_when_no_override() {
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Element 10 has no display override set
+        let value = Value::Calc(crate::logic::CalcValue::Display {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        // Should return default display (false means not overridden)
+        assert_eq!(result, Some(Value::Display(false)));
+    }
+
+    // ============================================
+    // unhandle_action for Parameterized tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_parameterized() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a parameterized style action
+        let inner_action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+        let action = ActionType::Parameterized {
+            action: Box::new(inner_action),
+            value: Value::Real(100.0),
+        };
+
+        // First, apply the action
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify it was applied
+        assert!(handler.get_visibility_override(10).is_some());
+
+        // Now unhandle it
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Verify it was cleaned up
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_multi_effect() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a MultiEffect action
+        let action = ActionType::MultiEffect(vec![
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        ]);
+
+        // First apply the action
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify both were applied
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(20).is_some());
+
+        // Now unhandle it
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Verify both were cleaned up
+        assert!(handler.get_visibility_override(10).is_none());
+        assert!(handler.get_display_override(20).is_none());
+    }
+
+    // ============================================
+    // utils::process_element_actions tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_process_element_actions_matching_trigger_executes() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: crate::ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1, // element_id
+            "click",
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_non_matching_trigger_skips() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: crate::ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "hover", // Different event type than Click
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        // Should still return success (no matching actions to fail)
+        assert!(success);
+
+        // But the action should NOT have been applied
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_stops_on_failure() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![
+            crate::Action {
+                trigger: crate::ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetVisibility(Visibility::Hidden),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+            crate::Action {
+                trigger: crate::ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetBackground(Some("invalid".to_string())),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+            crate::Action {
+                trigger: crate::ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetDisplay(false),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+        ];
+
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "click",
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        // Should fail due to invalid color
+        assert!(!success);
+
+        // First action executed
+        assert!(handler.get_visibility_override(10).is_some());
+
+        // Third action did NOT execute
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_with_custom_event() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: crate::ActionTrigger::Event("my-custom-event".to_string()),
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        // With matching event name
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "event",
+            Some("my-custom-event"),
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        assert!(handler.get_visibility_override(10).is_some());
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_custom_event_name_mismatch() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: crate::ActionTrigger::Event("my-custom-event".to_string()),
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        // With different event name
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "event",
+            Some("different-event"),
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        // Should still succeed (no matching actions to fail)
+        assert!(success);
+
+        // But action should NOT have been applied
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_multiple_matching_actions() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![
+            crate::Action {
+                trigger: crate::ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetVisibility(Visibility::Hidden),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+            crate::Action {
+                trigger: crate::ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(20),
+                        action: StyleAction::SetDisplay(false),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+        ];
+
+        let success = utils::process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "click",
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+
+        // Both actions should have been applied
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(20).is_some());
+    }
+
+    // ============================================
+    // ContainerElementFinder tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_container_element_finder_get_dimensions_with_fallback() {
+        use std::collections::BTreeMap;
+
+        // Create a mock container that implements ActionContainer
+        struct MockContainer {
+            id: usize,
+            str_id: Option<String>,
+            children: Vec<Self>,
+            data: BTreeMap<String, String>,
+            calculated_dims: Option<(f32, f32)>,
+            calculated_pos: Option<(f32, f32)>,
+        }
+
+        impl MockContainer {
+            fn with_calculated_dims(id: usize, dims: Option<(f32, f32)>) -> Self {
+                Self {
+                    id,
+                    str_id: None,
+                    children: Vec::new(),
+                    data: BTreeMap::new(),
+                    calculated_dims: dims,
+                    calculated_pos: None,
+                }
+            }
+        }
+
+        impl ActionContainer for MockContainer {
+            fn find_element_by_id(&self, id: usize) -> Option<&Self> {
+                if self.id == id {
+                    Some(self)
+                } else {
+                    self.children.iter().find_map(|c| c.find_element_by_id(id))
+                }
+            }
+
+            fn find_element_by_str_id(&self, _str_id: &str) -> Option<&Self> {
+                None
+            }
+
+            fn find_element_by_class(&self, _class: &str) -> Option<&Self> {
+                None
+            }
+
+            fn get_id(&self) -> usize {
+                self.id
+            }
+
+            fn get_str_id(&self) -> Option<&str> {
+                self.str_id.as_deref()
+            }
+
+            fn get_children(&self) -> &[Self] {
+                &self.children
+            }
+
+            fn get_data_attrs(&self) -> Option<&BTreeMap<String, String>> {
+                Some(&self.data)
+            }
+
+            fn get_calculated_dimensions(&self) -> Option<(f32, f32)> {
+                self.calculated_dims
+            }
+
+            fn get_calculated_position(&self) -> Option<(f32, f32)> {
+                self.calculated_pos
+            }
+        }
+
+        let container = MockContainer::with_calculated_dims(1, Some((150.0, 250.0)));
+        let positions: BTreeMap<usize, (f32, f32)> = BTreeMap::new();
+        let mut dimensions: BTreeMap<usize, (f32, f32)> = BTreeMap::new();
+
+        // Add dimensions for element 2 in the external map
+        dimensions.insert(2, (300.0, 400.0));
+
+        let finder = utils::ContainerElementFinder::new(&container, &positions, &dimensions);
+
+        // Element 1's dimensions come from the container's calculated dimensions
+        let dims_from_container = finder.get_dimensions(1);
+        assert_eq!(dims_from_container, Some((150.0, 250.0)));
+
+        // Element 2's dimensions come from the external dimensions map
+        let dims_from_map = finder.get_dimensions(2);
+        assert_eq!(dims_from_map, Some((300.0, 400.0)));
+
+        // Element 3 has no dimensions
+        let dims_missing = finder.get_dimensions(3);
+        assert_eq!(dims_missing, None);
+    }
+
+    #[test_log::test]
+    fn test_container_element_finder_get_position_with_fallback() {
+        use std::collections::BTreeMap;
+
+        struct MockContainer {
+            id: usize,
+            str_id: Option<String>,
+            children: Vec<Self>,
+            data: BTreeMap<String, String>,
+            calculated_dims: Option<(f32, f32)>,
+            calculated_pos: Option<(f32, f32)>,
+        }
+
+        impl MockContainer {
+            fn with_calculated_pos(id: usize, pos: Option<(f32, f32)>) -> Self {
+                Self {
+                    id,
+                    str_id: None,
+                    children: Vec::new(),
+                    data: BTreeMap::new(),
+                    calculated_dims: None,
+                    calculated_pos: pos,
+                }
+            }
+        }
+
+        impl ActionContainer for MockContainer {
+            fn find_element_by_id(&self, id: usize) -> Option<&Self> {
+                if self.id == id {
+                    Some(self)
+                } else {
+                    self.children.iter().find_map(|c| c.find_element_by_id(id))
+                }
+            }
+
+            fn find_element_by_str_id(&self, _str_id: &str) -> Option<&Self> {
+                None
+            }
+
+            fn find_element_by_class(&self, _class: &str) -> Option<&Self> {
+                None
+            }
+
+            fn get_id(&self) -> usize {
+                self.id
+            }
+
+            fn get_str_id(&self) -> Option<&str> {
+                self.str_id.as_deref()
+            }
+
+            fn get_children(&self) -> &[Self] {
+                &self.children
+            }
+
+            fn get_data_attrs(&self) -> Option<&BTreeMap<String, String>> {
+                Some(&self.data)
+            }
+
+            fn get_calculated_dimensions(&self) -> Option<(f32, f32)> {
+                self.calculated_dims
+            }
+
+            fn get_calculated_position(&self) -> Option<(f32, f32)> {
+                self.calculated_pos
+            }
+        }
+
+        let container = MockContainer::with_calculated_pos(1, Some((10.0, 20.0)));
+        let mut positions: BTreeMap<usize, (f32, f32)> = BTreeMap::new();
+        let dimensions: BTreeMap<usize, (f32, f32)> = BTreeMap::new();
+
+        // Add position for element 2 in the external map
+        positions.insert(2, (30.0, 40.0));
+
+        let finder = utils::ContainerElementFinder::new(&container, &positions, &dimensions);
+
+        // Element 1's position comes from the container's calculated position
+        let pos_from_container = finder.get_position(1);
+        assert_eq!(pos_from_container, Some((10.0, 20.0)));
+
+        // Element 2's position comes from the external positions map
+        let pos_from_map = finder.get_position(2);
+        assert_eq!(pos_from_map, Some((30.0, 40.0)));
+
+        // Element 3 has no position
+        let pos_missing = finder.get_position(3);
+        assert_eq!(pos_missing, None);
+    }
 }

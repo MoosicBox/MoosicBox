@@ -738,4 +738,98 @@ mod tests {
         // BodyReadError should convert to internal_server_error
         assert!(error.to_string().contains("network error"));
     }
+
+    #[test_log::test]
+    fn test_json_deref_mut() {
+        #[derive(Debug, PartialEq)]
+        struct MutableData {
+            value: i32,
+        }
+
+        let mut json_wrapper = Json(MutableData { value: 10 });
+
+        // Test DerefMut trait - modify the inner value
+        json_wrapper.value = 42;
+
+        assert_eq!(json_wrapper.value, 42);
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_json_extraction_with_text_json_content_type() {
+        // Test legacy text/json content type support
+        let json_body = r#"{"name": "Test", "email": "test@example.com"}"#;
+        let body = Bytes::from(json_body);
+
+        let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
+            .with_header("Content-Type", "text/json")
+            .with_body(body);
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
+
+        let result = Json::<TestUser>::from_request_sync(&req);
+        assert!(result.is_ok());
+
+        let Json(user) = result.unwrap();
+        assert_eq!(user.name, "Test");
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_json_extraction_with_charset_content_type() {
+        // Test application/json; charset=utf-8 content type
+        let json_body = r#"{"name": "Charset Test", "email": "charset@example.com"}"#;
+        let body = Bytes::from(json_body);
+
+        let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
+            .with_header("Content-Type", "application/json; charset=utf-8")
+            .with_body(body);
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
+
+        let result = Json::<TestUser>::from_request_sync(&req);
+        assert!(result.is_ok());
+
+        let Json(user) = result.unwrap();
+        assert_eq!(user.name, "Charset Test");
+    }
+
+    #[test_log::test]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
+    fn test_json_extraction_empty_bytes_body() {
+        // Test with body that exists but is empty bytes
+        let sim_req = SimulationRequest::new(crate::Method::Post, "/api/users")
+            .with_header("Content-Type", "application/json")
+            .with_body(Bytes::new());
+        let req = HttpRequest::new(SimulationStub::new(sim_req));
+
+        let result = Json::<TestUser>::from_request_sync(&req);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            JsonError::EmptyBody => {}
+            _ => panic!("Expected EmptyBody error"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_json_error_parse_error_details() {
+        // Test that ParseError captures line and column info
+        let invalid_json = r#"{
+            "name": "test",
+            "email" "missing_colon"
+        }"#;
+        let err = serde_json::from_str::<serde_json::Value>(invalid_json).unwrap_err();
+
+        let json_error = JsonError::parse_error(&err);
+
+        match json_error {
+            JsonError::ParseError { line, column, .. } => {
+                // Error should have line/column info
+                assert!(line.is_some());
+                assert!(column.is_some());
+                // The error is on line 3 (0-indexed would be line 3)
+                assert_eq!(line, Some(3));
+            }
+            _ => panic!("Expected ParseError variant"),
+        }
+    }
 }
