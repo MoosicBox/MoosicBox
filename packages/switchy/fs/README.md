@@ -262,6 +262,7 @@ let sync_options = async_options.into_sync();
 #[cfg(test)]
 mod tests {
     use switchy_fs::sync::{File, OpenOptions, read_to_string};
+    use std::io::Write;
 
     #[test]
     fn test_file_operations() {
