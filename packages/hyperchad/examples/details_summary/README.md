@@ -48,8 +48,14 @@ Nested details:
 
 ```rust
 details {
-    summary { "Nested Child" }
-    div { "Nested content" }
+    summary { "Parent" }
+    div {
+        "Parent content"
+        details {
+            summary { "Nested Child" }
+            div { "Nested content" }
+        }
+    }
 }
 ```
 
