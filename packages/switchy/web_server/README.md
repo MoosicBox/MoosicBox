@@ -348,6 +348,7 @@ fn create_server_with_openapi() {
 - **`Headers`** - Extract request headers in a Send-safe way
 - **`RequestData`** - Send-safe wrapper containing commonly needed request data
 - **`RequestInfo`** - Basic request information (method, path, query, remote address)
+- **`State<T>`** - Extract application state with backend-specific storage
 
 ### Request Methods
 
