@@ -79,7 +79,7 @@ if source.is_library() {
 ### Track Creation
 
 ```rust
-use moosicbox_music_models::{Track, AudioFormat, TrackApiSource};
+use moosicbox_music_models::{ApiSource, AudioFormat, Track, TrackApiSource};
 
 let track = Track {
     id: 1.into(),
