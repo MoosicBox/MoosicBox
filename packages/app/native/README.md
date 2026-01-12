@@ -268,10 +268,6 @@ cargo run --features "profiling-tracy,egui-wgpu"
 # Build MSI installer
 cargo install cargo-wix
 cargo wix --install
-
-# Build NSIS installer (requires NSIS)
-cargo install cargo-wix
-cargo wix --installer nsis
 ```
 
 ### macOS Bundle
