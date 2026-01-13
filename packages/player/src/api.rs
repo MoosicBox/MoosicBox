@@ -59,6 +59,7 @@ pub fn bind_services<
         .service(player_status_endpoint)
 }
 
+/// `OpenAPI` documentation structure for player API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -82,7 +83,6 @@ pub fn bind_services<
         PlaybackStatus,
     ))
 )]
-/// `OpenAPI` documentation structure for player API endpoints.
 pub struct Api;
 
 impl From<PlayerError> for actix_web::Error {
