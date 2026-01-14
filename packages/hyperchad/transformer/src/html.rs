@@ -2771,4 +2771,81 @@ Line 3</textarea>"#;
             panic!("Expected Anchor element");
         }
     }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_parses_anywhere() {
+        use hyperchad_transformer_models::OverflowWrap;
+
+        let html = r#"<div sx-overflow-wrap="anywhere">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.overflow_wrap, Some(OverflowWrap::Anywhere));
+    }
+
+    #[test_log::test]
+    fn parse_text_overflow_parses_clip() {
+        use hyperchad_transformer_models::TextOverflow;
+
+        let html = r#"<div sx-text-overflow="clip">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.text_overflow, Some(TextOverflow::Clip));
+    }
+
+    #[test_log::test]
+    fn parse_position_parses_sticky() {
+        use hyperchad_transformer_models::Position;
+
+        let html = r#"<div sx-position="sticky">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.position, Some(Position::Sticky));
+    }
+
+    #[test_log::test]
+    fn parse_cursor_parses_various_values() {
+        use hyperchad_transformer_models::Cursor;
+
+        let test_cases = [
+            ("crosshair", Cursor::Crosshair),
+            ("text", Cursor::Text),
+            ("move", Cursor::Move),
+            ("not-allowed", Cursor::NotAllowed),
+            ("grab", Cursor::Grab),
+            ("grabbing", Cursor::Grabbing),
+            ("col-resize", Cursor::ColResize),
+            ("row-resize", Cursor::RowResize),
+            ("ew-resize", Cursor::EwResize),
+            ("ns-resize", Cursor::NsResize),
+        ];
+
+        for (value, expected) in test_cases {
+            let html = format!(r#"<div sx-cursor="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+
+            assert_eq!(
+                child.cursor,
+                Some(expected),
+                "Failed for cursor value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_form_with_action_and_method() {
+        let html = r#"<form action="/submit" method="post"><div>content</div></form>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Form { action, method } = &child.element {
+            assert_eq!(action.as_deref(), Some("/submit"));
+            assert_eq!(method.as_deref(), Some("post"));
+        } else {
+            panic!("Expected Form element");
+        }
+    }
 }
