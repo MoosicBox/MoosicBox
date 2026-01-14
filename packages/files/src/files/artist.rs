@@ -410,3 +410,77 @@ struct ArtistCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::{ApiSource, ApiSources};
+
+    fn create_test_artist(cover: Option<String>) -> Artist {
+        Artist {
+            id: Id::Number(1),
+            title: "Test Artist".to_string(),
+            cover,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_valid_unix_path() {
+        let artist = create_test_artist(Some("/music/artists/beatles/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("/music/artists/beatles".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_deeply_nested_path() {
+        let artist = create_test_artist(Some(
+            "/home/user/music/library/artists/led_zeppelin/images/cover.png".to_string(),
+        ));
+        let result = get_artist_directory(&artist);
+        assert_eq!(
+            result,
+            Some("/home/user/music/library/artists/led_zeppelin/images".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_no_cover() {
+        let artist = create_test_artist(None);
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_filename_only() {
+        // A path with just a filename has no parent directory
+        let artist = create_test_artist(Some("cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        // Parent of "cover.jpg" is "" which becomes an empty String when converted
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_relative_path() {
+        let artist = create_test_artist(Some("artists/beatles/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("artists/beatles".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_spaces_in_path() {
+        let artist = create_test_artist(Some(
+            "/music/my artists/the beatles/cover art.jpg".to_string(),
+        ));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("/music/my artists/the beatles".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_special_characters_in_path() {
+        let artist = create_test_artist(Some("/music/[2024] New Album/cover.jpg".to_string()));
+        let result = get_artist_directory(&artist);
+        assert_eq!(result, Some("/music/[2024] New Album".to_string()));
+    }
+}
