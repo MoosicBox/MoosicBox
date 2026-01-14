@@ -584,6 +584,47 @@ mod tests {
 
     #[test_log::test]
     #[serial]
+    fn test_load_profile_config_with_json_file() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        let profiles_dir = temp_path
+            .join("server")
+            .join("profiles")
+            .join("json_profile");
+        sync::create_dir_all(&profiles_dir).unwrap();
+
+        let config_path = profiles_dir.join("config.json");
+        sync::write(
+            &config_path,
+            r#"{
+            "libraryPaths": ["/music/json"],
+            "playback": {
+                "gapless": false,
+                "crossfadeDuration": 1.5
+            }
+        }"#,
+        )
+        .unwrap();
+
+        crate::set_root_dir(temp_path.to_path_buf());
+        let result = load_profile_config(AppType::Server, "json_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(
+            config.library_paths.as_ref().unwrap(),
+            &vec!["/music/json".to_string()]
+        );
+        assert_eq!(config.playback.as_ref().unwrap().gapless, Some(false));
+        assert_eq!(
+            config.playback.as_ref().unwrap().crossfade_duration,
+            Some(1.5)
+        );
+    }
+
+    #[test_log::test]
+    #[serial]
     fn test_load_profile_config_returns_default_when_file_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
