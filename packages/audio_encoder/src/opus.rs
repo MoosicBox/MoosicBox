@@ -574,4 +574,158 @@ mod tests {
         assert!(flush_result.is_ok());
         assert!(writer.packet.is_none(), "Packet should be written on flush");
     }
+
+    #[test_log::test]
+    fn test_write_ogg_creates_valid_ogg_file() {
+        use std::io::Read;
+
+        // Create a temporary file using std::fs (required for ogg crate)
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("test_write_ogg.ogg");
+        let _ = std::fs::remove_file(&temp_file);
+
+        // Write an Ogg packet to the file
+        let test_content = b"Hello, Ogg!";
+        {
+            let file = std::fs::File::create(&temp_file).expect("Failed to create file");
+            write_ogg(file, test_content);
+        }
+
+        // Verify the file was created and contains valid Ogg data
+        let metadata = std::fs::metadata(&temp_file).expect("File should exist");
+        assert!(metadata.len() > 0, "File should not be empty");
+
+        // Verify the file starts with Ogg magic signature
+        let mut file = std::fs::File::open(&temp_file).expect("Failed to open file");
+        let mut header = [0u8; 4];
+        file.read_exact(&mut header).expect("Failed to read header");
+        assert_eq!(&header, b"OggS", "File should start with OggS magic");
+
+        // Cleanup
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test_log::test]
+    fn test_read_write_ogg_preserves_content() {
+
+        // Create a temporary directory for test files
+        let temp_dir = std::env::temp_dir();
+        let source_file = temp_dir.join("test_source.ogg");
+        let dest_file = temp_dir.join("test_dest.ogg");
+
+        // Cleanup any existing files
+        let _ = std::fs::remove_file(&source_file);
+        let _ = std::fs::remove_file(&dest_file);
+
+        // Create a source Ogg file with a packet
+        let test_content = b"Test audio data packet content";
+        {
+            let file = std::fs::File::create(&source_file).expect("Failed to create source file");
+            let mut writer = PacketWriter::new(file);
+            writer
+                .write_packet(
+                    test_content.to_vec(),
+                    12345,
+                    PacketWriteEndInfo::EndStream,
+                    0,
+                )
+                .expect("Failed to write packet");
+        }
+
+        // Now use read_write_ogg to copy the file
+        {
+            let read_file = std::fs::File::open(&source_file).expect("Failed to open source");
+            let write_file = std::fs::File::create(&dest_file).expect("Failed to create dest");
+            read_write_ogg(read_file, write_file);
+        }
+
+        // Verify destination file exists and has content
+        let dest_metadata = std::fs::metadata(&dest_file).expect("Dest file should exist");
+        assert!(dest_metadata.len() > 0, "Dest file should not be empty");
+
+        // Read the packet from destination to verify content was preserved
+        {
+            let mut file = std::fs::File::open(&dest_file).expect("Failed to open dest");
+            let mut pck_rdr = PacketReader::new(&mut file);
+            let packet = pck_rdr
+                .read_packet()
+                .expect("Failed to read packet")
+                .expect("Should have a packet");
+            assert_eq!(&packet.data, test_content, "Packet content should match");
+        }
+
+        // Cleanup
+        std::fs::remove_file(&source_file).ok();
+        std::fs::remove_file(&dest_file).ok();
+    }
+
+    #[test_log::test]
+    fn test_read_write_ogg_multiple_packets() {
+
+        let temp_dir = std::env::temp_dir();
+        let source_file = temp_dir.join("test_multi_source.ogg");
+        let dest_file = temp_dir.join("test_multi_dest.ogg");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&source_file);
+        let _ = std::fs::remove_file(&dest_file);
+
+        // Create source file with multiple packets
+        let packet1 = b"First packet data";
+        let packet2 = b"Second packet data";
+        let packet3 = b"Third and final packet";
+        {
+            let file = std::fs::File::create(&source_file).expect("Failed to create file");
+            let mut writer = PacketWriter::new(file);
+            writer
+                .write_packet(packet1.to_vec(), 1, PacketWriteEndInfo::NormalPacket, 0)
+                .expect("Failed to write packet 1");
+            writer
+                .write_packet(packet2.to_vec(), 1, PacketWriteEndInfo::EndPage, 100)
+                .expect("Failed to write packet 2");
+            writer
+                .write_packet(packet3.to_vec(), 1, PacketWriteEndInfo::EndStream, 200)
+                .expect("Failed to write packet 3");
+        }
+
+        // Copy using read_write_ogg
+        {
+            let read_file = std::fs::File::open(&source_file).expect("Failed to open source");
+            let write_file = std::fs::File::create(&dest_file).expect("Failed to create dest");
+            read_write_ogg(read_file, write_file);
+        }
+
+        // Verify all packets were copied
+        {
+            let mut file = std::fs::File::open(&dest_file).expect("Failed to open dest");
+            let mut pck_rdr = PacketReader::new(&mut file);
+
+            let p1 = pck_rdr
+                .read_packet()
+                .expect("Read failed")
+                .expect("Should have packet 1");
+            assert_eq!(&p1.data, packet1);
+
+            let p2 = pck_rdr
+                .read_packet()
+                .expect("Read failed")
+                .expect("Should have packet 2");
+            assert_eq!(&p2.data, packet2);
+
+            let p3 = pck_rdr
+                .read_packet()
+                .expect("Read failed")
+                .expect("Should have packet 3");
+            assert_eq!(&p3.data, packet3);
+            assert!(p3.last_in_stream(), "Third packet should be end of stream");
+
+            // No more packets
+            let p4 = pck_rdr.read_packet().expect("Read failed");
+            assert!(p4.is_none(), "Should have no more packets");
+        }
+
+        // Cleanup
+        std::fs::remove_file(&source_file).ok();
+        std::fs::remove_file(&dest_file).ok();
+    }
 }
