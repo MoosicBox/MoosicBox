@@ -3111,4 +3111,130 @@ mod tests {
             .expect("Failed to get status");
         assert!(status.active_playbacks.is_none());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_use_local_network_ip_replaces_localhost() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 999.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://localhost:8080".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // When use_local_network_ip is true and host is localhost,
+        // it should replace localhost with either the local IP or 127.0.0.1
+        // (127.0.0.1 is the fallback when local_ip() fails)
+        assert!(!url.contains("localhost"));
+        assert!(url.contains("/files/track"));
+        assert!(url.contains("trackId=999"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_use_local_network_ip_preserves_non_localhost() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 888.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Remote {
+            host: "http://192.168.1.100:8080".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // When use_local_network_ip is true but host is NOT localhost,
+        // the URL should remain unchanged
+        assert!(url.starts_with("http://192.168.1.100:8080/files/track"));
+        assert!(url.contains("trackId=888"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_local_source_with_use_local_network_ip() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        // Set up SERVICE_PORT for local source
+        set_service_port(9999);
+
+        let track_id = 777.into();
+        let api_source = ApiSource::library();
+        let player_source = PlayerSource::Local;
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true, // use_local_network_ip = true
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // When use_local_network_ip is true for local source,
+        // it should use the local IP (or fallback to 127.0.0.1)
+        // The important thing is the URL is valid and includes the port
+        assert!(url.contains(":9999/files/track"));
+        assert!(url.contains("trackId=777"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_track_url_localhost_with_path() {
+        use moosicbox_music_api::models::TrackAudioQuality;
+
+        let track_id = 666.into();
+        let api_source = ApiSource::library();
+        // Test localhost with port using colon (matches regex ^http://localhost[:/])
+        let player_source = PlayerSource::Remote {
+            host: "http://localhost:3000".to_string(),
+            query: None,
+            headers: None,
+        };
+        let format = PlaybackQuality::default();
+        let quality = TrackAudioQuality::Low;
+
+        let (url, _headers) = get_track_url(
+            &track_id,
+            &api_source,
+            &player_source,
+            format,
+            quality,
+            true,
+        )
+        .await
+        .expect("Failed to get track URL");
+
+        // Verify localhost was replaced
+        assert!(!url.contains("localhost"));
+        assert!(url.contains("/files/track"));
+    }
 }
