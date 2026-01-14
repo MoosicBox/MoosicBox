@@ -303,4 +303,23 @@ mod tests {
             Some(AssetNotFoundBehavior::Fallthrough)
         );
     }
+
+    #[cfg(unix)]
+    #[test_log::test]
+    fn test_asset_path_target_try_from_invalid_file_type() {
+        use std::os::unix::net::UnixListener;
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let socket_path = temp_dir.path().join("test.sock");
+
+        // Create a Unix socket (neither file nor directory)
+        let _listener = UnixListener::bind(&socket_path).expect("Failed to create socket");
+
+        let result = AssetPathTarget::try_from(socket_path);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Invalid file type"));
+    }
 }
