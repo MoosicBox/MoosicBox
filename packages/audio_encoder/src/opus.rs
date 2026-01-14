@@ -607,7 +607,6 @@ mod tests {
 
     #[test_log::test]
     fn test_read_write_ogg_preserves_content() {
-
         // Create a temporary directory for test files
         let temp_dir = std::env::temp_dir();
         let source_file = temp_dir.join("test_source.ogg");
@@ -661,7 +660,6 @@ mod tests {
 
     #[test_log::test]
     fn test_read_write_ogg_multiple_packets() {
-
         let temp_dir = std::env::temp_dir();
         let source_file = temp_dir.join("test_multi_source.ogg");
         let dest_file = temp_dir.join("test_multi_dest.ogg");
