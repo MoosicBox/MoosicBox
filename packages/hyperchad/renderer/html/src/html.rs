@@ -3606,4 +3606,402 @@ mod tests {
         assert!(!html.contains(" open"));
         assert!(html.ends_with("</details>"));
     }
+
+    // Test Select element basic rendering
+    #[test_log::test]
+    fn test_element_to_html_select_basic() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("country".to_string()),
+                selected: None,
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<select"));
+        assert!(html.contains("name=\"country\""));
+        assert!(html.ends_with("</select>"));
+    }
+
+    // Test Select element with all attributes
+    #[test_log::test]
+    fn test_element_to_html_select_all_attributes() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("items".to_string()),
+                selected: Some("opt2".to_string()),
+                multiple: Some(true),
+                disabled: Some(true),
+                autofocus: Some(true),
+            },
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.contains("name=\"items\""));
+        assert!(html.contains("data-selected=\"opt2\""));
+        assert!(html.contains(" multiple"));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains(" autofocus"));
+    }
+
+    // Test Select element with option children and selected matching
+    #[test_log::test]
+    fn test_element_to_html_select_with_option_selected_match() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // Create option children
+        let option1 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("us".to_string()),
+                disabled: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "United States".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let option2 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("uk".to_string()),
+                disabled: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "United Kingdom".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let option3 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("ca".to_string()),
+                disabled: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "Canada".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("country".to_string()),
+                selected: Some("uk".to_string()), // UK should be selected
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option1, option2, option3],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Verify the select renders correctly
+        assert!(html.starts_with("<select"));
+        assert!(html.contains("name=\"country\""));
+
+        // Verify option values are rendered
+        assert!(html.contains("value=\"us\""));
+        assert!(html.contains("value=\"uk\""));
+        assert!(html.contains("value=\"ca\""));
+
+        // Verify only the UK option has the selected attribute
+        // The pattern should be: value="uk" selected (in that order for the matching option)
+        assert!(html.contains("value=\"uk\" selected"));
+
+        // US and CA should NOT have selected
+        assert!(!html.contains("value=\"us\" selected"));
+        assert!(!html.contains("value=\"ca\" selected"));
+    }
+
+    // Test Select with no matching selected value
+    #[test_log::test]
+    fn test_element_to_html_select_no_matching_selected() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let option1 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("a".to_string()),
+                disabled: None,
+            },
+            ..Default::default()
+        };
+
+        let option2 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("b".to_string()),
+                disabled: None,
+            },
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("test".to_string()),
+                selected: Some("nonexistent".to_string()), // No option matches this
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option1, option2],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // No option should have the selected attribute
+        assert!(!html.contains(" selected"));
+        // data-selected attribute should still be present on the select
+        assert!(html.contains("data-selected=\"nonexistent\""));
+    }
+
+    // Test Option element with disabled attribute
+    #[test_log::test]
+    fn test_element_to_html_select_with_disabled_option() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let option1 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("enabled".to_string()),
+                disabled: None,
+            },
+            ..Default::default()
+        };
+
+        let option2 = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("disabled_opt".to_string()),
+                disabled: Some(true),
+            },
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("test".to_string()),
+                selected: None,
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option1, option2],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Only the second option should have disabled
+        assert!(html.contains("value=\"disabled_opt\" disabled"));
+        assert!(!html.contains("value=\"enabled\" disabled"));
+    }
+
+    // Test Option element without value attribute
+    #[test_log::test]
+    fn test_element_to_html_select_option_without_value() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        let option = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: None,
+                disabled: None,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "Select an option".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("test".to_string()),
+                selected: Some("something".to_string()),
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Option without value should not have value attribute
+        assert!(html.contains("<option>Select an option</option>"));
+        // Should not have selected since value is None
+        assert!(!html.contains("<option selected"));
+    }
+
+    // Test standalone Option element (not inside Select)
+    #[test_log::test]
+    fn test_element_to_html_standalone_option() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("test_value".to_string()),
+                disabled: Some(true),
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "Test Option".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(html.starts_with("<option"));
+        assert!(html.contains("value=\"test_value\""));
+        assert!(html.contains(" disabled"));
+        assert!(html.contains("Test Option"));
+        assert!(html.ends_with("</option>"));
+        // Standalone option should never have selected attribute
+        assert!(!html.contains(" selected"));
+    }
+
+    // Test render_option_child with non-option child (should render normally)
+    #[test_log::test]
+    fn test_element_to_html_select_with_non_option_child() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // An optgroup or other element might be a child of select
+        let option = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("valid".to_string()),
+                disabled: None,
+            },
+            ..Default::default()
+        };
+
+        // A div (unusual but possible)
+        let non_option = Container {
+            element: hyperchad_transformer::Element::Div,
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Text {
+                    value: "Non-option content".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("test".to_string()),
+                selected: None,
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option, non_option],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Both the option and the div should be rendered
+        assert!(html.contains("<option"));
+        assert!(html.contains("<div"));
+        assert!(html.contains("Non-option content"));
+    }
+
+    // Test Select with selected matching and disabled option
+    #[test_log::test]
+    fn test_element_to_html_select_selected_and_disabled_option() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+
+        // An option that is both selected AND disabled
+        let option = Container {
+            element: hyperchad_transformer::Element::Option {
+                value: Some("disabled_selected".to_string()),
+                disabled: Some(true),
+            },
+            ..Default::default()
+        };
+
+        let container = Container {
+            element: hyperchad_transformer::Element::Select {
+                name: Some("test".to_string()),
+                selected: Some("disabled_selected".to_string()),
+                multiple: None,
+                disabled: None,
+                autofocus: None,
+            },
+            children: vec![option],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+
+        // Option should have both selected and disabled attributes
+        assert!(html.contains("value=\"disabled_selected\" selected disabled"));
+    }
 }
