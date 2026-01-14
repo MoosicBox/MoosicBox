@@ -707,4 +707,206 @@ mod tests {
         // since they share the same Arc
         assert!(web_server.is_running().await);
     }
+
+    #[test_log::test]
+    fn test_renderer_ordering_preserved_on_deduplication() {
+        // When duplicates are added, the first occurrence should be kept
+        // and the relative order of unique renderers should be preserved
+        let simulator = HyperChadSimulator::new()
+            .with_renderer(RendererType::VanillaJs) // First
+            .with_renderer(RendererType::Html) // Second
+            .with_renderer(RendererType::VanillaJs) // Duplicate - should be ignored
+            .with_renderer(RendererType::Egui) // Third
+            .with_renderer(RendererType::Html); // Duplicate - should be ignored
+
+        assert_eq!(simulator.enabled_renderers.len(), 3);
+        // Order should be: VanillaJs, Html, Egui (in insertion order of first occurrences)
+        assert_eq!(simulator.enabled_renderers[0], RendererType::VanillaJs);
+        assert_eq!(simulator.enabled_renderers[1], RendererType::Html);
+        assert_eq!(simulator.enabled_renderers[2], RendererType::Egui);
+    }
+
+    #[test_log::test]
+    fn test_with_renderers_batch_preserves_order() {
+        // Batch add should preserve the order from the input vector
+        let renderers = vec![
+            RendererType::Fltk,
+            RendererType::Egui,
+            RendererType::Html,
+            RendererType::VanillaJs,
+        ];
+
+        let simulator = HyperChadSimulator::new().with_renderers(renderers);
+
+        assert_eq!(simulator.enabled_renderers.len(), 4);
+        assert_eq!(simulator.enabled_renderers[0], RendererType::Fltk);
+        assert_eq!(simulator.enabled_renderers[1], RendererType::Egui);
+        assert_eq!(simulator.enabled_renderers[2], RendererType::Html);
+        assert_eq!(simulator.enabled_renderers[3], RendererType::VanillaJs);
+    }
+
+    #[test_log::test]
+    fn test_interleaved_with_renderer_and_with_renderers() {
+        // Test that mixing individual and batch additions preserves order
+        // and correctly deduplicates across both methods
+        let simulator = HyperChadSimulator::new()
+            .with_renderer(RendererType::Html)
+            .with_renderers(vec![RendererType::VanillaJs, RendererType::Html]) // Html is duplicate
+            .with_renderer(RendererType::Egui)
+            .with_renderers(vec![RendererType::Fltk, RendererType::VanillaJs]); // VanillaJs is duplicate
+
+        assert_eq!(simulator.enabled_renderers.len(), 4);
+        // Order should be: Html, VanillaJs, Egui, Fltk
+        assert_eq!(simulator.enabled_renderers[0], RendererType::Html);
+        assert_eq!(simulator.enabled_renderers[1], RendererType::VanillaJs);
+        assert_eq!(simulator.enabled_renderers[2], RendererType::Egui);
+        assert_eq!(simulator.enabled_renderers[3], RendererType::Fltk);
+    }
+
+    #[test_log::test]
+    fn test_multiple_with_app_config_last_wins() {
+        // When with_app_config is called multiple times, the last config should win
+        let config1 = AppConfig {
+            name: "first-app".to_string(),
+            routes: vec!["/first".to_string()],
+            static_assets: BTreeMap::new(),
+            environment: BTreeMap::new(),
+        };
+
+        let config2 = AppConfig {
+            name: "second-app".to_string(),
+            routes: vec!["/second".to_string(), "/other".to_string()],
+            static_assets: BTreeMap::new(),
+            environment: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new()
+            .with_app_config(config1)
+            .with_app_config(config2);
+
+        // The second config should completely replace the first
+        assert_eq!(simulator.app_config.name, "second-app");
+        assert_eq!(simulator.app_config.routes.len(), 2);
+        assert_eq!(simulator.app_config.routes[0], "/second");
+    }
+
+    #[test_log::test]
+    fn test_multiple_with_mock_data_last_wins() {
+        // When with_mock_data is called multiple times, the last data should win
+        let data1 = SimulationData {
+            users: vec![serde_json::json!({"id": 1, "name": "Alice"})],
+            api_responses: BTreeMap::new(),
+            database_state: BTreeMap::new(),
+        };
+
+        let mut data2_responses = BTreeMap::new();
+        data2_responses.insert("/api/v2".to_string(), serde_json::json!({"version": 2}));
+
+        let data2 = SimulationData {
+            users: vec![
+                serde_json::json!({"id": 2, "name": "Bob"}),
+                serde_json::json!({"id": 3, "name": "Charlie"}),
+            ],
+            api_responses: data2_responses,
+            database_state: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new()
+            .with_mock_data(data1)
+            .with_mock_data(data2);
+
+        // The second mock data should completely replace the first
+        assert_eq!(simulator.mock_data.users.len(), 2);
+        assert_eq!(simulator.mock_data.api_responses.len(), 1);
+        assert!(simulator.mock_data.api_responses.contains_key("/api/v2"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_start_simulation_server_idempotent() {
+        // Starting the server multiple times should be safe (idempotent)
+        let web_server = Arc::new(SimulationWebServer::new());
+        let simulator = HyperChadSimulator::new().with_web_server(Arc::clone(&web_server));
+
+        // Start multiple times
+        let result1 = simulator.start_simulation_server().await;
+        let result2 = simulator.start_simulation_server().await;
+        let result3 = simulator.start_simulation_server().await;
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert!(result3.is_ok());
+
+        // Server should still be running
+        assert!(web_server.is_running().await);
+    }
+
+    #[test_log::test]
+    fn test_simulator_error_from_web_server_error() {
+        // Test that SimulatorError correctly converts from web_server::Error
+        let web_error = switchy_web_server_simulator::Error::ServerNotStarted;
+        let simulator_error: SimulatorError = web_error.into();
+
+        // The error should be wrapped as WebServer variant
+        match simulator_error {
+            SimulatorError::WebServer(_) => {} // Expected
+            _ => panic!("Expected WebServer error variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_simulator_error_from_simvar_error() {
+        // Test that SimulatorError correctly converts from simvar::Error
+        let simvar_error = simvar::Error::IO(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "test io error",
+        ));
+        let simulator_error: SimulatorError = simvar_error.into();
+
+        // The error should be wrapped as Simvar variant
+        match simulator_error {
+            SimulatorError::Simvar(_) => {} // Expected
+            _ => panic!("Expected Simvar error variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_empty_renderers_list() {
+        // A simulator with no renderers should work fine
+        let simulator = HyperChadSimulator::new();
+
+        assert!(simulator.enabled_renderers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_with_renderers_empty_vector() {
+        // Adding an empty vector of renderers should be a no-op
+        let simulator = HyperChadSimulator::new()
+            .with_renderer(RendererType::Html)
+            .with_renderers(vec![])
+            .with_renderer(RendererType::VanillaJs);
+
+        assert_eq!(simulator.enabled_renderers.len(), 2);
+        assert_eq!(simulator.enabled_renderers[0], RendererType::Html);
+        assert_eq!(simulator.enabled_renderers[1], RendererType::VanillaJs);
+    }
+
+    #[test_log::test]
+    fn test_all_renderer_types() {
+        // Test that all four renderer types can be added
+        let simulator = HyperChadSimulator::new()
+            .with_renderer(RendererType::Html)
+            .with_renderer(RendererType::VanillaJs)
+            .with_renderer(RendererType::Egui)
+            .with_renderer(RendererType::Fltk);
+
+        assert_eq!(simulator.enabled_renderers.len(), 4);
+        assert!(simulator.enabled_renderers.contains(&RendererType::Html));
+        assert!(
+            simulator
+                .enabled_renderers
+                .contains(&RendererType::VanillaJs)
+        );
+        assert!(simulator.enabled_renderers.contains(&RendererType::Egui));
+        assert!(simulator.enabled_renderers.contains(&RendererType::Fltk));
+    }
 }
