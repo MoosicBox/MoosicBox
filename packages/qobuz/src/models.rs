@@ -1934,4 +1934,470 @@ mod tests {
         assert_eq!(track.version, None);
         assert!(track.image.is_none());
     }
+
+    #[test_log::test]
+    fn test_qobuz_album_as_model_with_artist_name_display_fallback() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // Test the fallback from artist.name to artist.name.display
+        let json = serde_json::json!({
+            "id": "album123",
+            "artist": {
+                "id": 42,
+                "name": {
+                    "display": "Artist Display Name"
+                }
+            },
+            "maximum_bit_depth": 24,
+            "audio_info": {
+                "maximum_bit_depth": 24,
+                "maximum_channel_count": 2,
+                "maximum_sampling_rate": 96.0
+            },
+            "image": null,
+            "title": "Test Album",
+            "version": null,
+            "qobuz_id": 999,
+            "released_at": 1_684_108_800_000_i64,
+            "release_date_original": "2023-05-15",
+            "duration": 3600,
+            "parental_warning": false,
+            "popularity": 50,
+            "tracks_count": 10,
+            "genre": {
+                "id": 1,
+                "name": "Rock",
+                "slug": "rock"
+            },
+            "maximum_channel_count": 2,
+            "maximum_sampling_rate": 96.0
+        });
+
+        let album: Result<QobuzAlbum, _> = json.as_model();
+        assert!(album.is_ok());
+        let album = album.unwrap();
+        assert_eq!(album.artist, "Artist Display Name");
+        assert_eq!(album.artist_id, 42);
+        assert_eq!(album.id, "album123");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_as_model_with_audio_info_fallback() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // Test that audio_info nested values are used when top-level ones aren't present
+        let json = serde_json::json!({
+            "id": "album456",
+            "artist": {
+                "id": 55,
+                "name": "Simple Artist"
+            },
+            "audio_info": {
+                "maximum_bit_depth": 16,
+                "maximum_channel_count": 2,
+                "maximum_sampling_rate": 44.1
+            },
+            "image": {
+                "thumbnail": "thumb.jpg",
+                "small": null,
+                "medium": null,
+                "large": null,
+                "extralarge": null,
+                "mega": null
+            },
+            "title": "Audio Info Test",
+            "version": "Standard",
+            "qobuz_id": 888,
+            "released_at": 1_600_000_000_000_i64,
+            "release_date_original": "2020-09-13",
+            "duration": 2400,
+            "parental_warning": true,
+            "popularity": 75,
+            "tracks_count": 8,
+            "genre": {
+                "id": 2,
+                "name": "Jazz",
+                "slug": "jazz"
+            }
+        });
+
+        let album: Result<QobuzAlbum, _> = json.as_model();
+        assert!(album.is_ok());
+        let album = album.unwrap();
+        assert_eq!(album.maximum_bit_depth, 16);
+        assert_eq!(album.maximum_channel_count, 2);
+        assert!((album.maximum_sampling_rate - 44.1).abs() < f32::EPSILON);
+        assert_eq!(album.version, Some("Standard".to_string()));
+        assert!(album.parental_warning);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_as_model_release_type_fallback_uses_determinizer() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // When release_type is null, the magic determinizer should be used
+        // 1 track = Single
+        let json = serde_json::json!({
+            "id": "single123",
+            "artist": {
+                "id": 10,
+                "name": "Single Artist"
+            },
+            "maximum_bit_depth": 16,
+            "image": null,
+            "title": "Single Track",
+            "version": null,
+            "qobuz_id": 777,
+            "release_type": null,
+            "released_at": 1_600_000_000_000_i64,
+            "release_date_original": "2020-09-13",
+            "duration": 180,
+            "parental_warning": false,
+            "popularity": 60,
+            "tracks_count": 1,
+            "genre": {
+                "id": 3,
+                "name": "Pop",
+                "slug": "pop"
+            },
+            "maximum_channel_count": 2,
+            "maximum_sampling_rate": 44.1
+        });
+
+        let album: Result<QobuzAlbum, _> = json.as_model();
+        assert!(album.is_ok());
+        let album = album.unwrap();
+        // Single track should be classified as Single
+        assert_eq!(album.album_type, crate::QobuzAlbumReleaseType::Single);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_as_model_release_type_fallback_short_ep() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // 4 tracks with short duration (< 20 min) = EpSingle
+        let json = serde_json::json!({
+            "id": "ep123",
+            "artist": {
+                "id": 11,
+                "name": "EP Artist"
+            },
+            "maximum_bit_depth": 24,
+            "image": null,
+            "title": "Short EP",
+            "version": null,
+            "qobuz_id": 666,
+            "release_type": null,
+            "released_at": 1_600_000_000_000_i64,
+            "release_date_original": "2020-09-13",
+            "duration": 600,
+            "parental_warning": false,
+            "popularity": 40,
+            "tracks_count": 4,
+            "genre": {
+                "id": 4,
+                "name": "Electronic",
+                "slug": "electronic"
+            },
+            "maximum_channel_count": 2,
+            "maximum_sampling_rate": 48.0
+        });
+
+        let album: Result<QobuzAlbum, _> = json.as_model();
+        assert!(album.is_ok());
+        let album = album.unwrap();
+        // 4 tracks with less than 20 minutes should be EpSingle
+        assert_eq!(album.album_type, crate::QobuzAlbumReleaseType::EpSingle);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_track_as_model_with_album_context() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // Test QobuzTrack parsing from JSON with nested album data
+        // Note: The AsModelResult implementation uses album.duration for the track's duration
+        // This is intentional behavior in the Qobuz parsing logic
+        let json = serde_json::json!({
+            "id": 12_345_678,
+            "track_number": 5,
+            "album": {
+                "id": "albumxyz",
+                "title": "Album From Track",
+                "artist": {
+                    "id": 99,
+                    "name": "Track Album Artist"
+                },
+                "release_type": "album",
+                "duration": 240,
+                "tracks_count": 12
+            },
+            "image": {
+                "thumbnail": "track_thumb.jpg",
+                "small": null,
+                "medium": null,
+                "large": null,
+                "extralarge": null,
+                "mega": null
+            },
+            "copyright": "2023 Test Label",
+            "parental_warning": false,
+            "isrc": "TRACKISRC001",
+            "title": "Parsed Track",
+            "version": "Extended Mix"
+        });
+
+        let track: Result<QobuzTrack, _> = json.as_model();
+        assert!(track.is_ok());
+        let track = track.unwrap();
+        assert_eq!(track.id, 12_345_678);
+        assert_eq!(track.track_number, 5);
+        assert_eq!(track.album, "Album From Track");
+        assert_eq!(track.album_id, "albumxyz");
+        assert_eq!(track.artist, "Track Album Artist");
+        assert_eq!(track.artist_id, 99);
+        assert_eq!(track.album_type, crate::QobuzAlbumReleaseType::Album);
+        assert_eq!(track.copyright, Some("2023 Test Label".to_string()));
+        // The duration comes from album.duration in AsModelResult implementation
+        assert_eq!(track.duration, 240);
+        assert!(!track.parental_warning);
+        assert_eq!(track.isrc, "TRACKISRC001");
+        assert_eq!(track.title, "Parsed Track");
+        assert_eq!(track.version, Some("Extended Mix".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_track_as_model_release_type_fallback() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // Test that missing release_type uses the determinizer
+        let json = serde_json::json!({
+            "id": 98_765_432,
+            "track_number": 1,
+            "album": {
+                "id": "singletrack",
+                "title": "Single Track Album",
+                "artist": {
+                    "id": 77,
+                    "name": "Solo Artist"
+                },
+                "release_type": null,
+                "duration": 200,
+                "tracks_count": 1
+            },
+            "image": null,
+            "copyright": null,
+            "duration": 200,
+            "parental_warning": true,
+            "isrc": "SINGLE001",
+            "title": "The Single",
+            "version": null
+        });
+
+        let track: Result<QobuzTrack, _> = json.as_model();
+        assert!(track.is_ok());
+        let track = track.unwrap();
+        // 1 track = Single via determinizer
+        assert_eq!(track.album_type, crate::QobuzAlbumReleaseType::Single);
+        assert!(track.parental_warning);
+        assert!(track.copyright.is_none());
+        assert!(track.version.is_none());
+    }
+
+    #[test_log::test]
+    fn test_qobuz_genre_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 123,
+            "name": "Classical",
+            "slug": "classical"
+        });
+
+        let genre: Result<QobuzGenre, _> = json.as_model();
+        assert!(genre.is_ok());
+        let genre = genre.unwrap();
+        assert_eq!(genre.id, 123);
+        assert_eq!(genre.name, "Classical");
+        assert_eq!(genre.slug, "classical");
+    }
+
+    #[test_log::test]
+    fn test_qobuz_image_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "thumbnail": "thumb.jpg",
+            "small": "small.jpg",
+            "medium": null,
+            "large": "large.jpg",
+            "extralarge": null,
+            "mega": "mega.jpg"
+        });
+
+        let image: Result<QobuzImage, _> = json.as_model();
+        assert!(image.is_ok());
+        let image = image.unwrap();
+        assert_eq!(image.thumbnail, Some("thumb.jpg".to_string()));
+        assert_eq!(image.small, Some("small.jpg".to_string()));
+        assert!(image.medium.is_none());
+        assert_eq!(image.large, Some("large.jpg".to_string()));
+        assert!(image.extralarge.is_none());
+        assert_eq!(image.mega, Some("mega.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_artist_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": 456_789,
+            "name": "Famous Artist",
+            "image": {
+                "thumbnail": null,
+                "small": null,
+                "medium": "artist_medium.jpg",
+                "large": null,
+                "extralarge": null,
+                "mega": null
+            }
+        });
+
+        let artist: Result<QobuzArtist, _> = json.as_model();
+        assert!(artist.is_ok());
+        let artist = artist.unwrap();
+        assert_eq!(artist.id, 456_789);
+        assert_eq!(artist.name, "Famous Artist");
+        assert!(artist.image.is_some());
+        let image = artist.image.unwrap();
+        assert_eq!(image.medium, Some("artist_medium.jpg".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_qobuz_release_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "release789",
+            "artist": {
+                "id": 333,
+                "name": {
+                    "display": "Release Artist"
+                }
+            },
+            "audio_info": {
+                "maximum_bit_depth": 24,
+                "maximum_channel_count": 2,
+                "maximum_sampling_rate": 192.0
+            },
+            "image": null,
+            "title": "High Res Release",
+            "version": "Remastered 2023",
+            "release_type": "live",
+            "dates": {
+                "original": "2023-11-15"
+            },
+            "duration": 5400,
+            "parental_warning": false,
+            "tracks_count": 15,
+            "genre": {
+                "name": "Classical"
+            }
+        });
+
+        let release: Result<QobuzRelease, _> = json.as_model();
+        assert!(release.is_ok());
+        let release = release.unwrap();
+        assert_eq!(release.id, "release789");
+        assert_eq!(release.artist, "Release Artist");
+        assert_eq!(release.artist_id, 333);
+        assert_eq!(release.maximum_bit_depth, 24);
+        assert_eq!(release.title, "High Res Release");
+        assert_eq!(release.version, Some("Remastered 2023".to_string()));
+        assert_eq!(release.album_type, crate::QobuzAlbumReleaseType::Live);
+        assert_eq!(release.release_date_original, "2023-11-15");
+        assert_eq!(release.duration, 5400);
+        assert!(!release.parental_warning);
+        assert_eq!(release.tracks_count, 15);
+        assert_eq!(release.genre, "Classical");
+        assert!((release.maximum_sampling_rate - 192.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_release_as_model_without_release_type() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // Test that missing release_type uses the determinizer
+        // 12 tracks = Album regardless of duration
+        let json = serde_json::json!({
+            "id": "release_no_type",
+            "artist": {
+                "id": 444,
+                "name": {
+                    "display": "Album Artist"
+                }
+            },
+            "audio_info": {
+                "maximum_bit_depth": 16,
+                "maximum_channel_count": 2,
+                "maximum_sampling_rate": 44.1
+            },
+            "image": null,
+            "title": "Full Length Album",
+            "version": null,
+            "release_type": null,
+            "dates": {
+                "original": "2022-06-01"
+            },
+            "duration": 3600,
+            "parental_warning": false,
+            "tracks_count": 12,
+            "genre": {
+                "name": "Rock"
+            }
+        });
+
+        let release: Result<QobuzRelease, _> = json.as_model();
+        assert!(release.is_ok());
+        let release = release.unwrap();
+        // 12 tracks = Album via determinizer
+        assert_eq!(release.album_type, crate::QobuzAlbumReleaseType::Album);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_search_results_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "albums": {
+                "items": [],
+                "offset": 0,
+                "limit": 10,
+                "total": 0
+            },
+            "artists": {
+                "items": [],
+                "offset": 0,
+                "limit": 10,
+                "total": 5
+            },
+            "tracks": {
+                "items": [],
+                "offset": 5,
+                "limit": 20,
+                "total": 100
+            }
+        });
+
+        let results: Result<QobuzSearchResults, _> = json.as_model();
+        assert!(results.is_ok());
+        let results = results.unwrap();
+        assert_eq!(results.albums.items.len(), 0);
+        assert_eq!(results.albums.offset, 0);
+        assert_eq!(results.albums.limit, 10);
+        assert_eq!(results.albums.total, 0);
+        assert_eq!(results.artists.total, 5);
+        assert_eq!(results.tracks.offset, 5);
+        assert_eq!(results.tracks.limit, 20);
+        assert_eq!(results.tracks.total, 100);
+    }
 }
