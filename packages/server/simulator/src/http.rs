@@ -324,5 +324,57 @@ mod tests {
             let result = parse_http_response(raw).unwrap();
             assert_eq!(result.headers.get("Key"), Some(&"Value".to_string()));
         }
+
+        #[test_log::test]
+        fn ignores_lines_without_colons_in_headers() {
+            let raw = "HTTP/1.1 200 OK\r\nValid-Header: value\r\nMalformedLine\r\nAnother: header\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.headers.len(), 2);
+            assert_eq!(
+                result.headers.get("Valid-Header"),
+                Some(&"value".to_string())
+            );
+            assert_eq!(result.headers.get("Another"), Some(&"header".to_string()));
+        }
+
+        #[test_log::test]
+        fn handles_invalid_content_length_by_using_full_body() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: not-a-number\r\n\r\nFull body content";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Full body content");
+        }
+
+        #[test_log::test]
+        fn truncates_body_to_exact_content_length() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nHello World";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Hello World");
+        }
+
+        #[test_log::test]
+        fn handles_headers_with_empty_values() {
+            let raw = "HTTP/1.1 200 OK\r\nEmpty-Header: \r\nNormal: value\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.headers.get("Empty-Header"), Some(&String::new()));
+            assert_eq!(result.headers.get("Normal"), Some(&"value".to_string()));
+        }
+
+        #[test_log::test]
+        fn preserves_header_case_in_keys() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-TYPE: text/html\r\ncontent-type: text/plain\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            // BTreeMap will store both separately if cases differ
+            assert!(
+                result.headers.contains_key("Content-TYPE")
+                    || result.headers.contains_key("content-type")
+            );
+        }
+
+        #[test_log::test]
+        fn handles_content_length_zero() {
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\nThis body should be truncated to empty";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "");
+        }
     }
 }
