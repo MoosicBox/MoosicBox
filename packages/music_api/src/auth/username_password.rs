@@ -177,4 +177,53 @@ mod test {
         let result = auth.login("user", "pass").await;
         assert!(result.is_err());
     }
+
+    #[test_log::test]
+    fn username_password_auth_builder_default_is_same_as_new() {
+        let builder1 = UsernamePasswordAuthBuilder::default();
+        let builder2 = UsernamePasswordAuthBuilder::new();
+
+        assert!(builder1.handle_login.is_none());
+        assert!(builder2.handle_login.is_none());
+    }
+
+    #[test_log::test]
+    fn username_password_auth_into_auth_conversion() {
+        use super::Auth;
+
+        let auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let auth: Auth = auth.into();
+
+        assert!(matches!(auth, Auth::UsernamePassword(_)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn username_password_auth_login_accepts_string_and_str() {
+        let auth = UsernamePasswordAuth::builder()
+            .with_handler(|username, password| async move {
+                Ok(username == "user" && password == "pass")
+            })
+            .build()
+            .unwrap();
+
+        // Test with &str
+        let result = auth.login("user", "pass").await.unwrap();
+        assert!(result);
+
+        // Test with String
+        let result = auth
+            .login("user".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        assert!(result);
+    }
+
+    #[test_log::test]
+    fn username_password_auth_builder_can_be_used_via_struct_method() {
+        let builder = UsernamePasswordAuth::builder();
+        assert!(builder.handle_login.is_none());
+    }
 }

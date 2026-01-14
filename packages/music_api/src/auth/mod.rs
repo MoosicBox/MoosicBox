@@ -723,4 +723,68 @@ mod test {
 
         assert!(!auth.is_logged_in().await.unwrap());
     }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn poll_auth_into_auth_creates_poll_variant() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let auth: Auth = poll.into();
+
+        assert!(matches!(auth, Auth::Poll(_)));
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn username_password_auth_into_auth_creates_username_password_variant() {
+        use super::username_password::UsernamePasswordAuth;
+
+        let up_auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let auth: Auth = up_auth.into();
+
+        assert!(matches!(auth, Auth::UsernamePassword(_)));
+    }
+
+    #[test_log::test]
+    fn api_auth_builder_default_is_same_as_new() {
+        let builder1 = super::ApiAuthBuilder::default();
+        let builder2 = super::ApiAuthBuilder::new();
+
+        // Both should have None for auth, logged_in, and validate_credentials
+        assert!(builder1.auth.is_none());
+        assert!(builder2.auth.is_none());
+        assert!(builder1.logged_in.is_none());
+        assert!(builder2.logged_in.is_none());
+        assert!(builder1.validate_credentials.is_none());
+        assert!(builder2.validate_credentials.is_none());
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[test_log::test]
+    fn api_auth_builder_with_auth_accepts_poll_auth() {
+        use super::poll::PollAuth;
+
+        let poll = PollAuth::new();
+        let api_auth = ApiAuth::builder().with_auth(poll).build();
+
+        assert!(matches!(*api_auth, Auth::Poll(_)));
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[test_log::test]
+    fn api_auth_builder_with_auth_accepts_username_password_auth() {
+        use super::username_password::UsernamePasswordAuth;
+
+        let up_auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async { Ok(true) })
+            .build()
+            .unwrap();
+        let api_auth = ApiAuth::builder().with_auth(up_auth).build();
+
+        assert!(matches!(*api_auth, Auth::UsernamePassword(_)));
+    }
 }
