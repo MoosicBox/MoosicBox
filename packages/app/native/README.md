@@ -361,7 +361,3 @@ The MoosicBox Native App is structured as follows:
 - **Player** (`moosicbox_player`) - Audio playback functionality
 - **Music API** (`moosicbox_music_api`) - Multi-source music integration
 
-## See Also
-
-- [MoosicBox App Native UI](ui/README.md) - UI component library
-- [MoosicBox App Native Bundled](bundled/README.md) - Bundled server mode
