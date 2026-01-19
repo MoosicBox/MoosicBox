@@ -325,5 +325,5 @@ cargo test --all-features
 
 ## See Also
 
-- [`switchy_database`](../database/README.md) - Database abstraction layer
+- [`switchy_database`](../switchy/database/README.md) - Database abstraction layer
 - [`moosicbox_search`](../search/README.md) - Search engine functionality
