@@ -17,6 +17,7 @@ The package provides:
 - **CMake Build Integration**: Compiles the official libopus library from source using the `build.rs` script (with fixed-point mode enabled for bit-exact decoding)
 - **Raw FFI Bindings**: Unsafe extern functions for `opus_encoder_create`, `opus_encode`, `opus_decoder_create`, `opus_decode`, and their corresponding destroy functions
 - **Safe Wrapper Module**: The `safe` module provides `Encoder` and `Decoder` types with memory-safe Rust interfaces
+- **Application Mode Constants**: `OPUS_APPLICATION_AUDIO` and `OPUS_APPLICATION_VOIP` constants for encoder configuration
 - **Minimal API Surface**: Only exposes the functionality needed for test vector generation
 
 ## Future Migration Plan
