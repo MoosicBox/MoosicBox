@@ -265,4 +265,3 @@ match global_search("query", Some(0), Some(10)) {
 - [`moosicbox_music_models`](../music/models/README.md) - Music data models
 - [`moosicbox_library`](../library/README.md) - Music library management
 - [`moosicbox_scan`](../scan/README.md) - Library scanning and indexing
-- [`moosicbox_database`](../database/README.md) - Database operations
