@@ -1,3 +1,8 @@
+//! SILK frame types and metadata structures.
+//!
+//! This module defines frame-level types used during SILK decoding, including
+//! frame type classification (Inactive/Unvoiced/Voiced) and quantization parameters.
+
 /// SILK frame metadata decoded from bitstream
 ///
 /// Contains frame-level parameters decoded from SILK header that control
