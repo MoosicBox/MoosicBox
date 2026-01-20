@@ -44,8 +44,12 @@ impl MdnsServiceDaemon for MdnsSdServiceDaemon {
 }
 
 #[cfg(feature = "simulator")]
-/// Simulated mDNS service daemon for testing.
 pub mod simulator {
+    //! Simulated mDNS service daemon for testing.
+    //!
+    //! This module provides a no-op implementation of the mDNS service daemon
+    //! for testing scenarios where actual network operations are not desired.
+
     use async_trait::async_trait;
     use mdns_sd::ServiceInfo;
 
