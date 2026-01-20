@@ -1,4 +1,12 @@
 //! Actix Web server implementation.
+//!
+//! This module provides the [`ActixWebServer`] type and the [`WebServerBuilderActixExt`]
+//! trait for building and running Actix-based HTTP servers with the `switchy_web_server`
+//! framework.
+//!
+//! The server implementation handles routing, CORS, static files, and middleware
+//! integration, translating the framework-agnostic configuration into Actix-specific
+//! components.
 
 use std::{
     future,

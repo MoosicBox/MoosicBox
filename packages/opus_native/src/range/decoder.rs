@@ -1,3 +1,9 @@
+//! Range decoder implementation for Opus entropy coding.
+//!
+//! This module provides the range decoder used for entropy decoding in Opus packets.
+//! The decoder reads symbols from compressed bitstreams using arithmetic coding,
+//! supporting both range-coded symbols (from buffer start) and raw bits (from buffer end).
+
 use crate::error::{Error, Result};
 use crate::util::ilog;
 
