@@ -28,7 +28,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
+use moosicbox_async_service::{sync::RwLock, Arc, JoinHandle};
 use moosicbox_config::AppType;
 use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
