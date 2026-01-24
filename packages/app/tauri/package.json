@@ -36,12 +36,12 @@
         "@solid-primitives/utils": "^6.3.2",
         "@tauri-apps/api": "^2.9.1",
         "@tauri-apps/plugin-dialog": "^2.6.0",
-        "astro": "^5.16.14",
+        "astro": "^5.16.15",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "htmx.org": "^2.0.8",
         "nanostores": "^0.9.5",
-        "solid-js": "^1.9.10"
+        "solid-js": "^1.9.11"
     },
     "devDependencies": {
         "@solidjs/meta": "^0.29.4",
