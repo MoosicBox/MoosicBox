@@ -8885,6 +8885,7 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "test-log",
+ "tokio",
 ]
 
 [[package]]
@@ -9078,15 +9079,19 @@ name = "moosicbox_music_api_api"
 version = "0.1.4"
 dependencies = [
  "actix-web",
+ "async-trait",
  "futures",
  "log 0.4.29",
+ "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_profiles",
  "serde",
  "serde_json",
+ "switchy_async",
  "test-log",
+ "tokio",
  "utoipa",
 ]
 
@@ -15491,12 +15496,14 @@ dependencies = [
  "postgres-native-tls",
  "postgres-openssl",
  "rusqlite",
+ "serial_test",
  "sqlx",
  "switchy_async",
  "switchy_database",
  "switchy_env",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-postgres",
 ]
 

@@ -1164,4 +1164,177 @@ mod tests {
         assert_eq!(response1.body.unwrap(), Bytes::from("response"));
         assert_eq!(response2.body.unwrap(), Bytes::from("response"));
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_request_with_json_body_serialization_failure() {
+        use std::collections::BTreeMap;
+
+        // BTreeMap with non-String keys cannot be serialized to JSON
+        let mut invalid_map: BTreeMap<Vec<u8>, String> = BTreeMap::new();
+        invalid_map.insert(vec![1, 2, 3], "value".to_string());
+
+        let result = SimulatedRequest::new(HttpMethod::Post, "/test").with_json_body(&invalid_map);
+
+        assert!(
+            matches!(result, Err(Error::Serialization(_))),
+            "Expected Serialization error for non-serializable data"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_response_with_json_body_serialization_failure() {
+        use std::collections::BTreeMap;
+
+        // BTreeMap with non-String keys cannot be serialized to JSON
+        let mut invalid_map: BTreeMap<Vec<u8>, String> = BTreeMap::new();
+        invalid_map.insert(vec![1, 2, 3], "value".to_string());
+
+        let result = SimulatedResponse::ok().with_json_body(&invalid_map);
+
+        assert!(
+            matches!(result, Err(Error::Serialization(_))),
+            "Expected Serialization error for non-serializable data"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_mock_response_overwrite() {
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+
+        // Add first mock response
+        server
+            .add_mock_response("GET /test", SimulatedResponse::ok().with_text_body("first"))
+            .await;
+
+        // Add second mock response with same key - should overwrite
+        server
+            .add_mock_response(
+                "GET /test",
+                SimulatedResponse::ok().with_text_body("second"),
+            )
+            .await;
+
+        let request = SimulatedRequest::new(HttpMethod::Get, "/test");
+        let response = server.handle_request(request).await.unwrap();
+
+        // The second (later) mock should be the one returned
+        assert_eq!(response.body.unwrap(), Bytes::from("second"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_server_restart_clears_running_state_correctly() {
+        let server = SimulationWebServer::new();
+
+        // Start -> Stop -> Start cycle should work correctly
+        server.start().await.unwrap();
+        assert!(server.is_running().await);
+
+        server.stop().await;
+        assert!(!server.is_running().await);
+
+        // Verify requests fail when stopped
+        let request = SimulatedRequest::new(HttpMethod::Get, "/test");
+        assert!(matches!(
+            server.handle_request(request).await,
+            Err(Error::ServerNotStarted)
+        ));
+
+        // Restart and verify it works again
+        server.start().await.unwrap();
+        assert!(server.is_running().await);
+
+        server
+            .add_mock_response("GET /test", SimulatedResponse::ok())
+            .await;
+        let request = SimulatedRequest::new(HttpMethod::Get, "/test");
+        let response = server.handle_request(request).await;
+        assert!(response.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_route_handler_with_all_http_methods() {
+        // Test that all HTTP methods can be matched correctly
+        let methods = [
+            HttpMethod::Get,
+            HttpMethod::Post,
+            HttpMethod::Put,
+            HttpMethod::Patch,
+            HttpMethod::Delete,
+            HttpMethod::Head,
+            HttpMethod::Options,
+            HttpMethod::Connect,
+            HttpMethod::Trace,
+        ];
+
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+
+        for method in &methods {
+            let handler = RouteHandler::new(*method, "/resource", |_req| async {
+                Ok(SimulatedResponse::ok())
+            });
+            server.add_route(handler).await;
+        }
+
+        // Test each method
+        for method in &methods {
+            let request = SimulatedRequest::new(*method, "/resource");
+            let response = server.handle_request(request).await;
+            assert!(
+                response.is_ok(),
+                "Request with method {method} should succeed"
+            );
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_request_log_preserves_order() {
+        let server = SimulationWebServer::new();
+        server.start().await.unwrap();
+
+        server
+            .add_mock_response("GET /a", SimulatedResponse::ok())
+            .await;
+        server
+            .add_mock_response("GET /b", SimulatedResponse::ok())
+            .await;
+        server
+            .add_mock_response("GET /c", SimulatedResponse::ok())
+            .await;
+
+        // Make requests in specific order
+        let _ = server
+            .handle_request(SimulatedRequest::new(HttpMethod::Get, "/a"))
+            .await;
+        let _ = server
+            .handle_request(SimulatedRequest::new(HttpMethod::Get, "/b"))
+            .await;
+        let _ = server
+            .handle_request(SimulatedRequest::new(HttpMethod::Get, "/c"))
+            .await;
+
+        let log = server.get_request_log();
+        assert_eq!(log.len(), 3);
+        assert_eq!(log[0].path, "/a");
+        assert_eq!(log[1].path, "/b");
+        assert_eq!(log[2].path, "/c");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_route_handler_exact_path_matching() {
+        let handler = RouteHandler::new(HttpMethod::Get, "/api/users", |_req| async {
+            Ok(SimulatedResponse::ok())
+        });
+
+        // Exact match
+        assert!(handler.matches(&HttpMethod::Get, "/api/users"));
+
+        // Should NOT match similar but different paths
+        assert!(!handler.matches(&HttpMethod::Get, "/api/users/"));
+        assert!(!handler.matches(&HttpMethod::Get, "/api/users/1"));
+        assert!(!handler.matches(&HttpMethod::Get, "/api/user"));
+        assert!(!handler.matches(&HttpMethod::Get, "/api"));
+        assert!(!handler.matches(&HttpMethod::Get, ""));
+    }
 }

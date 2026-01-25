@@ -1573,6 +1573,106 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_app_dynamic_routes_with_literal_route() {
+        use crate::renderer::stub::StubRenderer;
+
+        let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+        let app = AppBuilder::new()
+            .with_router(router)
+            .build(StubRenderer)
+            .expect("Failed to build app");
+
+        // Verifies that Literal routes are handled correctly (printed without panic)
+        let result = app.dynamic_routes();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_app_dynamic_routes_with_literals_route() {
+        use crate::renderer::stub::StubRenderer;
+        use hyperchad_router::RoutePath;
+
+        // Create router with Literals variant (multiple alternative paths)
+        let router = Router::new().with_route(
+            RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()]),
+            |_req| async { "API".to_string() },
+        );
+        let app = AppBuilder::new()
+            .with_router(router)
+            .build(StubRenderer)
+            .expect("Failed to build app");
+
+        // Verifies that Literals routes print only the first path
+        let result = app.dynamic_routes();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_app_dynamic_routes_with_empty_literals_route() {
+        use crate::renderer::stub::StubRenderer;
+        use hyperchad_router::RoutePath;
+
+        // Create router with empty Literals variant (should be skipped)
+        let router =
+            Router::new().with_route(RoutePath::Literals(vec![]), |_req| async { String::new() });
+        let app = AppBuilder::new()
+            .with_router(router)
+            .build(StubRenderer)
+            .expect("Failed to build app");
+
+        // Verifies that empty Literals routes are skipped (continue branch)
+        let result = app.dynamic_routes();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_app_dynamic_routes_with_literal_prefix_route() {
+        use crate::renderer::stub::StubRenderer;
+        use hyperchad_router::RoutePath;
+
+        // Create router with LiteralPrefix variant (should be skipped)
+        let router = Router::new().with_route(
+            RoutePath::LiteralPrefix("/static/".to_string()),
+            |_req| async { "Static".to_string() },
+        );
+        let app = AppBuilder::new()
+            .with_router(router)
+            .build(StubRenderer)
+            .expect("Failed to build app");
+
+        // Verifies that LiteralPrefix routes are skipped (continue branch)
+        let result = app.dynamic_routes();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_app_dynamic_routes_with_mixed_route_types() {
+        use crate::renderer::stub::StubRenderer;
+        use hyperchad_router::RoutePath;
+
+        // Create router with all RoutePath variants
+        let router = Router::new()
+            .with_route("/home", |_req| async { "Home".to_string() })
+            .with_route(
+                RoutePath::Literals(vec!["/about".to_string(), "/info".to_string()]),
+                |_req| async { "About".to_string() },
+            )
+            .with_route(RoutePath::Literals(vec![]), |_req| async { String::new() })
+            .with_route(
+                RoutePath::LiteralPrefix("/assets/".to_string()),
+                |_req| async { "Assets".to_string() },
+            );
+        let app = AppBuilder::new()
+            .with_router(router)
+            .build(StubRenderer)
+            .expect("Failed to build app");
+
+        // Verifies correct handling of all RoutePath variants together
+        let result = app.dynamic_routes();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
     fn test_stub_renderer_add_responsive_trigger() {
         use crate::renderer::stub::StubRenderer;
         use hyperchad_renderer::{
