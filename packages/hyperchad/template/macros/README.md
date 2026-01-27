@@ -13,7 +13,11 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_template_macros = { version = "0.1.4" }
+hyperchad_template = { version = "0.1.4" }
+hyperchad_transformer = { version = "0.1.4" }
 ```
+
+**Note:** `hyperchad_template` and `hyperchad_transformer` are required because the macro generates code that uses types from these crates. Alternatively, you can use `hyperchad_template` directly, which re-exports this macro.
 
 ## Usage
 
@@ -118,4 +122,4 @@ Supported units: `%`, `vw`, `vh`, `dvw`, `dvh`, `px`, `em`, `rem`, `ch`, `ex`, `
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+See the [LICENSE](../../../../LICENSE) file for details.

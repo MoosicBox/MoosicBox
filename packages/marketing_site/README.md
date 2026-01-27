@@ -210,19 +210,6 @@ TOKIO_CONSOLE=1 cargo run --features "console-subscriber"
 
 The `assets` feature enables serving static assets from the `public/` directory. Assets are bundled at build time and served through static routes.
 
-### Testing Different Backends
-
-```bash
-# Test HTML rendering
-cargo test --features "html"
-
-# Test desktop rendering
-cargo test --features "egui-wgpu"
-
-# Test Lambda rendering
-cargo test --features "lambda,vanilla-js"
-```
-
 ## Architecture
 
 ### Multi-Platform Framework

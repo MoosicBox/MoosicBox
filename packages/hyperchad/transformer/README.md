@@ -138,6 +138,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter text...".to_string()),
     },
     name: Some("username".to_string()),
+    autofocus: None,
 };
 
 // Image with responsive loading
@@ -296,6 +297,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter your name".to_string()),
     },
     name: Some("name".to_string()),
+    autofocus: None,
 };
 
 // Checkbox
@@ -304,6 +306,7 @@ let checkbox = Element::Input {
         checked: Some(true),
     },
     name: Some("agree".to_string()),
+    autofocus: None,
 };
 
 // Password input
@@ -313,6 +316,7 @@ let password = Element::Input {
         placeholder: Some("Password".to_string()),
     },
     name: Some("password".to_string()),
+    autofocus: None,
 };
 ```
 
