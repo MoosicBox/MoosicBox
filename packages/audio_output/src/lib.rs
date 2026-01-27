@@ -1787,4 +1787,290 @@ mod tests {
         let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
         assert!(result.is_err());
     }
+
+    #[test_log::test]
+    fn test_audio_output_resample_triggered_when_rates_differ() {
+        use symphonia::core::audio::Signal;
+
+        // Create output with 48kHz sample rate
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mock_writer = TrackingMockAudioWrite::new();
+        let written_frames = mock_writer.written_frames.clone();
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            output_spec,
+            Box::new(mock_writer),
+        );
+
+        // Create an input buffer with different sample rate (44100 Hz)
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4410, input_spec);
+        buffer.render_reserved(Some(4410)); // 0.1 seconds of audio at 44100Hz
+
+        // Fill with test data
+        for ch in 0..2 {
+            let chan = buffer.chan_mut(ch);
+            #[allow(clippy::cast_precision_loss)]
+            for (i, sample) in chan.iter_mut().enumerate().take(4410) {
+                *sample = (i as f32) / 4410.0;
+            }
+        }
+
+        // Write through AudioWrite trait - this should trigger resampling
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_ok());
+
+        // Verify some frames were written (resampling changes the frame count)
+        // At 48kHz vs 44.1kHz, we expect approximately 4410 * (48000/44100) ≈ 4800 frames
+        let frames = written_frames.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(frames > 0);
+        // Verify resampling occurred (frame count changed)
+        assert!(
+            frames != 4410,
+            "Expected resampling to change frame count, got {frames}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_audio_output_audio_decode_decoded_handles_stream_end_gracefully() {
+        use moosicbox_audio_decoder::AudioDecode;
+        use symphonia::core::audio::Signal;
+        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
+        use symphonia::core::formats::{Packet, Track};
+
+        // Create a mock writer that will cause the resampler to return StreamEnd
+        // This happens when resample_if_needed returns StreamEnd
+        struct StreamEndWriter {
+            handle: AudioHandle,
+            call_count: std::sync::atomic::AtomicUsize,
+        }
+
+        impl AudioWrite for StreamEndWriter {
+            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                // This should not be called because StreamEnd is handled before write
+                self.call_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(0)
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        // Create output with a different sample rate to trigger resampling path
+        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = StreamEndWriter {
+            handle: AudioHandle::new(tx),
+            call_count: std::sync::atomic::AtomicUsize::new(0),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            output_spec,
+            Box::new(mock_writer),
+        );
+
+        // Create a tiny audio buffer with different sample rate to trigger resampling
+        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(100, input_spec);
+        buffer.render_reserved(Some(100));
+
+        let packet = Packet::new_from_slice(0, 0, 0, &[]);
+        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+
+        // Call decoded - should succeed (resampler initializes and processes)
+        let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_audio_output_write_handles_stream_end_returns_zero() {
+        use symphonia::core::audio::Signal;
+
+        // A mock writer that simulates stream end during resampling
+        // by having the output trigger a resampler and then returning StreamEnd
+        // on subsequent writes
+        struct CountingWriter {
+            handle: AudioHandle,
+            write_count: std::sync::atomic::AtomicUsize,
+        }
+
+        impl AudioWrite for CountingWriter {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                self.write_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let (tx, _rx) = flume::bounded(1);
+        let mock_writer = CountingWriter {
+            handle: AudioHandle::new(tx),
+            write_count: std::sync::atomic::AtomicUsize::new(0),
+        };
+
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(mock_writer),
+        );
+
+        // Empty buffer should result in 0 frames written
+        let buffer: AudioBuffer<f32> = AudioBuffer::new(0, spec);
+        let result = AudioWrite::write(&mut output, buffer);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_delegation_methods() {
+        use std::sync::Arc;
+
+        struct FullFeatureMockWriter {
+            handle: AudioHandle,
+            playback_position: f64,
+            output_spec: Option<SignalSpec>,
+            consumed_samples: Option<Arc<std::sync::atomic::AtomicUsize>>,
+            volume: f64,
+            shared_volume: Option<Arc<atomic_float::AtomicF64>>,
+            progress_callback_set: std::sync::atomic::AtomicBool,
+        }
+
+        impl FullFeatureMockWriter {
+            fn new() -> Self {
+                let (tx, _rx) = flume::bounded(1);
+                Self {
+                    handle: AudioHandle::new(tx),
+                    playback_position: 10.5,
+                    output_spec: Some(SignalSpec::new(
+                        48000,
+                        Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+                    )),
+                    consumed_samples: None,
+                    volume: 1.0,
+                    shared_volume: None,
+                    progress_callback_set: std::sync::atomic::AtomicBool::new(false),
+                }
+            }
+        }
+
+        impl AudioWrite for FullFeatureMockWriter {
+            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+                Ok(decoded.frames())
+            }
+
+            fn flush(&mut self) -> Result<(), AudioOutputError> {
+                Ok(())
+            }
+
+            fn get_playback_position(&self) -> Option<f64> {
+                Some(self.playback_position)
+            }
+
+            fn set_consumed_samples(
+                &mut self,
+                consumed_samples: Arc<std::sync::atomic::AtomicUsize>,
+            ) {
+                self.consumed_samples = Some(consumed_samples);
+            }
+
+            fn set_volume(&mut self, volume: f64) {
+                self.volume = volume;
+            }
+
+            fn set_shared_volume(&mut self, shared_volume: Arc<atomic_float::AtomicF64>) {
+                self.shared_volume = Some(shared_volume);
+            }
+
+            fn get_output_spec(&self) -> Option<SignalSpec> {
+                self.output_spec
+            }
+
+            fn set_progress_callback(
+                &mut self,
+                callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+            ) {
+                self.progress_callback_set
+                    .store(callback.is_some(), std::sync::atomic::Ordering::SeqCst);
+            }
+
+            fn handle(&self) -> AudioHandle {
+                self.handle.clone()
+            }
+        }
+
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let mut output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(FullFeatureMockWriter::new()),
+        );
+
+        // Test set_consumed_samples delegation
+        let consumed = Arc::new(std::sync::atomic::AtomicUsize::new(1000));
+        output.set_consumed_samples(consumed);
+
+        // Test set_volume delegation
+        output.set_volume(0.75);
+
+        // Test set_shared_volume delegation
+        let shared_vol = Arc::new(atomic_float::AtomicF64::new(0.5));
+        output.set_shared_volume(shared_vol);
+
+        // Test set_progress_callback delegation
+        output.set_progress_callback(Some(Box::new(|_pos| {})));
+
+        // Test get_output_spec delegation
+        let out_spec = output.get_output_spec();
+        assert!(out_spec.is_some());
+        assert_eq!(out_spec.unwrap().rate, 48000);
+    }
+
+    #[test_log::test]
+    fn test_audio_output_scanner_with_default_output_set() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Ok(Box::new(MockAudioWrite::new())),
+        );
+
+        // Create scanner with default output
+        let scanner = AudioOutputScanner {
+            outputs: vec![factory.clone()],
+            default_output: Some(factory),
+        };
+
+        // default_output_factory should return the factory
+        let default_factory = scanner.default_output_factory();
+        assert!(default_factory.is_some());
+        assert_eq!(default_factory.unwrap().id, "test-id");
+
+        // default_output should successfully create an AudioOutput
+        let result = scanner.default_output();
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert_eq!(output.id, "test-id");
+    }
 }

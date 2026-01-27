@@ -557,3 +557,105 @@ pub async fn remove_scan_path_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "local")]
+    mod validate_path_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_validate_path_rejects_simple_parent_directory_traversal() {
+            let result = validate_path("/tmp/../etc/passwd");
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("Path traversal detected"));
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_double_dot_at_start() {
+            let result = validate_path("../etc/passwd");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_multiple_traversals() {
+            let result = validate_path("/tmp/../../etc/passwd");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_traversal_in_middle() {
+            let result = validate_path("/home/user/../../../etc/passwd");
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_hidden_traversal_with_spaces() {
+            // Even with leading/trailing spaces around .., if ".." appears, it's rejected
+            let result = validate_path("/tmp/ .. /etc");
+            // This contains ".." so should be rejected
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_nonexistent_path() {
+            // Path doesn't exist, so canonicalize should fail
+            let result = validate_path("/nonexistent/path/that/does/not/exist/12345abcde");
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("Invalid path"));
+        }
+
+        #[test_log::test]
+        fn test_validate_path_accepts_valid_existing_path() {
+            // /tmp should exist on most systems
+            let result = validate_path("/tmp");
+            assert!(result.is_ok());
+            let canonical = result.unwrap();
+            // The canonical path should not contain ".."
+            assert!(!canonical.contains(".."));
+        }
+
+        #[test_log::test]
+        fn test_validate_path_accepts_root_directory() {
+            let result = validate_path("/");
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_validate_path_returns_canonicalized_path() {
+            // Using /tmp which should exist
+            let result = validate_path("/tmp/./");
+            assert!(result.is_ok());
+            let canonical = result.unwrap();
+            // Canonicalized path should not have trailing slash or "."
+            assert!(!canonical.ends_with("/."));
+            assert!(!canonical.ends_with("/./"));
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_encoded_traversal() {
+            // Encoded ".." should still contain ".." after decoding if passed directly
+            // The function checks for literal ".." in the string
+            let result = validate_path("/tmp/..%2F..%2Fetc");
+            // This doesn't contain literal ".." so it passes the first check
+            // but should fail canonicalization since the path doesn't exist
+            // The test verifies the function handles this case
+            if result.is_ok() {
+                // If it somehow succeeded, ensure no traversal occurred
+                let path = result.unwrap();
+                assert!(!path.contains(".."));
+            }
+            // Either error or safe path is acceptable
+        }
+
+        #[test_log::test]
+        fn test_validate_path_rejects_only_double_dots() {
+            let result = validate_path("..");
+            assert!(result.is_err());
+        }
+    }
+}

@@ -727,4 +727,98 @@ mod test {
         assert_eq!(parse_isize("+999999").unwrap(), 999_999);
         assert_eq!(parse_isize("-999999").unwrap(), -999_999);
     }
+
+    // Whitespace and special character handling tests
+
+    #[test_log::test]
+    fn parse_usize_rejects_leading_whitespace() {
+        assert!(matches!(
+            parse_usize(" 123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("\t123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("\n123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_rejects_trailing_whitespace() {
+        assert!(matches!(
+            parse_usize("123 "),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("123\t"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_usize("123\n"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_rejects_leading_whitespace() {
+        assert!(matches!(
+            parse_isize(" 123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize(" -123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize(" +123"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_rejects_trailing_whitespace() {
+        assert!(matches!(
+            parse_isize("123 "),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("-123 "),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        assert!(matches!(
+            parse_isize("+123 "),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_usize_rejects_unicode_digits() {
+        // Arabic-Indic digits (٠-٩)
+        assert!(matches!(
+            parse_usize("١٢٣"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        // Fullwidth digits (０-９)
+        assert!(matches!(
+            parse_usize("１２３"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
+
+    #[test_log::test]
+    fn parse_isize_rejects_unicode_digits() {
+        // Arabic-Indic digits
+        assert!(matches!(
+            parse_isize("١٢٣"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+        // Negative with fullwidth digits
+        assert!(matches!(
+            parse_isize("-１２３"),
+            Err(ParseIntError::InvalidDigit)
+        ));
+    }
 }
