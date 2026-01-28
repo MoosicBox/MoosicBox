@@ -141,3 +141,48 @@ impl Actor for &Host {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_host_returns_none_outside_host_context() {
+        // When called outside of a host's tick context, current_host should return None
+        assert!(current_host().is_none());
+    }
+
+    #[test_log::test]
+    fn test_current_host_returns_name_within_host_context() {
+        // When called within a with_host scope, current_host should return the host name
+        let result = with_host("test-host-name".to_string(), |_| current_host());
+        assert_eq!(result, Some("test-host-name".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_with_host_passes_name_to_closure() {
+        let captured_name = with_host("my-host".to_string(), str::to_owned);
+        assert_eq!(captured_name, "my-host");
+    }
+
+    #[test_log::test]
+    fn test_nested_with_host_uses_innermost_name() {
+        // Nested with_host calls should use the innermost host name
+        let result = with_host("outer-host".to_string(), |_| {
+            with_host("inner-host".to_string(), |_| current_host())
+        });
+        assert_eq!(result, Some("inner-host".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_host_restored_after_nested_scope() {
+        // After leaving a nested scope, current_host should return the outer host's name
+        let result = with_host("outer-host".to_string(), |_| {
+            let inner_result = with_host("inner-host".to_string(), |_| current_host());
+            assert_eq!(inner_result, Some("inner-host".to_string()));
+            // After inner scope exits, we should be back to outer host
+            current_host()
+        });
+        assert_eq!(result, Some("outer-host".to_string()));
+    }
+}

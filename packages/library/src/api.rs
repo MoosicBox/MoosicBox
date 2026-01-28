@@ -1150,3 +1150,141 @@ pub async fn reindex_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod api_track_from_library_track {
+        use super::*;
+
+        #[test_log::test]
+        fn converts_library_track_with_artwork_to_api_track_with_contains_cover_true() {
+            let library_track = LibraryTrack {
+                id: 1,
+                number: 5,
+                album: "Test Album".to_string(),
+                album_id: 10,
+                artist: "Test Artist".to_string(),
+                artist_id: 20,
+                artwork: Some("artwork.jpg".to_string()),
+                duration: 180.5,
+                title: "Test Track".to_string(),
+                ..Default::default()
+            };
+
+            let api_track = ApiTrack::from(library_track);
+
+            match api_track {
+                ApiTrack::Library(track) => {
+                    assert_eq!(track.id, 1);
+                    assert_eq!(track.number, 5);
+                    assert_eq!(track.album, "Test Album");
+                    assert_eq!(track.album_id, 10);
+                    assert_eq!(track.artist, "Test Artist");
+                    assert_eq!(track.artist_id, 20);
+                    assert!(track.contains_cover);
+                    assert!((track.duration - 180.5).abs() < f64::EPSILON);
+                    assert!(!track.explicit);
+                    assert_eq!(track.title, "Test Track");
+                }
+            }
+        }
+
+        #[test_log::test]
+        fn converts_library_track_without_artwork_to_api_track_with_contains_cover_false() {
+            let library_track = LibraryTrack {
+                id: 2,
+                number: 3,
+                album: "No Cover Album".to_string(),
+                album_id: 15,
+                artist: "Another Artist".to_string(),
+                artist_id: 25,
+                artwork: None,
+                duration: 200.0,
+                title: "No Cover Track".to_string(),
+                ..Default::default()
+            };
+
+            let api_track = ApiTrack::from(library_track);
+
+            match api_track {
+                ApiTrack::Library(track) => {
+                    assert!(!track.contains_cover);
+                    assert_eq!(track.id, 2);
+                    assert_eq!(track.album_id, 15);
+                }
+            }
+        }
+    }
+
+    mod api_artist_from_library_artist {
+        use super::*;
+
+        #[test_log::test]
+        fn converts_library_artist_with_cover_to_api_artist_with_contains_cover_true() {
+            let library_artist = LibraryArtist {
+                id: 100,
+                title: "Famous Artist".to_string(),
+                cover: Some("cover.jpg".to_string()),
+                ..Default::default()
+            };
+
+            let api_artist = ApiArtist::from(library_artist);
+
+            match api_artist {
+                ApiArtist::Library(artist) => {
+                    assert_eq!(artist.id, 100);
+                    assert_eq!(artist.title, "Famous Artist");
+                    assert!(artist.contains_cover);
+                }
+            }
+        }
+
+        #[test_log::test]
+        fn converts_library_artist_without_cover_to_api_artist_with_contains_cover_false() {
+            let library_artist = LibraryArtist {
+                id: 200,
+                title: "Unknown Artist".to_string(),
+                cover: None,
+                ..Default::default()
+            };
+
+            let api_artist = ApiArtist::from(library_artist);
+
+            match api_artist {
+                ApiArtist::Library(artist) => {
+                    assert_eq!(artist.id, 200);
+                    assert_eq!(artist.title, "Unknown Artist");
+                    assert!(!artist.contains_cover);
+                }
+            }
+        }
+    }
+
+    mod album_type_conversion {
+        use super::*;
+        use crate::LibraryAlbumType;
+
+        #[test_log::test]
+        fn lp_converts_to_library_album_type_lp() {
+            let album_type = AlbumType::Lp;
+            let library_album_type: LibraryAlbumType = album_type.into();
+            assert_eq!(library_album_type, LibraryAlbumType::Lp);
+        }
+
+        #[test_log::test]
+        fn eps_and_singles_converts_to_library_album_type_eps_and_singles() {
+            let album_type = AlbumType::EpsAndSingles;
+            let library_album_type: LibraryAlbumType = album_type.into();
+            assert_eq!(library_album_type, LibraryAlbumType::EpsAndSingles);
+        }
+
+        #[test_log::test]
+        fn compilations_converts_to_library_album_type_compilations() {
+            let album_type = AlbumType::Compilations;
+            let library_album_type: LibraryAlbumType = album_type.into();
+            assert_eq!(library_album_type, LibraryAlbumType::Compilations);
+        }
+    }
+}
