@@ -204,7 +204,7 @@ Each module has additional sub-features for fine-grained control:
 
 **HTTP Models**: `http-models-actix`, `http-models-reqwest`, `http-models-serde`
 
-**mDNS**: `mdns-scanner`, `mdns-simulator`
+**mDNS**: `mdns-simulator`
 
 **Random**: `random-rand`, `random-simulator`
 
@@ -214,7 +214,7 @@ Each module has additional sub-features for fine-grained control:
 
 **Time**: `time-simulator`, `time-std`
 
-**UPnP**: `upnp-api`, `upnp-listener`, `upnp-openapi`, `upnp-player`, `upnp-simulator`
+**UPnP**: `upnp-api`, `upnp-openapi`, `upnp-simulator`
 
 **UUID**: `uuid-serde`, `uuid-simulator`, `uuid-uuid`
 
