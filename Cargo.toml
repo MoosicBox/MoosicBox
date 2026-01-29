@@ -368,39 +368,39 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
     "metrics-prometheus",
     "prometheus",
 ] }
-actix-ws = "0.3.0"
+actix-ws = "0.3.1"
 anyhow = "1.0.100"
 arrayvec = "0.7.6"
-assert_cmd = "2.1.1"
+assert_cmd = "2.1.2"
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.12"
-aws-sdk-apigatewaymanagement = "1.91.0"
-aws-sdk-ssm = "1.101.0"
+aws-sdk-apigatewaymanagement = "1.92.0"
+aws-sdk-ssm = "1.102.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.1"
 bytes = "1.11.0"
 bytesize = "2.3.1"
 cargo_metadata = "0.23.1"
-chrono = { version = "0.4.42", default-features = false, features = [
+chrono = { version = "0.4.43", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4.5.55", features = ["derive"] }
 cmake = "0.1.57"
 color-backtrace = { version = "0.7.2", default-features = false, features = [
     "use-btparse-crate",
 ] }
 color-hex = "0.2.0"
-colored = { version = "3.0.0" }
+colored = { version = "3.1.1" }
 console-subscriber = "0.5.0"
 const-hex = "1.17.0"
 const_format = "0.2.35"
 convert_case = "0.10.0"
-cpal = "0.17.0"
+cpal = "0.17.1"
 ctrlc = "3.5.1"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
@@ -412,7 +412,7 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
-flate2 = "1.1.5"
+flate2 = "1.1.8"
 fltk = "1.5.22"
 flume = "0.12.0"
 free_log_client = { version = "0.5.0", default-features = false }
@@ -432,10 +432,10 @@ home = "0.5.12"
 hostname = "0.4.2"
 html-escape = "0.2.13"
 http = "1.4.0"
-id3 = "1.16.3"
+id3 = "1.16.4"
 image = "0.25.9"
 include_dir = "0.7.4"
-insta = "1.45.1"
+insta = "1.46.1"
 itertools = "0.14.0"
 itoa = "1.0.17"
 json5 = { version = "1.3.0", default-features = false }
@@ -443,14 +443,14 @@ kanal = "0.1.1"
 lambda_http = "1.0.2"
 lambda_runtime = "1.0.2"
 libvips = { version = "1.7.3" }
-local-ip-address = "0.6.8"
+local-ip-address = "0.6.9"
 log = { version = "0.4.29", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.17.1"
+mdns-sd = "0.17.2"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
-mlua = { version = "0.11.5", default-features = false }
+mlua = { version = "0.11.6", default-features = false }
 moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
@@ -463,13 +463,13 @@ nanoid = "0.4.0"
 native-tls = "0.2.14"
 net2 = "0.2.39"
 ogg = "0.9.2"
-oneshot = "0.1.11"
+oneshot = "0.1.13"
 open = "5.3.3"
 openssl = { version = "0.10.75", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.31.0", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
-opus = "0.3.0"
+opus = "0.3.1"
 os_info = { version = "3.14.0", default-features = false }
 paste = "1.0.15"
 pin-project = "1.1.10"
@@ -482,11 +482,11 @@ pingora-load-balancing = "0.6.0"
 pingora-proxy = "0.6.0"
 postgres-native-tls = "0.5.2"
 postgres-openssl = "0.5.2"
-postgres-protocol = "0.6.9"
+postgres-protocol = "0.6.10"
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5.0"
-proc-macro2 = "1.0.104"
+proc-macro2 = "1.0.106"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
 proptest = { version = "1.9.0", default-features = false, features = ["std"] }
@@ -494,15 +494,15 @@ puffin = "0.19.1"
 puffin_http = "0.16.1"
 pulldown-cmark = { version = "0.13.0", default-features = false }
 qstring = "0.7.2"
-test-strategy = { version = "0.4.3", default-features = false }
+test-strategy = { version = "0.4.4", default-features = false }
 
-quote = "1.0.42"
+quote = "1.0.44"
 rand = "0.9.2"
 rangemap = "1.7.1"
 ratatui = "0.30.0"
 rayon = { version = "1.11.0", default-features = false }
 rb = "0.4.1"
-rcgen = "0.14.6"
+rcgen = "0.14.7"
 regex = "1.12.2"
 reqwest = { version = "0.12.28", default-features = false, features = [
     "rustls-tls",
@@ -512,20 +512,20 @@ roxmltree = "0.21.1"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
-rust-embed = "8.9.0"
-rust_decimal = { version = "1.39.0", default-features = false }
-rust_decimal_macros = { version = "1.39.0", default-features = false }
+rust-embed = "8.11.0"
+rust_decimal = { version = "1.40.0", default-features = false }
+rust_decimal_macros = { version = "1.40.0", default-features = false }
 rustc_version = "0.4.1"
 ryu = "1.0.22"
 scoped-tls = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
-serde_json = "1.0.148"
+serde_json = "1.0.149"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.16.1", default-features = false }
 serde_yaml = "0.9.34"
-serial_test = "3.2.0"
+serial_test = "3.3.1"
 sha2 = "0.10.9"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.1"
@@ -554,54 +554,54 @@ swc_ecma_transforms_base = "34.0.0"
 swc_ecma_transforms_typescript = "37.0.0"
 swc_ecma_visit = "19.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
-syn = "2.0.111"
+syn = "2.0.114"
 syntect = "5.3.0"
 tantivy = "0.25.0"
 tauri = { version = "2.9.5", features = ["protocol-asset"] }
 tauri-build = { version = "2.5.3", features = [] }
 tauri-plugin = { version = "2.5.2", features = ["build"] }
-tauri-plugin-dialog = "2.4.2"
-tauri-plugin-fs = "2.4.4"
-tauri-plugin-log = "2.7.1"
+tauri-plugin-dialog = "2.6.0"
+tauri-plugin-fs = "2.4.5"
+tauri-plugin-log = "2.8.0"
 tauri-plugin-notification = "2.3.3"
 tempfile = "3.24.0"
 test-case = "3.3.1"
 test-log = "0.2.19"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.48.0" }
-tokio-postgres = { version = "0.7.15", features = [
+tokio = { version = "1.49.0" }
+tokio-postgres = { version = "0.7.16", features = [
     "with-chrono-0_4",
     "with-uuid-1",
 ] }
-tokio-stream = "0.1.17"
-tokio-test = "0.4.4"
+tokio-stream = "0.1.18"
+tokio-test = "0.4.5"
 tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-webpki-roots",
 ] }
-tokio-util = "0.7.17"
-toml = "0.9.10"
+tokio-util = "0.7.18"
+toml = "0.9.11"
 tracing = "0.1.44"
-tracing-opentelemetry = { version = "0.32.0" }
+tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.22"
-tracy-client = { version = "0.18.3", default-features = false }
+tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.114"
 turso = "0.3.2"
 uaparser = "0.6.4"
-url = "2.5.7"
+url = "2.5.8"
 urlencoding = "2.1.3"
 utoipa = { version = "5.4.0", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid = { version = "1.19.0", features = ["v4"] }
+uuid = { version = "1.20.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 which = { version = "8.0.0", default-features = false }
 whoami = "1.6.1"
-xml = "1.2.0"
+xml = "1.2.1"
 
 # Benchmarking
 criterion = { version = "0.8.1", default-features = false, features = [
