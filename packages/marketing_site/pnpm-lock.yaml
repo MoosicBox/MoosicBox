@@ -394,8 +394,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@25.0.10':
-    resolution: {integrity: sha512-zWW5KPngR/yvakJgGOmZ5vTBemDoSqF3AcV/LrO5u5wTWyEAVVh+IT39G4gtyAkh3CtTZs8aX/yRM82OfzHJRg==}
+  '@types/node@25.1.0':
+    resolution: {integrity: sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -1626,8 +1626,8 @@ packages:
     resolution: {integrity: sha512-qHKRW0pw3lYdZMQVkjDBqh8HlamH/LCww2PH7OWEp4Qrt3SFeYMNpnJrQzlSnGrDD5zGR51XqBh7FnNCdVNEHA==}
     engines: {node: '>=18'}
 
-  pacote@21.0.4:
-    resolution: {integrity: sha512-RplP/pDW0NNNDh3pnaoIWYPvNenS7UqMbXyvMqJczosiFWTeGGwJC2NQBLqKf4rGLFfwCOnntw1aEp9Jiqm1MA==}
+  pacote@21.1.0:
+    resolution: {integrity: sha512-WF/PwrImIIVaLmtuCeO5L7n6DA0ZGCqmDPO/XbNjZgNUX+2O5z4f4Wdmu6erBWNICkl3ftKJvit2eIVcpegRRw==}
     engines: {node: ^20.17.0 || >=22.9.0}
     hasBin: true
 
@@ -2348,7 +2348,7 @@ snapshots:
       npm-package-arg: 13.0.2
       npm-pick-manifest: 11.0.3
       npm-registry-fetch: 19.1.1
-      pacote: 21.0.4
+      pacote: 21.1.0
       parse-conflict-json: 5.0.1
       proc-log: 6.1.0
       proggy: 4.0.0
@@ -2392,7 +2392,7 @@ snapshots:
     dependencies:
       cacache: 20.0.3
       json-parse-even-better-errors: 5.0.0
-      pacote: 21.0.4
+      pacote: 21.1.0
       proc-log: 6.1.0
       semver: 7.7.3
     transitivePeerDependencies:
@@ -2635,7 +2635,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 25.0.10
+      '@types/node': 25.1.0
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.8': {}
@@ -2650,15 +2650,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 25.0.10
+      '@types/node': 25.1.0
 
-  '@types/node@25.0.10':
+  '@types/node@25.1.0':
     dependencies:
       undici-types: 7.16.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 25.0.10
+      '@types/node': 25.1.0
 
   '@types/semver@7.7.1': {}
 
@@ -4083,7 +4083,7 @@ snapshots:
     dependencies:
       find-up-simple: 1.0.1
 
-  pacote@21.0.4:
+  pacote@21.1.0:
     dependencies:
       '@npmcli/git': 7.0.1
       '@npmcli/installed-package-contents': 4.0.0
@@ -4172,7 +4172,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 25.0.10
+      '@types/node': 25.1.0
       long: 5.3.2
 
   proxy-addr@2.0.7:
