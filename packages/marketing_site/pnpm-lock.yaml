@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.2
         version: 6.83.2(typescript@5.9.3)
       '@pulumi/pulumi':
-        specifier: ^3.217.1
-        version: 3.217.1(typescript@5.9.3)
+        specifier: ^3.218.0
+        version: 3.218.0(typescript@5.9.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -312,8 +312,8 @@ packages:
   '@pulumi/aws@6.83.2':
     resolution: {integrity: sha512-FggAx+LxANUwD9KPlKy4U8uvVjhR8B6vw+doDq7zP3bRWz7CCCd4sXZT2k/ou0erZN78MTzOXYa1nsN0TBEDJg==}
 
-  '@pulumi/pulumi@3.217.1':
-    resolution: {integrity: sha512-D2ywcnzADLE8oNmRLD7Fh+RnZ/+/yID2c/eG3B8LxP7JuHL6MBS29qR46NMa7j5Jg0viwU0D7q+F4OxWKHPoqA==}
+  '@pulumi/pulumi@3.218.0':
+    resolution: {integrity: sha512-xqPX9zIi6cHFpO6f6W6vcTifLtjvTnlMnvCykvIdYhaHCHPbtx6QxCbOcS/YULpaWa4P7LzO219z3KMJ43/7jA==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2538,14 +2538,14 @@ snapshots:
 
   '@pulumi/aws@6.83.2(typescript@5.9.3)':
     dependencies:
-      '@pulumi/pulumi': 3.217.1(typescript@5.9.3)
+      '@pulumi/pulumi': 3.218.0(typescript@5.9.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - supports-color
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.217.1(typescript@5.9.3)':
+  '@pulumi/pulumi@3.218.0(typescript@5.9.3)':
     dependencies:
       '@grpc/grpc-js': 1.14.3
       '@logdna/tail-file': 2.2.0
