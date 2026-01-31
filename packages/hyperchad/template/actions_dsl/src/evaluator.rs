@@ -6431,4 +6431,226 @@ mod tests {
         assert!(result_str.contains("Option"));
         assert!(result_str.contains("Some"));
     }
+
+    // Tests for element_by_id() with different argument types
+
+    #[test_log::test]
+    fn test_generate_function_call_code_element_by_id_with_string_literal() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::String("my-id".to_string()))];
+        let result = generate_function_call_code(&mut context, "element_by_id", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementByIdRef"));
+        assert!(result_str.contains("my-id"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_element_by_id_with_variable() {
+        let mut context = Context::default();
+        let args = vec![Expression::Variable("id_var".to_string())];
+        let result = generate_function_call_code(&mut context, "element_by_id", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementByIdRef"));
+        assert!(result_str.contains("Variable"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_element_by_id_with_expression() {
+        let mut context = Context::default();
+        // Test with a non-literal, non-variable expression (e.g., a function call)
+        let args = vec![Expression::Call {
+            function: "get_id".to_string(),
+            args: vec![],
+        }];
+        let result = generate_function_call_code(&mut context, "element_by_id", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("ElementByIdRef"));
+        // The expression is evaluated and wrapped
+        assert!(result_str.contains("Literal"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_element_by_id_wrong_arg_count_returns_error() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "element_by_id", &[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects exactly 1 argument"));
+    }
+
+    // Tests for Visibility:: enum variant generation
+
+    #[test_log::test]
+    fn test_generate_function_call_code_visibility_visible_variant() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Visibility::Visible", &[]).unwrap();
+        let result_str = result.to_string();
+        // Token stream has spaces between components
+        assert!(result_str.contains("Visibility"));
+        assert!(result_str.contains("Visible"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_visibility_hidden_variant() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Visibility::Hidden", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Visibility"));
+        assert!(result_str.contains("Hidden"));
+    }
+
+    // Tests for Action:: enum variant generation
+
+    #[test_log::test]
+    fn test_generate_function_call_code_action_set_volume_variant() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Action::SetVolume", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Action :: SetVolume"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_action_seek_current_track_percent_variant() {
+        let mut context = Context::default();
+        let result =
+            generate_function_call_code(&mut context, "Action::SeekCurrentTrackPercent", &[])
+                .unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Action :: SeekCurrentTrackPercent"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_action_play_album_without_args() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Action::PlayAlbum", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Action :: PlayAlbum"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_action_play_album_with_args() {
+        let mut context = Context::default();
+        let args = vec![Expression::Literal(Literal::Integer(42))];
+        let result = generate_function_call_code(&mut context, "Action::PlayAlbum", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Action :: PlayAlbum"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_action_other_variant() {
+        let mut context = Context::default();
+        let result =
+            generate_function_call_code(&mut context, "Action::SomeOtherVariant", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Action :: SomeOtherVariant"));
+    }
+
+    // Tests for Key:: enum variant generation (via Context::resolve_enum_variant)
+    // Note: When args is empty, these go through the early return path at line 1564
+
+    #[test_log::test]
+    fn test_generate_function_call_code_key_enter_variant() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Key::Enter", &[]).unwrap();
+        let result_str = result.to_string();
+        // Context::resolve_enum_variant produces simple enum path
+        assert!(
+            result_str.contains("Key"),
+            "Expected 'Key' in: {result_str}"
+        );
+        assert!(
+            result_str.contains("Enter"),
+            "Expected 'Enter' in: {result_str}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_key_escape_variant() {
+        let mut context = Context::default();
+        let result = generate_function_call_code(&mut context, "Key::Escape", &[]).unwrap();
+        let result_str = result.to_string();
+        // Context::resolve_enum_variant produces simple enum path
+        assert!(result_str.contains("Key"));
+        assert!(result_str.contains("Escape"));
+    }
+
+    // Tests for enum variant resolution without args (simple paths)
+
+    #[test_log::test]
+    fn test_generate_function_call_code_simple_enum_path_without_args() {
+        let mut context = Context::default();
+        let result =
+            generate_function_call_code(&mut context, "MyEnum::SimpleVariant", &[]).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("MyEnum :: SimpleVariant"));
+    }
+
+    // Tests for transform_closure_for_event error cases
+
+    #[test_log::test]
+    fn test_transform_closure_for_event_with_no_params_returns_error() {
+        let mut context = Context::default();
+        let params: Vec<String> = vec![];
+        let body = Expression::Literal(Literal::Integer(1));
+        let result = transform_closure_for_event(&mut context, &params, &body);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("on_event closures must have exactly one parameter")
+        );
+    }
+
+    // Tests for replace_param_with_get_event_value with RawRust - additional coverage
+
+    #[test_log::test]
+    fn test_replace_param_with_get_event_value_in_raw_rust_preserves_unmatched_names() {
+        let mut context = Context::default();
+        let expr = Expression::RawRust("do_something(other_param)".to_string());
+        let result = replace_param_with_get_event_value(&mut context, &expr, "value").unwrap();
+        match result {
+            Expression::RawRust(code) => {
+                assert!(code.contains("other_param"));
+                assert!(!code.contains("get_event_value"));
+            }
+            _ => panic!("Expected RawRust expression"),
+        }
+    }
+
+    // Tests for invoke() with struct variant syntax in action
+
+    #[test_log::test]
+    fn test_generate_function_call_code_invoke_with_struct_variant_action() {
+        let mut context = Context::default();
+        // Create a struct-variant-like call in the first argument
+        let struct_variant_call = Expression::Call {
+            function: "MyEnum::MyVariant".to_string(),
+            args: vec![Expression::Tuple(vec![
+                Expression::Literal(Literal::String("field1".to_string())),
+                Expression::Literal(Literal::Integer(42)),
+            ])],
+        };
+        let args = vec![
+            struct_variant_call,
+            Expression::Literal(Literal::String("value".to_string())),
+        ];
+        let result = generate_function_call_code(&mut context, "invoke", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Parameterized"));
+        assert!(result_str.contains("MyEnum"));
+        assert!(result_str.contains("MyVariant"));
+        assert!(result_str.contains("field1"));
+    }
+
+    #[test_log::test]
+    fn test_generate_function_call_code_invoke_with_regular_expression() {
+        let mut context = Context::default();
+        // A regular variable as the action
+        let args = vec![
+            Expression::Variable("my_action".to_string()),
+            Expression::Literal(Literal::String("value".to_string())),
+        ];
+        let result = generate_function_call_code(&mut context, "invoke", &args).unwrap();
+        let result_str = result.to_string();
+        assert!(result_str.contains("Parameterized"));
+    }
 }

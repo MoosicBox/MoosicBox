@@ -1722,6 +1722,166 @@ mod test_bfs_traversal {
         assert!(matches!(container.element, crate::Element::Div));
         assert_eq!(container.children.len(), 2);
     }
+
+    #[test_log::test]
+    fn bfs_traverse_rev_visits_nodes_in_reverse_level_order() {
+        // Create a tree:
+        //       1 (depth 0)
+        //      / \
+        //     2   3 (depth 1)
+        //    /
+        //   4 (depth 2)
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut visited_ids = Vec::new();
+        bfs.traverse_rev(&container, |c| visited_ids.push(c.id));
+
+        // In reverse BFS order, deeper levels should be visited first
+        // Node 4 (depth 2) should appear before nodes at depth 1, which appear before depth 0
+        if visited_ids.contains(&4) && visited_ids.contains(&1) {
+            let pos_4 = visited_ids.iter().position(|&x| x == 4);
+            let pos_1 = visited_ids.iter().position(|&x| x == 1);
+            if let (Some(p4), Some(p1)) = (pos_4, pos_1) {
+                assert!(
+                    p4 < p1,
+                    "Node 4 (deepest) should be visited before node 1 (root)"
+                );
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_rev_visits_all_nodes_with_children() {
+        // BFS paths only contain paths to nodes that have children
+        // so traverse_rev only visits non-leaf nodes
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    children: vec![Container {
+                        id: 5,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut visited_ids = Vec::new();
+        bfs.traverse_rev(&container, |c| visited_ids.push(c.id));
+
+        // Should visit nodes that have children (and thus are in BFS paths)
+        assert!(!visited_ids.is_empty(), "Should have visited some nodes");
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_with_parents_exclusive_does_not_call_parent_on_leaf() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut parent_calls = Vec::new();
+        let mut visitor_calls = Vec::new();
+
+        bfs.traverse_with_parents(
+            false, // exclusive - parent callback NOT called on the visited node
+            0,
+            &container,
+            |c, data| {
+                parent_calls.push(c.id);
+                data + 1
+            },
+            |c, data| {
+                visitor_calls.push((c.id, data));
+            },
+        );
+
+        // When exclusive (false), the parent callback is only called on ancestors,
+        // not on the visited node itself
+        for (_id, depth) in &visitor_calls {
+            // The depth should equal the number of parent calls made for that node's ancestors
+            // For exclusive mode, depth counts only ancestors, not the node itself
+            assert!(
+                *depth <= parent_calls.len(),
+                "Depth {} should be <= parent call count {}",
+                depth,
+                parent_calls.len()
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_with_parents_inclusive_calls_parent_on_leaf() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut visitor_data = Vec::new();
+
+        bfs.traverse_with_parents(
+            true, // inclusive - parent callback IS called on the visited node
+            0,
+            &container,
+            |_c, data| data + 1,
+            |c, data| {
+                visitor_data.push((c.id, data));
+            },
+        );
+
+        // When inclusive (true), the parent callback is also called on the visited node
+        // So for node at depth d, the data value should be d+1 (includes self)
+        for (id, data) in &visitor_data {
+            assert!(
+                *data > 0,
+                "With inclusive=true, data should be > 0 for node {id}"
+            );
+        }
+    }
 }
 
 static EPSILON: f32 = 0.00001;

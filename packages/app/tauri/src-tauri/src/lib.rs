@@ -1716,4 +1716,88 @@ mod tests {
         assert_eq!(result.artist, "Famous Artist");
         assert!(result.artist_cover.is_none());
     }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_wraps_all_fields() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: Some("conn-123".to_string()),
+            connection_name: Some("My Connection".to_string()),
+            api_url: Some("http://api.example.com".to_string()),
+            client_id: Some("client-abc".to_string()),
+            signature_token: Some("sig-xyz".to_string()),
+            api_token: Some("token-123".to_string()),
+            profile: Some("default".to_string()),
+            playback_target: Some(PlaybackTarget::default()),
+            current_session_id: Some(42),
+        };
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // All fields should be wrapped in Some (indicating they should be updated)
+        assert_eq!(result.connection_id, Some(Some("conn-123".to_string())));
+        assert_eq!(
+            result.connection_name,
+            Some(Some("My Connection".to_string()))
+        );
+        assert_eq!(
+            result.api_url,
+            Some(Some("http://api.example.com".to_string()))
+        );
+        assert_eq!(result.client_id, Some(Some("client-abc".to_string())));
+        assert_eq!(result.signature_token, Some(Some("sig-xyz".to_string())));
+        assert_eq!(result.api_token, Some(Some("token-123".to_string())));
+        assert_eq!(result.profile, Some(Some("default".to_string())));
+        assert!(result.playback_target.is_some());
+        assert_eq!(result.current_session_id, Some(Some(42)));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_to_update_app_state_with_none_values() {
+        let tauri_state = TauriUpdateAppState {
+            connection_id: None,
+            connection_name: None,
+            api_url: Some("http://api.example.com".to_string()),
+            client_id: None,
+            signature_token: None,
+            api_token: None,
+            profile: None,
+            playback_target: None,
+            current_session_id: None,
+        };
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // None values should become Some(None) - indicating "update to None"
+        assert_eq!(result.connection_id, Some(None));
+        assert_eq!(result.connection_name, Some(None));
+        // Provided value should be wrapped in Some(Some(...))
+        assert_eq!(
+            result.api_url,
+            Some(Some("http://api.example.com".to_string()))
+        );
+        assert_eq!(result.client_id, Some(None));
+        assert_eq!(result.signature_token, Some(None));
+        assert_eq!(result.api_token, Some(None));
+        assert_eq!(result.profile, Some(None));
+        assert_eq!(result.playback_target, Some(None));
+        assert_eq!(result.current_session_id, Some(None));
+    }
+
+    #[test_log::test]
+    fn test_tauri_update_app_state_default_all_none() {
+        let tauri_state = TauriUpdateAppState::default();
+
+        let result: UpdateAppState = tauri_state.into();
+
+        // All default None values should become Some(None)
+        assert_eq!(result.connection_id, Some(None));
+        assert_eq!(result.connection_name, Some(None));
+        assert_eq!(result.api_url, Some(None));
+        assert_eq!(result.client_id, Some(None));
+        assert_eq!(result.signature_token, Some(None));
+        assert_eq!(result.api_token, Some(None));
+        assert_eq!(result.profile, Some(None));
+        assert_eq!(result.playback_target, Some(None));
+        assert_eq!(result.current_session_id, Some(None));
+    }
 }

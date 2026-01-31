@@ -3408,4 +3408,159 @@ mod tests {
         let result: Result<TidalAlbumType, _> = (&json_value).to_value_type();
         assert!(result.is_err());
     }
+
+    // TidalApiEndpoint URL construction tests for remaining endpoints
+    #[test_log::test]
+    fn test_tidal_api_endpoint_device_authorization() {
+        let url = tidal_api_endpoint!(DeviceAuthorization);
+        assert_eq!(url, "https://auth.tidal.com/v1/oauth2/device_authorization");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_authorization_token() {
+        let url = tidal_api_endpoint!(AuthorizationToken);
+        assert_eq!(url, "https://auth.tidal.com/v1/oauth2/token");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_artist() {
+        let url = tidal_api_endpoint!(Artist, &[(":artistId", "67890")]);
+        assert_eq!(url, "https://api.tidal.com/v1/artists/67890");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_add_favorite_artist() {
+        let url = tidal_api_endpoint!(AddFavoriteArtist, &[(":userId", "123")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/123/favorites/artists");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_favorite_albums() {
+        let url = tidal_api_endpoint!(FavoriteAlbums, &[(":userId", "456")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/456/favorites/albums");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_add_favorite_album() {
+        let url = tidal_api_endpoint!(AddFavoriteAlbum, &[(":userId", "456")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/456/favorites/albums");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_remove_favorite_album() {
+        let url = tidal_api_endpoint!(
+            RemoveFavoriteAlbum,
+            &[(":userId", "456"), (":albumId", "789")]
+        );
+        assert_eq!(
+            url,
+            "https://api.tidal.com/v1/users/456/favorites/albums/789"
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_artist_albums() {
+        let url = tidal_api_endpoint!(ArtistAlbums, &[(":artistId", "12345")]);
+        assert_eq!(url, "https://api.tidal.com/v1/artists/12345/albums");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_track() {
+        let url = tidal_api_endpoint!(Track, &[(":trackId", "99999")]);
+        assert_eq!(url, "https://api.tidal.com/v1/tracks/99999");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_favorite_tracks() {
+        let url = tidal_api_endpoint!(FavoriteTracks, &[(":userId", "111")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/111/favorites/tracks");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_add_favorite_track() {
+        let url = tidal_api_endpoint!(AddFavoriteTrack, &[(":userId", "111")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/111/favorites/tracks");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_remove_favorite_track() {
+        let url = tidal_api_endpoint!(
+            RemoveFavoriteTrack,
+            &[(":userId", "111"), (":trackId", "222")]
+        );
+        assert_eq!(
+            url,
+            "https://api.tidal.com/v1/users/111/favorites/tracks/222"
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_album_tracks() {
+        let url = tidal_api_endpoint!(AlbumTracks, &[(":albumId", "555")]);
+        assert_eq!(url, "https://api.tidal.com/v1/albums/555/tracks");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_track_url() {
+        let url = tidal_api_endpoint!(TrackUrl, &[(":trackId", "777")]);
+        assert_eq!(url, "https://api.tidal.com/v1/tracks/777/urlpostpaywall");
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_track_playback_info() {
+        let url = tidal_api_endpoint!(TrackPlaybackInfo, &[(":trackId", "888")]);
+        assert_eq!(url, "https://api.tidal.com/v1/tracks/888/playbackinfo");
+    }
+
+    // Test endpoint with full query string construction
+    #[test_log::test]
+    fn test_tidal_api_endpoint_with_multiple_query_params() {
+        let url = tidal_api_endpoint!(
+            Artist,
+            &[(":artistId", "12345")],
+            &[
+                ("countryCode", "US"),
+                ("locale", "en_US"),
+                ("deviceType", "BROWSER")
+            ]
+        );
+        assert_eq!(
+            url,
+            "https://api.tidal.com/v1/artists/12345?countryCode=US&locale=en_US&deviceType=BROWSER"
+        );
+    }
+
+    #[test_log::test]
+    fn test_tidal_api_endpoint_search_with_query_params() {
+        let url = tidal_api_endpoint!(
+            Search,
+            &[],
+            &[("query", "test"), ("limit", "10"), ("offset", "0")]
+        );
+        assert_eq!(
+            url,
+            "https://api.tidal.com/v1/search/top-hits?query=test&limit=10&offset=0"
+        );
+    }
+
+    // Error conversion tests
+    #[test_log::test]
+    fn test_error_to_music_api_error() {
+        let error = Error::NoUserIdAvailable;
+        let music_api_error: moosicbox_music_api::Error = error.into();
+        assert!(matches!(
+            music_api_error,
+            moosicbox_music_api::Error::Other(_)
+        ));
+    }
+
+    #[test_log::test]
+    fn test_try_from_album_type_error_to_music_api_error() {
+        let error = TryFromAlbumTypeError;
+        let music_api_error: moosicbox_music_api::Error = error.into();
+        assert!(matches!(
+            music_api_error,
+            moosicbox_music_api::Error::Other(_)
+        ));
+    }
 }

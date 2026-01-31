@@ -1999,4 +1999,124 @@ mod tests {
             "Results should be deduplicated"
         );
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_with_offset_beyond_results() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with offset beyond total results available
+        let response = crate::global_search("elder", Some(100), Some(10)).unwrap();
+
+        // Should return empty results since offset is beyond all results
+        assert!(response.results.is_empty());
+        // Position should be the starting offset when no results fetched
+        assert_eq!(response.position, 100);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_uses_default_limit_and_offset() {
+        before_each();
+
+        // Create properly structured data with all required fields for global_search parsing
+        let data: Vec<Vec<(&str, DataValue)>> = vec![
+            vec![
+                ("document_type", DataValue::String("artists".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Default Test Artist".into()),
+                ),
+                ("artist_id", DataValue::String("1".into())),
+                ("album_title", DataValue::String(String::new())),
+                ("track_title", DataValue::String(String::new())),
+                ("cover", DataValue::String(String::new())),
+                ("blur", DataValue::Bool(false)),
+            ],
+            vec![
+                ("document_type", DataValue::String("artists".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Default Another Artist".into()),
+                ),
+                ("artist_id", DataValue::String("2".into())),
+                ("album_title", DataValue::String(String::new())),
+                ("track_title", DataValue::String(String::new())),
+                ("cover", DataValue::String(String::new())),
+                ("blur", DataValue::Bool(false)),
+            ],
+        ];
+
+        crate::populate_global_search_index_sync(&data, true).unwrap();
+
+        // Call with None parameters to use defaults (offset=0, limit=10)
+        let response = crate::global_search("default", None, None).unwrap();
+
+        // Should return results (max 10 by default)
+        assert!(!response.results.is_empty());
+        assert!(response.results.len() <= 10);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_with_zero_limit() {
+        before_each();
+
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
+
+        // Search with limit=0 should return no results
+        let response = crate::global_search("elder", None, Some(0)).unwrap();
+
+        assert!(response.results.is_empty());
+        assert_eq!(response.position, 0);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_global_search_partial_page_results() {
+        before_each();
+
+        // Create a small dataset with exactly 3 items - include all required fields
+        let data: Vec<Vec<(&str, DataValue)>> = vec![
+            vec![
+                ("document_type", DataValue::String("artists".into())),
+                ("artist_title", DataValue::String("Partial One".into())),
+                ("artist_id", DataValue::String("1".into())),
+                ("album_title", DataValue::String(String::new())),
+                ("track_title", DataValue::String(String::new())),
+                ("cover", DataValue::String(String::new())),
+                ("blur", DataValue::Bool(false)),
+            ],
+            vec![
+                ("document_type", DataValue::String("artists".into())),
+                ("artist_title", DataValue::String("Partial Two".into())),
+                ("artist_id", DataValue::String("2".into())),
+                ("album_title", DataValue::String(String::new())),
+                ("track_title", DataValue::String(String::new())),
+                ("cover", DataValue::String(String::new())),
+                ("blur", DataValue::Bool(false)),
+            ],
+            vec![
+                ("document_type", DataValue::String("artists".into())),
+                ("artist_title", DataValue::String("Partial Three".into())),
+                ("artist_id", DataValue::String("3".into())),
+                ("album_title", DataValue::String(String::new())),
+                ("track_title", DataValue::String(String::new())),
+                ("cover", DataValue::String(String::new())),
+                ("blur", DataValue::Bool(false)),
+            ],
+        ];
+
+        crate::populate_global_search_index_sync(&data, true).unwrap();
+
+        // Request more results than exist (limit=10, but only 3 items)
+        let response = crate::global_search("partial", None, Some(10)).unwrap();
+
+        // Should return all 3 items, not 10
+        assert_eq!(response.results.len(), 3);
+        // Position should reflect all items were processed
+        assert_eq!(response.position, 3);
+    }
 }

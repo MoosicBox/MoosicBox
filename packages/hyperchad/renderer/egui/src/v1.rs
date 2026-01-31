@@ -4807,4 +4807,633 @@ mod tests {
         assert!((width - 100.0).abs() < f32::EPSILON);
         assert!((height - 50.0).abs() < f32::EPSILON);
     }
+
+    // ==================== add_watch_pos tests ====================
+
+    #[test_log::test]
+    fn test_add_watch_pos_empty_container_with_no_actions() {
+        let container = make_container(1, None, vec![], vec![]);
+        let mut watch_positions = HashSet::new();
+
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_position_x_self_target_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        // Create a container with an action that uses PositionX(SelfTarget)
+        let mut container = make_container(1, None, vec![], vec![]);
+
+        let position_x_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::SelfTarget,
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_x_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(100.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 1 should be in watch_positions because of SelfTarget
+        assert!(watch_positions.contains(&1));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_position_y_by_id_target_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        // Create nested containers
+        let target_child = make_container(3, Some("target-element"), vec![], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let mut container = make_container(1, None, vec![], vec![child]);
+
+        // Add action with PositionY targeting by string id
+        let position_y_calc = hyperchad_actions::logic::CalcValue::PositionY {
+            target: ElementTarget::ById(Target::Literal("target-element".to_string())),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_y_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(50.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Hover,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 3 should be in watch_positions (found by str_id "target-element")
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_mouse_x_target_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        // Create container with class for targeting
+        let target_child = make_container(2, None, vec!["mouse-target"], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_child]);
+
+        // Add action with MouseX targeting by class
+        let mouse_x_calc = hyperchad_actions::logic::CalcValue::MouseX {
+            target: Some(ElementTarget::Class(Target::Literal(
+                "mouse-target".to_string(),
+            ))),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(mouse_x_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(0.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::MouseDown,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 2 should be in watch_positions (found by class)
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_mouse_y_no_target_does_not_add() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let mut container = make_container(1, None, vec![], vec![]);
+
+        // Add action with MouseY but no target (global mouse position)
+        let mouse_y_calc = hyperchad_actions::logic::CalcValue::MouseY { target: None };
+        let value = hyperchad_actions::logic::Value::Calc(mouse_y_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(0.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Hover,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // MouseY with no target should NOT add to watch_positions
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_arithmetic_value() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target_child = make_container(2, Some("child-a"), vec![], vec![]);
+        let target_child_b = make_container(3, Some("child-b"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_child, target_child_b]);
+
+        // Create arithmetic value: PositionX(child-a) + PositionY(child-b)
+        let pos_x = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("child-a".to_string())),
+        };
+        let pos_y = hyperchad_actions::logic::CalcValue::PositionY {
+            target: ElementTarget::ById(Target::Literal("child-b".to_string())),
+        };
+        let arithmetic = hyperchad_actions::logic::Arithmetic::Plus(
+            hyperchad_actions::logic::Value::Calc(pos_x),
+            hyperchad_actions::logic::Value::Calc(pos_y),
+        );
+        let value = hyperchad_actions::logic::Value::Arithmetic(Box::new(arithmetic));
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(100.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both containers 2 and 3 should be in watch_positions
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_recursively_searches_children() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        // Create a deeply nested structure where only a grandchild has actions
+        let target = make_container(4, None, vec!["deep-target"], vec![]);
+        let mut grandchild = make_container(3, None, vec![], vec![target]);
+
+        // Add action to grandchild
+        let position_x_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::Class(Target::Literal("deep-target".to_string())),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_x_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(0.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        grandchild.actions.push(Action {
+            trigger: ActionTrigger::Immediate,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let child = make_container(2, None, vec![], vec![grandchild]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 4 should be found through recursive search
+        assert!(watch_positions.contains(&4));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_parameterized_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target_child = make_container(2, Some("param-target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_child]);
+
+        // Create a Parameterized action with PositionX value
+        let position_x_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("param-target".to_string())),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_x_calc);
+        let inner_action = ActionType::NoOp;
+        let parameterized_action = ActionType::Parameterized {
+            action: Box::new(inner_action),
+            value,
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: parameterized_action,
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 2 should be in watch_positions
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_multi_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target_a = make_container(2, Some("target-a"), vec![], vec![]);
+        let target_b = make_container(3, Some("target-b"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_a, target_b]);
+
+        // Create Multi action with two Parameterized actions
+        let pos_x_a = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("target-a".to_string())),
+        };
+        let pos_x_b = hyperchad_actions::logic::CalcValue::PositionY {
+            target: ElementTarget::ById(Target::Literal("target-b".to_string())),
+        };
+
+        let action_a = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: hyperchad_actions::logic::Value::Calc(pos_x_a),
+        };
+        let action_b = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: hyperchad_actions::logic::Value::Calc(pos_x_b),
+        };
+
+        let multi_action = ActionType::Multi(vec![action_a, action_b]);
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Resize,
+            effect: ActionEffect {
+                action: multi_action,
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both containers 2 and 3 should be in watch_positions
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_logic_nested_actions() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target_a = make_container(2, Some("target-then"), vec![], vec![]);
+        let target_b = make_container(3, Some("target-else"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_a, target_b]);
+
+        // Create Logic action with nested actions in both branches
+        let pos_then = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("target-then".to_string())),
+        };
+        let pos_else = hyperchad_actions::logic::CalcValue::PositionY {
+            target: ElementTarget::ById(Target::Literal("target-else".to_string())),
+        };
+
+        let then_action = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: hyperchad_actions::logic::Value::Calc(pos_then),
+        };
+        let else_action = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: hyperchad_actions::logic::Value::Calc(pos_else),
+        };
+
+        let condition = hyperchad_actions::logic::Condition::Bool(true);
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![ActionEffect {
+                action: then_action,
+                ..Default::default()
+            }],
+            else_actions: vec![ActionEffect {
+                action: else_action,
+                ..Default::default()
+            }],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both targets from then and else branches should be watched
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_event_action_wrapping() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target = make_container(2, Some("event-target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create Event action wrapping a Parameterized action
+        let pos_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("event-target".to_string())),
+        };
+        let inner_action = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: hyperchad_actions::logic::Value::Calc(pos_calc),
+        };
+        let event_action = ActionType::Event {
+            name: "custom-event".to_string(),
+            action: Box::new(inner_action),
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: event_action,
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 2 should be watched through the Event wrapper
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_multi_effect_action() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target_a = make_container(2, Some("effect-a"), vec![], vec![]);
+        let target_b = make_container(3, Some("effect-b"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target_a, target_b]);
+
+        // Create MultiEffect action with multiple effects
+        let pos_a = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("effect-a".to_string())),
+        };
+        let pos_b = hyperchad_actions::logic::CalcValue::PositionY {
+            target: ElementTarget::ById(Target::Literal("effect-b".to_string())),
+        };
+
+        let effect_a = ActionEffect {
+            action: ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: hyperchad_actions::logic::Value::Calc(pos_a),
+            },
+            ..Default::default()
+        };
+        let effect_b = ActionEffect {
+            action: ActionType::Parameterized {
+                action: Box::new(ActionType::NoOp),
+                value: hyperchad_actions::logic::Value::Calc(pos_b),
+            },
+            ..Default::default()
+        };
+
+        let multi_effect_action = ActionType::MultiEffect(vec![effect_a, effect_b]);
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Hover,
+            effect: ActionEffect {
+                action: multi_effect_action,
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Both containers should be watched
+        assert!(watch_positions.contains(&2));
+        assert!(watch_positions.contains(&3));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_arithmetic_grouping() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target = make_container(2, Some("grouped-target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create nested arithmetic with Grouping
+        let pos_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::ById(Target::Literal("grouped-target".to_string())),
+        };
+        let inner_arithmetic = hyperchad_actions::logic::Arithmetic::Plus(
+            hyperchad_actions::logic::Value::Calc(pos_calc),
+            hyperchad_actions::logic::Value::Real(10.0),
+        );
+        let grouped = hyperchad_actions::logic::Arithmetic::Grouping(Box::new(inner_arithmetic));
+        let outer_arithmetic = hyperchad_actions::logic::Arithmetic::Multiply(
+            hyperchad_actions::logic::Value::Arithmetic(Box::new(grouped)),
+            hyperchad_actions::logic::Value::Real(2.0),
+        );
+
+        let value = hyperchad_actions::logic::Value::Arithmetic(Box::new(outer_arithmetic));
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(100.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Container id 2 should be found through grouped arithmetic
+        assert!(watch_positions.contains(&2));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_skips_non_position_calc_values() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let target = make_container(2, Some("non-position-target"), vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![target]);
+
+        // Create condition with non-position CalcValue (Visibility)
+        let visibility_calc = hyperchad_actions::logic::CalcValue::Visibility {
+            target: ElementTarget::ById(Target::Literal("non-position-target".to_string())),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(visibility_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::String("visible".to_string()),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Visibility CalcValue should NOT add to watch_positions
+        assert!(watch_positions.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_element_id_target() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        // ElementTarget::Id uses numeric id (which is actually the self_id behavior)
+        let child = make_container(42, None, vec![], vec![]);
+        let mut container = make_container(1, None, vec![], vec![child]);
+
+        let position_x_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::Id(42),
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_x_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(0.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        container.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // ElementTarget::Id uses the inner id value directly
+        assert!(watch_positions.contains(&42));
+    }
+
+    #[test_log::test]
+    fn test_add_watch_pos_with_last_child_target() {
+        use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
+
+        let grandchild_a = make_container(3, None, vec![], vec![]);
+        let grandchild_b = make_container(4, None, vec![], vec![]);
+        let grandchild_c = make_container(5, None, vec![], vec![]);
+        let mut child = make_container(
+            2,
+            None,
+            vec![],
+            vec![grandchild_a, grandchild_b, grandchild_c],
+        );
+
+        // Add action to child that references LastChild
+        let position_x_calc = hyperchad_actions::logic::CalcValue::PositionX {
+            target: ElementTarget::LastChild,
+        };
+        let value = hyperchad_actions::logic::Value::Calc(position_x_calc);
+        let condition = hyperchad_actions::logic::Condition::Eq(
+            value,
+            hyperchad_actions::logic::Value::Real(0.0),
+        );
+        let logic_action = hyperchad_actions::logic::If {
+            condition,
+            actions: vec![],
+            else_actions: vec![],
+        };
+
+        child.actions.push(Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Logic(logic_action),
+                ..Default::default()
+            },
+        });
+
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let mut watch_positions = HashSet::new();
+        add_watch_pos(&container, &container, &mut watch_positions);
+
+        // Last child (id 5) should be in watch_positions
+        assert!(watch_positions.contains(&5));
+    }
 }
