@@ -39,6 +39,8 @@ The MoosicBox Async Macros package provides:
 #### Main Macros
 
 - **`#[main]`**: Main function macro for `switchy_async` runtime (uses simulator or tokio transparently based on enabled features)
+- **`#[unsync_main]`**: Main function macro for `switchy::unsync` runtime (simulator feature only)
+- **`#[tokio_main_wrapper]`**: Tokio-compatible main wrapper (always available)
 
 ### AST Transformation
 
@@ -236,6 +238,30 @@ async fn main() {
 #[main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
+}
+```
+
+#### Using `unsync_main`
+
+```rust
+use switchy_async_macros::unsync_main;
+
+#[unsync_main]
+async fn main() {
+    // Async main using switchy::unsync runtime
+    println!("Hello from unsync main!");
+}
+```
+
+#### Using `tokio_main_wrapper`
+
+```rust
+use switchy_async_macros::tokio_main_wrapper;
+
+#[tokio_main_wrapper]
+async fn main() {
+    // Async main using tokio-compatible runtime (always available)
+    println!("Hello from tokio main!");
 }
 ```
 

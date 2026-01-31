@@ -210,8 +210,6 @@ pub struct MediaInfo {
 ## Feature Flags
 
 - `api`: Enable Actix Web API endpoints
-- `listener`: Enable UPnP event listener functionality
-- `player`: Enable media player integration
 - `openapi`: Enable OpenAPI documentation
 - `simulator`: Enable device simulation for testing
 
@@ -295,8 +293,8 @@ cargo test --features "simulator"
 
 ## See Also
 
-- [`moosicbox_player`](../player/README.md) - Audio playback engine
-- [`moosicbox_audio_output`](../audio_output/README.md) - Audio output backends
-- [`moosicbox_session`](../session/README.md) - Session management
-- [`moosicbox_music_api`](../music_api/README.md) - Music API abstractions
+- [`moosicbox_player`](../../player/README.md) - Audio playback engine
+- [`moosicbox_audio_output`](../../audio_output/README.md) - Audio output backends
+- [`moosicbox_session`](../../session/README.md) - Session management
+- [`moosicbox_music_api`](../../music_api/README.md) - Music API abstractions
 - [`switchy_http`](../http/README.md) - HTTP client utilities
