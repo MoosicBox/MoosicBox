@@ -1385,6 +1385,10 @@ mod native_app {
 
     static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
+    /// Native application renderer for Tauri.
+    ///
+    /// This renderer wraps the `VanillaJsTagRenderer` and integrates with Tauri's
+    /// event system to emit UI updates to the frontend via Server-Sent Events (SSE).
     #[derive(Debug, Clone)]
     pub struct Renderer {
         tag_renderer: Arc<Mutex<VanillaJsTagRenderer>>,
