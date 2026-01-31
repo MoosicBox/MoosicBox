@@ -1202,4 +1202,191 @@ mod tests {
         assert_eq!(sessions[2].volume, Some(0.5));
         drop(sessions);
     }
+
+    // Tests for close_ws_connection
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_close_ws_connection_succeeds_with_no_handles() {
+        let state = crate::AppState::new();
+
+        // Ensure no handles are set (default state)
+        assert!(state.ws_handle.read().await.is_none());
+        assert!(state.ws_join_handle.read().await.is_none());
+
+        // close_ws_connection should succeed with no handles
+        let result = state.close_ws_connection().await;
+
+        assert!(result.is_ok());
+    }
+
+    // Tests for flush_ws_message_buffer
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_flush_ws_message_buffer_does_nothing_when_no_handle() {
+        let state = crate::AppState::new();
+
+        // Add some messages to the buffer
+        state
+            .ws_message_buffer
+            .write()
+            .await
+            .push(InboundPayload::Ping(EmptyPayload {}));
+        state
+            .ws_message_buffer
+            .write()
+            .await
+            .push(InboundPayload::GetConnectionId(EmptyPayload {}));
+
+        assert_eq!(state.ws_message_buffer.read().await.len(), 2);
+
+        // flush should succeed but not modify buffer (no handle available)
+        let result = state.flush_ws_message_buffer().await;
+
+        assert!(result.is_ok());
+        // Buffer should remain unchanged since there's no handle to flush to
+        assert_eq!(state.ws_message_buffer.read().await.len(), 2);
+    }
+
+    // Tests for handle_playback_update listener invocation
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_calls_before_listeners_when_trigger_events_true() {
+        let before_count = Arc::new(AtomicU32::new(0));
+        let before_count_clone = before_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_before_handle_playback_update_listener(move |_update| {
+                let count = before_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        // Add a session for the update
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let update = create_update(1);
+        let result = state.handle_playback_update(&update, true).await;
+
+        assert!(result.is_ok());
+        assert_eq!(before_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_calls_after_listeners_when_trigger_events_true() {
+        let after_count = Arc::new(AtomicU32::new(0));
+        let after_count_clone = after_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_handle_playback_update_listener(move |_update| {
+                let count = after_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let update = create_update(1);
+        let result = state.handle_playback_update(&update, true).await;
+
+        assert!(result.is_ok());
+        assert_eq!(after_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_skips_before_listeners_when_trigger_events_false() {
+        let before_count = Arc::new(AtomicU32::new(0));
+        let before_count_clone = before_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_before_handle_playback_update_listener(move |_update| {
+                let count = before_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let update = create_update(1);
+        let result = state.handle_playback_update(&update, false).await;
+
+        assert!(result.is_ok());
+        // Listener should NOT be called when trigger_events is false
+        assert_eq!(before_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_skips_after_listeners_when_trigger_events_false() {
+        let after_count = Arc::new(AtomicU32::new(0));
+        let after_count_clone = after_count.clone();
+
+        let state =
+            crate::AppState::new().with_on_after_handle_playback_update_listener(move |_update| {
+                let count = after_count_clone.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+
+        let session = create_test_session(1, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let update = create_update(1);
+        let result = state.handle_playback_update(&update, false).await;
+
+        assert!(result.is_ok());
+        // Listener should NOT be called when trigger_events is false
+        assert_eq!(after_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_still_applies_session_update_when_trigger_events_false() {
+        let state = crate::AppState::new();
+
+        let session = create_test_session(1, "Original Name");
+        *state.current_sessions.write().await = vec![session];
+
+        let mut update = create_update(1);
+        update.name = Some("Updated Name".to_string());
+        update.volume = Some(0.9);
+
+        // Even with trigger_events=false, session update should still be applied
+        let result = state.handle_playback_update(&update, false).await;
+
+        assert!(result.is_ok());
+        let sessions = state.current_sessions.read().await;
+        assert_eq!(sessions[0].name, "Updated Name");
+        assert_eq!(sessions[0].volume, Some(0.9));
+        drop(sessions);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_playback_update_receives_correct_update_in_listeners() {
+        let received_session_id = Arc::new(AtomicU32::new(0));
+        let received_session_id_clone = received_session_id.clone();
+
+        let state =
+            crate::AppState::new().with_on_before_handle_playback_update_listener(move |update| {
+                let session_id_store = received_session_id_clone.clone();
+                let session_id = update.session_id;
+                async move {
+                    #[allow(clippy::cast_possible_truncation)]
+                    session_id_store.store(session_id as u32, Ordering::SeqCst);
+                }
+            });
+
+        let session = create_test_session(42, "Test Session");
+        *state.current_sessions.write().await = vec![session];
+
+        let update = create_update(42);
+        let result = state.handle_playback_update(&update, true).await;
+
+        assert!(result.is_ok());
+        assert_eq!(received_session_id.load(Ordering::SeqCst), 42);
+    }
 }

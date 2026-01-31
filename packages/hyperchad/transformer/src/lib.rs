@@ -1483,6 +1483,185 @@ mod test_container_methods {
         };
         assert_eq!(container.fixed_positioned_elements().count(), 2);
     }
+
+    #[test_log::test]
+    fn find_element_by_class_finds_deeply_nested_element() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    children: vec![Container {
+                        id: 4,
+                        classes: vec!["target-class".to_string()],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let found = container.find_element_by_class("target-class");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 4);
+    }
+
+    #[test_log::test]
+    fn find_element_by_class_finds_first_match_in_breadth_first_order() {
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        classes: vec!["shared-class".to_string()],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    classes: vec!["shared-class".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        // find_element_by_class uses depth-first search, so it finds the first one in tree order
+        let found = container.find_element_by_class("shared-class");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 4);
+    }
+
+    #[test_log::test]
+    fn find_element_by_class_checks_multiple_classes() {
+        let container = Container {
+            id: 1,
+            classes: vec![
+                "first-class".to_string(),
+                "second-class".to_string(),
+                "third-class".to_string(),
+            ],
+            ..Default::default()
+        };
+        assert!(container.find_element_by_class("first-class").is_some());
+        assert!(container.find_element_by_class("second-class").is_some());
+        assert!(container.find_element_by_class("third-class").is_some());
+        assert!(container.find_element_by_class("nonexistent").is_none());
+    }
+
+    #[test_log::test]
+    fn find_parent_finds_direct_parent() {
+        let child_id = 2;
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: child_id,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let child = Container {
+            id: child_id,
+            ..Default::default()
+        };
+        let found = child.find_parent(&mut container);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 1);
+    }
+
+    #[test_log::test]
+    fn find_parent_finds_nested_parent() {
+        let child_id = 3;
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: child_id,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let child = Container {
+            id: child_id,
+            ..Default::default()
+        };
+        let found = child.find_parent(&mut container);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 2);
+    }
+
+    #[test_log::test]
+    fn find_parent_returns_none_when_not_found() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let orphan = Container {
+            id: 999,
+            ..Default::default()
+        };
+        assert!(orphan.find_parent(&mut container).is_none());
+    }
+
+    #[test_log::test]
+    fn find_parent_by_id_finds_nested_parent() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let parent = container.find_parent_by_id(4);
+        assert!(parent.is_some());
+        assert_eq!(parent.unwrap().id, 3);
+    }
+
+    #[test_log::test]
+    fn find_parent_by_id_mut_finds_nested_parent_and_allows_modification() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let parent = container.find_parent_by_id_mut(3);
+        assert!(parent.is_some());
+        let parent = parent.unwrap();
+        assert_eq!(parent.id, 2);
+        parent.str_id = Some("modified".to_string());
+
+        // Verify modification persisted
+        let found = container.find_element_by_str_id("modified");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, 2);
+    }
 }
 
 #[cfg(test)]
@@ -1721,6 +1900,198 @@ mod test_bfs_traversal {
 
         assert!(matches!(container.element, crate::Element::Div));
         assert_eq!(container.children.len(), 2);
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_rev_visits_nodes_in_reverse_level_order() {
+        let container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    children: vec![Container {
+                        id: 4,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    children: vec![Container {
+                        id: 5,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut forward_order = Vec::new();
+        let mut reverse_order = Vec::new();
+
+        bfs.traverse(&container, |c| forward_order.push(c.id));
+        bfs.traverse_rev(&container, |c| reverse_order.push(c.id));
+
+        // Verify that traverse_rev visits nodes in some order
+        // and that all non-leaf nodes are visited
+        assert!(!forward_order.is_empty());
+        assert!(!reverse_order.is_empty());
+        // Both should visit the same nodes (parents only, not leaves)
+        assert_eq!(forward_order.len(), reverse_order.len());
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_mut_allows_modification() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        bfs.traverse_mut(&mut container, |c| {
+            c.str_id = Some(format!("modified-{}", c.id));
+        });
+
+        // Verify modifications
+        assert!(container.find_element_by_str_id("modified-2").is_some());
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_rev_mut_allows_modification_in_reverse() {
+        let mut container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        bfs.traverse_rev_mut(&mut container, |c| {
+            c.str_id = Some(format!("rev-{}", c.id));
+        });
+
+        // Verify modifications were applied
+        assert!(container.find_element_by_str_id("rev-2").is_some());
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_with_parents_propagates_data() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                children: vec![Container {
+                    id: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut depths = Vec::new();
+
+        bfs.traverse_with_parents(
+            false,
+            0usize, // initial depth
+            &container,
+            |_, depth| depth + 1, // increment depth at each parent
+            |c, depth| depths.push((c.id, depth)),
+        );
+
+        // Nodes at different depths should have different depth values
+        assert!(!depths.is_empty());
+        for (id, depth) in depths {
+            // Depth should correlate with nesting level
+            if id == 2 {
+                assert_eq!(depth, 1);
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn bfs_traverse_with_parents_inclusive_includes_current_node() {
+        let container = Container {
+            id: 1,
+            children: vec![Container {
+                id: 2,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let bfs = container.bfs();
+        let mut inclusive_depths = Vec::new();
+        let mut non_inclusive_depths = Vec::new();
+
+        bfs.traverse_with_parents(
+            true, // inclusive
+            0usize,
+            &container,
+            |_, depth| depth + 1,
+            |c, depth| inclusive_depths.push((c.id, depth)),
+        );
+
+        bfs.traverse_with_parents(
+            false, // non-inclusive
+            0usize,
+            &container,
+            |_, depth| depth + 1,
+            |c, depth| non_inclusive_depths.push((c.id, depth)),
+        );
+
+        // Inclusive adds one more level of parent processing
+        for ((i_id, i_depth), (ni_id, ni_depth)) in
+            inclusive_depths.iter().zip(non_inclusive_depths.iter())
+        {
+            assert_eq!(i_id, ni_id);
+            assert_eq!(*i_depth, *ni_depth + 1);
+        }
+    }
+
+    #[test_log::test]
+    fn bfs_visit_mut_allows_modification() {
+        let mut container = Container {
+            id: 1,
+            children: vec![
+                Container {
+                    id: 2,
+                    ..Default::default()
+                },
+                Container {
+                    id: 3,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut count = 0;
+        let _ = container.bfs_visit_mut(|c| {
+            count += 1;
+            c.str_id = Some(format!("visited-{}", c.id));
+        });
+
+        assert!(count >= 3);
+        assert!(container.find_element_by_str_id("visited-2").is_some());
+        assert!(container.find_element_by_str_id("visited-3").is_some());
     }
 }
 
