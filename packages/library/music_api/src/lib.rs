@@ -828,57 +828,16 @@ impl MusicApi for LibraryMusicApi {
 mod tests {
     use regex::{Captures, Regex};
 
-    /// Tests the Windows path conversion logic used in `track_source()`.
-    /// Verifies that Unix-style mount paths like "/mnt/c" are correctly
-    /// converted to Windows drive letters like "C:".
-    #[cfg(target_os = "windows")]
-    #[test_log::test]
-    fn test_windows_path_conversion_single_drive() {
+    /// Converts a Unix-style WSL mount path to a Windows path.
+    /// This helper function extracts the regex-based conversion logic from `track_source()`
+    /// so it can be tested independently of the OS.
+    fn convert_wsl_path_to_windows(path: &str) -> String {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/c/Users/test/file.mp3";
-
-        let result = regex
+        regex
             .replace(path, |caps: &Captures| {
                 format!("{}:", caps[1].to_uppercase())
             })
-            .replace('/', "\\");
-
-        assert_eq!(result, "C:\\Users\\test\\file.mp3");
-    }
-
-    /// Tests Windows path conversion with lowercase drive letters.
-    /// Ensures that the drive letter is properly uppercased during conversion.
-    #[cfg(target_os = "windows")]
-    #[test_log::test]
-    fn test_windows_path_conversion_lowercase_drive() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/d/data/music.flac";
-
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
-
-        assert_eq!(result, "D:\\data\\music.flac");
-    }
-
-    /// Tests Windows path conversion when no mount point is present.
-    /// Verifies that paths without "/mnt/" are still processed correctly
-    /// (slashes converted to backslashes).
-    #[cfg(target_os = "windows")]
-    #[test_log::test]
-    fn test_windows_path_conversion_no_mount() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/some/other/path.mp3";
-
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
-
-        assert_eq!(result, "\\some\\other\\path.mp3");
+            .replace('/', "\\")
     }
 
     /// Tests that Unix systems don't perform Windows path conversion.
@@ -886,16 +845,11 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test_log::test]
     fn test_unix_path_no_conversion() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/c/Users/test/file.mp3";
 
-        // On Unix, no conversion should happen
+        // On Unix, no conversion should happen in the actual code
         let result = if std::env::consts::OS == "windows" {
-            regex
-                .replace(path, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\")
+            convert_wsl_path_to_windows(path)
         } else {
             path.to_string()
         };
@@ -903,20 +857,76 @@ mod tests {
         assert_eq!(result, path);
     }
 
-    /// Tests path conversion with multiple directory levels.
-    /// Ensures deep directory structures are handled correctly.
-    #[cfg(target_os = "windows")]
+    // Tests for the WSL path conversion regex logic.
+    // These tests verify the conversion logic independent of the OS,
+    // ensuring the regex and string manipulation work correctly on any platform.
+
+    /// Tests that a simple WSL mount path converts correctly to Windows format.
+    /// Verifies: /mnt/c -> C:, forward slashes -> backslashes.
     #[test_log::test]
-    fn test_windows_path_conversion_deep_directory() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/e/Music/Albums/2023/Best/track.flac";
+    fn test_wsl_path_conversion_drive_c() {
+        let result = convert_wsl_path_to_windows("/mnt/c/Users/test/file.mp3");
+        assert_eq!(result, "C:\\Users\\test\\file.mp3");
+    }
 
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
+    /// Tests that lowercase drive letters are uppercased during conversion.
+    /// Verifies the regex capture group uppercasing logic.
+    #[test_log::test]
+    fn test_wsl_path_conversion_uppercases_drive_letter() {
+        let result = convert_wsl_path_to_windows("/mnt/d/data/music.flac");
+        assert_eq!(result, "D:\\data\\music.flac");
+    }
 
+    /// Tests paths without a /mnt/ prefix.
+    /// When there's no WSL mount point, slashes should still be converted to backslashes.
+    #[test_log::test]
+    fn test_wsl_path_conversion_no_mount_prefix() {
+        let result = convert_wsl_path_to_windows("/some/other/path.mp3");
+        assert_eq!(result, "\\some\\other\\path.mp3");
+    }
+
+    /// Tests conversion with deeply nested directory paths.
+    /// Verifies that all forward slashes in the path are converted.
+    #[test_log::test]
+    fn test_wsl_path_conversion_deep_directory() {
+        let result = convert_wsl_path_to_windows("/mnt/e/Music/Albums/2023/Best/track.flac");
         assert_eq!(result, "E:\\Music\\Albums\\2023\\Best\\track.flac");
+    }
+
+    /// Tests conversion with different drive letters (beyond a, b, c, d).
+    /// Verifies the regex matches any single-character drive letter.
+    #[test_log::test]
+    fn test_wsl_path_conversion_various_drives() {
+        assert_eq!(
+            convert_wsl_path_to_windows("/mnt/z/archive/old.mp3"),
+            "Z:\\archive\\old.mp3"
+        );
+        assert_eq!(
+            convert_wsl_path_to_windows("/mnt/f/media/video.mkv"),
+            "F:\\media\\video.mkv"
+        );
+    }
+
+    /// Tests that filenames with special characters (but no spaces) are preserved.
+    /// The conversion should only affect path separators and the mount prefix.
+    #[test_log::test]
+    fn test_wsl_path_conversion_special_chars_in_filename() {
+        let result = convert_wsl_path_to_windows("/mnt/c/Music/Artist - Album (2023)/01_track.mp3");
+        assert_eq!(result, "C:\\Music\\Artist - Album (2023)\\01_track.mp3");
+    }
+
+    /// Tests that the root of a WSL mount converts correctly (no subdirectories).
+    #[test_log::test]
+    fn test_wsl_path_conversion_root_of_drive() {
+        let result = convert_wsl_path_to_windows("/mnt/c/file.txt");
+        assert_eq!(result, "C:\\file.txt");
+    }
+
+    /// Tests an empty path (edge case).
+    /// An empty path should remain empty after conversion.
+    #[test_log::test]
+    fn test_wsl_path_conversion_empty_path() {
+        let result = convert_wsl_path_to_windows("");
+        assert_eq!(result, "");
     }
 }

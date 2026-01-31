@@ -271,6 +271,28 @@ mod tests {
         assert!(pick_random_unused_port().is_some());
     }
 
+    #[cfg(feature = "rand")]
+    #[test_log::test]
+    fn test_pick_random_unused_port_returns_varied_ports() {
+        use std::collections::BTreeSet;
+
+        // Call pick_random_unused_port multiple times and collect unique ports
+        let mut ports = BTreeSet::new();
+        for _ in 0..20 {
+            if let Some(port) = pick_random_unused_port() {
+                ports.insert(port);
+            }
+        }
+
+        // We should get at least 2 different ports over 20 attempts
+        // (probability of getting the same port 20 times from a 10000-port range is negligible)
+        assert!(
+            ports.len() >= 2,
+            "Expected at least 2 different ports from 20 calls, got {}",
+            ports.len()
+        );
+    }
+
     #[test_log::test]
     fn port_range_test() {
         let range1 = test_utils::next_port_range(1000);

@@ -2934,4 +2934,308 @@ mod tests {
         assert_eq!(response.results.len(), 0);
         assert_eq!(response.position, 0);
     }
+
+    #[test_log::test]
+    fn test_yt_artist_as_model_sets_contains_cover_true_when_picture_present() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "artist123",
+            "picture": "abc-def-ghi",
+            "popularity": 85,
+            "name": "Test Artist"
+        });
+
+        let artist: YtArtist = json.as_model().unwrap();
+        assert_eq!(artist.id, "artist123");
+        assert_eq!(artist.name, "Test Artist");
+        assert_eq!(artist.popularity, 85);
+        assert_eq!(artist.picture, Some("abc-def-ghi".to_string()));
+        assert!(artist.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_yt_artist_as_model_sets_contains_cover_false_when_picture_missing() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "artist456",
+            "picture": null,
+            "popularity": 50,
+            "name": "Another Artist"
+        });
+
+        let artist: YtArtist = json.as_model().unwrap();
+        assert_eq!(artist.id, "artist456");
+        assert!(artist.picture.is_none());
+        assert!(!artist.contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_yt_search_artist_as_model_sets_contains_cover_based_on_picture() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // With picture
+        let json_with_picture = serde_json::json!({
+            "id": 123,
+            "picture": "pic-url",
+            "type": "ARTIST",
+            "name": "Artist Name"
+        });
+        let artist: YtSearchArtist = json_with_picture.as_model().unwrap();
+        assert!(artist.contains_cover);
+        assert_eq!(artist.picture, Some("pic-url".to_string()));
+
+        // Without picture
+        let json_without_picture = serde_json::json!({
+            "id": 456,
+            "picture": null,
+            "type": "ARTIST",
+            "name": "Another Artist"
+        });
+        let artist: YtSearchArtist = json_without_picture.as_model().unwrap();
+        assert!(!artist.contains_cover);
+        assert!(artist.picture.is_none());
+    }
+
+    #[test_log::test]
+    fn test_yt_search_album_as_model_parses_all_fields() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        // With cover
+        let json_with_cover = serde_json::json!({
+            "id": 789,
+            "artists": [],
+            "audioQuality": "LOSSLESS",
+            "copyright": null,
+            "cover": "cover-abc",
+            "duration": 3600,
+            "explicit": false,
+            "numberOfTracks": 10,
+            "popularity": 90,
+            "releaseDate": "2024-01-15",
+            "title": "Album Title",
+            "mediaMetadata": {
+                "tags": ["tag1", "tag2"]
+            }
+        });
+        let album: YtSearchAlbum = json_with_cover.as_model().unwrap();
+        // Note: contains_cover is always true in YtSearchAlbum parsing
+        assert!(album.contains_cover);
+        assert_eq!(album.cover, Some("cover-abc".to_string()));
+        assert_eq!(album.title, "Album Title");
+        assert_eq!(album.number_of_tracks, 10);
+        assert_eq!(album.audio_quality, "LOSSLESS");
+        assert!(!album.explicit);
+        assert_eq!(album.duration, 3600);
+        assert_eq!(album.popularity, 90);
+        assert_eq!(album.release_date, Some("2024-01-15".to_string()));
+        assert_eq!(album.media_metadata_tags, vec!["tag1", "tag2"]);
+
+        // Without cover - verify cover is None but contains_cover is still true
+        // (this is how the implementation works)
+        let json_without_cover = serde_json::json!({
+            "id": 101,
+            "artists": [],
+            "audioQuality": "HIGH",
+            "copyright": null,
+            "cover": null,
+            "duration": 1800,
+            "explicit": true,
+            "numberOfTracks": 5,
+            "popularity": 60,
+            "releaseDate": null,
+            "title": "No Cover Album",
+            "mediaMetadata": {
+                "tags": []
+            }
+        });
+        let album: YtSearchAlbum = json_without_cover.as_model().unwrap();
+        // Note: contains_cover is hardcoded to true in the implementation
+        assert!(album.contains_cover);
+        assert!(album.cover.is_none());
+        assert!(album.explicit);
+        assert!(album.release_date.is_none());
+    }
+
+    #[test_log::test]
+    fn test_yt_track_as_model_parses_nested_fields() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "track123",
+            "trackNumber": 5,
+            "artist": {
+                "id": "artist456",
+                "name": "Track Artist",
+                "picture": "artist-pic"
+            },
+            "album": {
+                "id": "album789",
+                "title": "Album Title",
+                "cover": "album-cover",
+                "type": "LP"
+            },
+            "audioQuality": "LOSSLESS",
+            "copyright": "2024 Label",
+            "duration": 240,
+            "explicit": true,
+            "isrc": "USABC1234567",
+            "popularity": 75,
+            "title": "Track Title",
+            "mediaMetadata": {
+                "tags": ["tag1"]
+            }
+        });
+
+        let track: YtTrack = json.as_model().unwrap();
+        assert_eq!(track.id, "track123");
+        assert_eq!(track.track_number, 5);
+        assert_eq!(track.artist_id, "artist456");
+        assert_eq!(track.artist, "Track Artist");
+        assert_eq!(track.artist_cover, Some("artist-pic".to_string()));
+        assert_eq!(track.album_id, "album789");
+        assert_eq!(track.album, "Album Title");
+        assert_eq!(track.album_cover, Some("album-cover".to_string()));
+        assert_eq!(track.album_type, crate::YtAlbumType::Lp);
+        assert_eq!(track.duration, 240);
+        assert!(track.explicit);
+        assert_eq!(track.isrc, "USABC1234567");
+        assert_eq!(track.title, "Track Title");
+    }
+
+    #[test_log::test]
+    fn test_yt_album_as_model_parses_nested_artist_fields() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "album123",
+            "artist": {
+                "id": "artist456",
+                "name": "Album Artist"
+            },
+            "type": "EPSANDSINGLES",
+            "audioQuality": "LOSSLESS",
+            "copyright": "2024 Records",
+            "cover": "cover-url",
+            "duration": 2400,
+            "explicit": false,
+            "numberOfTracks": 8,
+            "popularity": 80,
+            "releaseDate": "2024-06-15",
+            "title": "EP Title",
+            "mediaMetadata": {
+                "tags": ["electronic", "ambient"]
+            }
+        });
+
+        let album: YtAlbum = json.as_model().unwrap();
+        assert_eq!(album.id, "album123");
+        assert_eq!(album.artist, "Album Artist");
+        assert_eq!(album.artist_id, "artist456");
+        assert_eq!(album.album_type, crate::YtAlbumType::EpsAndSingles);
+        assert!(album.contains_cover); // Always true in this implementation
+        assert_eq!(album.cover, Some("cover-url".to_string()));
+        assert_eq!(album.number_of_tracks, 8);
+        assert_eq!(album.title, "EP Title");
+        assert_eq!(album.media_metadata_tags, vec!["electronic", "ambient"]);
+    }
+
+    #[test_log::test]
+    fn test_yt_video_as_model_parses_nested_fields() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "id": "video123",
+            "artist": {
+                "id": 999,
+                "name": "Video Artist",
+                "picture": "artist-pic-url"
+            },
+            "album": {
+                "id": 888,
+                "title": "Video Album",
+                "cover": "video-cover"
+            },
+            "audioQuality": "HIGH",
+            "duration": 300,
+            "explicit": false,
+            "title": "Music Video Title"
+        });
+
+        let video: YtVideo = json.as_model().unwrap();
+        assert_eq!(video.id, "video123");
+        assert_eq!(video.artist_id, 999);
+        assert_eq!(video.artist, "Video Artist");
+        assert_eq!(video.artist_cover, Some("artist-pic-url".to_string()));
+        assert_eq!(video.album_id, 888);
+        assert_eq!(video.album, "Video Album");
+        assert_eq!(video.album_cover, Some("video-cover".to_string()));
+        assert_eq!(video.duration, 300);
+        assert_eq!(video.title, "Music Video Title");
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_as_model_uses_defaults_for_pagination() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "contents": []
+        });
+
+        let results: YtSearchResults = json.as_model().unwrap();
+        // Verify default pagination values
+        assert_eq!(results.offset, 0);
+        assert_eq!(results.limit, 3);
+        assert_eq!(results.total, 0);
+        assert!(results.contents.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_yt_search_results_as_model_handles_null_contents() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "contents": null
+        });
+
+        let results: YtSearchResults = json.as_model().unwrap();
+        assert!(results.contents.is_empty());
+        assert_eq!(results.total, 0);
+    }
+
+    #[test_log::test]
+    fn test_yt_search_result_list_as_model() {
+        use moosicbox_json_utils::database::AsModelResult;
+
+        let json = serde_json::json!({
+            "items": [
+                {
+                    "id": "artist1",
+                    "picture": null,
+                    "popularity": 50,
+                    "name": "Artist 1"
+                },
+                {
+                    "id": "artist2",
+                    "picture": "pic-url",
+                    "popularity": 80,
+                    "name": "Artist 2"
+                }
+            ],
+            "offset": 0,
+            "limit": 10,
+            "totalNumberOfItems": 2
+        });
+
+        let result: YtSearchResultList<YtArtist> = json.as_model().unwrap();
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(result.offset, 0);
+        assert_eq!(result.limit, 10);
+        assert_eq!(result.total, 2);
+        assert_eq!(result.items[0].name, "Artist 1");
+        assert!(!result.items[0].contains_cover);
+        assert_eq!(result.items[1].name, "Artist 2");
+        assert!(result.items[1].contains_cover);
+    }
 }
