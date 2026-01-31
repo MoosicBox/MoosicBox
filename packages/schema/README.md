@@ -321,7 +321,7 @@ The system automatically creates a `__moosicbox_schema_migrations` table to trac
 
 ```sql
 CREATE TABLE __moosicbox_schema_migrations (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT NOT NULL,
     run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_on DATETIME,
     up_checksum VARCHAR(64) NOT NULL,
