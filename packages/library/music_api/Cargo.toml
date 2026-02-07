@@ -35,8 +35,13 @@ log         = { workspace = true }
 regex       = { workspace = true }
 
 [dev-dependencies]
+switchy_async    = { workspace = true, features = ["macros", "tokio"] }
 switchy_database = { workspace = true, features = ["simulator"] }
 test-log         = { workspace = true }
+tokio            = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
 
 [features]
 default = ["all-encoders", "api"]

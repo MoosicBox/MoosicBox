@@ -2771,4 +2771,211 @@ Line 3</textarea>"#;
             panic!("Expected Anchor element");
         }
     }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_style_only() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationStyle;
+
+        let html = r#"<div sx-text-decoration="solid">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![],
+                style: Some(TextDecorationStyle::Solid),
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_color_only() {
+        use crate::TextDecoration;
+        use hyperchad_color::Color;
+
+        let html = r##"<div sx-text-decoration="#00ff00">text</div>"##;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![],
+                style: None,
+                color: Some(Color::from_hex("#00ff00")),
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_thickness_with_px_suffix() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        // Since bare numbers might be interpreted as colors, use px suffix for thickness
+        let html = r#"<div sx-text-decoration="underline 3px">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: None,
+                color: None,
+                thickness: Some(crate::Number::Integer(3)),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_lines_and_color_without_style() {
+        use crate::TextDecoration;
+        use hyperchad_color::Color;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="underline #0000ff">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: None,
+                color: Some(Color::from_hex("#0000ff")),
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_multiple_lines() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="underline overline line-through">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![
+                    TextDecorationLine::Underline,
+                    TextDecorationLine::Overline,
+                    TextDecorationLine::LineThrough,
+                ],
+                style: None,
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_lines_with_thickness() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="underline 2.5">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: None,
+                color: None,
+                thickness: Some(crate::Number::Real(2.5)),
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_wavy_style() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::{TextDecorationLine, TextDecorationStyle};
+
+        let html = r#"<div sx-text-decoration="underline wavy">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: Some(TextDecorationStyle::Wavy),
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_none_line() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="none">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::None],
+                style: None,
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_inherit_line() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="inherit">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Inherit],
+                style: None,
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_parses_style_color_and_thickness_without_line() {
+        use crate::TextDecoration;
+        use hyperchad_color::Color;
+        use hyperchad_transformer_models::TextDecorationStyle;
+
+        let html = r#"<div sx-text-decoration="dashed #ff00ff 1.5">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![],
+                style: Some(TextDecorationStyle::Dashed),
+                color: Some(Color::from_hex("#ff00ff")),
+                thickness: Some(crate::Number::Real(1.5)),
+            })
+        );
+    }
 }
