@@ -397,4 +397,60 @@ mod tests {
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "div { width = \"50%\" }");
     }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_in_brackets() {
+        // Test that preprocessing works recursively inside brackets
+        let input = quote! { [ 100 vw ] };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "[\"100vw\"]");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_nested_groups() {
+        // Test nested groups processing
+        let input = quote! { { ( 50 vh ) } };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "{ (\"50vh\") }");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_at_end_of_stream() {
+        // Test numeric literal at end of stream without unit
+        let input = quote! { value = 42 };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "value = 42");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_string_literal_preserved() {
+        // Test that string literals pass through unchanged
+        let input = quote! { "hello" };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "\"hello\"");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_identifiers_preserved() {
+        // Test that plain identifiers pass through unchanged
+        let input = quote! { foo bar baz };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "foo bar baz");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_punct_preserved() {
+        // Test that punctuation other than % passes through unchanged
+        let input = quote! { a + b - c * d / e };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "a + b - c * d / e");
+    }
+
+    #[test_log::test]
+    fn test_preprocess_numeric_units_consecutive_numbers() {
+        // Test multiple consecutive numbers with different units
+        let input = quote! { 10 px 20 em 30 rem };
+        let result = preprocess_numeric_units(input);
+        assert_eq!(result.to_string(), "\"10px\" \"20em\" \"30rem\"");
+    }
 }

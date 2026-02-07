@@ -57,4 +57,13 @@ mod tests {
         assert_eq!(ilog(255), 8);
         assert_eq!(ilog(257), 9);
     }
+
+    #[test_log::test]
+    fn test_ilog_max_u32() {
+        // Test maximum u32 value: 2^32 - 1 requires 32 bits to store
+        assert_eq!(ilog(u32::MAX), 32);
+        // Also verify the high-order bit boundary
+        assert_eq!(ilog(1 << 31), 32); // 2^31
+        assert_eq!(ilog((1 << 31) - 1), 31); // 2^31 - 1
+    }
 }

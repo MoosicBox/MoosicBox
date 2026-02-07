@@ -81,6 +81,14 @@ pub async fn trigger_profiles_updated_event(
     send_profiles_updated_event(added, removed).await
 }
 
+/// Clears all registered profile update event listeners.
+///
+/// This is primarily intended for testing to ensure test isolation.
+#[cfg(test)]
+pub(crate) async fn clear_listeners() {
+    PROFILES_UPDATED_EVENT_LISTENERS.write().await.clear();
+}
+
 /// Sends profile update events to all registered listeners.
 ///
 /// # Errors
@@ -112,9 +120,16 @@ mod tests {
     use super::*;
     use serial_test::serial;
 
+    /// Clears all listeners before each test to ensure test isolation
+    async fn before_each() {
+        clear_listeners().await;
+    }
+
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_on_profiles_updated_event_registers_listener() {
+        before_each().await;
+
         let call_count = Arc::new(RwLock::new(0u32));
         let call_count_clone = Arc::clone(&call_count);
 
@@ -141,6 +156,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_added_profiles() {
+        before_each().await;
+
         let added_profiles = Arc::new(RwLock::new(Vec::new()));
         let added_clone = Arc::clone(&added_profiles);
 
@@ -166,6 +183,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_removed_profiles() {
+        before_each().await;
+
         let removed_profiles = Arc::new(RwLock::new(Vec::new()));
         let removed_clone = Arc::clone(&removed_profiles);
 
@@ -189,6 +208,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_profiles_updated_event_with_both_added_and_removed() {
+        before_each().await;
+
         let added_profiles = Arc::new(RwLock::new(Vec::new()));
         let removed_profiles = Arc::new(RwLock::new(Vec::new()));
         let added_clone = Arc::clone(&added_profiles);
@@ -219,6 +240,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_multiple_listeners_receive_events() {
+        before_each().await;
+
         let call_count1 = Arc::new(RwLock::new(0u32));
         let call_count2 = Arc::new(RwLock::new(0u32));
         let count1_clone = Arc::clone(&call_count1);
@@ -258,6 +281,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_send_profiles_updated_event_is_equivalent_to_trigger() {
+        before_each().await;
+
         let call_count = Arc::new(RwLock::new(0u32));
         let count_clone = Arc::clone(&call_count);
 
@@ -283,6 +308,8 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_empty_added_and_removed_lists() {
+        before_each().await;
+
         let call_count = Arc::new(RwLock::new(0u32));
         let added_received = Arc::new(RwLock::new(Vec::new()));
         let removed_received = Arc::new(RwLock::new(Vec::new()));
@@ -317,5 +344,68 @@ mod tests {
         // Verify empty lists were received
         assert!(added_received.read().await.is_empty());
         assert!(removed_received.read().await.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_listener_error_returns_collected_errors() {
+        before_each().await;
+
+        // Register a listener that always fails
+        on_profiles_updated_event(|_added, _removed| async move {
+            Err(Box::new(std::io::Error::other("Test error")) as Box<dyn std::error::Error + Send>)
+        })
+        .await;
+
+        let result = trigger_profiles_updated_event(vec!["test".to_string()], vec![]).await;
+        assert!(result.is_err());
+
+        let errors = result.unwrap_err();
+        // At least one error should be collected (from our failing listener)
+        assert!(!errors.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_multiple_listeners_with_mixed_success_and_failure() {
+        before_each().await;
+
+        let success_count = Arc::new(RwLock::new(0u32));
+        let success_clone = Arc::clone(&success_count);
+
+        // Register a successful listener
+        on_profiles_updated_event(move |_added, _removed| {
+            let count = Arc::clone(&success_clone);
+            async move {
+                *count.write().await += 1;
+                Ok(())
+            }
+        })
+        .await;
+
+        // Register a failing listener
+        on_profiles_updated_event(|_added, _removed| async move {
+            Err(Box::new(std::io::Error::other("Intentional test failure"))
+                as Box<dyn std::error::Error + Send>)
+        })
+        .await;
+
+        let initial_success = *success_count.read().await;
+
+        let result = trigger_profiles_updated_event(vec!["test".to_string()], vec![]).await;
+
+        // Result should be an error because one listener failed
+        assert!(result.is_err());
+
+        let errors = result.unwrap_err();
+        // Should have collected errors from the failing listener(s)
+        assert!(!errors.is_empty());
+
+        // Successful listener should still have been called
+        let final_success = *success_count.read().await;
+        assert!(
+            final_success > initial_success,
+            "Successful listener should still be called even when another listener fails"
+        );
     }
 }

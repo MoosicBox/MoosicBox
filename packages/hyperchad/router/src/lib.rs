@@ -3597,5 +3597,483 @@ mod tests {
             let nav: Navigation = (&path, info).into();
             assert_eq!(nav.0, "/test");
         }
+
+        #[test_log::test]
+        fn test_navigation_to_route_request_with_query_params() {
+            // When a RouteRequest with query params is converted to Navigation,
+            // the query params are serialized into the path string.
+            // When that Navigation is converted back to RouteRequest via the
+            // From<Navigation> impl, the query params remain in the path field
+            // and the query map is empty. This is intentional - Navigation is
+            // a lightweight wrapper that preserves the full URL string.
+            let mut original_req = RouteRequest::from_path("/search", RequestInfo::default());
+            original_req
+                .query
+                .insert("q".to_string(), "rust".to_string());
+            original_req
+                .query
+                .insert("page".to_string(), "1".to_string());
+
+            // Convert to Navigation
+            let nav: Navigation = original_req.into();
+            assert!(nav.0.contains("q=rust"));
+            assert!(nav.0.contains("page=1"));
+
+            // Convert back to RouteRequest via From<Navigation>
+            let req: RouteRequest = nav.into();
+            // The path contains the query string (it's embedded)
+            assert!(req.path.contains('?') || req.path.contains("q=rust"));
+            // The query map is empty because From<Navigation> doesn't parse query params
+            assert!(req.query.is_empty());
+        }
+    }
+
+    mod route_path_edge_case_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_literal_empty_path() {
+            // An empty literal path should only match an empty string
+            let route = RoutePath::Literal(String::new());
+            assert!(route.matches(""));
+            assert!(!route.matches("/"));
+            assert!(!route.matches("/any"));
+        }
+
+        #[test_log::test]
+        fn test_literals_single_item() {
+            // Literals variant with a single path should work like Literal
+            let route = RoutePath::Literals(vec!["/only".to_string()]);
+            assert!(route.matches("/only"));
+            assert!(!route.matches("/other"));
+            assert_eq!(route.strip_match("/only"), Some(""));
+        }
+
+        #[test_log::test]
+        fn test_literal_prefix_exact_match() {
+            // LiteralPrefix should match when path equals prefix exactly
+            let route = RoutePath::LiteralPrefix("/exact".to_string());
+            assert!(route.matches("/exact"));
+            assert_eq!(route.strip_match("/exact"), Some(""));
+        }
+
+        #[test_log::test]
+        fn test_from_ref_string() {
+            // Test the From<&String> impl (line 1091-1094)
+            let path = "/path".to_string();
+            let route: RoutePath = (&path).into();
+            assert_eq!(route, RoutePath::Literal("/path".to_string()));
+            assert!(route.matches("/path"));
+        }
+
+        #[test_log::test]
+        fn test_from_array_size_1() {
+            // Test the From<&[&str; 1]> impl
+            let arr: &[&str; 1] = &["/single"];
+            let route: RoutePath = arr.into();
+            assert_eq!(route, RoutePath::Literals(vec!["/single".to_string()]));
+        }
+
+        #[test_log::test]
+        fn test_from_array_size_4() {
+            let arr: &[&str; 4] = &["/a", "/b", "/c", "/d"];
+            let route: RoutePath = arr.into();
+            assert!(route.matches("/a"));
+            assert!(route.matches("/d"));
+            assert!(!route.matches("/e"));
+        }
+
+        #[test_log::test]
+        fn test_from_array_size_6_to_10() {
+            let arr6: &[&str; 6] = &["/1", "/2", "/3", "/4", "/5", "/6"];
+            let route6: RoutePath = arr6.into();
+            assert!(route6.matches("/6"));
+
+            let arr7: &[&str; 7] = &["/1", "/2", "/3", "/4", "/5", "/6", "/7"];
+            let route7: RoutePath = arr7.into();
+            assert!(route7.matches("/7"));
+
+            let arr8: &[&str; 8] = &["/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8"];
+            let route8: RoutePath = arr8.into();
+            assert!(route8.matches("/8"));
+
+            let arr9: &[&str; 9] = &["/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9"];
+            let route9: RoutePath = arr9.into();
+            assert!(route9.matches("/9"));
+
+            let arr10: &[&str; 10] = &["/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10"];
+            let route10: RoutePath = arr10.into();
+            assert!(route10.matches("/10"));
+        }
+
+        #[test_log::test]
+        fn test_from_vec_str() {
+            // Test From<Vec<&str>> impl
+            let paths: Vec<&str> = vec!["/x", "/y", "/z"];
+            let route: RoutePath = paths.into();
+            assert!(route.matches("/x"));
+            assert!(route.matches("/z"));
+            assert!(!route.matches("/w"));
+        }
+
+        #[test_log::test]
+        fn test_from_slice_string() {
+            // Test From<&[String]> impl
+            let paths: Vec<String> = vec!["/a".to_string(), "/b".to_string()];
+            let slice: &[String] = &paths;
+            let route: RoutePath = slice.into();
+            assert!(route.matches("/a"));
+            assert!(route.matches("/b"));
+        }
+    }
+
+    mod query_string_edge_cases {
+        use super::*;
+
+        #[test_log::test]
+        fn test_from_path_with_multiple_question_marks() {
+            // Query strings can contain '?' characters after the first one
+            // The parser should only split on the first '?'
+            let req = RouteRequest::from_path("/search?q=what?is?this", RequestInfo::default());
+            assert_eq!(req.path, "/search");
+            assert_eq!(req.query.get("q"), Some(&"what?is?this".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_from_path_with_encoded_special_chars() {
+            // URL-encoded characters in query params
+            let req = RouteRequest::from_path(
+                "/search?q=hello%20world&tag=%26test",
+                RequestInfo::default(),
+            );
+            assert_eq!(req.path, "/search");
+            // qstring library handles URL decoding
+            assert_eq!(req.query.get("q"), Some(&"hello world".to_string()));
+            assert_eq!(req.query.get("tag"), Some(&"&test".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_from_path_with_empty_value() {
+            // Query param with key but no value
+            let req = RouteRequest::from_path("/page?empty=&filled=value", RequestInfo::default());
+            assert_eq!(req.query.get("empty"), Some(&String::new()));
+            assert_eq!(req.query.get("filled"), Some(&"value".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_from_path_with_duplicate_keys() {
+            // When the same key appears multiple times, BTreeMap will keep the last value
+            let req = RouteRequest::from_path("/page?key=first&key=second", RequestInfo::default());
+            // BTreeMap::collect behavior depends on iterator implementation
+            // qstring may provide both values or just the last
+            let value = req.query.get("key");
+            assert!(value.is_some());
+        }
+    }
+
+    #[cfg(feature = "form")]
+    mod form_deserializer_edge_cases {
+        use super::*;
+        use serde::de::Deserializer;
+        use std::collections::BTreeMap;
+
+        #[test_log::test]
+        fn test_string_value_deserializer_identifier() {
+            // Test the deserialize_identifier method which is used during enum deserialization
+            struct IdentifierVisitor;
+            impl serde::de::Visitor<'_> for IdentifierVisitor {
+                type Value = String;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "an identifier")
+                }
+
+                fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    Ok(v.to_owned())
+                }
+
+                fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    Ok(v)
+                }
+            }
+
+            let deserializer =
+                form_deserializer::StringValueDeserializer::new("field_name".to_string());
+            let result = deserializer.deserialize_identifier(IdentifierVisitor);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "field_name");
+        }
+
+        #[test_log::test]
+        fn test_string_value_deserializer_bytes() {
+            // Test deserialize_bytes (as opposed to byte_buf which is already tested)
+            struct BytesVisitor;
+            impl serde::de::Visitor<'_> for BytesVisitor {
+                type Value = Vec<u8>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "bytes")
+                }
+
+                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+                    Ok(v)
+                }
+            }
+
+            let deserializer =
+                form_deserializer::StringValueDeserializer::new("byte_data".to_string());
+            let result = deserializer.deserialize_bytes(BytesVisitor);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), b"byte_data".to_vec());
+        }
+
+        #[test_log::test]
+        fn test_string_value_deserializer_ignored_any() {
+            struct IgnoredVisitor;
+            impl serde::de::Visitor<'_> for IgnoredVisitor {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "ignored")
+                }
+
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let deserializer =
+                form_deserializer::StringValueDeserializer::new("ignored".to_string());
+            let result = deserializer.deserialize_ignored_any(IgnoredVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_newtype_struct() {
+            struct NewtypeVisitor;
+            impl<'de> serde::de::Visitor<'de> for NewtypeVisitor {
+                type Value = BTreeMap<String, String>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "newtype")
+                }
+
+                fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                where
+                    D: serde::de::Deserializer<'de>,
+                {
+                    // When deserializing newtype, we can access the inner deserializer
+                    use serde::de::Deserialize;
+                    BTreeMap::deserialize(deserializer)
+                }
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("key".to_string(), "value".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_newtype_struct("Wrapper", NewtypeVisitor);
+            assert!(result.is_ok());
+            let map = result.unwrap();
+            assert_eq!(map.get("key"), Some(&"value".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_unit() {
+            struct UnitVisitor;
+            impl serde::de::Visitor<'_> for UnitVisitor {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "unit")
+                }
+
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_unit(UnitVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_any_delegates_to_map() {
+            struct MapVisitor;
+            impl<'de> serde::de::Visitor<'de> for MapVisitor {
+                type Value = BTreeMap<String, String>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "map")
+                }
+
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::MapAccess<'de>,
+                {
+                    let mut result = BTreeMap::new();
+                    while let Some((key, value)) = map.next_entry()? {
+                        result.insert(key, value);
+                    }
+                    Ok(result)
+                }
+            }
+
+            let mut data = BTreeMap::new();
+            data.insert("field".to_string(), "data".to_string());
+
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_any(MapVisitor);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().get("field"), Some(&"data".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_tuple_struct_error() {
+            struct TupleStructVisitor;
+            impl serde::de::Visitor<'_> for TupleStructVisitor {
+                type Value = (String, i32);
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "tuple struct")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_tuple_struct("Test", 2, TupleStructVisitor);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_identifier_error() {
+            struct IdentifierVisitor;
+            impl serde::de::Visitor<'_> for IdentifierVisitor {
+                type Value = String;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "identifier")
+                }
+            }
+
+            let data = BTreeMap::new();
+            let deserializer = form_deserializer::FormDataDeserializer::new(data);
+            let result = deserializer.deserialize_identifier(IdentifierVisitor);
+            assert!(result.is_err());
+        }
+
+        #[test_log::test]
+        fn test_form_data_deserializer_all_primitive_errors() {
+            // Test that all primitive types return appropriate errors from FormDataDeserializer
+            struct DummyVisitor<T>(std::marker::PhantomData<T>);
+            impl<T> DummyVisitor<T> {
+                fn new() -> Self {
+                    Self(std::marker::PhantomData)
+                }
+            }
+            impl<T> serde::de::Visitor<'_> for DummyVisitor<T> {
+                type Value = T;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "dummy")
+                }
+            }
+
+            let data = BTreeMap::new();
+
+            // Test i8-i128, u8-u128, f32-f64, char, str, string, bytes, byte_buf
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_i8(DummyVisitor::<i8>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_i16(DummyVisitor::<i16>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_i32(DummyVisitor::<i32>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_i64(DummyVisitor::<i64>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_i128(DummyVisitor::<i128>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_u8(DummyVisitor::<u8>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_u16(DummyVisitor::<u16>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_u32(DummyVisitor::<u32>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_u64(DummyVisitor::<u64>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_u128(DummyVisitor::<u128>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_f32(DummyVisitor::<f32>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_f64(DummyVisitor::<f64>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_char(DummyVisitor::<char>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_str(DummyVisitor::<String>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_string(DummyVisitor::<String>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data.clone());
+            assert!(d.deserialize_bytes(DummyVisitor::<Vec<u8>>::new()).is_err());
+
+            let d = form_deserializer::FormDataDeserializer::new(data);
+            assert!(
+                d.deserialize_byte_buf(DummyVisitor::<Vec<u8>>::new())
+                    .is_err()
+            );
+        }
+
+        #[test_log::test]
+        fn test_string_value_deserializer_unit_struct() {
+            struct UnitStructVisitor;
+            impl serde::de::Visitor<'_> for UnitStructVisitor {
+                type Value = ();
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(formatter, "unit struct")
+                }
+
+                fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                    Ok(())
+                }
+            }
+
+            let deserializer = form_deserializer::StringValueDeserializer::new("test".to_string());
+            let result = deserializer.deserialize_unit_struct("UnitStruct", UnitStructVisitor);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn test_string_value_deserializer_tuple_and_tuple_struct() {
+            // These delegate to deserialize_seq
+            use serde::de::Deserialize;
+
+            let deserializer = form_deserializer::StringValueDeserializer::new("test".to_string());
+            // Tuples expect sequences, a plain string won't work as a tuple
+            let result: Result<(String,), _> = <(String,)>::deserialize(deserializer);
+            // This will fail because a plain string can't be deserialized as a tuple
+            assert!(result.is_err());
+        }
     }
 }

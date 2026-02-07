@@ -1817,6 +1817,27 @@ mod tests {
         }
 
         #[test_log::test]
+        fn test_expression_element_by_id_ref_literal() {
+            let expr = Expression::ElementByIdRef(Box::new(Expression::Literal(Literal::String(
+                "myElement".to_string(),
+            ))));
+            assert_eq!(
+                expression_to_js(&expr),
+                "document.getElementById('myElement')"
+            );
+        }
+
+        #[test_log::test]
+        fn test_expression_element_by_id_ref_variable() {
+            let expr =
+                Expression::ElementByIdRef(Box::new(Expression::Variable("elementId".to_string())));
+            assert_eq!(
+                expression_to_js(&expr),
+                "document.getElementById(elementId)"
+            );
+        }
+
+        #[test_log::test]
         fn test_expression_call() {
             let expr = Expression::Call {
                 function: "console.log".to_string(),
@@ -2734,6 +2755,36 @@ mod tests {
         }
 
         #[test_log::test]
+        fn test_swap_strategy_before_begin() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/insert".to_string(),
+                    trigger: None,
+                    target: Selector::Id("target".to_string()),
+                    strategy: SwapStrategy::BeforeBegin,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-swap="beforebegin""#));
+        }
+
+        #[test_log::test]
+        fn test_swap_strategy_after_end() {
+            let container = Container {
+                route: Some(Route::Get {
+                    route: "/api/append".to_string(),
+                    trigger: None,
+                    target: Selector::Id("target".to_string()),
+                    strategy: SwapStrategy::AfterEnd,
+                }),
+                ..Default::default()
+            };
+            let result = render_attrs(&container);
+            assert!(result.contains(r#"hx-swap="afterend""#));
+        }
+
+        #[test_log::test]
         fn test_action_click_trigger() {
             let container = Container {
                 actions: vec![Action {
@@ -3120,6 +3171,25 @@ mod tests {
             assert!(result.contains("&lt;"));
             assert!(result.contains("&gt;"));
             assert!(result.contains("&quot;"));
+        }
+
+        #[test_log::test]
+        fn test_action_parameterized_with_non_custom_action() {
+            // When Parameterized wraps a non-Custom action (e.g., Log),
+            // the output won't have {action:...} format, so the strip_prefix
+            // fallback path is taken
+            let action = ActionType::Parameterized {
+                action: Box::new(ActionType::Log {
+                    message: "test".to_string(),
+                    level: LogLevel::Info,
+                }),
+                value: Value::Real(1.0),
+            };
+            let (result, _) = action_to_js(&action, true);
+            // The Log action output doesn't start with {action:, so it should
+            // be used as-is (after HTML escaping) in the parameterized wrapper
+            assert!(result.contains("triggerAction("));
+            assert!(result.contains("value:1"));
         }
     }
 
