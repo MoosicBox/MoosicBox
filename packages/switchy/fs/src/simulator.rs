@@ -22,6 +22,10 @@ mod real_fs_support {
     use scoped_tls::scoped_thread_local;
     use std::sync::{Arc, Mutex};
 
+    /// Marker type used with scoped thread-local storage to track real filesystem mode.
+    ///
+    /// This struct is used internally to mark when the current thread is operating
+    /// in "real filesystem" mode rather than simulator mode.
     pub struct RealFs;
 
     scoped_thread_local! {
@@ -37,12 +41,30 @@ mod real_fs_support {
         REAL_FS.set(&RealFs, f)
     }
 
+    /// Returns `true` if the current thread is operating in real filesystem mode.
+    ///
+    /// This is used internally to determine whether filesystem operations should
+    /// use the real filesystem or the simulator.
     #[inline]
     pub fn is_real_fs() -> bool {
         REAL_FS.is_set()
     }
 
-    // Simple conversion for std::fs::File to simulator File
+    /// Converts a standard library file handle to a simulator file handle.
+    ///
+    /// This function reads the content from a real `std::fs::File` and creates
+    /// a simulator `File` with that content loaded into memory.
+    ///
+    /// # Arguments
+    ///
+    /// * `std_file` - The standard library file handle to convert
+    /// * `path` - The path associated with the file
+    /// * `read` - Whether the file was opened for reading (affects content loading)
+    /// * `write` - Whether the file was opened for writing
+    ///
+    /// # Errors
+    ///
+    /// * If reading from the file fails when `read` is true
     pub fn convert_std_file_to_simulator(
         std_file: std::fs::File,
         path: impl AsRef<std::path::Path>,
@@ -67,7 +89,25 @@ mod real_fs_support {
         })
     }
 
-    // Async conversion for std::fs::File to simulator File
+    /// Asynchronously converts a standard library file handle to a simulator file handle.
+    ///
+    /// This function reads the content from a real `std::fs::File` in a blocking task
+    /// and creates a simulator `File` with that content loaded into memory.
+    ///
+    /// # Arguments
+    ///
+    /// * `std_file` - The standard library file handle to convert
+    /// * `path` - The path associated with the file
+    /// * `read` - Whether the file was opened for reading (affects content loading)
+    /// * `write` - Whether the file was opened for writing
+    ///
+    /// # Errors
+    ///
+    /// * If reading from the file fails when `read` is true
+    ///
+    /// # Panics
+    ///
+    /// * If the spawn_blocking task panics
     #[cfg(feature = "async")]
     pub async fn convert_std_file_to_simulator_async(
         std_file: std::fs::File,

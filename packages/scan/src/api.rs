@@ -84,6 +84,7 @@ pub fn bind_services<
 }
 
 #[cfg(feature = "openapi")]
+/// `OpenAPI` documentation structure for scan endpoints.
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Scan")),
@@ -103,7 +104,6 @@ pub fn bind_services<
         crate::models::api::ApiScanPath,
     ))
 )]
-/// `OpenAPI` documentation structure for scan endpoints.
 pub struct Api;
 
 /// Query parameters for scan endpoints.

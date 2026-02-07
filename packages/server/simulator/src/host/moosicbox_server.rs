@@ -29,10 +29,20 @@ use switchy_env::var_or;
 pub const HOST: &str = "moosicbox_server";
 /// Port number for the `MoosicBox` server simulation listener.
 pub const PORT: u16 = 1234;
-/// Cancellation token for the `MoosicBox` server.
+
+/// Global cancellation token for the `MoosicBox` server.
+///
+/// Used to signal graceful shutdown of the server during simulation.
+/// The token is wrapped in `Arc<Mutex<Option<...>>>` to allow shared
+/// mutable access across async tasks.
 pub static CANCELLATION_TOKEN: LazyLock<Arc<Mutex<Option<CancellationToken>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
-/// Server handle for the `MoosicBox` server.
+
+/// Global server handle for the `MoosicBox` server.
+///
+/// Provides access to the running server instance for operations like
+/// graceful or immediate shutdown. The handle is wrapped in
+/// `Arc<Mutex<Option<...>>>` to allow shared mutable access across async tasks.
 pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
 
