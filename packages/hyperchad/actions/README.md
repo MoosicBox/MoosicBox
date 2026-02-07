@@ -134,6 +134,8 @@ let remove_bg = ActionType::remove_background_self();
 ### Multi-Actions
 
 ```rust
+use hyperchad_actions::{ActionType, LogLevel};
+
 // Combine multiple actions
 let multi_action = ActionType::Multi(vec![
     ActionType::hide_by_id("modal"),
