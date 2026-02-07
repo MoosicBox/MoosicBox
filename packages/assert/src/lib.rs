@@ -951,10 +951,52 @@ mod tests {
         crate::die_or_unimplemented!("Not implemented yet");
     }
 
-    // Note: die_or_propagate! tests omitted due to macro expansion issues with std::process::exit
-    // The macro works correctly at runtime but has type-checking issues during test compilation
-    // when the ENABLE_ASSERT=1 branch is analyzed. Since we can't test the exit path anyway,
-    // and the macro is tested through actual usage, we skip these tests.
+    // Note: die_or_propagate! tests omitted due to macro expansion type-checking issues.
+    // The macro works correctly at runtime but has type-checking issues during compilation
+    // when both ENABLE_ASSERT branches are analyzed (the die! macro returns () while the
+    // Ok(x) arm returns the value type). The macro is tested through actual runtime usage.
+
+    // Test that only ENABLE_ASSERT="1" enables strict assertion mode
+    // Other values like "true", "yes", "0", "false", or unset should disable assertions
+    #[test_log::test]
+    fn test_assert_only_enabled_with_value_1() {
+        // "true" should NOT enable assertions (only "1" does)
+        unsafe { std::env::set_var("ENABLE_ASSERT", "true") };
+        crate::assert!(false); // Should be no-op, not exit
+
+        // "yes" should NOT enable assertions
+        unsafe { std::env::set_var("ENABLE_ASSERT", "yes") };
+        crate::assert!(false); // Should be no-op
+
+        // Empty string should NOT enable assertions
+        unsafe { std::env::set_var("ENABLE_ASSERT", "") };
+        crate::assert!(false); // Should be no-op
+
+        // "false" should NOT enable assertions
+        unsafe { std::env::set_var("ENABLE_ASSERT", "false") };
+        crate::assert!(false); // Should be no-op
+    }
+
+    #[test_log::test]
+    #[allow(clippy::items_after_statements)]
+    fn test_assert_or_err_behavior_with_various_env_values() {
+        fn test_function(value: i32) -> Result<i32, TestError> {
+            crate::assert_or_err!(value >= 0, TestError::InvalidValue, "Value must be >= 0");
+            Ok(value)
+        }
+
+        // "true" should use fallback behavior (return error)
+        unsafe { std::env::set_var("ENABLE_ASSERT", "true") };
+        assert_eq!(test_function(-1), Err(TestError::InvalidValue));
+
+        // "yes" should use fallback behavior
+        unsafe { std::env::set_var("ENABLE_ASSERT", "yes") };
+        assert_eq!(test_function(-1), Err(TestError::InvalidValue));
+
+        // empty string should use fallback behavior
+        unsafe { std::env::set_var("ENABLE_ASSERT", "") };
+        assert_eq!(test_function(-1), Err(TestError::InvalidValue));
+    }
 
     // Test with complex expressions and side effects
     #[test_log::test]

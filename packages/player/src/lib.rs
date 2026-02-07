@@ -3111,4 +3111,619 @@ mod tests {
             .expect("Failed to get status");
         assert!(status.active_playbacks.is_none());
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_next_track_at_end_of_playlist_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // Create playback with 2 tracks, positioned at the last track (position 1)
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(1), // At the last track (position 1 in 0-indexed list of 2)
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+        handler.playback.write().unwrap().replace(playback);
+
+        // Attempting to go to next track should fail with PositionOutOfBounds
+        let result = handler.next_track(None, None).await;
+        assert!(result.is_err());
+
+        match result {
+            Err(PlayerError::PositionOutOfBounds(pos)) => {
+                // Position 2 is out of bounds for a 2-track playlist (0-indexed: 0, 1)
+                assert_eq!(pos, 2);
+            }
+            _ => panic!("Expected PositionOutOfBounds error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_previous_track_at_start_of_playlist_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // Create playback at position 0 (first track)
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0), // At the first track
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+        handler.playback.write().unwrap().replace(playback);
+
+        // Attempting to go to previous track should fail with PositionOutOfBounds
+        let result = handler.previous_track(None, None).await;
+        assert!(result.is_err());
+
+        match result {
+            Err(PlayerError::PositionOutOfBounds(pos)) => {
+                // Position 0 is reported as out of bounds when trying to go before first track
+                assert_eq!(pos, 0);
+            }
+            _ => panic!("Expected PositionOutOfBounds error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_next_track_without_playback_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // No playback set - attempting next_track should fail
+        let result = handler.next_track(None, None).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::NoPlayersPlaying)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_previous_track_without_playback_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // No playback set - attempting previous_track should fail
+        let result = handler.previous_track(None, None).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::NoPlayersPlaying)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_next_track_single_track_playlist_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // Single track playlist at position 0
+        let tracks = vec![create_test_track(1)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            1,
+            "test".to_string(),
+            None,
+        );
+        handler.playback.write().unwrap().replace(playback);
+
+        // Attempting to go to next track on single-track playlist should fail
+        let result = handler.next_track(None, None).await;
+        assert!(result.is_err());
+
+        match result {
+            Err(PlayerError::PositionOutOfBounds(pos)) => {
+                assert_eq!(pos, 1); // Position 1 is out of bounds for single-track playlist
+            }
+            _ => panic!("Expected PositionOutOfBounds error"),
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playback_missing_session_id_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+        // No playback set, and no session_id provided
+
+        let result = handler
+            .update_playback(
+                false, // modify_playback
+                None,  // play
+                None,  // stop
+                None,  // playing
+                None,  // position
+                None,  // seek
+                None,  // volume
+                None,  // tracks
+                None,  // quality
+                None,  // session_id - missing!
+                None,  // profile
+                None,  // playback_target
+                false, // trigger_event
+                None,  // retry_options
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::MissingSessionId)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playback_missing_profile_returns_error() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+        // No playback set, session_id provided but no profile
+
+        let result = handler
+            .update_playback(
+                false,   // modify_playback
+                None,    // play
+                None,    // stop
+                None,    // playing
+                None,    // position
+                None,    // seek
+                None,    // volume
+                None,    // tracks
+                None,    // quality
+                Some(1), // session_id - provided
+                None,    // profile - missing!
+                None,    // playback_target
+                false,   // trigger_event
+                None,    // retry_options
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PlayerError::MissingProfile)));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playback_creates_new_playback_when_none_exists() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+        assert!(handler.playback.read().unwrap().is_none());
+
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let result = handler
+            .update_playback(
+                false,                    // modify_playback - don't trigger actual playback
+                None,                     // play
+                None,                     // stop
+                Some(false),              // playing - not playing yet
+                Some(0),                  // position
+                None,                     // seek
+                Some(0.8),                // volume
+                Some(tracks.clone()),     // tracks
+                None,                     // quality
+                Some(123),                // session_id
+                Some("test".to_string()), // profile
+                None,                     // playback_target
+                false,                    // trigger_event
+                None,                     // retry_options
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        // Verify playback was created
+        let playback = handler
+            .playback
+            .read()
+            .unwrap()
+            .as_ref()
+            .expect("Playback should be created")
+            .clone();
+        assert_eq!(playback.session_id, 123);
+        assert_eq!(playback.profile, "test");
+        assert_eq!(playback.tracks.len(), 2);
+        assert_eq!(playback.position, 0);
+        assert!((playback.volume.load(std::sync::atomic::Ordering::SeqCst) - 0.8).abs() < 0.001);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playback_updates_existing_playback_state() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // Set up initial playback
+        let tracks = vec![create_test_track(1), create_test_track(2)];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(0.5),
+            PlaybackQuality::default(),
+            100,
+            "initial".to_string(),
+            None,
+        );
+        handler.playback.write().unwrap().replace(playback);
+
+        // Update volume to 0.9
+        let result = handler
+            .update_playback(
+                false,     // modify_playback - just update state, don't trigger playback
+                None,      // play
+                None,      // stop
+                None,      // playing - keep current
+                None,      // position - keep current
+                None,      // seek
+                Some(0.9), // volume - update to 0.9
+                None,      // tracks - keep current
+                None,      // quality
+                None,      // session_id - use existing
+                None,      // profile - use existing
+                None,      // playback_target
+                false,     // trigger_event
+                None,      // retry_options
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        // Verify volume was updated
+        let playback = handler
+            .playback
+            .read()
+            .unwrap()
+            .as_ref()
+            .expect("Playback should exist")
+            .clone();
+        assert!((playback.volume.load(std::sync::atomic::Ordering::SeqCst) - 0.9).abs() < 0.001);
+        // Other fields should remain unchanged
+        assert_eq!(playback.session_id, 100);
+        assert_eq!(playback.profile, "initial");
+        assert_eq!(playback.position, 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_update_playback_updates_position() {
+        #[derive(Debug)]
+        struct MockPlayer;
+
+        #[async_trait]
+        impl Player for MockPlayer {
+            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                Ok(())
+            }
+            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                Ok(ApiPlaybackStatus {
+                    active_playbacks: None,
+                })
+            }
+            fn get_source(&self) -> &PlayerSource {
+                &PlayerSource::Local
+            }
+        }
+
+        let mut handler = PlaybackHandler::new(MockPlayer);
+
+        // Set up initial playback with 3 tracks at position 0
+        let tracks = vec![
+            create_test_track(1),
+            create_test_track(2),
+            create_test_track(3),
+        ];
+        let playback = Playback::new(
+            tracks,
+            Some(0),
+            AtomicF64::new(1.0),
+            PlaybackQuality::default(),
+            100,
+            "test".to_string(),
+            None,
+        );
+        handler.playback.write().unwrap().replace(playback);
+
+        // Update position to track 2 (index 1)
+        let result = handler
+            .update_playback(
+                false,   // modify_playback - just update state
+                None,    // play
+                None,    // stop
+                None,    // playing
+                Some(2), // position - move to track 3 (index 2)
+                None,    // seek
+                None,    // volume
+                None,    // tracks
+                None,    // quality
+                None,    // session_id
+                None,    // profile
+                None,    // playback_target
+                false,   // trigger_event
+                None,    // retry_options
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        // Verify position was updated
+        let playback = handler
+            .playback
+            .read()
+            .unwrap()
+            .as_ref()
+            .expect("Playback should exist")
+            .clone();
+        assert_eq!(playback.position, 2);
+    }
 }

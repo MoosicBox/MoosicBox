@@ -402,4 +402,154 @@ mod tests {
             "Should fetch from dynamic root endpoint"
         );
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_skeleton_html_contains_error_handling() {
+        use hyperchad_router::RequestInfo;
+
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        let result = setup_cdn_optimization(router, None, None);
+
+        let handler = {
+            let static_routes = result.static_routes.read().unwrap();
+            static_routes
+                .iter()
+                .find(|(route, _)| route.matches("/"))
+                .expect("Static route for / should exist")
+                .1
+                .clone()
+        };
+
+        let req = RouteRequest::from_path(
+            "/",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = handler(req)
+            .await
+            .expect("Handler should succeed")
+            .expect("Handler should return content");
+
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let html = match content {
+            Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
+            _ => panic!("Expected Raw content"),
+        };
+
+        // Verify JavaScript error handling is present
+        assert!(
+            html.contains(".catch(error"),
+            "Should have error handling in fetch"
+        );
+        assert!(
+            html.contains("Failed to load content"),
+            "Should display error message to user"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_endpoint_propagates_handler_error() {
+        use hyperchad_router::RequestInfo;
+
+        // Create a router with a handler that always fails
+        let router =
+            Router::new().with_route_result::<String, Option<String>, _, _>("/", |_req| async {
+                Err::<Option<String>, _>(Box::<dyn std::error::Error>::from(
+                    "Handler error".to_string(),
+                ))
+            });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Navigate to the dynamic endpoint
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        // The navigation should fail with a handler error
+        let navigation_result = result.navigate(req).await;
+        assert!(
+            navigation_result.is_err(),
+            "Navigation should fail when handler returns error"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_endpoint_handles_none_from_handler() {
+        use hyperchad_router::RequestInfo;
+
+        // Create a router with a handler that returns None
+        let router = Router::new()
+            .with_route_result::<Content, Option<Content>, _, _>("/", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>(None)
+            });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Navigate to the dynamic endpoint
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = result
+            .navigate(req)
+            .await
+            .expect("Navigation should succeed");
+
+        // Handler returning None should propagate as None
+        assert!(
+            content.is_none(),
+            "Should return None when handler returns None"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_skeleton_html_with_unicode_title() {
+        use hyperchad_router::RequestInfo;
+
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        let result = setup_cdn_optimization(router, Some("日本語タイトル 🌍"), None);
+
+        let handler = {
+            let static_routes = result.static_routes.read().unwrap();
+            static_routes
+                .iter()
+                .find(|(route, _)| route.matches("/"))
+                .expect("Static route for / should exist")
+                .1
+                .clone()
+        };
+
+        let req = RouteRequest::from_path(
+            "/",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = handler(req)
+            .await
+            .expect("Handler should succeed")
+            .expect("Handler should return content");
+
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let html = match content {
+            Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
+            _ => panic!("Expected Raw content"),
+        };
+
+        // Verify Unicode title is preserved correctly
+        assert!(
+            html.contains("<title>日本語タイトル 🌍</title>"),
+            "Should preserve Unicode characters in title"
+        );
+    }
 }
