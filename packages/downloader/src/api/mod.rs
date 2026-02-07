@@ -79,6 +79,9 @@ pub fn bind_services<
 pub struct Api;
 
 /// Adds a progress listener to the global download queue.
+///
+/// The listener will be called with progress events for all download tasks
+/// processed by the global queue.
 pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
     let mut queue = DOWNLOAD_QUEUE.write().await;
     *queue = queue.clone().add_progress_listener(listener);
