@@ -227,6 +227,10 @@ pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
 }
 
 /// Stub HTTP metrics handler that returns empty responses.
+///
+/// This handler is used in non-simulator mode when actual metrics collection
+/// is not configured. It returns empty HTTP responses and provides default
+/// request metrics middleware.
 #[derive(Debug)]
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
 pub struct StubHttpMetricsHandler;
