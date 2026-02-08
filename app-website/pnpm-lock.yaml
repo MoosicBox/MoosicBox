@@ -13,10 +13,10 @@ importers:
         version: 0.9.6(prettier-plugin-astro@0.13.0)(prettier@3.8.1)(typescript@5.9.3)
       '@astrojs/node':
         specifier: ^9.5.2
-        version: 9.5.2(astro@5.17.1(@types/node@25.2.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2))
+        version: 9.5.2(astro@5.17.1(@types/node@25.2.2)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2))
       '@astrojs/solid-js':
         specifier: ^5.1.3
-        version: 5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.2.1)(jiti@2.4.2)(solid-js@1.9.11)(yaml@2.8.2)
+        version: 5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.2.2)(jiti@2.4.2)(solid-js@1.9.11)(yaml@2.8.2)
       '@aws-sdk/client-ssm':
         specifier: ^3.985.0
         version: 3.985.0(aws-crt@1.21.8)
@@ -40,7 +40,7 @@ importers:
         version: 6.3.2(solid-js@1.9.11)
       astro:
         specifier: ^5.17.1
-        version: 5.17.1(@types/node@25.2.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2)
+        version: 5.17.1(@types/node@25.2.2)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2)
       astro-sst:
         specifier: ^2.45.2
         version: 2.45.2
@@ -140,10 +140,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^5.4.21
-        version: 5.4.21(@types/node@25.2.1)
+        version: 5.4.21(@types/node@25.2.2)
       vitest:
         specifier: ^1.6.1
-        version: 1.6.1(@types/node@25.2.1)(@vitest/ui@1.6.1)(jsdom@24.1.3)
+        version: 1.6.1(@types/node@25.2.2)(@vitest/ui@1.6.1)(jsdom@24.1.3)
 
 packages:
 
@@ -1537,8 +1537,8 @@ packages:
   '@types/nlcst@2.0.3':
     resolution: {integrity: sha512-vSYNSDe6Ix3q+6Z7ri9lyWqgGhJTmzRjZRqyq15N0Z/1/UnVsno9G/N40NBijoYx2seFDIl0+B2mgAb9mezUCA==}
 
-  '@types/node@25.2.1':
-    resolution: {integrity: sha512-CPrnr8voK8vC6eEtyRzvMpgp3VyVRhgclonE7qYi6P9sXwYb59ucfrnmFBTaP0yUi8Gk4yZg/LlTJULGxvTNsg==}
+  '@types/node@25.2.2':
+    resolution: {integrity: sha512-BkmoP5/FhRYek5izySdkOneRyXYN35I860MFAGupTdebyE66uZaR+bXLHq8k4DirE5DwQi3NuhvRU1jqTVwUrQ==}
 
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
@@ -4944,10 +4944,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.5.2(astro@5.17.1(@types/node@25.2.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2))':
+  '@astrojs/node@9.5.2(astro@5.17.1(@types/node@25.2.2)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2))':
     dependencies:
       '@astrojs/internal-helpers': 0.7.5
-      astro: 5.17.1(@types/node@25.2.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2)
+      astro: 5.17.1(@types/node@25.2.2)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2)
       send: 1.2.1
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -4957,11 +4957,11 @@ snapshots:
     dependencies:
       prismjs: 1.30.0
 
-  '@astrojs/solid-js@5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.2.1)(jiti@2.4.2)(solid-js@1.9.11)(yaml@2.8.2)':
+  '@astrojs/solid-js@5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.2.2)(jiti@2.4.2)(solid-js@1.9.11)(yaml@2.8.2)':
     dependencies:
       solid-js: 1.9.11
-      vite: 6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)
-      vite-plugin-solid: 2.11.10(@testing-library/jest-dom@5.17.0)(solid-js@1.9.11)(vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2))
+      vite: 6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)
+      vite-plugin-solid: 2.11.10(@testing-library/jest-dom@5.17.0)(solid-js@1.9.11)(vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2))
     transitivePeerDependencies:
       - '@testing-library/jest-dom'
       - '@types/node'
@@ -5873,7 +5873,7 @@ snapshots:
 
   '@jest/pattern@30.0.1':
     dependencies:
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       jest-regex-util: 30.0.1
 
   '@jest/schemas@29.6.3':
@@ -5890,7 +5890,7 @@ snapshots:
       '@jest/schemas': 30.0.5
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -6469,7 +6469,7 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
-  '@types/node@25.2.1':
+  '@types/node@25.2.2':
     dependencies:
       undici-types: 7.16.0
 
@@ -6483,7 +6483,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
     optional: true
 
   '@types/yargs-parser@21.0.3': {}
@@ -6600,7 +6600,7 @@ snapshots:
       std-env: 3.10.0
       strip-literal: 2.1.1
       test-exclude: 6.0.0
-      vitest: 1.6.1(@types/node@25.2.1)(@vitest/ui@1.6.1)(jsdom@24.1.3)
+      vitest: 1.6.1(@types/node@25.2.2)(@vitest/ui@1.6.1)(jsdom@24.1.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -6635,7 +6635,7 @@ snapshots:
       pathe: 1.1.2
       picocolors: 1.1.1
       sirv: 2.0.4
-      vitest: 1.6.1(@types/node@25.2.1)(@vitest/ui@1.6.1)(jsdom@24.1.3)
+      vitest: 1.6.1(@types/node@25.2.2)(@vitest/ui@1.6.1)(jsdom@24.1.3)
 
   '@vitest/utils@1.6.1':
     dependencies:
@@ -6836,7 +6836,7 @@ snapshots:
       '@astrojs/webapi': 3.0.0
       set-cookie-parser: 2.7.2
 
-  astro@5.17.1(@types/node@25.2.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2):
+  astro@5.17.1(@types/node@25.2.2)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.57.1)(typescript@5.9.3)(yaml@2.8.2):
     dependencies:
       '@astrojs/compiler': 2.13.1
       '@astrojs/internal-helpers': 0.7.5
@@ -6893,8 +6893,8 @@ snapshots:
       unist-util-visit: 5.1.0
       unstorage: 1.17.4(aws4fetch@1.0.20)
       vfile: 6.0.3
-      vite: 6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)
-      vitefu: 1.1.1(vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2))
+      vite: 6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)
+      vitefu: 1.1.1(vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2))
       xxhash-wasm: 1.1.0
       yargs-parser: 21.1.1
       yocto-spinner: 0.2.3
@@ -8445,7 +8445,7 @@ snapshots:
   jest-mock@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       jest-util: 30.2.0
 
   jest-regex-util@30.0.1: {}
@@ -8453,7 +8453,7 @@ snapshots:
   jest-util@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
@@ -10217,13 +10217,13 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-node@1.6.1(@types/node@25.2.1):
+  vite-node@1.6.1(@types/node@25.2.2):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.21(@types/node@25.2.1)
+      vite: 5.4.21(@types/node@25.2.2)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -10235,7 +10235,7 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-solid@2.11.10(@testing-library/jest-dom@5.17.0)(solid-js@1.9.11)(vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)):
+  vite-plugin-solid@2.11.10(@testing-library/jest-dom@5.17.0)(solid-js@1.9.11)(vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)):
     dependencies:
       '@babel/core': 7.29.0
       '@types/babel__core': 7.20.5
@@ -10243,23 +10243,23 @@ snapshots:
       merge-anything: 5.1.7
       solid-js: 1.9.11
       solid-refresh: 0.6.3(solid-js@1.9.11)
-      vite: 6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)
-      vitefu: 1.1.1(vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2))
+      vite: 6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)
+      vitefu: 1.1.1(vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2))
     optionalDependencies:
       '@testing-library/jest-dom': 5.17.0
     transitivePeerDependencies:
       - supports-color
 
-  vite@5.4.21(@types/node@25.2.1):
+  vite@5.4.21(@types/node@25.2.2):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.6
       rollup: 4.57.1
     optionalDependencies:
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       fsevents: 2.3.3
 
-  vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2):
+  vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.3)
@@ -10268,16 +10268,16 @@ snapshots:
       rollup: 4.57.1
       tinyglobby: 0.2.15
     optionalDependencies:
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       fsevents: 2.3.3
       jiti: 2.4.2
       yaml: 2.8.2
 
-  vitefu@1.1.1(vite@6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)):
+  vitefu@1.1.1(vite@6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)):
     optionalDependencies:
-      vite: 6.4.1(@types/node@25.2.1)(jiti@2.4.2)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@25.2.2)(jiti@2.4.2)(yaml@2.8.2)
 
-  vitest@1.6.1(@types/node@25.2.1)(@vitest/ui@1.6.1)(jsdom@24.1.3):
+  vitest@1.6.1(@types/node@25.2.2)(@vitest/ui@1.6.1)(jsdom@24.1.3):
     dependencies:
       '@vitest/expect': 1.6.1
       '@vitest/runner': 1.6.1
@@ -10296,11 +10296,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.21(@types/node@25.2.1)
-      vite-node: 1.6.1(@types/node@25.2.1)
+      vite: 5.4.21(@types/node@25.2.2)
+      vite-node: 1.6.1(@types/node@25.2.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 25.2.1
+      '@types/node': 25.2.2
       '@vitest/ui': 1.6.1(vitest@1.6.1)
       jsdom: 24.1.3
     transitivePeerDependencies:
