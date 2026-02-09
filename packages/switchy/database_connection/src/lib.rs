@@ -62,6 +62,7 @@ pub mod creds;
 #[allow(unused)]
 pub struct Credentials {
     host: String,
+    port: Option<u16>,
     name: String,
     user: String,
     password: Option<String>,
@@ -90,9 +91,16 @@ pub enum CredentialsParseError {
 impl Credentials {
     /// Creates new database credentials
     #[must_use]
-    pub const fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
+    pub const fn new(
+        host: String,
+        port: Option<u16>,
+        name: String,
+        user: String,
+        password: Option<String>,
+    ) -> Self {
         Self {
             host,
+            port,
             name,
             user,
             password,
@@ -127,7 +135,7 @@ impl Credentials {
                     .rsplit_once('/')
                     .ok_or(CredentialsParseError::MissingDatabase)?;
 
-                let Some((auth, host)) = auth_host.rsplit_once('@') else {
+                let Some((auth, host_port)) = auth_host.rsplit_once('@') else {
                     return Err(CredentialsParseError::MissingUsername);
                 };
 
@@ -135,6 +143,14 @@ impl Credentials {
                     (user, Some(pass.to_string()))
                 } else {
                     (auth, None)
+                };
+
+                // Split host and port
+                let (host, port) = if let Some((h, p)) = host_port.rsplit_once(':') {
+                    p.parse::<u16>()
+                        .map_or((host_port, None), |port_num| (h, Some(port_num)))
+                } else {
+                    (host_port, None)
                 };
 
                 if user.is_empty() {
@@ -149,6 +165,7 @@ impl Credentials {
 
                 Ok(Self::new(
                     host.to_string(),
+                    port,
                     dbname.to_string(),
                     user.to_string(),
                     password,
@@ -162,6 +179,12 @@ impl Credentials {
     #[must_use]
     pub fn host(&self) -> &str {
         &self.host
+    }
+
+    /// Returns the database port, if present
+    #[must_use]
+    pub const fn port(&self) -> Option<u16> {
+        self.port
     }
 
     /// Returns the database name
@@ -611,6 +634,10 @@ pub async fn init_postgres_sqlx(
         .database(&creds.name)
         .username(&creds.user);
 
+    if let Some(port) = creds.port {
+        connect_options = connect_options.port(port);
+    }
+
     if let Some(db_password) = &creds.password {
         connect_options = connect_options.password(db_password);
     }
@@ -654,6 +681,12 @@ pub async fn init_mysql_sqlx(creds: Credentials) -> Result<Box<dyn Database>, In
         .database(&creds.name)
         .username(&creds.user);
 
+    let connect_options = if let Some(port) = creds.port {
+        connect_options.port(port)
+    } else {
+        connect_options
+    };
+
     let connect_options = if let Some(db_password) = &creds.password {
         connect_options.password(db_password)
     } else {
@@ -692,6 +725,10 @@ pub async fn init_postgres_raw_native_tls(
         .host(&creds.host)
         .dbname(&creds.name)
         .user(&creds.user);
+
+    if let Some(port) = creds.port {
+        config.port(port);
+    }
 
     if let Some(db_password) = &creds.password {
         config.password(db_password);
@@ -743,6 +780,10 @@ pub async fn init_postgres_raw_openssl(
         .dbname(&creds.name)
         .user(&creds.user);
 
+    if let Some(port) = creds.port {
+        config.port(port);
+    }
+
     if let Some(db_password) = &creds.password {
         config.password(db_password);
     }
@@ -790,6 +831,10 @@ pub async fn init_postgres_raw_no_tls(
         .dbname(&creds.name)
         .user(&creds.user);
 
+    if let Some(port) = creds.port {
+        config.port(port);
+    }
+
     if let Some(db_password) = &creds.password {
         config.password(db_password);
     }
@@ -816,7 +861,8 @@ mod tests {
         let url = "postgres://user:pass123@localhost:5432/mydb";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), Some("pass123"));
@@ -827,7 +873,8 @@ mod tests {
         let url = "postgres://user@localhost:5432/mydb";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), None);
@@ -838,7 +885,8 @@ mod tests {
         let url = "postgresql://user:pass@host:1234/database";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "host:1234");
+        assert_eq!(creds.host(), "host");
+        assert_eq!(creds.port(), Some(1234));
         assert_eq!(creds.name(), "database");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), Some("pass"));
@@ -849,7 +897,8 @@ mod tests {
         let url = "mysql://dbuser:dbpass@dbhost:3306/mydb";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "dbhost:3306");
+        assert_eq!(creds.host(), "dbhost");
+        assert_eq!(creds.port(), Some(3306));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "dbuser");
         assert_eq!(creds.password(), Some("dbpass"));
@@ -860,7 +909,8 @@ mod tests {
         let url = "postgres://user:p@ss:w0rd!@localhost:5432/mydb";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), Some("p@ss:w0rd!"));
@@ -871,7 +921,8 @@ mod tests {
         let url = "  postgres://user:pass@localhost:5432/mydb  ";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), Some("pass"));
@@ -990,7 +1041,8 @@ mod tests {
         let url = "postgres://user:pass@db.example.com:5432/production";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "db.example.com:5432");
+        assert_eq!(creds.host(), "db.example.com");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "production");
         assert_eq!(creds.user(), "user");
         assert_eq!(creds.password(), Some("pass"));
@@ -1001,7 +1053,8 @@ mod tests {
         let url = "postgres://user:pass@192.168.1.100:5432/mydb";
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
-        assert_eq!(creds.host(), "192.168.1.100:5432");
+        assert_eq!(creds.host(), "192.168.1.100");
+        assert_eq!(creds.port(), Some(5432));
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
     }
@@ -1012,6 +1065,7 @@ mod tests {
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
         assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.port(), None);
         assert_eq!(creds.name(), "mydb");
         assert_eq!(creds.user(), "user");
     }

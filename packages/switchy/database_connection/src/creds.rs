@@ -68,6 +68,7 @@ pub enum GetDbCredsError {
 ///
 /// * If invalid connection options were given
 /// * If failed to retrieve the credentials from the SSM parameters
+#[allow(clippy::too_many_lines)]
 pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     log::trace!("get_db_creds");
 
@@ -82,12 +83,16 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     let env_db_name = switchy_env::var("DB_NAME").ok();
     let env_db_user = switchy_env::var("DB_USER").ok();
     let env_db_password = switchy_env::var("DB_PASSWORD").ok();
+    let env_db_port = switchy_env::var("DB_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok());
 
     Ok(
         if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
             log::debug!("get_db_creds: Using env var values host={env_db_host:?}");
             Credentials::new(
                 env_db_host.ok_or(GetDbCredsError::InvalidConnectionOptions)?,
+                env_db_port,
                 env_db_name.ok_or(GetDbCredsError::InvalidConnectionOptions)?,
                 env_db_user.ok_or(GetDbCredsError::InvalidConnectionOptions)?,
                 env_db_password,
@@ -178,7 +183,7 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
 
             log::debug!("get_db_creds: Fetching creds from aws ssm host={host}");
 
-            Credentials::new(host, name, user, password)
+            Credentials::new(host, None, name, user, password)
         },
     )
 }
