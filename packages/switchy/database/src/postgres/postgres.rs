@@ -419,6 +419,35 @@ impl std::fmt::Debug for PostgresTransaction {
     }
 }
 
+/// Extracts a detailed error message from a `tokio-postgres` error.
+///
+/// `tokio_postgres::Error`'s `Display` impl only shows the error kind (e.g.,
+/// `"db error"`) without the actual database message, detail, hint, or SQL
+/// state. This function extracts those from the underlying `DbError` when
+/// available, falling back to `Display` for non-database errors (connection
+/// failures, TLS errors, etc.).
+fn detailed_pg_error(e: &tokio_postgres::Error) -> String {
+    use std::fmt::Write as _;
+
+    e.as_db_error().map_or_else(
+        || e.to_string(),
+        |db_err| {
+            let mut msg = format!("{}: {}", db_err.severity(), db_err.message());
+            if let Some(detail) = db_err.detail() {
+                write!(msg, "\n  Detail: {detail}").unwrap();
+            }
+            if let Some(hint) = db_err.hint() {
+                write!(msg, "\n  Hint: {hint}").unwrap();
+            }
+            if let Some(where_) = db_err.where_() {
+                write!(msg, "\n  Where: {where_}").unwrap();
+            }
+            write!(msg, " [{}]", db_err.code().code()).unwrap();
+            msg
+        },
+    )
+}
+
 /// Errors specific to `PostgreSQL` database operations
 ///
 /// Wraps errors from the underlying `tokio-postgres` driver and connection pool,
@@ -427,7 +456,7 @@ impl std::fmt::Debug for PostgresTransaction {
 #[derive(Debug, Error)]
 pub enum PostgresDatabaseError {
     /// Error from the underlying `tokio-postgres` driver
-    #[error(transparent)]
+    #[error("{}", detailed_pg_error(.0))]
     Postgres(#[from] tokio_postgres::Error),
     /// Error from the `deadpool-postgres` connection pool
     #[error(transparent)]
@@ -748,7 +777,7 @@ impl Database for PostgresDatabase {
         let pg_rows = client
             .query(query, &[])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         if pg_rows.is_empty() {
             return Ok(vec![]);
@@ -808,7 +837,7 @@ impl Database for PostgresDatabase {
         let rows_affected = client
             .execute(&transformed_query, &param_refs[..])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         Ok(rows_affected)
     }
@@ -840,7 +869,7 @@ impl Database for PostgresDatabase {
         let pg_rows = client
             .query(&transformed_query, &param_refs[..])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         if pg_rows.is_empty() {
             return Ok(vec![]);
@@ -1136,7 +1165,7 @@ impl Database for PostgresTransaction {
         let pg_rows = client_ref
             .query(query, &[])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         if pg_rows.is_empty() {
             return Ok(vec![]);
@@ -1197,7 +1226,7 @@ impl Database for PostgresTransaction {
             .await
             .execute(&transformed_query, &param_refs[..])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         Ok(rows_affected)
     }
@@ -1230,7 +1259,7 @@ impl Database for PostgresTransaction {
             .await
             .query(&transformed_query, &param_refs[..])
             .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
 
         if pg_rows.is_empty() {
             return Ok(vec![]);
