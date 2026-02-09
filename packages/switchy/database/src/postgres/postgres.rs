@@ -736,7 +736,7 @@ impl Database for PostgresDatabase {
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
         let client = self.get_client().await?;
         client
-            .execute_raw(sql, &[] as &[&str])
+            .batch_execute(sql)
             .await
             .map_err(PostgresDatabaseError::Postgres)?;
         Ok(())
@@ -1123,7 +1123,7 @@ impl Database for PostgresTransaction {
         self.client
             .lock()
             .await
-            .execute(sql, &[])
+            .batch_execute(sql)
             .await
             .map_err(PostgresDatabaseError::Postgres)?;
         Ok(())
