@@ -33,6 +33,21 @@
 - **Naming**: All packages use underscore naming (`moosicbox_audio_decoder`)
 - **Features**: Always include `fail-on-warnings = []` feature
 - **Serde**: Use `SCREAMING_SNAKE_CASE` for rename attributes
+- **`_models` Pattern**: When a package defines types that other packages need
+  to depend on without pulling in the full package's functionality:
+    - Extract shared types into a sibling `models/` subdirectory as a separate
+      crate (e.g., `moosicbox_session` has `moosicbox_session_models`)
+    - `_models` crates contain ONLY: structs, enums, type aliases, `From`/`Into`
+      impls, serialization derives, and simple utility/parsing functions on those
+      types
+    - `_models` crates must NOT contain: business logic, database queries, HTTP
+      handlers, service orchestration, or heavy dependencies
+    - This prevents circular dependencies: two crates that need each other's types
+      can both depend on a shared `_models` crate instead of depending on each other
+    - `_models` crates should be leaves in the dependency graph (they may depend on
+      other `_models` crates but never on their parent implementation crate)
+    - Never create generic "shared" or "common" crates -- types belong in the
+      domain-specific `_models` crate for the package that owns them
 
 ### Documentation
 
