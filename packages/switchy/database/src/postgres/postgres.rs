@@ -3162,6 +3162,9 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                 Self::String(text_from_sql(raw)?.to_string())
             }
             "timestamp" => Self::DateTime(NaiveDateTime::from_sql(ty, raw)?),
+            "timestamptz" => {
+                Self::DateTime(chrono::DateTime::<chrono::Utc>::from_sql(ty, raw)?.naive_utc())
+            }
             #[cfg(feature = "uuid")]
             "uuid" => Self::Uuid(uuid::Uuid::from_sql(ty, raw)?),
             #[cfg(feature = "decimal")]
@@ -3242,6 +3245,14 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::DateTime(
                         NaiveDateTime::from_sql(ty, raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(Self::Null),
+            "timestamptz" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::DateTime(
+                        chrono::DateTime::<chrono::Utc>::from_sql(ty, raw)?.naive_utc(),
                     ))
                 })
                 .transpose()?
