@@ -847,8 +847,8 @@ impl Database for RusqliteDatabase {
             "
         );
 
-        // Use existing bind_values function to bind parameters
-        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         let rows_affected = stmt
@@ -893,8 +893,8 @@ impl Database for RusqliteDatabase {
             "
         );
 
-        // Use existing bind_values function to bind parameters
-        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Execute and use existing to_rows helper
@@ -1176,8 +1176,8 @@ impl Database for RusqliteTransaction {
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
             filtered_params.iter().map(|p| p.clone().into()).collect();
 
-        // Use existing bind_values function to bind parameters
-        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         let rows_affected = stmt
@@ -1211,8 +1211,8 @@ impl Database for RusqliteTransaction {
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
             filtered_params.iter().map(|p| p.clone().into()).collect();
 
-        // Use existing bind_values function to bind parameters
-        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Execute and use existing to_rows helper
@@ -3065,10 +3065,49 @@ fn bind_values(
     constant_inc: bool,
     offset: usize,
 ) -> Result<usize, RusqliteDatabaseError> {
+    bind_values_inner(statement, values, constant_inc, false, offset)
+}
+
+/// Like [`bind_values`] but with `bind_nulls` set to `true`, so that
+/// `DatabaseValue::Null` (and all `*Opt(None)` variants) are bound as SQL
+/// NULL rather than skipped. This keeps the positional index in sync with `?`
+/// placeholders written by the caller in raw-parameter queries.
+fn bind_values_raw(
+    statement: &mut Statement<'_>,
+    values: Option<&[RusqliteDatabaseValue]>,
+    offset: usize,
+) -> Result<usize, RusqliteDatabaseError> {
+    bind_values_inner(statement, values, false, true, offset)
+}
+
+/// Shared implementation for [`bind_values`] and [`bind_values_raw`].
+///
+/// When `bind_nulls` is `false` (query-builder path), null-like variants are
+/// skipped because the query builder already inlined `NULL` into the SQL text
+/// and emitted no `?` placeholder for them.
+///
+/// When `bind_nulls` is `true` (raw-params path), null-like variants are bound
+/// as `rusqlite::types::Null` so that the bind index stays aligned with the
+/// caller's `?` placeholders.
+#[allow(clippy::too_many_lines)]
+fn bind_values_inner(
+    statement: &mut Statement<'_>,
+    values: Option<&[RusqliteDatabaseValue]>,
+    constant_inc: bool,
+    bind_nulls: bool,
+    offset: usize,
+) -> Result<usize, RusqliteDatabaseError> {
     if let Some(values) = values {
         let mut i = 1 + offset;
         for value in values {
             match &**value {
+                // Now/NowPlus are handled upstream by
+                // sqlite_transform_query_for_params which replaces their
+                // placeholder with a SQL expression and removes them from the
+                // params list. No binding needed here.
+                DatabaseValue::Now | DatabaseValue::NowPlus(..) => (),
+                // Null-like variants: bind SQL NULL when in raw-params mode,
+                // skip when in query-builder mode (NULL is already inlined).
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
@@ -3081,13 +3120,32 @@ fn bind_values(
                 | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::Real32Opt(None)
-                | DatabaseValue::Now
-                | DatabaseValue::NowPlus(..) => (),
+                | DatabaseValue::Real32Opt(None) => {
+                    if bind_nulls {
+                        statement.raw_bind_parameter(i, rusqlite::types::Null)?;
+                        if !constant_inc {
+                            i += 1;
+                        }
+                    }
+                }
                 #[cfg(feature = "decimal")]
-                DatabaseValue::DecimalOpt(None) => (),
+                DatabaseValue::DecimalOpt(None) => {
+                    if bind_nulls {
+                        statement.raw_bind_parameter(i, rusqlite::types::Null)?;
+                        if !constant_inc {
+                            i += 1;
+                        }
+                    }
+                }
                 #[cfg(feature = "uuid")]
-                DatabaseValue::UuidOpt(None) => (),
+                DatabaseValue::UuidOpt(None) => {
+                    if bind_nulls {
+                        statement.raw_bind_parameter(i, rusqlite::types::Null)?;
+                        if !constant_inc {
+                            i += 1;
+                        }
+                    }
+                }
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, i32::from(*value))?;
                     if !constant_inc {
