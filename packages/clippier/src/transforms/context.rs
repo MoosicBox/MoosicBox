@@ -16,14 +16,23 @@ pub struct TransformContext {
     packages: BTreeMap<String, PackageInfo>,
 }
 
-/// Package metadata
+/// Package metadata for transform scripts.
+///
+/// Contains comprehensive information about a workspace package including
+/// its features, dependencies, and parsed `Cargo.toml` content. This is
+/// exposed to Lua transform scripts via the transform context.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PackageInfo {
+    /// The package name from `Cargo.toml`
     pub name: String,
+    /// Path to the package directory relative to workspace root
     pub path: PathBuf,
+    /// Parsed `Cargo.toml` content (not serialized)
     #[serde(skip, default = "default_cargo_toml")]
     pub cargo_toml: Value,
+    /// Map of feature names to their dependencies
     pub features: BTreeMap<String, Vec<String>>,
+    /// List of package dependencies
     pub dependencies: Vec<DependencyInfo>,
 }
 
@@ -32,12 +41,19 @@ fn default_cargo_toml() -> Value {
     Value::Table(toml::map::Map::new())
 }
 
-/// Dependency information
+/// Dependency information for a package.
+///
+/// Contains metadata about a single dependency including whether it's optional,
+/// if it's a workspace member, and what features are enabled for it.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DependencyInfo {
+    /// The dependency name
     pub name: String,
+    /// Whether this is an optional dependency
     pub optional: bool,
+    /// Whether this dependency is a workspace member
     pub workspace_member: bool,
+    /// Features enabled for this dependency
     pub features: Vec<String>,
 }
 
