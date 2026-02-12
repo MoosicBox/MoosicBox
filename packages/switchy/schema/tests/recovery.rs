@@ -105,18 +105,33 @@ async fn test_dirty_state_detection() {
         .await
         .unwrap();
 
+    // Also add a failed migration to verify it doesn't block
+    version_tracker
+        .record_migration_started(&*db, "002_failed_migration", &checksum, &checksum)
+        .await
+        .unwrap();
+    version_tracker
+        .update_migration_status(
+            &*db,
+            "002_failed_migration",
+            MigrationStatus::Failed,
+            Some("Test error".to_string()),
+        )
+        .await
+        .unwrap();
+
     // Create a simple migration source
     let mut source = CodeMigrationSource::new();
     source.add_migration(CodeMigration::new(
-        "002_new_migration".to_string(),
+        "003_new_migration".to_string(),
         Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
         Some(Box::new("DROP TABLE test".to_string())),
     ));
 
-    // Create runner without force flag - should detect dirty state
+    // Create runner without force flag - should detect dirty state (only in-progress)
     let runner = MigrationRunner::new(Box::new(source)).with_version_tracker(version_tracker);
 
-    // Run should fail due to dirty state
+    // Run should fail due to dirty state (only in-progress migrations block)
     let result = runner.run(&*db).await;
     assert!(result.is_err());
 
@@ -130,7 +145,7 @@ async fn test_dirty_state_detection() {
     // Create new source for force test
     let mut source2 = CodeMigrationSource::new();
     source2.add_migration(CodeMigration::new(
-        "002_new_migration".to_string(),
+        "003_new_migration".to_string(),
         Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
         Some(Box::new("DROP TABLE test".to_string())),
     ));
@@ -149,7 +164,7 @@ async fn test_dirty_state_detection() {
 
     // Verify the new migration was applied
     let new_migration_status = check_version_tracker
-        .get_migration_status(&*db, "002_new_migration")
+        .get_migration_status(&*db, "003_new_migration")
         .await
         .unwrap();
     assert!(new_migration_status.is_some());
@@ -168,6 +183,14 @@ async fn test_dirty_state_detection() {
         interrupted_status.unwrap().status,
         MigrationStatus::InProgress
     );
+
+    // Verify the failed migration is still there (and didn't block)
+    let failed_status = check_version_tracker
+        .get_migration_status(&*db, "002_failed_migration")
+        .await
+        .unwrap();
+    assert!(failed_status.is_some());
+    assert_eq!(failed_status.unwrap().status, MigrationStatus::Failed);
 }
 
 #[cfg(feature = "code")]
@@ -473,7 +496,248 @@ async fn test_migration_status_transitions() {
         .unwrap();
 
     let dirty_migrations = version_tracker.get_dirty_migrations(&*db).await.unwrap();
-    assert_eq!(dirty_migrations.len(), 1); // Only the in_progress one
-    assert_eq!(dirty_migrations[0].id, "002_in_progress");
-    assert_eq!(dirty_migrations[0].status, MigrationStatus::InProgress);
+    assert_eq!(dirty_migrations.len(), 1); // Only the failed one (in_progress from previous step is still there)
+    assert_eq!(
+        dirty_migrations
+            .iter()
+            .map(|r| r.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["002_in_progress"]
+    );
+
+    // Test get_in_progress_migrations filters correctly
+    let in_progress_migrations = version_tracker
+        .get_in_progress_migrations(&*db)
+        .await
+        .unwrap();
+    assert_eq!(in_progress_migrations.len(), 1); // Only the in_progress one
+    assert_eq!(in_progress_migrations[0].id, "002_in_progress");
+    assert_eq!(
+        in_progress_migrations[0].status,
+        MigrationStatus::InProgress
+    );
+}
+
+#[cfg(feature = "code")]
+#[switchy_async::test]
+async fn test_failed_migrations_dont_block_by_default() {
+    use switchy_schema::{
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
+    let db = create_empty_in_memory().await.unwrap();
+    let version_tracker = VersionTracker::with_table_name("__test_migrations");
+
+    // Ensure table exists
+    version_tracker.ensure_table_exists(&*db).await.unwrap();
+
+    // Manually insert a failed migration
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
+    version_tracker
+        .record_migration_started(&*db, "001_failed_migration", &checksum, &checksum)
+        .await
+        .unwrap();
+    version_tracker
+        .update_migration_status(
+            &*db,
+            "001_failed_migration",
+            MigrationStatus::Failed,
+            Some("Test error".to_string()),
+        )
+        .await
+        .unwrap();
+
+    // Create a migration source with a new migration
+    let mut source = CodeMigrationSource::new();
+    source.add_migration(CodeMigration::new(
+        "002_new_migration".to_string(),
+        Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
+        Some(Box::new("DROP TABLE test".to_string())),
+    ));
+
+    // Create runner with default settings (auto_retry_failed = false)
+    let runner = MigrationRunner::new(Box::new(source)).with_version_tracker(version_tracker);
+
+    // Run should succeed because failed migrations don't block by default
+    let result = runner.run(&*db).await;
+    assert!(
+        result.is_ok(),
+        "Failed migrations should not block by default: {:?}",
+        result
+    );
+
+    // Check status with new version tracker
+    let check_version_tracker = VersionTracker::with_table_name("__test_migrations");
+
+    // Verify new migration was applied
+    let new_migration_status = check_version_tracker
+        .get_migration_status(&*db, "002_new_migration")
+        .await
+        .unwrap();
+    assert!(new_migration_status.is_some());
+    assert_eq!(
+        new_migration_status.unwrap().status,
+        MigrationStatus::Completed
+    );
+
+    // Verify failed migration is still there (wasn't retried)
+    let failed_status = check_version_tracker
+        .get_migration_status(&*db, "001_failed_migration")
+        .await
+        .unwrap();
+    assert!(failed_status.is_some());
+    assert_eq!(failed_status.unwrap().status, MigrationStatus::Failed);
+}
+
+#[cfg(feature = "code")]
+#[switchy_async::test]
+async fn test_auto_retry_failed_functionality() {
+    use switchy_schema::{
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
+    let db = create_empty_in_memory().await.unwrap();
+    let version_tracker = VersionTracker::with_table_name("__test_migrations");
+
+    // Ensure table exists
+    version_tracker.ensure_table_exists(&*db).await.unwrap();
+
+    // Create a failed migration manually
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
+    version_tracker
+        .record_migration_started(&*db, "001_failed_migration", &checksum, &checksum)
+        .await
+        .unwrap();
+    version_tracker
+        .update_migration_status(
+            &*db,
+            "001_failed_migration",
+            MigrationStatus::Failed,
+            Some("Test error".to_string()),
+        )
+        .await
+        .unwrap();
+
+    // Create migration source with the same migration (but fixed SQL)
+    let mut source = CodeMigrationSource::new();
+    source.add_migration(CodeMigration::new(
+        "001_failed_migration".to_string(),
+        Box::new("CREATE TABLE test_table (id INTEGER PRIMARY KEY, data TEXT)".to_string()),
+        Some(Box::new("DROP TABLE test_table".to_string())),
+    ));
+    source.add_migration(CodeMigration::new(
+        "002_new_migration".to_string(),
+        Box::new("CREATE TABLE another_table (id INTEGER PRIMARY KEY)".to_string()),
+        Some(Box::new("DROP TABLE another_table".to_string())),
+    ));
+
+    // Create runner with auto_retry_failed enabled
+    let runner = MigrationRunner::new(Box::new(source))
+        .with_version_tracker(version_tracker)
+        .with_auto_retry_failed(true);
+
+    // Run should succeed and retry the failed migration
+    let result = runner.run(&*db).await;
+    assert!(result.is_ok(), "Auto-retry should succeed: {:?}", result);
+
+    // Check status with new version tracker
+    let check_version_tracker = VersionTracker::with_table_name("__test_migrations");
+
+    // Verify failed migration was retried and completed
+    let retried_status = check_version_tracker
+        .get_migration_status(&*db, "001_failed_migration")
+        .await
+        .unwrap();
+    assert!(retried_status.is_some());
+    let retried_record = retried_status.unwrap();
+    assert_eq!(retried_record.status, MigrationStatus::Completed);
+    assert!(retried_record.failure_reason.is_none());
+    assert!(retried_record.finished_on.is_some());
+
+    // Verify second migration was also applied
+    let second_status = check_version_tracker
+        .get_migration_status(&*db, "002_new_migration")
+        .await
+        .unwrap();
+    assert!(second_status.is_some());
+    assert_eq!(second_status.unwrap().status, MigrationStatus::Completed);
+
+    // Verify the table was actually created by the retried migration
+    let table_exists_result = db
+        .exec_raw("SELECT name FROM sqlite_master WHERE type='table' AND name='test_table'")
+        .await;
+    assert!(table_exists_result.is_ok());
+}
+
+#[cfg(feature = "code")]
+#[switchy_async::test]
+async fn test_in_progress_migrations_still_block() {
+    use switchy_schema::{
+        MigrationError,
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
+    let db = create_empty_in_memory().await.unwrap();
+    let version_tracker = VersionTracker::with_table_name("__test_migrations");
+
+    // Ensure table exists
+    version_tracker.ensure_table_exists(&*db).await.unwrap();
+
+    // Manually insert an in-progress migration
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
+    version_tracker
+        .record_migration_started(&*db, "001_in_progress_migration", &checksum, &checksum)
+        .await
+        .unwrap();
+
+    // Also add a failed migration
+    version_tracker
+        .record_migration_started(&*db, "002_failed_migration", &checksum, &checksum)
+        .await
+        .unwrap();
+    version_tracker
+        .update_migration_status(
+            &*db,
+            "002_failed_migration",
+            MigrationStatus::Failed,
+            Some("Test error".to_string()),
+        )
+        .await
+        .unwrap();
+
+    // Create a migration source with a new migration
+    let mut source = CodeMigrationSource::new();
+    source.add_migration(CodeMigration::new(
+        "003_new_migration".to_string(),
+        Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
+        Some(Box::new("DROP TABLE test".to_string())),
+    ));
+
+    // Create runner with auto_retry_failed enabled - should still block on in-progress
+    let runner = MigrationRunner::new(Box::new(source))
+        .with_version_tracker(version_tracker)
+        .with_auto_retry_failed(true);
+
+    // Run should fail due to in-progress migration (even with auto_retry_failed)
+    let result = runner.run(&*db).await;
+    assert!(result.is_err());
+
+    if let Err(MigrationError::DirtyState { migrations }) = result {
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0], "001_in_progress_migration");
+    } else {
+        panic!("Expected DirtyState error, got: {:?}", result);
+    }
+
+    // Verify failed migration is still there (but shouldn't be in dirty state error)
+    let check_version_tracker = VersionTracker::with_table_name("__test_migrations");
+    let failed_status = check_version_tracker
+        .get_migration_status(&*db, "002_failed_migration")
+        .await
+        .unwrap();
+    assert!(failed_status.is_some());
+    assert_eq!(failed_status.unwrap().status, MigrationStatus::Failed);
 }

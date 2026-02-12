@@ -480,6 +480,48 @@ impl VersionTracker {
         Ok(dirty_migrations)
     }
 
+    /// Get migrations that are in '`in_progress`' status (blocking migrations)
+    ///
+    /// Returns only migrations that are in '`in_progress`' status.
+    /// These represent migrations that are currently running and block new migrations.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    pub async fn get_in_progress_migrations(
+        &self,
+        db: &dyn Database,
+    ) -> Result<Vec<MigrationRecord>> {
+        let results = db
+            .select(&self.table_name)
+            .columns(&[
+                "id",
+                "run_on",
+                "finished_on",
+                "status",
+                "failure_reason",
+                "up_checksum",
+                "down_checksum",
+            ])
+            .filter(Box::new(where_eq(
+                "status",
+                MigrationStatus::InProgress.to_string(),
+            )))
+            .execute(db)
+            .await?;
+
+        let in_progress_migrations = results
+            .into_iter()
+            .map(|row| {
+                row.to_value_type().map_err(|e| {
+                    crate::MigrationError::Validation(format!("Row conversion failed: {e}"))
+                })
+            })
+            .collect::<Result<Vec<MigrationRecord>>>()?;
+
+        Ok(in_progress_migrations)
+    }
+
     /// Get all successfully applied migration IDs in chronological order
     ///
     /// Returns migration IDs for all completed migrations, ordered by run time (oldest first).

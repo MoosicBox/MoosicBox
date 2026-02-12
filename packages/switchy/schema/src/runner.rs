@@ -415,6 +415,7 @@ pub struct MigrationRunner<'a> {
     hooks: MigrationHooks,
     dry_run: bool,
     allow_dirty: bool,
+    auto_retry_failed: bool,
     checksum_config: ChecksumConfig,
 }
 
@@ -429,6 +430,7 @@ impl<'a> MigrationRunner<'a> {
             hooks: MigrationHooks::default(),
             dry_run: false,
             allow_dirty: false,
+            auto_retry_failed: false,
             checksum_config: ChecksumConfig::default(),
         }
     }
@@ -472,6 +474,29 @@ impl<'a> MigrationRunner<'a> {
     #[must_use]
     pub const fn with_allow_dirty(mut self, allow_dirty: bool) -> Self {
         self.allow_dirty = allow_dirty;
+        self
+    }
+
+    /// Automatically retry failed migrations
+    ///
+    /// When enabled, failed migrations will be automatically removed and retried
+    /// during normal `run()` operations. This is useful for programmatic usage
+    /// where you want to automatically recover from failed migrations.
+    ///
+    /// # Safety
+    ///
+    /// This feature is opt-in by default because automatic retries can be dangerous:
+    /// * SQL migrations are often not idempotent
+    /// * Retrying without manual fixes can cause data corruption
+    /// * Concurrent processes may retry the same migration
+    ///
+    /// Only enable this when:
+    /// * Your migrations are designed to be idempotent
+    /// * You understand the retry behavior
+    /// * You have appropriate error handling in place
+    #[must_use]
+    pub const fn with_auto_retry_failed(mut self, auto_retry_failed: bool) -> Self {
+        self.auto_retry_failed = auto_retry_failed;
         self
     }
 
@@ -526,13 +551,13 @@ impl<'a> MigrationRunner<'a> {
     /// # Errors
     ///
     /// * If the database query fails
-    /// * If dirty migrations exist and `allow_dirty` is false
+    /// * If in-progress migrations exist and `allow_dirty` is false
     async fn check_dirty_state(&self, db: &dyn Database) -> Result<()> {
-        let dirty_migrations = self.version_tracker.get_dirty_migrations(db).await?;
+        let in_progress_migrations = self.version_tracker.get_in_progress_migrations(db).await?;
 
-        if !dirty_migrations.is_empty() && !self.allow_dirty {
+        if !in_progress_migrations.is_empty() && !self.allow_dirty {
             return Err(crate::MigrationError::DirtyState {
-                migrations: dirty_migrations.into_iter().map(|r| r.id).collect(),
+                migrations: in_progress_migrations.into_iter().map(|r| r.id).collect(),
             });
         }
 
@@ -558,6 +583,26 @@ impl<'a> MigrationRunner<'a> {
 
         // Check for dirty state (migrations in progress)
         self.check_dirty_state(db).await?;
+
+        // Handle failed migrations if auto-retry is enabled
+        if self.auto_retry_failed {
+            // Get all migrations to check for failed ones
+            let migrations = self.source.migrations().await?;
+            for migration in &migrations {
+                let migration_id = migration.id();
+                if let Some(record) = self
+                    .version_tracker
+                    .get_migration_status(db, migration_id)
+                    .await?
+                    && record.status == MigrationStatus::Failed
+                {
+                    // Remove failed record so it can be retried
+                    self.version_tracker
+                        .remove_migration(db, migration_id)
+                        .await?;
+                }
+            }
+        }
 
         // Validate checksums if strict mode is enabled
         if self.checksum_config.require_validation {

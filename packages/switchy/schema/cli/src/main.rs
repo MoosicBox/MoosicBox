@@ -167,6 +167,9 @@ enum Commands {
         /// Force migration even if dirty state detected (dangerous)
         #[arg(long)]
         force: bool,
+        /// Automatically retry failed migrations
+        #[arg(long)]
+        retry_failed: bool,
         /// Require checksum validation before running migrations
         #[arg(long)]
         require_checksum_validation: bool,
@@ -342,6 +345,7 @@ async fn main() -> Result<()> {
             steps,
             dry_run,
             force,
+            retry_failed,
             require_checksum_validation,
         } => {
             run_migrations(
@@ -352,6 +356,7 @@ async fn main() -> Result<()> {
                 steps,
                 dry_run,
                 force,
+                retry_failed,
                 require_checksum_validation,
             )
             .await
@@ -713,7 +718,11 @@ async fn show_status(
 /// * Checksum validation fails when `require_checksum_validation` is enabled
 /// * Migration execution fails (SQL errors, constraint violations)
 /// * Migration state is dirty and `force` is not enabled
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::fn_params_excessive_bools
+)]
 async fn run_migrations(
     database_url: String,
     migrations_dir: PathBuf,
@@ -722,6 +731,7 @@ async fn run_migrations(
     steps: Option<usize>,
     dry_run: bool,
     force: bool,
+    retry_failed: bool,
     require_checksum_validation: bool,
 ) -> Result<()> {
     use switchy_schema::runner::{ChecksumConfig, ExecutionStrategy, MigrationRunner};
@@ -788,6 +798,19 @@ async fn run_migrations(
         println!("Proceeding with --force flag...");
         println!();
         runner = runner.with_allow_dirty(true);
+    }
+
+    if retry_failed {
+        use colored::Colorize;
+        println!(
+            "{}",
+            "🔄 INFO: Automatically retrying failed migrations"
+                .blue()
+                .bold()
+        );
+        println!("Failed migrations will be removed and retried automatically...");
+        println!();
+        runner = runner.with_auto_retry_failed(true);
     }
 
     // Show what we're about to do
@@ -2133,6 +2156,7 @@ mod tests {
             None,
             false,
             true,  // force = true
+            false, // retry_failed = false
             false, // require_checksum_validation = false
         )
         .await;
@@ -2543,6 +2567,7 @@ mod tests {
             Some(5),                              // steps - conflicting with up_to
             false,                                // dry_run
             false,                                // force
+            false,                                // retry_failed
             false,                                // require_checksum_validation
         )
         .await;
