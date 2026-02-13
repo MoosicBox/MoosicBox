@@ -2561,4 +2561,463 @@ mod tests {
             assert_eq!(logged_level, expected_level);
         }
     }
+
+    // ============================================
+    // calc_value with CalcValue::Visibility/Display from managers
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_visibility_with_override() {
+        // When visibility_manager has an override, calc_value should return that value
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First, set a visibility override on element 10
+        handler.handle_style_action(
+            &StyleAction::SetVisibility(Visibility::Hidden),
+            &ElementTarget::Id(10),
+            StyleTrigger::UiEvent,
+            1,
+        );
+
+        // Now calc_value should return the overridden visibility
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Visibility(Visibility::Hidden)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_visibility_without_override() {
+        // When visibility_manager has no override, calc_value should return default (Visible)
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        // Default visibility is Visible
+        assert_eq!(result, Some(Value::Visibility(Visibility::Visible)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_display_with_override() {
+        // When display_manager has an override, calc_value should return that value
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First, set a display override on element 10
+        handler.handle_style_action(
+            &StyleAction::SetDisplay(false),
+            &ElementTarget::Id(10),
+            StyleTrigger::UiEvent,
+            1,
+        );
+
+        // Now calc_value should return the overridden display
+        let value = Value::Calc(crate::logic::CalcValue::Display {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Display(false)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_display_without_override() {
+        // When display_manager has no override, calc_value should return default (false)
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::Display {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        // Default display when no override is false (from unwrap_or_default)
+        assert_eq!(result, Some(Value::Display(false)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_calc_visibility_nonexistent_element() {
+        // When element doesn't exist, calc_value should return None
+        let handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(999), // nonexistent
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        // get_element_id returns Some(999) for ElementTarget::Id(999), so it should work
+        // but the visibility_manager has no override for it
+        assert_eq!(result, Some(Value::Visibility(Visibility::Visible)));
+    }
+
+    // ============================================
+    // handle_action with delay_off effect
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_handle_action_with_delay_off_starts_timer() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+        let effect = ActionEffect {
+            action: action.clone(),
+            delay_off: Some(1000), // 1 second delay
+            throttle: None,
+            unique: None,
+        };
+
+        // Handle the action - this should start the delay_off timer
+        let success = handler.handle_action(
+            &action,
+            Some(&effect),
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        assert!(success);
+        // Style should be applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        // Delay off timer should have been started (not expired)
+        assert!(!handler.timing_manager.is_delay_off_expired(1));
+    }
+
+    // ============================================
+    // unhandle_action with unexpired delay_off
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_with_unexpired_delay_off_requests_repaint() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+        let effect = ActionEffect {
+            action: action.clone(),
+            delay_off: Some(10000), // 10 second delay (won't expire during test)
+            throttle: None,
+            unique: None,
+        };
+
+        // First, handle the action to apply style and start timer
+        handler.handle_action(
+            &action,
+            Some(&effect),
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify style was applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+
+        // Verify delay_off timer is NOT expired (just started)
+        assert!(!handler.timing_manager.is_delay_off_expired(1));
+
+        // Now unhandle - should request repaint and NOT remove the style
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // repaint should have been requested
+        assert!(context.repaint_called.get());
+        // Style should still be applied (delay_off prevents removal)
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_without_delay_off_removes_style() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+
+        // Handle without delay_off effect
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify style was applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+
+        // Without delay_off, is_delay_off_expired returns true (no timer = expired)
+        assert!(handler.timing_manager.is_delay_off_expired(1));
+
+        // Now unhandle - should remove the style immediately
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Style should be removed
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    // ============================================
+    // process_element_actions utility function tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_process_element_actions_matching_trigger() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "click", // matching trigger
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        // Action should have been processed
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_non_matching_trigger() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: ActionTrigger::Click,
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "hover", // non-matching trigger
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        // Action should NOT have been processed (trigger doesn't match)
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_custom_event_trigger() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![crate::Action {
+            trigger: ActionTrigger::Event("my-custom-event".to_string()),
+            effect: ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "event",
+            Some("my-custom-event"), // matching event name
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_multiple_actions() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions = vec![
+            crate::Action {
+                trigger: ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetVisibility(Visibility::Hidden),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+            crate::Action {
+                trigger: ActionTrigger::Click,
+                effect: ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(20),
+                        action: StyleAction::SetDisplay(false),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            },
+        ];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "click",
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        // Both actions should have been processed
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert_eq!(handler.get_display_override(20), Some(&false));
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_with_event_value() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Use a Log action to capture the event value
+        let actions = vec![crate::Action {
+            trigger: ActionTrigger::Change,
+            effect: ActionEffect {
+                action: ActionType::Log {
+                    message: "test message".to_string(),
+                    level: crate::LogLevel::Info,
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "change",
+            None,
+            Some("input-value"),
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+        // Log action should have been executed
+        let logs = context.logs.borrow();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].1, "test message");
+    }
+
+    #[test_log::test]
+    fn test_process_element_actions_empty_list() {
+        use utils::process_element_actions;
+
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        let actions: Vec<crate::Action> = vec![];
+
+        let success = process_element_actions(
+            &mut handler,
+            &actions,
+            1,
+            "click",
+            None,
+            None,
+            &context,
+            StyleTrigger::UiEvent,
+        );
+
+        assert!(success);
+    }
 }

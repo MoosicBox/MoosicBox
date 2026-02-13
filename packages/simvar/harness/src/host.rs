@@ -141,3 +141,61 @@ impl Actor for &Host {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_host_returns_none_outside_host_context() {
+        // When called outside of any host context (no host action is running),
+        // current_host() should return None
+        let result = current_host();
+        assert!(
+            result.is_none(),
+            "current_host() should return None when not inside a host action"
+        );
+    }
+
+    #[test_log::test]
+    fn test_with_host_sets_current_host_context() {
+        // Verify that with_host correctly sets the host context for the duration
+        // of the closure, making current_host() return the host name
+        let captured_name = with_host("test-host".to_string(), |name| {
+            assert_eq!(name, "test-host");
+            current_host()
+        });
+
+        assert_eq!(captured_name, Some("test-host".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_host_returns_none_after_with_host_exits() {
+        // Verify that after with_host exits, current_host() returns None again
+        with_host("temporary-host".to_string(), |_name| ());
+
+        let result = current_host();
+        assert!(
+            result.is_none(),
+            "current_host() should return None after with_host exits"
+        );
+    }
+
+    #[test_log::test]
+    fn test_with_host_nested_contexts() {
+        // Verify that nested with_host calls correctly shadow the outer context
+        with_host("outer-host".to_string(), |outer_name| {
+            assert_eq!(outer_name, "outer-host");
+            assert_eq!(current_host(), Some("outer-host".to_string()));
+
+            with_host("inner-host".to_string(), |inner_name| {
+                assert_eq!(inner_name, "inner-host");
+                // Inner context should shadow outer context
+                assert_eq!(current_host(), Some("inner-host".to_string()));
+            });
+
+            // After inner exits, outer context should be restored
+            assert_eq!(current_host(), Some("outer-host".to_string()));
+        });
+    }
+}

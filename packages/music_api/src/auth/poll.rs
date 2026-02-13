@@ -174,4 +174,49 @@ mod test {
 
         assert!(!result);
     }
+
+    #[test_log::test]
+    fn poll_auth_default_is_same_as_new() {
+        let auth1 = PollAuth::default();
+        let auth2 = PollAuth::new();
+
+        assert_eq!(auth1.timeout, auth2.timeout);
+        assert_eq!(auth1.timeout, Duration::from_secs(60));
+    }
+
+    #[test_log::test]
+    fn poll_auth_into_auth_conversion() {
+        use super::Auth;
+
+        let poll = PollAuth::new();
+        let auth: Auth = poll.into();
+
+        assert!(matches!(auth, Auth::Poll(_)));
+    }
+
+    #[test_log::test]
+    fn poll_auth_timeout_methods_chain_correctly() {
+        let auth = PollAuth::new()
+            .with_timeout_secs(30)
+            .with_timeout_millis(5000)
+            .with_timeout(Duration::from_secs(10));
+
+        // The last timeout value should win
+        assert_eq!(auth.timeout, Duration::from_secs(10));
+    }
+
+    #[test_log::test]
+    fn poll_auth_mutable_timeout_returns_self() {
+        let mut auth = PollAuth::new();
+
+        // Each mutable method should return &mut Self for chaining
+        let result = auth.timeout(Duration::from_secs(10));
+        assert_eq!(result.timeout, Duration::from_secs(10));
+
+        let result = auth.timeout_secs(20);
+        assert_eq!(result.timeout, Duration::from_secs(20));
+
+        let result = auth.timeout_millis(5000);
+        assert_eq!(result.timeout, Duration::from_millis(5000));
+    }
 }
