@@ -572,4 +572,122 @@ mod tests {
         // But callback should not be called because position change is below threshold
         assert!(callback_positions.lock().unwrap().is_empty());
     }
+
+    #[test_log::test]
+    fn test_set_consumed_samples_without_audio_spec() {
+        // Tests the edge case where set_consumed_samples is called before audio spec is set
+        // In this case, get_position() returns None, so last_reported_position shouldn't be updated
+        let tracker = ProgressTracker::new(None);
+
+        // Set consumed samples without setting audio spec first
+        tracker.set_consumed_samples(176_400);
+
+        // Consumed samples should be stored
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 176_400);
+
+        // But position should still be None (no audio spec to calculate position)
+        assert_eq!(tracker.get_position(), None);
+
+        // last_reported_position should remain at 0 since get_position() returned None
+        assert!(tracker.last_reported_position.load(Ordering::SeqCst).abs() < f64::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_callback_removed_after_setting() {
+        // Tests that a previously set callback can be removed by passing None
+        let tracker = ProgressTracker::new(Some(0.1)); // Low threshold for easy triggering
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+
+        // Set a callback
+        tracker.set_callback(Some(Box::new(move |pos| {
+            callback_positions_clone.lock().unwrap().push(pos);
+        })));
+
+        // Update samples enough to trigger callback (0.5 seconds > 0.1 threshold)
+        tracker.update_consumed_samples(44100); // 0.5 seconds
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+
+        // Remove the callback
+        tracker.set_callback(None);
+
+        // Further updates should NOT trigger any callback
+        tracker.update_consumed_samples(88200); // 1 more second (1.5 total, position changed by 1.0s)
+
+        // Callback count should still be 1 (callback was removed)
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+    }
+
+    #[test_log::test]
+    fn test_last_reported_position_updates_on_threshold_crossing() {
+        // Tests that last_reported_position is properly updated when threshold is crossed
+        let tracker = ProgressTracker::new(Some(0.5)); // 0.5 second threshold
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_count = Arc::new(Mutex::new(0));
+        let callback_count_clone = callback_count.clone();
+
+        tracker.set_callback(Some(Box::new(move |_pos| {
+            *callback_count_clone.lock().unwrap() += 1;
+        })));
+
+        // Initial position is 0.0
+        assert!(tracker.last_reported_position.load(Ordering::SeqCst).abs() < f64::EPSILON);
+
+        // First update: 0.6 seconds (crosses threshold from 0.0)
+        tracker.update_consumed_samples(52920); // 0.6 seconds worth
+        assert_eq!(*callback_count.lock().unwrap(), 1);
+
+        // last_reported_position should now be ~0.6
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!((last_pos - 0.6).abs() < 0.01);
+
+        // Second update: 0.3 more seconds (0.9 total) - doesn't cross 0.5 threshold from 0.6
+        tracker.update_consumed_samples(26460); // 0.3 seconds worth
+        assert_eq!(*callback_count.lock().unwrap(), 1); // Should still be 1
+
+        // Third update: 0.3 more seconds (1.2 total) - NOW crosses threshold from 0.6 (diff = 0.6)
+        tracker.update_consumed_samples(26460); // 0.3 seconds worth
+        assert_eq!(*callback_count.lock().unwrap(), 2); // Should now be 2
+
+        // last_reported_position should now be ~1.2
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!((last_pos - 1.2).abs() < 0.01);
+    }
+
+    #[test_log::test]
+    fn test_set_consumed_samples_updates_last_reported_position() {
+        // Tests that set_consumed_samples properly updates last_reported_position
+        // to prevent immediate callback triggering after a seek
+        let tracker = ProgressTracker::new(Some(0.1));
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_count = Arc::new(Mutex::new(0));
+        let callback_count_clone = callback_count.clone();
+
+        tracker.set_callback(Some(Box::new(move |_pos| {
+            *callback_count_clone.lock().unwrap() += 1;
+        })));
+
+        // Seek to 10 seconds
+        tracker.set_consumed_samples(882_000); // 10 seconds of stereo 44.1kHz
+
+        // Position should be calculated correctly
+        let position = tracker.get_position().unwrap();
+        assert!((position - 10.0).abs() < 0.01);
+
+        // last_reported_position should match to prevent immediate callback
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!((last_pos - 10.0).abs() < 0.01);
+
+        // A small update (0.05 seconds) should NOT trigger callback (below 0.1 threshold)
+        tracker.update_consumed_samples(4410); // 0.05 seconds
+        assert_eq!(*callback_count.lock().unwrap(), 0);
+
+        // A larger update (0.2 seconds more, total ~10.25) SHOULD trigger callback
+        tracker.update_consumed_samples(17640); // 0.2 seconds
+        assert_eq!(*callback_count.lock().unwrap(), 1);
+    }
 }

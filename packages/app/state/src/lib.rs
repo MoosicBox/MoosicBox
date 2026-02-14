@@ -2337,4 +2337,22 @@ mod tests {
         assert_eq!(result.session_id, 3);
         assert_eq!(result.name, "Last Session");
     }
+
+    // Tests for get_players
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_players_returns_empty_when_no_active_players() {
+        let state = AppState::new();
+
+        // No active players set (default state)
+        assert!(state.active_players.read().await.is_empty());
+
+        // Should return empty vec regardless of session_id or playback_target
+        let result = state.get_players(1, None).await;
+        assert!(result.is_empty());
+
+        let target = moosicbox_session::models::ApiPlaybackTarget::AudioZone { audio_zone_id: 1 };
+        let result = state.get_players(999, Some(&target)).await;
+        assert!(result.is_empty());
+    }
 }

@@ -912,4 +912,121 @@ mod test {
             Some(("1 + 2 ", " 3"))
         );
     }
+
+    #[test_log::test]
+    fn split_on_char_returns_error_for_closing_paren_when_brace_expected() {
+        // Opening brace but closing with paren - should error
+        let result = split_on_char("{ test ) + value", '+', 0);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_error_for_closing_brace_when_paren_expected() {
+        // Opening paren but closing with brace - should error
+        let result = split_on_char("( test } + value", '+', 0);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer() {
+        assert_eq!(parse_number("-42").unwrap(), Number::Integer(-42));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_float() {
+        assert_eq!(parse_number("-42.5").unwrap(), Number::Real(-42.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer_percent() {
+        assert_eq!(parse_number("-25%").unwrap(), Number::IntegerPercent(-25));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_float_percent() {
+        assert_eq!(parse_number("-25.5%").unwrap(), Number::RealPercent(-25.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer_vw() {
+        assert_eq!(parse_number("-10vw").unwrap(), Number::IntegerVw(-10));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer_vh() {
+        assert_eq!(parse_number("-10vh").unwrap(), Number::IntegerVh(-10));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer_dvw() {
+        assert_eq!(parse_number("-10dvw").unwrap(), Number::IntegerDvw(-10));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_negative_integer_dvh() {
+        assert_eq!(parse_number("-10dvh").unwrap(), Number::IntegerDvh(-10));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_positive_prefix() {
+        // The + prefix parses as a positive integer
+        assert_eq!(parse_number("+42").unwrap(), Number::Integer(42));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_zero() {
+        assert_eq!(parse_number("0").unwrap(), Number::Integer(0));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_zero_percent() {
+        assert_eq!(parse_number("0%").unwrap(), Number::IntegerPercent(0));
+    }
+
+    #[test_log::test]
+    fn parse_calc_parses_expression_with_spaces_around_parens() {
+        let result = parse_calc("calc ( 10 + 5 )").unwrap();
+        if let Number::Calc(calc) = result {
+            // Verify it parsed the inner expression correctly
+            let value = calc.calc(100.0, 1920.0, 1080.0);
+            assert!((value - 15.0).abs() < f32::EPSILON);
+        } else {
+            panic!("Expected Calc variant");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_calculation_handles_deeply_nested_groupings() {
+        // Test deeply nested groupings: (((10)))
+        let result = parse_calculation("(((10)))").unwrap();
+        if let Calculation::Grouping(inner1) = result
+            && let Calculation::Grouping(inner2) = *inner1
+            && let Calculation::Grouping(inner3) = *inner2
+            && let Calculation::Number(num) = *inner3
+        {
+            assert_eq!(*num, Number::Integer(10));
+            return;
+        }
+        panic!("Expected deeply nested groupings");
+    }
+
+    #[test_log::test]
+    fn parse_calculation_handles_complex_nested_min_max() {
+        // Test: min(max(10, 20), 15) - should result in min(20, 15) = 15
+        let result = parse_calculation("min(max(10, 20), 15)").unwrap();
+        let value = result.calc(100.0, 1920.0, 1080.0);
+        assert!((value - 15.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_none_when_needle_only_inside_brackets() {
+        // The + is inside parentheses, so no match at top level
+        assert_eq!(split_on_char("(1 + 2)", '+', 0).unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_none_when_needle_only_inside_braces() {
+        // The + is inside braces, so no match at top level
+        assert_eq!(split_on_char("{1 + 2}", '+', 0).unwrap(), None);
+    }
 }
