@@ -313,8 +313,6 @@ pub struct SignalChainStepProcessor {
     overflow: Vec<u8>,
 }
 
-impl SignalChainStepProcessor {}
-
 impl std::io::Seek for SignalChainStepProcessor {
     fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
         Err(std::io::Error::other(
