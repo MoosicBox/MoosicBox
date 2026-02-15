@@ -72,7 +72,11 @@ moosicbox_app_native_ui = { path = "../app/native/ui" }
 
 ```rust
 use moosicbox_app_native_ui::{page, sidebar_navigation, footer};
+use moosicbox_app_native_ui::state::State;
 use hyperchad::template::container;
+
+// Initialize application state
+let state = State::default();
 
 // Create sidebar navigation
 let nav = sidebar_navigation();
@@ -92,6 +96,10 @@ let footer_ui = footer(&state);
 
 ```rust
 use moosicbox_app_native_ui::player;
+use moosicbox_app_native_ui::state::State;
+
+// Initialize state
+let state = State::default();
 
 // Create player interface
 let player_ui = player(&state);

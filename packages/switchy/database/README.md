@@ -568,5 +568,5 @@ Embedded analytical database:
 
 ## See Also
 
-- [MoosicBox Config](../config/README.md) - Configuration management
-- [MoosicBox Server](../server/README.md) - Server with database integration
+- [MoosicBox Config](../../config/README.md) - Configuration management
+- [MoosicBox Server](../../server/README.md) - Server with database integration

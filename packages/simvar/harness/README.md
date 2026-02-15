@@ -186,20 +186,17 @@ sim.client("load_client", async {
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
 - `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
 - `SIMULATOR_SEED`: Fixed seed for deterministic runs
-- `NO_TUI`: Disable TUI interface when available
+- `NO_TUI`: Disable TUI interface (compile-time only, set when building)
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 
 ### Example Configuration
 
 ```bash
 # Run 10 simulations with 4 parallel workers
-export SIMULATOR_RUNS=10
-export SIMULATOR_MAX_PARALLEL=4
+SIMULATOR_RUNS=10 SIMULATOR_MAX_PARALLEL=4 cargo test simulation_test
 
-# Disable TUI interface
-export NO_TUI=1
-
-cargo test simulation_test
+# Disable TUI interface (must be set at compile time)
+NO_TUI=1 cargo build
 ```
 
 ## Features
@@ -220,7 +217,7 @@ When built with the `tui` feature (enabled by default), provides:
 - Error display and debugging
 - Interactive simulation monitoring
 
-Disable with `NO_TUI` environment variable or by excluding default features.
+Disable with `NO_TUI=1` at compile time or by excluding default features.
 
 ### Optional Features
 
