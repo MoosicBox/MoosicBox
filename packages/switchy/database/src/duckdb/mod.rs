@@ -1702,6 +1702,217 @@ fn extract_index_columns_from_sql(sql: &str) -> Vec<String> {
 }
 
 // ---------------------------------------------------------------------------
+// Shared introspection helpers (used by both DuckDbDatabase and DuckDbTransaction)
+// ---------------------------------------------------------------------------
+
+/// Query primary key columns for a table using `duckdb_constraints()`.
+#[cfg(feature = "schema")]
+fn query_primary_key_columns(
+    conn: &Connection,
+    table_name: &str,
+) -> Result<std::collections::BTreeSet<String>, DuckDbDatabaseError> {
+    let mut pk_cols = std::collections::BTreeSet::new();
+    // Use unnest() to flatten the constraint_column_names list into individual rows
+    let mut stmt = conn
+        .prepare(
+            "SELECT unnest(constraint_column_names) AS col_name \
+             FROM duckdb_constraints() \
+             WHERE table_name = ? AND schema_name = 'main' \
+             AND constraint_type = 'PRIMARY KEY'",
+        )
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let rows = stmt
+        .query_map([table_name], |row| row.get::<_, String>(0))
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    for row in rows {
+        let col_name = row.map_err(DuckDbDatabaseError::DuckDb)?;
+        pk_cols.insert(col_name);
+    }
+    Ok(pk_cols)
+}
+
+/// Query foreign key constraints for a table using `duckdb_constraints()`.
+#[cfg(feature = "schema")]
+fn query_foreign_keys(
+    conn: &Connection,
+    table_name: &str,
+) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, DuckDbDatabaseError>
+{
+    let mut fk_map = std::collections::BTreeMap::new();
+    // DuckDB's duckdb_constraints() returns FK info with constraint_column_names
+    // and referenced table info encoded in expression. We need to query the
+    // information_schema for more structured FK data.
+    let mut stmt = conn
+        .prepare(
+            "SELECT kcu.column_name, \
+                    ccu.table_name AS referenced_table, \
+                    ccu.column_name AS referenced_column, \
+                    rc.update_rule, \
+                    rc.delete_rule, \
+                    tc.constraint_name \
+             FROM information_schema.table_constraints tc \
+             JOIN information_schema.key_column_usage kcu \
+                 ON tc.constraint_name = kcu.constraint_name \
+                 AND tc.table_schema = kcu.table_schema \
+             JOIN information_schema.referential_constraints rc \
+                 ON tc.constraint_name = rc.constraint_name \
+                 AND tc.table_schema = rc.constraint_schema \
+             JOIN information_schema.key_column_usage ccu \
+                 ON rc.unique_constraint_name = ccu.constraint_name \
+                 AND rc.unique_constraint_schema = ccu.constraint_schema \
+             WHERE tc.table_name = ? AND tc.table_schema = 'main' \
+                 AND tc.constraint_type = 'FOREIGN KEY'",
+        )
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let rows = stmt
+        .query_map([table_name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    for row in rows {
+        let (column, referenced_table, referenced_column, on_update, on_delete, constraint_name) =
+            row.map_err(DuckDbDatabaseError::DuckDb)?;
+        fk_map.insert(
+            constraint_name.clone(),
+            crate::schema::ForeignKeyInfo {
+                name: constraint_name,
+                column,
+                referenced_table,
+                referenced_column,
+                on_update: if on_update == "NO ACTION" {
+                    None
+                } else {
+                    Some(on_update)
+                },
+                on_delete: if on_delete == "NO ACTION" {
+                    None
+                } else {
+                    Some(on_delete)
+                },
+            },
+        );
+    }
+    Ok(fk_map)
+}
+
+/// Get column info with primary key and auto-increment detection.
+#[cfg(feature = "schema")]
+fn duckdb_get_table_columns(
+    conn: &Connection,
+    table_name: &str,
+) -> Result<Vec<crate::schema::ColumnInfo>, DuckDbDatabaseError> {
+    let pk_cols = query_primary_key_columns(conn, table_name)?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT column_name, data_type, is_nullable, column_default, ordinal_position \
+             FROM information_schema.columns \
+             WHERE table_name = ? AND table_schema = 'main' \
+             ORDER BY ordinal_position",
+        )
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let rows = stmt
+        .query_map([table_name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, i32>(4)?,
+            ))
+        })
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+
+    let mut columns = Vec::new();
+    for row in rows {
+        let (name, type_str, nullable_str, default_str, ordinal) =
+            row.map_err(DuckDbDatabaseError::DuckDb)?;
+
+        // Detect auto-increment from nextval() default pattern
+        let auto_increment = default_str.as_ref().is_some_and(|d| d.contains("nextval("));
+
+        columns.push(crate::schema::ColumnInfo {
+            name: name.clone(),
+            data_type: duckdb_type_str_to_data_type(&type_str),
+            nullable: nullable_str == "YES",
+            is_primary_key: pk_cols.contains(&name),
+            auto_increment,
+            default_value: default_str.map(DatabaseValue::String),
+            #[allow(clippy::cast_sign_loss)]
+            ordinal_position: ordinal as u32,
+        });
+    }
+
+    Ok(columns)
+}
+
+/// Get complete table info including columns, indexes, and foreign keys.
+#[cfg(feature = "schema")]
+fn duckdb_get_table_info(
+    conn: &Connection,
+    table_name: &str,
+) -> Result<crate::schema::TableInfo, DuckDbDatabaseError> {
+    let columns = duckdb_get_table_columns(conn, table_name)?;
+    let pk_cols = query_primary_key_columns(conn, table_name)?;
+    let mut col_map = std::collections::BTreeMap::new();
+    for col in columns {
+        col_map.insert(col.name.clone(), col);
+    }
+
+    // Indexes via duckdb_indexes()
+    let mut idx_map = std::collections::BTreeMap::new();
+    let mut stmt = conn
+        .prepare(
+            "SELECT index_name, is_unique, sql FROM duckdb_indexes() \
+             WHERE table_name = ? AND schema_name = 'main'",
+        )
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let idx_rows = stmt
+        .query_map([table_name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, bool>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    for row in idx_rows {
+        let (name, unique, sql) = row.map_err(DuckDbDatabaseError::DuckDb)?;
+        let idx_columns = extract_index_columns_from_sql(&sql);
+        // Detect primary index by checking if its columns exactly match PK columns
+        let is_primary = !idx_columns.is_empty()
+            && idx_columns.len() == pk_cols.len()
+            && idx_columns.iter().all(|c| pk_cols.contains(c));
+        idx_map.insert(
+            name.clone(),
+            crate::schema::IndexInfo {
+                name,
+                unique,
+                columns: idx_columns,
+                is_primary,
+            },
+        );
+    }
+
+    // Foreign keys
+    let foreign_keys = query_foreign_keys(conn, table_name)?;
+
+    Ok(crate::schema::TableInfo {
+        name: table_name.to_string(),
+        columns: col_map,
+        indexes: idx_map,
+        foreign_keys,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Database trait implementations
 // ---------------------------------------------------------------------------
 
@@ -2083,53 +2294,9 @@ impl Database for DuckDbDatabase {
         if !self.table_exists(table_name).await? {
             return Ok(None);
         }
-
-        let columns = self.get_table_columns(table_name).await?;
-        let mut col_map = std::collections::BTreeMap::new();
-        for col in columns {
-            col_map.insert(col.name.clone(), col);
-        }
-
         let connection = self.get_connection();
         let conn = connection.lock().await;
-
-        // Indexes via duckdb_indexes()
-        let mut idx_map = std::collections::BTreeMap::new();
-        let mut stmt = conn
-            .prepare(
-                "SELECT index_name, is_unique, sql FROM duckdb_indexes() \
-                 WHERE table_name = ? AND schema_name = 'main'",
-            )
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        let idx_rows = stmt
-            .query_map([table_name], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, bool>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            })
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        for row in idx_rows {
-            let (name, unique, sql) = row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let idx_columns = extract_index_columns_from_sql(&sql);
-            idx_map.insert(
-                name.clone(),
-                crate::schema::IndexInfo {
-                    name,
-                    unique,
-                    columns: idx_columns,
-                    is_primary: false,
-                },
-            );
-        }
-
-        Ok(Some(crate::schema::TableInfo {
-            name: table_name.to_string(),
-            columns: col_map,
-            indexes: idx_map,
-            foreign_keys: std::collections::BTreeMap::new(),
-        }))
+        Ok(Some(duckdb_get_table_info(&conn, table_name)?))
     }
 
     #[cfg(feature = "schema")]
@@ -2140,43 +2307,7 @@ impl Database for DuckDbDatabase {
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
         let connection = self.get_connection();
         let conn = connection.lock().await;
-        let mut stmt = conn
-            .prepare(
-                "SELECT column_name, data_type, is_nullable, column_default, ordinal_position \
-                 FROM information_schema.columns \
-                 WHERE table_name = ? AND table_schema = 'main' \
-                 ORDER BY ordinal_position",
-            )
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        let rows = stmt
-            .query_map([table_name], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, i32>(4)?,
-                ))
-            })
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        let mut columns = Vec::new();
-        for row in rows {
-            let (name, type_str, nullable_str, default_str, ordinal) =
-                row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            columns.push(crate::schema::ColumnInfo {
-                name,
-                data_type: duckdb_type_str_to_data_type(&type_str),
-                nullable: nullable_str == "YES",
-                is_primary_key: false,
-                auto_increment: false,
-                default_value: default_str.map(DatabaseValue::String),
-                #[allow(clippy::cast_sign_loss)]
-                ordinal_position: ordinal as u32,
-            });
-        }
-
-        Ok(columns)
+        Ok(duckdb_get_table_columns(&conn, table_name)?)
     }
 
     #[cfg(feature = "schema")]
@@ -2320,19 +2451,15 @@ impl Database for DuckDbTransaction {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut results = Vec::new();
-
-        for values in &statement.values {
-            results.extend(upsert(
-                &*self.connection.lock().await,
-                statement.table_name,
-                values,
-                None,
-                None,
-            )?);
-        }
-
-        Ok(results)
+        Ok(upsert_multi(
+            &*self.connection.lock().await,
+            statement.table_name,
+            statement
+                .unique
+                .as_ref()
+                .ok_or(DuckDbDatabaseError::MissingUnique)?,
+            &statement.values,
+        )?)
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
@@ -2528,51 +2655,8 @@ impl Database for DuckDbTransaction {
         if !self.table_exists(table_name).await? {
             return Ok(None);
         }
-
-        let columns = self.get_table_columns(table_name).await?;
-        let mut col_map = std::collections::BTreeMap::new();
-        for col in columns {
-            col_map.insert(col.name.clone(), col);
-        }
-
         let conn = self.connection.lock().await;
-
-        let mut idx_map = std::collections::BTreeMap::new();
-        let mut stmt = conn
-            .prepare(
-                "SELECT index_name, is_unique, sql FROM duckdb_indexes() \
-                 WHERE table_name = ? AND schema_name = 'main'",
-            )
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        let idx_rows = stmt
-            .query_map([table_name], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, bool>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            })
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        for row in idx_rows {
-            let (name, unique, sql) = row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let idx_columns = extract_index_columns_from_sql(&sql);
-            idx_map.insert(
-                name.clone(),
-                crate::schema::IndexInfo {
-                    name,
-                    unique,
-                    columns: idx_columns,
-                    is_primary: false,
-                },
-            );
-        }
-
-        Ok(Some(crate::schema::TableInfo {
-            name: table_name.to_string(),
-            columns: col_map,
-            indexes: idx_map,
-            foreign_keys: std::collections::BTreeMap::new(),
-        }))
+        Ok(Some(duckdb_get_table_info(&conn, table_name)?))
     }
 
     #[cfg(feature = "schema")]
@@ -2582,43 +2666,7 @@ impl Database for DuckDbTransaction {
         table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
         let conn = self.connection.lock().await;
-        let mut stmt = conn
-            .prepare(
-                "SELECT column_name, data_type, is_nullable, column_default, ordinal_position \
-                 FROM information_schema.columns \
-                 WHERE table_name = ? AND table_schema = 'main' \
-                 ORDER BY ordinal_position",
-            )
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-        let rows = stmt
-            .query_map([table_name], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, i32>(4)?,
-                ))
-            })
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        let mut columns = Vec::new();
-        for row in rows {
-            let (name, type_str, nullable_str, default_str, ordinal) =
-                row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            columns.push(crate::schema::ColumnInfo {
-                name,
-                data_type: duckdb_type_str_to_data_type(&type_str),
-                nullable: nullable_str == "YES",
-                is_primary_key: false,
-                auto_increment: false,
-                default_value: default_str.map(DatabaseValue::String),
-                #[allow(clippy::cast_sign_loss)]
-                ordinal_position: ordinal as u32,
-            });
-        }
-
-        Ok(columns)
+        Ok(duckdb_get_table_columns(&conn, table_name)?)
     }
 
     #[cfg(feature = "schema")]
@@ -2685,28 +2733,86 @@ impl DatabaseTransaction for DuckDbTransaction {
     #[cfg(feature = "cascade")]
     async fn find_cascade_targets(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<crate::schema::DropPlan, DatabaseError> {
-        Err(DatabaseError::UnsupportedOperation(
-            "DuckDB cascade target discovery not yet implemented".to_string(),
-        ))
+        let mut all_dependents = std::collections::BTreeSet::new();
+        let mut to_check = vec![table_name.to_string()];
+        let mut checked = std::collections::BTreeSet::new();
+
+        while let Some(current_table) = to_check.pop() {
+            if !checked.insert(current_table.clone()) {
+                continue;
+            }
+
+            let tables = self.list_tables().await?;
+            for check_table in &tables {
+                if check_table == &current_table {
+                    continue;
+                }
+                // Check if check_table has a FK referencing current_table
+                let conn = self.connection.lock().await;
+                let fk_map = query_foreign_keys(&conn, check_table)?;
+                drop(conn);
+
+                for fk_info in fk_map.values() {
+                    if fk_info.referenced_table == current_table {
+                        all_dependents.insert(check_table.clone());
+                        to_check.push(check_table.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+        drop_order.push(table_name.to_string());
+
+        Ok(crate::schema::DropPlan::Simple(drop_order))
     }
 
     #[cfg(feature = "cascade")]
-    async fn has_any_dependents(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        Err(DatabaseError::UnsupportedOperation(
-            "DuckDB dependent check not yet implemented".to_string(),
-        ))
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let tables = self.list_tables().await?;
+        for check_table in &tables {
+            if check_table == table_name {
+                continue;
+            }
+            let conn = self.connection.lock().await;
+            let fk_map = query_foreign_keys(&conn, check_table)?;
+            drop(conn);
+
+            for fk_info in fk_map.values() {
+                if fk_info.referenced_table == table_name {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     #[cfg(feature = "cascade")]
     async fn get_direct_dependents(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
-        Err(DatabaseError::UnsupportedOperation(
-            "DuckDB direct dependent check not yet implemented".to_string(),
-        ))
+        let mut dependents = std::collections::BTreeSet::new();
+        let tables = self.list_tables().await?;
+        for check_table in &tables {
+            if check_table == table_name {
+                continue;
+            }
+            let conn = self.connection.lock().await;
+            let fk_map = query_foreign_keys(&conn, check_table)?;
+            drop(conn);
+
+            for fk_info in fk_map.values() {
+                if fk_info.referenced_table == table_name {
+                    dependents.insert(check_table.clone());
+                    break;
+                }
+            }
+        }
+        Ok(dependents)
     }
 }
 
@@ -2743,10 +2849,17 @@ impl Expression for DuckDbDatabaseValue {
             self.0,
             DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
+                | DatabaseValue::Int16Opt(None)
+                | DatabaseValue::Int32Opt(None)
+                | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
+                | DatabaseValue::UInt64Opt(None)
+                | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::StringOpt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt64Opt(None)
         )
     }
 

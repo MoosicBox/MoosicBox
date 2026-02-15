@@ -237,6 +237,10 @@ pub enum InitDbError {
     #[cfg(feature = "turso")]
     #[error(transparent)]
     InitTurso(#[from] InitTursoError),
+    /// Error initializing `DuckDB` database
+    #[cfg(feature = "duckdb")]
+    #[error(transparent)]
+    InitDuckDb(#[from] InitDuckDbError),
     /// Credentials were required but not provided
     #[error("Credentials are required")]
     CredentialsRequired,
@@ -260,7 +264,7 @@ pub enum InitDbError {
 /// * If fails to initialize the generic database connection
 #[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init(
-    #[cfg(feature = "sqlite")]
+    #[cfg(any(feature = "sqlite", feature = "duckdb"))]
     #[allow(unused)]
     path: Option<&std::path::Path>,
     #[allow(unused)] creds: Option<Credentials>,
@@ -268,13 +272,13 @@ pub async fn init(
     #[cfg(feature = "simulator")]
     {
         // Convert Path to string for the simulator
-        #[cfg(feature = "sqlite")]
+        #[cfg(any(feature = "sqlite", feature = "duckdb"))]
         let path_str = path.as_ref().map(|p| p.to_string_lossy().to_string());
         Ok(Box::new(
             switchy_database::simulator::SimulationDatabase::new_for_path(
-                #[cfg(feature = "sqlite")]
+                #[cfg(any(feature = "sqlite", feature = "duckdb"))]
                 path_str.as_deref(),
-                #[cfg(not(feature = "sqlite"))]
+                #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
                 None,
             )
             .unwrap(),
@@ -317,6 +321,11 @@ pub async fn init(
             #[cfg(feature = "turso")]
             return Ok(init_turso_local(path).await?);
             #[cfg(not(feature = "turso"))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "duckdb") {
+            #[cfg(feature = "duckdb")]
+            return Ok(init_duckdb(path)?);
+            #[cfg(not(feature = "duckdb"))]
             panic!("Invalid database features")
         } else if cfg!(feature = "sqlite-rusqlite") {
             #[cfg(feature = "sqlite-rusqlite")]

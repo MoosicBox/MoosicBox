@@ -240,6 +240,48 @@ mod duckdb_datetime_tests {
         let suite = DuckDbDateTimeTests;
         suite.test_multiple_now_consistency("duckdb").await;
     }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_in_where_clause() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_in_where_clause("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_plus_minutes_normalization() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_plus_minutes_normalization("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_consistency_in_transaction() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_consistency_in_transaction("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_plus_interval() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_plus_interval("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_minus_interval() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_minus_interval("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_complex_interval_operations() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_complex_interval_operations("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_mixed_now_operations() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_mixed_now_operations("duckdb").await;
+    }
 }
 
 // ===== RUSQLITE BACKEND TESTS =====

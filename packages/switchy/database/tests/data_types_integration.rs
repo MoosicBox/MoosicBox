@@ -84,6 +84,18 @@ mod duckdb_data_type_tests {
         let suite = DuckDbDataTypeTests;
         suite.test_int16_specific_type_and_retrieval().await;
     }
+
+    #[cfg(feature = "decimal")]
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_decimal_precision() {
+        DuckDbDataTypeTests.test_decimal_precision().await;
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_uuid_storage() {
+        DuckDbDataTypeTests.test_uuid_storage().await;
+    }
 }
 
 // ===== RUSQLITE BACKEND TESTS =====

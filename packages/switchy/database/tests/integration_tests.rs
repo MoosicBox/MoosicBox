@@ -108,6 +108,17 @@ mod duckdb_integration {
         let suite = DuckDbIntegrationTests;
         suite.test_query_raw_in_transaction().await;
     }
+
+    // NOTE: test_duckdb_transaction_isolation and test_duckdb_concurrent_transactions
+    // are intentionally omitted. DuckDB in-memory databases are isolated per connection,
+    // making cross-connection isolation and concurrency testing impractical.
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_query_raw_with_ddl_statement() {
+        DuckDbIntegrationTests
+            .test_query_raw_with_ddl_statement()
+            .await;
+    }
 }
 
 // ===== DUCKDB INTROSPECTION TESTS =====
@@ -2268,6 +2279,180 @@ mod simulator_returning_tests {
     async fn test_simulator_complex_filters_return_correct_rows() {
         let suite = SimulatorReturningTests;
         suite.test_complex_filters_return_correct_rows().await;
+    }
+}
+
+#[cfg(all(feature = "duckdb", feature = "schema"))]
+mod duckdb_returning_tests {
+    use super::*;
+    use common::returning_tests::ReturningTestSuite;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbReturningTests;
+
+    impl ReturningTestSuite for DuckDbReturningTests {
+        async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
+            let conn = ::duckdb::Connection::open_in_memory().ok()?;
+            let connection = Arc::new(Mutex::new(conn));
+            let db = DuckDbDatabase::new(vec![connection]);
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_insert_returns_complete_row() {
+        DuckDbReturningTests
+            .test_insert_returns_complete_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_update_returns_all_updated_rows() {
+        DuckDbReturningTests
+            .test_update_returns_all_updated_rows()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_update_with_limit_returns_limited_rows() {
+        DuckDbReturningTests
+            .test_update_with_limit_returns_limited_rows()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_delete_returns_deleted_rows() {
+        DuckDbReturningTests
+            .test_delete_returns_deleted_rows()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_delete_with_limit_returns_limited_rows() {
+        DuckDbReturningTests
+            .test_delete_with_limit_returns_limited_rows()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_upsert_returns_correct_row() {
+        DuckDbReturningTests.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_transaction_operations_return_data() {
+        DuckDbReturningTests
+            .test_transaction_operations_return_data()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_empty_operations_return_empty() {
+        DuckDbReturningTests
+            .test_empty_operations_return_empty()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_data_type_preservation_in_returns() {
+        DuckDbReturningTests
+            .test_data_type_preservation_in_returns()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_complex_filters_return_correct_rows() {
+        DuckDbReturningTests
+            .test_complex_filters_return_correct_rows()
+            .await;
+    }
+}
+
+#[cfg(all(feature = "duckdb", feature = "cascade"))]
+mod duckdb_cascade_tests {
+    use super::*;
+    use common::cascade_tests::CascadeTestSuite;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbCascadeTests;
+
+    impl CascadeTestSuite for DuckDbCascadeTests {
+        async fn setup_db(&self) -> Option<Arc<Box<dyn Database>>> {
+            let conn = ::duckdb::Connection::open_in_memory().ok()?;
+            let connection = Arc::new(Mutex::new(conn));
+            let db = DuckDbDatabase::new(vec![connection]);
+            Some(Arc::new(Box::new(db) as Box<dyn Database>))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_cascade_find_targets_linear() {
+        DuckDbCascadeTests.test_cascade_find_targets_linear().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_cascade_has_any_dependents() {
+        DuckDbCascadeTests.test_cascade_has_any_dependents().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_cascade_get_direct_dependents() {
+        DuckDbCascadeTests
+            .test_cascade_get_direct_dependents()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_cascade_drop_restrict() {
+        DuckDbCascadeTests.test_cascade_drop_restrict().await;
+    }
+
+    // DuckDB v1.4.4 does not support CASCADE on DROP TABLE for FK-dependent
+    // tables (returns "main key table" error), and does not allow dropping
+    // columns that have index or FK dependencies via ALTER TABLE.
+    #[ignore = "DuckDB does not support CASCADE DROP TABLE for FK-dependent tables"]
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_cascade_drop_execution() {
+        DuckDbCascadeTests.test_cascade_drop_execution().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_restrict_drop_execution() {
+        DuckDbCascadeTests.test_restrict_drop_execution().await;
+    }
+
+    #[ignore = "DuckDB does not allow dropping columns with index dependencies"]
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_drop_column_cascade_with_index() {
+        DuckDbCascadeTests
+            .test_drop_column_cascade_with_index()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_drop_column_restrict_with_index() {
+        DuckDbCascadeTests
+            .test_drop_column_restrict_with_index()
+            .await;
+    }
+
+    #[ignore = "DuckDB does not allow dropping columns with FK dependencies"]
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_drop_column_cascade_with_foreign_key() {
+        DuckDbCascadeTests
+            .test_drop_column_cascade_with_foreign_key()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_drop_column_restrict_no_dependencies() {
+        DuckDbCascadeTests
+            .test_drop_column_restrict_no_dependencies()
+            .await;
     }
 }
 
