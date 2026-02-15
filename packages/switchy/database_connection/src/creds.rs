@@ -187,3 +187,214 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
         },
     )
 }
+
+#[cfg(all(test, feature = "simulator"))]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use switchy_env::simulator::{remove_var, reset, set_var};
+
+    /// Helper to set up test environment and ensure cleanup on drop
+    struct TestEnv;
+
+    impl TestEnv {
+        fn new() -> Self {
+            reset();
+            Self
+        }
+    }
+
+    impl Drop for TestEnv {
+        fn drop(&mut self) {
+            reset();
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_database_url() {
+        let _env = TestEnv::new();
+
+        // Set DATABASE_URL - this takes precedence over individual env vars
+        set_var(
+            "DATABASE_URL",
+            "postgres://testuser:testpass@testhost:5432/testdb",
+        );
+
+        let creds = get_db_creds().await.expect("Failed to get credentials");
+
+        assert_eq!(creds.host(), "testhost:5432");
+        assert_eq!(creds.name(), "testdb");
+        assert_eq!(creds.user(), "testuser");
+        assert_eq!(creds.password(), Some("testpass"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_database_url_without_password() {
+        let _env = TestEnv::new();
+
+        set_var("DATABASE_URL", "mysql://admin@dbserver:3306/proddb");
+
+        let creds = get_db_creds().await.expect("Failed to get credentials");
+
+        assert_eq!(creds.host(), "dbserver:3306");
+        assert_eq!(creds.name(), "proddb");
+        assert_eq!(creds.user(), "admin");
+        assert_eq!(creds.password(), None);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_database_url_invalid_format() {
+        let _env = TestEnv::new();
+
+        // Set an invalid DATABASE_URL
+        set_var("DATABASE_URL", "not-a-valid-url");
+
+        let result = get_db_creds().await;
+
+        assert!(matches!(
+            result,
+            Err(GetDbCredsError::CredentialsParseError(
+                CredentialsParseError::InvalidUrl
+            ))
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_database_url_unsupported_scheme() {
+        let _env = TestEnv::new();
+
+        set_var("DATABASE_URL", "mongodb://user:pass@host/db");
+
+        let result = get_db_creds().await;
+
+        assert!(matches!(
+            result,
+            Err(GetDbCredsError::CredentialsParseError(
+                CredentialsParseError::UnsupportedScheme(_)
+            ))
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_individual_env_vars() {
+        let _env = TestEnv::new();
+
+        // Remove DATABASE_URL to force individual env var path
+        remove_var("DATABASE_URL");
+
+        set_var("DB_HOST", "myhost.example.com");
+        set_var("DB_NAME", "mydb");
+        set_var("DB_USER", "myuser");
+        set_var("DB_PASSWORD", "mysecret");
+
+        let creds = get_db_creds().await.expect("Failed to get credentials");
+
+        assert_eq!(creds.host(), "myhost.example.com");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "myuser");
+        assert_eq!(creds.password(), Some("mysecret"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_from_individual_env_vars_without_password() {
+        let _env = TestEnv::new();
+
+        remove_var("DATABASE_URL");
+
+        set_var("DB_HOST", "localhost");
+        set_var("DB_NAME", "devdb");
+        set_var("DB_USER", "devuser");
+        remove_var("DB_PASSWORD");
+
+        let creds = get_db_creds().await.expect("Failed to get credentials");
+
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.name(), "devdb");
+        assert_eq!(creds.user(), "devuser");
+        assert_eq!(creds.password(), None);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_missing_host_returns_error() {
+        let _env = TestEnv::new();
+
+        remove_var("DATABASE_URL");
+        remove_var("DB_HOST");
+        set_var("DB_NAME", "testdb");
+        set_var("DB_USER", "testuser");
+
+        let result = get_db_creds().await;
+
+        assert!(matches!(
+            result,
+            Err(GetDbCredsError::InvalidConnectionOptions)
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_missing_name_returns_error() {
+        let _env = TestEnv::new();
+
+        remove_var("DATABASE_URL");
+        set_var("DB_HOST", "testhost");
+        remove_var("DB_NAME");
+        set_var("DB_USER", "testuser");
+
+        let result = get_db_creds().await;
+
+        assert!(matches!(
+            result,
+            Err(GetDbCredsError::InvalidConnectionOptions)
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_missing_user_returns_error() {
+        let _env = TestEnv::new();
+
+        remove_var("DATABASE_URL");
+        set_var("DB_HOST", "testhost");
+        set_var("DB_NAME", "testdb");
+        remove_var("DB_USER");
+
+        let result = get_db_creds().await;
+
+        assert!(matches!(
+            result,
+            Err(GetDbCredsError::InvalidConnectionOptions)
+        ));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_get_db_creds_database_url_takes_precedence() {
+        let _env = TestEnv::new();
+
+        // Set both DATABASE_URL and individual vars
+        set_var(
+            "DATABASE_URL",
+            "postgres://urluser:urlpass@urlhost:5432/urldb",
+        );
+        set_var("DB_HOST", "envhost");
+        set_var("DB_NAME", "envdb");
+        set_var("DB_USER", "envuser");
+        set_var("DB_PASSWORD", "envpass");
+
+        let creds = get_db_creds().await.expect("Failed to get credentials");
+
+        // Should use DATABASE_URL values, not individual env vars
+        assert_eq!(creds.host(), "urlhost:5432");
+        assert_eq!(creds.name(), "urldb");
+        assert_eq!(creds.user(), "urluser");
+        assert_eq!(creds.password(), Some("urlpass"));
+    }
+}

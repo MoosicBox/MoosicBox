@@ -84,3 +84,62 @@ impl AsId for TidalConfig {
         DatabaseValue::Int64(i64::from(self.id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_tidal_config_as_id() {
+        let config = TidalConfig {
+            id: 42,
+            client_id: "client123".to_string(),
+            access_token: "token".to_string(),
+            refresh_token: "refresh".to_string(),
+            client_name: "test".to_string(),
+            expires_in: 3600,
+            issued_at: 1_234_567_890,
+            scope: "r_usr w_usr".to_string(),
+            token_type: "Bearer".to_string(),
+            user: "{}".to_string(),
+            user_id: 12345,
+            created: "2024-01-01".to_string(),
+            updated: "2024-01-02".to_string(),
+        };
+
+        let db_value = config.as_id();
+        match db_value {
+            DatabaseValue::Int64(id) => assert_eq!(id, 42),
+            _ => panic!("Expected DatabaseValue::Int64"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_config_as_id_zero() {
+        let config = TidalConfig {
+            id: 0,
+            ..Default::default()
+        };
+
+        let db_value = config.as_id();
+        match db_value {
+            DatabaseValue::Int64(id) => assert_eq!(id, 0),
+            _ => panic!("Expected DatabaseValue::Int64"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_tidal_config_as_id_max_u32() {
+        let config = TidalConfig {
+            id: u32::MAX,
+            ..Default::default()
+        };
+
+        let db_value = config.as_id();
+        match db_value {
+            DatabaseValue::Int64(id) => assert_eq!(id, i64::from(u32::MAX)),
+            _ => panic!("Expected DatabaseValue::Int64"),
+        }
+    }
+}

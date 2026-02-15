@@ -204,4 +204,112 @@ mod tests {
         assert!((max_f32(-10.0, -5.0) - (-5.0)).abs() < f32::EPSILON);
         assert!((max_f32(-5.0, 10.0) - 10.0).abs() < f32::EPSILON);
     }
+
+    #[test_log::test]
+    fn test_is_visible_returns_correct_distance_to_right() {
+        // Widget 50 units to the right of viewport edge
+        // Viewport: (0,0) with size 100x100
+        // Widget: (150, 50) with size 20x20 - starts 50 units past viewport right edge
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 150.0, 50.0, 20.0, 20.0);
+
+        assert!(!visible);
+        // Distance should be 50.0 (widget_x - viewport_w = 150 - 100)
+        assert!(
+            (dist - 50.0).abs() < 0.01,
+            "Expected dist ~50.0, got {dist}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_is_visible_returns_correct_distance_below() {
+        // Widget 30 units below viewport edge
+        // Viewport: (0,0) with size 100x100
+        // Widget: (50, 130) with size 20x20 - starts 30 units past viewport bottom edge
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 50.0, 130.0, 20.0, 20.0);
+
+        assert!(!visible);
+        // Distance should be 30.0 (widget_y - viewport_h = 130 - 100)
+        assert!(
+            (dist - 30.0).abs() < 0.01,
+            "Expected dist ~30.0, got {dist}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_is_visible_returns_correct_distance_to_left() {
+        // Widget to the left of viewport
+        // Viewport: (0,0) with size 100x100
+        // Widget: (-70, 50) with size 20x20 - ends 50 units before viewport left edge
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, -70.0, 50.0, 20.0, 20.0);
+
+        assert!(!visible);
+        // Distance should be 50.0: -(x + w) = -(-70 + 20) = -(-50) = 50
+        assert!(
+            (dist - 50.0).abs() < 0.01,
+            "Expected dist ~50.0, got {dist}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_is_visible_returns_correct_distance_above() {
+        // Widget above viewport
+        // Viewport: (0,0) with size 100x100
+        // Widget: (50, -80) with size 20x20 - ends 60 units above viewport top edge
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 50.0, -80.0, 20.0, 20.0);
+
+        assert!(!visible);
+        // Distance should be 60.0: -(y + h) = -(-80 + 20) = -(-60) = 60
+        assert!(
+            (dist - 60.0).abs() < 0.01,
+            "Expected dist ~60.0, got {dist}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_is_visible_returns_max_distance_when_outside_both_axes() {
+        // Widget outside viewport on both axes - should return max of x and y distances
+        // Viewport: (0,0) with size 100x100
+        // Widget: (150, 200) - 50 units to the right, 100 units below
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 150.0, 200.0, 20.0, 20.0);
+
+        assert!(!visible);
+        // x_dist = 150 - 100 = 50, y_dist = 200 - 100 = 100
+        // max(50, 100) = 100
+        assert!(
+            (dist - 100.0).abs() < 0.01,
+            "Expected dist ~100.0, got {dist}"
+        );
+    }
+
+    #[test_log::test]
+    fn test_is_visible_with_scrolled_viewport() {
+        // Viewport scrolled to position (500, 300)
+        // Widget visible within scrolled viewport
+        let (visible, dist) = is_visible(500.0, 300.0, 100.0, 100.0, 520.0, 320.0, 20.0, 20.0);
+
+        assert!(visible);
+        assert!(dist < 0.001, "Expected dist ~0.0, got {dist}");
+    }
+
+    #[test_log::test]
+    fn test_is_visible_widget_just_barely_outside() {
+        // Widget just 1 pixel outside viewport edge (past threshold)
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 101.0, 50.0, 20.0, 20.0);
+
+        assert!(!visible);
+        assert!((dist - 1.0).abs() < 0.01, "Expected dist ~1.0, got {dist}");
+    }
+
+    #[test_log::test]
+    fn test_is_visible_widget_just_barely_inside_threshold() {
+        // Widget overlapping by 0.0001 - should still be considered visible due to 0.001 threshold
+        // Viewport ends at 100, widget starts at 99.9995 with width 20
+        let (visible, dist) = is_visible(0.0, 0.0, 100.0, 100.0, 99.9995, 50.0, 20.0, 20.0);
+
+        assert!(
+            visible,
+            "Widget overlapping by tiny amount should be visible"
+        );
+        assert!(dist < 0.001);
+    }
 }
