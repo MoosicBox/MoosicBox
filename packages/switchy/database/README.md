@@ -565,8 +565,3 @@ Embedded analytical database:
 - **Manual Schema Management**: Schema changes must be managed manually
 - **No Query Optimization**: No automatic query analysis or optimization
 - **Backend-Specific Placeholder Syntax**: Different backends require different placeholder styles (though some auto-transformation is provided)
-
-## See Also
-
-- [MoosicBox Config](../config/README.md) - Configuration management
-- [MoosicBox Server](../server/README.md) - Server with database integration
