@@ -21,6 +21,7 @@ switchy_database = { workspace = true }
 switchy_env      = { workspace = true, features = ["std"] }
 
 # DB Dependencies
+duckdb   = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
@@ -49,6 +50,7 @@ test-log = { workspace = true }
 
 [features]
 default = [
+    "duckdb",
     "mysql-sqlx",
     "postgres-sqlx",
     "simulator",
@@ -71,6 +73,9 @@ simulator = [
 tls = ["sqlx/tls-rustls", "switchy_database/tls"]
 
 creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
+
+duckdb         = ["dep:duckdb", "dep:switchy_async", "switchy_database/duckdb"]
+duckdb-bundled = ["duckdb", "duckdb/bundled"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 

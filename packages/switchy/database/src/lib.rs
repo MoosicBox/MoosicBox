@@ -143,6 +143,9 @@
 
 /// Database configuration and initialization
 pub mod config;
+#[cfg(feature = "duckdb")]
+/// `DuckDB` database backend implementation
+pub mod duckdb;
 /// Trait for executing database operations
 pub mod executable;
 #[cfg(feature = "postgres-raw")]
@@ -875,6 +878,10 @@ impl TryFrom<DatabaseValue> for uuid::Uuid {
 /// Errors that can occur during database operations
 #[derive(Debug, Error)]
 pub enum DatabaseError {
+    #[cfg(feature = "duckdb")]
+    /// Error from `DuckDB` backend
+    #[error(transparent)]
+    DuckDb(duckdb::DuckDbDatabaseError),
     #[cfg(feature = "sqlite-rusqlite")]
     /// Error from rusqlite `SQLite` backend
     #[error(transparent)]

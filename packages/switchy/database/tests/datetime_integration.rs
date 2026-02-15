@@ -5,6 +5,243 @@ use common::datetime_tests::DateTimeTestSuite;
 use std::sync::Arc;
 use switchy_database::{Database, DatabaseValue};
 
+// ===== DUCKDB BACKEND TESTS =====
+#[cfg(feature = "duckdb")]
+mod duckdb_datetime_tests {
+    use super::*;
+    use ::duckdb::Connection;
+    use moosicbox_json_utils::database::ToValue as _;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbDateTimeTests;
+
+    impl DateTimeTestSuite<&'static str> for DuckDbDateTimeTests {
+        type DatabaseType = DuckDbDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            let conn = Connection::open_in_memory().ok()?;
+            let shared = Arc::new(Mutex::new(conn));
+            Some(Arc::new(DuckDbDatabase::new(vec![Arc::clone(&shared)])))
+        }
+
+        async fn create_test_table(&self, db: &Self::DatabaseType, table_name: &str) {
+            let query = format!(
+                "CREATE TABLE IF NOT EXISTS {table_name} (\
+                     id INTEGER PRIMARY KEY DEFAULT nextval('{table_name}_seq'), \
+                     created_at TIMESTAMP, \
+                     expires_at TIMESTAMP, \
+                     scheduled_for TIMESTAMP, \
+                     description TEXT\
+                 )"
+            );
+            db.exec_raw(&format!(
+                "CREATE SEQUENCE IF NOT EXISTS {table_name}_seq START 1"
+            ))
+            .await
+            .expect("Failed to create sequence");
+            db.exec_raw(&query)
+                .await
+                .expect("Failed to create datetime test table");
+        }
+
+        async fn cleanup_test_data(&self, db: &Self::DatabaseType, table_name: &str) {
+            let query = format!("DROP TABLE IF EXISTS {table_name}");
+            db.exec_raw(&query)
+                .await
+                .expect("Failed to drop test table");
+            let seq_query = format!("DROP SEQUENCE IF EXISTS {table_name}_seq");
+            db.exec_raw(&seq_query).await.ok();
+        }
+
+        async fn get_timestamp_column(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            column: &str,
+            id: i32,
+        ) -> Option<NaiveDateTime> {
+            let query = format!("SELECT {column} FROM {table_name} WHERE id = ?");
+            let rows = db
+                .query_raw_params(&query, &[DatabaseValue::Int64(i64::from(id))])
+                .await
+                .unwrap();
+
+            if let Some(row) = rows.first() {
+                return Some(row.to_value(column).unwrap());
+            }
+            None
+        }
+
+        async fn get_row_id_by_description(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            description: &str,
+        ) -> i32 {
+            let query =
+                format!("SELECT id FROM {table_name} WHERE description = ? ORDER BY id LIMIT 1");
+            let rows = db
+                .query_raw_params(&query, &[DatabaseValue::String(description.to_string())])
+                .await
+                .expect("Failed to get row by description");
+
+            if rows.is_empty() {
+                panic!("No row found with description '{description}'");
+            }
+
+            match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
+                DatabaseValue::Int64(n) => n as i32,
+                _ => panic!("Expected number for id"),
+            }
+        }
+
+        async fn insert_with_now(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            description: &str,
+        ) {
+            let query = format!("INSERT INTO {table_name} (created_at, description) VALUES (?, ?)");
+            db.exec_raw_params(
+                &query,
+                &[
+                    DatabaseValue::Now,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with NOW()");
+        }
+
+        async fn insert_with_expires_at(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            expires_at: DatabaseValue,
+            description: &str,
+        ) {
+            let query = format!("INSERT INTO {table_name} (expires_at, description) VALUES (?, ?)");
+            db.exec_raw_params(
+                &query,
+                &[expires_at, DatabaseValue::String(description.to_string())],
+            )
+            .await
+            .expect("Failed to insert with expires_at");
+        }
+
+        async fn insert_with_scheduled_for(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            scheduled_for: DatabaseValue,
+            description: &str,
+        ) {
+            let query =
+                format!("INSERT INTO {table_name} (scheduled_for, description) VALUES (?, ?)");
+            db.exec_raw_params(
+                &query,
+                &[
+                    scheduled_for,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with scheduled_for");
+        }
+
+        async fn insert_with_all_timestamps(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            created_at: DatabaseValue,
+            expires_at: DatabaseValue,
+            scheduled_for: DatabaseValue,
+            description: &str,
+        ) {
+            let query = format!(
+                "INSERT INTO {table_name} (created_at, expires_at, scheduled_for, description) VALUES (?, ?, ?, ?)"
+            );
+            db.exec_raw_params(
+                &query,
+                &[
+                    created_at,
+                    expires_at,
+                    scheduled_for,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with all timestamps");
+        }
+
+        fn gen_param(&self, _i: u8) -> &'static str {
+            "?"
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_insert() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_insert("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_plus_days() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_plus_days("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_minus_days() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_minus_days("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_plus_hours_minutes_seconds() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_plus_hours_minutes_seconds("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_now_plus_complex_interval() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_now_plus_complex_interval("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_zero_interval_returns_now() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_zero_interval_returns_now("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_mixed_parameters() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_mixed_parameters("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_duration_conversion() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_duration_conversion("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_update_with_now() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_update_with_now("duckdb").await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_multiple_now_consistency() {
+        let suite = DuckDbDateTimeTests;
+        suite.test_multiple_now_consistency("duckdb").await;
+    }
+}
+
 // ===== RUSQLITE BACKEND TESTS =====
 #[cfg(feature = "sqlite-rusqlite")]
 mod rusqlite_datetime_tests {

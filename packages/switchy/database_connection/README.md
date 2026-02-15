@@ -6,7 +6,7 @@ Database connection initialization and management with support for multiple data
 
 The Database Connection package provides:
 
-- **Multi-backend Support**: PostgreSQL, MySQL, and SQLite database connections
+- **Multi-backend Support**: PostgreSQL, MySQL, SQLite, DuckDB, and Turso database connections
 - **Feature-gated Backends**: Choose specific database implementations
 - **TLS Support**: Native TLS and OpenSSL options for PostgreSQL
 - **Connection Management**: Unified connection initialization interface
@@ -20,6 +20,7 @@ The Database Connection package provides:
 - **PostgreSQL**: Raw tokio-postgres and SQLx implementations
 - **MySQL**: SQLx implementation
 - **SQLite**: Rusqlite and SQLx implementations
+- **DuckDB**: Embedded analytical database (file-backed and in-memory)
 - **Turso**: Turso database support (libSQL-compatible)
 - **Simulator**: Mock database for testing and development
 
@@ -46,6 +47,13 @@ The Database Connection package provides:
 
 - **Local Files**: Local Turso/libSQL database files
 - **In-memory**: In-memory Turso databases
+
+### DuckDB Options
+
+- **File-based**: Persistent DuckDB database files
+- **In-memory**: In-memory DuckDB databases
+- **Read-only**: Read-only file-backed connections
+- **Connection Pool**: Pool of 5 connections behind `Arc<Mutex<>>`
 
 ## Installation
 
@@ -81,6 +89,12 @@ switchy_database_connection = {
 switchy_database_connection = {
     path = "../database_connection",
     features = ["turso"]
+}
+
+# DuckDB with bundled library
+switchy_database_connection = {
+    path = "../database_connection",
+    features = ["duckdb-bundled"]
 }
 ```
 
@@ -316,6 +330,33 @@ let db = init_turso_local(Some(db_path)).await?;
 let db = init_turso_local(None).await?;
 ```
 
+### DuckDB Database
+
+```rust
+// Feature: duckdb (or duckdb-bundled)
+use switchy_database_connection::init_duckdb;
+use std::path::Path;
+
+// File-based DuckDB database (pool of 5 connections)
+let db_path = Path::new("./analytics.duckdb");
+let db = init_duckdb(Some(db_path))?;
+
+// In-memory DuckDB database
+let db = init_duckdb(None)?;
+```
+
+### DuckDB Read-Only
+
+```rust
+// Feature: duckdb (or duckdb-bundled)
+use switchy_database_connection::init_duckdb_read_only;
+use std::path::Path;
+
+// Read-only file-backed DuckDB database (pool of 5 connections)
+let db_path = Path::new("./analytics.duckdb");
+let db = init_duckdb_read_only(db_path)?;
+```
+
 ### Non-SQLite Initialization
 
 ```rust
@@ -381,6 +422,10 @@ match init(None, None).await {
     Err(InitDbError::InitTurso(e)) => {
         eprintln!("Turso initialization error: {}", e);
     }
+    #[cfg(feature = "duckdb")]
+    Err(InitDbError::InitDuckDb(e)) => {
+        eprintln!("DuckDB initialization error: {}", e);
+    }
     Err(InitDbError::Database(e)) => {
         eprintln!("Database error: {}", e);
     }
@@ -410,6 +455,11 @@ match init(None, None).await {
 ### Turso Features
 
 - **`turso`**: Turso/libSQL database support
+
+### DuckDB Features
+
+- **`duckdb`**: DuckDB database support (requires system libduckdb)
+- **`duckdb-bundled`**: DuckDB with bundled library (no system install required)
 
 ### Other Features
 
@@ -454,6 +504,7 @@ DB_PASSWORD="password"
 - **deadpool-postgres**: Connection pooling for PostgreSQL (optional)
 - **SQLx**: Multi-database async driver (optional)
 - **Rusqlite**: SQLite synchronous driver (optional)
+- **DuckDB**: DuckDB embedded database driver (optional)
 - **Native TLS**: TLS implementation (optional)
 - **OpenSSL**: Alternative TLS implementation (optional)
 - **AWS SDK**: For SSM parameter store credential management (optional)
@@ -467,4 +518,5 @@ DB_PASSWORD="password"
 - **CLI Tools**: Command-line database utilities
 - **Testing**: Mock database connections for unit tests
 - **Data Migration**: Database migration and setup tools
+- **Analytics**: DuckDB connections for analytical workloads
 - **Multi-tenant Applications**: Dynamic database connections

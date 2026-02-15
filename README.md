@@ -49,7 +49,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 - **Multi-zone audio** - Play different music in different rooms
 - **Multiple simultaneous outputs** - Stream to multiple devices at once
 - **Automatic image optimization** - Perfect album art for any screen size
-- **Database flexibility** - Support for PostgreSQL, MySQL, and SQLite
+- **Database flexibility** - Support for PostgreSQL, MySQL, SQLite, and DuckDB
 - **Audio visualization** - See waveforms and track progress
 - **Remote library access** - Connect to other MoosicBox servers
 
@@ -129,6 +129,7 @@ MoosicBox supports multiple database backends for maximum flexibility:
 - **SQLite** - Perfect for personal use and getting started
 - **PostgreSQL** - Recommended for production and multi-user setups
 - **MySQL** - Full feature support with basic MySQL compatibility
+- **DuckDB** - Embedded analytical database for read-heavy and analytical workloads
 
 ## 🔧 Development
 

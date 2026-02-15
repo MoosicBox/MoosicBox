@@ -5,6 +5,87 @@ mod common;
 use common::data_types_tests::DataTypeTestSuite;
 use std::sync::Arc;
 
+// ===== DUCKDB BACKEND TESTS =====
+#[cfg(feature = "duckdb")]
+mod duckdb_data_type_tests {
+    use super::*;
+    use ::duckdb::Connection;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbDataTypeTests;
+
+    impl DataTypeTestSuite for DuckDbDataTypeTests {
+        type DatabaseType = DuckDbDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            let conn = Connection::open_in_memory().ok()?;
+            let shared = Arc::new(Mutex::new(conn));
+            Some(Arc::new(DuckDbDatabase::new(vec![Arc::clone(&shared)])))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_int_vs_bigint_type_safety() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_int_vs_bigint_type_safety().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_string_types_varchar_text_char() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_string_types_varchar_text_char().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_floating_point_types() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_floating_point_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_boolean_type() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_boolean_type().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_datetime_types() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_datetime_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_null_handling_all_types() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_null_handling_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_serial_auto_increment() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_serial_auto_increment().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_default_values_all_types() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_default_values_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_int8_specific_type_and_retrieval() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_int16_specific_type_and_retrieval() {
+        let suite = DuckDbDataTypeTests;
+        suite.test_int16_specific_type_and_retrieval().await;
+    }
+}
+
 // ===== RUSQLITE BACKEND TESTS =====
 #[cfg(feature = "sqlite-rusqlite")]
 mod rusqlite_data_type_tests {

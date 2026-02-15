@@ -24,6 +24,7 @@ switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_time  = { workspace = true, features = ["chrono", "std"] }
 
 # DB Dependencies
+duckdb   = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
@@ -73,6 +74,7 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 switchy_database_connection = { workspace = true, features = [
+    "duckdb",
     "mysql-sqlx",
     "postgres-native-tls",
     "postgres-raw",
@@ -96,6 +98,7 @@ default = [
     "auto-reverse",
     "cascade",
     "decimal",
+    "duckdb",
     "mysql",
     "postgres-sqlx",
     "schema",
@@ -119,6 +122,14 @@ api = ["dep:actix-web", "dep:futures", "moosicbox_profiles/api"]
 
 _any_backend = []
 
+duckdb = [
+    "_any_backend",
+    "dep:duckdb",
+    "dep:regex",
+    "placeholder-question-mark",
+    "switchy_async/sync",
+]
+duckdb-bundled = ["duckdb", "duckdb/bundled"]
 mysql = ["_any_backend", "mysql-sqlx", "sqlx"]
 mysql-sqlx = [
     "_any_backend",

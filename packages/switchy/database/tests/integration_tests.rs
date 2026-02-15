@@ -1,10 +1,178 @@
 use std::sync::Arc;
 
+#[allow(unused_imports)]
 use switchy_database::{Database, query::FilterableQuery as _};
 
 mod common;
 
 use common::integration_tests::IntegrationTestSuite;
+
+// ===== DUCKDB BACKEND TESTS =====
+#[cfg(feature = "duckdb")]
+mod duckdb_integration {
+    use super::*;
+    use ::duckdb::Connection;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbIntegrationTests;
+
+    impl IntegrationTestSuite for DuckDbIntegrationTests {
+        async fn get_database(&self) -> Option<Arc<Box<dyn Database>>> {
+            let conn = Connection::open_in_memory().ok()?;
+
+            conn.execute_batch(
+                "CREATE SEQUENCE users_id_seq START 1; \
+                 CREATE TABLE users (\
+                     id BIGINT DEFAULT nextval('users_id_seq'), \
+                     name TEXT NOT NULL, \
+                     PRIMARY KEY (id)\
+                 )",
+            )
+            .ok()?;
+
+            let shared = Arc::new(Mutex::new(conn));
+            let db = DuckDbDatabase::new(vec![Arc::clone(&shared)]);
+            Some(Arc::new(Box::new(db) as Box<dyn Database>))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_insert() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_insert().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_update() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_update().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_delete() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_delete().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_delete_with_limit() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_delete_with_limit().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_transaction_commit() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_transaction_commit().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_transaction_rollback() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_transaction_rollback().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_nested_transaction_rejection() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_nested_transaction_rejection().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_transaction_crud_operations() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_transaction_crud_operations().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_query_raw_with_valid_sql() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_query_raw_with_valid_sql().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_query_raw_with_empty_result() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_query_raw_with_empty_result().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_query_raw_with_invalid_sql() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_query_raw_with_invalid_sql().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_duckdb_query_raw_in_transaction() {
+        let suite = DuckDbIntegrationTests;
+        suite.test_query_raw_in_transaction().await;
+    }
+}
+
+// ===== DUCKDB INTROSPECTION TESTS =====
+#[cfg(all(feature = "duckdb", feature = "schema"))]
+mod duckdb_introspection_tests {
+    use super::*;
+    use ::duckdb::Connection;
+    use common::introspection_tests::IntrospectionTestSuite;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbIntrospectionTests;
+
+    impl IntrospectionTestSuite for DuckDbIntrospectionTests {
+        type DatabaseType = DuckDbDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            let conn = Connection::open_in_memory().ok()?;
+            let shared = Arc::new(Mutex::new(conn));
+            Some(Arc::new(DuckDbDatabase::new(vec![Arc::clone(&shared)])))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_table_exists() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_column_exists() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_get_table_columns() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_get_table_info() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_unsupported_types() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_transaction_context() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_duckdb_introspection_edge_cases() {
+        let suite = DuckDbIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+}
 
 #[cfg(feature = "sqlite-sqlx")]
 mod sqlx_sqlite {

@@ -6,7 +6,7 @@ Database abstraction layer with support for multiple database backends, schema m
 
 The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), and Turso
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, and Turso
 - **Schema Management**: Create/alter tables, indexes with portable definitions
 - **Schema Introspection**: Query existing database structure programmatically
 - **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
@@ -21,6 +21,7 @@ The Switchy Database package provides:
 - **PostgreSQL (raw)**: Production PostgreSQL using tokio-postgres and deadpool-postgres
 - **PostgreSQL (sqlx)**: Production PostgreSQL using sqlx with connection pooling
 - **MySQL (sqlx)**: MySQL database using sqlx driver
+- **DuckDB**: Embedded analytical database using duckdb driver with `?` placeholders
 - **Turso**: Turso (libSQL) cloud database support
 - **Simulator**: Testing database (delegates to underlying backend)
 
@@ -198,6 +199,7 @@ async fn process_batch(tx: &dyn Database, batch: &[String]) -> Result<(), Databa
 | SQLite     | ✅ Full           | Can create savepoints after errors  |
 | PostgreSQL | ✅ Full           | Must create before potential errors |
 | MySQL      | ✅ Full (InnoDB)  | Requires InnoDB storage engine      |
+| DuckDB     | ❌ Not supported  | Returns `UnsupportedOperation`      |
 
 #### Common Use Cases
 
@@ -344,6 +346,7 @@ async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
     // - sqlx-sqlite: ? placeholders
     // - PostgreSQL (raw/sqlx): $1, $2 placeholders
     // - MySQL (sqlx): ? placeholders
+    // - DuckDB: ? placeholders
     let params = vec![DatabaseValue::String("The Beatles".to_string())];
     let rows = db.query_raw_params("SELECT * FROM tracks WHERE artist = ?", &params).await?;
 
@@ -372,6 +375,8 @@ The following feature flags are available in `Cargo.toml`:
 - `postgres-raw` - PostgreSQL backend using tokio-postgres
 - `postgres-sqlx` - PostgreSQL backend using sqlx
 - `mysql` / `mysql-sqlx` - MySQL backend using sqlx
+- `duckdb` - DuckDB embedded analytical database
+- `duckdb-bundled` - DuckDB with bundled library (no system install required)
 - `turso` - Turso (libSQL) cloud database support
 
 ### Additional Features
@@ -432,6 +437,7 @@ Each backend has its own error variant:
 - `DatabaseError::Postgres(postgres::postgres::PostgresDatabaseError)` - raw PostgreSQL errors
 - `DatabaseError::PostgresSqlx(sqlx::postgres::SqlxDatabaseError)` - sqlx PostgreSQL errors
 - `DatabaseError::MysqlSqlx(sqlx::mysql::SqlxDatabaseError)` - sqlx MySQL errors
+- `DatabaseError::DuckDb(duckdb::DuckDbDatabaseError)` - DuckDB errors
 - `DatabaseError::Turso(turso::TursoDatabaseError)` - Turso errors
 
 ## Data Types
@@ -536,6 +542,21 @@ Turso (libSQL) cloud database support:
 - Uses `?` placeholders
 - Cloud-native database
 - Compatible with SQLite API
+
+### DuckDB
+
+Embedded analytical database:
+
+- **DuckDB** (`duckdb` / `duckdb-bundled` feature):
+    - Uses `?` placeholders
+    - Connection pool of 5 connections behind `Arc<Mutex<>>`
+    - Blocking operations wrapped in async
+    - In-memory and file-backed databases supported
+    - `NOW()` is cast to `TIMESTAMP` (DuckDB's `NOW()` returns `TIMESTAMP WITH TIME ZONE`)
+    - Auto-increment uses `CREATE SEQUENCE` + `DEFAULT nextval(...)` instead of `GENERATED ALWAYS AS IDENTITY`
+    - Savepoints are not supported (returns `UnsupportedOperation`)
+    - Schema introspection via `information_schema` and `duckdb_indexes()`
+    - `DELETE ... RETURNING` uses a SELECT-then-DELETE workaround (see source for details)
 
 ## Limitations
 

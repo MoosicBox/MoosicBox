@@ -396,6 +396,71 @@ pub enum InitSqliteRusqliteError {
     Sqlite(#[from] ::rusqlite::Error),
 }
 
+/// Errors that can occur when initializing a `DuckDB` connection
+#[cfg(feature = "duckdb")]
+#[derive(Debug, Error)]
+pub enum InitDuckDbError {
+    /// `DuckDB` database error
+    #[error(transparent)]
+    DuckDb(#[from] ::duckdb::Error),
+}
+
+/// Initializes a `DuckDB` database connection.
+///
+/// Creates a connection pool with 5 connections. If no path is provided,
+/// creates an in-memory database.
+///
+/// # Errors
+///
+/// * If fails to initialize the `DuckDB` connection
+#[cfg(feature = "duckdb")]
+pub fn init_duckdb(
+    db_location: Option<&std::path::Path>,
+) -> Result<Box<dyn Database>, InitDuckDbError> {
+    let mut connections = Vec::new();
+    for _ in 0..5 {
+        let conn = if let Some(path) = db_location {
+            ::duckdb::Connection::open(path)?
+        } else {
+            ::duckdb::Connection::open_in_memory()?
+        };
+        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(conn)));
+    }
+
+    Ok(Box::new(switchy_database::duckdb::DuckDbDatabase::new(
+        connections,
+    )))
+}
+
+/// Initializes a read-only `DuckDB` database connection.
+///
+/// Creates a connection pool with 5 connections opened in read-only mode.
+///
+/// # Errors
+///
+/// * If fails to initialize the `DuckDB` connection
+///
+/// # Panics
+///
+/// * If the `DuckDB` access mode configuration fails (should not happen)
+#[cfg(feature = "duckdb")]
+pub fn init_duckdb_read_only(
+    db_location: &std::path::Path,
+) -> Result<Box<dyn Database>, InitDuckDbError> {
+    let mut connections = Vec::new();
+    for _ in 0..5 {
+        let config = ::duckdb::Config::default()
+            .access_mode(::duckdb::AccessMode::ReadOnly)
+            .expect("Failed to set DuckDB access mode");
+        let conn = ::duckdb::Connection::open_with_flags(db_location, config)?;
+        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(conn)));
+    }
+
+    Ok(Box::new(switchy_database::duckdb::DuckDbDatabase::new(
+        connections,
+    )))
+}
+
 /// Initializes a `SQLite` database connection using rusqlite.
 ///
 /// Creates a connection pool with 5 connections. If no path is provided,

@@ -1,6 +1,6 @@
 # Database Introspection: Common Pitfalls and Solutions
 
-This guide covers common issues and platform-specific behavior when using database schema introspection across SQLite, PostgreSQL, and MySQL backends.
+This guide covers common issues and platform-specific behavior when using database schema introspection across SQLite, PostgreSQL, MySQL, and DuckDB backends.
 
 ## SQLite-Specific Pitfalls
 
@@ -232,16 +232,104 @@ CREATE TABLE products (
 
 **Limitation**: Generated column expressions not parsed or indicated in metadata.
 
+## DuckDB-Specific Pitfalls
+
+### 1. `GENERATED ALWAYS AS IDENTITY` Not Supported
+
+**Issue**: DuckDB v1.4.4 throws `"Constraint not implemented!"` for the SQL standard `GENERATED ALWAYS AS IDENTITY` syntax.
+
+```sql
+-- This fails in DuckDB:
+CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY);
+```
+
+**Solution**: Use sequence-based auto-increment instead:
+
+```sql
+CREATE SEQUENCE users_id_seq;
+CREATE TABLE users (id BIGINT DEFAULT nextval('users_id_seq') PRIMARY KEY);
+```
+
+**Introspection Impact**: The schema builder generates the sequence-based approach automatically when `auto_increment: true` is set. Associated sequences are named `{table_name}_{column_name}_seq` and are dropped when the table is dropped.
+
+### 2. `NOW()` Returns `TIMESTAMP WITH TIME ZONE`
+
+**Issue**: DuckDB's `NOW()` returns `TIMESTAMPTZ`, but `+(TIMESTAMPTZ, INTERVAL)` is not a valid operation.
+
+```sql
+-- This fails:
+SELECT NOW() + INTERVAL '1 day';
+-- Error: No function matches +(TIMESTAMP WITH TIME ZONE, INTERVAL)
+
+-- This works:
+SELECT NOW()::TIMESTAMP + INTERVAL '1 day';
+```
+
+**Current Behavior**: The DuckDB backend automatically casts `NOW()` to `TIMESTAMP` in all generated SQL, including `DatabaseValue::Now` and `DatabaseValue::NowPlus`.
+
+### 3. No Savepoint Support
+
+**Issue**: DuckDB's SQL parser does not recognize the `SAVEPOINT` statement.
+
+```sql
+-- This fails in DuckDB:
+SAVEPOINT my_savepoint;
+```
+
+**Current Behavior**: `savepoint()` returns `DatabaseError::UnsupportedOperation`. Use full transactions instead of nested savepoints.
+
+### 4. `DELETE ... RETURNING` Workaround
+
+**Issue**: DuckDB's `raw_execute()` consumes `RETURNING` clause results, making them unavailable via subsequent `raw_query()` calls. This means the standard `DELETE FROM ... RETURNING *` pattern returns 0 rows.
+
+**Current Behavior**: The backend uses a SELECT-then-DELETE approach: it first SELECTs the matching rows, then executes the DELETE. This is safe because each DuckDB connection is behind an `Arc<Mutex<>>`, preventing concurrent modifications on the same connection. For file-backed DuckDB with multiple connections, callers should wrap deletes in a transaction.
+
+### 5. In-Memory Databases Are Not Shared
+
+**Issue**: Unlike SQLite's `cache=shared` mode, DuckDB in-memory databases are isolated per connection.
+
+```rust
+// These two connections see completely different databases:
+let conn1 = Connection::open_in_memory()?;
+let conn2 = Connection::open_in_memory()?;
+```
+
+**Impact**: The connection pool created by `init_duckdb(None)` has 5 independent in-memory databases. For in-memory usage, only one connection in the pool will contain your data unless you coordinate explicitly.
+
+**Workaround**: For tests, use a single shared connection wrapped in `Arc<Mutex<>>`. For production, use file-backed databases.
+
+### 6. Type Mapping Differences
+
+**Issue**: DuckDB reports types differently than other backends in `information_schema.columns`.
+
+| DuckDB Type | Mapped `DataType` | Notes |
+| --- | --- | --- |
+| `INTEGER` | `Int` | 32-bit (not 64-bit like some expect) |
+| `BIGINT` | `BigInt` | 64-bit |
+| `VARCHAR` | `VarChar(n)` | Includes length |
+| `BOOLEAN` | `Bool` | Native boolean type |
+| `HUGEINT` | Lossy → `String` | 128-bit integer, no direct mapping |
+| `LIST`, `STRUCT`, `MAP` | Lossy → `Null` | Complex types logged as warnings |
+| `INTERVAL` | Lossy → `String` | Converted to human-readable string |
+
+**Lossy Conversions**: DuckDB types without a direct `DatabaseValue` mapping are converted with a warning log. `HUGEINT` and `UHUGEINT` become strings, `LIST`/`STRUCT`/`MAP`/`UNION` become `Null`.
+
+### 7. Index Introspection
+
+**Issue**: DuckDB uses `duckdb_indexes()` for index metadata, which returns index SQL rather than structured column lists.
+
+**Current Behavior**: Index columns are extracted by parsing the SQL string from the `sql` column of `duckdb_indexes()`. This works for simple indexes but may not correctly parse complex index expressions.
+
 ## Cross-Backend Pitfalls
 
 ### 1. Data Type Mapping Inconsistencies
 
 **Issue**: Same DataType enum maps to different native types across backends.
 
-| DataType | SQLite             | PostgreSQL              | MySQL         |
-| -------- | ------------------ | ----------------------- | ------------- |
-| `Real`   | 64-bit REAL        | 32-bit REAL             | 32-bit FLOAT  |
-| `Double` | N/A (maps to Real) | 64-bit DOUBLE PRECISION | 64-bit DOUBLE |
+| DataType | SQLite             | PostgreSQL              | MySQL         | DuckDB                   |
+| -------- | ------------------ | ----------------------- | ------------- | ------------------------ |
+| `Real`   | 64-bit REAL        | 32-bit REAL             | 32-bit FLOAT  | 32-bit FLOAT             |
+| `Double` | N/A (maps to Real) | 64-bit DOUBLE PRECISION | 64-bit DOUBLE | 64-bit DOUBLE            |
 
 **Solution**: Be aware of precision differences when migrating between backends.
 
@@ -272,6 +360,7 @@ CREATE TABLE test (note TEXT DEFAULT '');
 - **SQLite**: INTEGER PRIMARY KEY becomes alias for rowid
 - **PostgreSQL**: SERIAL creates sequence + DEFAULT nextval()
 - **MySQL**: AUTO_INCREMENT column attribute
+- **DuckDB**: Sequence-based (`CREATE SEQUENCE` + `DEFAULT nextval(...)`)
 
 **Current Status**: Auto-increment detection not reliably implemented across backends.
 
@@ -282,6 +371,7 @@ CREATE TABLE test (note TEXT DEFAULT '');
 - **SQLite**: No native date types, stores as TEXT/INTEGER/REAL
 - **PostgreSQL**: Rich temporal types with timezone support
 - **MySQL**: Separate DATE, TIME, DATETIME, TIMESTAMP types
+- **DuckDB**: `TIMESTAMP` (without timezone) and `TIMESTAMPTZ`; `NOW()` returns `TIMESTAMPTZ` and must be cast to `TIMESTAMP` for interval arithmetic
 
 **Mapping**: All map to `DataType::DateTime`, losing timezone and precision information.
 
@@ -385,4 +475,4 @@ mod tests {
 }
 ```
 
-This guide should help avoid common pitfalls and write robust code that works reliably across different database backends.
+This guide should help avoid common pitfalls and write robust code that works reliably across different database backends. For DuckDB-specific concerns, pay particular attention to the lossy type conversions, the sequence-based auto-increment, and the `TIMESTAMPTZ` vs `TIMESTAMP` distinction.
