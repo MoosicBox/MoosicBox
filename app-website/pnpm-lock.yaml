@@ -18,8 +18,8 @@ importers:
         specifier: ^5.1.3
         version: 5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.3.0)(jiti@2.4.2)(solid-js@1.9.11)(yaml@2.8.2)
       '@aws-sdk/client-ssm':
-        specifier: ^3.993.0
-        version: 3.993.0(aws-crt@1.21.8)
+        specifier: ^3.994.0
+        version: 3.994.0(aws-crt@1.21.8)
       '@hotwired/turbo':
         specifier: ^8.0.23
         version: 8.0.23
@@ -133,8 +133,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.18.10
-        version: 3.18.10
+        specifier: ^3.18.12
+        version: 3.18.12
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -230,8 +230,8 @@ packages:
   '@aws-crypto/util@5.2.0':
     resolution: {integrity: sha512-4RkU9EsI6ZpBve5fseQlGNUWKMa1RLPQ1dnjnQoe07ldfIzcsGb5hC5W0Dm7u423KWzawlrpbjXBrXCEv9zazQ==}
 
-  '@aws-sdk/client-ssm@3.993.0':
-    resolution: {integrity: sha512-BlFRC/b2Gu9ehBa/14Y+X7WRQAox4byIMFLW7vW9yrm2l542cWOE0Lg2sTcfT1A45N3Ldq/S+O9PoKnhAVxvqg==}
+  '@aws-sdk/client-ssm@3.994.0':
+    resolution: {integrity: sha512-ntz1woCUokHyimLKvUnzX8vkBjnorPIrT8qqBxdn5K1rj8kGwjgbD1h/dq05P7Ybpn6QzsMJuuDdqtlBdwhVhQ==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-sso@3.993.0':
@@ -308,6 +308,10 @@ packages:
 
   '@aws-sdk/util-endpoints@3.993.0':
     resolution: {integrity: sha512-j6vioBeRZ4eHX4SWGvGPpwGg/xSOcK7f1GL0VM+rdf3ZFTIsUEhCFmD78B+5r2PgztcECSzEfvHQX01k8dPQPw==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/util-endpoints@3.994.0':
+    resolution: {integrity: sha512-L2obUBw4ACMMd1F/SG5LdfPyZ0xJNs9Maifwr3w0uWO+4YvHmk9FfRskfSfE/SLZ9S387oSZ+1xiP7BfVCP/Og==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/util-locate-window@3.965.4':
@@ -1836,12 +1840,12 @@ packages:
     peerDependencies:
       acorn: ^6.0.0 || ^7.0.0 || ^8.0.0
 
-  acorn-walk@8.3.4:
-    resolution: {integrity: sha512-ueEepnujpqee2o5aIYnvHU6C0A42MNdsIDeqy5BydrkuC5R1ZuUFnm27EeFJGoEHJQgn3uleRvmTXaJgfXbt4g==}
+  acorn-walk@8.3.5:
+    resolution: {integrity: sha512-HEHNfbars9v4pgpW6SO1KSPkfoS0xVOM/9UzkJltjlsHZmJasxg8aXkuZa7SMf8vKGIBhpUsPluQSqhJFCqebw==}
     engines: {node: '>=0.4.0'}
 
-  acorn@8.15.0:
-    resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
+  acorn@8.16.0:
+    resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
 
@@ -2013,8 +2017,9 @@ packages:
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
-  baseline-browser-mapping@2.9.19:
-    resolution: {integrity: sha512-ipDqC8FrAl/76p2SSWKSI+H9tFwm7vYqXQrItCuiVPt26Km0jS+NzSsBWAaBusvSbQcfJG+JitdMm+wZAgTYqg==}
+  baseline-browser-mapping@2.10.0:
+    resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
+    engines: {node: '>=6.0.0'}
     hasBin: true
 
   bl@4.1.0:
@@ -4188,48 +4193,48 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.18.10:
-    resolution: {integrity: sha512-N3MwIpMZhhdZKDqLp9ZQNlwkWix5+q+N0PWstuTomYwgZOxCCe6u9IIsoIszSk+GAJJN/jvGZyLiXKeV4iiQvw==}
+  sst-darwin-arm64@3.18.12:
+    resolution: {integrity: sha512-YdbPHusB9qVt/YIZV8CXLmfmHh2sEAKCtElbnlYof/FjZBaMs1VRLVsn9ooveqgMQ9CFXMZ11/j0KKMHs1z73w==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.18.10:
-    resolution: {integrity: sha512-nQ0jMKkPOa+kj6Ygz8+kYhBua/vgNTLkd+4r8NSmk7v+Zs78lKnx3T//kEzS0yik6Q6QwGfokwrTcA1Jii2xSw==}
+  sst-darwin-x64@3.18.12:
+    resolution: {integrity: sha512-/E8+OGNx0CgFofGn5wkn+zj499ClKbH5XtVmvycJKjVoJR517C69OuHP6MdsPVsOQBdT7RnzGROY8MCDM4NwCA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.18.10:
-    resolution: {integrity: sha512-mj9VNj3SvLS+HaXx2PhCX0aTA7CwJNoM6JhRc0s/zCilqchcvqDjbhpYBJO4brEPv6aOaaa7T3WvIQqtYauK4Q==}
+  sst-linux-arm64@3.18.12:
+    resolution: {integrity: sha512-yVBydxpPmXzUmOhQaDzQ+9cTrpArrqDeBSQZOyhHsiEM60iFC4+WOQhdoMEVMje45CfVQt79f0KmdISGG155lg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.18.10:
-    resolution: {integrity: sha512-7iy1Eq2eqnT9Ag/8OVgC04vRjV7AAQyf/BvzLc+6Sz+GvRiKA8VEuPnbXNYQF+NIvEqsawfcd7MknSTtImpsvQ==}
+  sst-linux-x64@3.18.12:
+    resolution: {integrity: sha512-icL6bD8a4WVqyDqpuh7snHLloJTNSrBAi7QCte6Dvo1H3Qxpk77eVMPYml43tSD7vgH8wXPpskqq/Ks6dvvU5Q==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.18.10:
-    resolution: {integrity: sha512-77qZSuPZeQ5bdRCiq1pQEdY8EcGNHboKrx4P2yFid2FBDKJsXxOXtIxJdloyx+ljBn0+nxl/g040QBmXxdc9tA==}
+  sst-linux-x86@3.18.12:
+    resolution: {integrity: sha512-0Aj4sgt2sQ+huEQTQKyq7Si+io5GIRrkfJi960uwaOmqLxHrRclrN9w1zVfDXvNtYBTJLw71a9Z1V5uZ1IrclQ==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.18.10:
-    resolution: {integrity: sha512-aY+FhMxvYs8crlrKALpLn/kKmud8YQj6LkMHsrOAAIJhfNyxhCja2vrYQaY+bcqdsS5W2LMVcS2hyaMqKXZKcg==}
+  sst-win32-arm64@3.18.12:
+    resolution: {integrity: sha512-H9zwa5/NhTr44dXG2IsJOfZhvVMT2tW9EbqKP2+vQ4vCggKiV75LYS+zOioou5IsEeZvcYgJBf5mNr4LEQ1uxA==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.18.10:
-    resolution: {integrity: sha512-rY+yJXOpG+P5xXnaQRpCvBK2zwwLhjzpYidGkp6F+cGgiVdh2Wre/CIQNRaVHr20ncj8lLe/RsHWa9QCNM48jg==}
+  sst-win32-x64@3.18.12:
+    resolution: {integrity: sha512-L1V4ln82XLqntyvSfQMfMlirI0cladP1B9BwV4FyzCsIxw3+JlhPhx2rw/+eORQ3dHyGReaG3GncHszZTtF/Ug==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.18.10:
-    resolution: {integrity: sha512-pq8SmV0pIjBFMY6DraUZ4akyTxHnfjIKCRbBLdMxFUZK8TzA1NK2YdjRt1AwrgXRYGRyctrz/mt4WyO0SMOVQQ==}
+  sst-win32-x86@3.18.12:
+    resolution: {integrity: sha512-1XUyhzoIh6vCbd8C+mlIe1MBgTlLPEyholYwjqLA3wWm7o+4eZ/NW6X+8i8/39xAoP66mioxL+eDNTwng8v/Hw==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.18.10:
-    resolution: {integrity: sha512-SY+ldeJ9K5E9q+DhjXA3e2W3BEOzBwkE3IyLSD71uA3/5nRhUAST31iOWEpW36LbIvSQ9uOVDFcebztoLJ8s7w==}
+  sst@3.18.12:
+    resolution: {integrity: sha512-/CoY58wVAJK8lvRycnt6g61g9l1ZcK8CrZM39jqBiF+NTsLrYzoD5CCggFfsekjxi1hxOZo5oGz+nJ9gdrqrbA==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -5188,7 +5193,7 @@ snapshots:
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
-  '@aws-sdk/client-ssm@3.993.0(aws-crt@1.21.8)':
+  '@aws-sdk/client-ssm@3.994.0(aws-crt@1.21.8)':
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
@@ -5200,7 +5205,7 @@ snapshots:
       '@aws-sdk/middleware-user-agent': 3.972.11
       '@aws-sdk/region-config-resolver': 3.972.3
       '@aws-sdk/types': 3.973.1
-      '@aws-sdk/util-endpoints': 3.993.0
+      '@aws-sdk/util-endpoints': 3.994.0
       '@aws-sdk/util-user-agent-browser': 3.972.3
       '@aws-sdk/util-user-agent-node': 3.972.9(aws-crt@1.21.8)
       '@smithy/config-resolver': 4.4.6
@@ -5496,6 +5501,14 @@ snapshots:
       tslib: 2.8.1
 
   '@aws-sdk/util-endpoints@3.993.0':
+    dependencies:
+      '@aws-sdk/types': 3.973.1
+      '@smithy/types': 4.12.0
+      '@smithy/url-parser': 4.2.8
+      '@smithy/util-endpoints': 3.2.8
+      tslib: 2.8.1
+
+  '@aws-sdk/util-endpoints@3.994.0':
     dependencies:
       '@aws-sdk/types': 3.973.1
       '@smithy/types': 4.12.0
@@ -6942,15 +6955,15 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
-  acorn-jsx@5.3.2(acorn@8.15.0):
+  acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.16.0
 
-  acorn-walk@8.3.4:
+  acorn-walk@8.3.5:
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.16.0
 
-  acorn@8.15.0: {}
+  acorn@8.16.0: {}
 
   agent-base@7.1.4: {}
 
@@ -7088,7 +7101,7 @@ snapshots:
       '@capsizecss/unpack': 4.0.0
       '@oslojs/encoding': 1.1.0
       '@rollup/pluginutils': 5.3.0(rollup@4.57.1)
-      acorn: 8.15.0
+      acorn: 8.16.0
       aria-query: 5.3.2
       axobject-query: 4.1.0
       boxen: 8.0.1
@@ -7265,7 +7278,7 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.9.19: {}
+  baseline-browser-mapping@2.10.0: {}
 
   bl@4.1.0:
     dependencies:
@@ -7318,7 +7331,7 @@ snapshots:
 
   browserslist@4.28.1:
     dependencies:
-      baseline-browser-mapping: 2.9.19
+      baseline-browser-mapping: 2.10.0
       caniuse-lite: 1.0.30001770
       electron-to-chromium: 1.5.286
       node-releases: 2.0.27
@@ -8035,8 +8048,8 @@ snapshots:
 
   espree@10.4.0:
     dependencies:
-      acorn: 8.15.0
-      acorn-jsx: 5.3.2(acorn@8.15.0)
+      acorn: 8.16.0
+      acorn-jsx: 5.3.2(acorn@8.16.0)
       eslint-visitor-keys: 4.2.1
 
   esquery@1.7.0:
@@ -9249,7 +9262,7 @@ snapshots:
 
   mlly@1.8.0:
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.16.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.3
@@ -10062,31 +10075,31 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.18.10:
+  sst-darwin-arm64@3.18.12:
     optional: true
 
-  sst-darwin-x64@3.18.10:
+  sst-darwin-x64@3.18.12:
     optional: true
 
-  sst-linux-arm64@3.18.10:
+  sst-linux-arm64@3.18.12:
     optional: true
 
-  sst-linux-x64@3.18.10:
+  sst-linux-x64@3.18.12:
     optional: true
 
-  sst-linux-x86@3.18.10:
+  sst-linux-x86@3.18.12:
     optional: true
 
-  sst-win32-arm64@3.18.10:
+  sst-win32-arm64@3.18.12:
     optional: true
 
-  sst-win32-x64@3.18.10:
+  sst-win32-x64@3.18.12:
     optional: true
 
-  sst-win32-x86@3.18.10:
+  sst-win32-x86@3.18.12:
     optional: true
 
-  sst@3.18.10:
+  sst@3.18.12:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -10094,14 +10107,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.18.10
-      sst-darwin-x64: 3.18.10
-      sst-linux-arm64: 3.18.10
-      sst-linux-x64: 3.18.10
-      sst-linux-x86: 3.18.10
-      sst-win32-arm64: 3.18.10
-      sst-win32-x64: 3.18.10
-      sst-win32-x86: 3.18.10
+      sst-darwin-arm64: 3.18.12
+      sst-darwin-x64: 3.18.12
+      sst-linux-arm64: 3.18.12
+      sst-linux-x64: 3.18.12
+      sst-linux-x86: 3.18.12
+      sst-win32-arm64: 3.18.12
+      sst-win32-x64: 3.18.12
+      sst-win32-x86: 3.18.12
     transitivePeerDependencies:
       - supports-color
 
@@ -10558,7 +10571,7 @@ snapshots:
       '@vitest/snapshot': 1.6.1
       '@vitest/spy': 1.6.1
       '@vitest/utils': 1.6.1
-      acorn-walk: 8.3.4
+      acorn-walk: 8.3.5
       chai: 4.5.0
       debug: 4.4.3
       execa: 8.0.1
