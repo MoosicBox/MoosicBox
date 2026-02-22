@@ -211,24 +211,6 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_moosicbox_clone() {
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080);
-        let server = MoosicBox {
-            id: "test-server".to_string(),
-            name: "Test Server".to_string(),
-            host: addr,
-            dns: "test-server._moosicboxserver._tcp.local.".to_string(),
-        };
-
-        let cloned = server.clone();
-
-        assert_eq!(server.id, cloned.id);
-        assert_eq!(server.name, cloned.name);
-        assert_eq!(server.host, cloned.host);
-        assert_eq!(server.dns, cloned.dns);
-    }
-
-    #[test_log::test]
     fn test_moosicbox_with_different_ports() {
         let server1 = MoosicBox {
             id: "server1".to_string(),

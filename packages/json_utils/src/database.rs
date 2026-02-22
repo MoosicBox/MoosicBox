@@ -1611,6 +1611,15 @@ mod tests {
     }
 
     #[test_log::test]
+    #[cfg(feature = "uuid")]
+    fn test_to_value_type_option_uuid_opt_none() {
+        // Test UuidOpt(None) for reference type
+        let value = &DatabaseValue::UuidOpt(None);
+        let result: Result<Option<String>, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test_log::test]
     fn test_owned_string_from_datetime() {
         use chrono::NaiveDate;
 

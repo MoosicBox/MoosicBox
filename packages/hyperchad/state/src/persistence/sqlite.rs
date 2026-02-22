@@ -171,7 +171,7 @@ mod tests {
     use crate::StateStore;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     struct TestSettings {
         name: String,
         value: i32,
@@ -180,6 +180,12 @@ mod tests {
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct DifferentType {
         completely_different_field: Vec<bool>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct UnicodeSettings {
+        message: String,
+        emoji: String,
     }
 
     #[test_log::test(switchy_async::test)]
@@ -378,6 +384,68 @@ mod tests {
             matches!(result, Err(crate::Error::Serde(_))),
             "Expected Serde error, got: {result:?}"
         );
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_file_based_persistence() -> Result<(), crate::Error> {
+        // Test file-based SQLite persistence (as opposed to in-memory)
+        // This exercises the actual file I/O path and verifies data persists across operations
+        let test_dir = moosicbox_config::get_tests_dir_path();
+        std::fs::create_dir_all(&test_dir).expect("Failed to create test directory");
+        let db_path = test_dir.join("test_state.db");
+
+        // Clean up any previous test run
+        let _ = std::fs::remove_file(&db_path);
+
+        let settings = TestSettings {
+            name: "file_persistence".to_string(),
+            value: 999,
+        };
+
+        // Create persistence and store data
+        {
+            let persistence = SqlitePersistence::new(&db_path).await?;
+            persistence.set("file_key", &settings).await?;
+
+            // Verify we can read it back
+            let retrieved: Option<TestSettings> = persistence.get("file_key").await?;
+            assert_eq!(retrieved, Some(settings.clone()));
+        }
+
+        // Create a new persistence instance to verify data persisted to disk
+        {
+            let persistence = SqlitePersistence::new(&db_path).await?;
+            let retrieved: Option<TestSettings> = persistence.get("file_key").await?;
+            assert_eq!(retrieved, Some(settings));
+
+            // Clean up
+            persistence.clear().await?;
+        }
+
+        // Clean up the database file and directory
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_dir(&test_dir);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_unicode_keys_and_values() -> Result<(), crate::Error> {
+        // Test that Unicode characters are handled correctly in both keys and values
+        let persistence = SqlitePersistence::new_in_memory().await?;
+
+        // Test with various Unicode characters
+        let unicode_key = "日本語キー_🔑_κλειδί";
+        let unicode_value = UnicodeSettings {
+            message: "Привет мир! 你好世界! مرحبا بالعالم".to_string(),
+            emoji: "🎵🎶🎸🎹🎺🎻".to_string(),
+        };
+
+        persistence.set(unicode_key, &unicode_value).await?;
+        let retrieved: Option<UnicodeSettings> = persistence.get(unicode_key).await?;
+        assert_eq!(retrieved, Some(unicode_value));
 
         Ok(())
     }

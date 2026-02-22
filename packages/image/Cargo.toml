@@ -14,7 +14,7 @@ version     = "0.1.4"
 examples = true
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "tokio"]
 
 [[bin]]
 name              = "image_helper"
@@ -54,3 +54,8 @@ image        = ["dep:image", "dep:webp"]
 libvips      = ["dep:libvips"]
 
 profiling = ["dep:profiling"]
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true }

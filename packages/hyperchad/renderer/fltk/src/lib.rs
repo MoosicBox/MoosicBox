@@ -2267,4 +2267,388 @@ mod tests {
             assert!((updated.height - 300.0).abs() < f32::EPSILON);
         }
     }
+
+    mod get_container_text_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn test_empty_children_returns_empty_string() {
+            let container = Container {
+                children: vec![],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert!(text.is_empty());
+        }
+
+        #[test_log::test]
+        fn test_single_raw_element_returns_value() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Raw {
+                        value: "hello".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "hello");
+        }
+
+        #[test_log::test]
+        fn test_single_text_element_returns_value() {
+            let container = Container {
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "world".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "world");
+        }
+
+        #[test_log::test]
+        fn test_multiple_raw_elements_concatenates_values() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "hello".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: " ".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: "world".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "hello world");
+        }
+
+        #[test_log::test]
+        fn test_mixed_raw_and_text_elements_concatenates_values() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "raw".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "text".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "rawtext");
+        }
+
+        #[test_log::test]
+        fn test_non_text_elements_are_filtered_out() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: "visible".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Span,
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "visible");
+        }
+
+        #[test_log::test]
+        fn test_only_non_text_elements_returns_empty_string() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Span,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Header,
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert!(text.is_empty());
+        }
+
+        #[test_log::test]
+        fn test_preserves_order_of_text_elements() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Text {
+                            value: "1".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: "2".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "3".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "123");
+        }
+
+        #[test_log::test]
+        fn test_handles_empty_string_values() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: String::new(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "text".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "text");
+        }
+
+        #[test_log::test]
+        fn test_handles_unicode_content() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "こんにちは".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: " 🌍".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "こんにちは 🌍");
+        }
+
+        #[test_log::test]
+        fn test_filters_image_elements() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Image {
+                            source: Some("test.png".to_string()),
+                            alt: None,
+                            fit: None,
+                            source_set: None,
+                            sizes: None,
+                            loading: None,
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "caption".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "caption");
+        }
+
+        #[test_log::test]
+        fn test_filters_anchor_elements() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Anchor {
+                            href: Some("https://example.com".to_string()),
+                            target: None,
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: "link text".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "link text");
+        }
+
+        #[test_log::test]
+        fn test_filters_heading_elements() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Heading {
+                            size: HeaderSize::H1,
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "heading text".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "heading text");
+        }
+
+        #[test_log::test]
+        fn test_handles_whitespace_only_values() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "   ".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "\t\n".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "   \t\n");
+        }
+
+        #[test_log::test]
+        fn test_interleaved_text_and_non_text_elements() {
+            let container = Container {
+                children: vec![
+                    Container {
+                        element: Element::Raw {
+                            value: "a".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Div,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Text {
+                            value: "b".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Span,
+                        ..Default::default()
+                    },
+                    Container {
+                        element: Element::Raw {
+                            value: "c".to_string(),
+                        },
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let text = FltkRenderer::get_container_text(&container);
+
+            assert_eq!(text, "abc");
+        }
+    }
 }

@@ -1485,4 +1485,72 @@ mod tests {
         // Verify position was updated
         assert_eq!(stream.read_position, 500);
     }
+
+    // ==== HTTP Fetcher Error Handling Tests ====
+
+    /// Test HTTP fetcher that returns an error on fetch
+    #[derive(Clone)]
+    struct FailingHttpFetcher {
+        error_message: String,
+    }
+
+    impl FailingHttpFetcher {
+        fn new(error_message: &str) -> Self {
+            Self {
+                error_message: error_message.to_string(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HttpFetcher for FailingHttpFetcher {
+        async fn fetch_range(
+            &self,
+            _url: &str,
+            _start: u64,
+            _end: Option<u64>,
+        ) -> Result<
+            Box<
+                dyn futures::Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send
+                    + Unpin,
+            >,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            Err(self.error_message.clone().into())
+        }
+    }
+
+    /// Test that HTTP fetch error is handled gracefully
+    #[test_log::test(switchy_async::test)]
+    async fn test_http_fetch_error_handling() {
+        let abort_token = CancellationToken::new();
+        let fetcher = FailingHttpFetcher::new("Connection refused");
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            true, // Auto-start fetch (triggers fetch_range error)
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read should return 0 bytes since the fetcher failed and sent empty bytes
+        let mut buf = [0u8; 100];
+        let result = stream.read(&mut buf);
+
+        // The stream should handle the error gracefully
+        // When fetch fails, it sends empty bytes which indicates EOF
+        match result {
+            Ok(bytes_read) => {
+                assert_eq!(bytes_read, 0, "Should return 0 bytes on fetch error");
+            }
+            Err(e) => {
+                // UnexpectedEof is also acceptable since we expected 1000 bytes but got 0
+                assert_eq!(e.kind(), std::io::ErrorKind::UnexpectedEof);
+            }
+        }
+    }
 }

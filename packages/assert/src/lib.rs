@@ -951,10 +951,76 @@ mod tests {
         crate::die_or_unimplemented!("Not implemented yet");
     }
 
-    // Note: die_or_propagate! tests omitted due to macro expansion issues with std::process::exit
-    // The macro works correctly at runtime but has type-checking issues during test compilation
-    // when the ENABLE_ASSERT=1 branch is analyzed. Since we can't test the exit path anyway,
-    // and the macro is tested through actual usage, we skip these tests.
+    // Note: die_or_propagate! tests are limited due to macro expansion type constraints.
+    // The macro's die! branch returns () which must match the Ok value type, so only
+    // Result<(), E> can be tested without compiler errors.
+
+    // Test die_or_propagate! macro with ENABLE_ASSERT disabled (Ok path)
+    #[test_log::test]
+    #[allow(clippy::items_after_statements, unused_variables)]
+    fn test_die_or_propagate_returns_ok_value_when_disabled() {
+        unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
+
+        fn test_function() -> Result<(), TestError> {
+            #![allow(unused_variables)]
+            crate::die_or_propagate!(Ok::<(), TestError>(()), "Should not die");
+            Ok(())
+        }
+
+        let result = test_function();
+        assert_eq!(result, Ok(()));
+    }
+
+    // Test die_or_propagate! macro with ENABLE_ASSERT disabled (Err path with message)
+    #[test_log::test]
+    #[allow(clippy::items_after_statements, unused_variables)]
+    fn test_die_or_propagate_propagates_error_when_disabled() {
+        unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
+
+        fn test_function() -> Result<(), TestError> {
+            #![allow(unused_variables)]
+            crate::die_or_propagate!(
+                Err::<(), TestError>(TestError::Critical),
+                "Should propagate error"
+            );
+            Ok(()) // Should never reach here
+        }
+
+        let result = test_function();
+        assert_eq!(result, Err(TestError::Critical));
+    }
+
+    // Test die_or_propagate! macro without message (Ok path)
+    #[test_log::test]
+    #[allow(clippy::items_after_statements, unused_variables)]
+    fn test_die_or_propagate_without_message_returns_ok_value() {
+        unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
+
+        fn test_function() -> Result<(), TestError> {
+            #![allow(unused_variables)]
+            crate::die_or_propagate!(Ok::<(), TestError>(()),);
+            Ok(())
+        }
+
+        let result = test_function();
+        assert_eq!(result, Ok(()));
+    }
+
+    // Test die_or_propagate! macro without message (Err path)
+    #[test_log::test]
+    #[allow(clippy::items_after_statements, unused_variables)]
+    fn test_die_or_propagate_without_message_propagates_error() {
+        unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
+
+        fn test_function() -> Result<(), TestError> {
+            #![allow(unused_variables)]
+            crate::die_or_propagate!(Err::<(), TestError>(TestError::InvalidValue),);
+            Ok(())
+        }
+
+        let result = test_function();
+        assert_eq!(result, Err(TestError::InvalidValue));
+    }
 
     // Test with complex expressions and side effects
     #[test_log::test]

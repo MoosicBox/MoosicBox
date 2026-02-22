@@ -572,4 +572,98 @@ mod tests {
         // But callback should not be called because position change is below threshold
         assert!(callback_positions.lock().unwrap().is_empty());
     }
+
+    #[test_log::test]
+    fn test_progress_tracker_debug_shows_all_fields() {
+        let tracker = ProgressTracker::new(Some(0.25));
+        tracker.set_audio_spec(48000, 2);
+        tracker.update_consumed_samples(96000); // 1 second of audio at 48kHz stereo
+
+        let debug_str = format!("{tracker:?}");
+
+        // Debug output should include all tracked fields
+        assert!(debug_str.contains("ProgressTracker"));
+        assert!(debug_str.contains("consumed_samples"));
+        assert!(debug_str.contains("96000")); // consumed samples value
+        assert!(debug_str.contains("sample_rate"));
+        assert!(debug_str.contains("48000")); // sample rate value
+        assert!(debug_str.contains("channels"));
+        assert!(debug_str.contains("threshold"));
+        assert!(debug_str.contains("0.25")); // threshold value
+        assert!(debug_str.contains("last_reported_position"));
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_set_consumed_samples_updates_last_position() {
+        let tracker = ProgressTracker::new(Some(0.1));
+        tracker.set_audio_spec(44100, 2);
+
+        // Set consumed samples to 2 seconds worth
+        tracker.set_consumed_samples(176_400);
+
+        // Last reported position should be updated to avoid immediate callback
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        // Position should be 2.0 seconds
+        assert!((last_pos - 2.0).abs() < 0.001);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_set_consumed_samples_without_spec() {
+        let tracker = ProgressTracker::new(Some(0.1));
+        // Don't set audio spec - this tests the path where get_position returns None
+
+        // Set consumed samples - this should succeed but not update last_reported_position
+        tracker.set_consumed_samples(176_400);
+
+        // last_reported_position should remain 0 because get_position returns None
+        let last_pos = tracker.last_reported_position.load(Ordering::SeqCst);
+        assert!(last_pos.abs() < f64::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_multiple_updates_accumulate() {
+        let tracker = ProgressTracker::new(Some(0.5));
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+
+        tracker.set_callback(Some(Box::new(move |pos| {
+            callback_positions_clone.lock().unwrap().push(pos);
+        })));
+
+        // First update: 0.25 seconds (below threshold of 0.5)
+        tracker.update_consumed_samples(22050);
+        assert!(callback_positions.lock().unwrap().is_empty());
+
+        // Second update: another 0.25 seconds (total 0.5s)
+        // Note: threshold comparison is > not >=, so exactly 0.5 doesn't trigger
+        tracker.update_consumed_samples(22050);
+        assert!(callback_positions.lock().unwrap().is_empty());
+
+        // Third update: another 0.1 seconds (total 0.6s > 0.5, now crosses threshold)
+        tracker.update_consumed_samples(8820);
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+
+        // Last reported position is now ~0.6s
+        // Fourth update: another 0.5 seconds (total 1.1s, which is > 0.6 + 0.5 = 1.1s)
+        // Note: 0.5s worth = 44100 samples
+        // To exceed threshold, need > 0.5s from last reported, so need to go beyond 1.1s
+        tracker.update_consumed_samples(44100 + 8820); // 0.6 seconds, total 1.2s
+        assert_eq!(callback_positions.lock().unwrap().len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_progress_tracker_update_consumed_samples_without_callback() {
+        let tracker = ProgressTracker::new(Some(0.1));
+        tracker.set_audio_spec(44100, 2);
+
+        // Don't set a callback
+        // Update with enough samples to cross threshold
+        tracker.update_consumed_samples(88200); // 1 second
+
+        // Should complete without error
+        let position = tracker.get_position().unwrap();
+        assert!((position - 1.0).abs() < 0.001);
+    }
 }
