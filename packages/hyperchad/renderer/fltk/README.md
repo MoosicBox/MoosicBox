@@ -276,7 +276,7 @@ let button_view = container! {
 renderer.render(View::from(button_view)).await?;
 ```
 
-**Note**: Form inputs (text, password, checkbox) are not yet implemented. The `input` element exists but is not currently rendered by the FLTK renderer.
+**Note**: Form inputs (text, password, checkbox) are not yet implemented. The `input` element exists but is not currently rendered by the FLTK renderer. Additionally, `fx-click` and other action handlers shown in the examples above demonstrate the HyperChad template syntax but are not yet processed by the FLTK renderer.
 
 ### Image Gallery
 
@@ -573,6 +573,7 @@ This renderer is designed for:
 ### Not Yet Implemented
 
 - **Form Inputs**: Text inputs, checkboxes, radio buttons are not rendered
+- **Action Handlers**: `fx-click`, `fx-change`, and other action event handlers are not processed
 - **Multi-Window Support**: Currently limited to single window applications
 - **Native Menus**: Menu bars and context menus not implemented
 - **Dialog Boxes**: File choosers and message boxes not integrated

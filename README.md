@@ -198,7 +198,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_resampler](packages/resampler)** - Audio resampling utilities for format conversion
 - **[moosicbox_downloader](packages/downloader)** - Media downloading and caching system
 - **[moosicbox_opus](packages/opus)** - Opus codec integration
-- **[moosicbox_opus_native](packages/opus_native)** - Native Opus codec bindings
+- **[moosicbox_opus_native](packages/opus_native)** - Pure Rust Opus audio decoder implementation
 - **[moosicbox_opus_native_libopus](packages/opus_native/libopus)** - LibOpus native library
 - **[aconverter](packages/aconverter)** - Audio converter helper binary
 
