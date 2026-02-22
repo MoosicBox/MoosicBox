@@ -59,7 +59,7 @@
         "@hotwired/turbo": "^8.0.23",
         "@nanostores/persistent": "^0.9.1",
         "@nanostores/solid": "^0.4.2",
-        "@solid-primitives/scheduled": "^1.5.2",
+        "@solid-primitives/scheduled": "^1.5.3",
         "@solid-primitives/storage": "^2.1.4",
         "@solid-primitives/utils": "^6.3.2",
         "astro": "^5.17.3",
