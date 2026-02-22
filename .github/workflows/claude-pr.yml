@@ -230,8 +230,19 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
-            - name: Install inotify-tools
-              run: sudo apt-get install -y inotify-tools
+            - name: Setup file watcher
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  command: cargo build -p moosicbox_file_watcher --release --features cli
+                  shell: bash
+                  output-path: target/release/moosicbox-file-watcher
+                  artifact-name: moosicbox-file-watcher-ubuntu-latest-binary
+                  cache-key-prefix: file-watcher-claude
+                  make-executable: true
+                  verify-command: --version
+
+            - name: Add file watcher to PATH
+              run: echo "${{ github.workspace }}/target/release" >> $GITHUB_PATH
 
             - name: Start stream watcher
               run: |

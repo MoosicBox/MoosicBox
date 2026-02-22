@@ -30,6 +30,7 @@ members = [
     "packages/date_utils",
     "packages/downloader",
     "packages/env_utils",
+    "packages/file_watcher",
     "packages/files",
     "packages/gpipe",
     "packages/gpipe/ast",
@@ -239,6 +240,7 @@ moosicbox_config                   = { version = "0.1.1", default-features = fal
 moosicbox_date_utils               = { version = "0.1.1", default-features = false, path = "packages/date_utils" }
 moosicbox_downloader               = { version = "0.1.1", default-features = false, path = "packages/downloader" }
 moosicbox_env_utils                = { version = "0.1.1", default-features = false, path = "packages/env_utils" }
+moosicbox_file_watcher             = { version = "0.1.0", default-features = false, path = "packages/file_watcher" }
 moosicbox_files                    = { version = "0.1.1", default-features = false, path = "packages/files" }
 moosicbox_image                    = { version = "0.1.1", default-features = false, path = "packages/image" }
 moosicbox_json_utils               = { version = "0.1.1", default-features = false, path = "packages/json_utils" }
@@ -463,6 +465,7 @@ mysql = { version = "26.0.1", features = [
 nanoid = "0.4.0"
 native-tls = "0.2.14"
 net2 = "0.2.39"
+notify = "8.2.0"
 ogg = "0.9.2"
 oneshot = "0.1.11"
 open = "5.3.3"

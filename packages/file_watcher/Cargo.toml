@@ -1,0 +1,41 @@
+[package]
+authors     = { workspace = true }
+categories  = ["command-line-utilities", "filesystem"]
+description = "Cross-platform file watcher for monitoring filesystem changes"
+edition     = { workspace = true }
+keywords    = ["filesystem", "monitor", "notify", "watch"]
+license     = { workspace = true }
+name        = "moosicbox_file_watcher"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name              = "moosicbox-file-watcher"
+path              = "src/main.rs"
+required-features = ["cli"]
+
+[dependencies]
+clap = { workspace = true, features = ["derive"], optional = true }
+log = { workspace = true }
+moosicbox_logging = { workspace = true, features = [
+    "free_log",
+], optional = true }
+notify = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "signal",
+], optional = true }
+
+### FEATURES #################################################################
+
+[features]
+default = []
+
+# Enable CLI binary with argument parsing
+cli = ["dep:clap", "dep:moosicbox_logging", "dep:tokio"]
+
+fail-on-warnings = []
