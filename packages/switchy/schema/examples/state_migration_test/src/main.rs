@@ -24,6 +24,7 @@ struct AddUsersBioColumn;
 
 #[async_trait]
 impl Migration<'static> for AddUsersBioColumn {
+    /// Returns the unique identifier for this migration.
     fn id(&self) -> &'static str {
         "002_add_users_bio"
     }
@@ -60,6 +61,7 @@ impl Migration<'static> for AddUsersBioColumn {
         Ok(())
     }
 
+    /// Returns a human-readable description of what this migration does.
     fn description(&self) -> Option<&str> {
         Some("Add bio column to users table")
     }
@@ -70,6 +72,7 @@ struct AddEmailIndex;
 
 #[async_trait]
 impl Migration<'static> for AddEmailIndex {
+    /// Returns the unique identifier for this migration.
     fn id(&self) -> &'static str {
         "003_add_email_index"
     }
@@ -103,6 +106,7 @@ impl Migration<'static> for AddEmailIndex {
         Ok(())
     }
 
+    /// Returns a human-readable description of what this migration does.
     fn description(&self) -> Option<&str> {
         Some("Add index on users.email")
     }
@@ -175,6 +179,15 @@ async fn setup_initial_data(db: &dyn Database) -> std::result::Result<(), Databa
     Ok(())
 }
 
+/// Entry point for the state migration test example.
+///
+/// Demonstrates how to use `verify_migrations_with_state` to test migrations
+/// against a database that already contains data.
+///
+/// # Errors
+///
+/// * Returns an error if database creation fails
+/// * Returns an error if any migration fails to apply or roll back
 #[switchy_async::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("State Migration Test Example");
@@ -244,6 +257,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for state migration functionality.
+
     use super::*;
     use switchy_database::query::FilterableQuery;
     use switchy_schema_test_utils::TestError;
