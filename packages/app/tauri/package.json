@@ -33,7 +33,7 @@
         "@nanostores/solid": "^0.4.2",
         "@solid-primitives/scheduled": "^1.5.3",
         "@solid-primitives/storage": "^2.1.4",
-        "@solid-primitives/utils": "^6.3.2",
+        "@solid-primitives/utils": "^6.4.0",
         "@tauri-apps/api": "^2.10.1",
         "@tauri-apps/plugin-dialog": "^2.6.0",
         "astro": "^5.17.3",
