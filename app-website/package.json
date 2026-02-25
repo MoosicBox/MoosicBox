@@ -55,7 +55,7 @@
         "@astrojs/check": "^0.9.6",
         "@astrojs/node": "^9.5.4",
         "@astrojs/solid-js": "^5.1.3",
-        "@aws-sdk/client-ssm": "^3.996.0",
+        "@aws-sdk/client-ssm": "^3.997.0",
         "@hotwired/turbo": "^8.0.23",
         "@nanostores/persistent": "^0.9.1",
         "@nanostores/solid": "^0.4.2",
