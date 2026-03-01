@@ -16,6 +16,10 @@ static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
 /// State for buffering code block content during syntax highlighting.
+///
+/// This struct holds the intermediate state while parsing a fenced code block,
+/// accumulating the code content and storing the optional language identifier
+/// for later syntax highlighting.
 pub struct CodeBlockState {
     /// The language of the code block (if specified).
     pub language: Option<String>,
