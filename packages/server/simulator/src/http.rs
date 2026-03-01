@@ -324,5 +324,52 @@ mod tests {
             let result = parse_http_response(raw).unwrap();
             assert_eq!(result.headers.get("Key"), Some(&"Value".to_string()));
         }
+
+        #[test_log::test]
+        fn returns_full_body_when_content_length_is_not_numeric() {
+            // When Content-Length cannot be parsed as a number, the body should be returned as-is
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\nHello World";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Hello World");
+        }
+
+        #[test_log::test]
+        fn skips_headers_without_colons() {
+            // Headers without colons are malformed and should be silently ignored
+            let raw = "HTTP/1.1 200 OK\r\nMalformedHeader\r\nValid-Header: value\r\n\r\nBody";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.headers.len(), 1);
+            assert_eq!(
+                result.headers.get("Valid-Header"),
+                Some(&"value".to_string())
+            );
+            assert!(!result.headers.contains_key("MalformedHeader"));
+        }
+
+        #[test_log::test]
+        fn truncates_body_exactly_at_content_length_boundary() {
+            // When body length exactly equals Content-Length, should return exact body
+            let raw = "HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nHello World";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.body, "Hello World");
+        }
+
+        #[test_log::test]
+        fn handles_empty_headers_section() {
+            // Response with just status line and empty headers before body
+            let raw = "HTTP/1.1 200 OK\r\n\r\nJust body";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.status_code, 200);
+            assert!(result.headers.is_empty());
+            assert_eq!(result.body, "Just body");
+        }
+
+        #[test_log::test]
+        fn handles_status_line_with_extra_reason_phrase_words() {
+            // Status reason phrase can have multiple words
+            let raw = "HTTP/1.1 503 Service Temporarily Unavailable\r\n\r\n";
+            let result = parse_http_response(raw).unwrap();
+            assert_eq!(result.status_code, 503);
+        }
     }
 }

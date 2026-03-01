@@ -1999,4 +1999,313 @@ mod tests {
             "Results should be deduplicated"
         );
     }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_document_type_artists() {
+        before_each();
+
+        // Create artist, album, and track all with "TestName" in the title
+        // to verify document_type filtering works correctly
+        let artist: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("artists".into())),
+            ("artist_title", DataValue::String("TestName Band".into())),
+            ("artist_id", DataValue::String("300".into())),
+            ("album_title", DataValue::String(String::new())),
+            ("track_title", DataValue::String(String::new())),
+        ];
+        let album: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("albums".into())),
+            ("artist_title", DataValue::String("Different Artist".into())),
+            ("artist_id", DataValue::String("301".into())),
+            ("album_title", DataValue::String("TestName Album".into())),
+            ("album_id", DataValue::String("400".into())),
+            ("track_title", DataValue::String(String::new())),
+        ];
+        let track: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Another Artist".into())),
+            ("artist_id", DataValue::String("302".into())),
+            ("album_title", DataValue::String("Some Album".into())),
+            ("album_id", DataValue::String("401".into())),
+            ("track_title", DataValue::String("TestName Song".into())),
+            ("track_id", DataValue::String("500".into())),
+        ];
+
+        crate::populate_global_search_index_sync(&[artist, album, track], true).unwrap();
+
+        // Search for "TestName" - should find all three documents
+        let results = crate::search_global_search_index("testname", 0, 10).unwrap();
+
+        // All three documents should be found
+        assert_eq!(results.len(), 3);
+
+        // Verify document types are present in results
+        let doc_types: Vec<_> = results
+            .iter()
+            .filter_map(|doc| {
+                doc.0
+                    .get("document_type")
+                    .and_then(|v| v.first())
+                    .and_then(|v| match v {
+                        OwnedValue::Str(s) => Some(s.clone()),
+                        _ => None,
+                    })
+            })
+            .collect();
+
+        assert!(doc_types.contains(&"artists".to_string()));
+        assert!(doc_types.contains(&"albums".to_string()));
+        assert!(doc_types.contains(&"tracks".to_string()));
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_artist_entry_without_album_or_track() {
+        before_each();
+
+        // Create an artist entry (with empty album and track titles)
+        // This tests the artist-specific query path that matches on empty track_title_string
+        // and empty album_title_string
+        let artist_only: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("artists".into())),
+            ("artist_title", DataValue::String("Solo Artist Name".into())),
+            ("artist_id", DataValue::String("600".into())),
+            ("album_title", DataValue::String(String::new())),
+            ("track_title", DataValue::String(String::new())),
+        ];
+
+        crate::populate_global_search_index_sync(&[artist_only], true).unwrap();
+
+        // Search for the artist
+        let results = crate::search_global_search_index("solo artist", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify it's an artist entry
+        let has_artist = results.iter().any(|doc| {
+            doc.0
+                .get("document_type")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, OwnedValue::Str(s) if s == "artists"))
+        });
+        assert!(has_artist);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_album_entry_without_track() {
+        before_each();
+
+        // Create an album entry (with empty track title)
+        // This tests the album-specific query path that matches on empty track_title_string
+        let album_only: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("albums".into())),
+            ("artist_title", DataValue::String("Album Artist".into())),
+            ("artist_id", DataValue::String("700".into())),
+            ("album_title", DataValue::String("Standalone Album".into())),
+            ("album_id", DataValue::String("701".into())),
+            ("track_title", DataValue::String(String::new())),
+        ];
+
+        crate::populate_global_search_index_sync(&[album_only], true).unwrap();
+
+        // Search for the album
+        let results = crate::search_global_search_index("standalone album", 0, 10).unwrap();
+
+        assert!(!results.is_empty());
+
+        // Verify it's an album entry
+        let has_album = results.iter().any(|doc| {
+            doc.0
+                .get("document_type")
+                .and_then(|v| v.first())
+                .is_some_and(|v| matches!(v, OwnedValue::Str(s) if s == "albums"))
+        });
+        assert!(has_album);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_populate_global_search_index_async() {
+        before_each();
+
+        let test_data: Vec<Vec<(&str, DataValue)>> = vec![vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Async Artist".into())),
+            ("artist_id", DataValue::String("800".into())),
+            ("album_title", DataValue::String("Async Album".into())),
+            ("album_id", DataValue::String("801".into())),
+            ("track_title", DataValue::String("Async Track".into())),
+            ("track_id", DataValue::String("802".into())),
+        ]];
+
+        // Test the async version of populate
+        crate::populate_global_search_index(&test_data, true)
+            .await
+            .unwrap();
+
+        // Verify the data was indexed
+        let results = crate::search_global_search_index("async track", 0, 10).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_explicit_pagination_raw() {
+        before_each();
+
+        // Create test data for pagination testing
+        let track_data: Vec<Vec<(&str, DataValue)>> = vec![
+            vec![
+                ("document_type", DataValue::String("tracks".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Pagination Artist".into()),
+                ),
+                ("artist_id", DataValue::String("2000".into())),
+                ("album_title", DataValue::String("Pagination Album".into())),
+                ("album_id", DataValue::String("2001".into())),
+                (
+                    "track_title",
+                    DataValue::String("PaginationTrack One".into()),
+                ),
+                ("track_id", DataValue::String("2002".into())),
+            ],
+            vec![
+                ("document_type", DataValue::String("tracks".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Pagination Artist".into()),
+                ),
+                ("artist_id", DataValue::String("2000".into())),
+                ("album_title", DataValue::String("Pagination Album".into())),
+                ("album_id", DataValue::String("2001".into())),
+                (
+                    "track_title",
+                    DataValue::String("PaginationTrack Two".into()),
+                ),
+                ("track_id", DataValue::String("2003".into())),
+            ],
+            vec![
+                ("document_type", DataValue::String("tracks".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Pagination Artist".into()),
+                ),
+                ("artist_id", DataValue::String("2000".into())),
+                ("album_title", DataValue::String("Pagination Album".into())),
+                ("album_id", DataValue::String("2001".into())),
+                (
+                    "track_title",
+                    DataValue::String("PaginationTrack Three".into()),
+                ),
+                ("track_id", DataValue::String("2004".into())),
+            ],
+            vec![
+                ("document_type", DataValue::String("tracks".into())),
+                (
+                    "artist_title",
+                    DataValue::String("Pagination Artist".into()),
+                ),
+                ("artist_id", DataValue::String("2000".into())),
+                ("album_title", DataValue::String("Pagination Album".into())),
+                ("album_id", DataValue::String("2001".into())),
+                (
+                    "track_title",
+                    DataValue::String("PaginationTrack Four".into()),
+                ),
+                ("track_id", DataValue::String("2005".into())),
+            ],
+        ];
+
+        crate::populate_global_search_index_sync(&track_data, true).unwrap();
+
+        // Test with explicit offset and limit using search_global_search_index
+        let results = crate::search_global_search_index("paginationtrack", 0, 3).unwrap();
+
+        // Should return results with explicit pagination (at most 3)
+        assert!(!results.is_empty());
+        assert!(results.len() <= 3);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_with_limit_greater_than_results() {
+        before_each();
+
+        // Create single track
+        let track1: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Dup Artist".into())),
+            ("artist_id", DataValue::String("1000".into())),
+            ("album_title", DataValue::String("Dup Album".into())),
+            ("album_id", DataValue::String("1001".into())),
+            ("track_title", DataValue::String("UniqueTrackName".into())),
+            ("track_id", DataValue::String("1002".into())),
+        ];
+
+        crate::populate_global_search_index_sync(&[track1], true).unwrap();
+
+        // Search with limit larger than actual results
+        let results = crate::search_global_search_index("uniquetrackname", 0, 10).unwrap();
+
+        // Should find the track
+        assert!(!results.is_empty());
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_multi_word_query() {
+        before_each();
+
+        let track: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            (
+                "artist_title",
+                DataValue::String("The Rolling Stones".into()),
+            ),
+            ("artist_id", DataValue::String("1100".into())),
+            ("album_title", DataValue::String("Some Girls".into())),
+            ("album_id", DataValue::String("1101".into())),
+            (
+                "track_title",
+                DataValue::String("Miss You (Extended Mix)".into()),
+            ),
+            ("track_id", DataValue::String("1102".into())),
+        ];
+
+        crate::populate_global_search_index_sync(&[track], true).unwrap();
+
+        // Search with multiple words
+        let results = crate::search_global_search_index("rolling stones miss you", 0, 10).unwrap();
+
+        // Should find the track
+        assert!(!results.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test(real_fs))]
+    #[serial]
+    async fn test_search_partial_word_match() {
+        before_each();
+
+        let track: Vec<(&str, DataValue)> = vec![
+            ("document_type", DataValue::String("tracks".into())),
+            ("artist_title", DataValue::String("Metallica".into())),
+            ("artist_id", DataValue::String("1200".into())),
+            ("album_title", DataValue::String("Master of Puppets".into())),
+            ("album_id", DataValue::String("1201".into())),
+            ("track_title", DataValue::String("Battery".into())),
+            ("track_id", DataValue::String("1202".into())),
+        ];
+
+        crate::populate_global_search_index_sync(&[track], true).unwrap();
+
+        // Search with partial word "metal" for "Metallica"
+        let results = crate::search_global_search_index("metal", 0, 10).unwrap();
+
+        // Should find the track due to prefix matching
+        assert!(!results.is_empty());
+    }
 }

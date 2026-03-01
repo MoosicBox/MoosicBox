@@ -2042,4 +2042,182 @@ mod tests {
 
         assert_eq!(deserialized, original);
     }
+
+    // ============================================
+    // Additional untested helper function tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_get_visibility_selector() {
+        let calc = get_visibility_selector("my-selector");
+
+        match calc {
+            CalcValue::Visibility { target } => {
+                assert_eq!(target, ElementTarget::Selector(Target::from("my-selector")));
+            }
+            _ => panic!("Expected Visibility CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_display_child_class() {
+        let calc = get_display_child_class("child-class-name");
+
+        match calc {
+            CalcValue::Display { target } => {
+                assert_eq!(
+                    target,
+                    ElementTarget::ChildClass(Target::from("child-class-name"))
+                );
+            }
+            _ => panic!("Expected Display CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_height_px_by_id() {
+        let calc = get_height_px_by_id("height-element");
+
+        match calc {
+            CalcValue::HeightPx { target } => {
+                assert_eq!(target, ElementTarget::ById(Target::from("height-element")));
+            }
+            _ => panic!("Expected HeightPx CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_position_x_self() {
+        let calc = get_position_x_self();
+
+        match calc {
+            CalcValue::PositionX { target } => {
+                assert_eq!(target, ElementTarget::SelfTarget);
+            }
+            _ => panic!("Expected PositionX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_mouse_x_self() {
+        let calc = get_mouse_x_self();
+
+        match calc {
+            CalcValue::MouseX { target } => {
+                assert_eq!(target, Some(ElementTarget::SelfTarget));
+            }
+            _ => panic!("Expected MouseX CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_mouse_y_by_id() {
+        let calc = get_mouse_y_by_id("mouse-element");
+
+        match calc {
+            CalcValue::MouseY { target } => {
+                assert_eq!(
+                    target,
+                    Some(ElementTarget::ById(Target::from("mouse-element")))
+                );
+            }
+            _ => panic!("Expected MouseY CalcValue"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_value_helper() {
+        // Test the value() helper function
+        let v = value(42.5f32);
+        assert_eq!(v, Value::Real(42.5));
+
+        let v2 = value(Visibility::Hidden);
+        assert_eq!(v2, Value::Visibility(Visibility::Hidden));
+    }
+
+    #[test_log::test]
+    fn test_value_key() {
+        let v = Value::Key(Key::Escape);
+        assert_eq!(v, Value::Key(Key::Escape));
+
+        // Test conversion
+        let v2: Value = Key::Enter.into();
+        assert_eq!(v2, Value::Key(Key::Enter));
+    }
+
+    #[test_log::test]
+    fn test_value_layout_direction() {
+        let v = Value::LayoutDirection(LayoutDirection::Row);
+        assert_eq!(v, Value::LayoutDirection(LayoutDirection::Row));
+
+        let v2 = Value::LayoutDirection(LayoutDirection::Column);
+        assert_eq!(v2, Value::LayoutDirection(LayoutDirection::Column));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_nested_operations() {
+        // Test nested arithmetic: (10 + 5) * 2 / 3
+        let add = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
+        let mult = add.multiply(2.0);
+        let div = mult.divide(3.0);
+
+        let result = div.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(10.0));
+    }
+
+    #[test_log::test]
+    fn test_arithmetic_min_max_combined() {
+        // Test: max(min(100, 50), 30) = max(50, 30) = 50
+        let min_arith = Arithmetic::Min(Value::Real(100.0), Value::Real(50.0));
+        let max_arith = min_arith.max(30.0);
+
+        let result = max_arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
+        assert_eq!(result, Some(50.0));
+    }
+
+    #[test_log::test]
+    fn test_condition_eq_with_different_types() {
+        // Test Eq condition with visibility values
+        let cond = Condition::Eq(
+            Value::Visibility(Visibility::Hidden),
+            Value::Visibility(Visibility::Hidden),
+        );
+
+        match cond {
+            Condition::Eq(a, b) => {
+                assert_eq!(a, b);
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_if_with_multiple_actions_and_else_actions() {
+        let condition = Condition::Bool(true);
+        let if_action = condition
+            .then(ActionType::hide_by_id("el1"))
+            .then(ActionType::show_by_id("el2"))
+            .then(ActionType::display_by_id("el3"))
+            .or_else(ActionType::no_display_by_id("el4"))
+            .or_else(ActionType::hide_class("class1"));
+
+        assert_eq!(if_action.actions.len(), 3);
+        assert_eq!(if_action.else_actions.len(), 2);
+    }
+
+    #[test_log::test]
+    fn test_calc_value_eq_creates_condition() {
+        let calc = CalcValue::WidthPx {
+            target: ElementTarget::SelfTarget,
+        };
+        let condition = calc.eq(100.0);
+
+        match condition {
+            Condition::Eq(left, right) => {
+                assert!(matches!(left, Value::Calc(_)));
+                assert_eq!(right, Value::Real(100.0));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
 }

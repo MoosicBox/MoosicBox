@@ -1171,5 +1171,240 @@ mod tests {
             assert_eq!(action_name, "test");
             assert!(value.is_none());
         }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_file_not_found_returns_404() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            // No files created - directory exists but is empty
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            app.asset_not_found_behavior = AssetNotFoundBehavior::NotFound;
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None, // Use global default
+            });
+
+            let req = create_route_request("/assets/nonexistent.txt");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 404);
+            assert!(response.body().is_empty());
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_file_not_found_returns_500() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            // No files created - directory exists but is empty
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            app.asset_not_found_behavior = AssetNotFoundBehavior::InternalServerError;
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None, // Use global default
+            });
+
+            let req = create_route_request("/assets/nonexistent.txt");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 500);
+            assert!(response.body().is_empty());
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_fallthrough_continues_to_routes() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use hyperchad_router::{Container, Element};
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            // No files created - directory exists but is empty
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            // Create a route that matches when asset fallthrough occurs
+            let router = Router::new().with_route("/assets/page", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router);
+            app.asset_not_found_behavior = AssetNotFoundBehavior::Fallthrough;
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None, // Use global default
+            });
+
+            // Request a path that doesn't exist as a file but has a matching route
+            let req = create_route_request("/assets/page");
+            let response = app.process(&req).await.unwrap();
+
+            // Should fallthrough to router and return HTML
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_per_route_behavior_overrides_global() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            // Global behavior is NotFound (404)
+            app.asset_not_found_behavior = AssetNotFoundBehavior::NotFound;
+            // But this specific route overrides to InternalServerError (500)
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: Some(AssetNotFoundBehavior::InternalServerError),
+            });
+
+            let req = create_route_request("/assets/nonexistent.txt");
+            let response = app.process(&req).await.unwrap();
+
+            // Should use per-route override (500) not global (404)
+            assert_eq!(response.status(), 500);
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_process_directory_asset_serves_existing_file() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use std::fs::File;
+            use std::io::Write;
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            let file_path = temp_dir.path().join("test.txt");
+            let mut file = File::create(&file_path).unwrap();
+            file.write_all(b"test content").unwrap();
+            drop(file);
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/assets/test.txt");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/plain"
+            );
+            assert_eq!(response.body(), b"test content");
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_process_static_file_route_serves_file() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use std::fs::File;
+            use std::io::Write;
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            let file_path = temp_dir.path().join("config.json");
+            let mut file = File::create(&file_path).unwrap();
+            file.write_all(br#"{"key": "value"}"#).unwrap();
+            drop(file);
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new();
+            let mut app = HttpApp::new(renderer, router);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/config.json".to_string(),
+                target: AssetPathTarget::File(file_path),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/config.json");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "application/json"
+            );
+            assert_eq!(response.body(), br#"{"key": "value"}"#);
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_process_directory_root_match_falls_through_to_router() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use hyperchad_router::{Container, Element};
+            use std::fs::{self, File};
+            use switchy_fs::tempdir;
+
+            let temp_dir = tempdir().unwrap();
+            // Create a file to ensure the directory has content
+            File::create(temp_dir.path().join("file.txt")).unwrap();
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/assets", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/assets".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            // Request exactly "/assets/" (directory root) - should fall through to router
+            // because empty path_match is skipped for directories
+            let req = create_route_request("/assets");
+            let response = app.process(&req).await.unwrap();
+
+            // Should be handled by the router, not the asset route
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+
+            // Cleanup
+            fs::remove_file(temp_dir.path().join("file.txt")).ok();
+        }
     }
 }

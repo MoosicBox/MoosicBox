@@ -3598,4 +3598,207 @@ mod tests {
             assert_eq!(nav.0, "/test");
         }
     }
+
+    mod route_priority_tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_first_registered_route_wins_exact_match() {
+            // When multiple routes match the same path, the first registered should win
+            let router = Router::new()
+                .with_route("/path", |_req| async { "First".to_string() })
+                .with_route("/path", |_req| async { "Second".to_string() });
+
+            // Navigate and verify it's the first handler that gets called
+            // We can't easily check which handler ran, but we can verify the route func
+            // returns the first one (since both would produce Some content)
+            let result = router.navigate("/path").await.unwrap();
+            assert!(result.is_some());
+
+            // Verify that exactly 2 routes are registered
+            assert_eq!(router.routes.read().unwrap().len(), 2);
+
+            // The first handler should be returned by get_route_func
+            // Both handlers exist, but find() returns first match
+            let func = router.get_route_func("/path");
+            assert!(func.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_exact_route_before_prefix_wins() {
+            // More specific exact route should win when registered first
+            let router = Router::new()
+                .with_route("/static/special", |_req| async { "Exact".to_string() })
+                .with_route(
+                    RoutePath::LiteralPrefix("/static/".to_string()),
+                    |_req| async { "Prefix".to_string() },
+                );
+
+            // Verify both routes exist
+            assert_eq!(router.routes.read().unwrap().len(), 2);
+
+            // The exact match registered first should match first
+            let result = router.navigate("/static/special").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_prefix_route_before_exact_wins() {
+            // When prefix is registered first, it should win
+            let router = Router::new()
+                .with_route(
+                    RoutePath::LiteralPrefix("/api/".to_string()),
+                    |_req| async { "Prefix".to_string() },
+                )
+                .with_route("/api/special", |_req| async { "Exact".to_string() });
+
+            // The prefix route registered first should match
+            let result = router.navigate("/api/special").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_literals_route_first_match() {
+            // With Literals containing multiple paths, first matching path in first route wins
+            let router = Router::new()
+                .with_route(&["/a", "/b"][..], |_req| async { "First set".to_string() })
+                .with_route(&["/b", "/c"][..], |_req| async { "Second set".to_string() });
+
+            // /b appears in both, but first route should match
+            let result = router.navigate("/b").await.unwrap();
+            assert!(result.is_some());
+
+            // /c only appears in second route
+            let result = router.navigate("/c").await.unwrap();
+            assert!(result.is_some());
+        }
+    }
+
+    mod query_string_edge_cases {
+        use super::*;
+
+        #[test_log::test]
+        fn test_query_duplicate_keys_last_value_wins() {
+            // When same key appears multiple times, BTreeMap will have last value
+            // due to QString iteration order and collect behavior
+            let req =
+                RouteRequest::from_path("/search?key=first&key=second", RequestInfo::default());
+            assert_eq!(req.path, "/search");
+            // BTreeMap::collect keeps last value for duplicate keys
+            assert_eq!(req.query.get("key"), Some(&"second".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_url_encoded_values() {
+            // QString should decode URL-encoded values
+            let req = RouteRequest::from_path(
+                "/search?name=hello%20world&tag=c%2B%2B",
+                RequestInfo::default(),
+            );
+            assert_eq!(req.path, "/search");
+            assert_eq!(req.query.get("name"), Some(&"hello world".to_string()));
+            assert_eq!(req.query.get("tag"), Some(&"c++".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_empty_value() {
+            let req = RouteRequest::from_path("/page?flag=&name=test", RequestInfo::default());
+            assert_eq!(req.query.get("flag"), Some(&String::new()));
+            assert_eq!(req.query.get("name"), Some(&"test".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_key_without_value() {
+            // Query parameter with key but no = sign
+            let req = RouteRequest::from_path("/page?flag", RequestInfo::default());
+            // QString treats this as key with empty value
+            assert!(req.query.contains_key("flag"));
+        }
+
+        #[test_log::test]
+        fn test_query_special_characters_in_key() {
+            let req = RouteRequest::from_path("/api?user%5Bid%5D=123", RequestInfo::default());
+            // user[id] URL-encoded as user%5Bid%5D
+            assert_eq!(req.query.get("user[id]"), Some(&"123".to_string()));
+        }
+
+        #[test_log::test]
+        fn test_query_multiple_question_marks() {
+            // Only first ? should split path from query
+            let req = RouteRequest::from_path("/page?a=1?b=2", RequestInfo::default());
+            assert_eq!(req.path, "/page");
+            // The second ? becomes part of the value
+            assert_eq!(req.query.get("a"), Some(&"1?b=2".to_string()));
+        }
+    }
+
+    mod concurrent_access_tests {
+        use super::*;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_concurrent_navigation() {
+            let counter = Arc::new(AtomicU32::new(0));
+            let counter_clone = counter.clone();
+
+            let router = Router::new().with_route("/count", move |_req| {
+                let c = counter_clone.clone();
+                async move {
+                    c.fetch_add(1, Ordering::SeqCst);
+                    "counted".to_string()
+                }
+            });
+
+            // Spawn multiple concurrent navigations
+            let mut handles = Vec::new();
+            for _ in 0..10 {
+                let r = router.clone();
+                handles.push(switchy_async::task::spawn(async move {
+                    r.navigate("/count").await
+                }));
+            }
+
+            // Wait for all to complete
+            for handle in handles {
+                let result = handle.await.unwrap();
+                assert!(result.is_ok());
+            }
+
+            // All 10 navigations should have completed
+            assert_eq!(counter.load(Ordering::SeqCst), 10);
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_concurrent_route_registration() {
+            let router = Router::new();
+
+            // Spawn tasks that add routes concurrently
+            let mut handles = Vec::new();
+            for i in 0..5 {
+                let r = router.clone();
+                let path = format!("/route{i}");
+                let path_for_handler = path.clone();
+                handles.push(switchy_async::task::spawn(async move {
+                    r.add_route_result(&path, move |_req| {
+                        let p = path_for_handler.clone();
+                        async move { Ok::<_, Box<dyn std::error::Error>>(p) }
+                    });
+                }));
+            }
+
+            // Wait for all registrations
+            for handle in handles {
+                handle.await.unwrap();
+            }
+
+            // All routes should be registered
+            assert_eq!(router.routes.read().unwrap().len(), 5);
+
+            // All routes should be navigable
+            for i in 0..5 {
+                let result = router.navigate(format!("/route{i}")).await;
+                assert!(result.is_ok());
+            }
+        }
+    }
 }

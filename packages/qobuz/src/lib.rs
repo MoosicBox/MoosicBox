@@ -3090,4 +3090,88 @@ mod tests {
             QobuzAlbumReleaseType::Album
         );
     }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_valid_string() {
+        use moosicbox_json_utils::ToValueType;
+
+        let value = serde_json::json!("album");
+        let result: Result<QobuzAlbumReleaseType, _> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), QobuzAlbumReleaseType::Album);
+
+        let value = serde_json::json!("live");
+        let result: Result<QobuzAlbumReleaseType, _> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), QobuzAlbumReleaseType::Live);
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_invalid_string() {
+        use moosicbox_json_utils::ToValueType;
+
+        let value = serde_json::json!("not_a_release_type");
+        let result: Result<QobuzAlbumReleaseType, _> = (&value).to_value_type();
+        assert!(result.is_err());
+        // Check that ConvertType error is returned
+        if let Err(moosicbox_json_utils::ParseError::ConvertType(msg)) = result {
+            assert!(msg.contains("QobuzAlbumReleaseType"));
+        } else {
+            panic!("Expected ConvertType error");
+        }
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_non_string() {
+        use moosicbox_json_utils::ToValueType;
+
+        // Passing a number instead of a string should produce MissingValue error
+        let value = serde_json::json!(123);
+        let result: Result<QobuzAlbumReleaseType, _> = (&value).to_value_type();
+        assert!(result.is_err());
+        if let Err(moosicbox_json_utils::ParseError::MissingValue(msg)) = result {
+            assert!(msg.contains("QobuzAlbumReleaseType"));
+        } else {
+            panic!("Expected MissingValue error");
+        }
+    }
+
+    #[test_log::test]
+    fn test_qobuz_album_release_type_to_value_type_null() {
+        use moosicbox_json_utils::ToValueType;
+
+        // Passing null should produce MissingValue error
+        let value = serde_json::json!(null);
+        let result: Result<QobuzAlbumReleaseType, _> = (&value).to_value_type();
+        assert!(result.is_err());
+        if let Err(moosicbox_json_utils::ParseError::MissingValue(msg)) = result {
+            assert!(msg.contains("QobuzAlbumReleaseType"));
+        } else {
+            panic!("Expected MissingValue error");
+        }
+    }
+
+    #[test_log::test]
+    fn test_error_to_music_api_error_conversion() {
+        // Test that Error converts to moosicbox_music_api::Error::Other
+        let error = Error::NoAccessTokenAvailable;
+        let music_api_error: moosicbox_music_api::Error = error.into();
+        // The conversion wraps it in Error::Other
+        assert!(matches!(
+            music_api_error,
+            moosicbox_music_api::Error::Other(_)
+        ));
+    }
+
+    #[test_log::test]
+    fn test_error_to_music_api_error_parse_error() {
+        use moosicbox_json_utils::ParseError;
+
+        // Test that Parse error also converts properly
+        let parse_error = ParseError::MissingValue("test".to_string());
+        let error = Error::from(parse_error);
+        let music_api_error: moosicbox_music_api::Error = error.into();
+        assert!(matches!(
+            music_api_error,
+            moosicbox_music_api::Error::Other(_)
+        ));
+    }
 }

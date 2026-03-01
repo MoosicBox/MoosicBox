@@ -1241,6 +1241,75 @@ mod tests {
         assert_eq!(audio_format_to_content_type(&AudioFormat::Source), None);
     }
 
+    #[cfg(feature = "format-flac")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_local_flac() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Flac,
+            path: "/music/track.flac".to_string(),
+            track_id: Some("123".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/flac".to_string())
+        );
+    }
+
+    #[cfg(feature = "format-mp3")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_mp3() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Mp3,
+            url: "https://example.com/track.mp3".to_string(),
+            track_id: Some("456".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: None,
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/mp3".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_track_source_to_content_type_source_format() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Source,
+            path: "/music/track.wav".to_string(),
+            track_id: Some("789".into()),
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        assert_eq!(track_source_to_content_type(&source), None);
+    }
+
+    #[cfg(feature = "format-aac")]
+    #[test_log::test]
+    fn test_track_source_to_content_type_remote_aac_with_headers() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+
+        let source = TrackSource::RemoteUrl {
+            format: AudioFormat::Aac,
+            url: "https://example.com/track.m4a".to_string(),
+            track_id: None,
+            source: TrackApiSource::Api(ApiSource::library()),
+            headers: Some(vec![(
+                "Authorization".to_string(),
+                "Bearer token".to_string(),
+            )]),
+        };
+        assert_eq!(
+            track_source_to_content_type(&source),
+            Some("audio/m4a".to_string())
+        );
+    }
+
     #[test_log::test]
     fn test_visualize_empty_buffer() {
         use symphonia::core::audio::AudioBuffer;

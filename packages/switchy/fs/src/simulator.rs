@@ -4874,3 +4874,135 @@ mod async_create_dir_tests {
         assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
     }
 }
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_exists_tests {
+    use super::{reset_fs, sync, unsync};
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_exists_returns_true_for_existing_file() {
+        reset_fs();
+        sync::create_dir_all("/exists_test").unwrap();
+        sync::write("/exists_test/file.txt", b"content").unwrap();
+
+        assert!(unsync::exists("/exists_test/file.txt").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_exists_returns_true_for_existing_directory() {
+        reset_fs();
+        sync::create_dir_all("/exists_test/subdir").unwrap();
+
+        assert!(unsync::exists("/exists_test/subdir").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_exists_returns_false_for_nonexistent_path() {
+        reset_fs();
+
+        assert!(!unsync::exists("/nonexistent/path").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_exists_returns_true_for_root() {
+        reset_fs();
+        sync::create_dir_all("/").unwrap();
+
+        assert!(unsync::exists("/").await);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_exists_with_empty_path() {
+        reset_fs();
+
+        // Empty path should return false (doesn't exist)
+        assert!(!unsync::exists("").await);
+    }
+}
+
+#[cfg(test)]
+mod read_to_string_error_tests {
+    use super::{reset_fs, sync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_read_to_string_with_invalid_utf8_returns_error() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        // Write invalid UTF-8 bytes
+        let invalid_utf8 = vec![0xFF, 0xFE, 0x00, 0x01];
+        sync::write("/tmp/invalid_utf8.bin", &invalid_utf8).unwrap();
+
+        // read_to_string should fail with InvalidData error
+        let result = sync::read_to_string("/tmp/invalid_utf8.bin");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test_log::test]
+    fn test_read_returns_raw_bytes_for_binary_content() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        // Write binary data
+        let binary_data = vec![0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD];
+        sync::write("/tmp/binary.bin", &binary_data).unwrap();
+
+        // read (not read_to_string) should succeed
+        let result = sync::read("/tmp/binary.bin").unwrap();
+        assert_eq!(result, binary_data);
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "async")]
+mod async_read_tests {
+    use super::{reset_fs, sync, unsync};
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_binary_content() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        let binary_data = vec![0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD];
+        sync::write("/tmp/async_binary.bin", &binary_data).unwrap();
+
+        let result = unsync::read("/tmp/async_binary.bin").await.unwrap();
+        assert_eq!(result, binary_data);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_empty_file() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+        sync::write("/tmp/empty.bin", b"").unwrap();
+
+        let result = unsync::read("/tmp/empty.bin").await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_nonexistent_file_fails() {
+        reset_fs();
+
+        let result = unsync::read("/nonexistent.bin").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_async_read_to_string_with_invalid_utf8_fails() {
+        reset_fs();
+        sync::create_dir_all("/tmp").unwrap();
+
+        let invalid_utf8 = vec![0xFF, 0xFE, 0x00, 0x01];
+        sync::write("/tmp/async_invalid.bin", &invalid_utf8).unwrap();
+
+        let result = unsync::read_to_string("/tmp/async_invalid.bin").await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+    }
+}

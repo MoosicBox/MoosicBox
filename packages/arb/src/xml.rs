@@ -185,4 +185,41 @@ mod tests {
             );
         }
     }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_tab_as_invalid() {
+        // U+0009 (tab) is a control character in the middle of the invalid range
+        assert!(is_invalid_xml_char('\u{0009}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_newline_as_invalid() {
+        // U+000A (newline/LF) is a control character in the middle of the invalid range
+        assert!(is_invalid_xml_char('\u{000A}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_carriage_return_as_invalid() {
+        // U+000D (carriage return) is a control character in the middle of the invalid range
+        assert!(is_invalid_xml_char('\u{000D}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_supplementary_plane_char_as_valid() {
+        // U+10000 is the first supplementary plane character (outside BMP)
+        // Should be valid for XML
+        assert!(!is_invalid_xml_char('\u{10000}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_emoji_as_valid() {
+        // Emoji (U+1F600 - grinning face) is in supplementary plane and should be valid
+        assert!(!is_invalid_xml_char('\u{1F600}'));
+    }
+
+    #[test_log::test]
+    fn is_invalid_xml_char_identifies_last_valid_unicode_as_valid() {
+        // U+10FFFF is the maximum valid Unicode code point
+        assert!(!is_invalid_xml_char('\u{10FFFF}'));
+    }
 }

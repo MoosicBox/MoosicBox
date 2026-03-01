@@ -410,3 +410,58 @@ struct ArtistCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::{ApiSource, ApiSources, id::Id};
+
+    fn create_test_artist(cover: Option<String>) -> Artist {
+        Artist {
+            id: Id::Number(1),
+            title: "Test Artist".to_string(),
+            cover,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        }
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_valid_path() {
+        let artist = create_test_artist(Some("/music/artist/cover.jpg".to_string()));
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/music/artist".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_nested_path() {
+        let artist = create_test_artist(Some(
+            "/home/user/music/artists/band/artwork.png".to_string(),
+        ));
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/home/user/music/artists/band".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_no_cover() {
+        let artist = create_test_artist(None);
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, None);
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_filename_only() {
+        // When the path is just a filename with no parent directory
+        let artist = create_test_artist(Some("cover.jpg".to_string()));
+        let directory = get_artist_directory(&artist);
+        // PathBuf::parent() returns Some("") for a filename without path
+        assert_eq!(directory, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_root_path() {
+        let artist = create_test_artist(Some("/cover.jpg".to_string()));
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/".to_string()));
+    }
+}

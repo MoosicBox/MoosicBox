@@ -128,3 +128,73 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_client_context() {
+        // When called outside of a client's action future, current_client should return None
+        let result = current_client();
+        assert!(
+            result.is_none(),
+            "current_client should return None when not inside a client context"
+        );
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_name_within_client_context() {
+        // Manually set up the scoped thread-local to simulate being inside a client context
+        let expected_name = "test-client";
+        let client = Handle {
+            name: expected_name.to_string(),
+        };
+
+        HANDLE.set(&client, || {
+            let result = current_client();
+            assert_eq!(
+                result,
+                Some(expected_name.to_string()),
+                "current_client should return the client name when inside a client context"
+            );
+        });
+    }
+
+    #[test_log::test]
+    fn test_with_client_provides_name_to_closure() {
+        let result = with_client("my-client".to_string(), str::to_uppercase);
+        assert_eq!(result, "MY-CLIENT");
+    }
+
+    #[test_log::test]
+    fn test_nested_client_contexts() {
+        // Test that nested client contexts work correctly (inner overrides outer)
+        let outer = Handle {
+            name: "outer".to_string(),
+        };
+
+        HANDLE.set(&outer, || {
+            assert_eq!(current_client(), Some("outer".to_string()));
+
+            let inner = Handle {
+                name: "inner".to_string(),
+            };
+
+            HANDLE.set(&inner, || {
+                assert_eq!(
+                    current_client(),
+                    Some("inner".to_string()),
+                    "Inner context should override outer context"
+                );
+            });
+
+            // After inner context exits, outer should be visible again
+            assert_eq!(
+                current_client(),
+                Some("outer".to_string()),
+                "Outer context should be restored after inner exits"
+            );
+        });
+    }
+}

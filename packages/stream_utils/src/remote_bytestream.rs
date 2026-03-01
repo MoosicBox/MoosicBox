@@ -1485,4 +1485,123 @@ mod tests {
         // Verify position was updated
         assert_eq!(stream.read_position, 500);
     }
+
+    // ==== ADDITIONAL READ/SEEK TESTS ====
+
+    /// Test reading in small chunks works correctly
+    #[test_log::test(switchy_async::test)]
+    async fn test_read_in_small_chunks() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("abcdefghij")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(10),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read 3 bytes at a time
+        let mut all_data = Vec::new();
+
+        let mut buf = [0u8; 3];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        all_data.extend_from_slice(&buf[..bytes_read]);
+        assert_eq!(bytes_read, 3);
+        assert_eq!(&buf[..bytes_read], b"abc");
+
+        let bytes_read = stream.read(&mut buf).unwrap();
+        all_data.extend_from_slice(&buf[..bytes_read]);
+        assert_eq!(bytes_read, 3);
+        assert_eq!(&buf[..bytes_read], b"def");
+
+        let bytes_read = stream.read(&mut buf).unwrap();
+        all_data.extend_from_slice(&buf[..bytes_read]);
+        assert_eq!(bytes_read, 3);
+        assert_eq!(&buf[..bytes_read], b"ghi");
+
+        let bytes_read = stream.read(&mut buf).unwrap();
+        all_data.extend_from_slice(&buf[..bytes_read]);
+        assert_eq!(bytes_read, 1);
+        assert_eq!(&buf[..bytes_read], b"j");
+
+        // Verify all data was read correctly
+        assert_eq!(all_data, b"abcdefghij");
+        assert!(stream.finished, "Stream should be finished");
+    }
+
+    /// Test that seek and read interaction works correctly
+    #[test_log::test(switchy_async::test)]
+    async fn test_seek_then_read_correctness() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("0123456789")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(10),
+            true, // Auto-start fetch
+            true, // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Read first 5 bytes
+        let mut buf = [0u8; 5];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 5);
+        assert_eq!(&buf[..bytes_read], b"01234");
+
+        // Seek back to position 2 (within buffer)
+        stream.seek(SeekFrom::Start(2)).unwrap();
+        assert_eq!(stream.read_position, 2);
+
+        // Read from position 2
+        let mut buf2 = [0u8; 3];
+        let bytes_read = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read, 3);
+        assert_eq!(&buf2[..bytes_read], b"234");
+    }
+
+    /// Test stream position tracking across multiple operations
+    #[test_log::test(switchy_async::test)]
+    async fn test_stream_position_tracking() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("test data here")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(14), // "test data here" = 14 bytes
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        switchy_async::task::yield_now().await;
+
+        // Initial position should be 0
+        assert_eq!(stream.read_position, 0);
+
+        // Read 4 bytes
+        let mut buf = [0u8; 4];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 4);
+        assert_eq!(stream.read_position, 4);
+
+        // Seek to middle
+        stream.seek(SeekFrom::Start(7)).unwrap();
+        assert_eq!(stream.read_position, 7);
+
+        // Read 4 more bytes
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 4);
+        assert_eq!(stream.read_position, 11);
+
+        // Use stream_position to verify
+        let pos = stream.stream_position().unwrap();
+        assert_eq!(pos, 11);
+    }
 }
