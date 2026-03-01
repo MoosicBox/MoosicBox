@@ -122,7 +122,7 @@ let view = container! {
             }
 
             button
-                fx-click=fx { toggle_visibility("advanced") }
+                fx-click=fx { element_by_id("advanced").toggle_visibility() }
                 class="btn btn-info"
             {
                 "Toggle Advanced"
@@ -355,7 +355,7 @@ let view = container! {
     button fx-click=fx {
         show("element1");
         hide("element2");
-        focus("input1")
+        element_by_id("input1").focus()
     } {
         "Execute Multiple Actions"
     }

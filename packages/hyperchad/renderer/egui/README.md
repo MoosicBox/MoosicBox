@@ -207,108 +207,6 @@ let view = container! {
 renderer.render(View::from(view)).await?;
 ```
 
-### Form Handling
-
-```rust
-use hyperchad_template::container;
-
-let form_view = container! {
-    div
-        width=400
-        background="white"
-        padding=20
-        border="1px solid #ccc"
-        direction="column"
-        gap=15
-    {
-        h2 { "User Registration" }
-
-        input
-            type="text"
-            name="username"
-            placeholder="Enter username"
-            fx-change=fx { set_data_attr("username", event_value()) }
-        {}
-
-        input
-            type="password"
-            name="password"
-            placeholder="Enter password"
-            fx-change=fx { set_data_attr("password", event_value()) }
-        {}
-
-        input
-            type="checkbox"
-            name="agree"
-            fx-change=fx { set_data_attr("agreed", event_value()) }
-        {}
-
-        span { "I agree to the terms" }
-
-        button
-            background="blue"
-            color="white"
-            padding="10px 20px"
-            fx-click=fx { request_action("submit_form", data_attrs()) }
-        {
-            "Register"
-        }
-    }
-};
-
-renderer.render(View::from(form_view)).await?;
-```
-
-### Image Display
-
-```rust
-use hyperchad_template::container;
-
-let image_view = container! {
-    div
-        width=600
-        height=400
-        direction="column"
-        align-items="center"
-        gap=20
-    {
-        h2 { "Image Gallery" }
-
-        img
-            src="https://example.com/image.jpg"
-            alt="Example Image"
-            width=400
-            height=300
-            fit="cover"
-            loading="lazy"
-        {}
-
-        div
-            direction="row"
-            gap=10
-        {
-            img
-                src="/assets/thumb1.jpg"
-                width=100
-                height=100
-                fit="cover"
-                fx-click=fx { set_attr("main-image", "src", "/assets/image1.jpg") }
-            {}
-
-            img
-                src="/assets/thumb2.jpg"
-                width=100
-                height=100
-                fit="cover"
-                fx-click=fx { set_attr("main-image", "src", "/assets/image2.jpg") }
-            {}
-        }
-    }
-};
-
-renderer.render(View::from(image_view)).await?;
-```
-
 ### Custom Layout Calculator
 
 For a complete working example of implementing a custom layout calculator with font metrics
@@ -325,7 +223,7 @@ when the renderer starts.
 ### Event Handling
 
 ```rust
-use hyperchad_actions::{ActionType, ActionEffect};
+use hyperchad_actions::logic::Value;
 use switchy_async::runtime::Handle;
 
 // Handle action events

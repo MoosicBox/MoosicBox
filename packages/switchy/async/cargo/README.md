@@ -41,10 +41,10 @@ The MoosicBox Async Cargo package provides:
 
 ```bash
 # Install from source
-cargo install --path packages/async/cargo
+cargo install --path packages/switchy/async/cargo
 
 # Or build locally
-cd packages/async/cargo
+cd packages/switchy/async/cargo
 cargo build --release
 ```
 
@@ -81,7 +81,7 @@ warning: src/handlers.rs: async method `handle_request` in impl is missing #[inj
 # GitHub Actions example
 - name: Check async functions
   run: |
-      cargo install --path packages/async/cargo
+      cargo install --path packages/switchy/async/cargo
       switchy_async_cargo
 ```
 
