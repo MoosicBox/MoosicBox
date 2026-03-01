@@ -104,7 +104,8 @@ curl http://localhost:8000/health
 ### WebSocket Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws');
+// Requires clientId and signature query parameters
+const ws = new WebSocket('ws://localhost:8000/ws?clientId=my-client&signature=my-signature-token');
 ws.onopen = () => console.log('Connected');
 ws.onmessage = (event) => console.log('Message:', event.data);
 ```

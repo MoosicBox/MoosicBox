@@ -122,7 +122,7 @@ let view = container! {
             }
 
             button
-                fx-click=fx { toggle_visibility("advanced") }
+                fx-click=fx { element_by_id("advanced").toggle_visibility() }
                 class="btn btn-info"
             {
                 "Toggle Advanced"
@@ -269,25 +269,25 @@ let interactive_view = container! {
 
         div class="color-controls" {
             button
-                fx-click=fx { set_background_by_id("#ff0000", "display-box") }
+                fx-click=(ActionType::set_background_by_id("#ff0000", "display-box"))
             {
                 "Red"
             }
 
             button
-                fx-click=fx { set_background_by_id("#00ff00", "display-box") }
+                fx-click=(ActionType::set_background_by_id("#00ff00", "display-box"))
             {
                 "Green"
             }
 
             button
-                fx-click=fx { set_background_by_id("#0000ff", "display-box") }
+                fx-click=(ActionType::set_background_by_id("#0000ff", "display-box"))
             {
                 "Blue"
             }
 
             button
-                fx-click=fx { remove_background_by_id("display-box") }
+                fx-click=(ActionType::remove_background_by_id("display-box"))
             {
                 "Reset"
             }
@@ -355,7 +355,7 @@ let view = container! {
     button fx-click=fx {
         show("element1");
         hide("element2");
-        focus("input1")
+        element_by_id("input1").focus()
     } {
         "Execute Multiple Actions"
     }

@@ -238,6 +238,8 @@ cargo tauri build --bundles rpm  # Linux RPM
 - **Windows**: Windows 10+ (x86_64, aarch64)
 - **macOS**: macOS 10.15+ (x86_64, aarch64)
 - **Linux**: Ubuntu 18.04+, Debian 10+, Arch Linux, Fedora 31+
+- **Android**: Android 14+ (API level 34+)
+- **iOS**: iOS (via Tauri mobile support)
 
 ### System Requirements
 
