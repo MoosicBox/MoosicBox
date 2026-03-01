@@ -428,4 +428,120 @@ mod test {
 
         runtime.wait().unwrap();
     }
+
+    #[test]
+    fn handle_try_current_returns_error_outside_runtime() {
+        // Outside any runtime context, try_current should return an error
+        let result = super::Handle::try_current();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_try_current_returns_ok_inside_runtime() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            // Inside a runtime context, try_current should succeed
+            let result = super::Handle::try_current();
+            assert!(result.is_ok());
+
+            // Verify the handle works
+            let handle = result.unwrap();
+            let join_handle = handle.spawn(async { 42 });
+            let value = join_handle.await.unwrap();
+            assert_eq!(value, 42);
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_default_creates_working_runtime() {
+        // Test that Runtime::default() creates a working runtime
+        let runtime = super::Runtime::default();
+
+        let result = runtime.block_on(async { "default works" });
+
+        assert_eq!(result, "default works");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let handle = runtime.spawn(async { 123 });
+
+        let result = runtime.block_on(async { handle.await.unwrap() });
+
+        assert_eq!(result, 123);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let handle = runtime.spawn_with_name("named_task", async { "from named task" });
+
+        let result = runtime.block_on(async { handle.await.unwrap() });
+
+        assert_eq!(result, "from named task");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_blocking_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let handle = runtime.spawn_blocking(|| {
+            // Simulate some blocking work
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            "blocking result"
+        });
+
+        let result = runtime.block_on(async { handle.await.unwrap() });
+
+        assert_eq!(result, "blocking result");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_blocking_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let handle = runtime.spawn_blocking_with_name("named_blocking", || 456);
+
+        let result = runtime.block_on(async { handle.await.unwrap() });
+
+        assert_eq!(result, 456);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn_with_name("handle_task", async { "spawned via handle" });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "spawned via handle");
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_blocking_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle =
+            handle.spawn_blocking_with_name("blocking_handle_task", || "blocking via handle");
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, "blocking via handle");
+        runtime.wait().unwrap();
+    }
 }

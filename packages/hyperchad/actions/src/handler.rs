@@ -2561,4 +2561,474 @@ mod tests {
             assert_eq!(logged_level, expected_level);
         }
     }
+
+    // ============================================
+    // Multi-action failure propagation tests
+    // ============================================
+    //
+    // These tests verify that when an action in a Multi or MultiEffect
+    // sequence fails, the execution stops and subsequent actions are
+    // not executed.
+
+    #[test_log::test]
+    fn test_action_handler_multi_stops_on_failure() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a Multi action where the second action fails (invalid background hex)
+        // and verify the third action is not executed
+        let action = ActionType::Multi(vec![
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetBackground(Some("invalid-hex".to_string())),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetDisplay(false),
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because second action failed
+        assert!(!success);
+        // First action should have been applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        // Third action should NOT have been applied (execution stopped at failure)
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_multi_effect_stops_on_failure() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a MultiEffect action where the second effect fails
+        let action = ActionType::MultiEffect(vec![
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetBackground(Some("not-a-valid-color".to_string())),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because second effect failed
+        assert!(!success);
+        // First effect should have been applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        // Third effect should NOT have been applied
+        assert!(handler.get_display_override(10).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_multi_all_succeed() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a Multi action where all actions succeed
+        let action = ActionType::Multi(vec![
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetDisplay(false),
+            },
+            ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetBackground(Some("#FF0000".to_string())),
+            },
+        ]);
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return true because all actions succeeded
+        assert!(success);
+        // All actions should have been applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert_eq!(handler.get_display_override(10), Some(&false));
+        assert!(handler.get_background_override(10).is_some());
+    }
+
+    // ============================================
+    // unhandle_action tests for MultiEffect
+    // ============================================
+    //
+    // These tests verify that unhandle_action properly reverses
+    // style effects for MultiEffect actions.
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_multi_effect() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Apply a MultiEffect action
+        let action = ActionType::MultiEffect(vec![
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetVisibility(Visibility::Hidden),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+            ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(20),
+                    action: StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        ]);
+
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify styles were applied
+        assert!(handler.get_visibility_override(10).is_some());
+        assert!(handler.get_display_override(20).is_some());
+
+        // Now unhandle the action
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Verify styles were removed
+        assert!(handler.get_visibility_override(10).is_none());
+        assert!(handler.get_display_override(20).is_none());
+    }
+
+    #[test_log::test]
+    fn test_action_handler_unhandle_action_parameterized() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Apply a Parameterized action wrapping a Style action
+        let action = ActionType::Parameterized {
+            action: Box::new(ActionType::Style {
+                target: ElementTarget::Id(10),
+                action: StyleAction::SetVisibility(Visibility::Hidden),
+            }),
+            value: Value::Real(42.0),
+        };
+
+        handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Verify style was applied
+        assert!(handler.get_visibility_override(10).is_some());
+
+        // Now unhandle the action
+        handler.unhandle_action(&action, StyleTrigger::UiEvent, 1, &context);
+
+        // Verify style was removed (Parameterized unwraps to the inner action)
+        assert!(handler.get_visibility_override(10).is_none());
+    }
+
+    // ============================================
+    // Logic action failure propagation tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_logic_then_branch_failure_returns_false() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a Logic action where the then branch has a failing action
+        let action = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Bool(true),
+            actions: vec![
+                ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetVisibility(Visibility::Hidden),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+                ActionEffect {
+                    action: ActionType::Style {
+                        target: ElementTarget::Id(10),
+                        action: StyleAction::SetBackground(Some("bad-color".to_string())),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                },
+            ],
+            else_actions: vec![],
+        });
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because the then branch had a failing action
+        assert!(!success);
+        // First action in the then branch should have been applied
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+    }
+
+    #[test_log::test]
+    fn test_action_handler_logic_else_branch_failure_returns_false() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Create a Logic action where the else branch has a failing action
+        let action = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Bool(false), // Else branch will execute
+            actions: vec![],
+            else_actions: vec![ActionEffect {
+                action: ActionType::Style {
+                    target: ElementTarget::Id(10),
+                    action: StyleAction::SetBackground(Some("invalid".to_string())),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        });
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because the else branch had a failing action
+        assert!(!success);
+    }
+
+    // ============================================
+    // Style action with nonexistent target tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_style_action_nonexistent_by_id_target() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Target doesn't exist in the mock finder
+        let action = ActionType::Style {
+            target: ElementTarget::ById(Target::from("nonexistent-element")),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because target was not found
+        assert!(!success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_style_action_nonexistent_class_target() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Class doesn't exist in the mock finder
+        let action = ActionType::Style {
+            target: ElementTarget::Class(Target::from("nonexistent-class")),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because target was not found
+        assert!(!success);
+    }
+
+    #[test_log::test]
+    fn test_action_handler_style_action_nonexistent_child_class() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // Parent exists but child class doesn't
+        let action = ActionType::Style {
+            target: ElementTarget::ChildClass(Target::from("nonexistent-child")),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+
+        // Using parent 10 which exists, but "nonexistent-child" doesn't exist
+        let success = handler.handle_action(
+            &action,
+            None,
+            StyleTrigger::UiEvent,
+            10,
+            &context,
+            None,
+            None,
+        );
+
+        // Should return false because target was not found
+        assert!(!success);
+    }
+
+    // ============================================
+    // Calc value with visibility from manager tests
+    // ============================================
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_visibility_from_manager() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First set a visibility override
+        let set_action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetVisibility(Visibility::Hidden),
+        };
+        handler.handle_action(
+            &set_action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Now calculate the visibility value
+        let value = Value::Calc(crate::logic::CalcValue::Visibility {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Visibility(Visibility::Hidden)));
+    }
+
+    #[test_log::test]
+    fn test_action_handler_calc_value_display_from_manager() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+
+        // First set a display override
+        let set_action = ActionType::Style {
+            target: ElementTarget::Id(10),
+            action: StyleAction::SetDisplay(false),
+        };
+        handler.handle_action(
+            &set_action,
+            None,
+            StyleTrigger::UiEvent,
+            1,
+            &context,
+            None,
+            None,
+        );
+
+        // Now calculate the display value
+        let value = Value::Calc(crate::logic::CalcValue::Display {
+            target: ElementTarget::Id(10),
+        });
+        let result = handler.calc_value(&value, 1, &context, None);
+
+        assert_eq!(result, Some(Value::Display(false)));
+    }
 }

@@ -2288,6 +2288,59 @@ mod tests {
             let result = cloned.navigate("/home").await.unwrap();
             assert!(result.is_some());
         }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_first_matching_route_wins_prefix_first() {
+            // Tests that when multiple routes could match, the first one added is used
+            // Using side effect tracking via Arc<Mutex> to verify which handler was called
+            use std::sync::Mutex;
+
+            let called_handler = Arc::new(Mutex::new(String::new()));
+            let called_handler_clone = called_handler.clone();
+
+            let router = Router::new()
+                .with_route(RoutePath::LiteralPrefix("/api/".to_string()), move |_req| {
+                    let called_handler = called_handler_clone.clone();
+                    async move {
+                        *called_handler.lock().unwrap() = "prefix".to_string();
+                        "Content".to_string()
+                    }
+                })
+                .with_route("/api/users", |_req| async { "Literal".to_string() });
+
+            // The prefix route was added first, so it should match
+            let result = router.navigate("/api/users").await.unwrap();
+            assert!(result.is_some());
+            assert_eq!(*called_handler.lock().unwrap(), "prefix");
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_first_matching_route_wins_literal_first() {
+            // Tests that order of registration determines which route matches
+            // Using side effect tracking via Arc<Mutex> to verify which handler was called
+            use std::sync::Mutex;
+
+            let called_handler = Arc::new(Mutex::new(String::new()));
+            let called_handler_clone = called_handler.clone();
+
+            let router = Router::new()
+                .with_route("/api/users", move |_req| {
+                    let called_handler = called_handler_clone.clone();
+                    async move {
+                        *called_handler.lock().unwrap() = "literal".to_string();
+                        "Content".to_string()
+                    }
+                })
+                .with_route(
+                    RoutePath::LiteralPrefix("/api/".to_string()),
+                    |_req| async { "Prefix".to_string() },
+                );
+
+            // The literal route was added first, so it should match
+            let result = router.navigate("/api/users").await.unwrap();
+            assert!(result.is_some());
+            assert_eq!(*called_handler.lock().unwrap(), "literal");
+        }
     }
 
     mod navigation_tests {

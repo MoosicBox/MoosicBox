@@ -801,6 +801,94 @@ mod test_calculation_calc {
             Calculation::Grouping(Box::new(Calculation::Number(Box::new(Number::Integer(50)))));
         assert!(calc.is_fixed());
     }
+
+    #[test_log::test]
+    fn calculation_divide_by_zero_returns_infinity() {
+        let calc = Calculation::Divide(
+            Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(0)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!(result.is_infinite());
+    }
+
+    #[test_log::test]
+    fn calculation_divide_negative_by_zero_returns_negative_infinity() {
+        let calc = Calculation::Divide(
+            Box::new(Calculation::Number(Box::new(Number::Integer(-10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(0)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!(result.is_infinite());
+        assert!(result.is_sign_negative());
+    }
+
+    #[test_log::test]
+    fn calculation_min_with_negative_values_returns_smaller() {
+        let calc = Calculation::Min(
+            Box::new(Calculation::Number(Box::new(Number::Integer(-10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(-5)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - (-10.0)).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_max_with_negative_values_returns_larger() {
+        let calc = Calculation::Max(
+            Box::new(Calculation::Number(Box::new(Number::Integer(-10)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(-5)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - (-5.0)).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_multiply_with_zero_returns_zero() {
+        let calc = Calculation::Multiply(
+            Box::new(Calculation::Number(Box::new(Number::Integer(100)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(0)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_subtract_with_same_values_returns_zero() {
+        let calc = Calculation::Subtract(
+            Box::new(Calculation::Number(Box::new(Number::Integer(42)))),
+            Box::new(Calculation::Number(Box::new(Number::Integer(42)))),
+        );
+        let result = calc.calc(100.0, 1920.0, 1080.0);
+        assert!((result - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_with_mixed_units_evaluates_in_context() {
+        // Test: 50% + 10vw with container=200, viewport_width=1920
+        // 50% of 200 = 100, 10vw of 1920 = 192, total = 292
+        let calc = Calculation::Add(
+            Box::new(Calculation::Number(Box::new(Number::IntegerPercent(50)))),
+            Box::new(Calculation::Number(Box::new(Number::IntegerVw(10)))),
+        );
+        let result = calc.calc(200.0, 1920.0, 1080.0);
+        assert!((result - 292.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn calculation_is_fixed_with_viewport_units_returns_true() {
+        // Viewport units are considered "fixed" in the context of Number::is_fixed
+        // because they don't depend on container size
+        let calc = Calculation::Number(Box::new(Number::IntegerVw(50)));
+        assert!(calc.is_fixed());
+    }
+
+    #[test_log::test]
+    fn calculation_is_dynamic_returns_false_for_viewport_units() {
+        // Viewport units are not "dynamic" - they're fixed relative to viewport
+        let calc = Calculation::Number(Box::new(Number::IntegerVw(50)));
+        assert!(!calc.is_dynamic());
+    }
 }
 
 #[cfg(test)]

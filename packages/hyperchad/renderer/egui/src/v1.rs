@@ -4807,4 +4807,83 @@ mod tests {
         assert!((width - 100.0).abs() < f32::EPSILON);
         assert!((height - 50.0).abs() < f32::EPSILON);
     }
+
+    // ==================== ElementTarget::Selector tests ====================
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_strips_dot_prefix() {
+        let target_child = make_container(3, None, vec!["highlight"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        // Selector with leading '.' should be stripped and treated as class
+        let target = ElementTarget::Selector(Target::Literal(".highlight".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_strips_hash_prefix() {
+        // In egui renderer, # is stripped and treated as class lookup (best effort)
+        let target_child = make_container(3, None, vec!["my-id"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        // Selector with leading '#' should be stripped and treated as class
+        let target = ElementTarget::Selector(Target::Literal("#my-id".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_strips_both_prefixes() {
+        // Test that multiple prefix chars are stripped
+        let target_child = make_container(3, None, vec!["target"], vec![]);
+        let container = make_container(1, None, vec![], vec![target_child]);
+
+        // Leading '.#' should be stripped to 'target'
+        let target = ElementTarget::Selector(Target::Literal(".#target".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_no_prefix() {
+        let target_child = make_container(3, None, vec!["plain-class"], vec![]);
+        let container = make_container(1, None, vec![], vec![target_child]);
+
+        // Selector without prefix should work as-is
+        let target = ElementTarget::Selector(Target::Literal("plain-class".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_not_found() {
+        let container = make_container(1, None, vec!["other-class"], vec![]);
+
+        let target = ElementTarget::Selector(Target::Literal(".nonexistent".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_ref_returns_none() {
+        let container = make_container(1, None, vec!["target"], vec![]);
+
+        // Target::Ref is not supported, should return None
+        let target = ElementTarget::Selector(Target::Ref("target".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_none());
+    }
 }

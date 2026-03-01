@@ -410,3 +410,76 @@ struct ArtistCoverRequest {
     file_path: PathBuf,
     headers: Option<Vec<(String, String)>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use moosicbox_music_models::ApiSources;
+
+    use super::*;
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_valid_path() {
+        let artist = Artist {
+            id: 1.into(),
+            title: "Test Artist".to_string(),
+            cover: Some("/music/artists/test_artist/cover.jpg".to_string()),
+            api_source: moosicbox_music_models::ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/music/artists/test_artist".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_filename_only() {
+        let artist = Artist {
+            id: 2.into(),
+            title: "Test Artist".to_string(),
+            cover: Some("cover.jpg".to_string()),
+            api_source: moosicbox_music_models::ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+        let directory = get_artist_directory(&artist);
+        // A filename-only path has empty parent directory
+        assert_eq!(directory, Some(String::new()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_no_cover() {
+        let artist = Artist {
+            id: 3.into(),
+            title: "Test Artist".to_string(),
+            cover: None,
+            api_source: moosicbox_music_models::ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, None);
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_root_path() {
+        let artist = Artist {
+            id: 4.into(),
+            title: "Test Artist".to_string(),
+            cover: Some("/cover.jpg".to_string()),
+            api_source: moosicbox_music_models::ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_get_artist_directory_with_nested_path() {
+        let artist = Artist {
+            id: 5.into(),
+            title: "Test Artist".to_string(),
+            cover: Some("/a/b/c/d/e/cover.png".to_string()),
+            api_source: moosicbox_music_models::ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+        let directory = get_artist_directory(&artist);
+        assert_eq!(directory, Some("/a/b/c/d/e".to_string()));
+    }
+}

@@ -1202,4 +1202,63 @@ mod tests {
         assert_eq!(sessions[2].volume, Some(0.5));
         drop(sessions);
     }
+
+    // Tests for close_ws_connection
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_close_ws_connection_succeeds_when_no_handle_exists() {
+        let state = crate::AppState::new();
+
+        // Ensure no handles are set (default state)
+        assert!(state.ws_handle.read().await.is_none());
+        assert!(state.ws_join_handle.read().await.is_none());
+
+        // Should succeed without error
+        let result = state.close_ws_connection().await;
+        assert!(result.is_ok());
+    }
+
+    // Tests for flush_ws_message_buffer
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_flush_ws_message_buffer_succeeds_when_no_handle_exists() {
+        let state = crate::AppState::new();
+
+        // Add some messages to the buffer
+        state
+            .ws_message_buffer
+            .write()
+            .await
+            .push(InboundPayload::Ping(EmptyPayload {}));
+        state
+            .ws_message_buffer
+            .write()
+            .await
+            .push(InboundPayload::GetSessions(EmptyPayload {}));
+
+        // Ensure no handle is set
+        assert!(state.ws_handle.read().await.is_none());
+
+        // Should succeed without error
+        let result = state.flush_ws_message_buffer().await;
+        assert!(result.is_ok());
+
+        // Buffer should remain intact (not flushed since no handle)
+        let buffer = state.ws_message_buffer.read().await;
+        assert_eq!(buffer.len(), 2);
+        drop(buffer);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_flush_ws_message_buffer_empty_buffer_succeeds() {
+        let state = crate::AppState::new();
+
+        // Buffer is empty by default
+        assert!(state.ws_message_buffer.read().await.is_empty());
+        assert!(state.ws_handle.read().await.is_none());
+
+        // Should succeed without error even with empty buffer and no handle
+        let result = state.flush_ws_message_buffer().await;
+        assert!(result.is_ok());
+    }
 }

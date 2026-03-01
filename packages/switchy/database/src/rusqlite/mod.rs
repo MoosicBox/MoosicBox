@@ -4982,4 +4982,232 @@ mod tests {
         let result = transaction.savepoint("1invalid").await;
         assert!(result.is_err());
     }
+
+    mod format_sqlite_interval_tests {
+        use super::*;
+        use crate::sql_interval::SqlInterval;
+
+        #[test_log::test]
+        fn test_zero_interval_returns_zero_seconds() {
+            let interval = SqlInterval::new();
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["0 seconds"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_year() {
+            let interval = SqlInterval::from_years(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 year"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_years() {
+            let interval = SqlInterval::from_years(3);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+3 years"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_years() {
+            let interval = SqlInterval::from_years(-2);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-2 years"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_month() {
+            let interval = SqlInterval::from_months(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 month"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_months() {
+            let interval = SqlInterval::from_months(6);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+6 months"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_months() {
+            let interval = SqlInterval::from_months(-3);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-3 months"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_day() {
+            let interval = SqlInterval::from_days(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 day"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_days() {
+            let interval = SqlInterval::from_days(7);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+7 days"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_days() {
+            let interval = SqlInterval::from_days(-5);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-5 days"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_hour() {
+            let interval = SqlInterval::from_hours(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 hour"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_hours() {
+            let interval = SqlInterval::from_hours(12);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+12 hours"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_hours() {
+            let interval = SqlInterval::from_hours(-3);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-3 hours"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_minute() {
+            let interval = SqlInterval::from_minutes(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 minute"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_minutes() {
+            let interval = SqlInterval::from_minutes(30);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+30 minutes"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_minutes() {
+            let interval = SqlInterval::from_minutes(-15);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-15 minutes"]);
+        }
+
+        #[test_log::test]
+        fn test_singular_second() {
+            let interval = SqlInterval::from_seconds(1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+1 second"]);
+        }
+
+        #[test_log::test]
+        fn test_plural_seconds() {
+            let interval = SqlInterval::from_seconds(45);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["+45 seconds"]);
+        }
+
+        #[test_log::test]
+        fn test_negative_seconds() {
+            let interval = SqlInterval::from_seconds(-10);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-10 seconds"]);
+        }
+
+        #[test_log::test]
+        fn test_seconds_with_nanoseconds() {
+            let interval = SqlInterval::new().seconds(1).nanos(500_000_000);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result.len(), 1);
+            assert!(result[0].contains("1.5"));
+            assert!(result[0].contains("seconds"));
+        }
+
+        #[test_log::test]
+        fn test_nanoseconds_only() {
+            let interval = SqlInterval::new().nanos(250_000_000);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result.len(), 1);
+            assert!(result[0].contains("0.25"));
+            assert!(result[0].contains("seconds"));
+        }
+
+        #[test_log::test]
+        fn test_complex_interval_multiple_components() {
+            let interval = SqlInterval::new()
+                .years(1)
+                .months(3)
+                .days(7)
+                .hours(2)
+                .minutes(30)
+                .seconds(15);
+            let result = format_sqlite_interval(&interval);
+
+            assert_eq!(result.len(), 6);
+            assert_eq!(result[0], "+1 year");
+            assert_eq!(result[1], "+3 months");
+            assert_eq!(result[2], "+7 days");
+            assert_eq!(result[3], "+2 hours");
+            assert_eq!(result[4], "+30 minutes");
+            assert_eq!(result[5], "+15 seconds");
+        }
+
+        #[test_log::test]
+        fn test_mixed_positive_and_negative() {
+            let interval = SqlInterval::new().years(1).months(-2).days(5);
+            let result = format_sqlite_interval(&interval);
+
+            assert_eq!(result.len(), 3);
+            assert_eq!(result[0], "+1 year");
+            assert_eq!(result[1], "-2 months");
+            assert_eq!(result[2], "+5 days");
+        }
+
+        #[test_log::test]
+        fn test_negative_singular_values() {
+            // Test that -1 uses singular form
+            let interval = SqlInterval::from_years(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 year"]);
+
+            let interval = SqlInterval::from_months(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 month"]);
+
+            let interval = SqlInterval::from_days(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 day"]);
+
+            let interval = SqlInterval::from_hours(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 hour"]);
+
+            let interval = SqlInterval::from_minutes(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 minute"]);
+
+            let interval = SqlInterval::from_seconds(-1);
+            let result = format_sqlite_interval(&interval);
+            assert_eq!(result, vec!["-1 second"]);
+        }
+
+        #[test_log::test]
+        fn test_from_duration() {
+            // 1 hour, 30 minutes, 45 seconds
+            let duration = Duration::from_secs(5445);
+            let interval = SqlInterval::from_duration(duration);
+            let result = format_sqlite_interval(&interval);
+
+            assert_eq!(result.len(), 3);
+            assert_eq!(result[0], "+1 hour");
+            assert_eq!(result[1], "+30 minutes");
+            assert_eq!(result[2], "+45 seconds");
+        }
+    }
 }

@@ -557,3 +557,89 @@ pub async fn remove_scan_path_endpoint(
 
     Ok(Json(serde_json::json!({"success": true})))
 }
+
+#[cfg(test)]
+#[cfg(feature = "local")]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_validate_path_rejects_double_dot_traversal() {
+        let result = validate_path("/home/user/../etc/passwd");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_multiple_double_dots() {
+        let result = validate_path("/var/../../etc/passwd");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_hidden_traversal_in_middle() {
+        let result = validate_path("/home/user/music/..hidden/../file");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_encoded_traversal_pattern() {
+        // While URL encoding would typically be handled by the web framework,
+        // we test that literal .. is still caught
+        let result = validate_path("/path/to/..sneaky");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_returns_error_for_nonexistent_path() {
+        let result = validate_path("/nonexistent/path/that/does/not/exist/at/all/12345abcde");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid path"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_accepts_valid_existing_path() {
+        // Use root directory which always exists on Unix
+        let result = validate_path("/");
+        assert!(result.is_ok());
+        let path = result.unwrap();
+        assert_eq!(path, "/");
+    }
+
+    #[test_log::test]
+    fn test_validate_path_canonicalizes_existing_path() {
+        // Use /tmp which exists on most Unix systems
+        let result = validate_path("/tmp");
+        if result.is_ok() {
+            let path = result.unwrap();
+            // Canonicalized path should not contain .. or .
+            assert!(!path.contains(".."));
+            assert!(!path.ends_with("/."));
+        }
+        // If /tmp doesn't exist, that's fine - we just skip this assertion
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_parent_directory_at_start() {
+        let result = validate_path("../etc/passwd");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+
+    #[test_log::test]
+    fn test_validate_path_rejects_trailing_double_dot() {
+        let result = validate_path("/home/user/..");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Path traversal detected"));
+    }
+}

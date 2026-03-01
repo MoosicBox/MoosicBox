@@ -40,6 +40,10 @@ switchy       = { workspace = true, features = ["http"] }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_fs    = { workspace = true, features = ["std"] }
 test-log      = { workspace = true }
+tokio         = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
 
 [features]
 default = ["actions", "assets", "debug", "json"]

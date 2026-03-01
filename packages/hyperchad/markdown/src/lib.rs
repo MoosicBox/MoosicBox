@@ -1939,6 +1939,110 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_textarea_tag() {
+        let md = "<textarea>Captured input</textarea>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify textarea tag is escaped
+            assert!(value.contains("&amp;lt;textarea"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_xmp_tag() {
+        let md = "<xmp>Raw content</xmp>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify xmp tag is escaped
+            assert!(value.contains("&amp;lt;xmp"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noembed_tag() {
+        let md = "<noembed>Fallback content</noembed>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noembed tag is escaped
+            assert!(value.contains("&amp;lt;noembed"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_noframes_tag() {
+        let md = "<noframes>No frames fallback</noframes>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify noframes tag is escaped
+            assert!(value.contains("&amp;lt;noframes"));
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_xss_protection_plaintext_tag() {
+        let md = "<plaintext>Plain text mode</plaintext>";
+        let options = MarkdownOptions {
+            xss_protection: true,
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(md, options);
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            // Verify plaintext tag is escaped
+            assert!(value.contains("&amp;lt;plaintext"));
+        }
+    }
+
+    #[test_log::test]
+    fn test_hard_break_whitespace_preservation() {
+        let md = "Line 1  \nLine 2";
+        let container = markdown_to_container(md);
+        if let Some(paragraph) = container.children.first() {
+            // Find the hard break element (newline with PreserveWrap)
+            let hard_break = paragraph.children.iter().find(|c| {
+                if let Element::Text { value } = &c.element {
+                    value == "\n"
+                } else {
+                    false
+                }
+            });
+            assert!(hard_break.is_some());
+            let hard_break = hard_break.unwrap();
+            assert_eq!(hard_break.white_space, Some(WhiteSpace::PreserveWrap));
+        }
+    }
+
     #[test_log::test]
     fn test_nested_blockquote() {
         let md = "> Outer quote\n> > Nested quote";

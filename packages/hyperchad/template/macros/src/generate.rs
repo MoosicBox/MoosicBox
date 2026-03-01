@@ -4890,4 +4890,318 @@ mod tests {
             );
         }
     }
+
+    mod parse_number_literal_string_tests {
+        use super::*;
+
+        // Note: This function prioritizes f32 parsing, so whole numbers like "50" are parsed
+        // as RealPercent (f32), not IntegerPercent. The Integer variants are only used when
+        // f32::parse fails (e.g., values outside f32 range).
+
+        #[test_log::test]
+        fn parses_whole_number_percentage_as_real() {
+            // Whole numbers are parsed as f32, so they become RealPercent
+            let result = Generator::parse_number_literal_string("50%").to_string();
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains("50"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_percentage() {
+            let result = Generator::parse_number_literal_string("33.5%").to_string();
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains("33.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_vw_as_real() {
+            let result = Generator::parse_number_literal_string("100vw").to_string();
+            assert!(result.contains("RealVw"));
+            assert!(result.contains("100"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_vw() {
+            let result = Generator::parse_number_literal_string("50.5vw").to_string();
+            assert!(result.contains("RealVw"));
+            assert!(result.contains("50.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_vh_as_real() {
+            let result = Generator::parse_number_literal_string("80vh").to_string();
+            assert!(result.contains("RealVh"));
+            assert!(result.contains("80"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_vh() {
+            let result = Generator::parse_number_literal_string("75.5vh").to_string();
+            assert!(result.contains("RealVh"));
+            assert!(result.contains("75.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_dvw_as_real() {
+            let result = Generator::parse_number_literal_string("90dvw").to_string();
+            assert!(result.contains("RealDvw"));
+            assert!(result.contains("90"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_dvw() {
+            let result = Generator::parse_number_literal_string("45.5dvw").to_string();
+            assert!(result.contains("RealDvw"));
+            assert!(result.contains("45.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_dvh_as_real() {
+            let result = Generator::parse_number_literal_string("60dvh").to_string();
+            assert!(result.contains("RealDvh"));
+            assert!(result.contains("60"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_dvh() {
+            let result = Generator::parse_number_literal_string("30.5dvh").to_string();
+            assert!(result.contains("RealDvh"));
+            assert!(result.contains("30.5"));
+        }
+
+        #[test_log::test]
+        fn parses_whole_number_as_real() {
+            // Whole numbers are parsed as f32, so they become Real
+            let result = Generator::parse_number_literal_string("42").to_string();
+            assert!(result.contains("Real"));
+            assert!(result.contains("42"));
+            // Make sure it's not RealPercent or other unit variants
+            assert!(!result.contains("RealPercent"));
+            assert!(!result.contains("RealVw"));
+        }
+
+        #[test_log::test]
+        fn parses_decimal_number() {
+            let result = Generator::parse_number_literal_string("3.14").to_string();
+            assert!(result.contains("Real"));
+            assert!(result.contains("3.14"));
+            // Make sure it's not RealPercent or other variants
+            assert!(!result.contains("RealPercent"));
+            assert!(!result.contains("RealVw"));
+        }
+
+        #[test_log::test]
+        fn parses_zero_as_real() {
+            // Zero is parsed as f32, so it becomes Real
+            let result = Generator::parse_number_literal_string("0").to_string();
+            assert!(result.contains("Real"));
+            assert!(result.contains('0'));
+        }
+
+        #[test_log::test]
+        fn parses_zero_percentage_as_real() {
+            let result = Generator::parse_number_literal_string("0%").to_string();
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains('0'));
+        }
+
+        #[test_log::test]
+        fn falls_back_for_invalid_input() {
+            let result = Generator::parse_number_literal_string("invalid").to_string();
+            // Should fall back to parse_number
+            assert!(result.contains("parse_number"));
+        }
+
+        #[test_log::test]
+        fn parses_negative_percentage() {
+            let result = Generator::parse_number_literal_string("-25%").to_string();
+            // Debug: The output is: hyperchad_transformer::Number::RealPercent(-25f32)
+            // The f32 literal may not contain the exact string "-25", but uses "-25f32"
+            assert!(result.contains("RealPercent"));
+            assert!(result.contains("- 25"));
+        }
+
+        #[test_log::test]
+        fn parses_negative_number() {
+            let result = Generator::parse_number_literal_string("-10.5").to_string();
+            // Note: The result contains "- 10.5f32" (with space after minus)
+            assert!(result.contains("Real"));
+            assert!(result.contains("10.5"));
+        }
+    }
+
+    mod parse_color_string_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn parses_black() {
+            let result = Generator::parse_color_string("black").to_string();
+            assert!(result.contains("BLACK"));
+        }
+
+        #[test_log::test]
+        fn parses_white() {
+            let result = Generator::parse_color_string("white").to_string();
+            assert!(result.contains("WHITE"));
+        }
+
+        #[test_log::test]
+        fn parses_red() {
+            let result = Generator::parse_color_string("red").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FF0000"));
+        }
+
+        #[test_log::test]
+        fn parses_green() {
+            let result = Generator::parse_color_string("green").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("00FF00"));
+        }
+
+        #[test_log::test]
+        fn parses_blue() {
+            let result = Generator::parse_color_string("blue").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("0000FF"));
+        }
+
+        #[test_log::test]
+        fn parses_gray() {
+            let result = Generator::parse_color_string("gray").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("808080"));
+        }
+
+        #[test_log::test]
+        fn parses_yellow() {
+            let result = Generator::parse_color_string("yellow").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFFF00"));
+        }
+
+        #[test_log::test]
+        fn parses_cyan() {
+            let result = Generator::parse_color_string("cyan").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("00FFFF"));
+        }
+
+        #[test_log::test]
+        fn parses_magenta() {
+            let result = Generator::parse_color_string("magenta").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FF00FF"));
+        }
+
+        #[test_log::test]
+        fn parses_orange() {
+            let result = Generator::parse_color_string("orange").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFA500"));
+        }
+
+        #[test_log::test]
+        fn parses_purple() {
+            let result = Generator::parse_color_string("purple").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("800080"));
+        }
+
+        #[test_log::test]
+        fn parses_pink() {
+            let result = Generator::parse_color_string("pink").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("FFC0CB"));
+        }
+
+        #[test_log::test]
+        fn parses_brown() {
+            let result = Generator::parse_color_string("brown").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("A52A2A"));
+        }
+
+        #[test_log::test]
+        fn parses_hex_color() {
+            let result = Generator::parse_color_string("#AABBCC").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("AABBCC"));
+        }
+
+        #[test_log::test]
+        fn parses_short_hex_color() {
+            let result = Generator::parse_color_string("#ABC").to_string();
+            assert!(result.contains("from_hex"));
+            assert!(result.contains("ABC"));
+        }
+
+        #[test_log::test]
+        fn falls_back_to_black_for_unknown() {
+            let result = Generator::parse_color_string("unknowncolor").to_string();
+            assert!(result.contains("BLACK"));
+        }
+    }
+
+    mod validate_element_parent_option_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn option_in_select_is_valid() {
+            let result = validate_element_parent("option", ParentContext::Select);
+            assert!(result.is_ok());
+        }
+
+        #[test_log::test]
+        fn option_in_generic_is_invalid() {
+            let result = validate_element_parent("option", ParentContext::Generic);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err(),
+                "<option> element can only be used as a direct child of <select>"
+            );
+        }
+
+        #[test_log::test]
+        fn option_at_root_is_invalid() {
+            let result = validate_element_parent("option", ParentContext::Root);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err(),
+                "<option> element can only be used as a direct child of <select>"
+            );
+        }
+
+        #[test_log::test]
+        fn option_in_details_is_invalid() {
+            let result = validate_element_parent("option", ParentContext::Details);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err(),
+                "<option> element can only be used as a direct child of <select>"
+            );
+        }
+    }
+
+    mod parent_context_child_context_select_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn select_returns_select_context() {
+            assert_eq!(
+                ParentContext::child_context("select"),
+                ParentContext::Select
+            );
+        }
+
+        #[test_log::test]
+        fn other_elements_return_generic() {
+            assert_eq!(ParentContext::child_context("div"), ParentContext::Generic);
+            assert_eq!(ParentContext::child_context("form"), ParentContext::Generic);
+            assert_eq!(
+                ParentContext::child_context("input"),
+                ParentContext::Generic
+            );
+        }
+    }
 }

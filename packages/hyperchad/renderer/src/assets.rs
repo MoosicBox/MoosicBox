@@ -303,4 +303,38 @@ mod tests {
             Some(AssetNotFoundBehavior::Fallthrough)
         );
     }
+
+    #[cfg(unix)]
+    #[test_log::test]
+    fn test_asset_path_target_try_from_special_file_type() {
+        use std::os::unix::fs::FileTypeExt;
+        use std::process::Command;
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let fifo_path = temp_dir.path().join("test_fifo");
+
+        // Create a named pipe (FIFO) using mkfifo command - this is a special file
+        // type that is neither a regular file nor a directory
+        let status = Command::new("mkfifo")
+            .arg(&fifo_path)
+            .status()
+            .expect("Failed to execute mkfifo command");
+        assert!(status.success(), "mkfifo command failed");
+
+        // Verify the FIFO was created correctly
+        let metadata = std::fs::metadata(&fifo_path).expect("Failed to get metadata");
+        assert!(
+            metadata.file_type().is_fifo(),
+            "Expected FIFO file type, got {:?}",
+            metadata.file_type()
+        );
+
+        // The path exists but is neither a file nor a directory
+        let result = AssetPathTarget::try_from(fifo_path);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Invalid file type"));
+    }
 }
