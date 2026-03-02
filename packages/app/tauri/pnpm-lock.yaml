@@ -106,8 +106,8 @@ importers:
         specifier: ^1.6.0
         version: 1.6.0(eslint@8.57.1)
       eslint-plugin-diff:
-        specifier: ^2.1.3
-        version: 2.1.3(eslint@8.57.1)
+        specifier: ^2.1.5
+        version: 2.1.5(eslint@8.57.1)
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)
@@ -830,8 +830,8 @@ packages:
     resolution: {integrity: sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==}
     deprecated: Use @eslint/object-schema instead
 
-  '@img/colour@1.0.0':
-    resolution: {integrity: sha512-A5P/LfWGFSl6nsckYtjw9da+19jB8hkJ6ACTGcDfEJ0aE+l2n2El7dsVM7UVHZQ9s2lmYMWlrS21YLy2IR1LUw==}
+  '@img/colour@1.1.0':
+    resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -2175,8 +2175,8 @@ packages:
     peerDependencies:
       eslint: '>=8.57.0'
 
-  eslint-plugin-diff@2.1.3:
-    resolution: {integrity: sha512-dgbF+EKLUbZuSQv9/rADOyAWPIJ1z1KSIPljSdzAaLybC1+0W/zOpX8RvNnln/RIDpCwq0SIA2Dmj+K3lOTjfA==}
+  eslint-plugin-diff@2.1.5:
+    resolution: {integrity: sha512-gqaax0ZI35i3vAXqp8cJjIJ1hIO9bPtAImwB4cxJ+E8azMgBjbo6IKtBQx0qfGwGoDi/d5HosGhTOsIHT1pXXw==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       eslint: '>=6.7.0'
@@ -3494,8 +3494,8 @@ packages:
   sass-formatter@0.7.9:
     resolution: {integrity: sha512-CWZ8XiSim+fJVG0cFLStwDvft1VI7uvXdCNJYXhDvowiv+DsbD1nXLiQ4zrE5UBvj5DWZJ93cwN0NX5PMsr1Pw==}
 
-  sax@1.4.4:
-    resolution: {integrity: sha512-1n3r/tGXO6b6VXMdFT54SHzT9ytu9yr7TaELowdYpMqY/Ao7EnlQGmAQ1+RatX7Tkkdm6hONI2owqNx2aZj5Sw==}
+  sax@1.5.0:
+    resolution: {integrity: sha512-21IYA3Q5cQf089Z6tgaUTr7lDAyzoTPx5HRtbhsME8Udispad8dC/+sziTNugOEx54ilvatQ9YCzl4KQLPcRHA==}
     engines: {node: '>=11.0.0'}
 
   saxes@6.0.0:
@@ -4893,7 +4893,7 @@ snapshots:
 
   '@humanwhocodes/object-schema@2.0.3': {}
 
-  '@img/colour@1.0.0':
+  '@img/colour@1.1.0':
     optional: true
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -6396,7 +6396,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-diff@2.1.3(eslint@8.57.1):
+  eslint-plugin-diff@2.1.5(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
 
@@ -8096,7 +8096,7 @@ snapshots:
     dependencies:
       suf-log: 2.5.3
 
-  sax@1.4.4: {}
+  sax@1.5.0: {}
 
   saxes@6.0.0:
     dependencies:
@@ -8156,7 +8156,7 @@ snapshots:
 
   sharp@0.34.5:
     dependencies:
-      '@img/colour': 1.0.0
+      '@img/colour': 1.1.0
       detect-libc: 2.1.2
       semver: 7.7.4
     optionalDependencies:
@@ -8361,7 +8361,7 @@ snapshots:
       css-what: 6.2.2
       csso: 5.0.5
       picocolors: 1.1.1
-      sax: 1.4.4
+      sax: 1.5.0
 
   symbol-tree@3.2.4: {}
 
