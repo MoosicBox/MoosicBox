@@ -685,6 +685,67 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_tunnel_response_from_bytes_max_values() {
+        let headers = BTreeMap::new();
+        let body = b"max value test";
+
+        // Test with maximum u64 request_id
+        let bytes = create_binary_response(
+            u64::MAX,
+            1,
+            true,
+            Some(u16::MAX),
+            Some(headers.clone()),
+            body,
+        );
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, u64::MAX);
+        assert_eq!(response.packet_id, 1);
+        assert!(response.last);
+        assert_eq!(response.status, Some(u16::MAX));
+        assert_eq!(response.headers, Some(headers));
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test_log::test]
+    fn test_tunnel_response_from_bytes_max_packet_id() {
+        let body = b"max packet id test";
+
+        // Test with maximum u32 packet_id (not first packet, so no headers/status)
+        let bytes = create_binary_response(12345, u32::MAX, true, None, None, body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 12345);
+        assert_eq!(response.packet_id, u32::MAX);
+        assert!(response.last);
+        assert_eq!(response.status, None);
+        assert_eq!(response.headers, None);
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test_log::test]
+    fn test_tunnel_response_from_bytes_large_body() {
+        // Test with a large body to verify byte handling
+        let headers = BTreeMap::new();
+        let body: Vec<u8> = (0_u8..=255).cycle().take(10_000).collect();
+
+        let bytes = create_binary_response(54321, 1, true, Some(200), Some(headers.clone()), &body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 54321);
+        assert_eq!(response.packet_id, 1);
+        assert!(response.last);
+        assert_eq!(response.status, Some(200));
+        assert_eq!(response.headers, Some(headers));
+        assert_eq!(response.bytes.len(), 10_000);
+        assert_eq!(response.bytes.as_ref(), body.as_slice());
+    }
+
+    #[test_log::test]
     #[should_panic(expected = "range start must not be greater than end")]
     fn test_tunnel_response_from_bytes_too_short() {
         // Less than 13 bytes minimum
@@ -1193,6 +1254,76 @@ mod tests {
 
         let bytes3 = stream.next().await.unwrap().unwrap();
         assert_eq!(bytes3.as_ref(), b"packet3");
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_interleaved_packet_order() {
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(777, rx, abort_token, &noop_on_end);
+
+        // Send packets in interleaved order: 1, 3, 5, 2, 4, 6
+        // This tests the queue insertion logic with gaps
+        tx.send(create_tunnel_response(777, 1, false, b"packet1"))
+            .unwrap();
+        tx.send(create_tunnel_response(777, 3, false, b"packet3"))
+            .unwrap();
+        tx.send(create_tunnel_response(777, 5, false, b"packet5"))
+            .unwrap();
+        tx.send(create_tunnel_response(777, 2, false, b"packet2"))
+            .unwrap();
+        tx.send(create_tunnel_response(777, 4, false, b"packet4"))
+            .unwrap();
+        tx.send(create_tunnel_response(777, 6, true, b"packet6"))
+            .unwrap();
+
+        // Should receive in correct order: 1, 2, 3, 4, 5, 6
+        for i in 1..=6 {
+            let bytes = stream.next().await.unwrap().unwrap();
+            assert_eq!(bytes.as_ref(), format!("packet{i}").as_bytes());
+        }
+
+        // Stream should end
+        let result = stream.next().await;
+        assert!(result.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_tunnel_stream_large_body_streaming() {
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded();
+        let abort_token = CancellationToken::new();
+
+        let mut stream = TunnelStream::new(888, rx, abort_token, &noop_on_end);
+
+        // Create large body data split across multiple packets
+        let chunk1: Vec<u8> = (0_u8..=255).cycle().take(5000).collect();
+        let chunk2: Vec<u8> = (0_u8..=255).cycle().skip(5000 % 256).take(5000).collect();
+        let chunk3: Vec<u8> = (0_u8..=255).cycle().skip(10_000 % 256).take(5000).collect();
+
+        tx.send(create_tunnel_response(888, 1, false, &chunk1))
+            .unwrap();
+        tx.send(create_tunnel_response(888, 2, false, &chunk2))
+            .unwrap();
+        tx.send(create_tunnel_response(888, 3, true, &chunk3))
+            .unwrap();
+
+        // Receive and verify each chunk
+        let bytes1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes1.len(), 5000);
+        assert_eq!(bytes1.as_ref(), chunk1.as_slice());
+
+        let bytes2 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes2.len(), 5000);
+        assert_eq!(bytes2.as_ref(), chunk2.as_slice());
+
+        let bytes3 = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes3.len(), 5000);
+        assert_eq!(bytes3.as_ref(), chunk3.as_slice());
 
         // Stream should end
         let result = stream.next().await;

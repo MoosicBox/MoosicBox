@@ -2055,4 +2055,178 @@ mod tests {
         assert_eq!(results.offset, 0);
         assert_eq!(results.limit, 10);
     }
+
+    // Additional search results position edge case tests
+    #[test_log::test]
+    fn test_search_results_position_with_empty_results() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 0,
+            },
+            artists: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 0,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 0,
+            },
+            offset: 0,
+            limit: 10,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        // Position is capped at total (0) since offset + limit (10) > total (0)
+        assert_eq!(api_response.position, 0);
+        assert!(api_response.results.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_search_results_position_exactly_at_total() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![],
+                offset: 90,
+                limit: 10,
+                total: 100,
+            },
+            artists: TidalSearchResultList {
+                items: vec![],
+                offset: 90,
+                limit: 10,
+                total: 50,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![],
+                offset: 90,
+                limit: 10,
+                total: 75,
+            },
+            offset: 90,
+            limit: 10,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        // offset (90) + limit (10) == 100, which equals total
+        assert_eq!(api_response.position, 100);
+    }
+
+    // Album to TidalAlbum conversion tests with date handling
+    #[test_log::test]
+    fn test_album_to_tidal_album_with_release_date() {
+        use moosicbox_date_utils::chrono::NaiveDate;
+
+        let original_album = Album {
+            id: Id::from(12345_u64),
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: Id::from(67890_u64),
+            album_type: moosicbox_music_models::AlbumType::Lp,
+            date_released: Some(
+                NaiveDate::from_ymd_opt(2024, 6, 15)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            ),
+            date_added: None,
+            artwork: Some("cover-url".to_string()),
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let tidal_album: TidalAlbum = original_album.try_into().unwrap();
+        assert_eq!(tidal_album.id, 12345);
+        assert_eq!(tidal_album.title, "Test Album");
+        assert_eq!(tidal_album.artist, "Test Artist");
+        assert_eq!(tidal_album.artist_id, 67890);
+        // Verify the date was converted to RFC3339 format
+        assert!(tidal_album.release_date.is_some());
+        let release_date = tidal_album.release_date.unwrap();
+        assert!(release_date.contains("2024-06-15"));
+    }
+
+    #[test_log::test]
+    fn test_album_to_tidal_album_unsupported_type_defaults_to_lp() {
+        let original_album = Album {
+            id: Id::from(11111_u64),
+            title: "Live Album".to_string(),
+            artist: "Live Artist".to_string(),
+            artist_id: Id::from(22222_u64),
+            album_type: moosicbox_music_models::AlbumType::Live,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let tidal_album: TidalAlbum = original_album.try_into().unwrap();
+        // Live album type is not supported by Tidal, should default to Lp
+        assert_eq!(tidal_album.album_type, crate::TidalAlbumType::Lp);
+    }
+
+    #[test_log::test]
+    fn test_album_to_tidal_album_eps_and_singles() {
+        let original_album = Album {
+            id: Id::from(33333_u64),
+            title: "Single Track".to_string(),
+            artist: "Single Artist".to_string(),
+            artist_id: Id::from(44444_u64),
+            album_type: moosicbox_music_models::AlbumType::EpsAndSingles,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let tidal_album: TidalAlbum = original_album.try_into().unwrap();
+        assert_eq!(tidal_album.album_type, crate::TidalAlbumType::EpsAndSingles);
+    }
+
+    #[test_log::test]
+    fn test_album_to_tidal_album_compilations() {
+        let original_album = Album {
+            id: Id::from(55555_u64),
+            title: "Greatest Hits".to_string(),
+            artist: "Various Artists".to_string(),
+            artist_id: Id::from(66666_u64),
+            album_type: moosicbox_music_models::AlbumType::Compilations,
+            date_released: None,
+            date_added: None,
+            artwork: None,
+            directory: None,
+            blur: false,
+            versions: vec![],
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            artist_sources: moosicbox_music_models::ApiSources::default(),
+            album_sources: moosicbox_music_models::ApiSources::default(),
+        };
+
+        let tidal_album: TidalAlbum = original_album.try_into().unwrap();
+        assert_eq!(tidal_album.album_type, crate::TidalAlbumType::Compilations);
+    }
 }

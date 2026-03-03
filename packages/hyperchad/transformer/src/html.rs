@@ -2771,4 +2771,662 @@ Line 3</textarea>"#;
             panic!("Expected Anchor element");
         }
     }
+
+    #[test_log::test]
+    fn parse_overflow_attributes() {
+        use hyperchad_transformer_models::LayoutOverflow;
+
+        let cases = [
+            ("wrap", LayoutOverflow::Wrap { grid: false }),
+            ("wrap-grid", LayoutOverflow::Wrap { grid: true }),
+            ("scroll", LayoutOverflow::Scroll),
+            ("expand", LayoutOverflow::Expand),
+            ("squash", LayoutOverflow::Squash),
+            ("hidden", LayoutOverflow::Hidden),
+            ("auto", LayoutOverflow::Auto),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-overflow-x="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.overflow_x, expected,
+                "Failed for overflow value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_position_attributes() {
+        use hyperchad_transformer_models::Position;
+
+        let cases = [
+            ("static", Position::Static),
+            ("sticky", Position::Sticky),
+            ("relative", Position::Relative),
+            ("absolute", Position::Absolute),
+            ("fixed", Position::Fixed),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-position="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.position,
+                Some(expected),
+                "Failed for position value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_cursor_attributes() {
+        use hyperchad_transformer_models::Cursor;
+
+        let cases = [
+            ("auto", Cursor::Auto),
+            ("pointer", Cursor::Pointer),
+            ("text", Cursor::Text),
+            ("crosshair", Cursor::Crosshair),
+            ("move", Cursor::Move),
+            ("not-allowed", Cursor::NotAllowed),
+            ("grab", Cursor::Grab),
+            ("grabbing", Cursor::Grabbing),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-cursor="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.cursor,
+                Some(expected),
+                "Failed for cursor value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_user_select_attributes() {
+        use hyperchad_transformer_models::UserSelect;
+
+        let cases = [
+            ("auto", UserSelect::Auto),
+            ("none", UserSelect::None),
+            ("text", UserSelect::Text),
+            ("all", UserSelect::All),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-user-select="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.user_select,
+                Some(expected),
+                "Failed for user-select value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_overflow_wrap_attributes() {
+        use hyperchad_transformer_models::OverflowWrap;
+
+        let cases = [
+            ("normal", OverflowWrap::Normal),
+            ("break-word", OverflowWrap::BreakWord),
+            ("anywhere", OverflowWrap::Anywhere),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-overflow-wrap="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.overflow_wrap,
+                Some(expected),
+                "Failed for overflow-wrap value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_text_overflow_attributes() {
+        use hyperchad_transformer_models::TextOverflow;
+
+        let cases = [
+            ("clip", TextOverflow::Clip),
+            ("ellipsis", TextOverflow::Ellipsis),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-text-overflow="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.text_overflow,
+                Some(expected),
+                "Failed for text-overflow value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_white_space_attributes() {
+        use hyperchad_transformer_models::WhiteSpace;
+
+        let cases = [
+            ("normal", WhiteSpace::Normal),
+            ("preserve", WhiteSpace::Preserve),
+            ("pre", WhiteSpace::Preserve),
+            ("preserve-wrap", WhiteSpace::PreserveWrap),
+            ("pre-wrap", WhiteSpace::PreserveWrap),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-white-space="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.white_space,
+                Some(expected),
+                "Failed for white-space value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_text_align_attributes() {
+        use hyperchad_transformer_models::TextAlign;
+
+        let cases = [
+            ("start", TextAlign::Start),
+            ("center", TextAlign::Center),
+            ("end", TextAlign::End),
+            ("justify", TextAlign::Justify),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-text-align="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.text_align,
+                Some(expected),
+                "Failed for text-align value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_justify_content_attributes() {
+        use hyperchad_transformer_models::JustifyContent;
+
+        let cases = [
+            ("start", JustifyContent::Start),
+            ("center", JustifyContent::Center),
+            ("end", JustifyContent::End),
+            ("space-between", JustifyContent::SpaceBetween),
+            ("space-evenly", JustifyContent::SpaceEvenly),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-justify-content="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.justify_content,
+                Some(expected),
+                "Failed for justify-content value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_align_items_attributes() {
+        use hyperchad_transformer_models::AlignItems;
+
+        let cases = [
+            ("start", AlignItems::Start),
+            ("center", AlignItems::Center),
+            ("end", AlignItems::End),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<div sx-align-items="{value}">content</div>"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+            assert_eq!(
+                child.align_items,
+                Some(expected),
+                "Failed for align-items value '{value}'"
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn parse_visibility_attributes() {
+        use hyperchad_transformer_models::Visibility;
+
+        let html = r#"<div sx-visibility="visible">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.visibility, Some(Visibility::Visible));
+
+        let html = r#"<div sx-visibility="hidden">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.visibility, Some(Visibility::Hidden));
+    }
+
+    #[test_log::test]
+    fn parse_hidden_attribute() {
+        let html = r#"<div sx-hidden="true">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.hidden, Some(true));
+
+        let html = r#"<div sx-hidden="false">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.hidden, Some(false));
+
+        // Empty string is treated as true
+        let html = r#"<div sx-hidden="">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.hidden, Some(true));
+    }
+
+    #[test_log::test]
+    fn parse_direction_attribute() {
+        use hyperchad_transformer_models::LayoutDirection;
+
+        let html = r#"<div sx-dir="row">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.direction, LayoutDirection::Row);
+
+        let html = r#"<div sx-dir="col">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.direction, LayoutDirection::Column);
+    }
+
+    #[test_log::test]
+    fn parse_flex_grow_and_shrink_individually() {
+        use crate::Number;
+
+        // Test sx-flex-grow separately
+        let html = r#"<div sx-flex-grow="2">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        if let Some(flex) = &child.flex {
+            assert_eq!(flex.grow, Number::Integer(2));
+        } else {
+            panic!("Expected flex to be Some");
+        }
+
+        // Test sx-flex-shrink separately
+        let html = r#"<div sx-flex-shrink="3">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        if let Some(flex) = &child.flex {
+            assert_eq!(flex.shrink, Number::Integer(3));
+        } else {
+            panic!("Expected flex to be Some");
+        }
+
+        // Test sx-flex-basis separately
+        let html = r#"<div sx-flex-basis="100">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        if let Some(flex) = &child.flex {
+            assert_eq!(flex.basis, Number::Integer(100));
+        } else {
+            panic!("Expected flex to be Some");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_with_style_only() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::{TextDecorationLine, TextDecorationStyle};
+
+        // Test style following a line
+        let html = r#"<div sx-text-decoration="underline dashed">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::Underline],
+                style: Some(TextDecorationStyle::Dashed),
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_text_decoration_none() {
+        use crate::TextDecoration;
+        use hyperchad_transformer_models::TextDecorationLine;
+
+        let html = r#"<div sx-text-decoration="none">text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(
+            child.text_decoration,
+            Some(TextDecoration {
+                line: vec![TextDecorationLine::None],
+                style: None,
+                color: None,
+                thickness: None,
+            })
+        );
+    }
+
+    #[test_log::test]
+    fn parse_gap_sets_both_row_and_column_gap() {
+        use crate::Number;
+
+        let html = r#"<div sx-gap="10">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.column_gap, Some(Number::Integer(10)));
+        assert_eq!(child.row_gap, Some(Number::Integer(10)));
+    }
+
+    #[test_log::test]
+    fn parse_margin_shorthand_sets_all_sides() {
+        use crate::Number;
+
+        let html = r#"<div sx-margin="20">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.margin_top, Some(Number::Integer(20)));
+        assert_eq!(child.margin_right, Some(Number::Integer(20)));
+        assert_eq!(child.margin_bottom, Some(Number::Integer(20)));
+        assert_eq!(child.margin_left, Some(Number::Integer(20)));
+    }
+
+    #[test_log::test]
+    fn parse_margin_x_sets_horizontal_margins() {
+        use crate::Number;
+
+        let html = r#"<div sx-margin-x="15">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.margin_left, Some(Number::Integer(15)));
+        assert_eq!(child.margin_right, Some(Number::Integer(15)));
+        assert_eq!(child.margin_top, None);
+        assert_eq!(child.margin_bottom, None);
+    }
+
+    #[test_log::test]
+    fn parse_margin_y_sets_vertical_margins() {
+        use crate::Number;
+
+        let html = r#"<div sx-margin-y="25">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.margin_top, Some(Number::Integer(25)));
+        assert_eq!(child.margin_bottom, Some(Number::Integer(25)));
+        assert_eq!(child.margin_left, None);
+        assert_eq!(child.margin_right, None);
+    }
+
+    #[test_log::test]
+    fn parse_padding_shorthand_sets_all_sides() {
+        use crate::Number;
+
+        let html = r#"<div sx-padding="30">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.padding_top, Some(Number::Integer(30)));
+        assert_eq!(child.padding_right, Some(Number::Integer(30)));
+        assert_eq!(child.padding_bottom, Some(Number::Integer(30)));
+        assert_eq!(child.padding_left, Some(Number::Integer(30)));
+    }
+
+    #[test_log::test]
+    fn parse_padding_x_sets_horizontal_paddings() {
+        use crate::Number;
+
+        let html = r#"<div sx-padding-x="12">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.padding_left, Some(Number::Integer(12)));
+        assert_eq!(child.padding_right, Some(Number::Integer(12)));
+        assert_eq!(child.padding_top, None);
+        assert_eq!(child.padding_bottom, None);
+    }
+
+    #[test_log::test]
+    fn parse_border_radius_shorthand_sets_all_corners() {
+        use crate::Number;
+
+        let html = r#"<div sx-border-radius="8">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.border_top_left_radius, Some(Number::Integer(8)));
+        assert_eq!(child.border_top_right_radius, Some(Number::Integer(8)));
+        assert_eq!(child.border_bottom_left_radius, Some(Number::Integer(8)));
+        assert_eq!(child.border_bottom_right_radius, Some(Number::Integer(8)));
+    }
+
+    #[test_log::test]
+    fn parse_border_top_radius_sets_top_corners() {
+        use crate::Number;
+
+        let html = r#"<div sx-border-top-radius="5">content</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        assert_eq!(child.border_top_left_radius, Some(Number::Integer(5)));
+        assert_eq!(child.border_top_right_radius, Some(Number::Integer(5)));
+        assert_eq!(child.border_bottom_left_radius, None);
+        assert_eq!(child.border_bottom_right_radius, None);
+    }
+
+    #[test_log::test]
+    fn parse_link_target_self() {
+        use hyperchad_transformer_models::LinkTarget;
+
+        let html = r#"<a href="/page" target="_self">Link</a>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Anchor { target, .. } = &child.element {
+            assert_eq!(*target, Some(LinkTarget::SelfTarget));
+        } else {
+            panic!("Expected Anchor element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_link_target_parent() {
+        use hyperchad_transformer_models::LinkTarget;
+
+        let html = r#"<a href="/page" target="_parent">Link</a>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Anchor { target, .. } = &child.element {
+            assert_eq!(*target, Some(LinkTarget::Parent));
+        } else {
+            panic!("Expected Anchor element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_link_target_top() {
+        use hyperchad_transformer_models::LinkTarget;
+
+        let html = r#"<a href="/page" target="_top">Link</a>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Anchor { target, .. } = &child.element {
+            assert_eq!(*target, Some(LinkTarget::Top));
+        } else {
+            panic!("Expected Anchor element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_input_password_type() {
+        let html = r#"<input type="password" name="pass" placeholder="Enter password">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Input {
+            input: crate::Input::Password { placeholder, value },
+            name,
+            ..
+        } = &child.element
+        {
+            assert_eq!(name.as_deref(), Some("pass"));
+            assert_eq!(placeholder.as_deref(), Some("Enter password"));
+            assert_eq!(*value, None);
+        } else {
+            panic!("Expected Password input");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_input_hidden_type() {
+        let html = r#"<input type="hidden" name="token" value="secret123">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Input {
+            input: crate::Input::Hidden { value },
+            name,
+            ..
+        } = &child.element
+        {
+            assert_eq!(name.as_deref(), Some("token"));
+            assert_eq!(value.as_deref(), Some("secret123"));
+        } else {
+            panic!("Expected Hidden input");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_image_loading_eager() {
+        use hyperchad_transformer_models::ImageLoading;
+
+        let html = r#"<img src="/test.jpg" loading="eager">"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Image { loading, .. } = &child.element {
+            assert_eq!(*loading, Some(ImageLoading::Eager));
+        } else {
+            panic!("Expected Image element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_image_fit_values() {
+        use hyperchad_transformer_models::ImageFit;
+
+        let cases = [
+            ("default", ImageFit::Default),
+            ("contain", ImageFit::Contain),
+            ("cover", ImageFit::Cover),
+            ("fill", ImageFit::Fill),
+            ("none", ImageFit::None),
+        ];
+
+        for (value, expected) in cases {
+            let html = format!(r#"<img src="/test.jpg" sx-fit="{value}">"#);
+            let container: Container = html.as_str().try_into().unwrap();
+            let child = &container.children[0];
+
+            if let crate::Element::Image { fit, .. } = &child.element {
+                assert_eq!(*fit, Some(expected), "Failed for sx-fit value '{value}'");
+            } else {
+                panic!("Expected Image element for '{value}'");
+            }
+        }
+    }
+
+    #[test_log::test]
+    fn parse_form_with_action_and_method() {
+        let html = r#"<form action="/submit" method="post">content</form>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Form { action, method } = &child.element {
+            assert_eq!(action.as_deref(), Some("/submit"));
+            assert_eq!(method.as_deref(), Some("post"));
+        } else {
+            panic!("Expected Form element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_button_with_type() {
+        let html = r#"<button type="submit">Submit</button>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Button { r#type } = &child.element {
+            assert_eq!(r#type.as_deref(), Some("submit"));
+        } else {
+            panic!("Expected Button element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_td_with_rows_and_columns() {
+        use crate::Number;
+
+        let html = r#"<table><tr><td rows="2" columns="3">Cell</td></tr></table>"#;
+        let container: Container = html.try_into().unwrap();
+        let table = &container.children[0];
+        let tr = &table.children[0];
+        let td = &tr.children[0];
+
+        if let crate::Element::TD { rows, columns } = &td.element {
+            assert_eq!(*rows, Some(Number::Integer(2)));
+            assert_eq!(*columns, Some(Number::Integer(3)));
+        } else {
+            panic!("Expected TD element");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_th_with_rows_and_columns() {
+        use crate::Number;
+
+        let html = r#"<table><thead><tr><th rows="1" columns="2">Header</th></tr></thead></table>"#;
+        let container: Container = html.try_into().unwrap();
+        let table = &container.children[0];
+        let thead = &table.children[0];
+        let tr = &thead.children[0];
+        let th = &tr.children[0];
+
+        if let crate::Element::TH { rows, columns } = &th.element {
+            assert_eq!(*rows, Some(Number::Integer(1)));
+            assert_eq!(*columns, Some(Number::Integer(2)));
+        } else {
+            panic!("Expected TH element");
+        }
+    }
 }

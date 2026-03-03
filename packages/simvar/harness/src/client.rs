@@ -128,3 +128,48 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_client_context() {
+        // When called outside of a client's tick context, current_client should return None
+        assert!(current_client().is_none());
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_name_within_client_context() {
+        // When called within a with_client scope, current_client should return the client name
+        let result = with_client("test-client-name".to_string(), |_| current_client());
+        assert_eq!(result, Some("test-client-name".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_with_client_passes_name_to_closure() {
+        let captured_name = with_client("my-client".to_string(), str::to_owned);
+        assert_eq!(captured_name, "my-client");
+    }
+
+    #[test_log::test]
+    fn test_nested_with_client_uses_innermost_name() {
+        // Nested with_client calls should use the innermost client name
+        let result = with_client("outer-client".to_string(), |_| {
+            with_client("inner-client".to_string(), |_| current_client())
+        });
+        assert_eq!(result, Some("inner-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_restored_after_nested_scope() {
+        // After leaving a nested scope, current_client should return the outer client's name
+        let result = with_client("outer-client".to_string(), |_| {
+            let inner_result = with_client("inner-client".to_string(), |_| current_client());
+            assert_eq!(inner_result, Some("inner-client".to_string()));
+            // After inner scope exits, we should be back to outer client
+            current_client()
+        });
+        assert_eq!(result, Some("outer-client".to_string()));
+    }
+}

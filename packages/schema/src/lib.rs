@@ -890,6 +890,28 @@ mod tests {
             "Migrations should be sorted by ID (timestamp order)"
         );
     }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_migrations_are_idempotent() {
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        // Run config migrations twice - should succeed both times
+        migrate_config_sqlite(&*db).await.unwrap();
+        let result = migrate_config_sqlite(&*db).await;
+        assert!(
+            result.is_ok(),
+            "Running config migrations twice should succeed (idempotent)"
+        );
+
+        // Run library migrations twice - should succeed both times
+        migrate_library_sqlite(&*db).await.unwrap();
+        let result = migrate_library_sqlite(&*db).await;
+        assert!(
+            result.is_ok(),
+            "Running library migrations twice should succeed (idempotent)"
+        );
+    }
 }
 
 #[cfg(feature = "sqlite")]

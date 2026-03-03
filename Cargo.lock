@@ -6535,6 +6535,7 @@ dependencies = [
  "switchy_fs",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -8871,12 +8872,14 @@ dependencies = [
  "moosicbox_middleware",
  "serde",
  "serde_json",
+ "switchy_async",
  "switchy_database",
  "switchy_env",
  "switchy_http",
  "switchy_uuid",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "url 2.5.7",
  "utoipa",
 ]
@@ -9029,7 +9032,10 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "switchy_fs",
+ "tempfile",
+ "test-log",
  "thiserror 2.0.17",
+ "tokio",
  "webp",
 ]
 
@@ -9313,15 +9319,19 @@ name = "moosicbox_music_api_api"
 version = "0.1.4"
 dependencies = [
  "actix-web",
+ "async-trait",
  "futures",
  "log 0.4.29",
+ "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_profiles",
  "serde",
  "serde_json",
+ "switchy_async",
  "test-log",
+ "tokio",
  "utoipa",
 ]
 

@@ -189,6 +189,10 @@ mod tests {
         HttpResponse::Created().body("created")
     }
 
+    async fn internal_server_error_handler() -> HttpResponse {
+        HttpResponse::InternalServerError().body("internal server error")
+    }
+
     async fn redirect_handler() -> HttpResponse {
         HttpResponse::Found()
             .insert_header(("Location", "http://example.com"))
@@ -399,5 +403,23 @@ mod tests {
         let _from_new = ApiLogger::new();
         let _from_default = ApiLogger::default();
         // If this compiles and runs, both constructors work correctly
+    }
+
+    #[test_log::test(actix_web::test)]
+    async fn test_middleware_handles_server_error_response() {
+        // Tests the specific code path where is_server_error() returns true,
+        // which triggers error logging and the assertion check.
+        // This is distinct from client errors (4xx) which don't trigger is_server_error().
+        let app = test::init_service(
+            App::new()
+                .wrap(ApiLogger::new())
+                .route("/error", web::get().to(internal_server_error_handler)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/error").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
