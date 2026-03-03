@@ -4686,11 +4686,66 @@ mod tests {
             ParentContext::child_context("details"),
             ParentContext::Details
         );
+        assert_eq!(
+            ParentContext::child_context("select"),
+            ParentContext::Select
+        );
         assert_eq!(ParentContext::child_context("div"), ParentContext::Generic);
         assert_eq!(ParentContext::child_context("span"), ParentContext::Generic);
         assert_eq!(
             ParentContext::child_context("button"),
             ParentContext::Generic
+        );
+    }
+
+    #[test_log::test]
+    fn test_validate_element_parent_option_in_select() {
+        // option is allowed in select parent
+        let result = validate_element_parent("option", ParentContext::Select);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn test_validate_element_parent_option_in_generic() {
+        // option is NOT allowed in generic parent
+        let result = validate_element_parent("option", ParentContext::Generic);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<option> element can only be used as a direct child of <select>"
+        );
+    }
+
+    #[test_log::test]
+    fn test_validate_element_parent_option_at_root() {
+        // option is NOT allowed at root
+        let result = validate_element_parent("option", ParentContext::Root);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<option> element can only be used as a direct child of <select>"
+        );
+    }
+
+    #[test_log::test]
+    fn test_validate_element_parent_option_in_details() {
+        // option is NOT allowed in details parent
+        let result = validate_element_parent("option", ParentContext::Details);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<option> element can only be used as a direct child of <select>"
+        );
+    }
+
+    #[test_log::test]
+    fn test_validate_element_parent_summary_in_select() {
+        // summary is NOT allowed in select parent
+        let result = validate_element_parent("summary", ParentContext::Select);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<summary> element can only be used as a direct child of <details>"
         );
     }
 

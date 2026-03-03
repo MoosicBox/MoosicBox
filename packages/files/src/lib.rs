@@ -592,6 +592,122 @@ pub async fn search_for_cover(
 mod tests {
     use super::*;
 
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_bytes_to_file_creates_parent_directories() {
+        let test_dir = moosicbox_config::get_tests_dir_path()
+            .join("save_bytes_test")
+            .join("nested")
+            .join("dir");
+        let file_path = test_dir.join("test_file.txt");
+
+        // Clean up from previous runs
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).ok();
+        }
+
+        let test_bytes = b"test content";
+        save_bytes_to_file(test_bytes, &file_path, None).unwrap();
+
+        assert!(file_path.exists());
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, test_bytes);
+
+        // Cleanup
+        std::fs::remove_dir_all(test_dir.parent().unwrap().parent().unwrap()).ok();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_bytes_to_file_truncates_when_no_start() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("save_bytes_truncate_test");
+        let file_path = test_dir.join("truncate_test.txt");
+
+        // Clean up from previous runs
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).ok();
+        }
+
+        // First write
+        save_bytes_to_file(b"original content", &file_path, None).unwrap();
+
+        // Second write without start - should truncate
+        save_bytes_to_file(b"new", &file_path, None).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"new");
+
+        // Cleanup
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_bytes_to_file_truncates_when_start_is_zero() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("save_bytes_zero_start_test");
+        let file_path = test_dir.join("zero_start_test.txt");
+
+        // Clean up from previous runs
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).ok();
+        }
+
+        // First write
+        save_bytes_to_file(b"original content", &file_path, None).unwrap();
+
+        // Write with start=0 should also truncate
+        save_bytes_to_file(b"new", &file_path, Some(0)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"new");
+
+        // Cleanup
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_bytes_to_file_appends_with_offset() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("save_bytes_append_test");
+        let file_path = test_dir.join("append_test.txt");
+
+        // Clean up from previous runs
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).ok();
+        }
+
+        // First write
+        save_bytes_to_file(b"Hello", &file_path, None).unwrap();
+
+        // Append at offset (after "Hello")
+        save_bytes_to_file(b" World", &file_path, Some(5)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"Hello World");
+
+        // Cleanup
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_save_bytes_to_file_overwrites_at_offset() {
+        let test_dir = moosicbox_config::get_tests_dir_path().join("save_bytes_overwrite_test");
+        let file_path = test_dir.join("overwrite_test.txt");
+
+        // Clean up from previous runs
+        if test_dir.exists() {
+            std::fs::remove_dir_all(&test_dir).ok();
+        }
+
+        // First write
+        save_bytes_to_file(b"Hello World", &file_path, None).unwrap();
+
+        // Overwrite starting at position 6 (where "World" starts)
+        save_bytes_to_file(b"Rust!", &file_path, Some(6)).unwrap();
+
+        let content = std::fs::read(&file_path).unwrap();
+        assert_eq!(content, b"Hello Rust!");
+
+        // Cleanup
+        std::fs::remove_dir_all(&test_dir).ok();
+    }
+
     #[test_log::test]
     fn test_sanitize_filename_removes_special_characters() {
         assert_eq!(sanitize_filename("hello world"), "hello_world");

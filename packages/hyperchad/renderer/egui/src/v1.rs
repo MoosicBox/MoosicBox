@@ -4807,4 +4807,165 @@ mod tests {
         assert!((width - 100.0).abs() < f32::EPSILON);
         assert!((height - 50.0).abs() < f32::EPSILON);
     }
+
+    // ==================== map_element_target Selector tests ====================
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_class_prefix() {
+        // Selector with leading '.' should be treated as class lookup
+        let target_child = make_container(3, None, vec!["my-class"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Selector(Target::Literal(".my-class".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_id_prefix() {
+        // Selector with leading '#' should also be treated as class lookup
+        // after stripping the prefix
+        let target_child = make_container(3, None, vec!["element-id"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Selector(Target::Literal("#element-id".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_no_prefix() {
+        // Selector without prefix should work as-is
+        let target_child = make_container(3, None, vec!["plain-selector"], vec![]);
+        let child = make_container(2, None, vec![], vec![target_child]);
+        let container = make_container(1, None, vec![], vec![child]);
+
+        let target = ElementTarget::Selector(Target::Literal("plain-selector".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_not_found() {
+        let container = make_container(1, None, vec!["other-class"], vec![]);
+
+        let target = ElementTarget::Selector(Target::Literal(".nonexistent".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_map_element_target_with_selector_ref_returns_none() {
+        // Target::Ref should return None for Selector
+        let target_child = make_container(3, None, vec!["my-class"], vec![]);
+        let container = make_container(1, None, vec![], vec![target_child]);
+
+        let target = ElementTarget::Selector(Target::Ref(".my-class".to_string()));
+        let result = map_element_target(&target, 1, &container, |c| c.id);
+
+        assert!(result.is_none());
+    }
+
+    // ==================== EguiElementFinder cached position/dimension tests ====================
+
+    #[test_log::test]
+    fn test_element_finder_get_dimensions_prefers_cache_over_calculated() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(50.0);
+
+        let mut finder = EguiElementFinder::new(&container);
+        // Add cached dimensions that differ from calculated
+        finder.dimensions.insert(1, (200.0, 150.0));
+
+        let result = finder.get_dimensions(1);
+        assert!(result.is_some());
+        let (width, height) = result.unwrap();
+        // Should return cached values, not calculated ones
+        assert!((width - 200.0).abs() < f32::EPSILON);
+        assert!((height - 150.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_element_finder_get_dimensions_falls_back_to_calculated_when_not_cached() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(50.0);
+
+        let finder = EguiElementFinder::new(&container);
+        // No cached dimensions
+
+        let result = finder.get_dimensions(1);
+        assert!(result.is_some());
+        let (width, height) = result.unwrap();
+        // Should return calculated values since nothing is cached
+        assert!((width - 100.0).abs() < f32::EPSILON);
+        assert!((height - 50.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_element_finder_get_position_prefers_cache_over_calculated() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_x = Some(10.0);
+        container.calculated_y = Some(20.0);
+
+        let mut finder = EguiElementFinder::new(&container);
+        // Add cached positions that differ from calculated
+        finder.positions.insert(1, (50.0, 75.0));
+
+        let result = finder.get_position(1);
+        assert!(result.is_some());
+        let (x, y) = result.unwrap();
+        // Should return cached values, not calculated ones
+        assert!((x - 50.0).abs() < f32::EPSILON);
+        assert!((y - 75.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_element_finder_get_position_falls_back_to_calculated_when_not_cached() {
+        let mut container = make_container(1, None, vec![], vec![]);
+        container.calculated_x = Some(10.0);
+        container.calculated_y = Some(20.0);
+
+        let finder = EguiElementFinder::new(&container);
+        // No cached positions
+
+        let result = finder.get_position(1);
+        assert!(result.is_some());
+        let (x, y) = result.unwrap();
+        // Should return calculated values since nothing is cached
+        assert!((x - 10.0).abs() < f32::EPSILON);
+        assert!((y - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn test_element_finder_get_dimensions_returns_none_for_nonexistent_element() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+
+        // Element with id 999 doesn't exist
+        let result = finder.get_dimensions(999);
+        assert!(result.is_none());
+    }
+
+    #[test_log::test]
+    fn test_element_finder_get_position_returns_none_for_nonexistent_element() {
+        let container = make_container(1, None, vec![], vec![]);
+
+        let finder = EguiElementFinder::new(&container);
+
+        // Element with id 999 doesn't exist
+        let result = finder.get_position(999);
+        assert!(result.is_none());
+    }
 }

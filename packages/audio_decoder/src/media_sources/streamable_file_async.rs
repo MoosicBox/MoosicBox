@@ -505,4 +505,164 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
     }
+
+    #[test_log::test]
+    fn test_try_write_chunk_writes_data_to_buffer_and_updates_downloaded() {
+        let mut instance = create_test_instance(1000);
+        let (tx, rx) = bounded(1);
+
+        // Simulate a completed download
+        let chunk_data = vec![1u8, 2, 3, 4, 5];
+        tx.send((100, chunk_data.clone())).unwrap();
+        instance.receivers.push((1, rx));
+
+        // Mark downloaded as non-empty so we use non-blocking receive
+        instance.downloaded.insert(0..50);
+
+        instance.try_write_chunk(false);
+
+        // Verify data was written to buffer at correct position
+        assert_eq!(instance.buffer[100..105], chunk_data);
+        // Verify downloaded range was updated
+        assert!(instance.downloaded.contains(&100));
+        assert!(instance.downloaded.contains(&104));
+        // Verify receiver was removed after completion
+        assert!(instance.receivers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_removes_completed_receivers() {
+        let mut instance = create_test_instance(1000);
+
+        let (tx1, rx1) = bounded(1);
+        let (tx2, rx2) = bounded(1);
+
+        // First receiver has data ready
+        tx1.send((0, vec![1u8, 2, 3])).unwrap();
+        // Second receiver also has data ready
+        tx2.send((100, vec![4u8, 5, 6])).unwrap();
+
+        instance.receivers.push((1, rx1));
+        instance.receivers.push((2, rx2));
+
+        // Mark downloaded as non-empty for non-blocking mode
+        instance.downloaded.insert(500..600);
+
+        instance.try_write_chunk(false);
+
+        // Both receivers should be removed
+        assert!(instance.receivers.is_empty());
+        // Both chunks should be in downloaded ranges
+        assert!(instance.downloaded.contains(&0));
+        assert!(instance.downloaded.contains(&100));
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_handles_empty_chunk() {
+        let mut instance = create_test_instance(1000);
+        let (tx, rx) = bounded(1);
+
+        // Send an empty chunk (position == end case)
+        tx.send((500, vec![])).unwrap();
+        instance.receivers.push((1, rx));
+
+        // Mark downloaded as non-empty for non-blocking receive
+        instance.downloaded.insert(0..100);
+
+        instance.try_write_chunk(false);
+
+        // Empty chunk should not add to downloaded ranges at that position
+        // because position == end (500 + 0 = 500, min(500, 1000) = 500)
+        // and the condition `if position != end` prevents insertion
+        assert!(!instance.downloaded.contains(&500));
+        // Receiver should still be removed
+        assert!(instance.receivers.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_writes_at_buffer_end() {
+        // Test writing a chunk that fits exactly within the buffer bounds
+        let mut instance = create_test_instance(100);
+        let (tx, rx) = bounded(1);
+
+        // Send a chunk that fits within buffer (position 80, 20 bytes = ends at 100)
+        let chunk_data = vec![1u8; 20];
+        tx.send((80, chunk_data)).unwrap();
+        instance.receivers.push((1, rx));
+
+        // Mark downloaded as non-empty
+        instance.downloaded.insert(0..50);
+
+        instance.try_write_chunk(false);
+
+        // All 20 bytes should be written (from position 80 to 100)
+        assert!(instance.downloaded.contains(&80));
+        assert!(instance.downloaded.contains(&99));
+        // Position 100 should not be in downloaded (it's the buffer length)
+        assert!(!instance.downloaded.contains(&100));
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_no_receivers_is_noop() {
+        let mut instance = create_test_instance(1000);
+        let original_buffer = instance.buffer.clone();
+
+        instance.try_write_chunk(false);
+
+        // Buffer should be unchanged
+        assert_eq!(instance.buffer, original_buffer);
+        assert!(instance.downloaded.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_try_write_chunk_pending_receiver_not_ready() {
+        let mut instance = create_test_instance(1000);
+        let (_tx, rx) = bounded::<(usize, Vec<u8>)>(1);
+
+        // Add receiver but don't send any data
+        instance.receivers.push((1, rx));
+        // Mark downloaded as non-empty for non-blocking mode
+        instance.downloaded.insert(0..100);
+
+        instance.try_write_chunk(false);
+
+        // Receiver should remain since no data was received
+        assert_eq!(instance.receivers.len(), 1);
+    }
+
+    #[test_log::test]
+    fn test_stream_position() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 4567;
+
+        let result = instance.stream_position();
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 4567);
+    }
+
+    #[test_log::test]
+    fn test_seek_start_to_zero() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 5000;
+
+        let result = instance.seek(std::io::SeekFrom::Start(0));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+        assert_eq!(instance.read_position, 0);
+    }
+
+    #[test_log::test]
+    fn test_seek_end_positive_beyond_buffer() {
+        let mut instance = create_test_instance(10000);
+        instance.read_position = 5000;
+
+        // End + positive offset = beyond buffer, should not move
+        let result = instance.seek(std::io::SeekFrom::End(1000));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5000); // Returns current position
+        assert_eq!(instance.read_position, 5000); // Position unchanged
+    }
 }
