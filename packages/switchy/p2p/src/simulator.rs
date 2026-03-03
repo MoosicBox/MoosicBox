@@ -72,31 +72,39 @@ pub struct NetworkGraph {
     links: BTreeMap<(SimulatorNodeId, SimulatorNodeId), LinkInfo>,
 }
 
-/// Information about a node in the P2P network
+/// Information about a node in the P2P network.
 ///
 /// Contains node identity, online status, registered names for discovery,
 /// and message queues for each connected peer to maintain FIFO ordering.
 #[derive(Debug, Clone)]
 pub struct NodeInfo {
+    /// The unique identifier for this node.
     #[allow(dead_code)] // Used in Phase 2.4
     id: SimulatorNodeId,
+    /// Whether the node is currently online and reachable.
     #[allow(dead_code)] // Used in Phase 2.3
     is_online: bool,
+    /// Registered names for DNS-like discovery, mapping names to node ID strings.
     #[allow(dead_code)] // Used in Phase 2.4
-    registered_names: BTreeMap<String, String>, // For DNS-like discovery
+    registered_names: BTreeMap<String, String>,
+    /// Message queues for each connected peer, ensuring FIFO delivery order.
     message_queues: BTreeMap<SimulatorNodeId, VecDeque<Vec<u8>>>,
 }
 
-/// Network link characteristics between two nodes
+/// Network link characteristics between two nodes.
 ///
 /// Defines the properties of a network connection including latency, packet loss,
 /// bandwidth limitations, and whether the link is currently active.
 #[derive(Debug, Clone)]
 pub struct LinkInfo {
+    /// The simulated network latency for messages traversing this link.
     latency: Duration,
+    /// Probability of packet loss (0.0 = no loss, 1.0 = always lost).
     packet_loss: f64,
+    /// Optional bandwidth limit in bytes per second.
     #[allow(dead_code)] // Used in Phase 2.3
-    bandwidth_limit: Option<u64>, // bytes per second
+    bandwidth_limit: Option<u64>,
+    /// Whether the link is currently active and can route traffic.
     is_active: bool,
 }
 

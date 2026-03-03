@@ -434,7 +434,10 @@ pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
     SplitIter::new(slice, chunk_size)
 }
 
-/// Iterator that yields chunks from a slice
+/// Iterator that yields chunks from a slice.
+///
+/// This iterator is returned by [`split`] and yields consecutive slices
+/// of approximately equal size from the original slice.
 pub struct SplitIter<'a, T> {
     slice: &'a [T],
     chunk_size: usize,
@@ -551,7 +554,14 @@ struct DependencyInfo<'a> {
     is_optional: bool,
 }
 
-/// Context for workspace member resolution and caching
+/// Context for workspace member resolution and caching.
+///
+/// This struct provides lazy-loading and caching of workspace member information
+/// to optimize repeated lookups. It parses the workspace `Cargo.toml` once and
+/// caches member paths as they are resolved.
+///
+/// The context supports glob patterns in workspace member definitions (e.g., `packages/*`)
+/// and will expand them to actual directory paths.
 pub struct WorkspaceContext {
     root: std::path::PathBuf,
     member_patterns: Vec<String>,
