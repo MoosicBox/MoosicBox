@@ -417,6 +417,7 @@ def main() -> int:
             log(
                 "Detected final response and idle tool activity; wrote completion signal"
             )
+            break
 
         if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
             last_heartbeat = now
