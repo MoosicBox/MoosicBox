@@ -158,11 +158,11 @@ jobs:
                   model: ${{ inputs.model }}
                   max_turns: ${{ inputs.max_turns }}
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-${{ matrix.package.name }}
+                  name: ai-output-${{ matrix.package.name }}
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
@@ -224,7 +224,7 @@ jobs:
 
                       ### ⚙️ Process:
                       - Used parallel job execution (one per package)
-                      - Each package rustdoc reviewed independently by Claude
+                      - Each package rustdoc reviewed independently by AI
                       - All changes verified with `cargo clippy` and `cargo doc`
                       - All changes consolidated on branch: `${branch_name}`
 
@@ -236,7 +236,7 @@ jobs:
 
                       ### ⚠️ Important Notes:
                       - This is an automated review - human oversight is essential
-                      - Claude focuses on public API documentation only
+                      - AI focuses on public API documentation only
                       - All changes passed `cargo clippy` and `cargo doc` verification
                       - Please review all changes carefully before merging
 

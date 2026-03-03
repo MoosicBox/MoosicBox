@@ -132,7 +132,7 @@ jobs:
                     echo "No README found for ${{ matrix.package.name }}, skipping"
                   fi
 
-            - name: Update README with Claude
+            - name: Update README with AI
               if: steps.check_readme.outputs.exists == 'true'
               id: ai
               uses: ./.github/actions/ai-checker
@@ -174,11 +174,11 @@ jobs:
                     fi
                   fi
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always() && steps.check_readme.outputs.exists == 'true'
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-${{ matrix.package.name }}
+                  name: ai-output-${{ matrix.package.name }}
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
@@ -201,7 +201,7 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
-            - name: Update root README with Claude
+            - name: Update root README with AI
               uses: ./.github/actions/ai-checker
               with:
                   command: check
@@ -236,11 +236,11 @@ jobs:
                     fi
                   fi
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-root-readme
+                  name: ai-output-root-readme
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
@@ -302,7 +302,7 @@ jobs:
 
                       ### ⚙️ Process:
                       - Used parallel job execution (one per package)
-                      - Each package README reviewed independently by Claude
+                      - Each package README reviewed independently by AI
                       - All changes consolidated on branch: `${branch_name}`
 
                       ### 📝 Review Guidelines:
@@ -313,7 +313,7 @@ jobs:
 
                       ### ⚠️ Important Notes:
                       - This is an automated review - human oversight is essential
-                      - Claude may be overly conservative or miss nuances
+                      - AI may be overly conservative or miss nuances
                       - Please review all changes carefully before merging
 
                       ---

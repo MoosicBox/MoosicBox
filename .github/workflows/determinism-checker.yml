@@ -124,11 +124,11 @@ jobs:
                   model: ${{ inputs.model }}
                   max_turns: ${{ inputs.max_turns }}
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-determinism
+                  name: ai-output-determinism
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7

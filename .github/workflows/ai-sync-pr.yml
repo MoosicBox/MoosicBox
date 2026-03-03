@@ -78,7 +78,7 @@ jobs:
                   shell: bash
                   output-path: ~/.cargo/bin/cargo-machete
                   artifact-name: cargo-machete-ubuntu-latest-binary
-                  cache-key-prefix: cargo-machete-claude
+                  cache-key-prefix: cargo-machete-ai
                   make-executable: true
                   verify-command: --version
 
@@ -91,7 +91,7 @@ jobs:
                   shell: bash
                   output-path: ~/.cargo/bin/taplo
                   artifact-name: taplo-ubuntu-latest-binary
-                  cache-key-prefix: taplo-claude
+                  cache-key-prefix: taplo-ai
                   make-executable: true
                   verify-command: --version
 

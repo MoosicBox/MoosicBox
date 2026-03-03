@@ -115,7 +115,7 @@ jobs:
               run: |
                   cargo install cargo-audit --locked
 
-            - name: Check security with Claude
+            - name: Check security with AI
               id: ai
               uses: ./.github/actions/ai-checker
               with:
@@ -140,11 +140,11 @@ jobs:
                   model: ${{ inputs.model }}
                   max_turns: ${{ inputs.max_turns }}
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-security
+                  name: ai-output-security
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7

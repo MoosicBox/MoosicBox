@@ -133,7 +133,7 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
-            - name: Add unit tests with Claude
+            - name: Add unit tests with AI
               id: ai
               uses: ./.github/actions/ai-checker
               with:
@@ -159,11 +159,11 @@ jobs:
                   model: ${{ inputs.model }}
                   max_turns: ${{ inputs.max_turns }}
 
-            - name: Upload Claude output for review
+            - name: Upload AI output for review
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: claude-output-${{ matrix.package.name }}
+                  name: ai-output-${{ matrix.package.name }}
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
@@ -226,7 +226,7 @@ jobs:
 
                       ### ⚙️ Process:
                       - Used parallel job execution (one per package)
-                      - Each package analyzed independently by Claude
+                      - Each package analyzed independently by AI
                       - Tests follow MoosicBox conventions (switchy_async::test, test_log)
                       - All changes verified with `cargo test` and `cargo clippy`
                       - Simulator compatibility tested with `cargo test -p <pkg> -p simvar`
@@ -241,7 +241,7 @@ jobs:
 
                       ### ⚠️ Important Notes:
                       - This is an automated review - human oversight is essential
-                      - Claude only adds tests that meet strict selection criteria
+                      - AI only adds tests that meet strict selection criteria
                       - All tests passed verification: `cargo test`, `cargo clippy`, simulator tests
                       - Please review test quality and value before merging
                       - Verify no unnecessary dependencies were added

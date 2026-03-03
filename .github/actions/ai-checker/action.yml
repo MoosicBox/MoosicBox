@@ -178,7 +178,7 @@ inputs:
     max_turns:
         description: "Max turns (reserved)"
         required: false
-    claude_args:
+    model_args:
         description: "Additional model args (reserved)"
         required: false
 
@@ -787,7 +787,7 @@ runs:
                 ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
                 if [ -n "$ISSUE_NUM" ]; then
                   COMMENT_ID=$(gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-                    --jq '.[-1] | select(.user.login == "claude[bot]" or (.user.login | test("Bot$"))) | .id' 2>/dev/null || echo "")
+                    --jq '.[-1] | select(.user.login == "MoosicBoxBot" or (.user.login | test("Bot$"))) | .id' 2>/dev/null || echo "")
                   echo "📋 Found latest bot comment ID: $COMMENT_ID"
                 fi
               fi

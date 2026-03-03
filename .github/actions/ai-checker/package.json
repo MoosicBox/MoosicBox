@@ -1,7 +1,7 @@
 {
     "name": "ai-checker-action",
     "version": "1.0.0",
-    "description": "Template resolver for Claude Checker action",
+    "description": "Template resolver for AI Checker action",
     "main": "src/resolve-template.js",
     "scripts": {
         "test": "echo \"No tests yet\""

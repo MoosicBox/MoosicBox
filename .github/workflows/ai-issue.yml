@@ -11,7 +11,7 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    claude:
+    ai:
         if: |
             (
                 (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@moosicboxbot')) ||
@@ -73,7 +73,7 @@ jobs:
                   shell: bash
                   output-path: ~/.cargo/bin/cargo-machete
                   artifact-name: cargo-machete-ubuntu-latest-binary
-                  cache-key-prefix: cargo-machete-claude
+                  cache-key-prefix: cargo-machete-ai
                   make-executable: true
                   verify-command: --version
 
@@ -86,7 +86,7 @@ jobs:
                   shell: bash
                   output-path: ~/.cargo/bin/taplo
                   artifact-name: taplo-ubuntu-latest-binary
-                  cache-key-prefix: taplo-claude
+                  cache-key-prefix: taplo-ai
                   make-executable: true
                   verify-command: --version
 
@@ -113,29 +113,29 @@ jobs:
                   set -euo pipefail
                   COMMENT_TYPE="issue"
 
-                  : > /tmp/stream-watcher.log
+                  : > /tmp/db-watcher.log
                   nohup python3 ${GITHUB_WORKSPACE}/.github/scripts/opencode-db-watcher.py \
                     "${{ github.repository }}" \
                     "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
                     "${{ steps.create_ack.outputs.comment_id }}" \
                     "$COMMENT_TYPE" \
-                    >> /tmp/stream-watcher.log 2>&1 &
+                    >> /tmp/db-watcher.log 2>&1 &
 
                   WATCHER_PID=$!
-                  echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+                  echo $WATCHER_PID > /tmp/db_watcher_pid.txt
 
                   sleep 2
                   if ! kill -0 $WATCHER_PID 2>/dev/null; then
                     echo "❌ DB watcher exited immediately"
                     echo "📋 DB watcher logs:"
-                    cat /tmp/stream-watcher.log || true
+                    cat /tmp/db-watcher.log || true
                     exit 1
                   fi
 
-                  echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
+                  echo "🔄 Started DB watcher (PID: $WATCHER_PID)"
                   echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
                   echo "📋 Comment type: $COMMENT_TYPE"
-                  echo "📋 Logs: /tmp/stream-watcher.log"
+                  echo "📋 Logs: /tmp/db-watcher.log"
 
             - name: Run MoosicBox Bot
               id: ai
@@ -267,7 +267,7 @@ jobs:
                   curl -fsSL https://opencode.ai/install | bash
                   rm -f /tmp/opencode_agent_done.txt
 
-                  tail -n +1 -F /tmp/stream-watcher.log &
+                  tail -n +1 -F /tmp/db-watcher.log &
                   WATCHER_TAIL_PID=$!
                   trap 'kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true' EXIT
 
@@ -299,18 +299,18 @@ jobs:
                   kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true
                   wait $WATCHER_TAIL_PID 2>/dev/null || true
 
-            - name: Wait for stream watcher completion
+            - name: Wait for DB watcher completion
               if: always()
               run: |
-                  if [ -f /tmp/stream_watcher_pid.txt ]; then
-                    WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
+                  if [ -f /tmp/db_watcher_pid.txt ]; then
+                    WATCHER_PID=$(cat /tmp/db_watcher_pid.txt)
 
-                    echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
+                    echo "⏳ Waiting for DB watcher (PID: $WATCHER_PID) to complete..."
 
                     # Wait up to 30 seconds for graceful completion
                     for i in {1..30}; do
                       if ! kill -0 $WATCHER_PID 2>/dev/null; then
-                        echo "✅ Stream watcher completed gracefully"
+                        echo "✅ DB watcher completed gracefully"
                         break
                       fi
                       sleep 1
@@ -318,24 +318,24 @@ jobs:
 
                     # Force kill if still running
                     if kill -0 $WATCHER_PID 2>/dev/null; then
-                      echo "⚠️ Stream watcher still running, sending SIGTERM..."
+                      echo "⚠️ DB watcher still running, sending SIGTERM..."
                       kill -TERM $WATCHER_PID 2>/dev/null || true
                       sleep 2
 
                       if kill -0 $WATCHER_PID 2>/dev/null; then
-                        echo "⚠️ Forcing stream watcher to stop..."
+                        echo "⚠️ Forcing DB watcher to stop..."
                         kill -9 $WATCHER_PID 2>/dev/null || true
                       fi
                     fi
 
                     # Show logs for debugging
-                    if [ -f /tmp/stream-watcher.log ]; then
+                    if [ -f /tmp/db-watcher.log ]; then
                       echo ""
-                      echo "📋 Stream watcher logs:"
-                      cat /tmp/stream-watcher.log
+                      echo "📋 DB watcher logs:"
+                      cat /tmp/db-watcher.log
                     fi
                   else
-                    echo "⚠️ No stream watcher PID found"
+                    echo "⚠️ No DB watcher PID found"
                   fi
 
                   # Debug: Show session tracking status
@@ -428,7 +428,7 @@ jobs:
 
                       ISSUE_NUM="${{ github.event.issue.number }}"
                       COMMENT_ID=$(gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
-                          --jq '.[-1] | select(.user.login == "claude[bot]" or .user.login == "MoosicBoxBot") | .id')
+                          --jq '.[-1] | select(.user.login == "MoosicBoxBot") | .id')
 
                       if [ -n "$COMMENT_ID" ]; then
                           echo "✅ Found latest comment ID: $COMMENT_ID"
@@ -436,7 +436,7 @@ jobs:
                   fi
 
                   if [ -z "$COMMENT_ID" ]; then
-                      echo "❌ Could not find Claude's comment to update"
+                      echo "❌ Could not find bot comment to update"
                       exit 0
                   fi
 
@@ -578,7 +578,7 @@ jobs:
                   PR_TITLE="Fix #${ISSUE_NUM}: ${ISSUE_TITLE}"
 
                   cat > /tmp/pr_body.md << 'EOF'
-                  ## 🤖 Claude-Generated Fix
+                  ## 🤖 AI-Generated Fix
 
                   This PR was automatically created by @moosicboxbot to address issue #${{ github.event.issue.number }}.
 
@@ -586,7 +586,7 @@ jobs:
                   ${{ github.event.issue.title }}
 
                   ### Changes
-                  Claude made the following changes to resolve this issue. Please review carefully before merging.
+                  AI made the following changes to resolve this issue. Please review carefully before merging.
 
                   Closes #${{ github.event.issue.number }}
                   EOF

@@ -1,10 +1,10 @@
 # AI Checker Action
 
-Generic Claude-based documentation and code checker with customizable prompt templates and multi-command workflow orchestration.
+Generic AI-based documentation and code checker with customizable prompt templates and multi-command workflow orchestration.
 
 ## Overview
 
-This action provides a flexible, template-driven system for running Claude Code checks on your repository. It supports:
+This action provides a flexible, template-driven system for running AI checks on your repository. It supports:
 
 - **Built-in templates** for common checks (README, rustdoc, examples, issue handling, PR comments, code review)
 - **Custom templates** via file path or inline text
@@ -19,7 +19,7 @@ This action supports three commands via the `command` input:
 
 ### 1. `check` (default)
 
-Run Claude Code checks with templates and commit changes.
+Run AI checks with templates and commit changes.
 
 ### 2. `create-branch`
 
@@ -37,7 +37,7 @@ Create or update a pull request for a branch. Handles checking for existing PRs,
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
 ```
 
@@ -49,7 +49,7 @@ This will check the root README.md using all default settings.
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       template_vars: |
           package_path: packages/audio
@@ -119,7 +119,7 @@ jobs:
               with:
                   command: check # or omit (default)
                   github_token: ${{ secrets.GITHUB_TOKEN }}
-                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  # OPENAI_API_KEY should be set in workflow env
                   prompt_template: 'readme'
                   branch_name: ${{ needs.create-branch.outputs.branch-name }}
 
@@ -137,7 +137,7 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
                   branch_name: ${{ needs.create-branch.outputs.branch-name }}
                   pr_title: '📝 Documentation Updates'
-                  pr_body: 'Automated documentation updates from Claude'
+                  pr_body: 'Automated documentation updates from AI'
 ```
 
 ## Inputs
@@ -153,7 +153,7 @@ jobs:
 | Input          | Description                                                 |
 | -------------- | ----------------------------------------------------------- |
 | `github_token` | GitHub token with write permissions (required for all)      |
-| `claude_token` | Claude Code OAuth token (required for `check` command only) |
+| `OPENAI_API_KEY` | Provider API key set in workflow env/secrets |
 
 ### Prompt Template (required for `check` command)
 
@@ -168,7 +168,7 @@ jobs:
 | Input             | Description                           | Default                   |
 | ----------------- | ------------------------------------- | ------------------------- |
 | `branch_name`     | Branch name (auto-generated if empty) |                           |
-| `branch_prefix`   | Branch prefix for auto-generation     | `claude-updates`          |
+| `branch_prefix`   | Branch prefix for auto-generation     | `ai-updates`          |
 | `existing_branch` | Use existing branch if it exists      | `true`                    |
 | `git_user_name`   | Git user name for commits             | `github-actions[bot]`     |
 | `git_user_email`  | Git user email                        | `github-actions[bot]@...` |
@@ -179,7 +179,7 @@ jobs:
 | ----------------------- | ------------------------------------ | ---------------------------------- |
 | `branch_name`           | Branch name (required for create-pr) |                                    |
 | `pr_base_branch`        | Base branch for PR                   | `master`                           |
-| `pr_title`              | PR title (supports ${variables})     | `📝 Automated updates from Claude` |
+| `pr_title`              | PR title (supports ${variables})     | `📝 Automated updates from AI` |
 | `pr_body`               | PR body (supports ${variables})      | `""`                               |
 | `pr_labels`             | Comma-separated PR labels            | `automated`                        |
 | `pr_skip_if_no_changes` | Skip PR creation if no changes       | `true`                             |
@@ -190,16 +190,16 @@ jobs:
 | ---------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
 | `template_vars`                    | YAML/JSON object of variables                                            | `{}`                              |
 | `verification_profile`             | Built-in profile: `auto`, `rust`, `typescript`, `python`, `go`, `custom` | `auto`                            |
-| `verification_config_file`         | Path to verification config YAML                                         | `.github/claude-verification.yml` |
+| `verification_config_file`         | Path to verification config YAML                                         | `.github/ai-verification.yml` |
 | `verification_config_inline`       | Inline verification config (YAML)                                        |                                   |
 | `branch_name`                      | Branch to commit to (overrides template default)                         |                                   |
 | `commit_message`                   | Commit message (supports template variables)                             |                                   |
 | `auto_commit`                      | Automatically commit changes                                             | `true`                            |
 | `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                           |
-| `summary_title`                    | Title for workflow summary section                                       | `💭 Claude Execution Details`     |
-| `model`                            | Claude model                                                             |                                   |
+| `summary_title`                    | Title for workflow summary section                                       | `💭 AI Execution Details`     |
+| `model`                            | Model                                                             |                                   |
 | `max_turns`                        | Max turns                                                                |                                   |
-| `claude_args`                      | Additional Claude Code arguments                                         |                                   |
+| `model_args`                      | Additional model arguments                                         |                                   |
 | `working_directory`                | Working directory                                                        | `.`                               |
 
 ## Outputs
@@ -355,14 +355,14 @@ branch_name: ${is_root_readme ? 'docs/root-readme-updates-' + run_id : 'docs/rea
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
 
 # Package README
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       template_vars: |
           package_path: packages/my-package
@@ -388,7 +388,7 @@ branch_name: docs/rustdoc-updates-${run_id}
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'rustdoc'
       template_vars: |
           package_path: packages/my-package
@@ -421,7 +421,7 @@ branch_name: docs/tsdoc-updates-${run_id}
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'tsdoc'
       template_vars: |
           package_path: app-website
@@ -447,7 +447,7 @@ branch_name: docs/examples-updates-${run_id}
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'examples'
       template_vars: |
           package_path: packages/my-package
@@ -480,7 +480,7 @@ branch_name: test/coverage-${package_name}-${run_id}
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'unit-tests'
       template_vars: |
           package_path: packages/my-rust-package
@@ -492,7 +492,7 @@ branch_name: test/coverage-${package_name}-${run_id}
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'unit-tests'
       template_vars: |
           package_path: app-website
@@ -503,11 +503,11 @@ branch_name: test/coverage-${package_name}-${run_id}
 
 ### `issue` (TODO)
 
-Handles @claude mentions in GitHub issues.
+Handles @moosicboxbot mentions in GitHub issues.
 
 ### `pr` (TODO)
 
-Handles @claude mentions in PR comments.
+Handles @moosicboxbot mentions in PR comments.
 
 ### `code-review` (TODO)
 
@@ -521,7 +521,7 @@ Automated code review on PR open/sync.
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template_file: '.github/prompts/security-audit.md'
       template_vars: |
           severity: high
@@ -534,7 +534,7 @@ Automated code review on PR open/sync.
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template_text: |
           ---
           target: ${package_path}/README.md
@@ -558,7 +558,7 @@ Automated code review on PR open/sync.
 
 ### Verification Config File
 
-Create `.github/claude-verification.yml`:
+Create `.github/ai-verification.yml`:
 
 ```yaml
 # Setup steps (run once)
@@ -601,7 +601,7 @@ jobs:
             - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
               with:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
-                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  # OPENAI_API_KEY should be set in workflow env
                   prompt_template: 'readme'
                   template_vars: |
                       package_path: packages/${{ matrix.package }}
@@ -616,7 +616,7 @@ Project type is auto-detected from `package.json`. Package manager is detected f
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'unit-tests'
       template_vars: |
           package_path: app-website
@@ -630,7 +630,7 @@ Override auto-detection when needed:
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'unit-tests'
       template_vars: |
           package_path: packages/my-package
@@ -645,7 +645,7 @@ Override auto-detection when needed:
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       template_vars: |
           package_path: packages/audio
@@ -657,7 +657,7 @@ Override auto-detection when needed:
 
 ## Execution Details
 
-The ai-checker action can provide detailed execution information showing how Claude worked on the task. This includes tool usage, thinking process, token counts, and costs.
+The ai-checker action can provide detailed execution information showing how AI worked on the task. This includes tool usage, thinking process, token counts, and costs.
 
 ### Workflow Summary
 
@@ -669,7 +669,7 @@ Post the "💭 How I worked on this" details directly to the GitHub Actions work
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       enable_execution_details_summary: 'true'
       summary_title: '💭 README Update Details'
@@ -696,7 +696,7 @@ Upload execution details as a downloadable artifact:
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       enable_execution_details_artifact: 'true'
       artifact_name_prefix: 'readme'
@@ -712,7 +712,7 @@ Append execution details to GitHub issue/PR comments:
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       enable_execution_details: 'true'
       acknowledgment_comment_id: ${{ steps.comment.outputs.comment_id }}
@@ -724,11 +724,11 @@ Append execution details to GitHub issue/PR comments:
 - uses: MoosicBox/MoosicBox/.github/actions/ai-checker@v1
   with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # OPENAI_API_KEY should be set in workflow env
       prompt_template: 'readme'
       # Summary for quick access
       enable_execution_details_summary: 'true'
-      summary_title: '💭 How Claude Updated README'
+      summary_title: '💭 How AI Updated README'
       # Artifact for long-term storage
       enable_execution_details_artifact: 'true'
       artifact_retention_days: '90'

@@ -307,7 +307,7 @@ function testPartials() {
  * Main test runner
  */
 function main() {
-    console.log('🧪 Testing Claude Checker Templates\n');
+    console.log('🧪 Testing AI Checker Templates\n');
     console.log('='.repeat(50));
 
     // Test partials first
