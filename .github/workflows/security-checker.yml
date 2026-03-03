@@ -29,10 +29,16 @@ on:
                 default: ""
 
             model:
-                description: "Model to use in provider/model format"
+                description: "Model to use (leave empty for default)"
                 required: false
-                type: string
-                default: "openai/gpt-5.3-codex"
+                type: choice
+                options:
+                    - ""
+                    - "openai/gpt-5.3-codex"
+                    - "openai/gpt-5.2"
+                    - "openai/gpt-5.1-codex"
+                    - "openai/gpt-5-nano"
+                default: ""
 
             max_turns:
                 description: "Maximum conversation turns (leave empty for default)"
