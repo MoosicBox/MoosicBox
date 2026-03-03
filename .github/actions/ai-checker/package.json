@@ -1,5 +1,5 @@
 {
-    "name": "claude-checker-action",
+    "name": "ai-checker-action",
     "version": "1.0.0",
     "description": "Template resolver for Claude Checker action",
     "main": "src/resolve-template.js",
