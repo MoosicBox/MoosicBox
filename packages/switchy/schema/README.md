@@ -15,6 +15,25 @@ A comprehensive schema migration system for the Switchy database ecosystem, prov
 - **Async/Await**: Full async support for database operations
 - **Auto-Reversible Migrations**: Automatic DOWN migration generation for safe operations (requires `auto-reverse` feature)
 
+## Backend Capability Matrix
+
+The migration runner and CLI support multiple database backends with a mostly shared feature set.
+
+| Capability | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
+| ---------- | ------ | ---------- | ----- | ------ | ------------- |
+| CLI URL support (`switchy-migrate -d ...`) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Migration create/status/migrate/rollback/validate commands | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Runner core flows (apply/list/rollback/checksum/dirty-state) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Savepoint API support in backend | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Full cascade/drop-column dependency behavior parity | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| Built-in test coverage in this crate (default CI path) | ✅ | ⚠️ | ⚠️ | ✅ | ✅ |
+
+Notes:
+
+- `DuckDB` savepoints are not supported by the backend.
+- `DuckDB` has engine-level DDL limitations around some FK/index-dependent `CASCADE` and `DROP COLUMN` operations in v1.4.4.
+- `MySQL` CLI integration tests are env-gated (`SWITCHY_TEST_MYSQL_URL`) rather than always-on.
+
 ## Quick Start
 
 ### Using the CLI (Recommended)

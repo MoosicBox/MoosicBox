@@ -18,6 +18,19 @@ The binary is installed as `switchy-migrate`.
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **Turso (local)**: `turso://path/to/db.sqlite`, `turso:path/to/db.sqlite`, `turso://:memory:`, or `turso:`
 
+## Capability Matrix
+
+| Capability | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
+| ---------- | ------ | ---------- | ----- | ------ | ------------- |
+| `create` / `status` / `migrate` / `rollback` / `validate` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `--database-url` scheme support | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Default test coverage in this crate | ✅ | ⚠️ | ⚠️ | ✅ | ✅ |
+
+Notes:
+
+- `MySQL` integration coverage is env-gated via `SWITCHY_TEST_MYSQL_URL`.
+- `DuckDB` savepoints are unsupported at backend level, but migration CLI flows are supported.
+
 DuckDB backend behavior can be configured via environment variables:
 
 - `SWITCHY_DUCKDB_MODE`: `deterministic` (default) or `pooled`
