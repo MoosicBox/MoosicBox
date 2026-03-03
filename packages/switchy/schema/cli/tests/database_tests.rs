@@ -31,6 +31,52 @@ async fn test_status_with_sqlite_empty_database() {
 }
 
 #[switchy_async::test(no_simulator)]
+async fn test_status_with_duckdb_empty_database() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.duckdb");
+    let migrations_dir = temp_dir.path().join("migrations");
+    create_dir_all(&migrations_dir).unwrap();
+
+    let database_url = format!("duckdb://{}", db_path.display());
+
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
+    cmd.args([
+        "status",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("No migrations found"));
+}
+
+#[switchy_async::test(no_simulator)]
+async fn test_status_with_turso_empty_database() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test-turso.db");
+    let migrations_dir = temp_dir.path().join("migrations");
+    create_dir_all(&migrations_dir).unwrap();
+
+    let database_url = format!("turso://{}", db_path.display());
+
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
+    cmd.args([
+        "status",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("No migrations found"));
+}
+
+#[switchy_async::test(no_simulator)]
 async fn test_create_and_status_workflow() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("workflow.db");
@@ -53,6 +99,80 @@ async fn test_create_and_status_workflow() {
         .stdout(predicate::str::contains("Created migration:"));
 
     // Step 2: Check status shows pending migration
+    let mut status_cmd = cargo_bin_cmd!("switchy-migrate");
+    status_cmd.args([
+        "status",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    status_cmd
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("initial_schema"))
+        .stdout(predicate::str::contains("pending").or(predicate::str::contains("unapplied")));
+}
+
+#[switchy_async::test(no_simulator)]
+async fn test_create_and_status_workflow_duckdb() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("workflow.duckdb");
+    let migrations_dir = temp_dir.path().join("migrations");
+
+    let database_url = format!("duckdb://{}", db_path.display());
+
+    let mut create_cmd = cargo_bin_cmd!("switchy-migrate");
+    create_cmd.args([
+        "create",
+        "initial_schema",
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    create_cmd
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created migration:"));
+
+    let mut status_cmd = cargo_bin_cmd!("switchy-migrate");
+    status_cmd.args([
+        "status",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    status_cmd
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("initial_schema"))
+        .stdout(predicate::str::contains("pending").or(predicate::str::contains("unapplied")));
+}
+
+#[switchy_async::test(no_simulator)]
+async fn test_create_and_status_workflow_turso() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("workflow-turso.db");
+    let migrations_dir = temp_dir.path().join("migrations");
+
+    let database_url = format!("turso://{}", db_path.display());
+
+    let mut create_cmd = cargo_bin_cmd!("switchy-migrate");
+    create_cmd.args([
+        "create",
+        "initial_schema",
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    create_cmd
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created migration:"));
+
     let mut status_cmd = cargo_bin_cmd!("switchy-migrate");
     status_cmd.args([
         "status",
@@ -100,6 +220,96 @@ async fn test_migrate_dry_run() {
     down_file.write_all(down_content.as_bytes()).unwrap();
 
     let database_url = format!("sqlite://{}", db_path.display());
+
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
+    cmd.args([
+        "migrate",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("dry run").or(predicate::str::contains("Dry run")))
+        .stdout(predicate::str::contains("001_create_users"));
+}
+
+#[switchy_async::test(no_simulator)]
+async fn test_migrate_dry_run_duckdb() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("dryrun.duckdb");
+    let migrations_dir = temp_dir.path().join("migrations");
+    create_dir_all(&migrations_dir).unwrap();
+
+    let migration_id = "001_create_users";
+    let migration_dir = migrations_dir.join(migration_id);
+    create_dir_all(&migration_dir).unwrap();
+
+    let up_content = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);";
+    let mut up_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(migration_dir.join("up.sql"))
+        .unwrap();
+    up_file.write_all(up_content.as_bytes()).unwrap();
+
+    let down_content = "DROP TABLE users;";
+    let mut down_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(migration_dir.join("down.sql"))
+        .unwrap();
+    down_file.write_all(down_content.as_bytes()).unwrap();
+
+    let database_url = format!("duckdb://{}", db_path.display());
+
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
+    cmd.args([
+        "migrate",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("dry run").or(predicate::str::contains("Dry run")))
+        .stdout(predicate::str::contains("001_create_users"));
+}
+
+#[switchy_async::test(no_simulator)]
+async fn test_migrate_dry_run_turso() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("dryrun-turso.db");
+    let migrations_dir = temp_dir.path().join("migrations");
+    create_dir_all(&migrations_dir).unwrap();
+
+    let migration_id = "001_create_users";
+    let migration_dir = migrations_dir.join(migration_id);
+    create_dir_all(&migration_dir).unwrap();
+
+    let up_content = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);";
+    let mut up_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(migration_dir.join("up.sql"))
+        .unwrap();
+    up_file.write_all(up_content.as_bytes()).unwrap();
+
+    let down_content = "DROP TABLE users;";
+    let mut down_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(migration_dir.join("down.sql"))
+        .unwrap();
+    down_file.write_all(down_content.as_bytes()).unwrap();
+
+    let database_url = format!("turso://{}", db_path.display());
 
     let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([

@@ -28,8 +28,11 @@ dialoguer = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
 switchy_database = { workspace = true, features = ["schema"] }
 switchy_database_connection = { workspace = true, features = [
+    "duckdb-bundled",
+    "mysql-sqlx",
     "postgres-sqlx",
     "sqlite-sqlx",
+    "turso",
 ] }
 switchy_fs = { workspace = true, features = ["std"] }
 switchy_schema = { workspace = true, features = ["all-discovery"] }

@@ -1,8 +1,9 @@
 //! Command-line interface for managing database schema migrations.
 //!
 //! This crate provides the `switchy-migrate` binary, a CLI tool for managing database schema
-//! migrations with support for `PostgreSQL` and `SQLite` databases. It handles migration creation,
-//! execution, rollback, validation, and status tracking.
+//! migrations with support for `PostgreSQL`, `SQLite`, `DuckDB`, `MySQL`, and local
+//! `Turso` databases. It handles migration creation, execution, rollback,
+//! validation, and status tracking.
 //!
 //! # Features
 //!
@@ -30,6 +31,9 @@
 //!
 //! * `SQLite`: `sqlite://path/to/db.sqlite` or `sqlite://:memory:`
 //! * `PostgreSQL`: `postgresql://user:pass@host:port/database`
+//! * `DuckDB`: `duckdb://path/to/db.duckdb`, `duckdb:path/to/db.duckdb`, or `duckdb://:memory:`
+//! * `MySQL`: `mysql://user:pass@host:port/database`
+//! * `Turso` (local): `turso://path/to/db.sqlite`, `turso:path/to/db.sqlite`, or `turso://:memory:`
 //!
 //! # Environment Variables
 //!

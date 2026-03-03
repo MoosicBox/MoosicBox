@@ -1,6 +1,6 @@
 # switchy_schema_cli
 
-Command-line interface for managing database schema migrations with support for PostgreSQL and SQLite databases.
+Command-line interface for managing database schema migrations with support for PostgreSQL, SQLite, DuckDB, MySQL, and local Turso databases.
 
 ## Installation
 
@@ -14,6 +14,9 @@ The binary is installed as `switchy-migrate`.
 
 - **SQLite**: `sqlite://path/to/db.sqlite` or `sqlite://:memory:`
 - **PostgreSQL**: `postgresql://user:pass@host:port/database` or `postgres://user:pass@host:port/database`
+- **DuckDB**: `duckdb://path/to/db.duckdb`, `duckdb:path/to/db.duckdb`, `duckdb://:memory:`, or `duckdb:`
+- **MySQL**: `mysql://user:pass@host:port/database`
+- **Turso (local)**: `turso://path/to/db.sqlite`, `turso:path/to/db.sqlite`, `turso://:memory:`, or `turso:`
 
 ## Environment Variables
 
@@ -47,6 +50,7 @@ Show migration status and pending migrations.
 ```bash
 switchy-migrate status -d <database-url>
 switchy-migrate status -d sqlite://db.sqlite --show-failed
+switchy-migrate status -d duckdb://:memory:
 ```
 
 **Options:**
@@ -64,6 +68,7 @@ Run pending migrations.
 switchy-migrate migrate -d <database-url>
 switchy-migrate migrate -d sqlite://db.sqlite --dry-run
 switchy-migrate migrate -d postgres://localhost/mydb --up-to 20231201000000_init
+switchy-migrate migrate -d mysql://user:pass@localhost/mydb --steps 3
 switchy-migrate migrate -d sqlite://db.sqlite --steps 3
 ```
 
@@ -86,6 +91,7 @@ Rollback migrations.
 switchy-migrate rollback -d <database-url>
 switchy-migrate rollback -d sqlite://db.sqlite --steps 2
 switchy-migrate rollback -d postgres://localhost/mydb --to 20231201000000_init
+switchy-migrate rollback -d turso://:memory: --all --dry-run
 switchy-migrate rollback -d sqlite://db.sqlite --all --dry-run
 ```
 
