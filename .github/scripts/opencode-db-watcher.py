@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 UPDATE_INTERVAL_SECONDS = 3
 HEARTBEAT_INTERVAL_SECONDS = 10
+NO_SESSION_NOTE_SECONDS = 20
 UNDERSTANDING_FILE = "/tmp/ai_understanding.txt"
 DB_PATH = os.path.join(
     os.path.expanduser("~"), ".local", "share", "opencode", "opencode.db"
@@ -237,7 +238,11 @@ def main() -> int:
     endpoint = detect_api_endpoint(repo, comment_id, comment_type)
     log(f"Using API endpoint: {endpoint}")
 
-    progress_lines = ["→ Waiting for model activity..."]
+    now_utc = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    progress_lines = [
+        f"→ Watcher connected at {now_utc}",
+        "→ Waiting for model activity...",
+    ]
     seen_parts: Set[str] = set()
     seen_status: Dict[str, str] = {}
     last_time_created = 0
@@ -248,12 +253,14 @@ def main() -> int:
     start_ms = int(time.time() * 1000)
     workspace = os.environ.get("GITHUB_WORKSPACE")
     last_heartbeat = 0.0
+    no_session_note_added = False
 
     session_id: Optional[str] = None
     understanding_inserted = False
 
     update_comment(repo, endpoint, comment_id, progress_lines, None)
     updates += 1
+    log("Posted initial watcher status to acknowledgment comment")
 
     while running:
         now = time.time()
@@ -282,8 +289,26 @@ def main() -> int:
             if session_id:
                 log(f"Detected OpenCode session: {session_id}")
 
+        if (
+            not session_id
+            and not no_session_note_added
+            and (now * 1000 - start_ms) >= (NO_SESSION_NOTE_SECONDS * 1000)
+        ):
+            progress_lines.append(
+                "→ Waiting for OpenCode session to appear in local DB..."
+            )
+            no_session_note_added = True
+            if now - last_update >= 1:
+                update_comment(
+                    repo, endpoint, comment_id, progress_lines, understanding_text
+                )
+                last_update = now
+                updates += 1
+            log("No OpenCode session discovered yet; posted diagnostic note")
+
         if session_id:
             new_parts = query_new_parts(session_id, last_time_created)
+            log(f"Polled {len(new_parts)} new part rows for session {session_id}")
             changed = False
 
             for part_id, time_created, data in new_parts:
@@ -348,6 +373,7 @@ def main() -> int:
                 "heartbeat "
                 + f"session_found={'yes' if session_id else 'no'} "
                 + f"db_exists={'yes' if os.path.isfile(DB_PATH) else 'no'} "
+                + f"workspace={'set' if workspace else 'unset'} "
                 + f"events_seen={all_events} tool_events={tool_events} updates={updates}"
             )
 

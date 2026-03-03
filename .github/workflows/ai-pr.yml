@@ -232,17 +232,27 @@ jobs:
 
             - name: Start DB watcher
               run: |
+                  set -euo pipefail
                   COMMENT_TYPE="${{ github.event_name == 'pull_request_review_comment' && 'pr_review_comment' || github.event_name == 'issue_comment' && github.event.issue.pull_request && 'pr_issue_comment' || 'issue' }}"
 
-                  python3 ${GITHUB_WORKSPACE}/.github/scripts/opencode-db-watcher.py \
+                  : > /tmp/stream-watcher.log
+                  nohup python3 ${GITHUB_WORKSPACE}/.github/scripts/opencode-db-watcher.py \
                     "${{ github.repository }}" \
                     "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
                     "${{ steps.create_ack.outputs.comment_id }}" \
                     "$COMMENT_TYPE" \
-                    > /tmp/stream-watcher.log 2>&1 &
+                    >> /tmp/stream-watcher.log 2>&1 &
 
                   WATCHER_PID=$!
                   echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+
+                  sleep 2
+                  if ! kill -0 $WATCHER_PID 2>/dev/null; then
+                    echo "❌ DB watcher exited immediately"
+                    echo "📋 DB watcher logs:"
+                    cat /tmp/stream-watcher.log || true
+                    exit 1
+                  fi
 
                   echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
                   echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
@@ -406,7 +416,15 @@ jobs:
               run: |
                   set -euo pipefail
                   curl -fsSL https://opencode.ai/install | bash
+
+                  tail -n +1 -F /tmp/stream-watcher.log &
+                  WATCHER_TAIL_PID=$!
+                  trap 'kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true' EXIT
+
                   "$HOME/.opencode/bin/opencode" github run
+
+                  kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true
+                  wait $WATCHER_TAIL_PID 2>/dev/null || true
 
             - name: Wait for stream watcher completion
               if: always()
@@ -451,6 +469,22 @@ jobs:
                     echo "  OpenCode DB exists: YES"
                   else
                     echo "  OpenCode DB exists: NO"
+                  fi
+
+                  echo ""
+                  echo "📂 Debug: OpenCode log files:"
+                  if [ -d "$HOME/.local/share/opencode/log" ]; then
+                    ls -la "$HOME/.local/share/opencode/log" || true
+                    LATEST_LOG=$(ls -1t "$HOME/.local/share/opencode/log"/*.log 2>/dev/null | head -n 1 || true)
+                    if [ -n "$LATEST_LOG" ]; then
+                      echo ""
+                      echo "📋 Latest OpenCode log: $LATEST_LOG"
+                      tail -n 120 "$LATEST_LOG" || true
+                    else
+                      echo "  No .log files found"
+                    fi
+                  else
+                    echo "  OpenCode log directory missing"
                   fi
 
             - name: Append execution details to bot response
