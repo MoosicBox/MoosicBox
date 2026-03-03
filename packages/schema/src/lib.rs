@@ -937,7 +937,69 @@ mod sqlite_tests {
         migrate_library_sqlite(&*db).await.unwrap();
     }
 
+    mod skip_migrations_behavior {
+        use super::*;
+        use serial_test::serial;
+        use switchy_env::simulator::{remove_var, set_var};
+
+        #[test_log::test(switchy_async::test)]
+        #[serial]
+        async fn test_skip_migrations_marks_completed_without_creating_tables() {
+            // Set up the skip flag
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
+
+            let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+            // Run migrations with skip flag - should not actually create tables
+            migrate_library_sqlite(&*db).await.unwrap();
+
+            // The 'artists' table should NOT exist because migrations were skipped
+            let result = db
+                .query_raw("SELECT name FROM sqlite_master WHERE type='table' AND name='artists'")
+                .await
+                .unwrap();
+
+            // Should be empty because tables weren't created
+            assert!(
+                result.is_empty(),
+                "artists table should not exist when migrations are skipped"
+            );
+
+            // Clean up
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+        }
+
+        #[test_log::test(switchy_async::test)]
+        #[serial]
+        async fn test_skip_migrations_records_in_tracking_table() {
+            // Set up the skip flag
+            set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
+
+            let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+            // Run migrations with skip flag
+            migrate_library_sqlite(&*db).await.unwrap();
+
+            // Check that the migrations tracking table exists and has entries
+            let result = db
+                .query_raw("SELECT COUNT(*) as count FROM __moosicbox_schema_migrations")
+                .await
+                .unwrap();
+
+            let count: i64 = result[0].get("count").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            assert!(
+                count > 0,
+                "Migrations should be recorded in tracking table even when skipped"
+            );
+
+            // Clean up
+            remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
+        }
+    }
+
     #[test_log::test(switchy_async::test)]
+    #[serial_test::serial]
     async fn test_api_sources_table_migration() {
         const API_SOURCES_COLUMN: &str = "
             (
@@ -1170,6 +1232,7 @@ mod sqlite_tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    #[serial_test::serial]
     async fn test_api_sources_column_migration() {
         let tidal = ApiSource::register("Tidal", "Tidal");
         let qobuz = ApiSource::register("Qobuz", "Qobuz");

@@ -2082,6 +2082,134 @@ mod tests {
         );
     }
 
+    mod message_handler_tests {
+        use super::{Message, TunnelMessage, TunnelSender};
+        use bytes::Bytes;
+        use pretty_assertions::assert_eq;
+        use tokio::sync::mpsc;
+        use tokio_tungstenite::tungstenite::protocol::frame::Frame;
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_text_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let message = Message::Text("hello world".into());
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            match received {
+                TunnelMessage::Text(text) => assert_eq!(text, "hello world"),
+                _ => panic!("expected Text message"),
+            }
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_binary_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let data = vec![1, 2, 3, 4, 5];
+            let message = Message::Binary(Bytes::from(data.clone()));
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            match received {
+                TunnelMessage::Binary(bytes) => assert_eq!(bytes.to_vec(), data),
+                _ => panic!("expected Binary message"),
+            }
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_ping_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let payload = vec![1, 2, 3];
+            let message = Message::Ping(Bytes::from(payload.clone()));
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            match received {
+                TunnelMessage::Ping(data) => assert_eq!(data, payload),
+                _ => panic!("expected Ping message"),
+            }
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_pong_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let payload = vec![4, 5, 6];
+            let message = Message::Pong(Bytes::from(payload.clone()));
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            match received {
+                TunnelMessage::Pong(data) => assert_eq!(data, payload),
+                _ => panic!("expected Pong message"),
+            }
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_close_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let message = Message::Close(None);
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            assert!(matches!(received, TunnelMessage::Close));
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_frame_message() {
+            let (tx, mut rx) = mpsc::channel(1);
+            let frame = Frame::ping(Bytes::new());
+            let message = Message::Frame(frame);
+
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_ok());
+
+            let received = rx.recv().await.expect("should receive message");
+            assert!(matches!(received, TunnelMessage::Frame(_)));
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn test_message_handler_returns_error_when_channel_closed() {
+            let (tx, rx) = mpsc::channel(1);
+            drop(rx); // Close the receiving end
+
+            let message = Message::Text("test".into());
+            let result = TunnelSender::message_handler(tx, message).await;
+            assert!(result.is_err());
+        }
+    }
+
+    mod sender_handle_tests {
+        use super::{CancellationToken, TunnelSenderHandle};
+        use std::sync::{Arc, RwLock};
+
+        #[test_log::test]
+        fn test_close_cancels_token() {
+            let sender = Arc::new(RwLock::new(None));
+            let cancellation_token = CancellationToken::new();
+            let player_actions = Arc::new(RwLock::new(Vec::new()));
+
+            let handle = TunnelSenderHandle {
+                sender,
+                cancellation_token: cancellation_token.clone(),
+                player_actions,
+            };
+
+            assert!(!cancellation_token.is_cancelled());
+            handle.close();
+            assert!(cancellation_token.is_cancelled());
+        }
+    }
+
     #[cfg(feature = "base64")]
     mod base64_tests {
         use super::{BTreeMap, TunnelSender};

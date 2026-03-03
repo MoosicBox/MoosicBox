@@ -828,95 +828,109 @@ impl MusicApi for LibraryMusicApi {
 mod tests {
     use regex::{Captures, Regex};
 
-    /// Tests the Windows path conversion logic used in `track_source()`.
-    /// Verifies that Unix-style mount paths like "/mnt/c" are correctly
-    /// converted to Windows drive letters like "C:".
-    #[cfg(target_os = "windows")]
-    #[test_log::test]
-    fn test_windows_path_conversion_single_drive() {
+    /// Helper function that applies Windows path conversion logic.
+    /// This mirrors the logic in `track_source()` for testability.
+    fn apply_windows_path_conversion(path: &str) -> String {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/c/Users/test/file.mp3";
-
-        let result = regex
+        regex
             .replace(path, |caps: &Captures| {
                 format!("{}:", caps[1].to_uppercase())
             })
-            .replace('/', "\\");
+            .replace('/', "\\")
+    }
 
+    /// Tests the Windows path conversion logic used in `track_source()`.
+    /// Verifies that Unix-style mount paths like "/mnt/c" are correctly
+    /// converted to Windows drive letters like "C:".
+    #[test_log::test]
+    fn test_windows_path_conversion_single_drive() {
+        let result = apply_windows_path_conversion("/mnt/c/Users/test/file.mp3");
         assert_eq!(result, "C:\\Users\\test\\file.mp3");
     }
 
     /// Tests Windows path conversion with lowercase drive letters.
     /// Ensures that the drive letter is properly uppercased during conversion.
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_lowercase_drive() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/d/data/music.flac";
-
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
-
+        let result = apply_windows_path_conversion("/mnt/d/data/music.flac");
         assert_eq!(result, "D:\\data\\music.flac");
     }
 
     /// Tests Windows path conversion when no mount point is present.
     /// Verifies that paths without "/mnt/" are still processed correctly
     /// (slashes converted to backslashes).
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_no_mount() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/some/other/path.mp3";
-
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
-
+        let result = apply_windows_path_conversion("/some/other/path.mp3");
         assert_eq!(result, "\\some\\other\\path.mp3");
-    }
-
-    /// Tests that Unix systems don't perform Windows path conversion.
-    /// Paths should remain unchanged on non-Windows platforms.
-    #[cfg(not(target_os = "windows"))]
-    #[test_log::test]
-    fn test_unix_path_no_conversion() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/c/Users/test/file.mp3";
-
-        // On Unix, no conversion should happen
-        let result = if std::env::consts::OS == "windows" {
-            regex
-                .replace(path, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\")
-        } else {
-            path.to_string()
-        };
-
-        assert_eq!(result, path);
     }
 
     /// Tests path conversion with multiple directory levels.
     /// Ensures deep directory structures are handled correctly.
-    #[cfg(target_os = "windows")]
     #[test_log::test]
     fn test_windows_path_conversion_deep_directory() {
-        let regex = Regex::new(r"/mnt/(\w+)").unwrap();
-        let path = "/mnt/e/Music/Albums/2023/Best/track.flac";
-
-        let result = regex
-            .replace(path, |caps: &Captures| {
-                format!("{}:", caps[1].to_uppercase())
-            })
-            .replace('/', "\\");
-
+        let result = apply_windows_path_conversion("/mnt/e/Music/Albums/2023/Best/track.flac");
         assert_eq!(result, "E:\\Music\\Albums\\2023\\Best\\track.flac");
+    }
+
+    /// Tests that multi-character drive names are handled correctly.
+    /// WSL mount points like "/mnt/sd" should convert to "SD:".
+    #[test_log::test]
+    fn test_windows_path_conversion_multi_char_drive() {
+        let result = apply_windows_path_conversion("/mnt/sd/media/music.mp3");
+        assert_eq!(result, "SD:\\media\\music.mp3");
+    }
+
+    /// Tests that the regex correctly handles paths with numeric characters
+    /// in the mount point (e.g., "/mnt/drive1/").
+    #[test_log::test]
+    fn test_windows_path_conversion_alphanumeric_mount() {
+        let result = apply_windows_path_conversion("/mnt/drive1/folder/file.mp3");
+        assert_eq!(result, "DRIVE1:\\folder\\file.mp3");
+    }
+
+    /// Tests that paths with no leading /mnt/ but starting with /mnt elsewhere
+    /// are handled correctly (only the leading /mnt/ should be matched).
+    #[test_log::test]
+    fn test_windows_path_conversion_embedded_mnt() {
+        // Only the first /mnt/ should be replaced
+        let result = apply_windows_path_conversion("/mnt/c/data/mnt/backup/file.mp3");
+        assert_eq!(result, "C:\\data\\mnt\\backup\\file.mp3");
+    }
+
+    /// Tests empty path handling.
+    #[test_log::test]
+    fn test_windows_path_conversion_empty_path() {
+        let result = apply_windows_path_conversion("");
+        assert_eq!(result, "");
+    }
+
+    /// Tests a Windows-native path (should only convert slashes, not the mount).
+    #[test_log::test]
+    fn test_windows_path_conversion_already_windows_style() {
+        // If path is already Windows-style (unlikely but test for robustness)
+        let result = apply_windows_path_conversion("C:/Users/test/file.mp3");
+        assert_eq!(result, "C:\\Users\\test\\file.mp3");
+    }
+
+    /// Tests that the runtime detection of Windows OS correctly skips conversion.
+    #[test_log::test]
+    fn test_unix_path_no_conversion_when_not_windows() {
+        let path = "/mnt/c/Users/test/file.mp3";
+
+        // Simulating what the actual code does - on Unix it doesn't convert
+        let result = if std::env::consts::OS == "windows" {
+            apply_windows_path_conversion(path)
+        } else {
+            path.to_string()
+        };
+
+        // On the CI (Linux), this should not convert
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(result, path);
+
+        // On Windows, this should convert
+        #[cfg(target_os = "windows")]
+        assert_eq!(result, "C:\\Users\\test\\file.mp3");
     }
 }

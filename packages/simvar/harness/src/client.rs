@@ -128,3 +128,61 @@ impl Actor for &Client {
         (*self).tick();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_current_client_returns_none_outside_client_context() {
+        // When called outside of any client context (no client action is running),
+        // current_client() should return None
+        let result = current_client();
+        assert!(
+            result.is_none(),
+            "current_client() should return None when not inside a client action"
+        );
+    }
+
+    #[test_log::test]
+    fn test_with_client_sets_current_client_context() {
+        // Verify that with_client correctly sets the client context for the duration
+        // of the closure, making current_client() return the client name
+        let captured_name = with_client("test-client".to_string(), |name| {
+            assert_eq!(name, "test-client");
+            current_client()
+        });
+
+        assert_eq!(captured_name, Some("test-client".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_current_client_returns_none_after_with_client_exits() {
+        // Verify that after with_client exits, current_client() returns None again
+        with_client("temporary-client".to_string(), |_name| ());
+
+        let result = current_client();
+        assert!(
+            result.is_none(),
+            "current_client() should return None after with_client exits"
+        );
+    }
+
+    #[test_log::test]
+    fn test_with_client_nested_contexts() {
+        // Verify that nested with_client calls correctly shadow the outer context
+        with_client("outer-client".to_string(), |outer_name| {
+            assert_eq!(outer_name, "outer-client");
+            assert_eq!(current_client(), Some("outer-client".to_string()));
+
+            with_client("inner-client".to_string(), |inner_name| {
+                assert_eq!(inner_name, "inner-client");
+                // Inner context should shadow outer context
+                assert_eq!(current_client(), Some("inner-client".to_string()));
+            });
+
+            // After inner exits, outer context should be restored
+            assert_eq!(current_client(), Some("outer-client".to_string()));
+        });
+    }
+}

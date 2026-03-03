@@ -2365,4 +2365,18 @@ mod test {
         let count = (&apis).into_iter().count();
         assert_eq!(count, 0);
     }
+
+    #[test_log::test]
+    fn music_apis_default_creates_empty_collection() {
+        let apis = MusicApis::default();
+        assert_eq!(apis.iter().count(), 0);
+    }
+
+    #[test_log::test]
+    fn track_or_id_from_owned_id_creates_id_variant() {
+        let id = Id::from(42);
+        let track_or_id = TrackOrId::from(id.clone());
+
+        assert_eq!(track_or_id.id(), &id);
+    }
 }
