@@ -121,33 +121,36 @@ mod duckdb_integration {
     }
 }
 
-// ===== DUCKDB FILE-BACKED TRANSACTION TESTS =====
+// ===== DUCKDB TRANSACTION MODE MATRIX TESTS =====
 #[cfg(feature = "duckdb")]
-mod duckdb_file_backed_transactions {
+mod duckdb_transaction_mode_matrix {
     use super::*;
     use ::duckdb::Connection;
     use switchy_async::sync::Mutex;
-    use switchy_database::duckdb::DuckDbDatabase;
+    use switchy_database::duckdb::{DuckDbConfig, DuckDbConsistency, DuckDbDatabase, DuckDbMode};
 
-    struct DuckDbFileBackedIntegrationTests;
+    const CONNECTION_POOL_SIZE: u8 = 5;
 
-    impl IntegrationTestSuite for DuckDbFileBackedIntegrationTests {
-        async fn get_database(&self) -> Option<Arc<Box<dyn Database>>> {
-            use std::time::{SystemTime, UNIX_EPOCH};
+    fn db_path(prefix: &str) -> Option<std::path::PathBuf> {
+        use std::time::{SystemTime, UNIX_EPOCH};
 
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .ok()?
-                .as_nanos();
-            let thread_id = std::thread::current().id();
-            let db_file = std::env::temp_dir().join(format!(
-                "duckdb_file_backed_{}_{}_{thread_id:?}.duckdb",
-                std::process::id(),
-                timestamp
-            ));
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_nanos();
+        let thread_id = std::thread::current().id();
+        Some(std::env::temp_dir().join(format!(
+            "{prefix}_{}_{}_{thread_id:?}.duckdb",
+            std::process::id(),
+            timestamp
+        )))
+    }
 
-            let mut connections = Vec::new();
-            for _ in 0..5 {
+    fn create_database(config: DuckDbConfig) -> Option<Arc<Box<dyn Database>>> {
+        let db_file = db_path("duckdb_matrix")?;
+
+        let connections = match config.mode {
+            DuckDbMode::Deterministic => {
                 let conn = Connection::open(&db_file).ok()?;
                 conn.execute_batch(
                     "CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1; \
@@ -158,26 +161,185 @@ mod duckdb_file_backed_transactions {
                      )",
                 )
                 .ok()?;
-                connections.push(Arc::new(Mutex::new(conn)));
+
+                let shared = Arc::new(Mutex::new(conn));
+                let mut connections = Vec::new();
+                for _ in 0..CONNECTION_POOL_SIZE {
+                    connections.push(Arc::clone(&shared));
+                }
+                connections
             }
+            DuckDbMode::Pooled => {
+                let mut connections = Vec::new();
+                for _ in 0..CONNECTION_POOL_SIZE {
+                    let conn = Connection::open(&db_file).ok()?;
+                    conn.execute_batch(
+                        "CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1; \
+                         CREATE TABLE IF NOT EXISTS users (\
+                             id BIGINT DEFAULT nextval('users_id_seq'), \
+                             name TEXT NOT NULL, \
+                             PRIMARY KEY (id)\
+                         )",
+                    )
+                    .ok()?;
+                    connections.push(Arc::new(Mutex::new(conn)));
+                }
+                connections
+            }
+        };
 
-            let db = DuckDbDatabase::new(connections);
-            Some(Arc::new(Box::new(db) as Box<dyn Database>))
-        }
+        let db = DuckDbDatabase::new_with_config(connections, config);
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
     }
 
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
-    #[ignore = "DuckDB multi-connection file-backed transaction visibility is still inconsistent in this backend"]
-    async fn test_duckdb_file_backed_transaction_isolation() {
-        let suite = DuckDbFileBackedIntegrationTests;
-        suite.test_transaction_isolation().await;
+    async fn test_duckdb_deterministic_strict_shared_connection_visibility() {
+        let Some(db) = create_database(DuckDbConfig {
+            mode: DuckDbMode::Deterministic,
+            consistency: DuckDbConsistency::Strict,
+        }) else {
+            return;
+        };
+
+        let tx = db.begin_transaction().await.expect("tx should begin");
+        tx.insert("users")
+            .value("name", "deterministic_user")
+            .execute(&*tx)
+            .await
+            .expect("insert in tx should succeed");
+
+        let rows = db
+            .select("users")
+            .where_eq("name", "deterministic_user")
+            .execute(&**db)
+            .await
+            .expect("select should succeed");
+
+        assert_eq!(
+            rows.len(),
+            1,
+            "deterministic mode uses one shared connection, so uncommitted data is visible"
+        );
+
+        tx.rollback().await.expect("rollback should succeed");
     }
 
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
-    #[ignore = "DuckDB multi-connection concurrent transaction outcomes are still inconsistent in this backend"]
-    async fn test_duckdb_file_backed_concurrent_transactions() {
-        let suite = DuckDbFileBackedIntegrationTests;
-        suite.test_concurrent_transactions().await;
+    async fn test_duckdb_pooled_strict_serializes_transaction_entry() {
+        let Some(db) = create_database(DuckDbConfig {
+            mode: DuckDbMode::Pooled,
+            consistency: DuckDbConsistency::Strict,
+        }) else {
+            return;
+        };
+
+        let tx1 = db.begin_transaction().await.expect("tx1 should begin");
+        tx1.insert("users")
+            .value("name", "strict_user_1")
+            .execute(&*tx1)
+            .await
+            .expect("tx1 insert should succeed");
+
+        let db_clone = Arc::clone(&db);
+        let mut task = switchy_async::task::spawn(async move {
+            let tx2 = db_clone
+                .begin_transaction()
+                .await
+                .expect("tx2 should begin after tx1 ends");
+            tx2.insert("users")
+                .value("name", "strict_user_2")
+                .execute(&*tx2)
+                .await
+                .expect("tx2 insert should succeed");
+            tx2.commit().await.expect("tx2 commit should succeed");
+        });
+
+        switchy_async::time::sleep(std::time::Duration::from_millis(150)).await;
+        assert!(
+            !task.is_finished(),
+            "second transaction should wait while first transaction holds strict gate"
+        );
+
+        tx1.commit().await.expect("tx1 commit should succeed");
+
+        switchy_async::time::timeout(std::time::Duration::from_secs(5), task)
+            .await
+            .expect("tx2 should complete after tx1 commit")
+            .expect("tx2 task should not panic");
+
+        db.query_raw("SELECT COUNT(*) AS count FROM users")
+            .await
+            .expect("database should remain queryable after strict serialized transactions");
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_pooled_relaxed_concurrency_completes_without_deadlock() {
+        let Some(db) = create_database(DuckDbConfig {
+            mode: DuckDbMode::Pooled,
+            consistency: DuckDbConsistency::Relaxed,
+        }) else {
+            return;
+        };
+
+        let db1 = Arc::clone(&db);
+        let task1 = switchy_async::task::spawn(async move {
+            let Ok(tx) = db1.begin_transaction().await else {
+                return false;
+            };
+
+            let inserted = tx
+                .insert("users")
+                .value("name", "relaxed_user_1")
+                .execute(&*tx)
+                .await
+                .is_ok();
+
+            if inserted {
+                tx.commit().await.is_ok()
+            } else {
+                tx.rollback().await.is_ok()
+            }
+        });
+
+        let db2 = Arc::clone(&db);
+        let task2 = switchy_async::task::spawn(async move {
+            let Ok(tx) = db2.begin_transaction().await else {
+                return false;
+            };
+
+            let inserted = tx
+                .insert("users")
+                .value("name", "relaxed_user_2")
+                .execute(&*tx)
+                .await
+                .is_ok();
+
+            if inserted {
+                tx.commit().await.is_ok()
+            } else {
+                tx.rollback().await.is_ok()
+            }
+        });
+
+        let (result1, result2) =
+            switchy_async::time::timeout(std::time::Duration::from_secs(10), async {
+                switchy_async::join!(task1, task2)
+            })
+            .await
+            .expect("relaxed mode transaction tasks should not deadlock");
+
+        let _ = result1.expect("task1 should not panic");
+        let _ = result2.expect("task2 should not panic");
+
+        db.insert("users")
+            .value("name", "post_relaxed_user")
+            .execute(&**db)
+            .await
+            .expect("database should remain writable after concurrent relaxed transactions");
+
+        db.query_raw("SELECT COUNT(*) AS count FROM users")
+            .await
+            .expect("database should remain queryable after concurrent relaxed transactions");
     }
 }
 
