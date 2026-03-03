@@ -549,10 +549,10 @@ When working with migration collections:
 
 ```rust
 // Static migrations
-let migrations: Vec<Box<dyn Migration<'static> + 'static>> = source.migrations().await?;
+let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = source.migrations().await?;
 
 // Borrowed migrations (advanced)
-let migrations: Vec<Box<dyn Migration<'a> + 'a>> = source.migrations().await?;
+let migrations: Vec<Arc<dyn Migration<'a> + 'a>> = source.migrations().await?;
 ```
 
 ## Migration Table Schema

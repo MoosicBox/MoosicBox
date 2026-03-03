@@ -146,7 +146,7 @@ RUN cargo build --release --bin moosicbox_marketing_site --features "actix,html,
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/moosicbox_marketing_site /usr/local/bin/
-EXPOSE 3000
+EXPOSE 8343
 CMD ["moosicbox_marketing_site"]
 ```
 
