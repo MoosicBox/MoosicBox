@@ -118,4 +118,4 @@ Supported units: `%`, `vw`, `vh`, `dvw`, `dvh`, `px`, `em`, `rem`, `ch`, `ex`, `
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+See the [LICENSE](../../../../LICENSE) file for details.
