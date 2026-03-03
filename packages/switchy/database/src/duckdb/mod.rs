@@ -222,7 +222,7 @@ impl DuckDbTransaction {
     }
 
     #[must_use]
-    pub fn new_with_guard(
+    pub const fn new_with_guard(
         connection: Arc<Mutex<Connection>>,
         operation_gate_guard: Option<OwnedMutexGuard<()>>,
     ) -> Self {

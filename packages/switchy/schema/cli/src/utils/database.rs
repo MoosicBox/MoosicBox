@@ -34,7 +34,7 @@ pub async fn connect(database_url: &str) -> Result<Box<dyn Database>, CliError> 
     match scheme {
         "sqlite" => connect_sqlite(database_url).await,
         "postgresql" | "postgres" => connect_postgres(database_url).await,
-        "duckdb" => connect_duckdb(database_url).await,
+        "duckdb" => connect_duckdb(database_url),
         "mysql" => connect_mysql(database_url).await,
         "turso" => connect_turso(database_url).await,
         _ => Err(CliError::Config(format!(
@@ -78,7 +78,7 @@ async fn connect_postgres(database_url: &str) -> Result<Box<dyn Database>, CliEr
         .map_err(|e| CliError::Config(format!("PostgreSQL connection error: {e}")))
 }
 
-async fn connect_duckdb(database_url: &str) -> Result<Box<dyn Database>, CliError> {
+fn connect_duckdb(database_url: &str) -> Result<Box<dyn Database>, CliError> {
     let path = path_from_url(database_url, "duckdb");
 
     switchy_database_connection::init_duckdb(path)

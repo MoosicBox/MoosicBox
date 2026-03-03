@@ -1402,7 +1402,7 @@ mod tests {
         use crate::version::DEFAULT_MIGRATIONS_TABLE;
         use switchy_database::Executable;
 
-        async fn init_duckdb_test_db() -> Box<dyn switchy_database::Database> {
+        fn init_duckdb_test_db() -> Box<dyn switchy_database::Database> {
             let conn = duckdb::Connection::open_in_memory()
                 .expect("Failed to open in-memory DuckDB connection");
             let shared = std::sync::Arc::new(switchy_async::sync::Mutex::new(conn));
@@ -3594,7 +3594,7 @@ mod tests {
 
         #[switchy_async::test]
         async fn test_custom_table_name_integration_duckdb() {
-            let db = init_duckdb_test_db().await;
+            let db = init_duckdb_test_db();
 
             let mut source = CodeMigrationSource::new();
             source.add_migration(CodeMigration::new(
@@ -3625,7 +3625,7 @@ mod tests {
 
         #[switchy_async::test]
         async fn test_list_migrations_with_applied_status_duckdb() {
-            let db = init_duckdb_test_db().await;
+            let db = init_duckdb_test_db();
 
             let mut source = CodeMigrationSource::new();
             source.add_migration(CodeMigration::new(
@@ -3686,7 +3686,7 @@ mod tests {
 
         #[switchy_async::test]
         async fn test_dirty_state_check_prevents_migrations_duckdb() {
-            let db = init_duckdb_test_db().await;
+            let db = init_duckdb_test_db();
 
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(false);
@@ -3718,7 +3718,7 @@ mod tests {
 
         #[switchy_async::test]
         async fn test_allow_dirty_bypasses_check_duckdb() {
-            let db = init_duckdb_test_db().await;
+            let db = init_duckdb_test_db();
 
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(true);
