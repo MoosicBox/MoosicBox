@@ -58,18 +58,6 @@ inputs:
         required: false
         default: "true"
 
-    # === Stream Watcher (Optional) ===
-    enable_stream_watcher:
-        description: "Enable live progress updates"
-        required: false
-        default: "false"
-    stream_comment_id:
-        description: "Comment ID for live updates"
-        required: false
-    stream_comment_type:
-        description: "Comment type: issue, pr_issue_comment, pr_review_comment"
-        required: false
-
     # === Execution Details (Optional) ===
     enable_execution_details:
         description: "Append execution details to comment"
@@ -451,54 +439,6 @@ runs:
               git config user.name "MoosicBoxBot"
               git config user.email "MoosicBoxBot@gmail.com"
 
-        - name: Check stream watcher prerequisites
-          if: inputs.command == 'check' && inputs.enable_stream_watcher == 'true'
-          shell: bash
-          run: |
-              # Verify inotify-tools is installed
-              if ! command -v inotifywait &> /dev/null; then
-                echo "⚠️ WARNING: inotify-tools not installed. Stream watcher will be disabled."
-                echo "Install with: sudo apt-get install -y inotify-tools"
-                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
-              else
-                echo "✅ inotify-tools found"
-                echo "stream_watcher_enabled=true" >> $GITHUB_ENV
-              fi
-
-              # Stream watcher script is bundled with action
-              STREAM_WATCHER_SCRIPT="${{ github.action_path }}/scripts/stream-watcher.sh"
-              if [ ! -f "$STREAM_WATCHER_SCRIPT" ]; then
-                echo "⚠️ ERROR: Stream watcher script missing from action"
-                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
-              else
-                echo "stream_watcher_script=$STREAM_WATCHER_SCRIPT" >> $GITHUB_ENV
-              fi
-
-              # Verify comment ID provided
-              if [ -z "${{ inputs.stream_comment_id }}" ]; then
-                echo "⚠️ WARNING: stream_comment_id not provided"
-                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
-              fi
-
-        - name: Start stream watcher
-          if: inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
-          shell: bash
-          run: |
-              STREAM_FILE="${{ runner.temp }}/opencode-stream.jsonl"
-
-              ${{ env.stream_watcher_script }} \
-                "$STREAM_FILE" \
-                "${{ github.repository }}" \
-                "${{ inputs.github_token }}" \
-                "${{ inputs.stream_comment_id }}" \
-                "${{ inputs.stream_comment_type }}" \
-                > /tmp/stream-watcher.log 2>&1 &
-
-              WATCHER_PID=$!
-              echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
-              echo "🔄 Stream watcher started (PID: $WATCHER_PID)"
-              echo "📋 Stream file: $STREAM_FILE"
-
         - name: Resolve config
           if: inputs.command == 'check'
           id: config
@@ -519,44 +459,6 @@ runs:
               prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
               use_github_token: "true"
               mentions: "@moosicboxbot"
-
-        - name: Stop stream watcher
-          if: always() && inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
-          shell: bash
-          run: |
-              if [ -f /tmp/stream_watcher_pid.txt ]; then
-                WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
-
-                echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
-
-                # Graceful shutdown (30 seconds)
-                for i in {1..30}; do
-                  if ! kill -0 $WATCHER_PID 2>/dev/null; then
-                    echo "✅ Stream watcher completed"
-                    break
-                  fi
-                  sleep 1
-                done
-
-                # Force shutdown if still running
-                if kill -0 $WATCHER_PID 2>/dev/null; then
-                  echo "⚠️ Stream watcher still running, sending SIGTERM..."
-                  kill -TERM $WATCHER_PID 2>/dev/null || true
-                  sleep 2
-
-                  if kill -0 $WATCHER_PID 2>/dev/null; then
-                    echo "⚠️ Forcing stream watcher to stop..."
-                    kill -9 $WATCHER_PID 2>/dev/null || true
-                  fi
-                fi
-
-                # Show logs if available
-                if [ -f /tmp/stream-watcher.log ]; then
-                  echo ""
-                  echo "📋 Stream watcher logs:"
-                  cat /tmp/stream-watcher.log
-                fi
-              fi
 
         - name: Detect changes
           if: inputs.command == 'check'
