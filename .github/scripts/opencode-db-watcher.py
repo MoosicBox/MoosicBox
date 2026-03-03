@@ -14,12 +14,16 @@ UPDATE_INTERVAL_SECONDS = 3
 HEARTBEAT_INTERVAL_SECONDS = 10
 NO_SESSION_NOTE_SECONDS = 20
 UNDERSTANDING_FILE = "/tmp/ai_understanding.txt"
+FINAL_COMMENT_FILE = "/tmp/final_comment_id.txt"
+DONE_SIGNAL_FILE = "/tmp/opencode_agent_done.txt"
+IDLE_AFTER_FINAL_SECONDS = 10
 DB_PATH = os.path.join(
     os.path.expanduser("~"), ".local", "share", "opencode", "opencode.db"
 )
 
 
 running = True
+received_signal = False
 
 
 def log(message: str) -> None:
@@ -27,7 +31,8 @@ def log(message: str) -> None:
 
 
 def on_signal(_sig, _frame) -> None:
-    global running
+    global running, received_signal
+    received_signal = True
     running = False
     log("Received signal, stopping watcher")
 
@@ -98,9 +103,14 @@ def extract_tool_context(tool_name: str, tool_input: Dict) -> str:
     return ""
 
 
-def build_progress_block(progress_lines: List[str], open_details: bool = True) -> str:
+def build_progress_block(
+    progress_lines: List[str],
+    *,
+    title: str = "🔄 Live Progress",
+    open_details: bool = True,
+) -> str:
     details_tag = "<details open>" if open_details else "<details>"
-    lines = [details_tag, "<summary>🔄 Live Progress</summary>", ""]
+    lines = [details_tag, f"<summary>{title}</summary>", ""]
     lines.extend(progress_lines)
     lines.extend(["", "</details>"])
     return "\n".join(lines)
@@ -123,6 +133,9 @@ def update_comment(
     comment_id: str,
     progress_lines: List[str],
     understanding: Optional[str],
+    *,
+    title: str = "🔄 Live Progress",
+    open_details: bool = True,
 ) -> bool:
     code, original_body, err = run_gh([endpoint, "--jq", ".body"])
     if code != 0:
@@ -137,7 +150,9 @@ def update_comment(
             else f"**My understanding:** {understanding}"
         )
 
-    progress_block = build_progress_block(progress_lines, open_details=True)
+    progress_block = build_progress_block(
+        progress_lines, title=title, open_details=open_details
+    )
     new_body = f"{base}\n\n---\n\n{progress_block}" if base else progress_block
 
     code, _, err = run_gh(["-X", "PATCH", endpoint, "-F", "body=@-"], stdin=new_body)
@@ -254,6 +269,14 @@ def main() -> int:
     workspace = os.environ.get("GITHUB_WORKSPACE")
     last_heartbeat = 0.0
     no_session_note_added = False
+    last_part_activity = time.time()
+    done_signal_written = False
+
+    if os.path.exists(DONE_SIGNAL_FILE):
+        try:
+            os.remove(DONE_SIGNAL_FILE)
+        except OSError:
+            pass
 
     session_id: Optional[str] = None
     understanding_inserted = False
@@ -312,6 +335,8 @@ def main() -> int:
             new_parts = query_new_parts(session_id, last_time_created)
             log(f"Polled {len(new_parts)} new part rows for session {session_id}")
             changed = False
+            if new_parts:
+                last_part_activity = now
 
             for part_id, time_created, data in new_parts:
                 if time_created > last_time_created:
@@ -369,6 +394,30 @@ def main() -> int:
                     updates += 1
                 last_update = now
 
+        if (
+            session_id
+            and not done_signal_written
+            and os.path.isfile(FINAL_COMMENT_FILE)
+            and (now - last_part_activity) >= IDLE_AFTER_FINAL_SECONDS
+        ):
+            done_signal_written = True
+            progress_lines.append(
+                "→ Final response posted; waiting for workflow cleanup"
+            )
+            if update_comment(
+                repo, endpoint, comment_id, progress_lines, understanding_text
+            ):
+                updates += 1
+            last_update = now
+            try:
+                with open(DONE_SIGNAL_FILE, "w", encoding="utf-8") as f:
+                    f.write("done\n")
+            except OSError as exc:
+                log(f"Failed to write done signal file: {exc}")
+            log(
+                "Detected final response and idle tool activity; wrote completion signal"
+            )
+
         if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
             last_heartbeat = now
             log(
@@ -390,7 +439,20 @@ def main() -> int:
         except OSError:
             final_understanding = None
 
-    if update_comment(repo, endpoint, comment_id, progress_lines, final_understanding):
+    if done_signal_written:
+        progress_lines.append("→ Completed")
+    elif received_signal:
+        progress_lines.append("→ Interrupted")
+
+    if update_comment(
+        repo,
+        endpoint,
+        comment_id,
+        progress_lines,
+        final_understanding,
+        title="💭 How I worked on this",
+        open_details=False,
+    ):
         updates += 1
     log(
         f"Stopped watcher; parsed {tool_events} tool events, {all_events} total events, {updates} comment updates"

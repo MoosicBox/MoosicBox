@@ -416,12 +416,36 @@ jobs:
               run: |
                   set -euo pipefail
                   curl -fsSL https://opencode.ai/install | bash
+                  rm -f /tmp/opencode_agent_done.txt
 
                   tail -n +1 -F /tmp/stream-watcher.log &
                   WATCHER_TAIL_PID=$!
                   trap 'kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true' EXIT
 
-                  "$HOME/.opencode/bin/opencode" github run
+                  "$HOME/.opencode/bin/opencode" github run &
+                  OPENCODE_PID=$!
+
+                  echo "⏳ Waiting for OpenCode process (PID: $OPENCODE_PID)"
+                  while kill -0 $OPENCODE_PID 2>/dev/null; do
+                    if [ -f /tmp/opencode_agent_done.txt ]; then
+                      echo "✅ Watcher signaled completion; sending SIGTERM to OpenCode"
+                      kill -TERM $OPENCODE_PID 2>/dev/null || true
+                      break
+                    fi
+                    sleep 2
+                  done
+
+                  set +e
+                  wait $OPENCODE_PID
+                  OPENCODE_EXIT=$?
+                  set -e
+
+                  if [ -f /tmp/opencode_agent_done.txt ] && [ "$OPENCODE_EXIT" -eq 143 ]; then
+                    echo "✅ OpenCode terminated after watcher completion signal"
+                  elif [ "$OPENCODE_EXIT" -ne 0 ]; then
+                    echo "❌ OpenCode exited with code $OPENCODE_EXIT"
+                    exit $OPENCODE_EXIT
+                  fi
 
                   kill -TERM $WATCHER_TAIL_PID 2>/dev/null || true
                   wait $WATCHER_TAIL_PID 2>/dev/null || true
