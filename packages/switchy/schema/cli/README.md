@@ -18,6 +18,11 @@ The binary is installed as `switchy-migrate`.
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **Turso (local)**: `turso://path/to/db.sqlite`, `turso:path/to/db.sqlite`, `turso://:memory:`, or `turso:`
 
+DuckDB backend behavior can be configured via environment variables:
+
+- `SWITCHY_DUCKDB_MODE`: `deterministic` (default) or `pooled`
+- `SWITCHY_DUCKDB_CONSISTENCY`: `strict` (default) or `relaxed`
+
 ## Environment Variables
 
 - `SWITCHY_DATABASE_URL`: Database connection URL

@@ -23,10 +23,10 @@
 //! let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
 //!
 //! // Initialize a database connection (parameters vary by feature)
-//! # #[cfg(feature = "sqlite")]
+//! # #[cfg(any(feature = "sqlite", feature = "duckdb"))]
 //! let db = init(None, Some(creds)).await?;
-//! # #[cfg(not(feature = "sqlite"))]
-//! # let db = init(Some(creds)).await?;
+//! # #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
+//! # let db = init(Some(creds), None).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -412,6 +412,48 @@ pub enum InitDuckDbError {
     /// `DuckDB` database error
     #[error(transparent)]
     DuckDb(#[from] ::duckdb::Error),
+    /// Invalid `DuckDB` option in environment variable
+    #[error("Invalid DuckDB configuration: {0}")]
+    InvalidConfig(String),
+}
+
+#[cfg(feature = "duckdb")]
+fn parse_duckdb_mode(value: &str) -> Result<switchy_database::duckdb::DuckDbMode, InitDuckDbError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "deterministic" => Ok(switchy_database::duckdb::DuckDbMode::Deterministic),
+        "pooled" => Ok(switchy_database::duckdb::DuckDbMode::Pooled),
+        _ => Err(InitDuckDbError::InvalidConfig(format!(
+            "SWITCHY_DUCKDB_MODE must be 'deterministic' or 'pooled' (got '{value}')"
+        ))),
+    }
+}
+
+#[cfg(feature = "duckdb")]
+fn parse_duckdb_consistency(
+    value: &str,
+) -> Result<switchy_database::duckdb::DuckDbConsistency, InitDuckDbError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "strict" => Ok(switchy_database::duckdb::DuckDbConsistency::Strict),
+        "relaxed" => Ok(switchy_database::duckdb::DuckDbConsistency::Relaxed),
+        _ => Err(InitDuckDbError::InvalidConfig(format!(
+            "SWITCHY_DUCKDB_CONSISTENCY must be 'strict' or 'relaxed' (got '{value}')"
+        ))),
+    }
+}
+
+#[cfg(feature = "duckdb")]
+fn duckdb_config_from_env() -> Result<switchy_database::duckdb::DuckDbConfig, InitDuckDbError> {
+    let mut config = switchy_database::duckdb::DuckDbConfig::default();
+
+    if let Ok(mode) = std::env::var("SWITCHY_DUCKDB_MODE") {
+        config.mode = parse_duckdb_mode(&mode)?;
+    }
+
+    if let Ok(consistency) = std::env::var("SWITCHY_DUCKDB_CONSISTENCY") {
+        config.consistency = parse_duckdb_consistency(&consistency)?;
+    }
+
+    Ok(config)
 }
 
 /// Initializes a `DuckDB` database connection.
@@ -426,19 +468,57 @@ pub enum InitDuckDbError {
 pub fn init_duckdb(
     db_location: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitDuckDbError> {
-    let mut connections = Vec::new();
-    for _ in 0..5 {
-        let conn = if let Some(path) = db_location {
-            ::duckdb::Connection::open(path)?
-        } else {
-            ::duckdb::Connection::open_in_memory()?
-        };
-        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(conn)));
-    }
+    init_duckdb_with_options(db_location, duckdb_config_from_env()?)
+}
 
-    Ok(Box::new(switchy_database::duckdb::DuckDbDatabase::new(
-        connections,
-    )))
+/// Initializes a `DuckDB` database connection with explicit backend options.
+///
+/// # Errors
+///
+/// * If fails to initialize the `DuckDB` connection
+#[cfg(feature = "duckdb")]
+pub fn init_duckdb_with_options(
+    db_location: Option<&std::path::Path>,
+    config: switchy_database::duckdb::DuckDbConfig,
+) -> Result<Box<dyn Database>, InitDuckDbError> {
+    use std::sync::Arc;
+
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbMode;
+
+    const CONNECTION_POOL_SIZE: u8 = 5;
+
+    let connections = match config.mode {
+        DuckDbMode::Deterministic => {
+            let conn = if let Some(path) = db_location {
+                ::duckdb::Connection::open(path)?
+            } else {
+                ::duckdb::Connection::open_in_memory()?
+            };
+            let shared = Arc::new(Mutex::new(conn));
+            let mut connections = Vec::new();
+            for _ in 0..CONNECTION_POOL_SIZE {
+                connections.push(Arc::clone(&shared));
+            }
+            connections
+        }
+        DuckDbMode::Pooled => {
+            let mut connections = Vec::new();
+            for _ in 0..CONNECTION_POOL_SIZE {
+                let conn = if let Some(path) = db_location {
+                    ::duckdb::Connection::open(path)?
+                } else {
+                    ::duckdb::Connection::open_in_memory()?
+                };
+                connections.push(Arc::new(Mutex::new(conn)));
+            }
+            connections
+        }
+    };
+
+    Ok(Box::new(
+        switchy_database::duckdb::DuckDbDatabase::new_with_config(connections, config),
+    ))
 }
 
 /// Initializes a read-only `DuckDB` database connection.
@@ -456,18 +536,59 @@ pub fn init_duckdb(
 pub fn init_duckdb_read_only(
     db_location: &std::path::Path,
 ) -> Result<Box<dyn Database>, InitDuckDbError> {
-    let mut connections = Vec::new();
-    for _ in 0..5 {
-        let config = ::duckdb::Config::default()
-            .access_mode(::duckdb::AccessMode::ReadOnly)
-            .expect("Failed to set DuckDB access mode");
-        let conn = ::duckdb::Connection::open_with_flags(db_location, config)?;
-        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(conn)));
-    }
+    init_duckdb_read_only_with_options(db_location, duckdb_config_from_env()?)
+}
 
-    Ok(Box::new(switchy_database::duckdb::DuckDbDatabase::new(
-        connections,
-    )))
+/// Initializes a read-only `DuckDB` database connection with explicit backend options.
+///
+/// # Errors
+///
+/// * If fails to initialize the `DuckDB` connection
+///
+/// # Panics
+///
+/// * If the `DuckDB` access mode configuration fails (should not happen)
+#[cfg(feature = "duckdb")]
+pub fn init_duckdb_read_only_with_options(
+    db_location: &std::path::Path,
+    config: switchy_database::duckdb::DuckDbConfig,
+) -> Result<Box<dyn Database>, InitDuckDbError> {
+    use std::sync::Arc;
+
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbMode;
+
+    const CONNECTION_POOL_SIZE: u8 = 5;
+
+    let connections = match config.mode {
+        DuckDbMode::Deterministic => {
+            let flags = ::duckdb::Config::default()
+                .access_mode(::duckdb::AccessMode::ReadOnly)
+                .expect("Failed to set DuckDB access mode");
+            let conn = ::duckdb::Connection::open_with_flags(db_location, flags)?;
+            let shared = Arc::new(Mutex::new(conn));
+            let mut connections = Vec::new();
+            for _ in 0..CONNECTION_POOL_SIZE {
+                connections.push(Arc::clone(&shared));
+            }
+            connections
+        }
+        DuckDbMode::Pooled => {
+            let mut connections = Vec::new();
+            for _ in 0..CONNECTION_POOL_SIZE {
+                let flags = ::duckdb::Config::default()
+                    .access_mode(::duckdb::AccessMode::ReadOnly)
+                    .expect("Failed to set DuckDB access mode");
+                let conn = ::duckdb::Connection::open_with_flags(db_location, flags)?;
+                connections.push(Arc::new(Mutex::new(conn)));
+            }
+            connections
+        }
+    };
+
+    Ok(Box::new(
+        switchy_database::duckdb::DuckDbDatabase::new_with_config(connections, config),
+    ))
 }
 
 /// Initializes a `SQLite` database connection using rusqlite.
@@ -1166,5 +1287,54 @@ mod tests {
         let creds = Credentials::from_url(url).expect("Failed to parse URL");
 
         assert_eq!(creds.password(), Some(""));
+    }
+
+    #[cfg(feature = "duckdb")]
+    #[test_log::test]
+    fn test_parse_duckdb_mode_values() {
+        assert_eq!(
+            parse_duckdb_mode("deterministic").expect("mode should parse"),
+            switchy_database::duckdb::DuckDbMode::Deterministic
+        );
+        assert_eq!(
+            parse_duckdb_mode("pooled").expect("mode should parse"),
+            switchy_database::duckdb::DuckDbMode::Pooled
+        );
+        assert_eq!(
+            parse_duckdb_mode("POOLED").expect("mode should parse case-insensitively"),
+            switchy_database::duckdb::DuckDbMode::Pooled
+        );
+    }
+
+    #[cfg(feature = "duckdb")]
+    #[test_log::test]
+    fn test_parse_duckdb_mode_invalid() {
+        let result = parse_duckdb_mode("fast");
+        assert!(matches!(result, Err(InitDuckDbError::InvalidConfig(_))));
+    }
+
+    #[cfg(feature = "duckdb")]
+    #[test_log::test]
+    fn test_parse_duckdb_consistency_values() {
+        assert_eq!(
+            parse_duckdb_consistency("strict").expect("consistency should parse"),
+            switchy_database::duckdb::DuckDbConsistency::Strict
+        );
+        assert_eq!(
+            parse_duckdb_consistency("relaxed").expect("consistency should parse"),
+            switchy_database::duckdb::DuckDbConsistency::Relaxed
+        );
+        assert_eq!(
+            parse_duckdb_consistency("RELAXED")
+                .expect("consistency should parse case-insensitively"),
+            switchy_database::duckdb::DuckDbConsistency::Relaxed
+        );
+    }
+
+    #[cfg(feature = "duckdb")]
+    #[test_log::test]
+    fn test_parse_duckdb_consistency_invalid() {
+        let result = parse_duckdb_consistency("eventual");
+        assert!(matches!(result, Err(InitDuckDbError::InvalidConfig(_))));
     }
 }

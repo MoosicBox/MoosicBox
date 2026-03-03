@@ -550,6 +550,11 @@ Embedded analytical database:
 - **DuckDB** (`duckdb` / `duckdb-bundled` feature):
     - Uses `?` placeholders
     - Connection pool of 5 connections behind `Arc<Mutex<>>`
+    - Supports routing/consistency config (`DuckDbConfig`):
+        - `Deterministic` mode (default): one shared connection topology for predictable behavior
+        - `Pooled` mode: round-robin across independent connections
+        - `Strict` consistency (default): serialized operation gate in pooled mode
+        - `Relaxed` consistency: higher throughput, weaker cross-connection guarantees
     - Blocking operations wrapped in async
     - In-memory and file-backed databases supported
     - For cross-connection transaction behavior, prefer file-backed databases in tests

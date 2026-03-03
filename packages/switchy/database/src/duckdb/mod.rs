@@ -10,11 +10,14 @@
 //! - Configurable number of connections per database instance (default 5)
 //! - Round-robin connection selection
 //! - Thread-safe access through `Arc<Mutex<Connection>>`
+//! - Configurable routing/consistency policies via `DuckDbConfig`
 //!
 //! # Transaction Support
 //!
 //! Transactions get dedicated connections from the pool to ensure isolation.
 //! Each transaction uses SQL commands: `BEGIN`, `COMMIT`, `ROLLBACK`.
+//! In strict pooled mode, operations are serialized through a global gate to
+//! avoid inconsistent cross-connection visibility.
 
 use std::{
     ops::Deref,
@@ -29,6 +32,7 @@ use async_trait::async_trait;
 use std::fmt::Write as _;
 use switchy_async::sync::Mutex;
 use thiserror::Error;
+use tokio::sync::OwnedMutexGuard;
 
 use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
@@ -107,11 +111,44 @@ fn format_duckdb_interval(interval: &SqlInterval) -> String {
 /// Manages a pool of `DuckDB` connections using round-robin selection for distributing
 /// queries across multiple connections. Each connection is protected by a mutex for
 /// thread-safe access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuckDbMode {
+    /// Uses one shared connection across the configured pool slots.
+    Deterministic,
+    /// Uses independent connections and round-robin routing.
+    Pooled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuckDbConsistency {
+    /// Serializes operations through a global gate.
+    Strict,
+    /// Allows operations to proceed independently.
+    Relaxed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckDbConfig {
+    pub mode: DuckDbMode,
+    pub consistency: DuckDbConsistency,
+}
+
+impl Default for DuckDbConfig {
+    fn default() -> Self {
+        Self {
+            mode: DuckDbMode::Deterministic,
+            consistency: DuckDbConsistency::Strict,
+        }
+    }
+}
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct DuckDbDatabase {
     connections: Vec<Arc<Mutex<Connection>>>,
     next_connection: AtomicUsize,
+    config: DuckDbConfig,
+    operation_gate: Arc<Mutex<()>>,
 }
 
 impl DuckDbDatabase {
@@ -119,16 +156,48 @@ impl DuckDbDatabase {
     ///
     /// The connections are used in round-robin fashion to distribute load.
     #[must_use]
-    pub const fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
+    pub fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
+        Self::new_with_config(
+            connections,
+            DuckDbConfig {
+                mode: DuckDbMode::Pooled,
+                consistency: DuckDbConsistency::Relaxed,
+            },
+        )
+    }
+
+    /// Creates a new `DuckDB` database instance with explicit routing and consistency config.
+    #[must_use]
+    pub fn new_with_config(connections: Vec<Arc<Mutex<Connection>>>, config: DuckDbConfig) -> Self {
         Self {
             connections,
             next_connection: AtomicUsize::new(0),
+            config,
+            operation_gate: Arc::new(Mutex::new(())),
         }
     }
 
     fn get_connection(&self) -> Arc<Mutex<Connection>> {
         let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % self.connections.len();
         self.connections[index].clone()
+    }
+
+    #[must_use]
+    pub const fn config(&self) -> DuckDbConfig {
+        self.config
+    }
+
+    fn should_gate_operations(&self) -> bool {
+        self.config.mode == DuckDbMode::Pooled
+            && self.config.consistency == DuckDbConsistency::Strict
+    }
+
+    async fn lock_operation_gate(&self) -> Option<OwnedMutexGuard<()>> {
+        if self.should_gate_operations() {
+            Some(self.operation_gate.clone().lock_owned().await)
+        } else {
+            None
+        }
     }
 }
 
@@ -142,16 +211,26 @@ pub struct DuckDbTransaction {
     connection: Arc<Mutex<Connection>>,
     committed: AtomicBool,
     rolled_back: AtomicBool,
+    _operation_gate_guard: Option<OwnedMutexGuard<()>>,
 }
 
 impl DuckDbTransaction {
     /// Creates a new `DuckDB` transaction from a connection
     #[must_use]
-    pub const fn new(connection: Arc<Mutex<Connection>>) -> Self {
+    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
+        Self::new_with_guard(connection, None)
+    }
+
+    #[must_use]
+    pub fn new_with_guard(
+        connection: Arc<Mutex<Connection>>,
+        operation_gate_guard: Option<OwnedMutexGuard<()>>,
+    ) -> Self {
         Self {
             connection,
             committed: AtomicBool::new(false),
             rolled_back: AtomicBool::new(false),
+            _operation_gate_guard: operation_gate_guard,
         }
     }
 }
@@ -1919,6 +1998,7 @@ fn duckdb_get_table_info(
 #[async_trait]
 impl Database for DuckDbDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(select(
             &*connection.lock().await,
@@ -1936,6 +2016,7 @@ impl Database for DuckDbDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(find_row(
             &*connection.lock().await,
@@ -1952,6 +2033,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(delete(
             &*connection.lock().await,
@@ -1965,6 +2047,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(delete(
             &*connection.lock().await,
@@ -1980,6 +2063,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(insert_and_get_row(
             &*connection.lock().await,
@@ -1992,6 +2076,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(update_and_get_rows(
             &*connection.lock().await,
@@ -2006,6 +2091,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(update_and_get_row(
             &*connection.lock().await,
@@ -2020,6 +2106,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(upsert(
             &*connection.lock().await,
@@ -2034,6 +2121,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(upsert_and_get_row(
             &*connection.lock().await,
@@ -2048,6 +2136,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(upsert_multi(
             &*connection.lock().await,
@@ -2061,6 +2150,7 @@ impl Database for DuckDbDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         log::trace!("exec_raw: query:\n{statement}");
 
@@ -2074,6 +2164,7 @@ impl Database for DuckDbDatabase {
 
     #[allow(clippy::significant_drop_tightening)]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let connection = connection.lock().await;
 
@@ -2096,6 +2187,7 @@ impl Database for DuckDbDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        let operation_gate_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
 
         connection
@@ -2104,7 +2196,10 @@ impl Database for DuckDbDatabase {
             .execute_batch("BEGIN TRANSACTION")
             .map_err(DuckDbDatabaseError::DuckDb)?;
 
-        Ok(Box::new(DuckDbTransaction::new(connection)))
+        Ok(Box::new(DuckDbTransaction::new_with_guard(
+            connection,
+            operation_gate_guard,
+        )))
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -2113,6 +2208,7 @@ impl Database for DuckDbDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let (transformed_query, filtered_params) =
             duckdb_transform_query_for_params(query, params)?;
 
@@ -2152,6 +2248,7 @@ impl Database for DuckDbDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let (transformed_query, filtered_params) =
             duckdb_transform_query_for_params(query, params)?;
 
@@ -2191,6 +2288,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(exec_schema_ddl(
             &*connection.lock().await,
@@ -2203,6 +2301,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(exec_schema_ddl(
             &*connection.lock().await,
@@ -2215,6 +2314,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(exec_schema_ddl(
             &*connection.lock().await,
@@ -2227,6 +2327,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         Ok(exec_schema_ddl(
             &*connection.lock().await,
@@ -2239,6 +2340,7 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let conn = connection.lock().await;
         for sql in build_alter_table_sqls(statement) {
@@ -2250,6 +2352,7 @@ impl Database for DuckDbDatabase {
     #[cfg(feature = "schema")]
     #[allow(clippy::significant_drop_tightening)]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let conn = connection.lock().await;
         let mut stmt = conn
@@ -2267,6 +2370,7 @@ impl Database for DuckDbDatabase {
     #[cfg(feature = "schema")]
     #[allow(clippy::significant_drop_tightening)]
     async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let conn = connection.lock().await;
         let mut stmt = conn
@@ -2291,11 +2395,23 @@ impl Database for DuckDbDatabase {
         &self,
         table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        if !self.table_exists(table_name).await? {
-            return Ok(None);
-        }
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let conn = connection.lock().await;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT COUNT(*) FROM information_schema.tables \
+                 WHERE table_name = ? AND table_schema = 'main'",
+            )
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+        let count: i64 = stmt
+            .query_row([table_name], |row| row.get(0))
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+        if count == 0 {
+            return Ok(None);
+        }
+
         Ok(Some(duckdb_get_table_info(&conn, table_name)?))
     }
 
@@ -2305,6 +2421,7 @@ impl Database for DuckDbDatabase {
         &self,
         table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let conn = connection.lock().await;
         Ok(duckdb_get_table_columns(&conn, table_name)?)
