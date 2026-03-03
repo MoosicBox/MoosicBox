@@ -34,7 +34,7 @@ def on_signal(_sig, _frame) -> None:
 
 def run_gh(args: List[str], *, stdin: Optional[str] = None) -> Tuple[int, str, str]:
     proc = subprocess.run(
-        ["gh", *args],
+        ["gh", "api", *args],
         input=stdin,
         text=True,
         capture_output=True,
@@ -258,9 +258,11 @@ def main() -> int:
     session_id: Optional[str] = None
     understanding_inserted = False
 
-    update_comment(repo, endpoint, comment_id, progress_lines, None)
-    updates += 1
-    log("Posted initial watcher status to acknowledgment comment")
+    if update_comment(repo, endpoint, comment_id, progress_lines, None):
+        updates += 1
+        log("Posted initial watcher status to acknowledgment comment")
+    else:
+        log("Failed to post initial watcher status to acknowledgment comment")
 
     while running:
         now = time.time()
@@ -278,11 +280,11 @@ def main() -> int:
             understanding_inserted = True
             log("Detected understanding file")
             if now - last_update >= 1:
-                update_comment(
+                if update_comment(
                     repo, endpoint, comment_id, progress_lines, understanding_text
-                )
+                ):
+                    updates += 1
                 last_update = now
-                updates += 1
 
         if not session_id:
             session_id = discover_session_id(start_ms, workspace)
@@ -299,11 +301,11 @@ def main() -> int:
             )
             no_session_note_added = True
             if now - last_update >= 1:
-                update_comment(
+                if update_comment(
                     repo, endpoint, comment_id, progress_lines, understanding_text
-                )
+                ):
+                    updates += 1
                 last_update = now
-                updates += 1
             log("No OpenCode session discovered yet; posted diagnostic note")
 
         if session_id:
@@ -361,11 +363,11 @@ def main() -> int:
                 changed = True
 
             if changed and now - last_update >= UPDATE_INTERVAL_SECONDS:
-                update_comment(
+                if update_comment(
                     repo, endpoint, comment_id, progress_lines, understanding_text
-                )
+                ):
+                    updates += 1
                 last_update = now
-                updates += 1
 
         if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
             last_heartbeat = now
@@ -388,8 +390,8 @@ def main() -> int:
         except OSError:
             final_understanding = None
 
-    update_comment(repo, endpoint, comment_id, progress_lines, final_understanding)
-    updates += 1
+    if update_comment(repo, endpoint, comment_id, progress_lines, final_understanding):
+        updates += 1
     log(
         f"Stopped watcher; parsed {tool_events} tool events, {all_events} total events, {updates} comment updates"
     )
