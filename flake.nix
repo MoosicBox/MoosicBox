@@ -51,6 +51,7 @@
           pkg-config
           gnumake
           gcc
+          duckdb
           libiconv
           autoconf
           automake
