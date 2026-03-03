@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 
 UPDATE_INTERVAL_SECONDS = 3
+HEARTBEAT_INTERVAL_SECONDS = 10
 UNDERSTANDING_FILE = "/tmp/ai_understanding.txt"
 DB_PATH = os.path.join(
     os.path.expanduser("~"), ".local", "share", "opencode", "opencode.db"
@@ -146,14 +147,40 @@ def update_comment(
     return True
 
 
-def read_session_id(path: str) -> Optional[str]:
-    if not os.path.isfile(path):
+def discover_session_id(start_ms: int, workspace: Optional[str]) -> Optional[str]:
+    if not os.path.isfile(DB_PATH):
         return None
+
     try:
-        value = open(path, "r", encoding="utf-8").read().strip()
-        return value or None
-    except OSError:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, time_created, directory
+                FROM session
+                WHERE time_created >= ?
+                ORDER BY time_created DESC
+                LIMIT 20
+                """,
+                (start_ms,),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        log(f"Session discovery query failed: {exc}")
         return None
+
+    if not rows:
+        return None
+
+    if workspace:
+        for session_id, _created, directory in rows:
+            if directory == workspace:
+                return str(session_id)
+
+    return str(rows[0][0])
 
 
 def query_new_parts(
@@ -162,21 +189,25 @@ def query_new_parts(
     if not os.path.isfile(DB_PATH):
         return []
 
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, time_created, data
-            FROM part
-            WHERE session_id = ? AND time_created > ?
-            ORDER BY time_created ASC
-            """,
-            (session_id, last_time_created),
-        )
-        rows = cur.fetchall()
-    finally:
-        conn.close()
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, time_created, data
+                FROM part
+                WHERE session_id = ? AND time_created > ?
+                ORDER BY time_created ASC
+                """,
+                (session_id, last_time_created),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        log(f"Part polling query failed: {exc}")
+        return []
 
     parsed: List[Tuple[str, int, Dict]] = []
     for part_id, time_created, raw_data in rows:
@@ -189,17 +220,14 @@ def query_new_parts(
 
 
 def main() -> int:
-    if len(sys.argv) < 6:
-        log(
-            "Usage: opencode-db-watcher.py <session_id_file> <repo> <token> <comment_id> <comment_type>"
-        )
+    if len(sys.argv) < 5:
+        log("Usage: opencode-db-watcher.py <repo> <token> <comment_id> <comment_type>")
         return 2
 
-    session_id_file = sys.argv[1]
-    repo = sys.argv[2]
-    token = sys.argv[3]
-    comment_id = sys.argv[4]
-    comment_type = sys.argv[5]
+    repo = sys.argv[1]
+    token = sys.argv[2]
+    comment_id = sys.argv[3]
+    comment_type = sys.argv[4]
 
     os.environ["GH_TOKEN"] = token
 
@@ -215,11 +243,17 @@ def main() -> int:
     last_time_created = 0
     last_update = 0.0
     tool_events = 0
+    all_events = 0
+    updates = 0
+    start_ms = int(time.time() * 1000)
+    workspace = os.environ.get("GITHUB_WORKSPACE")
+    last_heartbeat = 0.0
 
     session_id: Optional[str] = None
     understanding_inserted = False
 
     update_comment(repo, endpoint, comment_id, progress_lines, None)
+    updates += 1
 
     while running:
         now = time.time()
@@ -241,9 +275,10 @@ def main() -> int:
                     repo, endpoint, comment_id, progress_lines, understanding_text
                 )
                 last_update = now
+                updates += 1
 
         if not session_id:
-            session_id = read_session_id(session_id_file)
+            session_id = discover_session_id(start_ms, workspace)
             if session_id:
                 log(f"Detected OpenCode session: {session_id}")
 
@@ -256,6 +291,15 @@ def main() -> int:
                     last_time_created = time_created
 
                 if data.get("type") != "tool":
+                    part_type = str(data.get("type") or "")
+                    if part_type == "step-start":
+                        if progress_lines and progress_lines[0].startswith(
+                            "→ Waiting for model activity"
+                        ):
+                            progress_lines.pop(0)
+                        progress_lines.append("→ Started reasoning step")
+                        changed = True
+                        all_events += 1
                     continue
 
                 state = data.get("state") or {}
@@ -288,6 +332,7 @@ def main() -> int:
                     progress_lines.pop(0)
                 progress_lines.append(line)
                 tool_events += 1
+                all_events += 1
                 changed = True
 
             if changed and now - last_update >= UPDATE_INTERVAL_SECONDS:
@@ -295,6 +340,16 @@ def main() -> int:
                     repo, endpoint, comment_id, progress_lines, understanding_text
                 )
                 last_update = now
+                updates += 1
+
+        if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            last_heartbeat = now
+            log(
+                "heartbeat "
+                + f"session_found={'yes' if session_id else 'no'} "
+                + f"db_exists={'yes' if os.path.isfile(DB_PATH) else 'no'} "
+                + f"events_seen={all_events} tool_events={tool_events} updates={updates}"
+            )
 
         time.sleep(1)
 
@@ -308,7 +363,10 @@ def main() -> int:
             final_understanding = None
 
     update_comment(repo, endpoint, comment_id, progress_lines, final_understanding)
-    log(f"Stopped watcher; parsed {tool_events} tool events")
+    updates += 1
+    log(
+        f"Stopped watcher; parsed {tool_events} tool events, {all_events} total events, {updates} comment updates"
+    )
     return 0
 
 

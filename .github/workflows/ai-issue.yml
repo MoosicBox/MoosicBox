@@ -113,7 +113,6 @@ jobs:
                   COMMENT_TYPE="issue"
 
                   python3 ${GITHUB_WORKSPACE}/.github/scripts/opencode-db-watcher.py \
-                    "/tmp/opencode_session_id.txt" \
                     "${{ github.repository }}" \
                     "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
                     "${{ steps.create_ack.outputs.comment_id }}" \
@@ -124,7 +123,6 @@ jobs:
                   echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
 
                   echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
-                  echo "📋 Session id file: /tmp/opencode_session_id.txt"
                   echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
                   echo "📋 Comment type: $COMMENT_TYPE"
                   echo "📋 Logs: /tmp/stream-watcher.log"
@@ -257,13 +255,7 @@ jobs:
               run: |
                   set -euo pipefail
                   curl -fsSL https://opencode.ai/install | bash
-                  rm -f /tmp/opencode_session_id.txt
-                  "$HOME/.opencode/bin/opencode" github run 2>&1 | while IFS= read -r line; do
-                    printf '%s\n' "$line"
-                    if [[ "$line" =~ ^opencode[[:space:]]+session[[:space:]]+([A-Za-z0-9_-]+)$ ]]; then
-                      printf '%s' "${BASH_REMATCH[1]}" > /tmp/opencode_session_id.txt
-                    fi
-                  done
+                  "$HOME/.opencode/bin/opencode" github run
 
             - name: Wait for stream watcher completion
               if: always()
@@ -307,12 +299,6 @@ jobs:
                   # Debug: Show session tracking status
                   echo ""
                   echo "📂 Debug: Session tracking status:"
-                  if [ -f /tmp/opencode_session_id.txt ]; then
-                    echo "  Session id file exists: YES"
-                    echo "  Session id: $(cat /tmp/opencode_session_id.txt)"
-                  else
-                    echo "  Session id file exists: NO"
-                  fi
                   if [ -f "$HOME/.local/share/opencode/opencode.db" ]; then
                     echo "  OpenCode DB exists: YES"
                   else
