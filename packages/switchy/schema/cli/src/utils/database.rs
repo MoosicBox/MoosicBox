@@ -6,6 +6,13 @@
 
 use crate::CliError;
 use switchy_database::Database;
+use switchy_database::duckdb::{DuckDbConfig, DuckDbConsistency, DuckDbMode};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DuckDbConnectOptions {
+    pub mode: Option<DuckDbMode>,
+    pub consistency: Option<DuckDbConsistency>,
+}
 
 /// Connect to database based on URL scheme.
 ///
@@ -25,7 +32,19 @@ use switchy_database::Database;
 /// * `MySQL` URL parsing fails (malformed URL)
 /// * `MySQL` connection fails (network, authentication, etc.)
 /// * Local `Turso` connection fails (invalid path, permissions, etc.)
+#[allow(dead_code)]
 pub async fn connect(database_url: &str) -> Result<Box<dyn Database>, CliError> {
+    connect_with_options(database_url, DuckDbConnectOptions::default()).await
+}
+
+/// Connect to database with optional `DuckDB` override configuration.
+///
+/// For non-`DuckDB` backends, `duckdb_options` is ignored.
+/// For `DuckDB`, provided values override backend defaults.
+pub async fn connect_with_options(
+    database_url: &str,
+    duckdb_options: DuckDbConnectOptions,
+) -> Result<Box<dyn Database>, CliError> {
     let scheme = database_url
         .split(':')
         .next()
@@ -34,7 +53,7 @@ pub async fn connect(database_url: &str) -> Result<Box<dyn Database>, CliError> 
     match scheme {
         "sqlite" => connect_sqlite(database_url).await,
         "postgresql" | "postgres" => connect_postgres(database_url).await,
-        "duckdb" => connect_duckdb(database_url),
+        "duckdb" => connect_duckdb(database_url, duckdb_options),
         "mysql" => connect_mysql(database_url).await,
         "turso" => connect_turso(database_url).await,
         _ => Err(CliError::Config(format!(
@@ -78,10 +97,26 @@ async fn connect_postgres(database_url: &str) -> Result<Box<dyn Database>, CliEr
         .map_err(|e| CliError::Config(format!("PostgreSQL connection error: {e}")))
 }
 
-fn connect_duckdb(database_url: &str) -> Result<Box<dyn Database>, CliError> {
+fn connect_duckdb(
+    database_url: &str,
+    duckdb_options: DuckDbConnectOptions,
+) -> Result<Box<dyn Database>, CliError> {
     let path = path_from_url(database_url, "duckdb");
 
-    switchy_database_connection::init_duckdb(path)
+    if duckdb_options.mode.is_none() && duckdb_options.consistency.is_none() {
+        return switchy_database_connection::init_duckdb(path)
+            .map_err(|e| CliError::Config(format!("DuckDB connection error: {e}")));
+    }
+
+    let mut config = DuckDbConfig::default();
+    if let Some(mode) = duckdb_options.mode {
+        config.mode = mode;
+    }
+    if let Some(consistency) = duckdb_options.consistency {
+        config.consistency = consistency;
+    }
+
+    switchy_database_connection::init_duckdb_with_options(path, config)
         .map_err(|e| CliError::Config(format!("DuckDB connection error: {e}")))
 }
 
@@ -198,6 +233,20 @@ mod tests {
         assert!(
             result3.is_ok(),
             "Should connect to in-memory DuckDB database with 'duckdb://'"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_duckdb_with_explicit_connect_options() {
+        let options = DuckDbConnectOptions {
+            mode: Some(DuckDbMode::Pooled),
+            consistency: Some(DuckDbConsistency::Strict),
+        };
+
+        let result = connect_with_options("duckdb://:memory:", options).await;
+        assert!(
+            result.is_ok(),
+            "Should connect to DuckDB with explicit mode/consistency options"
         );
     }
 

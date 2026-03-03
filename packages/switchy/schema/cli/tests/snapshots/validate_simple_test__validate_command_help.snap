@@ -18,6 +18,10 @@ Options:
           Exit with error code if mismatches found
       --verbose
           Show detailed checksum values
+      --duckdb-mode <DUCKDB_MODE>
+          `DuckDB` routing mode (overrides environment when provided) [env: SWITCHY_DUCKDB_MODE=] [possible values: deterministic, pooled]
+      --duckdb-consistency <DUCKDB_CONSISTENCY>
+          `DuckDB` consistency policy (overrides environment when provided) [env: SWITCHY_DUCKDB_CONSISTENCY=] [possible values: strict, relaxed]
   -h, --help
           Print help
 

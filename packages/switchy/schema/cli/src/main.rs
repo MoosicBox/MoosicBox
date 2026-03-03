@@ -40,12 +40,14 @@
 //! * `SWITCHY_DATABASE_URL`: Database connection URL
 //! * `SWITCHY_MIGRATIONS_DIR`: Directory containing migration files (default: `./migrations`)
 //! * `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
+//! * `SWITCHY_DUCKDB_MODE`: `DuckDB` routing mode (`deterministic` or `pooled`)
+//! * `SWITCHY_DUCKDB_CONSISTENCY`: `DuckDB` consistency policy (`strict` or `relaxed`)
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::{io::Write as _, path::PathBuf};
 use thiserror::Error;
 
@@ -96,6 +98,56 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum DuckDbModeArg {
+    Deterministic,
+    Pooled,
+}
+
+impl From<DuckDbModeArg> for switchy_database::duckdb::DuckDbMode {
+    fn from(value: DuckDbModeArg) -> Self {
+        match value {
+            DuckDbModeArg::Deterministic => Self::Deterministic,
+            DuckDbModeArg::Pooled => Self::Pooled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum DuckDbConsistencyArg {
+    Strict,
+    Relaxed,
+}
+
+impl From<DuckDbConsistencyArg> for switchy_database::duckdb::DuckDbConsistency {
+    fn from(value: DuckDbConsistencyArg) -> Self {
+        match value {
+            DuckDbConsistencyArg::Strict => Self::Strict,
+            DuckDbConsistencyArg::Relaxed => Self::Relaxed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Args, Default)]
+struct DuckDbCliArgs {
+    /// `DuckDB` routing mode (overrides environment when provided)
+    #[arg(long, env = "SWITCHY_DUCKDB_MODE", value_enum)]
+    duckdb_mode: Option<DuckDbModeArg>,
+
+    /// `DuckDB` consistency policy (overrides environment when provided)
+    #[arg(long, env = "SWITCHY_DUCKDB_CONSISTENCY", value_enum)]
+    duckdb_consistency: Option<DuckDbConsistencyArg>,
+}
+
+impl DuckDbCliArgs {
+    fn as_connect_options(&self) -> utils::database::DuckDbConnectOptions {
+        utils::database::DuckDbConnectOptions {
+            mode: self.duckdb_mode.map(Into::into),
+            consistency: self.duckdb_consistency.map(Into::into),
+        }
+    }
+}
+
 /// Available CLI subcommands for managing database migrations.
 ///
 /// Each command provides different functionality for creating, executing,
@@ -138,6 +190,8 @@ enum Commands {
         /// Show detailed status including failed and in-progress migrations
         #[arg(long)]
         show_failed: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Run pending migrations
     Migrate {
@@ -177,6 +231,8 @@ enum Commands {
         /// Require checksum validation before running migrations
         #[arg(long)]
         require_checksum_validation: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Rollback migrations
     Rollback {
@@ -210,6 +266,8 @@ enum Commands {
         /// Dry run - show what would be done without executing
         #[arg(long)]
         dry_run: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Retry a failed migration
     Retry {
@@ -233,6 +291,8 @@ enum Commands {
         migration_table: String,
         /// Migration ID to retry
         migration_id: String,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Mark a migration as completed (dangerous operation)
     MarkCompleted {
@@ -259,6 +319,8 @@ enum Commands {
         /// Force the operation without confirmation
         #[arg(long)]
         force: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Mark all migrations as completed without executing them (VERY dangerous operation)
     MarkAllCompleted {
@@ -295,6 +357,8 @@ enum Commands {
         /// Force the operation without confirmation
         #[arg(long)]
         force: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
     /// Validate checksums of applied migrations
     Validate {
@@ -322,6 +386,8 @@ enum Commands {
         /// Show detailed checksum values
         #[arg(long)]
         verbose: bool,
+        #[command(flatten)]
+        duckdb: DuckDbCliArgs,
     },
 }
 
@@ -340,7 +406,17 @@ async fn main() -> Result<()> {
             migrations_dir,
             migration_table,
             show_failed,
-        } => show_status(database_url, migrations_dir, migration_table, show_failed).await,
+            duckdb,
+        } => {
+            show_status(
+                database_url,
+                migrations_dir,
+                migration_table,
+                show_failed,
+                duckdb.as_connect_options(),
+            )
+            .await
+        }
         Commands::Migrate {
             database_url,
             migrations_dir,
@@ -351,6 +427,7 @@ async fn main() -> Result<()> {
             force,
             retry_failed,
             require_checksum_validation,
+            duckdb,
         } => {
             run_migrations(
                 database_url,
@@ -362,6 +439,7 @@ async fn main() -> Result<()> {
                 force,
                 retry_failed,
                 require_checksum_validation,
+                duckdb.as_connect_options(),
             )
             .await
         }
@@ -373,6 +451,7 @@ async fn main() -> Result<()> {
             steps,
             all,
             dry_run,
+            duckdb,
         } => {
             rollback_migrations(
                 database_url,
@@ -382,6 +461,7 @@ async fn main() -> Result<()> {
                 steps,
                 all,
                 dry_run,
+                duckdb.as_connect_options(),
             )
             .await
         }
@@ -390,13 +470,24 @@ async fn main() -> Result<()> {
             migrations_dir,
             migration_table,
             migration_id,
-        } => retry_migration(database_url, migrations_dir, migration_table, migration_id).await,
+            duckdb,
+        } => {
+            retry_migration(
+                database_url,
+                migrations_dir,
+                migration_table,
+                migration_id,
+                duckdb.as_connect_options(),
+            )
+            .await
+        }
         Commands::MarkCompleted {
             database_url,
             migrations_dir,
             migration_table,
             migration_id,
             force,
+            duckdb,
         } => {
             mark_migration_completed(
                 database_url,
@@ -404,6 +495,7 @@ async fn main() -> Result<()> {
                 migration_table,
                 migration_id,
                 force,
+                duckdb.as_connect_options(),
             )
             .await
         }
@@ -416,6 +508,7 @@ async fn main() -> Result<()> {
             all,
             drop,
             force,
+            duckdb,
         } => {
             mark_all_migrations_completed(
                 database_url,
@@ -426,6 +519,7 @@ async fn main() -> Result<()> {
                 all,
                 drop,
                 force,
+                duckdb.as_connect_options(),
             )
             .await
         }
@@ -435,6 +529,7 @@ async fn main() -> Result<()> {
             migration_table,
             strict,
             verbose,
+            duckdb,
         } => {
             validate_checksums(
                 database_url,
@@ -442,6 +537,7 @@ async fn main() -> Result<()> {
                 migration_table,
                 strict,
                 verbose,
+                duckdb.as_connect_options(),
             )
             .await
         }
@@ -558,11 +654,12 @@ async fn show_status(
     migrations_dir: PathBuf,
     migration_table: String,
     show_failed: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use switchy_schema::runner::MigrationRunner;
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Create migration runner with directory source
     let runner =
@@ -737,6 +834,7 @@ async fn run_migrations(
     force: bool,
     retry_failed: bool,
     require_checksum_validation: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use switchy_schema::runner::{ChecksumConfig, ExecutionStrategy, MigrationRunner};
 
@@ -762,7 +860,7 @@ async fn run_migrations(
     }
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Determine execution strategy
     let strategy = match (up_to.clone(), steps) {
@@ -911,6 +1009,7 @@ async fn run_migrations(
 /// * Database connection fails (invalid URL, network issues, authentication)
 /// * Reading user confirmation from stdin fails
 /// * Rollback execution fails (SQL errors, constraint violations)
+#[allow(clippy::too_many_arguments)]
 async fn rollback_migrations(
     database_url: String,
     migrations_dir: PathBuf,
@@ -919,6 +1018,7 @@ async fn rollback_migrations(
     steps: Option<usize>,
     all: bool,
     dry_run: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use std::io::{self, Write};
     use switchy_schema::runner::{MigrationRunner, RollbackStrategy};
@@ -935,7 +1035,7 @@ async fn rollback_migrations(
     }
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Determine rollback strategy
     let strategy = if all {
@@ -1059,12 +1159,13 @@ async fn retry_migration(
     migrations_dir: PathBuf,
     migration_table: String,
     migration_id: String,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use colored::Colorize;
     use switchy_schema::runner::MigrationRunner;
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Create migration runner with directory source
     let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
@@ -1112,13 +1213,14 @@ async fn mark_migration_completed(
     migration_table: String,
     migration_id: String,
     force: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use colored::Colorize;
     use dialoguer::Confirm;
     use switchy_schema::runner::MigrationRunner;
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Create migration runner with directory source
     let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
@@ -1203,13 +1305,14 @@ async fn mark_all_migrations_completed(
     all: bool,
     drop: bool,
     force: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use colored::Colorize;
     use dialoguer::Confirm;
     use switchy_schema::runner::{MarkCompletedScope, MigrationRunner};
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Create migration runner with directory source
     let runner =
@@ -1585,12 +1688,13 @@ async fn validate_checksums(
     migration_table: String,
     strict: bool,
     verbose: bool,
+    duckdb_options: utils::database::DuckDbConnectOptions,
 ) -> Result<()> {
     use colored::Colorize;
     use switchy_schema::runner::MigrationRunner;
 
     // Connect to database
-    let db = utils::database::connect(&database_url).await?;
+    let db = utils::database::connect_with_options(&database_url, duckdb_options).await?;
 
     // Create migration runner with directory source
     let runner =
@@ -1705,6 +1809,7 @@ mod tests {
                 steps,
                 all,
                 dry_run,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -1755,6 +1860,7 @@ mod tests {
                 steps,
                 all,
                 dry_run,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -1850,6 +1956,7 @@ mod tests {
                 migrations_dir,
                 migration_table,
                 show_failed,
+                ..
             } => {
                 assert_eq!(database_url, "postgres://user:pass@localhost:5432/mydb");
                 assert_eq!(migrations_dir, PathBuf::from("/app/migrations"));
@@ -1931,6 +2038,7 @@ mod tests {
                 migrations_dir,
                 migration_table,
                 migration_id,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -1961,6 +2069,7 @@ mod tests {
                 migrations_dir,
                 migration_table,
                 migration_id,
+                ..
             } => {
                 assert_eq!(database_url, "postgres://localhost/test");
                 assert_eq!(migrations_dir, PathBuf::from("/app/migrations"));
@@ -1988,6 +2097,7 @@ mod tests {
                 migration_table,
                 migration_id,
                 force,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -2101,6 +2211,54 @@ mod tests {
         }
     }
 
+    #[test_log::test]
+    fn test_cli_parsing_duckdb_flags() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "status",
+            "--database-url",
+            "duckdb://:memory:",
+            "--duckdb-mode",
+            "pooled",
+            "--duckdb-consistency",
+            "relaxed",
+        ]);
+
+        match cli.command {
+            Commands::Status {
+                database_url,
+                duckdb,
+                ..
+            } => {
+                assert_eq!(database_url, "duckdb://:memory:");
+                assert!(matches!(duckdb.duckdb_mode, Some(DuckDbModeArg::Pooled)));
+                assert!(matches!(
+                    duckdb.duckdb_consistency,
+                    Some(DuckDbConsistencyArg::Relaxed)
+                ));
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_cli_parsing_duckdb_defaults_to_none() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "status",
+            "--database-url",
+            "duckdb://:memory:",
+        ]);
+
+        match cli.command {
+            Commands::Status { duckdb, .. } => {
+                assert!(duckdb.duckdb_mode.is_none());
+                assert!(duckdb.duckdb_consistency.is_none());
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
     // CLI command execution tests
     #[switchy_async::test]
     async fn test_retry_command_error_handling() {
@@ -2110,6 +2268,7 @@ mod tests {
             PathBuf::from("./migrations"),
             "__switchy_migrations".to_string(),
             "001_test_retry".to_string(),
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2134,6 +2293,7 @@ mod tests {
             "__switchy_migrations".to_string(),
             "001_test".to_string(),
             true, // force = true to skip confirmation
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2162,6 +2322,7 @@ mod tests {
             true,  // force = true
             false, // retry_failed = false
             false, // require_checksum_validation = false
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2195,6 +2356,7 @@ mod tests {
                 migration_table,
                 strict,
                 verbose,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("/custom/migrations"));
@@ -2224,6 +2386,7 @@ mod tests {
                 migration_table,
                 strict,
                 verbose,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations")); // default
@@ -2246,6 +2409,7 @@ mod tests {
                 migration_table,
                 strict,
                 verbose,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://memory");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -2403,6 +2567,7 @@ mod tests {
                 all,
                 drop,
                 force,
+                ..
             } => {
                 assert_eq!(database_url, "sqlite://test.db");
                 assert_eq!(migrations_dir, PathBuf::from("./migrations"));
@@ -2573,6 +2738,7 @@ mod tests {
             false,                                // force
             false,                                // retry_failed
             false,                                // require_checksum_validation
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2600,6 +2766,7 @@ mod tests {
             Some(3),                              // steps - conflicting with to
             false,                                // all
             true,                                 // dry_run
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2630,6 +2797,7 @@ mod tests {
             Some(2), // steps
             true,    // all - conflicting with steps
             true,    // dry_run
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2660,6 +2828,7 @@ mod tests {
             None,                                 // steps
             true,                                 // all
             true,                                 // dry_run
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2688,6 +2857,7 @@ mod tests {
             "__switchy_migrations".to_string(),
             false, // strict
             false, // verbose
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2712,6 +2882,7 @@ mod tests {
             PathBuf::from("./migrations"),
             "__switchy_migrations".to_string(),
             false, // show_failed
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 
@@ -2740,6 +2911,7 @@ mod tests {
             false, // all
             false, // drop
             true,  // force
+            utils::database::DuckDbConnectOptions::default(),
         )
         .await;
 

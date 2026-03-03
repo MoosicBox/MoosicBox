@@ -23,11 +23,20 @@ DuckDB backend behavior can be configured via environment variables:
 - `SWITCHY_DUCKDB_MODE`: `deterministic` (default) or `pooled`
 - `SWITCHY_DUCKDB_CONSISTENCY`: `strict` (default) or `relaxed`
 
+Equivalent CLI flags are available on all database commands:
+
+- `--duckdb-mode <deterministic|pooled>`
+- `--duckdb-consistency <strict|relaxed>`
+
+Precedence: CLI flags override environment variables.
+
 ## Environment Variables
 
 - `SWITCHY_DATABASE_URL`: Database connection URL
 - `SWITCHY_MIGRATIONS_DIR`: Directory containing migration files (default: `./migrations`)
 - `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
+- `SWITCHY_DUCKDB_MODE`: DuckDB routing mode (`deterministic` or `pooled`)
+- `SWITCHY_DUCKDB_CONSISTENCY`: DuckDB consistency policy (`strict` or `relaxed`)
 
 ## Commands
 
