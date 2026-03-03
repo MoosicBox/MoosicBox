@@ -233,7 +233,7 @@ async fn run_duckdb_blocking<T>(
     task: impl FnOnce() -> Result<T, DatabaseError> + Send + 'static,
 ) -> Result<T, DatabaseError>
 where
-    T: Send + 'static,
+    T: Send + Unpin + 'static,
 {
     Handle::current()
         .spawn_blocking_with_name(task_name, task)
@@ -974,6 +974,7 @@ fn bexprs_to_values_opt(
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn select(
     connection: &Connection,
     table_name: &str,
@@ -2036,20 +2037,38 @@ fn duckdb_get_table_info(
 // ---------------------------------------------------------------------------
 
 #[async_trait]
+#[allow(clippy::significant_drop_tightening)]
 impl Database for DuckDbDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(select(
-            &*connection.lock().await,
+        let sql = format!(
+            "SELECT {} {} FROM {} {} {} {} {}",
+            if query.distinct { "DISTINCT" } else { "" },
+            query.columns.join(", "),
             query.table_name,
-            query.distinct,
-            query.columns,
-            query.filters.as_deref(),
-            query.joins.as_deref(),
-            query.sorts.as_deref(),
-            query.limit,
-        )?)
+            build_join_clauses(query.joins.as_deref()),
+            build_where_clause(query.filters.as_deref()),
+            build_sort_clause(query.sorts.as_deref()),
+            query
+                .limit
+                .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+        );
+        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+
+        run_duckdb_blocking("duckdb_select", move || {
+            let conn = connection.blocking_lock();
+            let mut statement = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut statement, Some(&params), false, 0)?;
+            statement
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = statement.column_names();
+            to_rows(&column_names, &mut statement.raw_query()).map_err(Into::into)
+        })
+        .await
     }
 
     async fn query_first(
@@ -2058,15 +2077,36 @@ impl Database for DuckDbDatabase {
     ) -> Result<Option<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(find_row(
-            &*connection.lock().await,
+        let sql = format!(
+            "SELECT {} {} FROM {} {} {} {} LIMIT 1",
+            if query.distinct { "DISTINCT" } else { "" },
+            query.columns.join(", "),
             query.table_name,
-            query.distinct,
-            query.columns,
-            query.filters.as_deref(),
-            query.joins.as_deref(),
-            query.sorts.as_deref(),
-        )?)
+            build_join_clauses(query.joins.as_deref()),
+            build_where_clause(query.filters.as_deref()),
+            build_sort_clause(query.sorts.as_deref()),
+        );
+        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+
+        run_duckdb_blocking("duckdb_select_first", move || {
+            let conn = connection.blocking_lock();
+            let mut statement = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut statement, Some(&params), false, 0)?;
+            statement
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = statement.column_names();
+            let mut query = statement.raw_query();
+            query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()
+                .map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_delete(
@@ -2075,12 +2115,52 @@ impl Database for DuckDbDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(delete(
-            &*connection.lock().await,
-            statement.table_name,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+        let where_clause = build_where_clause(statement.filters.as_deref());
+        let filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        let limit_clause = statement
+            .limit
+            .map_or_else(String::new, |l| format!(" LIMIT {l}"));
+        let returning_query = format!(
+            "SELECT * FROM {} {where_clause}{limit_clause}",
+            statement.table_name
+        );
+        let delete_query = if statement.limit.is_some() {
+            format!(
+                "DELETE FROM {} WHERE rowid IN (SELECT rowid FROM {} {where_clause}{limit_clause})",
+                statement.table_name, statement.table_name
+            )
+        } else {
+            format!("DELETE FROM {} {where_clause}", statement.table_name)
+        };
+
+        run_duckdb_blocking("duckdb_delete", move || {
+            let conn = connection.blocking_lock();
+
+            let mut select_stmt = conn
+                .prepare(&returning_query)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut select_stmt, Some(&filter_values), false, 0)?;
+            select_stmt
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = select_stmt.column_names();
+            let rows_to_return = to_rows(&column_names, &mut select_stmt.raw_query())?;
+
+            let mut delete_stmt = conn
+                .prepare(&delete_query)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut delete_stmt, Some(&filter_values), false, 0)?;
+            delete_stmt
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+
+            Ok(rows_to_return)
+        })
+        .await
     }
 
     async fn exec_delete_first(
@@ -2105,11 +2185,42 @@ impl Database for DuckDbDatabase {
     ) -> Result<crate::Row, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(insert_and_get_row(
-            &*connection.lock().await,
+        let column_names = statement
+            .values
+            .iter()
+            .map(|(key, _)| format!("\"{key}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let insert_columns = if statement.values.is_empty() {
+            String::new()
+        } else {
+            format!("({column_names})")
+        };
+        let sql = format!(
+            "INSERT INTO {} {insert_columns} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-        )?)
+            build_values_clause(&statement.values)
+        );
+        let params = exprs_to_values(&statement.values);
+
+        run_duckdb_blocking("duckdb_insert", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            let mut query = stmt.raw_query();
+            let row = query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()?
+                .ok_or(DuckDbDatabaseError::NoRow)?;
+            Ok(row)
+        })
+        .await
     }
 
     async fn exec_update(
@@ -2118,13 +2229,51 @@ impl Database for DuckDbDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(update_and_get_rows(
-            &*connection.lock().await,
+        let select_query = statement.limit.map(|_| {
+            format!(
+                "SELECT rowid FROM {} {}",
+                statement.table_name,
+                build_where_clause(statement.filters.as_deref())
+            )
+        });
+        let sql = format!(
+            "UPDATE {} {} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+            build_set_clause(&statement.values),
+            build_update_where_clause(
+                statement.filters.as_deref(),
+                statement.limit,
+                select_query.as_deref()
+            ),
+        );
+
+        let update_values = statement
+            .values
+            .iter()
+            .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+            .map(Into::into)
+            .collect::<Vec<DuckDbDatabaseValue>>();
+        let mut filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        if statement.limit.is_some() {
+            filter_values.extend(filter_values.clone());
+        }
+        let params = [update_values, filter_values].concat();
+
+        run_duckdb_blocking("duckdb_update", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            to_rows(&column_names, &mut stmt.raw_query()).map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_update_first(
@@ -2133,13 +2282,57 @@ impl Database for DuckDbDatabase {
     ) -> Result<Option<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        Ok(update_and_get_row(
-            &*connection.lock().await,
+        let select_query = statement.limit.map(|_| {
+            format!(
+                "SELECT rowid FROM {} {}",
+                statement.table_name,
+                build_where_clause(statement.filters.as_deref())
+            )
+        });
+        let sql = format!(
+            "UPDATE {} {} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+            build_set_clause(&statement.values),
+            build_update_where_clause(
+                statement.filters.as_deref(),
+                statement.limit,
+                select_query.as_deref()
+            ),
+        );
+
+        let update_values = statement
+            .values
+            .iter()
+            .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+            .map(Into::into)
+            .collect::<Vec<DuckDbDatabaseValue>>();
+        let mut filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        if statement.limit.is_some() {
+            filter_values.extend(filter_values.clone());
+        }
+        let params = [update_values, filter_values].concat();
+
+        run_duckdb_blocking("duckdb_update_first", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            let mut query = stmt.raw_query();
+            query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()
+                .map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_upsert(
@@ -2516,45 +2709,126 @@ impl Database for DuckDbDatabase {
 // ---------------------------------------------------------------------------
 
 #[async_trait]
+#[allow(clippy::significant_drop_tightening)]
 impl Database for DuckDbTransaction {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(select(
-            &*self.connection.lock().await,
+        let connection = Arc::clone(&self.connection);
+        let sql = format!(
+            "SELECT {} {} FROM {} {} {} {} {}",
+            if query.distinct { "DISTINCT" } else { "" },
+            query.columns.join(", "),
             query.table_name,
-            query.distinct,
-            query.columns,
-            query.filters.as_deref(),
-            query.joins.as_deref(),
-            query.sorts.as_deref(),
-            query.limit,
-        )?)
+            build_join_clauses(query.joins.as_deref()),
+            build_where_clause(query.filters.as_deref()),
+            build_sort_clause(query.sorts.as_deref()),
+            query
+                .limit
+                .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+        );
+        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+
+        run_duckdb_blocking("duckdb_tx_select", move || {
+            let conn = connection.blocking_lock();
+            let mut statement = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut statement, Some(&params), false, 0)?;
+            statement
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = statement.column_names();
+            to_rows(&column_names, &mut statement.raw_query()).map_err(Into::into)
+        })
+        .await
     }
 
     async fn query_first(
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
-        Ok(find_row(
-            &*self.connection.lock().await,
+        let connection = Arc::clone(&self.connection);
+        let sql = format!(
+            "SELECT {} {} FROM {} {} {} {} LIMIT 1",
+            if query.distinct { "DISTINCT" } else { "" },
+            query.columns.join(", "),
             query.table_name,
-            query.distinct,
-            query.columns,
-            query.filters.as_deref(),
-            query.joins.as_deref(),
-            query.sorts.as_deref(),
-        )?)
+            build_join_clauses(query.joins.as_deref()),
+            build_where_clause(query.filters.as_deref()),
+            build_sort_clause(query.sorts.as_deref()),
+        );
+        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+
+        run_duckdb_blocking("duckdb_tx_select_first", move || {
+            let conn = connection.blocking_lock();
+            let mut statement = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut statement, Some(&params), false, 0)?;
+            statement
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = statement.column_names();
+            let mut query = statement.raw_query();
+            query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()
+                .map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_delete(
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(delete(
-            &*self.connection.lock().await,
-            statement.table_name,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+        let connection = Arc::clone(&self.connection);
+        let where_clause = build_where_clause(statement.filters.as_deref());
+        let filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        let limit_clause = statement
+            .limit
+            .map_or_else(String::new, |l| format!(" LIMIT {l}"));
+        let returning_query = format!(
+            "SELECT * FROM {} {where_clause}{limit_clause}",
+            statement.table_name
+        );
+        let delete_query = if statement.limit.is_some() {
+            format!(
+                "DELETE FROM {} WHERE rowid IN (SELECT rowid FROM {} {where_clause}{limit_clause})",
+                statement.table_name, statement.table_name
+            )
+        } else {
+            format!("DELETE FROM {} {where_clause}", statement.table_name)
+        };
+
+        run_duckdb_blocking("duckdb_tx_delete", move || {
+            let conn = connection.blocking_lock();
+            let mut select_stmt = conn
+                .prepare(&returning_query)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut select_stmt, Some(&filter_values), false, 0)?;
+            select_stmt
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = select_stmt.column_names();
+            let rows_to_return = to_rows(&column_names, &mut select_stmt.raw_query())?;
+
+            let mut delete_stmt = conn
+                .prepare(&delete_query)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut delete_stmt, Some(&filter_values), false, 0)?;
+            delete_stmt
+                .raw_execute()
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+
+            Ok(rows_to_return)
+        })
+        .await
     }
 
     async fn exec_delete_first(
@@ -2575,37 +2849,153 @@ impl Database for DuckDbTransaction {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
-        Ok(insert_and_get_row(
-            &*self.connection.lock().await,
+        let connection = Arc::clone(&self.connection);
+        let column_names = statement
+            .values
+            .iter()
+            .map(|(key, _)| format!("\"{key}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let insert_columns = if statement.values.is_empty() {
+            String::new()
+        } else {
+            format!("({column_names})")
+        };
+        let sql = format!(
+            "INSERT INTO {} {insert_columns} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-        )?)
+            build_values_clause(&statement.values)
+        );
+        let params = exprs_to_values(&statement.values);
+
+        run_duckdb_blocking("duckdb_tx_insert", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            let mut query = stmt.raw_query();
+            let row = query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()?
+                .ok_or(DuckDbDatabaseError::NoRow)?;
+            Ok(row)
+        })
+        .await
     }
 
     async fn exec_update(
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        Ok(update_and_get_rows(
-            &*self.connection.lock().await,
+        let connection = Arc::clone(&self.connection);
+        let select_query = statement.limit.map(|_| {
+            format!(
+                "SELECT rowid FROM {} {}",
+                statement.table_name,
+                build_where_clause(statement.filters.as_deref())
+            )
+        });
+        let sql = format!(
+            "UPDATE {} {} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+            build_set_clause(&statement.values),
+            build_update_where_clause(
+                statement.filters.as_deref(),
+                statement.limit,
+                select_query.as_deref()
+            ),
+        );
+
+        let update_values = statement
+            .values
+            .iter()
+            .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+            .map(Into::into)
+            .collect::<Vec<DuckDbDatabaseValue>>();
+        let mut filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        if statement.limit.is_some() {
+            filter_values.extend(filter_values.clone());
+        }
+        let params = [update_values, filter_values].concat();
+
+        run_duckdb_blocking("duckdb_tx_update", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            to_rows(&column_names, &mut stmt.raw_query()).map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_update_first(
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
-        Ok(update_and_get_row(
-            &*self.connection.lock().await,
+        let connection = Arc::clone(&self.connection);
+        let select_query = statement.limit.map(|_| {
+            format!(
+                "SELECT rowid FROM {} {}",
+                statement.table_name,
+                build_where_clause(statement.filters.as_deref())
+            )
+        });
+        let sql = format!(
+            "UPDATE {} {} {} RETURNING *",
             statement.table_name,
-            &statement.values,
-            statement.filters.as_deref(),
-            statement.limit,
-        )?)
+            build_set_clause(&statement.values),
+            build_update_where_clause(
+                statement.filters.as_deref(),
+                statement.limit,
+                select_query.as_deref()
+            ),
+        );
+
+        let update_values = statement
+            .values
+            .iter()
+            .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+            .map(Into::into)
+            .collect::<Vec<DuckDbDatabaseValue>>();
+        let mut filter_values = statement
+            .filters
+            .as_deref()
+            .map(bexprs_to_values)
+            .unwrap_or_default();
+        if statement.limit.is_some() {
+            filter_values.extend(filter_values.clone());
+        }
+        let params = [update_values, filter_values].concat();
+
+        run_duckdb_blocking("duckdb_tx_update_first", move || {
+            let conn = connection.blocking_lock();
+            let mut stmt = conn
+                .prepare_cached(&sql)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            bind_values(&mut stmt, Some(&params), false, 0)?;
+            stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+            let column_names = stmt.column_names();
+            let mut query = stmt.raw_query();
+            query
+                .next()
+                .map_err(DuckDbDatabaseError::DuckDb)?
+                .map(|row| from_row(&column_names, row))
+                .transpose()
+                .map_err(Into::into)
+        })
+        .await
     }
 
     async fn exec_upsert(
