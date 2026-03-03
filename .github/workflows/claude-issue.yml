@@ -116,7 +116,7 @@ jobs:
                   COMMENT_TYPE="issue"
 
                   ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
-                    "${{ runner.temp }}/claude-stream.jsonl" \
+                    "${{ runner.temp }}/opencode-run.log" \
                     "${{ github.repository }}" \
                     "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
                     "${{ steps.create_ack.outputs.comment_id }}" \
@@ -127,23 +127,21 @@ jobs:
                   echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
 
                   echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
-                  echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
+                  echo "📋 Stream file: ${{ runner.temp }}/opencode-run.log"
                   echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
                   echo "📋 Comment type: $COMMENT_TYPE"
                   echo "📋 Logs: /tmp/stream-watcher.log"
 
             - name: Run MoosicBox Bot
               id: claude
-              uses: anomalyco/opencode/github@latest
+              shell: bash
               env:
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
                   GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-              with:
-                  model: openai/gpt-5.3-codex
-                  use_github_token: "true"
-                  mentions: "@moosicboxbot"
-
-                  prompt: |
+                  MODEL: openai/gpt-5.3-codex
+                  USE_GITHUB_TOKEN: "true"
+                  MENTIONS: "@moosicboxbot"
+                  PROMPT: |
                       You are helping solve a GitHub issue. A user has mentioned @moosicboxbot in an issue.
 
                       IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
@@ -259,6 +257,10 @@ jobs:
                       ```
 
                       Now respond appropriately based on whether this is a question or a command.
+              run: |
+                  set -euo pipefail
+                  curl -fsSL https://opencode.ai/install | bash
+                  "$HOME/.opencode/bin/opencode" github run 2>&1 | tee "${{ runner.temp }}/opencode-run.log"
 
             - name: Wait for stream watcher completion
               if: always()
@@ -302,7 +304,7 @@ jobs:
                   # Debug: Show stream file status
                   echo ""
                   echo "📂 Debug: Stream file status:"
-                  STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
+                  STREAM_FILE="${{ runner.temp }}/opencode-run.log"
                   if [ -f "$STREAM_FILE" ]; then
                     FILE_SIZE=$(wc -c < "$STREAM_FILE" 2>/dev/null || echo "unknown")
                     LINE_COUNT=$(wc -l < "$STREAM_FILE" 2>/dev/null || echo "unknown")

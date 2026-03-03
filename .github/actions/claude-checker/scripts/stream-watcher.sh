@@ -10,6 +10,7 @@ COMMENT_TYPE="${5:-auto}"  # Optional: issue, pr_issue_comment, pr_review_commen
 
 UPDATE_INTERVAL=3  # seconds between comment updates
 PROCESSED_LINES=0
+TOOL_EVENTS_COUNT=0
 PROGRESS_FILE="/tmp/progress_content.md"
 UNDERSTANDING_FILE="/tmp/claude_understanding.txt"
 UNDERSTANDING_INSERTED=false
@@ -23,6 +24,8 @@ init_progress_section() {
     cat > "$PROGRESS_FILE" << 'EOF'
 <details open>
 <summary>🔄 Live Progress</summary>
+
+→ Waiting for model activity...
 
 EOF
     log "Initialized progress section"
@@ -73,8 +76,8 @@ extract_tool_context() {
     esac
 }
 
-# Process a single JSON line and append to progress file
-process_json_line() {
+# Process a single Claude JSON line and append to progress file
+process_claude_json_line() {
     local line="$1"
 
     [ -z "$line" ] && return
@@ -103,9 +106,58 @@ process_json_line() {
             local context=$(extract_tool_context "$tool_name" "$tool_input")
 
             echo "→ Used \`$tool_name\`$context" >> "$PROGRESS_FILE"
+            TOOL_EVENTS_COUNT=$((TOOL_EVENTS_COUNT + 1))
             echo "" >> "$PROGRESS_FILE"
         fi
     done
+}
+
+# Process a single OpenCode log line and append to progress file
+process_opencode_log_line() {
+    local line="$1"
+
+    [ -z "$line" ] && return
+
+    if [[ "$line" != \|* ]]; then
+        return
+    fi
+
+    local tool_name
+    tool_name=$(echo "$line" | sed -nE 's/^\|[[:space:]]*([A-Za-z_]+)[[:space:]]+\{.*/\1/p')
+
+    if [ -z "$tool_name" ]; then
+        return
+    fi
+
+    if [[ "$line" != *"{"* ]]; then
+        return
+    fi
+
+    local tool_input
+    tool_input="{${line#*\{}"
+
+    if ! echo "$tool_input" | jq -e . >/dev/null 2>&1; then
+        return
+    fi
+
+    local context
+    context=$(extract_tool_context "$tool_name" "$tool_input")
+
+    echo "→ Used \`$tool_name\`$context" >> "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+    TOOL_EVENTS_COUNT=$((TOOL_EVENTS_COUNT + 1))
+}
+
+process_line() {
+    local line="$1"
+
+    [ -z "$line" ] && return
+
+    if echo "$line" | jq -e . >/dev/null 2>&1; then
+        process_claude_json_line "$line"
+    fi
+
+    process_opencode_log_line "$line"
 }
 
 # Detect correct API endpoint for comment
@@ -140,19 +192,21 @@ detect_api_endpoint() {
 # Check for understanding file and insert if found
 insert_understanding_if_available() {
     if [ "$UNDERSTANDING_INSERTED" = true ]; then
-        return
+        return 1
     fi
 
     if [ ! -f "$UNDERSTANDING_FILE" ] || [ ! -s "$UNDERSTANDING_FILE" ]; then
-        return
+        return 1
     fi
 
     log "📝 Found understanding file, inserting into comment..."
 
     local understanding_text=$(cat "$UNDERSTANDING_FILE")
+    [ -z "$understanding_text" ] && return 1
 
     UNDERSTANDING_INSERTED=true
     log "✅ Understanding will be inserted in next comment update"
+    return 0
 }
 
 # Backfill existing events from stream file
@@ -172,7 +226,7 @@ backfill_existing_events() {
     log "Backfilling $line_count existing events..."
 
     while IFS= read -r line; do
-        process_json_line "$line"
+        process_line "$line"
     done < "$STREAM_FILE"
 
     PROCESSED_LINES=$line_count
@@ -194,7 +248,7 @@ process_new_events() {
     local new_lines=$((total_lines - PROCESSED_LINES))
 
     tail -n "$new_lines" "$STREAM_FILE" | while IFS= read -r line; do
-        process_json_line "$line"
+        process_line "$line"
     done
 
     PROCESSED_LINES=$total_lines
@@ -286,7 +340,10 @@ watch_stream() {
     # Poll for changes indefinitely until killed by workflow
     while kill -0 $inotify_pid 2>/dev/null; do
         # Check for understanding file
-        insert_understanding_if_available
+        understanding_added=false
+        if insert_understanding_if_available; then
+            understanding_added=true
+        fi
 
         # Check if stream file was modified
         local current_modification=$(stat -c %Y "$STREAM_FILE" 2>/dev/null || echo "0")
@@ -300,11 +357,15 @@ watch_stream() {
             # Rate limiting
             if [ $((now - last_update)) -ge $UPDATE_INTERVAL ]; then
                 process_new_events
-
-                if [ "$PROCESSED_LINES" -gt 0 ]; then
-                    update_comment "$comment_id"
-                    last_update=$now
-                fi
+                update_comment "$comment_id"
+                last_update=$now
+            fi
+        elif [ "$understanding_added" = true ]; then
+            local now
+            now=$(date +%s)
+            if [ $((now - last_update)) -ge 1 ]; then
+                update_comment "$comment_id"
+                last_update=$now
             fi
         fi
 
