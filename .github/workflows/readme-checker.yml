@@ -134,7 +134,7 @@ jobs:
 
             - name: Update README with Claude
               if: steps.check_readme.outputs.exists == 'true'
-              id: claude
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

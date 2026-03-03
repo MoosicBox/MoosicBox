@@ -101,7 +101,7 @@ jobs:
                   workspace-toolchains-json: ${{ steps.toolchains.outputs.matrix }}
 
             - name: Check determinism with AI
-              id: claude
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

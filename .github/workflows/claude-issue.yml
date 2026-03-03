@@ -133,7 +133,7 @@ jobs:
                   echo "📋 Logs: /tmp/stream-watcher.log"
 
             - name: Run MoosicBox Bot
-              id: claude
+              id: ai
               shell: bash
               env:
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -164,7 +164,7 @@ jobs:
                       1. Quickly read and analyze the user's message
                       2. Determine: Is it a Question or Command? What's the scope?
                       3. Summarize in 1-2 sentences what you plan to do
-                      4. Write to /tmp/claude_understanding.txt immediately
+                      4. Write to /tmp/ai_understanding.txt immediately
 
                       Guidelines for the summary:
                       - **Questions**: "I'll explain [topic] in the context of [file/code]"
@@ -174,7 +174,7 @@ jobs:
 
                       Example:
                       ```bash
-                      echo "I'll investigate the issue and implement a fix for the reported bug." > /tmp/claude_understanding.txt
+                      echo "I'll investigate the issue and implement a fix for the reported bug." > /tmp/ai_understanding.txt
                       ```
 
                       STEP 2 - ANALYZE THE ISSUE:
@@ -245,7 +245,7 @@ jobs:
                       STEP 3 - POST FINAL RESPONSE:
                       After completing your analysis or implementation, post a final comment with your findings.
 
-                      CRITICAL: After posting your response, save the comment ID to /tmp/claude_final_comment_id.txt for tracking.
+                      CRITICAL: After posting your response, save the comment ID to /tmp/final_comment_id.txt for tracking.
 
                       Post your response:
                       ```
@@ -253,7 +253,7 @@ jobs:
                       your detailed response here
                       EOF
                       RESPONSE=$(gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file /tmp/response.txt 2>&1)
-                      echo "$RESPONSE" | grep -oP '#issuecomment-\K\d+' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                      echo "$RESPONSE" | grep -oP '#issuecomment-\K\d+' > /tmp/final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
                       ```
 
                       Now respond appropriately based on whether this is a question or a command.
@@ -315,12 +315,12 @@ jobs:
                     echo "  File exists: NO"
                   fi
 
-            - name: Append execution details to Claude's response
-              if: always() && steps.claude.outputs.execution_file != ''
+            - name: Append execution details to bot response
+              if: always() && steps.ai.outputs.execution_file != ''
               env:
                   GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               run: |
-                  EXECUTION_FILE="${{ steps.claude.outputs.execution_file }}"
+                  EXECUTION_FILE="${{ steps.ai.outputs.execution_file }}"
 
                   if [ ! -f "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
                       echo "⚠️ Execution file not found or empty, skipping"
@@ -372,8 +372,8 @@ jobs:
                   echo "⚠️ Adding execution details to final response comment..."
 
                   COMMENT_ID=""
-                  if [ -f /tmp/claude_final_comment_id.txt ]; then
-                      COMMENT_ID=$(cat /tmp/claude_final_comment_id.txt)
+                  if [ -f /tmp/final_comment_id.txt ]; then
+                      COMMENT_ID=$(cat /tmp/final_comment_id.txt)
                       echo "✅ Found saved comment ID: $COMMENT_ID"
                   else
                       echo "⚠️ No saved comment ID found, searching for latest comment..."

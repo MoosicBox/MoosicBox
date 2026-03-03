@@ -875,8 +875,8 @@ runs:
               # Find comment to update (priority: ack > final > latest)
               COMMENT_ID="${{ inputs.acknowledgment_comment_id }}"
 
-              if [ -z "$COMMENT_ID" ] && [ -f /tmp/claude_final_comment_id.txt ]; then
-                COMMENT_ID=$(cat /tmp/claude_final_comment_id.txt)
+              if [ -z "$COMMENT_ID" ] && [ -f /tmp/final_comment_id.txt ]; then
+                COMMENT_ID=$(cat /tmp/final_comment_id.txt)
                 echo "📋 Using final comment ID: $COMMENT_ID"
               fi
 

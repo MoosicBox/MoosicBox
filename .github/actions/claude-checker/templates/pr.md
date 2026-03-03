@@ -77,10 +77,10 @@ STEP 3 - POST FINAL RESPONSE:
 After completing your analysis or implementation, post a final comment with your findings.
 Reference the specific code context in your response if applicable.
 
-CRITICAL: After posting your response, save the comment ID to /tmp/claude_final_comment_id.txt for tracking.
+CRITICAL: After posting your response, save the comment ID to /tmp/final_comment_id.txt for tracking.
 
 Use the appropriate command based on the comment type:
-${code_file && root_comment_id ? '- Reply to the comment thread using the ROOT comment ID:\n  ```\n  cat > /tmp/response.txt << \'EOF\'\n  your detailed response here\n  EOF\n  RESPONSE=$(gh api -X POST "/repos/' + repository + '/pulls/' + pr_number + '/comments/' + root_comment_id + '/replies" -F body=@/tmp/response.txt 2>&1)\n echo "$RESPONSE" | jq -r ".id" > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"\n  ```\n\n  IMPORTANT: Use the root comment ID ' + root_comment_id + ' for all replies.' : '- Post a PR comment:\n  ```\n  cat > /tmp/response.txt << \'EOF\'\n  your detailed response here\n  EOF\n  RESPONSE=$(gh pr comment ' + pr_number + ' --repo ' + repository + ' --body-file /tmp/response.txt 2>&1)\n echo "$RESPONSE" | grep -oP "#issuecomment-\\K\\d+" > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"\n ```'}
+${code_file && root_comment_id ? '- Reply to the comment thread using the ROOT comment ID:\n  ```\n  cat > /tmp/response.txt << \'EOF\'\n  your detailed response here\n  EOF\n  RESPONSE=$(gh api -X POST "/repos/' + repository + '/pulls/' + pr_number + '/comments/' + root_comment_id + '/replies" -F body=@/tmp/response.txt 2>&1)\n echo "$RESPONSE" | jq -r ".id" > /tmp/final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"\n  ```\n\n  IMPORTANT: Use the root comment ID ' + root_comment_id + ' for all replies.' : '- Post a PR comment:\n  ```\n  cat > /tmp/response.txt << \'EOF\'\n  your detailed response here\n  EOF\n  RESPONSE=$(gh pr comment ' + pr_number + ' --repo ' + repository + ' --body-file /tmp/response.txt 2>&1)\n echo "$RESPONSE" | grep -oP "#issuecomment-\\K\\d+" > /tmp/final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"\n ```'}
 
 Now respond appropriately based on whether this is a question or a command.
 

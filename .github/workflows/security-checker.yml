@@ -116,7 +116,7 @@ jobs:
                   cargo install cargo-audit --locked
 
             - name: Check security with Claude
-              id: claude
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

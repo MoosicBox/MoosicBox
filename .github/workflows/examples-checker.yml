@@ -146,7 +146,7 @@ jobs:
                   fi
 
             - name: Ensure and validate examples
-              id: claude
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

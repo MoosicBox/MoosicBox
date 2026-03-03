@@ -131,8 +131,8 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
-            - name: Update rustdoc with Claude
-              id: claude
+            - name: Update rustdoc with AI
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

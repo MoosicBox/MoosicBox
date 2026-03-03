@@ -55,7 +55,7 @@ jobs:
                   fi
 
             - name: Run MoosicBox Bot Review
-              id: claude-review
+              id: ai-review
               uses: anomalyco/opencode/github@latest
               env:
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

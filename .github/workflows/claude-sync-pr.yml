@@ -171,7 +171,7 @@ jobs:
 
             - name: Run MoosicBox Bot for conflict resolution
               if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
-              id: claude
+              id: ai
               uses: anomalyco/opencode/github@latest
               env:
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

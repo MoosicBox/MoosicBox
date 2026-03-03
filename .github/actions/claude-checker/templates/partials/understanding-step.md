@@ -1,7 +1,7 @@
 ---
 # Partial: Understanding Step (Step 1)
 # Expected variables (with defaults)
-understanding_file: '/tmp/claude_understanding.txt'
+understanding_file: '/tmp/ai_understanding.txt'
 ---
 
 ## STEP 1 - WRITE YOUR UNDERSTANDING

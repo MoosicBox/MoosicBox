@@ -12,7 +12,7 @@ UPDATE_INTERVAL=3  # seconds between comment updates
 PROCESSED_LINES=0
 TOOL_EVENTS_COUNT=0
 PROGRESS_FILE="/tmp/progress_content.md"
-UNDERSTANDING_FILE="/tmp/claude_understanding.txt"
+UNDERSTANDING_FILE="/tmp/ai_understanding.txt"
 UNDERSTANDING_INSERTED=false
 
 log() {

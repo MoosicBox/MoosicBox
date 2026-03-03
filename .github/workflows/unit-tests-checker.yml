@@ -134,7 +134,7 @@ jobs:
                   rust-components: "rustfmt, clippy"
 
             - name: Add unit tests with Claude
-              id: claude
+              id: ai
               uses: ./.github/actions/claude-checker
               with:
                   command: check

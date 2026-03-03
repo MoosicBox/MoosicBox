@@ -60,7 +60,7 @@ ${project_type == 'rust' ? include('rust/verification-checklist', { package_name
 STEP 3 - POST FINAL RESPONSE:
 After completing your analysis or implementation, post a final comment with your findings.
 
-CRITICAL: After posting your response, save the comment ID to /tmp/claude_final_comment_id.txt for tracking.
+CRITICAL: After posting your response, save the comment ID to /tmp/final_comment_id.txt for tracking.
 
 Post your response:
 
@@ -69,7 +69,7 @@ cat > /tmp/response.txt << 'EOF'
 your detailed response here
 EOF
 RESPONSE=$(gh issue comment ${issue_number} --repo ${repository} --body-file /tmp/response.txt 2>&1)
-echo "$RESPONSE" | grep -oP '#issuecomment-\K\d+' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+echo "$RESPONSE" | grep -oP '#issuecomment-\K\d+' > /tmp/final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
 ```
 
 Now respond appropriately based on whether this is a question or a command.
