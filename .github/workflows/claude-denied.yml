@@ -1,4 +1,4 @@
-name: Claude Access Denied
+name: MoosicBox Bot Access Denied
 
 on:
     issue_comment:
@@ -13,14 +13,14 @@ on:
 jobs:
     deny-unauthorized:
         # Only run if:
-        # 1. Contains @claude mention
+        # 1. Contains @moosicboxbot mention
         # 2. User is NOT a member/owner
         if: |
             (
-                (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-                (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-                (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-                (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+                (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@moosicboxbot')) ||
+                (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@moosicboxbot')) ||
+                (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@moosicboxbot')) ||
+                (github.event_name == 'issues' && (contains(github.event.issue.body, '@moosicboxbot') || contains(github.event.issue.title, '@moosicboxbot')))
             )
             &&
             (
@@ -61,13 +61,13 @@ jobs:
                     ASSOCIATION="${{ github.event.issue.author_association }}"
                   fi
 
-                  echo "🚫 Denying @claude access for $ACTOR (association: $ASSOCIATION)"
+                  echo "🚫 Denying @moosicboxbot access for $ACTOR (association: $ASSOCIATION)"
 
                   # Create denial message
                   cat > /tmp/denied.txt << 'EOF'
                   🚫 **Access Denied**
 
-                  Only users with write access can trigger Claude workflows for security reasons.
+                  Only users with write access can trigger MoosicBox bot workflows for security reasons.
 
                   **Your association:** `ASSOCIATION_PLACEHOLDER`
                   **Required:** `MEMBER`, `OWNER`, or `COLLABORATOR` (write access)

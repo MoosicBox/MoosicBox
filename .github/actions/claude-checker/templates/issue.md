@@ -12,7 +12,7 @@ branch_name: 'fix-issue-${issue_number}-${run_id}'
 custom_guidelines: ''
 ---
 
-You are helping solve a GitHub issue. A user has mentioned @claude in an issue.
+You are helping solve a GitHub issue. A user has mentioned @moosicboxbot in an issue.
 
 IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
 

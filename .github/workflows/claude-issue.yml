@@ -1,4 +1,4 @@
-name: Claude Code (Issues)
+name: MoosicBox Bot (Issues)
 
 on:
     issue_comment:
@@ -7,15 +7,15 @@ on:
         types: [opened, assigned]
 
 concurrency:
-    group: claude-issue-${{ github.event.issue.number }}
+    group: moosicboxbot-issue-${{ github.event.issue.number }}
     cancel-in-progress: false
 
 jobs:
     claude:
         if: |
             (
-                (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
-                (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+                (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@moosicboxbot')) ||
+                (github.event_name == 'issues' && (contains(github.event.issue.body, '@moosicboxbot') || contains(github.event.issue.title, '@moosicboxbot')))
             )
             &&
             (
@@ -132,21 +132,19 @@ jobs:
                   echo "📋 Comment type: $COMMENT_TYPE"
                   echo "📋 Logs: /tmp/stream-watcher.log"
 
-            - name: Run Claude Code
+            - name: Run MoosicBox Bot
               id: claude
-              uses: BSteffaniak/claude-code-action@dev
+              uses: anomalyco/opencode/github@latest
+              env:
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-                  stream_output_file: ${{ runner.temp }}/claude-stream.jsonl
-
-                  additional_permissions: |
-                      actions: read
-
-                  claude_args: '--model claude-opus-4-5-20251101 --allowedTools "Edit,Read,Write,Bash"'
+                  model: openai/gpt-5.3-codex
+                  use_github_token: "true"
+                  mentions: "@moosicboxbot"
 
                   prompt: |
-                      You are helping solve a GitHub issue. A user has mentioned @claude in an issue.
+                      You are helping solve a GitHub issue. A user has mentioned @moosicboxbot in an issue.
 
                       IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
 
@@ -532,7 +530,7 @@ jobs:
                   cat > /tmp/pr_body.md << 'EOF'
                   ## 🤖 Claude-Generated Fix
 
-                  This PR was automatically created by @claude to address issue #${{ github.event.issue.number }}.
+                  This PR was automatically created by @moosicboxbot to address issue #${{ github.event.issue.number }}.
 
                   ### Issue
                   ${{ github.event.issue.title }}

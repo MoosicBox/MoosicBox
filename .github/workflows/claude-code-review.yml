@@ -1,4 +1,4 @@
-name: Claude Code Review
+name: MoosicBox Bot Code Review
 
 on:
     pull_request:
@@ -47,19 +47,22 @@ jobs:
                     cat > /tmp/denied.txt << 'EOF'
                   🚫 **Automated Code Review Unavailable**
 
-                  Automated Claude code reviews are only available for pull requests from organization members.
+                  Automated MoosicBox bot code reviews are only available for pull requests from organization members.
                   EOF
 
                     gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file /tmp/denied.txt
                     exit 1
                   fi
 
-            - name: Run Claude Code Review
+            - name: Run MoosicBox Bot Review
               id: claude-review
-              uses: BSteffaniak/claude-code-action@dev
+              uses: anomalyco/opencode/github@latest
+              env:
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-                  use_sticky_comment: "true"
+                  model: openai/gpt-5.3-codex
+                  use_github_token: "true"
                   prompt: |
                       REPO: ${{ github.repository }}
                       PR NUMBER: ${{ github.event.pull_request.number }}
@@ -74,7 +77,3 @@ jobs:
                       Use the repository's AGENTS.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
                       Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
-
-                  # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-                  # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-                  claude_args: '--model claude-opus-4-5-20251101 --allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'

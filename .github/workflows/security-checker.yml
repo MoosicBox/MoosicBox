@@ -29,20 +29,10 @@ on:
                 default: ""
 
             model:
-                description: "Claude model to use (leave empty for latest default)"
+                description: "Model to use in provider/model format"
                 required: false
-                type: choice
-                options:
-                    - ""
-                    - "claude-opus-4-5-20251101"
-                    - "claude-sonnet-4-5-20250929"
-                    - "claude-opus-4-1-20250805"
-                    - "claude-opus-4-20250514"
-                    - "claude-sonnet-4-20250514"
-                    - "claude-3-7-sonnet-20250219"
-                    - "claude-3-5-haiku-20241022"
-                    - "claude-3-haiku-20240307"
-                default: ""
+                type: string
+                default: "openai/gpt-5.3-codex"
 
             max_turns:
                 description: "Maximum conversation turns (leave empty for default)"
@@ -57,6 +47,7 @@ permissions:
 
 env:
     CARGO_TERM_COLOR: always
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 jobs:
     create-branch:
@@ -124,7 +115,6 @@ jobs:
               with:
                   command: check
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   prompt_template_file: .github/prompts/security.md
 
                   enable_execution_details_summary: "true"
@@ -143,7 +133,6 @@ jobs:
 
                   model: ${{ inputs.model }}
                   max_turns: ${{ inputs.max_turns }}
-                  claude_args: --allowedTools Edit,Read,Write,Bash,Glob,Grep
 
             - name: Upload Claude output for review
               if: always()

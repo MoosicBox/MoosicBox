@@ -20,7 +20,7 @@ root_comment_id: ''
 custom_guidelines: ''
 ---
 
-You are helping with a GitHub repository. A user has mentioned @claude in a comment.
+You are helping with a GitHub repository. A user has mentioned @moosicboxbot in a comment.
 
 IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
 

@@ -1,4 +1,4 @@
-name: Claude Code (PR Sync/Rebase)
+name: MoosicBox Bot (PR Sync/Rebase)
 
 on:
     issue_comment:
@@ -15,12 +15,12 @@ jobs:
              (github.event_name == 'pull_request_review_comment') ||
              (github.event_name == 'pull_request_review'))
             &&
-            (contains(github.event.comment.body, '@claude sync') ||
-             contains(github.event.comment.body, '@claude rebase') ||
-             contains(github.event.comment.body, '@claude fix-conflicts') ||
-             contains(github.event.review.body, '@claude sync') ||
-             contains(github.event.review.body, '@claude rebase') ||
-             contains(github.event.review.body, '@claude fix-conflicts')) &&
+            (contains(github.event.comment.body, '@moosicboxbot sync') ||
+             contains(github.event.comment.body, '@moosicboxbot rebase') ||
+             contains(github.event.comment.body, '@moosicboxbot fix-conflicts') ||
+             contains(github.event.review.body, '@moosicboxbot sync') ||
+             contains(github.event.review.body, '@moosicboxbot rebase') ||
+             contains(github.event.review.body, '@moosicboxbot fix-conflicts')) &&
             (
                 (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
                 (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
@@ -169,13 +169,17 @@ jobs:
 
                   gh pr comment ${{ steps.pr_details.outputs.pr_number }} --repo ${{ github.repository }} --body-file /tmp/status.txt
 
-            - name: Run Claude for conflict resolution
+            - name: Run MoosicBox Bot for conflict resolution
               if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
               id: claude
-              uses: BSteffaniak/claude-code-action@dev
+              uses: anomalyco/opencode/github@latest
+              env:
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-                  claude_args: '--model claude-opus-4-5-20251101 --allowedTools "Edit,Read,Write,Bash"'
+                  model: openai/gpt-5.3-codex
+                  use_github_token: "true"
+                  mentions: "@moosicboxbot"
                   prompt: |
                       You are helping resolve merge conflicts on a GitHub Pull Request.
 

@@ -1,5 +1,5 @@
-name: "Claude Checker"
-description: "Generic Claude-based checker with orchestration features"
+name: "AI Checker"
+description: "Generic OpenCode-based checker with orchestration features"
 author: "MoosicBox"
 
 inputs:
@@ -13,10 +13,6 @@ inputs:
     github_token:
         description: "GitHub token with write permissions"
         required: true
-    claude_token:
-        description: "Claude Code OAuth token"
-        required: false # Not required for create-branch and create-pr commands
-
     # === Prompt Template (One Required) ===
     prompt_template:
         description: "Built-in template: readme, rustdoc, examples, issue, pr, code-review, unit-tests, security"
@@ -41,7 +37,7 @@ inputs:
     branch_prefix:
         description: "Branch prefix for auto-generation (create-branch command)"
         required: false
-        default: "claude-updates"
+        default: "ai-updates"
     existing_branch:
         description: "Use existing branch if it exists (create-branch command)"
         required: false
@@ -113,7 +109,7 @@ inputs:
     summary_title:
         description: "Title for workflow summary section"
         required: false
-        default: "💭 Claude Execution Details"
+        default: "💭 AI Execution Details"
 
     # === Co-Author Attribution (Optional) ===
     enable_coauthor_attribution:
@@ -149,7 +145,7 @@ inputs:
     fallback_branch_prefix:
         description: "Prefix for fallback branch"
         required: false
-        default: "claude-fallback"
+        default: "ai-fallback"
 
     # === Commit Message Extraction ===
     extract_commit_message:
@@ -173,7 +169,7 @@ inputs:
     pr_title:
         description: "PR title (supports template variables, create-pr command)"
         required: false
-        default: "📝 Automated updates from Claude"
+        default: "📝 Automated updates from AI Checker"
     pr_body:
         description: "PR body (supports template variables, create-pr command)"
         required: false
@@ -187,15 +183,15 @@ inputs:
         required: false
         default: "true"
 
-    # === Claude Config ===
+    # === Model Config ===
     model:
-        description: "Claude model (default: claude-opus-4-5-20251101)"
+        description: "Model id in provider/model format (default: openai/gpt-5.3-codex)"
         required: false
     max_turns:
-        description: "Max turns"
+        description: "Max turns (reserved)"
         required: false
     claude_args:
-        description: "Additional Claude args"
+        description: "Additional model args (reserved)"
         required: false
 
     # === Advanced ===
@@ -216,7 +212,7 @@ outputs:
         value: ${{ steps.create_branch.outputs.branch_name || steps.setup_branch.outputs.branch_name }}
     execution_file:
         description: "Execution details file path (JSON)"
-        value: ${{ steps.claude.outputs.execution_file }}
+        value: ${{ steps.opencode.outputs.execution_file }}
     execution_details_file:
         description: "Formatted execution details markdown file path"
         value: ${{ steps.format_execution_details.outputs.details_file }}
@@ -298,9 +294,8 @@ runs:
                 exit 1
               fi
 
-              if [ -z "${{ inputs.claude_token }}" ]; then
-                echo "❌ Error: claude_token is required for 'check' command"
-                exit 1
+              if [ -z "${OPENAI_API_KEY:-}" ]; then
+                echo "ℹ️ OPENAI_API_KEY not set; ensure credentials for selected provider are available"
               fi
 
               echo "✅ Input validation passed"
@@ -434,7 +429,7 @@ runs:
               elif [ -n "$RESOLVED_BRANCH_NAME" ]; then
                 BRANCH_NAME="$RESOLVED_BRANCH_NAME"
               else
-                BRANCH_NAME="claude-updates-${{ github.run_id }}"
+                BRANCH_NAME="ai-updates-${{ github.run_id }}"
               fi
 
               echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
@@ -489,7 +484,7 @@ runs:
           if: inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
           shell: bash
           run: |
-              STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
+              STREAM_FILE="${{ runner.temp }}/opencode-stream.jsonl"
 
               ${{ env.stream_watcher_script }} \
                 "$STREAM_FILE" \
@@ -509,22 +504,21 @@ runs:
           id: config
           shell: bash
           run: |
-              DEFAULT_MODEL="claude-opus-4-5-20251101"
+              DEFAULT_MODEL="openai/gpt-5.3-codex"
               MODEL="${{ inputs.model }}"
               echo "model=${MODEL:-$DEFAULT_MODEL}" >> $GITHUB_OUTPUT
 
-        - name: Run Claude Code
+        - name: Run OpenCode
           if: inputs.command == 'check'
-          id: claude
-          uses: BSteffaniak/claude-code-action@dev
+          id: opencode
+          uses: anomalyco/opencode/github@latest
+          env:
+              GITHUB_TOKEN: ${{ inputs.github_token }}
           with:
-              claude_code_oauth_token: ${{ inputs.claude_token }}
-              stream_output_file: ${{ inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true' && format('{0}/claude-stream.jsonl', runner.temp) || '' }}
+              model: ${{ steps.config.outputs.model }}
               prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
-              claude_args: >-
-                  --model ${{ steps.config.outputs.model }}
-                  ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || '' }}
-                  ${{ inputs.claude_args }}
+              use_github_token: "true"
+              mentions: "@moosicboxbot"
 
         - name: Stop stream watcher
           if: always() && inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
@@ -590,29 +584,14 @@ runs:
                 BASE_COMMIT_MSG="${{ steps.resolve_template.outputs.commit_message }}"
               fi
               if [ -z "$BASE_COMMIT_MSG" ]; then
-                BASE_COMMIT_MSG="chore: update via Claude checker"
+                BASE_COMMIT_MSG="chore: update via ai checker"
               fi
 
-              # Extract detailed description from Claude output if enabled
+              # Extract detailed description from model output if enabled
               COMMIT_DESC=""
-              if [ "${{ inputs.extract_commit_message }}" = "true" ] && [ -f output.txt ]; then
-                echo "📋 Extracting commit description from Claude output..."
-
-                # Try JSONL format first (from claude-code-action)
-                COMMIT_DESC=$(grep "${{ inputs.commit_message_start_marker }}" output.txt 2>/dev/null | head -1 | \
-                  jq -r '.message.content[0].text |
-                  split("${{ inputs.commit_message_start_marker }}\n")[1] |
-                  split("\n${{ inputs.commit_message_end_marker }}")[0]' 2>/dev/null || echo "")
-
-                # Try plain text format
-                if [ -z "$COMMIT_DESC" ]; then
-                  COMMIT_DESC=$(sed -n '/${{ inputs.commit_message_start_marker }}/,/${{ inputs.commit_message_end_marker }}/p' output.txt 2>/dev/null | \
-                    sed '1d;$d' || echo "")
-                fi
+              if [ "${{ inputs.extract_commit_message }}" = "true" ]; then
+                echo "ℹ️ Commit message extraction from action output is disabled for OpenCode backend"
               fi
-
-              # Remove output.txt if it exists (from claude-code-action)
-              rm -f output.txt
 
               # Check for uncommitted changes
               if [ -z "$(git status --porcelain)" ]; then
@@ -865,12 +844,12 @@ runs:
               fi
 
         - name: Format and append execution details
-          if: always() && inputs.command == 'check' && inputs.enable_execution_details == 'true' && steps.claude.outputs.execution_file != ''
+          if: always() && inputs.command == 'check' && inputs.enable_execution_details == 'true' && steps.opencode.outputs.execution_file != ''
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
           run: |
-              EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+              EXEC_FILE="${{ steps.opencode.outputs.execution_file }}"
 
               if [ ! -f "$EXEC_FILE" ] || [ ! -s "$EXEC_FILE" ]; then
                 echo "⚠️ Execution file not found or empty"
@@ -902,7 +881,7 @@ runs:
               fi
 
               if [ -z "$COMMENT_ID" ]; then
-                # Find latest Claude/bot comment
+                # Find latest bot comment
                 ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
                 if [ -n "$ISSUE_NUM" ]; then
                   COMMENT_ID=$(gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
@@ -949,11 +928,11 @@ runs:
               fi
 
         - name: Format execution details for artifact/summary
-          if: always() && inputs.command == 'check' && (inputs.enable_execution_details_artifact == 'true' || inputs.enable_execution_details_summary == 'true') && steps.claude.outputs.execution_file != ''
+          if: always() && inputs.command == 'check' && (inputs.enable_execution_details_artifact == 'true' || inputs.enable_execution_details_summary == 'true') && steps.opencode.outputs.execution_file != ''
           id: format_execution_details
           shell: bash
           run: |
-              EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+              EXEC_FILE="${{ steps.opencode.outputs.execution_file }}"
               PACKAGE_NAME="${{ inputs.artifact_package_name }}"
 
               # Generate output file path
