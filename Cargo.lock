@@ -15851,6 +15851,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "duckdb",
  "hex",
  "include_dir",
  "log 0.4.29",

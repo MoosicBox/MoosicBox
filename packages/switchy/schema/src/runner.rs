@@ -1402,6 +1402,13 @@ mod tests {
         use crate::version::DEFAULT_MIGRATIONS_TABLE;
         use switchy_database::Executable;
 
+        async fn init_duckdb_test_db() -> Box<dyn switchy_database::Database> {
+            let conn = duckdb::Connection::open_in_memory()
+                .expect("Failed to open in-memory DuckDB connection");
+            let shared = std::sync::Arc::new(switchy_async::sync::Mutex::new(conn));
+            Box::new(switchy_database::duckdb::DuckDbDatabase::new(vec![shared]))
+        }
+
         #[switchy_async::test]
         async fn test_migration_runner_creation() {
             let source = CodeMigrationSource::new();
@@ -3583,6 +3590,154 @@ mod tests {
                 1,
                 "after_migration should be called once during rollback"
             );
+        }
+
+        #[switchy_async::test]
+        async fn test_custom_table_name_integration_duckdb() {
+            let db = init_duckdb_test_db().await;
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test_custom_table_duckdb".to_string(),
+                Box::new("CREATE TABLE test_table (id INTEGER PRIMARY KEY);".to_string())
+                    as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE test_table;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let custom_table_name = "custom_migration_tracker_duckdb";
+            let runner = MigrationRunner::new(Box::new(source)).with_table_name(custom_table_name);
+
+            runner.run(&*db).await.expect("Migration should succeed");
+
+            let results = db
+                .select(custom_table_name)
+                .columns(&["id"])
+                .execute(&*db)
+                .await
+                .expect("Should be able to query custom migration table");
+
+            assert_eq!(results.len(), 1);
+            assert_eq!(
+                results[0].get("id").unwrap().as_str().unwrap(),
+                "001_test_custom_table_duckdb"
+            );
+        }
+
+        #[switchy_async::test]
+        async fn test_list_migrations_with_applied_status_duckdb() {
+            let db = init_duckdb_test_db().await;
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "003_third".to_string(),
+                Box::new("CREATE TABLE third (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            let partial_runner =
+                runner.with_strategy(ExecutionStrategy::UpTo("002_second".to_string()));
+            partial_runner
+                .run(&*db)
+                .await
+                .expect("Migrations should succeed");
+
+            let mut source_for_listing = CodeMigrationSource::new();
+            source_for_listing.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source_for_listing.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source_for_listing.add_migration(CodeMigration::new(
+                "003_third".to_string(),
+                Box::new("CREATE TABLE third (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let listing_runner = MigrationRunner::new(Box::new(source_for_listing));
+
+            let updated_list = listing_runner
+                .list_migrations(&*db)
+                .await
+                .expect("List should succeed");
+            assert_eq!(updated_list.len(), 3);
+            assert_eq!(updated_list[0].id, "001_first");
+            assert_eq!(updated_list[1].id, "002_second");
+            assert_eq!(updated_list[2].id, "003_third");
+            assert!(updated_list[0].applied, "001_first should be applied");
+            assert!(updated_list[1].applied, "002_second should be applied");
+            assert!(!updated_list[2].applied, "003_third should not be applied");
+        }
+
+        #[switchy_async::test]
+        async fn test_dirty_state_check_prevents_migrations_duckdb() {
+            let db = init_duckdb_test_db().await;
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(false);
+
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "test_migration", &checksum, &checksum)
+                .await
+                .expect("Failed to record migration start");
+
+            let result = runner.check_dirty_state(&*db).await;
+            assert!(result.is_err(), "Should fail with dirty migrations");
+
+            match result {
+                Err(crate::MigrationError::DirtyState { migrations }) => {
+                    assert_eq!(migrations.len(), 1);
+                    assert_eq!(migrations[0], "test_migration");
+                }
+                _ => panic!("Expected DirtyState error"),
+            }
+        }
+
+        #[switchy_async::test]
+        async fn test_allow_dirty_bypasses_check_duckdb() {
+            let db = init_duckdb_test_db().await;
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(true);
+
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "test_migration", &checksum, &checksum)
+                .await
+                .expect("Failed to record migration start");
+
+            let result = runner.check_dirty_state(&*db).await;
+            assert!(result.is_ok(), "Should pass with allow_dirty = true");
         }
     }
 }

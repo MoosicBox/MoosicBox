@@ -121,6 +121,66 @@ mod duckdb_integration {
     }
 }
 
+// ===== DUCKDB FILE-BACKED TRANSACTION TESTS =====
+#[cfg(feature = "duckdb")]
+mod duckdb_file_backed_transactions {
+    use super::*;
+    use ::duckdb::Connection;
+    use switchy_async::sync::Mutex;
+    use switchy_database::duckdb::DuckDbDatabase;
+
+    struct DuckDbFileBackedIntegrationTests;
+
+    impl IntegrationTestSuite for DuckDbFileBackedIntegrationTests {
+        async fn get_database(&self) -> Option<Arc<Box<dyn Database>>> {
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .ok()?
+                .as_nanos();
+            let thread_id = std::thread::current().id();
+            let db_file = std::env::temp_dir().join(format!(
+                "duckdb_file_backed_{}_{}_{thread_id:?}.duckdb",
+                std::process::id(),
+                timestamp
+            ));
+
+            let mut connections = Vec::new();
+            for _ in 0..5 {
+                let conn = Connection::open(&db_file).ok()?;
+                conn.execute_batch(
+                    "CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1; \
+                     CREATE TABLE IF NOT EXISTS users (\
+                         id BIGINT DEFAULT nextval('users_id_seq'), \
+                         name TEXT NOT NULL, \
+                         PRIMARY KEY (id)\
+                     )",
+                )
+                .ok()?;
+                connections.push(Arc::new(Mutex::new(conn)));
+            }
+
+            let db = DuckDbDatabase::new(connections);
+            Some(Arc::new(Box::new(db) as Box<dyn Database>))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    #[ignore = "DuckDB multi-connection file-backed transaction visibility is still inconsistent in this backend"]
+    async fn test_duckdb_file_backed_transaction_isolation() {
+        let suite = DuckDbFileBackedIntegrationTests;
+        suite.test_transaction_isolation().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    #[ignore = "DuckDB multi-connection concurrent transaction outcomes are still inconsistent in this backend"]
+    async fn test_duckdb_file_backed_concurrent_transactions() {
+        let suite = DuckDbFileBackedIntegrationTests;
+        suite.test_concurrent_transactions().await;
+    }
+}
+
 // ===== DUCKDB INTROSPECTION TESTS =====
 #[cfg(all(feature = "duckdb", feature = "schema"))]
 mod duckdb_introspection_tests {

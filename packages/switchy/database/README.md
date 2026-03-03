@@ -552,11 +552,14 @@ Embedded analytical database:
     - Connection pool of 5 connections behind `Arc<Mutex<>>`
     - Blocking operations wrapped in async
     - In-memory and file-backed databases supported
+    - For cross-connection transaction behavior, prefer file-backed databases in tests
     - `NOW()` is cast to `TIMESTAMP` (DuckDB's `NOW()` returns `TIMESTAMP WITH TIME ZONE`)
     - Auto-increment uses `CREATE SEQUENCE` + `DEFAULT nextval(...)` instead of `GENERATED ALWAYS AS IDENTITY`
     - Savepoints are not supported (returns `UnsupportedOperation`)
     - Schema introspection via `information_schema` and `duckdb_indexes()`
     - `DELETE ... RETURNING` uses a SELECT-then-DELETE workaround (see source for details)
+    - `DROP TABLE ... CASCADE` for FK-dependent tables is limited in DuckDB v1.4.4
+    - `ALTER TABLE ... DROP COLUMN` with index/FK dependencies is limited in DuckDB v1.4.4
 
 ## Limitations
 

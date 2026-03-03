@@ -401,6 +401,12 @@ println!("Total: {}, New: {}, Failed: {}, InProgress: {}",
          summary.total, summary.newly_marked, summary.failed_marked, summary.in_progress_marked);
 ```
 
+### Backend Notes
+
+- DuckDB is fully supported for migration execution and status tracking.
+- DuckDB savepoints are not supported by the backend (transaction savepoint APIs return unsupported operation).
+- DuckDB has engine-level DDL limitations around FK/index-dependent `CASCADE` table/column drops in v1.4.4.
+
 ## Discovery Methods
 
 ### 1. Embedded Migrations (Compile-Time)
