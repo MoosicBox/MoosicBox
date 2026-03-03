@@ -460,6 +460,12 @@ macro_rules! option_env_i8 {
 }
 
 /// Returns a compile-time environment variable as a string slice, or a default value if not set.
+///
+/// This macro wraps the standard `option_env!` macro to provide a convenient way to read
+/// string environment variables with a fallback default value when the variable is not set.
+///
+/// Unlike the numeric variants (`default_env_usize!`, etc.), this macro does not perform
+/// any parsing and simply returns the raw string value.
 #[macro_export]
 macro_rules! default_env {
     ($name:expr, $default:expr $(,)?) => {
