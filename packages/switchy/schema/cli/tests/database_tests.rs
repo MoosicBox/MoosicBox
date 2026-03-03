@@ -77,6 +77,30 @@ async fn test_status_with_turso_empty_database() {
 }
 
 #[switchy_async::test(no_simulator)]
+async fn test_status_with_mysql_env_url_if_provided() {
+    let Some(database_url) = std::env::var("SWITCHY_TEST_MYSQL_URL").ok() else {
+        return;
+    };
+
+    let temp_dir = TempDir::new().unwrap();
+    let migrations_dir = temp_dir.path().join("migrations");
+    create_dir_all(&migrations_dir).unwrap();
+
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
+    cmd.args([
+        "status",
+        "--database-url",
+        &database_url,
+        "--migrations-dir",
+        migrations_dir.to_str().unwrap(),
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("No migrations found"));
+}
+
+#[switchy_async::test(no_simulator)]
 async fn test_create_and_status_workflow() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("workflow.db");

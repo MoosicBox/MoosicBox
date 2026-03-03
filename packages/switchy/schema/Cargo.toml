@@ -42,6 +42,7 @@ switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = [
     "duckdb-bundled",
     "sqlite-sqlx",
+    "turso",
 ] }
 switchy_fs = { workspace = true, features = ["simulator-real-fs", "std"] }
 switchy_schema_test_utils = { workspace = true, features = [

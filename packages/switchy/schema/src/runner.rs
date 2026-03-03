@@ -1402,6 +1402,59 @@ mod tests {
         use crate::version::DEFAULT_MIGRATIONS_TABLE;
         use switchy_database::Executable;
 
+        #[derive(Debug, Clone, Copy)]
+        enum MatrixBackend {
+            Sqlite,
+            DuckDb,
+            Turso,
+        }
+
+        impl MatrixBackend {
+            fn name(self) -> &'static str {
+                match self {
+                    Self::Sqlite => "sqlite",
+                    Self::DuckDb => "duckdb",
+                    Self::Turso => "turso",
+                }
+            }
+        }
+
+        fn matrix_backends() -> [MatrixBackend; 3] {
+            [
+                MatrixBackend::Sqlite,
+                MatrixBackend::DuckDb,
+                MatrixBackend::Turso,
+            ]
+        }
+
+        async fn init_matrix_db(backend: MatrixBackend) -> Box<dyn switchy_database::Database> {
+            match backend {
+                MatrixBackend::Sqlite => switchy_database_connection::init_sqlite_sqlx(None)
+                    .await
+                    .expect("Failed to create SQLite test database"),
+                MatrixBackend::DuckDb => switchy_database_connection::init_duckdb(None)
+                    .expect("Failed to create DuckDB test database"),
+                MatrixBackend::Turso => switchy_database_connection::init_turso_local(None)
+                    .await
+                    .expect("Failed to create Turso test database"),
+            }
+        }
+
+        fn simple_source(ids: &[&str]) -> CodeMigrationSource<'static> {
+            let mut source = CodeMigrationSource::new();
+            for id in ids {
+                let table_name = format!("t_{}", id.replace('-', "_"));
+                source.add_migration(CodeMigration::new(
+                    (*id).to_string(),
+                    Box::new(format!(
+                        "CREATE TABLE {table_name} (id INTEGER PRIMARY KEY);"
+                    )) as Box<dyn Executable>,
+                    Some(Box::new(format!("DROP TABLE {table_name};")) as Box<dyn Executable>),
+                ));
+            }
+            source
+        }
+
         fn init_duckdb_test_db() -> Box<dyn switchy_database::Database> {
             let conn = duckdb::Connection::open_in_memory()
                 .expect("Failed to open in-memory DuckDB connection");
@@ -3738,6 +3791,72 @@ mod tests {
 
             let result = runner.check_dirty_state(&*db).await;
             assert!(result.is_ok(), "Should pass with allow_dirty = true");
+        }
+
+        #[switchy_async::test]
+        async fn test_backend_matrix_migration_apply_and_list() {
+            for backend in matrix_backends() {
+                let db = init_matrix_db(backend).await;
+                let runner = MigrationRunner::new(Box::new(simple_source(&[
+                    "001_matrix_first",
+                    "002_matrix_second",
+                ])));
+
+                runner
+                    .run(&*db)
+                    .await
+                    .unwrap_or_else(|e| panic!("{} apply failed: {e}", backend.name()));
+
+                let listed = runner
+                    .list_migrations(&*db)
+                    .await
+                    .unwrap_or_else(|e| panic!("{} list failed: {e}", backend.name()));
+
+                assert_eq!(
+                    listed.len(),
+                    2,
+                    "{} should list exactly two migrations",
+                    backend.name()
+                );
+                assert!(
+                    listed.iter().all(|m| m.applied),
+                    "{} should mark both migrations as applied",
+                    backend.name()
+                );
+            }
+        }
+
+        #[switchy_async::test]
+        async fn test_backend_matrix_rollback_steps() {
+            for backend in matrix_backends() {
+                let db = init_matrix_db(backend).await;
+                let runner = MigrationRunner::new(Box::new(simple_source(&[
+                    "001_matrix_rollback_a",
+                    "002_matrix_rollback_b",
+                ])));
+
+                runner
+                    .run(&*db)
+                    .await
+                    .unwrap_or_else(|e| panic!("{} initial run failed: {e}", backend.name()));
+
+                runner
+                    .rollback(&*db, RollbackStrategy::Steps(1))
+                    .await
+                    .unwrap_or_else(|e| panic!("{} rollback failed: {e}", backend.name()));
+
+                let listed = runner.list_migrations(&*db).await.unwrap_or_else(|e| {
+                    panic!("{} list after rollback failed: {e}", backend.name())
+                });
+
+                let applied_count = listed.iter().filter(|m| m.applied).count();
+                assert_eq!(
+                    applied_count,
+                    1,
+                    "{} should have exactly one applied migration after rolling back one step",
+                    backend.name()
+                );
+            }
         }
     }
 }
