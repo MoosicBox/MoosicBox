@@ -803,6 +803,27 @@ fn filter_dangerous_url(url: &str) -> String {
 mod tests {
     use super::*;
 
+    fn collect_text(container: &Container) -> String {
+        let mut text = String::new();
+        if let Element::Text { value } = &container.element {
+            text.push_str(value);
+        }
+        for child in &container.children {
+            text.push_str(&collect_text(child));
+        }
+        text
+    }
+
+    fn contains_element(container: &Container, predicate: &impl Fn(&Element) -> bool) -> bool {
+        if predicate(&container.element) {
+            return true;
+        }
+        container
+            .children
+            .iter()
+            .any(|child| contains_element(child, predicate))
+    }
+
     #[test_log::test]
     fn test_basic_markdown() {
         let md = "**bold** and *italic*";
@@ -1252,6 +1273,38 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_smart_punctuation_transforms_text_when_enabled() {
+        let md = "Wait... --- now";
+        let options = MarkdownOptions {
+            enable_smart_punctuation: true,
+            ..Default::default()
+        };
+
+        let container = markdown_to_container_with_options(md, options);
+        let text = collect_text(&container);
+
+        assert!(text.contains('…'));
+        assert!(text.contains('—'));
+        assert!(!text.contains("..."));
+        assert!(!text.contains("---"));
+    }
+
+    #[test_log::test]
+    fn test_smart_punctuation_preserves_literal_text_when_disabled() {
+        let md = "Wait... --- now";
+        let options = MarkdownOptions {
+            enable_smart_punctuation: false,
+            ..Default::default()
+        };
+
+        let container = markdown_to_container_with_options(md, options);
+        let text = collect_text(&container);
+
+        assert!(text.contains("..."));
+        assert!(text.contains("---"));
+    }
+
+    #[test_log::test]
     fn test_header_size_conversion_h1() {
         let size = HeaderSize::from(HeadingLevel::H1);
         assert_eq!(size, HeaderSize::H1);
@@ -1326,6 +1379,62 @@ mod tests {
         let container = markdown_to_container_with_options(md, options);
         // When tables are disabled, markdown should be treated as text
         assert!(!container.children.is_empty());
+    }
+
+    #[test_log::test]
+    fn test_tables_disabled_does_not_create_table_elements() {
+        let md = "| Header |\n|--------|\n| Cell   |";
+        let options = MarkdownOptions {
+            enable_tables: false,
+            ..Default::default()
+        };
+
+        let container = markdown_to_container_with_options(md, options);
+        let has_table = contains_element(&container, &|element| matches!(element, Element::Table));
+
+        assert!(!has_table);
+        assert!(collect_text(&container).contains("| Header |"));
+    }
+
+    #[test_log::test]
+    fn test_strikethrough_disabled_preserves_literal_markers() {
+        let md = "~~strikethrough text~~";
+        let options = MarkdownOptions {
+            enable_strikethrough: false,
+            ..Default::default()
+        };
+
+        let container = markdown_to_container_with_options(md, options);
+        let has_strikethrough =
+            contains_element(&container, &|element| matches!(element, Element::Span));
+
+        assert!(!has_strikethrough);
+        assert!(collect_text(&container).contains("~~strikethrough text~~"));
+    }
+
+    #[test_log::test]
+    fn test_tasklists_disabled_does_not_create_checkbox_inputs() {
+        let md = "- [x] Checked\n- [ ] Unchecked";
+        let options = MarkdownOptions {
+            enable_tasklists: false,
+            ..Default::default()
+        };
+
+        let container = markdown_to_container_with_options(md, options);
+        let has_checkbox = contains_element(&container, &|element| {
+            matches!(
+                element,
+                Element::Input {
+                    input: hyperchad_transformer::Input::Checkbox { .. },
+                    ..
+                }
+            )
+        });
+
+        assert!(!has_checkbox);
+        let text = collect_text(&container);
+        assert!(text.contains("[x] Checked"));
+        assert!(text.contains("[ ] Unchecked"));
     }
 
     #[cfg(feature = "xss-protection")]
