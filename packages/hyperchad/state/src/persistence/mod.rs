@@ -80,3 +80,54 @@ pub trait StatePersistence: Send + Sync {
     /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
     async fn clear(&self) -> Result<(), Error>;
 }
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use serde::{Serialize, de::DeserializeOwned};
+
+    use super::StatePersistence;
+    use crate::Error;
+
+    struct FailingTakePersistence;
+
+    #[async_trait]
+    impl StatePersistence for FailingTakePersistence {
+        async fn set<T: Serialize + Send + Sync>(
+            &self,
+            _key: impl Into<String> + Send + Sync,
+            _value: &T,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
+            &self,
+            _key: impl AsRef<str> + Send + Sync,
+        ) -> Result<Option<T>, Error> {
+            Ok(None)
+        }
+
+        async fn take<T: DeserializeOwned + Send + Sync>(
+            &self,
+            _key: impl AsRef<str> + Send + Sync,
+        ) -> Result<Option<T>, Error> {
+            let err = serde_json::from_str::<u32>("\"invalid-number\"")
+                .expect_err("string should fail to deserialize as u32");
+            Err(Error::Serde(err))
+        }
+
+        async fn clear(&self) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_default_remove_propagates_take_error() {
+        let persistence = FailingTakePersistence;
+
+        let result = persistence.remove("key").await;
+
+        assert!(matches!(result, Err(Error::Serde(_))));
+    }
+}
