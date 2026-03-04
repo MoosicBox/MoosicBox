@@ -142,6 +142,17 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[cfg(unix)]
+    fn make_executable_script(path: &Path, body: &str) {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        fs::write(path, body).unwrap();
+        let permissions = fs::metadata(path).unwrap().permissions();
+        let mut permissions = permissions;
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
     #[test_log::test]
     fn test_fixup_binary_filename_non_windows() {
         // On non-Windows systems, should always return the original path
@@ -247,5 +258,111 @@ mod tests {
             }
             last_index = Some(current_index);
         }
+    }
+
+    #[cfg(unix)]
+    #[test_log::test]
+    fn test_run_command_falls_back_when_binary_not_found() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let marker_file = temp_dir.path().join("fallback-was-run");
+        let fallback = temp_dir.path().join("fallback.sh");
+
+        make_executable_script(
+            &fallback,
+            &format!("#!/bin/sh\n: > \"{}\"\n", marker_file.to_str().unwrap()),
+        );
+
+        let missing = temp_dir.path().join("missing-binary");
+
+        run_command(
+            vec![
+                missing.to_string_lossy().to_string(),
+                fallback.to_string_lossy().to_string(),
+            ]
+            .into_iter(),
+            &[],
+            temp_dir.path(),
+        );
+
+        assert!(marker_file.exists(), "fallback binary should be executed");
+    }
+
+    #[cfg(unix)]
+    #[test_log::test]
+    fn test_run_command_falls_back_after_127_status() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let first_marker = temp_dir.path().join("first-attempt");
+        let second_marker = temp_dir.path().join("second-attempt");
+        let first = temp_dir.path().join("first.sh");
+        let second = temp_dir.path().join("second.sh");
+
+        make_executable_script(
+            &first,
+            &format!(
+                "#!/bin/sh\n: > \"{}\"\nexit 127\n",
+                first_marker.to_str().unwrap()
+            ),
+        );
+        make_executable_script(
+            &second,
+            &format!("#!/bin/sh\n: > \"{}\"\n", second_marker.to_str().unwrap()),
+        );
+
+        run_command(
+            vec![
+                first.to_string_lossy().to_string(),
+                second.to_string_lossy().to_string(),
+            ]
+            .into_iter(),
+            &[],
+            temp_dir.path(),
+        );
+
+        assert!(first_marker.exists(), "first binary should be attempted");
+        assert!(
+            second_marker.exists(),
+            "second binary should be executed after status 127"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test_log::test]
+    fn test_run_command_panics_on_non_127_failure() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let first_marker = temp_dir.path().join("first-attempt");
+        let second_marker = temp_dir.path().join("second-attempt");
+        let first = temp_dir.path().join("first.sh");
+        let second = temp_dir.path().join("second.sh");
+
+        make_executable_script(
+            &first,
+            &format!(
+                "#!/bin/sh\n: > \"{}\"\nexit 1\n",
+                first_marker.to_str().unwrap()
+            ),
+        );
+        make_executable_script(
+            &second,
+            &format!("#!/bin/sh\n: > \"{}\"\n", second_marker.to_str().unwrap()),
+        );
+
+        let result = std::panic::catch_unwind(|| {
+            run_command(
+                vec![
+                    first.to_string_lossy().to_string(),
+                    second.to_string_lossy().to_string(),
+                ]
+                .into_iter(),
+                &[],
+                temp_dir.path(),
+            );
+        });
+
+        assert!(result.is_err(), "non-127 exit should panic");
+        assert!(first_marker.exists(), "first binary should be attempted");
+        assert!(
+            !second_marker.exists(),
+            "second binary should not run after non-127 failure"
+        );
     }
 }
