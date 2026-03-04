@@ -435,4 +435,82 @@ mod tests {
             "PLUGIN_HASH should contain '-actions-key-up' when plugin-actions-key-up is enabled"
         );
     }
+
+    #[test_log::test]
+    fn test_plugin_hash_matches_exact_enabled_feature_order() {
+        let mut expected = String::from("plugins");
+
+        #[cfg(feature = "plugin-idiomorph")]
+        expected.push_str("-idiomorph");
+        #[cfg(feature = "plugin-nav")]
+        expected.push_str("-nav");
+        #[cfg(feature = "plugin-sse")]
+        expected.push_str("-sse");
+        #[cfg(feature = "plugin-tauri-event")]
+        expected.push_str("-tauri-event");
+        #[cfg(all(not(feature = "plugin-uuid-insecure"), feature = "plugin-uuid"))]
+        expected.push_str("-uuid");
+        #[cfg(feature = "plugin-uuid-insecure")]
+        expected.push_str("-uuid-insecure");
+        #[cfg(feature = "plugin-routing")]
+        expected.push_str("-routing");
+        #[cfg(feature = "plugin-event")]
+        expected.push_str("-event");
+        #[cfg(feature = "plugin-actions-change")]
+        expected.push_str("-actions-change");
+        #[cfg(feature = "plugin-actions-click")]
+        expected.push_str("-actions-click");
+        #[cfg(feature = "plugin-actions-click-outside")]
+        expected.push_str("-actions-click-outside");
+        #[cfg(feature = "plugin-actions-event")]
+        expected.push_str("-actions-event");
+        #[cfg(feature = "plugin-actions-event-key-down")]
+        expected.push_str("-actions-event-key-down");
+        #[cfg(feature = "plugin-actions-event-key-up")]
+        expected.push_str("-actions-event-key-up");
+        #[cfg(feature = "plugin-actions-immediate")]
+        expected.push_str("-actions-immediate");
+        #[cfg(feature = "plugin-actions-mouse-down")]
+        expected.push_str("-actions-mouse-down");
+        #[cfg(feature = "plugin-actions-mouse-over")]
+        expected.push_str("-actions-mouse-over");
+        #[cfg(feature = "plugin-actions-key-down")]
+        expected.push_str("-actions-key-down");
+        #[cfg(feature = "plugin-actions-key-up")]
+        expected.push_str("-actions-key-up");
+        #[cfg(feature = "plugin-actions-resize")]
+        expected.push_str("-actions-resize");
+        #[cfg(feature = "plugin-canvas")]
+        expected.push_str("-canvas");
+        #[cfg(feature = "plugin-form")]
+        expected.push_str("-form");
+        #[cfg(feature = "plugin-http-events")]
+        expected.push_str("-http-events");
+
+        assert_eq!(
+            PLUGIN_HASH, expected,
+            "PLUGIN_HASH should exactly match enabled plugin markers in the documented order"
+        );
+    }
+
+    #[test_log::test]
+    fn test_uuid_feature_markers_are_exclusive_for_all_combinations() {
+        #[cfg(all(feature = "plugin-uuid", not(feature = "plugin-uuid-insecure")))]
+        {
+            assert!(PLUGIN_HASH.contains("-uuid"));
+            assert!(!PLUGIN_HASH.contains("-uuid-insecure"));
+        }
+
+        #[cfg(all(feature = "plugin-uuid", feature = "plugin-uuid-insecure"))]
+        {
+            assert!(!PLUGIN_HASH.contains("-uuid"));
+            assert!(PLUGIN_HASH.contains("-uuid-insecure"));
+        }
+
+        #[cfg(all(not(feature = "plugin-uuid"), not(feature = "plugin-uuid-insecure")))]
+        {
+            assert!(!PLUGIN_HASH.contains("-uuid"));
+            assert!(!PLUGIN_HASH.contains("-uuid-insecure"));
+        }
+    }
 }
