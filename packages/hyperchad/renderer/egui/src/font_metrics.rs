@@ -62,3 +62,58 @@ fn from_galley(value: &egui::Galley) -> FontMetricsBounds {
         rows: value.rows.iter().map(from_row).collect(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui;
+    use hyperchad_transformer::layout::font::FontMetrics as _;
+
+    use super::EguiFontMetrics;
+
+    fn initialized_context() -> egui::Context {
+        let context = egui::Context::default();
+        let _ = context.run(egui::RawInput::default(), |_ctx| {});
+        context
+    }
+
+    fn metric_bounds(text: &str, size: f32, wrap_width: f32) -> Vec<(f32, f32)> {
+        let metrics = EguiFontMetrics::new(initialized_context());
+        metrics
+            .measure_text(text, size, wrap_width)
+            .rows
+            .into_iter()
+            .map(|row| (row.width, row.height))
+            .collect()
+    }
+
+    #[test_log::test]
+    fn measure_text_wrap_width_changes_row_count() {
+        let text = "The quick brown fox jumps over the lazy dog";
+
+        let wide_rows = metric_bounds(text, 16.0, 1_000.0);
+        let narrow_rows = metric_bounds(text, 16.0, 40.0);
+
+        assert_eq!(wide_rows.len(), 1);
+        assert!(
+            narrow_rows.len() > wide_rows.len(),
+            "expected wrapped text to produce more rows (wide: {}, narrow: {})",
+            wide_rows.len(),
+            narrow_rows.len()
+        );
+    }
+
+    #[test_log::test]
+    fn measure_text_respects_explicit_newlines() {
+        let rows = metric_bounds("first line\nsecond line", 16.0, 1_000.0);
+
+        assert!(
+            rows.len() >= 2,
+            "expected at least two rows for explicit newline, got {}",
+            rows.len()
+        );
+        assert!(
+            rows.into_iter()
+                .all(|(width, height)| width > 0.0 && height > 0.0)
+        );
+    }
+}
