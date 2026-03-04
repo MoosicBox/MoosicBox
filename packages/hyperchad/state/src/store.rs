@@ -144,6 +144,143 @@ impl<P: StatePersistence> StateStore<P> {
     }
 }
 
+#[cfg(test)]
+mod core_tests {
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            Arc, RwLock,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
+    use async_trait::async_trait;
+    use serde::{Deserialize, Serialize, de::DeserializeOwned};
+    use serde_json::{Value, json};
+
+    use super::StateStore;
+    use crate::{Error, persistence::StatePersistence};
+
+    #[derive(Clone, Default)]
+    struct MockPersistence {
+        values: Arc<RwLock<BTreeMap<String, Value>>>,
+        get_calls: Arc<AtomicUsize>,
+    }
+
+    impl MockPersistence {
+        fn insert_raw_value(&self, key: &str, value: Value) {
+            if let Ok(mut values) = self.values.write() {
+                values.insert(key.to_string(), value);
+            }
+        }
+
+        fn get_call_count(&self) -> usize {
+            self.get_calls.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl StatePersistence for MockPersistence {
+        async fn set<T: Serialize + Send + Sync>(
+            &self,
+            key: impl Into<String> + Send + Sync,
+            value: &T,
+        ) -> Result<(), Error> {
+            if let Ok(mut values) = self.values.write() {
+                values.insert(key.into(), serde_json::to_value(value)?);
+            }
+
+            Ok(())
+        }
+
+        async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
+            &self,
+            key: impl AsRef<str> + Send + Sync,
+        ) -> Result<Option<T>, Error> {
+            self.get_calls.fetch_add(1, Ordering::SeqCst);
+
+            let value = self
+                .values
+                .read()
+                .ok()
+                .and_then(|values| values.get(key.as_ref()).cloned());
+
+            value
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(Into::into)
+        }
+
+        async fn take<T: DeserializeOwned + Send + Sync>(
+            &self,
+            key: impl AsRef<str> + Send + Sync,
+        ) -> Result<Option<T>, Error> {
+            let value = self
+                .values
+                .write()
+                .ok()
+                .and_then(|mut values| values.remove(key.as_ref()));
+
+            value
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(Into::into)
+        }
+
+        async fn clear(&self) -> Result<(), Error> {
+            if let Ok(mut values) = self.values.write() {
+                values.clear();
+            }
+
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestData {
+        id: u32,
+        name: String,
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_caches_value_loaded_from_persistence() -> Result<(), Error> {
+        let persistence = MockPersistence::default();
+        persistence.insert_raw_value("persisted", json!({ "id": 7, "name": "from-db" }));
+
+        let store = StateStore::new(persistence.clone());
+
+        let first: Option<TestData> = store.get("persisted").await?;
+        let second: Option<TestData> = store.get("persisted").await?;
+
+        assert_eq!(first, second);
+        assert_eq!(
+            first,
+            Some(TestData {
+                id: 7,
+                name: "from-db".into()
+            })
+        );
+        assert_eq!(persistence.get_call_count(), 1);
+
+        Ok(())
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_deserialization_error_is_not_cached() {
+        let persistence = MockPersistence::default();
+        persistence.insert_raw_value("invalid", json!({ "id": "not-a-u32", "name": "bad" }));
+
+        let store = StateStore::new(persistence.clone());
+
+        let first = store.get::<TestData>("invalid").await;
+        let second = store.get::<TestData>("invalid").await;
+
+        assert!(matches!(first, Err(Error::Serde(_))));
+        assert!(matches!(second, Err(Error::Serde(_))));
+        assert_eq!(persistence.get_call_count(), 2);
+    }
+}
+
 #[cfg(feature = "persistence-sqlite")]
 #[cfg(test)]
 mod tests {
