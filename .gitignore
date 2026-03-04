@@ -21,6 +21,7 @@ node_modules
 *.bak
 *.db-shm
 *.db-wal
+*.duckdb
 
 */Cargo.lock
 .aider*
