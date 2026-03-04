@@ -192,6 +192,22 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_is_visible_uses_tolerance_for_near_edge_widget() {
+        let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 800.0005, 100.0, 50.0, 50.0);
+
+        assert!(visible);
+        assert!((dist - 0.0005).abs() < 0.0001);
+    }
+
+    #[test_log::test]
+    fn test_is_visible_outside_tolerance_reports_not_visible() {
+        let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 800.01, 100.0, 50.0, 50.0);
+
+        assert!(!visible);
+        assert!((dist - 0.01).abs() < 0.0001);
+    }
+
+    #[test_log::test]
     fn test_max_f32_returns_larger_value() {
         assert!((max_f32(5.0, 10.0) - 10.0).abs() < f32::EPSILON);
         assert!((max_f32(10.0, 5.0) - 10.0).abs() < f32::EPSILON);
