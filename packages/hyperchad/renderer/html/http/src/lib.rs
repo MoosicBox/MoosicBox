@@ -1055,6 +1055,133 @@ mod tests {
             assert_eq!(response.body(), b"console.log('test');");
         }
 
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_missing_file_falls_through_to_router() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use hyperchad_router::{Container, Element};
+
+            let temp_dir = switchy_fs::tempdir().unwrap();
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/missing.js", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router)
+                .with_asset_not_found_behavior(AssetNotFoundBehavior::Fallthrough);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/missing.js");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_missing_file_returns_not_found() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use hyperchad_router::{Container, Element};
+
+            let temp_dir = switchy_fs::tempdir().unwrap();
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/missing.js", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router)
+                .with_asset_not_found_behavior(AssetNotFoundBehavior::NotFound);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/missing.js");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 404);
+            assert!(response.body().is_empty());
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_missing_file_returns_internal_server_error() {
+            use hyperchad_renderer::assets::{
+                AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute,
+            };
+            use hyperchad_router::{Container, Element};
+
+            let temp_dir = switchy_fs::tempdir().unwrap();
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/missing.js", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router)
+                .with_asset_not_found_behavior(AssetNotFoundBehavior::InternalServerError);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/missing.js");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 500);
+            assert!(response.body().is_empty());
+        }
+
+        #[cfg(feature = "assets")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_directory_asset_exact_route_match_falls_through_to_router() {
+            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use hyperchad_router::{Container, Element};
+
+            let temp_dir = switchy_fs::tempdir().unwrap();
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/", |_req| async {
+                Container {
+                    element: Element::Div,
+                    ..Default::default()
+                }
+            });
+            let mut app = HttpApp::new(renderer, router);
+            app.static_asset_routes.push(StaticAssetRoute {
+                route: "/".to_string(),
+                target: AssetPathTarget::Directory(temp_dir.path().to_path_buf()),
+                not_found_behavior: None,
+            });
+
+            let req = create_route_request("/");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers().get("Content-Type").unwrap(),
+                "text/html; charset=utf-8"
+            );
+        }
+
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_without_primary_returns_empty_html() {
             use hyperchad_renderer::View;
