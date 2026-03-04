@@ -1025,19 +1025,6 @@ fn build_update_plan(
     (query, [update_values, filter_values].concat())
 }
 
-fn build_find_first_plan(
-    table_name: &str,
-    filters: Option<&[Box<dyn BooleanExpression>]>,
-) -> (String, Vec<DuckDbDatabaseValue>) {
-    (
-        format!(
-            "SELECT * FROM {table_name} {} LIMIT 1",
-            build_where_clause(filters)
-        ),
-        bexprs_to_values_opt(filters).unwrap_or_default(),
-    )
-}
-
 fn build_upsert_multi_chunk_plans(
     table_name: &str,
     unique: &[Box<dyn Expression>],
@@ -1144,6 +1131,87 @@ fn build_upsert_chunk_plan(
         .collect::<Vec<DuckDbDatabaseValue>>();
 
     Ok((query, params))
+}
+
+fn execute_returning_rows(
+    connection: &Connection,
+    sql: &str,
+    params: &[DuckDbDatabaseValue],
+    constant_inc: bool,
+) -> Result<Vec<crate::Row>, DuckDbDatabaseError> {
+    let mut stmt = connection
+        .prepare_cached(sql)
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    bind_values(&mut stmt, Some(params), constant_inc, 0)?;
+    stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+    let column_names = stmt.column_names();
+    to_rows(&column_names, &mut stmt.raw_query())
+}
+
+fn execute_returning_first(
+    connection: &Connection,
+    sql: &str,
+    params: &[DuckDbDatabaseValue],
+    constant_inc: bool,
+) -> Result<crate::Row, DuckDbDatabaseError> {
+    let mut stmt = connection
+        .prepare_cached(sql)
+        .map_err(DuckDbDatabaseError::DuckDb)?;
+    bind_values(&mut stmt, Some(params), constant_inc, 0)?;
+    stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
+    let column_names = stmt.column_names();
+    let mut query = stmt.raw_query();
+    query
+        .next()
+        .map_err(DuckDbDatabaseError::DuckDb)?
+        .map(|row| from_row(&column_names, row))
+        .transpose()?
+        .ok_or(DuckDbDatabaseError::NoRow)
+}
+
+fn execute_upsert_plan(
+    connection: &Connection,
+    update_sql: &str,
+    update_params: &[DuckDbDatabaseValue],
+    insert_sql: &str,
+    insert_params: &[DuckDbDatabaseValue],
+) -> Result<Vec<crate::Row>, DuckDbDatabaseError> {
+    let updated_rows = execute_returning_rows(connection, update_sql, update_params, false)?;
+    if updated_rows.is_empty() {
+        Ok(vec![execute_returning_first(
+            connection,
+            insert_sql,
+            insert_params,
+            false,
+        )?])
+    } else {
+        Ok(updated_rows)
+    }
+}
+
+fn execute_upsert_first_plan(
+    connection: &Connection,
+    update_sql: &str,
+    update_params: &[DuckDbDatabaseValue],
+    insert_sql: &str,
+    insert_params: &[DuckDbDatabaseValue],
+) -> Result<crate::Row, DuckDbDatabaseError> {
+    let updated_rows = execute_returning_rows(connection, update_sql, update_params, false)?;
+    updated_rows.into_iter().next().map_or_else(
+        || execute_returning_first(connection, insert_sql, insert_params, false),
+        Ok,
+    )
+}
+
+fn execute_upsert_multi_plans(
+    connection: &Connection,
+    plans: &[(String, Vec<DuckDbDatabaseValue>)],
+) -> Result<Vec<crate::Row>, DuckDbDatabaseError> {
+    let mut results = Vec::new();
+    for (sql, params) in plans {
+        results.append(&mut execute_returning_rows(connection, sql, params, true)?);
+    }
+    Ok(results)
 }
 
 // ---------------------------------------------------------------------------
@@ -2169,37 +2237,14 @@ impl Database for DuckDbDatabase {
 
         run_duckdb_blocking("duckdb_upsert", move || {
             let conn = connection.blocking_lock();
-
-            let mut update_stmt = conn
-                .prepare_cached(&update_sql)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            bind_values(&mut update_stmt, Some(&update_params), false, 0)?;
-            update_stmt
-                .raw_execute()
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            let update_column_names = update_stmt.column_names();
-            let updated_rows = to_rows(&update_column_names, &mut update_stmt.raw_query())?;
-
-            if updated_rows.is_empty() {
-                let mut insert_stmt = conn
-                    .prepare_cached(&insert_sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut insert_stmt, Some(&insert_params), false, 0)?;
-                insert_stmt
-                    .raw_execute()
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                let insert_column_names = insert_stmt.column_names();
-                let mut query = insert_stmt.raw_query();
-                let inserted_row = query
-                    .next()
-                    .map_err(DuckDbDatabaseError::DuckDb)?
-                    .map(|row| from_row(&insert_column_names, row))
-                    .transpose()?
-                    .ok_or(DuckDbDatabaseError::NoRow)?;
-                Ok(vec![inserted_row])
-            } else {
-                Ok(updated_rows)
-            }
+            execute_upsert_plan(
+                &conn,
+                &update_sql,
+                &update_params,
+                &insert_sql,
+                &insert_params,
+            )
+            .map_err(Into::into)
         })
         .await
     }
@@ -2210,8 +2255,6 @@ impl Database for DuckDbDatabase {
     ) -> Result<crate::Row, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        let (find_sql, find_params) =
-            build_find_first_plan(statement.table_name, statement.filters.as_deref());
         let (update_sql, update_params) = build_update_plan(
             statement.table_name,
             &statement.values,
@@ -2223,55 +2266,14 @@ impl Database for DuckDbDatabase {
 
         run_duckdb_blocking("duckdb_upsert_first", move || {
             let conn = connection.blocking_lock();
-
-            let mut find_stmt = conn
-                .prepare_cached(&find_sql)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            bind_values(&mut find_stmt, Some(&find_params), false, 0)?;
-            find_stmt
-                .raw_execute()
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            let found = find_stmt
-                .raw_query()
-                .next()
-                .map_err(DuckDbDatabaseError::DuckDb)?
-                .is_some();
-
-            if found {
-                let mut update_stmt = conn
-                    .prepare_cached(&update_sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut update_stmt, Some(&update_params), false, 0)?;
-                update_stmt
-                    .raw_execute()
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                let update_column_names = update_stmt.column_names();
-                let mut query = update_stmt.raw_query();
-                query
-                    .next()
-                    .map_err(DuckDbDatabaseError::DuckDb)?
-                    .map(|row| from_row(&update_column_names, row))
-                    .transpose()?
-                    .ok_or(DuckDbDatabaseError::NoRow)
-                    .map_err(Into::into)
-            } else {
-                let mut insert_stmt = conn
-                    .prepare_cached(&insert_sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut insert_stmt, Some(&insert_params), false, 0)?;
-                insert_stmt
-                    .raw_execute()
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                let insert_column_names = insert_stmt.column_names();
-                let mut query = insert_stmt.raw_query();
-                query
-                    .next()
-                    .map_err(DuckDbDatabaseError::DuckDb)?
-                    .map(|row| from_row(&insert_column_names, row))
-                    .transpose()?
-                    .ok_or(DuckDbDatabaseError::NoRow)
-                    .map_err(Into::into)
-            }
+            execute_upsert_first_plan(
+                &conn,
+                &update_sql,
+                &update_params,
+                &insert_sql,
+                &insert_params,
+            )
+            .map_err(Into::into)
         })
         .await
     }
@@ -2293,17 +2295,7 @@ impl Database for DuckDbDatabase {
 
         run_duckdb_blocking("duckdb_upsert_multi", move || {
             let conn = connection.blocking_lock();
-            let mut results = Vec::new();
-            for (sql, params) in plans {
-                let mut stmt = conn
-                    .prepare_cached(&sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut stmt, Some(&params), true, 0)?;
-                stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
-                let column_names = stmt.column_names();
-                results.append(&mut to_rows(&column_names, &mut stmt.raw_query())?);
-            }
-            Ok(results)
+            execute_upsert_multi_plans(&conn, &plans).map_err(Into::into)
         })
         .await
     }
@@ -2940,37 +2932,14 @@ impl Database for DuckDbTransaction {
 
         run_duckdb_blocking("duckdb_tx_upsert", move || {
             let conn = connection.blocking_lock();
-
-            let mut update_stmt = conn
-                .prepare_cached(&update_sql)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            bind_values(&mut update_stmt, Some(&update_params), false, 0)?;
-            update_stmt
-                .raw_execute()
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            let update_column_names = update_stmt.column_names();
-            let updated_rows = to_rows(&update_column_names, &mut update_stmt.raw_query())?;
-
-            if updated_rows.is_empty() {
-                let mut insert_stmt = conn
-                    .prepare_cached(&insert_sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut insert_stmt, Some(&insert_params), false, 0)?;
-                insert_stmt
-                    .raw_execute()
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                let insert_column_names = insert_stmt.column_names();
-                let mut query = insert_stmt.raw_query();
-                let inserted_row = query
-                    .next()
-                    .map_err(DuckDbDatabaseError::DuckDb)?
-                    .map(|row| from_row(&insert_column_names, row))
-                    .transpose()?
-                    .ok_or(DuckDbDatabaseError::NoRow)?;
-                Ok(vec![inserted_row])
-            } else {
-                Ok(updated_rows)
-            }
+            execute_upsert_plan(
+                &conn,
+                &update_sql,
+                &update_params,
+                &insert_sql,
+                &insert_params,
+            )
+            .map_err(Into::into)
         })
         .await
     }
@@ -2991,37 +2960,14 @@ impl Database for DuckDbTransaction {
 
         run_duckdb_blocking("duckdb_tx_upsert_first", move || {
             let conn = connection.blocking_lock();
-
-            let mut update_stmt = conn
-                .prepare_cached(&update_sql)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            bind_values(&mut update_stmt, Some(&update_params), false, 0)?;
-            update_stmt
-                .raw_execute()
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            let update_column_names = update_stmt.column_names();
-            let updated_rows = to_rows(&update_column_names, &mut update_stmt.raw_query())?;
-
-            if let Some(row) = updated_rows.into_iter().next() {
-                Ok(row)
-            } else {
-                let mut insert_stmt = conn
-                    .prepare_cached(&insert_sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut insert_stmt, Some(&insert_params), false, 0)?;
-                insert_stmt
-                    .raw_execute()
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                let insert_column_names = insert_stmt.column_names();
-                let mut query = insert_stmt.raw_query();
-                query
-                    .next()
-                    .map_err(DuckDbDatabaseError::DuckDb)?
-                    .map(|row| from_row(&insert_column_names, row))
-                    .transpose()?
-                    .ok_or(DuckDbDatabaseError::NoRow)
-                    .map_err(Into::into)
-            }
+            execute_upsert_first_plan(
+                &conn,
+                &update_sql,
+                &update_params,
+                &insert_sql,
+                &insert_params,
+            )
+            .map_err(Into::into)
         })
         .await
     }
@@ -3042,17 +2988,7 @@ impl Database for DuckDbTransaction {
 
         run_duckdb_blocking("duckdb_tx_upsert_multi", move || {
             let conn = connection.blocking_lock();
-            let mut results = Vec::new();
-            for (sql, params) in plans {
-                let mut stmt = conn
-                    .prepare_cached(&sql)
-                    .map_err(DuckDbDatabaseError::DuckDb)?;
-                bind_values(&mut stmt, Some(&params), true, 0)?;
-                stmt.raw_execute().map_err(DuckDbDatabaseError::DuckDb)?;
-                let column_names = stmt.column_names();
-                results.append(&mut to_rows(&column_names, &mut stmt.raw_query())?);
-            }
-            Ok(results)
+            execute_upsert_multi_plans(&conn, &plans).map_err(Into::into)
         })
         .await
     }

@@ -241,6 +241,7 @@ mod duckdb_transaction_mode_matrix {
             .expect("tx1 insert should succeed");
 
         let db_clone = Arc::clone(&db);
+        #[allow(unused_mut)]
         let mut task = switchy_async::task::spawn(async move {
             let tx2 = db_clone
                 .begin_transaction()
