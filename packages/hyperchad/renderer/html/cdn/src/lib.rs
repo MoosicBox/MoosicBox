@@ -116,7 +116,7 @@ pub fn setup_cdn_optimization(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyperchad_router::RouteRequest;
+    use hyperchad_router::{NavigateError, RequestInfo, RouteRequest};
     use pretty_assertions::assert_eq;
 
     #[test_log::test]
@@ -203,8 +203,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_setup_cdn_optimization_preserves_dynamic_root() {
-        use hyperchad_router::RequestInfo;
-
         // Create a router with a dynamic root that returns specific content
         let expected_content = "Original dynamic content from handler";
         let router =
@@ -233,6 +231,65 @@ mod tests {
         };
 
         assert_eq!(text, expected_content);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_root_endpoint_propagates_none_content() {
+        let router = Router::new()
+            .with_route_result::<Content, Option<Content>, _, _>("/", |_req| async {
+                Ok::<Option<Content>, std::io::Error>(None)
+            });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let content = result
+            .navigate(req)
+            .await
+            .expect("Navigation should succeed for None response");
+
+        assert!(
+            content.is_none(),
+            "Expected proxy endpoint to preserve None from original handler"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_dynamic_root_endpoint_propagates_handler_error() {
+        let router =
+            Router::new().with_route_result::<Content, Option<Content>, _, _>("/", |_req| async {
+                Err::<Option<Content>, std::io::Error>(std::io::Error::other("dynamic root failed"))
+            });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+
+        let error = result
+            .navigate(req)
+            .await
+            .expect_err("Navigation should surface original handler failures");
+
+        match error {
+            NavigateError::Handler(inner) => {
+                assert!(
+                    inner.to_string().contains("dynamic root failed"),
+                    "Expected handler error details to be preserved"
+                );
+            }
+            other => panic!("Expected NavigateError::Handler, got {other:?}"),
+        }
     }
 
     #[test_log::test]
@@ -280,8 +337,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_skeleton_html_content_structure() {
-        use hyperchad_router::RequestInfo;
-
         // Setup CDN optimization with title and viewport
         let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
         let result = setup_cdn_optimization(
@@ -348,8 +403,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_skeleton_html_without_title_or_viewport() {
-        use hyperchad_router::RequestInfo;
-
         // Setup CDN optimization without title or viewport
         let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
         let result = setup_cdn_optimization(router, None, None);
