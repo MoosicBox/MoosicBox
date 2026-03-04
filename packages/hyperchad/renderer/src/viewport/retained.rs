@@ -221,7 +221,7 @@ pub trait ViewportPosition {
             this_widget.widget_x() as f32,
             this_widget.widget_y() as f32,
             self.viewport_w() as f32,
-            self.viewport_y() as f32,
+            self.viewport_h() as f32,
             widget.widget_x() as f32,
             widget.widget_y() as f32,
             widget.widget_w() as f32,
@@ -572,6 +572,33 @@ mod tests {
 
         assert!(!visible);
         assert!(dist > 0);
+    }
+
+    #[test_log::test]
+    fn test_viewport_position_is_widget_visible_uses_height_for_vertical_bounds() {
+        let viewport = TestViewportPosition {
+            x: 0,
+            y: 10,
+            w: 200,
+            h: 100,
+        };
+        let this_widget = TestViewportPosition {
+            x: 0,
+            y: 10,
+            w: 200,
+            h: 100,
+        };
+        let widget = TestWidget {
+            x: 50,
+            y: 90,
+            w: 20,
+            h: 20,
+        };
+
+        let (visible, dist) = viewport.is_widget_visible(&this_widget, &widget);
+
+        assert!(visible);
+        assert_eq!(dist, 0);
     }
 
     #[test_log::test]

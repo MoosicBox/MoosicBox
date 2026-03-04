@@ -172,7 +172,7 @@ impl ViewportListener {
                 self.visible = visible;
                 Some(prev_visible)
             };
-            self.prev_dist = if (prev_dist - dist) < 0.01 {
+            self.prev_dist = if (prev_dist - dist).abs() < 0.01 {
                 None
             } else {
                 self.dist = dist;
@@ -579,6 +579,58 @@ mod tests {
             (new_dist - initial_dist).abs() > 0.01,
             "Distance should have changed significantly"
         );
+    }
+
+    #[test_log::test]
+    fn test_viewport_listener_distance_increase_above_threshold() {
+        let mut listener = ViewportListener::new(
+            Some(Viewport {
+                parent: None,
+                pos: Pos {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+                viewport: Pos {
+                    x: 150.0,
+                    y: 150.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+            }),
+            300.0,
+            300.0,
+            50.0,
+            50.0,
+        );
+
+        let ((visible, _), (initial_dist, _)) = listener.check();
+        assert!(!visible);
+        assert!(initial_dist > 0.0);
+
+        listener.viewport = Some(Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        });
+
+        let ((visible, prev_visible), (new_dist, prev_dist)) = listener.check();
+
+        assert!(!visible);
+        assert!(prev_visible.is_none());
+        assert_eq!(prev_dist, Some(initial_dist));
+        assert!(new_dist > initial_dist);
     }
 
     #[test_log::test]

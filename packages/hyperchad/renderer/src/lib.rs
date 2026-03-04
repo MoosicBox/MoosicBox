@@ -1028,6 +1028,26 @@ mod tests {
         }
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestTryViewError;
+
+    struct FailingTryIntoView;
+
+    impl TryInto<View> for FailingTryIntoView {
+        type Error = TestTryViewError;
+
+        fn try_into(self) -> Result<View, Self::Error> {
+            Err(TestTryViewError)
+        }
+    }
+
+    #[test_log::test]
+    fn test_content_try_view_propagates_conversion_error() {
+        let result = Content::try_view(FailingTryIntoView);
+
+        assert_eq!(result.unwrap_err(), TestTryViewError);
+    }
+
     #[test_log::test]
     fn test_view_try_from_valid_html_str() {
         let html = "<div>Hello</div>";
