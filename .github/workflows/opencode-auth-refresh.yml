@@ -1,0 +1,221 @@
+name: OpenCode Auth Refresh
+
+on:
+    workflow_call:
+        outputs:
+            auth_json_b64_effective:
+                description: "Effective auth payload after refresh attempt"
+                value: ${{ jobs.refresh.outputs.auth_json_b64_effective }}
+        secrets:
+            OPENCODE_AUTH_JSON_B64:
+                required: true
+            OPENCODE_SECRETS_PAT:
+                required: true
+
+jobs:
+    refresh:
+        runs-on: ubuntu-latest
+        outputs:
+            auth_json_b64_effective: ${{ steps.effective_auth.outputs.auth_json_b64_effective }}
+        concurrency:
+            group: opencode-auth-refresh-${{ github.repository }}
+            cancel-in-progress: false
+        permissions:
+            contents: read
+        steps:
+            - name: Validate environment and restore auth state
+              id: restore
+              shell: bash
+              env:
+                  OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+              run: |
+                  set -euo pipefail
+
+                  if [ -n "${OPENAI_API_KEY:-}" ]; then
+                    echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
+                    exit 1
+                  fi
+
+                  if [ -z "${OPENCODE_AUTH_JSON_B64:-}" ]; then
+                    echo "❌ Missing OPENCODE_AUTH_JSON_B64 secret"
+                    exit 1
+                  fi
+
+                  AUTH_DIR="$HOME/.local/share/opencode"
+                  AUTH_FILE="$AUTH_DIR/auth.json"
+                  mkdir -p "$AUTH_DIR"
+                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_FILE"
+                  chmod 600 "$AUTH_FILE"
+
+                  echo "auth_file=$AUTH_FILE" >> "$GITHUB_OUTPUT"
+                  echo "before_hash=$(sha256sum "$AUTH_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+                  cat > /tmp/opencode_auth_validate.py << 'PY'
+                  import datetime
+                  import json
+                  import pathlib
+                  import sys
+                  import urllib.error
+                  import urllib.request
+
+                  path = pathlib.Path(sys.argv[1])
+                  data = json.loads(path.read_text())
+                  openai = data.get("openai")
+                  if openai is None and isinstance(data.get("providers"), dict):
+                      openai = data["providers"].get("openai")
+
+                  if not isinstance(openai, dict):
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print("reason=missing_openai_provider")
+                      sys.exit(0)
+
+                  access = openai.get("access")
+                  refresh = openai.get("refresh")
+                  expires = openai.get("expires")
+
+                  if not isinstance(access, str) or not access.strip():
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print("reason=missing_access_token")
+                      sys.exit(0)
+
+                  if not isinstance(refresh, str) or not refresh.strip():
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print("reason=missing_refresh_token")
+                      sys.exit(0)
+
+                  expired = False
+                  if isinstance(expires, (int, float)):
+                      sec = expires / 1000 if expires > 10_000_000_000 else expires
+                      expiry = datetime.datetime.fromtimestamp(sec, datetime.UTC)
+                      expired = expiry <= (datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=5))
+
+                  if expired:
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print("reason=expired_or_expiring")
+                      sys.exit(0)
+
+                  req = urllib.request.Request(
+                      "https://api.openai.com/v1/models",
+                      headers={"Authorization": f"Bearer {access.strip()}"},
+                  )
+
+                  status = None
+                  for attempt in range(2):
+                      try:
+                          with urllib.request.urlopen(req, timeout=20) as res:
+                              status = int(res.status)
+                              break
+                      except urllib.error.HTTPError as err:
+                          status = int(err.code)
+                          if status in (429, 500, 502, 503, 504) and attempt == 0:
+                              continue
+                          break
+                      except Exception:
+                          if attempt == 0:
+                              continue
+                          status = -1
+
+                  if status in (200, 403):
+                      print("valid=true")
+                      print("needs_refresh=false")
+                      print(f"reason=http_{status}")
+                  elif status == 401:
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print("reason=http_401")
+                  else:
+                      print("valid=false")
+                      print("needs_refresh=true")
+                      print(f"reason=http_{status}")
+                  PY
+
+            - name: Lightweight token validity check
+              id: lightweight
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  AUTH_FILE="${{ steps.restore.outputs.auth_file }}"
+                  while IFS='=' read -r key value; do
+                    echo "$key=$value" >> "$GITHUB_OUTPUT"
+                  done < <(python3 /tmp/opencode_auth_validate.py "$AUTH_FILE")
+
+            - name: Install OpenCode
+              if: steps.lightweight.outputs.needs_refresh == 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  curl -fsSL https://opencode.ai/install | bash
+
+            - name: Attempt OpenCode refresh
+              if: steps.lightweight.outputs.needs_refresh == 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  "$HOME/.opencode/bin/opencode" auth list >/tmp/opencode-auth-list.txt
+                  "$HOME/.opencode/bin/opencode" run --model openai/gpt-5-nano "Reply with OK." >/tmp/opencode-refresh.txt 2>/tmp/opencode-refresh.err || true
+
+            - name: Re-check token validity after refresh attempt
+              if: steps.lightweight.outputs.needs_refresh == 'true'
+              id: post_refresh
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  AUTH_FILE="${{ steps.restore.outputs.auth_file }}"
+                  while IFS='=' read -r key value; do
+                    echo "post_${key}=$value" >> "$GITHUB_OUTPUT"
+                  done < <(python3 /tmp/opencode_auth_validate.py "$AUTH_FILE")
+
+            - name: Rotate OPENCODE_AUTH_JSON_B64 if auth changed
+              if: steps.lightweight.outputs.needs_refresh == 'true'
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ secrets.OPENCODE_SECRETS_PAT }}
+              run: |
+                  set -euo pipefail
+                  AUTH_FILE="${{ steps.restore.outputs.auth_file }}"
+                  BEFORE_HASH="${{ steps.restore.outputs.before_hash }}"
+                  AFTER_HASH="$(sha256sum "$AUTH_FILE" | awk '{print $1}')"
+
+                  if [ "$BEFORE_HASH" = "$AFTER_HASH" ]; then
+                    echo "ℹ️ Auth state unchanged"
+                    exit 0
+                  fi
+
+                  if [ "${{ steps.post_refresh.outputs.post_valid }}" != "true" ]; then
+                    echo "ℹ️ Auth changed but post-refresh validity check failed; skipping secret rotation"
+                    exit 0
+                  fi
+
+                  NEW_AUTH_B64="$(base64 < "$AUTH_FILE" | tr -d '\n')"
+                  printf '%s' "$NEW_AUTH_B64" | gh secret set OPENCODE_AUTH_JSON_B64 --repo "$GITHUB_REPOSITORY" --body -
+                  echo "✅ Rotated OPENCODE_AUTH_JSON_B64 secret"
+
+            - name: Fail if auth is still invalid
+              if: |
+                  steps.lightweight.outputs.valid != 'true' &&
+                  (steps.lightweight.outputs.needs_refresh != 'true' || steps.post_refresh.outputs.post_valid != 'true')
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  echo "❌ OpenCode OpenAI subscription auth is invalid and could not be refreshed automatically."
+                  echo "   Re-seed OPENCODE_AUTH_JSON_B64 using the reauth workflow_dispatch flow."
+                  echo "   Initial reason: ${{ steps.lightweight.outputs.reason }}"
+                  if [ "${{ steps.lightweight.outputs.needs_refresh }}" = "true" ]; then
+                    echo "   Post-refresh reason: ${{ steps.post_refresh.outputs.post_reason }}"
+                  fi
+                  exit 1
+
+            - name: Publish effective auth output
+              id: effective_auth
+              if: always()
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  AUTH_FILE="${{ steps.restore.outputs.auth_file }}"
+                  EFFECTIVE_AUTH_B64="$(base64 < "$AUTH_FILE" | tr -d '\n')"
+                  echo "::add-mask::$EFFECTIVE_AUTH_B64"
+                  echo "auth_json_b64_effective=$EFFECTIVE_AUTH_B64" >> "$GITHUB_OUTPUT"

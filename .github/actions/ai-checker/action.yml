@@ -282,8 +282,14 @@ runs:
                 exit 1
               fi
 
-              if [ -z "${OPENAI_API_KEY:-}" ]; then
-                echo "ℹ️ OPENAI_API_KEY not set; ensure credentials for selected provider are available"
+              if [ -n "${OPENAI_API_KEY:-}" ]; then
+                echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
+                exit 1
+              fi
+
+              if [ -z "${OPENCODE_AUTH_JSON_B64:-}" ]; then
+                echo "❌ OPENCODE_AUTH_JSON_B64 is required for 'check' command"
+                exit 1
               fi
 
               echo "✅ Input validation passed"
@@ -447,6 +453,17 @@ runs:
               DEFAULT_MODEL="openai/gpt-5.3-codex"
               MODEL="${{ inputs.model }}"
               echo "model=${MODEL:-$DEFAULT_MODEL}" >> $GITHUB_OUTPUT
+
+        - name: Restore OpenCode auth
+          if: inputs.command == 'check'
+          shell: bash
+          run: |
+              set -euo pipefail
+
+              AUTH_DIR="$HOME/.local/share/opencode"
+              mkdir -p "$AUTH_DIR"
+              printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+              chmod 600 "$AUTH_DIR/auth.json"
 
         - name: Run OpenCode
           if: inputs.command == 'check'

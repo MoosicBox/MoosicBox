@@ -53,12 +53,18 @@ permissions:
 
 env:
     CARGO_TERM_COLOR: always
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 jobs:
+    auth-refresh:
+        uses: ./.github/workflows/opencode-auth-refresh.yml
+        secrets:
+            OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+            OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+
     create-branch:
         name: Create or use existing branch
         runs-on: ubuntu-latest
+        needs: [auth-refresh]
         outputs:
             branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
@@ -81,7 +87,9 @@ jobs:
     check-security:
         name: Check workspace for security vulnerabilities
         runs-on: ubuntu-latest
-        needs: [create-branch]
+        needs: [auth-refresh, create-branch]
+        env:
+            OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
 
         steps:
             - name: Checkout repository

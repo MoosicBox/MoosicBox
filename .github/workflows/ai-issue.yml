@@ -11,7 +11,29 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    auth-refresh:
+        if: |
+            (
+                (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@moosicboxbot')) ||
+                (github.event_name == 'issues' && (contains(github.event.issue.body, '@moosicboxbot') || contains(github.event.issue.title, '@moosicboxbot')))
+            )
+            &&
+            (
+                (github.event_name == 'issue_comment' && github.event.comment.user.type != 'Bot') ||
+                (github.event_name == 'issues')
+            )
+            &&
+            (
+                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
+                (github.event_name == 'issues' && contains('MEMBER,OWNER,COLLABORATOR', github.event.issue.author_association))
+            )
+        uses: ./.github/workflows/opencode-auth-refresh.yml
+        secrets:
+            OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+            OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+
     ai:
+        needs: [auth-refresh]
         if: |
             (
                 (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@moosicboxbot')) ||
@@ -141,7 +163,7 @@ jobs:
               id: ai
               shell: bash
               env:
-                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
                   GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   MODEL: openai/gpt-5.3-codex
                   USE_GITHUB_TOKEN: "true"
@@ -264,6 +286,17 @@ jobs:
                       Now respond appropriately based on whether this is a question or a command.
               run: |
                   set -euo pipefail
+
+                  if [ -n "${OPENAI_API_KEY:-}" ]; then
+                    echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
+                    exit 1
+                  fi
+
+                  AUTH_DIR="$HOME/.local/share/opencode"
+                  mkdir -p "$AUTH_DIR"
+                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+                  chmod 600 "$AUTH_DIR/auth.json"
+
                   curl -fsSL https://opencode.ai/install | bash
                   rm -f /tmp/opencode_agent_done.txt
 

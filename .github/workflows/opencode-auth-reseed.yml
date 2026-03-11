@@ -1,0 +1,56 @@
+name: OpenCode Auth Reseed
+
+on:
+    workflow_dispatch:
+        inputs:
+            auth_json_b64:
+                description: "Base64-encoded ~/.local/share/opencode/auth.json"
+                required: true
+                type: string
+
+permissions:
+    contents: read
+
+jobs:
+    reseed:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Validate provided auth payload
+              id: validate
+              shell: bash
+              env:
+                  AUTH_JSON_B64: ${{ github.event.inputs.auth_json_b64 }}
+              run: |
+                  set -euo pipefail
+
+                  AUTH_FILE=/tmp/opencode-auth.json
+                  printf '%s' "$AUTH_JSON_B64" | base64 --decode > "$AUTH_FILE"
+
+                  python3 - "$AUTH_FILE" << 'PY'
+                  import json
+                  import pathlib
+                  import sys
+
+                  auth = json.loads(pathlib.Path(sys.argv[1]).read_text())
+                  openai = auth.get("openai")
+                  if openai is None and isinstance(auth.get("providers"), dict):
+                      openai = auth["providers"].get("openai")
+
+                  if not isinstance(openai, dict):
+                      raise SystemExit("Missing openai provider in auth payload")
+                  if not isinstance(openai.get("access"), str) or not openai.get("access"):
+                      raise SystemExit("Missing openai.access in auth payload")
+                  if not isinstance(openai.get("refresh"), str) or not openai.get("refresh"):
+                      raise SystemExit("Missing openai.refresh in auth payload")
+                  print("payload_valid=true")
+                  PY
+
+            - name: Update OPENCODE_AUTH_JSON_B64 secret
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ secrets.OPENCODE_SECRETS_PAT }}
+                  AUTH_JSON_B64: ${{ github.event.inputs.auth_json_b64 }}
+              run: |
+                  set -euo pipefail
+                  printf '%s' "$AUTH_JSON_B64" | gh secret set OPENCODE_AUTH_JSON_B64 --repo "$GITHUB_REPOSITORY" --body -
+                  echo "✅ Updated OPENCODE_AUTH_JSON_B64"

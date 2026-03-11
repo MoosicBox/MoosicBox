@@ -153,7 +153,7 @@ jobs:
 | Input          | Description                                                 |
 | -------------- | ----------------------------------------------------------- |
 | `github_token` | GitHub token with write permissions (required for all)      |
-| `OPENAI_API_KEY` | Provider API key set in workflow env/secrets |
+| `OPENCODE_AUTH_JSON_B64` | Base64-encoded OpenCode auth payload available in workflow env/secrets |
 
 ### Prompt Template (required for `check` command)
 

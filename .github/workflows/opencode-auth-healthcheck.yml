@@ -1,0 +1,13 @@
+name: OpenCode Auth Healthcheck
+
+on:
+    schedule:
+        - cron: "17 6 * * *"
+    workflow_dispatch:
+
+jobs:
+    auth-refresh:
+        uses: ./.github/workflows/opencode-auth-refresh.yml
+        secrets:
+            OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+            OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}

@@ -11,7 +11,14 @@ on:
         #   - "src/**/*.jsx"
 
 jobs:
+    auth-refresh:
+        uses: ./.github/workflows/opencode-auth-refresh.yml
+        secrets:
+            OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+            OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+
     ai-review:
+        needs: [auth-refresh]
         # Optional: Filter by PR author
         # if: |
         #   github.event.pull_request.user.login == 'external-contributor' ||
@@ -54,11 +61,27 @@ jobs:
                     exit 1
                   fi
 
+            - name: Restore OpenCode auth
+              shell: bash
+              env:
+                  OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
+              run: |
+                  set -euo pipefail
+
+                  if [ -n "${OPENAI_API_KEY:-}" ]; then
+                    echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
+                    exit 1
+                  fi
+
+                  AUTH_DIR="$HOME/.local/share/opencode"
+                  mkdir -p "$AUTH_DIR"
+                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+                  chmod 600 "$AUTH_DIR/auth.json"
+
             - name: Run MoosicBox Bot Review
               id: ai-review
               uses: anomalyco/opencode/github@latest
               env:
-                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
                   GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               with:
                   model: openai/gpt-5.3-codex

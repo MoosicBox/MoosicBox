@@ -48,12 +48,18 @@ permissions:
 
 env:
     CARGO_TERM_COLOR: always
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 jobs:
+    auth-refresh:
+        uses: ./.github/workflows/opencode-auth-refresh.yml
+        secrets:
+            OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
+            OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+
     create-branch:
         name: Create or use existing branch
         runs-on: ubuntu-latest
+        needs: [auth-refresh]
         outputs:
             branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
@@ -104,8 +110,10 @@ jobs:
     add-unit-tests:
         name: Add tests to ${{ matrix.package.name }}
         runs-on: ubuntu-latest
-        needs: [create-branch, determine-packages]
+        needs: [auth-refresh, create-branch, determine-packages]
         if: needs.determine-packages.outputs.has-packages == 'true'
+        env:
+            OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
         strategy:
             fail-fast: false
             max-parallel: 20
