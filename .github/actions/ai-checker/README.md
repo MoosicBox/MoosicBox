@@ -153,7 +153,7 @@ jobs:
 | Input          | Description                                                 |
 | -------------- | ----------------------------------------------------------- |
 | `github_token` | GitHub token with write permissions (required for all)      |
-| `OPENCODE_AUTH_JSON_B64` | Base64-encoded OpenCode auth payload available in workflow env/secrets |
+| `OPENCODE_AUTH_JSON_B64` | Base64-encoded OpenCode auth payload in env/secrets (optional if `~/.local/share/opencode/auth.json` is already present) |
 
 ### Prompt Template (required for `check` command)
 

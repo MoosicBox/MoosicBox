@@ -16,6 +16,7 @@ jobs:
         secrets:
             OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
             OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+            OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
 
     ai-review:
         needs: [auth-refresh]
@@ -61,10 +62,16 @@ jobs:
                     exit 1
                   fi
 
-            - name: Restore OpenCode auth
+            - name: Download encrypted OpenCode auth
+              uses: actions/download-artifact@v4
+              with:
+                  name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
+                  path: /tmp/opencode-auth
+
+            - name: Decrypt OpenCode auth
               shell: bash
               env:
-                  OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
+                  OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
               run: |
                   set -euo pipefail
 
@@ -75,7 +82,7 @@ jobs:
 
                   AUTH_DIR="$HOME/.local/share/opencode"
                   mkdir -p "$AUTH_DIR"
-                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+                  gpg --batch --yes --passphrase "$OPENCODE_ARTIFACT_KEY" --decrypt --output "$AUTH_DIR/auth.json" /tmp/opencode-auth/auth.json.gpg
                   chmod 600 "$AUTH_DIR/auth.json"
 
             - name: Run MoosicBox Bot Review

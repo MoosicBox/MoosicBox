@@ -35,6 +35,7 @@ jobs:
         secrets:
             OPENCODE_AUTH_JSON_B64: ${{ secrets.OPENCODE_AUTH_JSON_B64 }}
             OPENCODE_SECRETS_PAT: ${{ secrets.OPENCODE_SECRETS_PAT }}
+            OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
 
     ai:
         needs: [auth-refresh]
@@ -287,11 +288,27 @@ jobs:
                   echo "📋 Comment type: $COMMENT_TYPE"
                   echo "📋 Logs: /tmp/db-watcher.log"
 
+            - name: Download encrypted OpenCode auth
+              uses: actions/download-artifact@v4
+              with:
+                  name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
+                  path: /tmp/opencode-auth
+
+            - name: Decrypt OpenCode auth
+              shell: bash
+              env:
+                  OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
+              run: |
+                  set -euo pipefail
+                  AUTH_DIR="$HOME/.local/share/opencode"
+                  mkdir -p "$AUTH_DIR"
+                  gpg --batch --yes --passphrase "$OPENCODE_ARTIFACT_KEY" --decrypt --output "$AUTH_DIR/auth.json" /tmp/opencode-auth/auth.json.gpg
+                  chmod 600 "$AUTH_DIR/auth.json"
+
             - name: Run MoosicBox Bot
               id: ai
               shell: bash
               env:
-                  OPENCODE_AUTH_JSON_B64: ${{ needs.auth-refresh.outputs.auth_json_b64_effective }}
                   GITHUB_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   MODEL: openai/gpt-5.3-codex
                   USE_GITHUB_TOKEN: "true"
@@ -448,11 +465,6 @@ jobs:
                     echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
                     exit 1
                   fi
-
-                  AUTH_DIR="$HOME/.local/share/opencode"
-                  mkdir -p "$AUTH_DIR"
-                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
-                  chmod 600 "$AUTH_DIR/auth.json"
 
                   curl -fsSL https://opencode.ai/install | bash
                   rm -f /tmp/opencode_agent_done.txt

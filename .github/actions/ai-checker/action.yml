@@ -287,8 +287,8 @@ runs:
                 exit 1
               fi
 
-              if [ -z "${OPENCODE_AUTH_JSON_B64:-}" ]; then
-                echo "❌ OPENCODE_AUTH_JSON_B64 is required for 'check' command"
+              if [ -z "${OPENCODE_AUTH_JSON_B64:-}" ] && [ ! -f "$HOME/.local/share/opencode/auth.json" ]; then
+                echo "❌ OpenCode auth is required for 'check' command (set OPENCODE_AUTH_JSON_B64 or provide ~/.local/share/opencode/auth.json)"
                 exit 1
               fi
 
@@ -462,7 +462,16 @@ runs:
 
               AUTH_DIR="$HOME/.local/share/opencode"
               mkdir -p "$AUTH_DIR"
-              printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+
+              if [ -n "${OPENCODE_AUTH_JSON_B64:-}" ]; then
+                printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+              elif [ -f "$AUTH_DIR/auth.json" ]; then
+                echo "ℹ️ Using pre-restored OpenCode auth file"
+              else
+                echo "❌ Missing OpenCode auth file and OPENCODE_AUTH_JSON_B64"
+                exit 1
+              fi
+
               chmod 600 "$AUTH_DIR/auth.json"
 
         - name: Run OpenCode

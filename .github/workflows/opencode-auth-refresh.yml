@@ -3,20 +3,22 @@ name: OpenCode Auth Refresh
 on:
     workflow_call:
         outputs:
-            auth_json_b64_effective:
-                description: "Effective auth payload after refresh attempt"
-                value: ${{ jobs.refresh.outputs.auth_json_b64_effective }}
+            auth_artifact_name:
+                description: "Encrypted auth artifact name for downstream jobs"
+                value: ${{ jobs.refresh.outputs.auth_artifact_name }}
         secrets:
             OPENCODE_AUTH_JSON_B64:
                 required: true
             OPENCODE_SECRETS_PAT:
+                required: true
+            OPENCODE_ARTIFACT_KEY:
                 required: true
 
 jobs:
     refresh:
         runs-on: ubuntu-latest
         outputs:
-            auth_json_b64_effective: ${{ steps.effective_auth.outputs.auth_json_b64_effective }}
+            auth_artifact_name: ${{ steps.encrypt.outputs.auth_artifact_name }}
         concurrency:
             group: opencode-auth-refresh-${{ github.repository }}
             cancel-in-progress: false
@@ -131,13 +133,27 @@ jobs:
                   fi
                   exit 1
 
-            - name: Publish effective auth output
-              id: effective_auth
-              if: always()
+            - name: Encrypt auth for downstream jobs
+              id: encrypt
+              if: success()
               shell: bash
+              env:
+                  OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
               run: |
                   set -euo pipefail
                   AUTH_FILE="${{ steps.restore.outputs.auth_file }}"
-                  EFFECTIVE_AUTH_B64="$(base64 < "$AUTH_FILE" | tr -d '\n')"
-                  echo "::add-mask::$EFFECTIVE_AUTH_B64"
-                  echo "auth_json_b64_effective=$EFFECTIVE_AUTH_B64" >> "$GITHUB_OUTPUT"
+                  ARTIFACT_DIR="/tmp/opencode-auth-artifact"
+                  ARTIFACT_NAME="opencode-auth-${{ github.run_id }}-${{ github.run_attempt }}"
+
+                  mkdir -p "$ARTIFACT_DIR"
+                  gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase "$OPENCODE_ARTIFACT_KEY" --output "$ARTIFACT_DIR/auth.json.gpg" "$AUTH_FILE"
+
+                  echo "auth_artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+
+            - name: Upload encrypted auth artifact
+              if: success()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ steps.encrypt.outputs.auth_artifact_name }}
+                  path: /tmp/opencode-auth-artifact/auth.json.gpg
+                  retention-days: 1
