@@ -35,3 +35,30 @@ let plan = TestPlan::new()
 - **HTTP**: `send_request()` with support for GET, POST, PUT, DELETE requests and JSON/form/text bodies
 - **Timing**: `wait_for_element()`, `wait_for_url()`, `sleep()`
 - **Control Flow**: `repeat()`, `parallel()`, try/catch, retry with delay
+
+## HTTP Request Usage
+
+```rust
+use hyperchad_test_utils::{HttpRequestStep, TestPlan};
+
+let request = HttpRequestStep::post("/api/login")
+    .json(serde_json::json!({"username": "testuser", "password": "secret123"}))
+    .expect_status(200);
+
+let plan = TestPlan::new().send_request(request);
+```
+
+`HttpRequestStep` is the main API for HTTP test steps. Use `get()`, `post()`, `put()`, or `delete()`, then configure headers/body/validation with `with_header()`, `json()`, `text()`, `form()`, `expect_status()`, and `with_timeout()`.
+
+## Reusable Fragments
+
+```rust
+use hyperchad_test_utils::{fragments, TestPlan};
+
+let plan = TestPlan::new()
+    .include(fragments::login_flow("testuser", "secret123"))
+    .include(fragments::accessibility_test())
+    .include(fragments::logout_flow());
+```
+
+The `fragments` module provides `login_flow()`, `logout_flow()`, `navigation_test()`, `form_validation_test()`, and `accessibility_test()` for common scenarios.
