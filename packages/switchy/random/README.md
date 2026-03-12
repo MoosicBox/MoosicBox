@@ -138,6 +138,28 @@ fn main() {
 }
 ```
 
+### Simulator Seed Control
+
+When the `simulator` feature is enabled, you can inspect and control thread-local deterministic seeding:
+
+```rust
+use switchy_random::simulator;
+
+fn main() {
+    let initial = simulator::initial_seed();
+    let has_fixed_seed = simulator::contains_fixed_seed();
+
+    simulator::reset_seed();
+    let current = simulator::seed();
+
+    simulator::reset_rng();
+    let rng = simulator::rng();
+    let value = rng.next_u32();
+
+    println!("initial={initial} fixed={has_fixed_seed} current={current} value={value}");
+}
+```
+
 ## Architecture
 
 ### Core Traits
