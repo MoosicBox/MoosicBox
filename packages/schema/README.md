@@ -18,10 +18,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_schema = { workspace = true, features = ["sqlite", "postgres"] }
+moosicbox_schema = { version = "0.1.4", features = ["sqlite", "postgres"] }
 
 # Or rely on default features (includes "sqlite" and "postgres")
-# moosicbox_schema = { workspace = true }
+# moosicbox_schema = "0.1.4"
 ```
 
 ## Usage
