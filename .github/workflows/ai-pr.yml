@@ -294,6 +294,9 @@ jobs:
                   artifact_name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
                   artifact_key: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
 
+            - name: Install OpenCode CLI
+              uses: ./.github/actions/opencode-install
+
             - name: Run MoosicBox Bot
               id: ai
               shell: bash
@@ -454,8 +457,6 @@ jobs:
                     echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
                     exit 1
                   fi
-
-                  curl -fsSL https://opencode.ai/install | bash
                   rm -f /tmp/opencode_agent_done.txt
 
                   tail -n +1 -F /tmp/db-watcher.log &

@@ -476,11 +476,7 @@ runs:
 
         - name: Install OpenCode CLI
           if: inputs.command == 'check'
-          shell: bash
-          run: |
-              set -euo pipefail
-              curl -fsSL https://opencode.ai/install | bash
-              echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+          uses: ./.github/actions/opencode-install
 
         - name: Run OpenCode
           if: inputs.command == 'check'

@@ -1,0 +1,155 @@
+name: Install OpenCode
+description: Install latest OpenCode CLI with retries and caching
+
+runs:
+    using: composite
+    steps:
+        - name: Resolve latest OpenCode release
+          id: resolve
+          shell: bash
+          run: |
+              set -euo pipefail
+
+              ATTEMPTS=5
+              DELAY=2
+              TAG=""
+
+              for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
+                echo "🔎 Resolving latest OpenCode release (attempt $ATTEMPT/$ATTEMPTS)"
+                if TAG=$(curl -fsSL --connect-timeout 15 --max-time 30 "https://api.github.com/repos/anomalyco/opencode/releases/latest" | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tag_name","").strip(); print(t) if t else sys.exit(1)'); then
+                  break
+                fi
+
+                if [ "$ATTEMPT" -eq "$ATTEMPTS" ]; then
+                  echo "❌ Failed to fetch latest OpenCode release tag"
+                  exit 1
+                fi
+
+                echo "⚠️ Failed to fetch release tag, retrying in ${DELAY}s"
+                sleep "$DELAY"
+                DELAY=$((DELAY * 2))
+              done
+
+              echo "version=$TAG" >> "$GITHUB_OUTPUT"
+              echo "✅ Resolved OpenCode release: $TAG"
+
+        - name: Cache OpenCode binary
+          id: cache
+          uses: actions/cache@v4
+          with:
+              path: ~/.opencode/bin
+              key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.version }}
+
+        - name: Install OpenCode binary
+          if: steps.cache.outputs.cache-hit != 'true'
+          shell: bash
+          env:
+              VERSION: ${{ steps.resolve.outputs.version }}
+          run: |
+              set -euo pipefail
+
+              OS=$(echo "${RUNNER_OS}" | tr '[:upper:]' '[:lower:]')
+              ARCH=$(echo "${RUNNER_ARCH}" | tr '[:upper:]' '[:lower:]')
+
+              case "$ARCH" in
+                x64|x86_64) ARCH="x64" ;;
+                arm64|aarch64) ARCH="arm64" ;;
+                *)
+                  echo "❌ Unsupported runner architecture: ${RUNNER_ARCH}"
+                  exit 1
+                  ;;
+              esac
+
+              case "$OS" in
+                linux)
+                  EXT=".tar.gz"
+                  ;;
+                macos|darwin)
+                  OS="darwin"
+                  EXT=".zip"
+                  ;;
+                windows)
+                  EXT=".zip"
+                  ;;
+                *)
+                  echo "❌ Unsupported runner OS: ${RUNNER_OS}"
+                  exit 1
+                  ;;
+              esac
+
+              TARGET="${OS}-${ARCH}"
+              FILENAME="opencode-${TARGET}${EXT}"
+              URL="https://github.com/anomalyco/opencode/releases/download/${VERSION}/${FILENAME}"
+
+              echo "📦 Installing OpenCode ${VERSION} from ${FILENAME}"
+
+              TMP_DIR=$(mktemp -d)
+              ARCHIVE_PATH="${TMP_DIR}/${FILENAME}"
+              ATTEMPTS=5
+              DELAY=2
+
+              cleanup() {
+                rm -rf "$TMP_DIR"
+              }
+              trap cleanup EXIT
+
+              for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
+                echo "⬇️ Download attempt $ATTEMPT/$ATTEMPTS"
+
+                if curl -fL --connect-timeout 15 --max-time 120 -o "$ARCHIVE_PATH" "$URL"; then
+                  if [ ! -s "$ARCHIVE_PATH" ]; then
+                    echo "⚠️ Downloaded archive is empty"
+                  elif [ "$OS" = "linux" ]; then
+                    if gzip -t "$ARCHIVE_PATH" && tar -tzf "$ARCHIVE_PATH" >/dev/null 2>&1; then
+                      break
+                    fi
+                    echo "⚠️ Downloaded archive failed gzip/tar validation"
+                  else
+                    if unzip -t "$ARCHIVE_PATH" >/dev/null 2>&1; then
+                      break
+                    fi
+                    echo "⚠️ Downloaded archive failed zip validation"
+                  fi
+                else
+                  echo "⚠️ Download failed"
+                fi
+
+                rm -f "$ARCHIVE_PATH"
+
+                if [ "$ATTEMPT" -eq "$ATTEMPTS" ]; then
+                  echo "❌ Failed to download a valid OpenCode archive after retries"
+                  exit 1
+                fi
+
+                echo "🔁 Retrying in ${DELAY}s"
+                sleep "$DELAY"
+                DELAY=$((DELAY * 2))
+              done
+
+              mkdir -p "$HOME/.opencode/bin"
+
+              if [ "$OS" = "linux" ]; then
+                tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+              else
+                unzip -q "$ARCHIVE_PATH" -d "$TMP_DIR"
+              fi
+
+              if [ ! -f "$TMP_DIR/opencode" ]; then
+                echo "❌ OpenCode binary not found in extracted archive"
+                exit 1
+              fi
+
+              mv "$TMP_DIR/opencode" "$HOME/.opencode/bin/opencode"
+              chmod 755 "$HOME/.opencode/bin/opencode"
+
+        - name: Add OpenCode to PATH
+          shell: bash
+          run: |
+              set -euo pipefail
+              echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+        - name: Verify OpenCode installation
+          shell: bash
+          run: |
+              set -euo pipefail
+              "$HOME/.opencode/bin/opencode" --version

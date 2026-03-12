@@ -69,10 +69,7 @@ jobs:
 
             - name: Install OpenCode
               if: steps.lightweight.outputs.needs_refresh == 'true'
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  curl -fsSL https://opencode.ai/install | bash
+              uses: ./.github/actions/opencode-install
 
             - name: Attempt OpenCode refresh
               if: steps.lightweight.outputs.needs_refresh == 'true'
