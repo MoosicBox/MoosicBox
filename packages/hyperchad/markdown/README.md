@@ -4,7 +4,7 @@ Markdown to HyperChad Container conversion with GitHub Flavored Markdown support
 
 ## Features
 
-- **GitHub Flavored Markdown**: Full support for GFM extensions including tables, strikethrough, task lists, footnotes, and smart punctuation
+- **GitHub Flavored Markdown**: Support for GFM extensions including tables, strikethrough, task lists, smart punctuation, and footnote parsing
 - **Emoji support**: Convert emoji shortcodes (`:rocket:` to 🚀) when the `emoji` feature is enabled
 - **XSS protection**: Sanitize dangerous HTML tags and URLs when the `xss-protection` feature is enabled
 - **Syntax highlighting**: Highlight code blocks with language-specific coloring when the `syntax-highlighting` feature is enabled
