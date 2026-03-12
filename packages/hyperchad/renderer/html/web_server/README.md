@@ -62,6 +62,18 @@ let mut runner = app.to_runner(handle)?;
 runner.run()?;
 ```
 
+## Public API
+
+- `WebServerResponseProcessor<T>` - Trait for request preparation and response/body generation (`prepare_request`, `to_response`, `to_body`)
+- `WebServerApp::new(processor, renderer_event_rx)` - Main constructor for creating a web server renderer application
+- `ToRenderRunner::to_runner(handle)` - Converts `WebServerApp` into a runnable `RenderRunner`
+- `RenderRunner::run()` - Starts the HTTP server runtime
+
+## Configuration
+
+- `BIND_ADDR` - Bind address for the HTTP server (default: `0.0.0.0`)
+- `PORT` - Bind port for the HTTP server (default: `8343`)
+
 ## Cargo Features
 
 - `actix` - Enable actix-web backend support in `switchy_web_server`
