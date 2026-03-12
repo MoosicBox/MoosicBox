@@ -54,7 +54,7 @@ Instead, it provides the core message processing logic that can be integrated wi
 
 The package tracks active connections using an in-memory `BTreeMap`:
 
-- Connects clients and assigns connection IDs
+- Connects clients and tracks connection IDs
 - Registers connections with database
 - Handles disconnection and cleanup
 - Broadcasts connection status to all clients
@@ -104,7 +104,7 @@ impl WebsocketSender for MyWebSocketHandler {
 ### Processing Messages
 
 ```rust
-use moosicbox_ws::{process_message, WebsocketContext};
+use moosicbox_ws::{process_message, WebsocketContext, WebsocketSender};
 use switchy_database::config::ConfigDatabase;
 
 async fn handle_websocket_message(
