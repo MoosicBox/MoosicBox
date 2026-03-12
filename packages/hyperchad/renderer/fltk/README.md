@@ -193,7 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     renderer.render(View::from(view)).await?;
 
     // Convert to runner and start event loop
-    let runner = renderer.to_runner(hyperchad_renderer::Handle::current())?;
+    let mut runner = renderer.to_runner(hyperchad_renderer::Handle::current())?;
     runner.run()?;
 
     Ok(())
