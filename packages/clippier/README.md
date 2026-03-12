@@ -957,6 +957,16 @@ clippier check --skip "shellcheck"
 clippier check --output json
 ```
 
+`check`/`fmt` also load default tool settings from a `clippier.toml` in the working directory:
+
+```toml
+[tools]
+skip = ["gofmt"]
+required = ["rustfmt", "taplo"]
+```
+
+CLI values are additive: `--skip` and `--required` are merged with config values.
+
 The `check` command automatically detects and runs:
 
 - **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
@@ -1293,6 +1303,10 @@ Place a `clippier.toml` at the workspace root to define defaults for all package
 ```toml
 # {workspace_root}/clippier.toml
 # Workspace-level defaults apply to all packages unless overridden
+
+[tools]
+skip = ["gofmt"]
+required = ["rustfmt", "taplo"]
 
 # Rust-specific configuration (workspace-wide defaults)
 [rust]

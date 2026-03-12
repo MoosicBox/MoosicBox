@@ -24,7 +24,7 @@ use clippier::handle_check_command;
 #[cfg(feature = "format")]
 use clippier::handle_fmt_command;
 #[cfg(feature = "_tools")]
-use clippier::tools::ToolsConfig;
+use clippier::tools::build_tools_config;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -795,13 +795,8 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
         } => {
-            let mut config = ToolsConfig::default();
-            if let Some(req) = required {
-                config.required = req;
-            }
-            if let Some(s) = skip {
-                config.skip = s;
-            }
+            let config =
+                build_tools_config(working_dir.as_deref(), required.as_deref(), skip.as_deref())?;
             handle_check_command(
                 working_dir.as_deref(),
                 tools.as_deref(),
@@ -820,13 +815,8 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
         } => {
-            let mut config = ToolsConfig::default();
-            if let Some(req) = required {
-                config.required = req;
-            }
-            if let Some(s) = skip {
-                config.skip = s;
-            }
+            let config =
+                build_tools_config(working_dir.as_deref(), required.as_deref(), skip.as_deref())?;
             handle_fmt_command(
                 working_dir.as_deref(),
                 tools.as_deref(),

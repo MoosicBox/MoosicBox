@@ -7,3 +7,6 @@ toolchain = "cargo-machete"
 
 [[dependencies]]
 toolchain = "taplo"
+
+[tools]
+skip = ["gofmt"]
