@@ -50,12 +50,6 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 simvar_harness = { path = "../simvar/harness" }
-
-# Optional: Enable TUI interface
-simvar_harness = {
-    path = "../simvar/harness",
-    features = ["tui"]
-}
 ```
 
 ## Usage
