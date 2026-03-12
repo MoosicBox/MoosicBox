@@ -8,7 +8,7 @@ The MoosicBox Async Cargo package provides:
 
 - **Lint Tool**: Command-line tool for async function analysis
 - **Attribute Detection**: Finds async functions missing `#[inject_yields]`
-- **Workspace Support**: Analyzes entire Rust workspaces
+- **Root Source Support**: Analyzes Rust source files under `<root>/src`
 - **CI Integration**: Suitable for continuous integration pipelines
 - **Syntax Analysis**: Uses syn for accurate Rust code parsing
 
@@ -23,7 +23,7 @@ The MoosicBox Async Cargo package provides:
 
 ### Code Coverage
 
-- **Workspace Scanning**: Recursively scans all Rust source files
+- **Source Scanning**: Recursively scans Rust source files under `<root>/src`
 - **File Filtering**: Processes only `.rs` files
 - **Syntax Parsing**: Robust parsing with error handling
 - **Path Resolution**: Handles complex file structures
@@ -41,10 +41,10 @@ The MoosicBox Async Cargo package provides:
 
 ```bash
 # Install from source
-cargo install --path packages/async/cargo
+cargo install --path packages/switchy/async/cargo
 
 # Or build locally
-cd packages/async/cargo
+cd packages/switchy/async/cargo
 cargo build --release
 ```
 
@@ -57,8 +57,8 @@ cargo build --release
 ### Command Line
 
 ```bash
-# Check current workspace
-switchy_async_cargo
+# Check using CARGO_MANIFEST_DIR
+CARGO_MANIFEST_DIR=/path/to/project switchy_async_cargo
 
 # Check specific directory
 switchy_async_cargo --root /path/to/project
@@ -81,7 +81,7 @@ warning: src/handlers.rs: async method `handle_request` in impl is missing #[inj
 # GitHub Actions example
 - name: Check async functions
   run: |
-      cargo install --path packages/async/cargo
+      cargo install --path packages/switchy/async/cargo
       switchy_async_cargo
 ```
 
