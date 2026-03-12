@@ -17,8 +17,8 @@ The MoosicBox Marketing Site UI package provides:
 ### Page Templates
 
 - **Home Page**: Landing page with hero section and showcase
-- **Download Page**: Product download and installation pages
-- **Try Now**: Free trial and demo pages
+- **Download Page**: Product download page template
+- **Try Now**: Free trial page template
 - **404 Page**: Not found error page template
 
 ### Layout Components
@@ -190,7 +190,7 @@ let text_align = if_responsive("mobile-large")
 ### Layout
 
 - **Flexbox**: Modern flexbox-based layouts
-- **Grid**: CSS Grid for complex layouts
+- **Container Layouts**: Nested container composition for page sections
 - **Responsive**: Mobile-first responsive design
 - **Spacing**: Consistent padding and margins
 
