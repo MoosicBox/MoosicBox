@@ -32,6 +32,15 @@ The MoosicBox Server Simulator package provides:
 - **TCP Streams**: Simulated network connection support
 - **Multi-Attempt Logic**: Robust connection establishment with configurable retries
 
+### Cargo Features
+
+- **default**: Enables `player`, `sqlite`, `telemetry`, and `upnp`
+- **player**: Enables player-related server functionality through `moosicbox_server/player`
+- **sqlite**: Enables SQLite-backed server functionality through `moosicbox_server/sqlite`
+- **telemetry**: Enables telemetry integration through `moosicbox_server/telemetry` and `simvar/telemetry`
+- **upnp**: Enables UPnP integration through `moosicbox_server/upnp` and `simvar/upnp` (also enables `player`)
+- **fail-on-warnings**: Propagates strict warning-as-error behavior to simulator dependencies
+
 ## Installation
 
 Add this to your `Cargo.toml`:
