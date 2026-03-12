@@ -1,0 +1,8 @@
+Reviewed `README.md` against the current workspace metadata and project structure (`Cargo.toml`, package paths, and server defaults), and I did not find any fundamental inaccuracies or critical omissions that would mislead users or block basic usage.
+
+- `README.md` exists and is aligned with the current repository layout.
+- Installation/run instructions (`cargo run -p moosicbox_server`, default port `8000`) match the actual server entrypoint behavior.
+- Package/module links in the workspace package list resolve to existing paths.
+- No fundamental API/usage gap was found at the root-project README level that requires mandatory correction.
+
+No changes required - documentation is accurate
