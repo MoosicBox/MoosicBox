@@ -496,6 +496,15 @@ The `Savepoint` trait provides:
 - `rollback_to()` - Rollback to the savepoint
 - `name()` - Get the savepoint name
 
+### Global and Profile Database Access
+
+The crate also exposes public APIs for resolving `Database` instances in applications:
+
+- `config::init(database)` - Register a global `Arc<Box<dyn Database>>` singleton
+- `config::ConfigDatabase` - Wrapper that dereferences to `dyn Database` (and supports Actix extraction with `api` feature)
+- `profiles::PROFILES` - Global profile registry for multiple named databases
+- `profiles::LibraryDatabase` - Profile-resolved wrapper that dereferences to `dyn Database` (and supports Actix extraction with `api` feature)
+
 ## Backend Implementation Details
 
 ### SQLite
