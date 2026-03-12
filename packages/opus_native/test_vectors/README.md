@@ -1,6 +1,6 @@
 # Opus Test Vectors
 
-This package provides test vectors for validating the moosicbox_opus_native decoder against RFC 6716 compliance.
+This package provides test vectors for validating the moosicbox_opus_native decoder against libopus reference output.
 
 ## Status
 
