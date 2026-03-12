@@ -227,6 +227,8 @@ Simple struct for pagination parameters (offset and limit).
 - `rest_of_items_in_batches()`: Load all remaining items using parallel batches
 - `with_rest_of_pages()`: Include current page and load remaining pages
 - `with_rest_of_items()`: Include current page items and load remaining items
+- `with_rest_of_pages_in_batches()`: Include current page and load remaining pages in parallel batches
+- `with_rest_of_items_in_batches()`: Include current page items and load remaining items using parallel batches
 - `map()`: Transform item types
 - `map_err()`: Transform error types
 - `transpose()`: Convert PagingResponse<Result<T, E>, E> to Result<PagingResponse<T, E>, E>
