@@ -62,11 +62,8 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_transformer = { path = "../hyperchad/transformer" }
 
-# Enable additional features
-hyperchad_transformer = {
-    path = "../hyperchad/transformer",
-    features = ["html", "layout", "layout-offset"]
-}
+# Or enable additional features
+# hyperchad_transformer = { path = "../hyperchad/transformer", features = ["html", "layout", "layout-offset"] }
 ```
 
 ## Usage
@@ -107,6 +104,19 @@ let pretty_html = container.display_to_string_default_pretty(true, true)
 // With debug attributes
 let debug_html = container.display_to_string_default(true, true)
     .expect("Failed to generate HTML");
+```
+
+### HTML Parsing (with `html` feature)
+
+```rust
+use hyperchad_transformer::Container;
+
+let container = Container::try_from("<div id=\"root\">Hello</div>")
+    .expect("Failed to parse HTML");
+
+if let Some(element) = container.find_element_by_str_id("root") {
+    println!("Parsed element: {:?}", element.element);
+}
 ```
 
 ### Layout Calculations
@@ -236,6 +246,9 @@ container.overrides.push(ConfigOverride {
 ### Layout Calculations (with `layout` feature)
 
 ```rust
+#[cfg(feature = "layout")]
+use hyperchad_transformer::Container;
+
 #[cfg(feature = "layout")]
 use hyperchad_transformer::layout::Calc;
 
