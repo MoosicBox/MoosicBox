@@ -12,7 +12,7 @@ The HyperChad FLTK Renderer provides:
 - **Retained Mode GUI**: Traditional widget-based GUI architecture
 - **Layout Engine**: Complete flexbox and positioning layout system
 - **Image Support**: Async image loading with caching and format support
-- **Event System**: Comprehensive event handling and action system
+- **Event System**: Navigation events with async waiting support
 - **Viewport Management**: Scrolling and viewport-aware rendering
 
 ## Supported Elements
@@ -25,7 +25,7 @@ The HyperChad FLTK Renderer provides:
 - **Text**: `h1`, `h2`, `h3`, `h4`, `h5`, `h6` (headings), raw text
 - **Images**: `img` (with async loading, HTTP support, and local file support)
 - **Links**: `a` (anchor with navigation support)
-- **Buttons**: `button` (rendered as clickable containers)
+- **Buttons**: `button` (rendered as containers)
 - **Dropdowns**: `select` with `option` children (rendered as FLTK Choice widget)
 
 ### Not Rendered
@@ -54,9 +54,9 @@ The HyperChad FLTK Renderer provides:
 ### Interactive Elements
 
 - **Containers**: Divs, sections, headers, footers, and other semantic elements
-- **Clickable Elements**: Buttons (rendered as containers) and anchors with navigation
+- **Clickable Elements**: Anchors with navigation
 - **Scrollable Areas**: Horizontal and vertical scrolling with overflow support
-- **Event Handling**: Click events and navigation
+- **Event Handling**: Navigation events
 - **Dropdowns**: Select elements with option children
 - **Planned**: Form inputs (text, checkbox, radio)
 
@@ -203,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Interactive Button Application
+### Button Layout Application
 
 ```rust
 use hyperchad_template::container;
@@ -221,7 +221,7 @@ let button_view = container! {
             text-align="center"
             margin-bottom=20
         {
-            "Interactive Buttons"
+            "Button Layout"
         }
 
         div
@@ -235,7 +235,6 @@ let button_view = container! {
                 background="blue"
                 color="white"
                 padding=10
-                fx-click=fx { request_action("button_clicked", "action1") }
             {
                 "Action 1"
             }
@@ -246,7 +245,6 @@ let button_view = container! {
                 background="green"
                 color="white"
                 padding=10
-                fx-click=fx { request_action("button_clicked", "action2") }
             {
                 "Action 2"
             }
@@ -257,7 +255,6 @@ let button_view = container! {
                 background="red"
                 color="white"
                 padding=10
-                fx-click=fx { request_action("button_clicked", "action3") }
             {
                 "Action 3"
             }
@@ -268,7 +265,7 @@ let button_view = container! {
             padding=10
             text-align="center"
         {
-            "Click a button above"
+            "Button layout example"
         }
     }
 };
@@ -276,7 +273,7 @@ let button_view = container! {
 renderer.render(View::from(button_view)).await?;
 ```
 
-**Note**: Form inputs (text, password, checkbox) are not yet implemented. The `input` element exists but is not currently rendered by the FLTK renderer.
+**Note**: Form inputs (text, password, checkbox) are not yet implemented. The `input` element exists but is not currently rendered by the FLTK renderer. `button` elements are rendered, but click action dispatch is not implemented by this renderer.
 
 ### Image Gallery
 
@@ -391,24 +388,12 @@ renderer.render(View::from(scrollable_view)).await?;
 ### Event Handling
 
 ```rust
-use hyperchad_actions::logic::Value;
-
-// Handle action events from button clicks and other interactions
-tokio::spawn(async move {
-    while let Ok((action_name, value)) = action_rx.recv_async().await {
-        match action_name.as_str() {
-            "button_clicked" => {
-                if let Some(Value::String(button_id)) = value {
-                    println!("Button clicked: {}", button_id);
-                    // Update UI or perform action based on button_id
-                }
-            }
-            "app_exit" => {
-                std::process::exit(0);
-            }
-            _ => {
-                println!("Unknown action: {}", action_name);
-            }
+// Handle navigation events from anchor interactions
+tokio::spawn({
+    let renderer = renderer.clone();
+    async move {
+        while let Some(href) = renderer.wait_for_navigation().await {
+            println!("Navigating to: {}", href);
         }
     }
 });
