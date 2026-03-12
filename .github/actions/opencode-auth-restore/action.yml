@@ -1,0 +1,41 @@
+name: Restore OpenCode Auth
+description: Download and decrypt OpenCode auth artifact
+
+inputs:
+    artifact_name:
+        description: Encrypted auth artifact name
+        required: true
+    artifact_key:
+        description: Passphrase used to decrypt auth artifact
+        required: true
+
+runs:
+    using: composite
+    steps:
+        - name: Download encrypted auth artifact
+          uses: actions/download-artifact@v4
+          with:
+              name: ${{ inputs.artifact_name }}
+              path: /tmp/opencode-auth
+
+        - name: Decrypt OpenCode auth
+          shell: bash
+          env:
+              OPENCODE_ARTIFACT_KEY: ${{ inputs.artifact_key }}
+          run: |
+              set -euo pipefail
+
+              if [ -n "${OPENAI_API_KEY:-}" ]; then
+                echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
+                exit 1
+              fi
+
+              if [ -z "${OPENCODE_ARTIFACT_KEY:-}" ]; then
+                echo "❌ Missing OPENCODE_ARTIFACT_KEY"
+                exit 1
+              fi
+
+              AUTH_DIR="$HOME/.local/share/opencode"
+              mkdir -p "$AUTH_DIR"
+              gpg --batch --yes --passphrase "$OPENCODE_ARTIFACT_KEY" --decrypt --output "$AUTH_DIR/auth.json" /tmp/opencode-auth/auth.json.gpg
+              chmod 600 "$AUTH_DIR/auth.json"

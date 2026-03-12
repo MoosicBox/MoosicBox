@@ -127,22 +127,11 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
-            - name: Download encrypted OpenCode auth
-              uses: actions/download-artifact@v4
+            - name: Restore OpenCode auth
+              uses: ./.github/actions/opencode-auth-restore
               with:
-                  name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
-                  path: /tmp/opencode-auth
-
-            - name: Decrypt OpenCode auth
-              shell: bash
-              env:
-                  OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
-              run: |
-                  set -euo pipefail
-                  AUTH_DIR="$HOME/.local/share/opencode"
-                  mkdir -p "$AUTH_DIR"
-                  gpg --batch --yes --passphrase "$OPENCODE_ARTIFACT_KEY" --decrypt --output "$AUTH_DIR/auth.json" /tmp/opencode-auth/auth.json.gpg
-                  chmod 600 "$AUTH_DIR/auth.json"
+                  artifact_name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
+                  artifact_key: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
 
             - name: Setup CI environment
               uses: ./.github/actions/clippier

@@ -193,30 +193,12 @@ jobs:
 
                   gh pr comment ${{ steps.pr_details.outputs.pr_number }} --repo ${{ github.repository }} --body-file /tmp/status.txt
 
-            - name: Download encrypted OpenCode auth
+            - name: Restore OpenCode auth
               if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
-              uses: actions/download-artifact@v4
+              uses: ./.github/actions/opencode-auth-restore
               with:
-                  name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
-                  path: /tmp/opencode-auth
-
-            - name: Decrypt OpenCode auth
-              if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
-              shell: bash
-              env:
-                  OPENCODE_ARTIFACT_KEY: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
-              run: |
-                  set -euo pipefail
-
-                  if [ -n "${OPENAI_API_KEY:-}" ]; then
-                    echo "❌ OPENAI_API_KEY must not be set for subscription-auth workflows"
-                    exit 1
-                  fi
-
-                  AUTH_DIR="$HOME/.local/share/opencode"
-                  mkdir -p "$AUTH_DIR"
-                  gpg --batch --yes --passphrase "$OPENCODE_ARTIFACT_KEY" --decrypt --output "$AUTH_DIR/auth.json" /tmp/opencode-auth/auth.json.gpg
-                  chmod 600 "$AUTH_DIR/auth.json"
+                  artifact_name: ${{ needs.auth-refresh.outputs.auth_artifact_name }}
+                  artifact_key: ${{ secrets.OPENCODE_ARTIFACT_KEY }}
 
             - name: Run MoosicBox Bot for conflict resolution
               if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
