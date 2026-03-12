@@ -1140,7 +1140,9 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 ## Command Line Options
 
-### Global Options
+### Common Command Options
+
+These options are shared across multiple subcommands (they are not top-level global flags).
 
 | Option             | Description                                                           |
 | ------------------ | --------------------------------------------------------------------- |
@@ -1198,16 +1200,19 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 ### Docker Generation Options
 
-| Option                    | Description                      | Default                |
-| ------------------------- | -------------------------------- | ---------------------- |
-| `--base-image`            | Docker builder image             | `rust:1-bookworm`      |
-| `--final-image`           | Docker runtime image             | `debian:bookworm-slim` |
-| `--build-args`            | Cargo build arguments            | -                      |
-| `--generate-dockerignore` | Generate .dockerignore           | true                   |
-| `--env`                   | Runtime environment variables    | -                      |
-| `--build-env`             | Build-time environment variables | -                      |
-| `--arg`                   | Arguments to pass to binary      | -                      |
-| `--bin`                   | Specify binary name              | Auto-detect            |
+| Option                    | Description                           | Default                |
+| ------------------------- | ------------------------------------- | ---------------------- |
+| `--git-ref`               | Git ref when workspace is a git URL   | `master`               |
+| `--features`              | Features to enable for target package | -                      |
+| `--no-default-features`   | Do not activate default features      | false                  |
+| `--base-image`            | Docker builder image                  | `rust:1-bookworm`      |
+| `--final-image`           | Docker runtime image                  | `debian:bookworm-slim` |
+| `--build-args`            | Cargo build arguments                 | -                      |
+| `--generate-dockerignore` | Generate .dockerignore                | true                   |
+| `--env`                   | Runtime environment variables         | -                      |
+| `--build-env`             | Build-time environment variables      | -                      |
+| `--arg`                   | Arguments to pass to binary           | -                      |
+| `--bin`                   | Specify binary name                   | Auto-detect            |
 
 ### Affected Packages Options
 
