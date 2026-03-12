@@ -32,3 +32,29 @@ moosicbox_menu_models = { path = "../menu/models" }
 
 - `api` (default): Enables API model types
 - `openapi` (default): Adds OpenAPI schema support via utoipa
+
+## Usage
+
+Main public types:
+
+- `AlbumVersion`: Core album version model with track list and audio quality metadata
+- `api::ApiAlbumVersion` (with `api` feature): Serializable API model for request/response payloads
+
+The crate also provides conversions between these types:
+
+- `From<AlbumVersion> for api::ApiAlbumVersion`
+- `From<api::ApiAlbumVersion> for AlbumVersion`
+
+```rust
+use moosicbox_menu_models::AlbumVersion;
+#[cfg(feature = "api")]
+use moosicbox_menu_models::api::ApiAlbumVersion;
+
+fn convert(version: AlbumVersion) {
+    #[cfg(feature = "api")]
+    {
+        let api_version: ApiAlbumVersion = version.clone().into();
+        let _domain_version: AlbumVersion = api_version.into();
+    }
+}
+```
