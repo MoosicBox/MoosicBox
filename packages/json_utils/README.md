@@ -146,7 +146,8 @@ pub mod database {
     pub trait ToValue<Type> {
         fn to_value<T>(self, index: &str) -> Result<T, ParseError>
         where
-            Type: ToValueType<T>;
+            Type: ToValueType<T>,
+            for<'a> &'a Row: MissingValue<T>;
     }
 }
 ```
@@ -191,7 +192,8 @@ pub mod rusqlite {
     pub trait ToValue<Type> {
         fn to_value<T>(self, index: &str) -> Result<T, ParseError>
         where
-            Type: ToValueType<T>;
+            Type: ToValueType<T>,
+            for<'a> &'a Row<'a>: MissingValue<T>;
     }
 }
 ```
