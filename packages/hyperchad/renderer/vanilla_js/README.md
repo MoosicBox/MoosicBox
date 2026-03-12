@@ -152,6 +152,17 @@ let view = container! {
 renderer.render(hyperchad_renderer::View::from(view)).await?;
 ```
 
+### Renderer Event Publishing API
+
+When you need to publish updates to connected clients (for example with SSE), use `VanillaJsRenderer`.
+
+- `VanillaJsRenderer::default()` creates the renderer extension
+- `emit_event(publisher, event_name, event_value)` publishes `RendererEvent::Event`
+- `render(publisher, view)` publishes `RendererEvent::View`
+- `render_canvas(publisher, update)` publishes `RendererEvent::CanvasUpdate`
+
+`VanillaJsRenderer` implements `hyperchad_renderer_html::extend::ExtendHtmlRenderer`, so bring that trait into scope when calling these methods.
+
 ### Form Handling
 
 ```rust
