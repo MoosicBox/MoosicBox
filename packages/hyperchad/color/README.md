@@ -19,7 +19,7 @@ The HyperChad Color package provides:
 
 - **Hex Strings**: Parse 3, 4, 6, and 8 character hex strings
 - **Flexible Input**: Support for #-prefixed and plain hex strings
-- **Whitespace Handling**: Automatic whitespace trimming
+- **Whitespace Handling**: Trailing whitespace is automatically trimmed
 - **Case Insensitive**: Support for both uppercase and lowercase hex
 
 ### Color Formats
@@ -33,7 +33,7 @@ The HyperChad Color package provides:
 
 - **ParseHexError**: Comprehensive error types for parsing failures
 - **Invalid Characters**: Detailed error reporting for invalid hex characters
-- **Length Validation**: Proper validation of hex string lengths
+- **Length Validation**: Detects incomplete 7-character values and overly long inputs
 - **Non-ASCII Detection**: Detection and reporting of non-ASCII characters
 
 ## Installation
