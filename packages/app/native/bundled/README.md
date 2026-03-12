@@ -49,6 +49,26 @@ Add this to your `Cargo.toml`:
 moosicbox_app_native_bundled = { path = "../app/native/bundled" }
 ```
 
+Or use the published crate:
+
+```toml
+[dependencies]
+moosicbox_app_native_bundled = "0.1.4"
+```
+
+### Feature Flags
+
+- **default**: `all-decoders`, `all-sources`
+- **tunnel**: Enables tunnel support via `moosicbox_server/tunnel`
+- **all-formats**: Enables all format support (`all-os-formats`, `format-mp3`)
+- **all-os-formats**: Enables OS-specific formats (`format-aac`, `format-flac`, `format-opus`)
+- **format-aac**, **format-flac**, **format-mp3**, **format-opus**: Enable individual format support
+- **all-decoders**: Enables all decoder support (`all-os-decoders`, `decoder-mp3`)
+- **all-os-decoders**: Enables OS-specific decoders (`decoder-aac`, `decoder-flac`, `decoder-opus`)
+- **decoder-aac**, **decoder-flac**, **decoder-mp3**, **decoder-opus**: Enable individual decoders
+- **all-sources**: Enables all source integrations (`qobuz`, `tidal`, `yt`)
+- **qobuz**, **tidal**, **yt**: Enable individual source integrations
+
 ## Usage
 
 ### Service Creation and Management
