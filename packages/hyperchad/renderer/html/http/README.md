@@ -42,15 +42,11 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Default features: actions, assets, debug, json
 hyperchad_renderer_html_http = { path = "../hyperchad/renderer/html/http" }
 
-# Default features: actions, assets, debug, json
-# Or with specific features only
-hyperchad_renderer_html_http = {
-    path = "../hyperchad/renderer/html/http",
-    default-features = false,
-    features = ["actions"]
-}
+# Or with specific features only:
+# hyperchad_renderer_html_http = { path = "../hyperchad/renderer/html/http", default-features = false, features = ["actions"] }
 ```
 
 ## Usage
