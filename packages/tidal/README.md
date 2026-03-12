@@ -42,6 +42,15 @@ The package is organized into:
 - `api.rs` - HTTP API endpoints for server integration (packages/tidal/src/api.rs)
 - `db/` - Database persistence for configuration (packages/tidal/src/db/)
 
+## Installation
+
+Add the crate to your `Cargo.toml`:
+
+```toml
+[dependencies]
+moosicbox_tidal = { version = "0.1.4" }
+```
+
 ## Usage
 
 ### Authentication
@@ -295,7 +304,7 @@ match result {
 - The package requires a valid Tidal client ID and secret for authentication
 - Database persistence requires the `db` feature to be enabled
 - Streaming quality depends on the user's Tidal subscription level
-- All API functions that interact with Tidal require authentication (except device_authorization)
+- All API functions that interact with Tidal require authentication (except `device_authorization` and `device_authorization_token`)
 - The package handles automatic token refresh when credentials are persisted to the database
 
 ## See Also
