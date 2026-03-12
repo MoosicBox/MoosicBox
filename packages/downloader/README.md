@@ -16,7 +16,7 @@ The MoosicBox Downloader package provides functionality for downloading music tr
 - **Queue Management**: Background download queue with progress tracking
 - **Resume Support**: Resume interrupted downloads automatically
 - **Progress Tracking**: Real-time download progress and speed monitoring
-- **Audio Quality Selection**: Choose audio quality (FLAC, AAC, MP3, Opus)
+- **Audio Quality Selection**: Choose audio quality (`Low`, `FlacLossless`, `FlacHiRes`, `FlacHighestRes`)
 - **File Organization**: Automatic file organization by artist/album/track
 - **Local Scanning**: Automatic library scanning after downloads complete
 
