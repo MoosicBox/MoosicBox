@@ -18,10 +18,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_schema = { workspace = true }
-
-# Enable database-specific features as needed
 moosicbox_schema = { workspace = true, features = ["sqlite", "postgres"] }
+
+# Or rely on default features (includes "sqlite" and "postgres")
+# moosicbox_schema = { workspace = true }
 ```
 
 ## Usage
@@ -346,7 +346,9 @@ The tracking table records:
 - `switchy_schema`: Generic migration engine
 - `switchy_database`: Database abstraction layer
 - `switchy_env`: Environment variable handling
+- `moosicbox_assert`: Runtime assertion helpers
 - `include_dir`: Compile-time directory inclusion
+- `log`: Logging for migration execution and status
 - `thiserror`: Error handling utilities
 
 ## Error Types
