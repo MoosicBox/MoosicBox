@@ -60,7 +60,16 @@ The package provides both a library API and a CLI tool.
 The `image` module provides pure Rust image processing:
 
 ```rust
-use moosicbox_image::{Encoding, image::try_resize_local_file_async};
+use moosicbox_image::{Encoding, image::{try_resize_local_file, try_resize_local_file_async}};
+
+// Sync resize
+let bytes = try_resize_local_file(
+    800,  // width
+    600,  // height
+    "input.jpg",
+    Encoding::Jpeg,
+    85    // quality
+)?;
 
 // Async resize
 let bytes = try_resize_local_file_async(
@@ -77,13 +86,16 @@ let bytes = try_resize_local_file_async(
 The `libvips` module provides high-performance processing (Linux/macOS only):
 
 ```rust
-use moosicbox_image::libvips::{resize_local_file, resize_bytes};
+use moosicbox_image::libvips::{get_error, resize_local_file, resize_bytes};
 
 // Resize from file path
 let bytes = resize_local_file(800, 600, "input.jpg")?;
 
 // Resize from bytes
 let resized = resize_bytes(800, 600, &image_bytes)?;
+
+// Read and clear the backend error buffer after failures
+let last_error = get_error();
 ```
 
 ### Encoding Types
