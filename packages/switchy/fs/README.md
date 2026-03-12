@@ -95,6 +95,7 @@ fn sync_file_operations() -> std::io::Result<()> {
     // Append to file
     let mut file = OpenOptions::new()
         .append(true)
+        .write(true)
         .open("./data/example.txt")?;
 
     file.write_all(b"\nAppended line")?;
@@ -144,6 +145,7 @@ async fn async_file_operations() -> std::io::Result<()> {
     // Append to file
     let mut file = OpenOptions::new()
         .append(true)
+        .write(true)
         .open("./async_data/example.txt")
         .await?;
 
@@ -186,6 +188,7 @@ let file = OpenOptions::new()
 // Open file for appending
 let file = OpenOptions::new()
     .append(true)
+    .write(true)
     .open("log_file.txt")?;
 
 // Create or truncate file for writing
