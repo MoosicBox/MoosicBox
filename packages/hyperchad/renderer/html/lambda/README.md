@@ -47,22 +47,16 @@ Add this to your `Cargo.toml`:
 hyperchad_renderer_html_lambda = { path = "../hyperchad/renderer/html/lambda" }
 hyperchad_template = { path = "../hyperchad/template" }  # For template DSL support
 
-# With JSON support
-hyperchad_renderer_html_lambda = {
-    path = "../hyperchad/renderer/html/lambda",
-    features = ["json"]
-}
+# Or explicitly enable JSON support (enabled by default):
+# hyperchad_renderer_html_lambda = { path = "../hyperchad/renderer/html/lambda", features = ["json"] }
 
-# With asset serving
-hyperchad_renderer_html_lambda = {
-    path = "../hyperchad/renderer/html/lambda",
-    features = ["assets"]
-}
+# Or explicitly enable asset serving (enabled by default):
+# hyperchad_renderer_html_lambda = { path = "../hyperchad/renderer/html/lambda", features = ["assets"] }
 ```
 
 ## Usage
 
-> **Note**: The examples below use the HyperChad template DSL (`container!` macro from `hyperchad_template`). While the Lambda renderer itself only handles HTML strings, most users will be using HyperChad templates to generate that HTML. You can also use raw HTML strings or any other templating approach that returns a `String`.
+> **Note**: The examples below use the HyperChad template DSL (`container!` macro from `hyperchad_template`). The Lambda renderer supports `Content::Html`, `Content::Raw`, and `Content::Json` (with the `json` feature), and most users will use HyperChad templates to generate HTML content. You can also use raw HTML strings or any other templating approach that returns a `String`.
 
 ### Basic Lambda Function
 
