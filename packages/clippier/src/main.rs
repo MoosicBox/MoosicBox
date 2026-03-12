@@ -468,6 +468,10 @@ enum Commands {
         /// Color mode for tool output
         #[arg(long, value_enum, default_value_t=ColorMode::Auto)]
         color: ColorMode,
+
+        /// Disable real-time pane TUI output
+        #[arg(long, default_value_t = false)]
+        no_tui: bool,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -503,6 +507,10 @@ enum Commands {
         /// Color mode for tool output
         #[arg(long, value_enum, default_value_t=ColorMode::Auto)]
         color: ColorMode,
+
+        /// Disable real-time pane TUI output
+        #[arg(long, default_value_t = false)]
+        no_tui: bool,
     },
 }
 
@@ -805,6 +813,7 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
             color,
+            no_tui,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -819,6 +828,7 @@ async fn main() -> Result<(), BoxError> {
                 config,
                 output,
                 color,
+                !no_tui,
             )?
         }
         #[cfg(feature = "format")]
@@ -831,6 +841,7 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
             color,
+            no_tui,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -846,6 +857,7 @@ async fn main() -> Result<(), BoxError> {
                 config,
                 output,
                 color,
+                !no_tui,
             )?
         }
     };

@@ -6,11 +6,49 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "tools-tui")]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "tools-tui")]
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
+#[cfg(feature = "tools-tui")]
+use std::thread;
+
 use rayon::prelude::*;
 
 use crate::ColorMode;
 use crate::tools::registry::{ToolError, ToolRegistry};
+#[cfg(feature = "tools-tui")]
+use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
+
+/// Live tool execution events used by the TUI.
+#[cfg(feature = "tools-tui")]
+#[derive(Debug, Clone)]
+pub enum ToolEvent {
+    Started {
+        tool_name: String,
+        display_name: String,
+    },
+    StdoutLine {
+        tool_name: String,
+        line: String,
+    },
+    StderrLine {
+        tool_name: String,
+        line: String,
+    },
+    Finished {
+        tool_name: String,
+        success: bool,
+    },
+}
+
+#[cfg(feature = "tools-tui")]
+static POST_TUI_INTERRUPT_REQUESTED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "tools-tui")]
+static POST_TUI_INTERRUPT_ENABLED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "tools-tui")]
+static POST_TUI_INTERRUPT_HANDLER_INIT: OnceLock<()> = OnceLock::new();
 
 /// Result of running a single tool
 #[derive(Debug, Clone)]
@@ -203,7 +241,7 @@ impl<'a> ToolRunner<'a> {
                     Self::apply_color_env(command, ColorMode::Always);
                 } else {
                     Self::apply_color_env(command, ColorMode::Never);
-                }
+                };
             }
         }
     }
@@ -273,6 +311,37 @@ impl<'a> ToolRunner<'a> {
         Ok(self.run_tools(&tools, paths, check_mode))
     }
 
+    /// Runs specific tools by name and renders live pane output in a TUI.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no matching tools are found.
+    pub fn run_specific_with_tui(
+        &self,
+        tool_names: &[&str],
+        paths: &[&str],
+        check_mode: bool,
+    ) -> Result<AggregatedResults, ToolError> {
+        let tools: Vec<&Tool> = tool_names
+            .iter()
+            .filter_map(|name| self.registry.get(name))
+            .collect();
+
+        if tools.is_empty() {
+            return Err(ToolError::NoToolsAvailable);
+        }
+
+        #[cfg(feature = "tools-tui")]
+        {
+            Ok(self.run_tools_with_tui(&tools, paths, check_mode))
+        }
+
+        #[cfg(not(feature = "tools-tui"))]
+        {
+            Ok(self.run_tools(&tools, paths, check_mode))
+        }
+    }
+
     /// Runs a collection of tools and aggregates results
     fn run_tools(&self, tools: &[&Tool], _paths: &[&str], check_mode: bool) -> AggregatedResults {
         let start_time = Instant::now();
@@ -300,6 +369,326 @@ impl<'a> ToolRunner<'a> {
             total_duration,
             success_count,
             failure_count,
+        }
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn run_tools_with_tui(
+        &self,
+        tools: &[&Tool],
+        _paths: &[&str],
+        check_mode: bool,
+    ) -> AggregatedResults {
+        let start_time = Instant::now();
+        let (tx, rx) = mpsc::channel::<ToolEvent>();
+        let cancel_requested = Arc::new(AtomicBool::new(false));
+        let tool_meta: Vec<(String, String)> = tools
+            .iter()
+            .map(|tool| (tool.name.clone(), tool.display_name.clone()))
+            .collect();
+
+        let results: Vec<ToolResult> = thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for tool in tools {
+                let tx = tx.clone();
+                let cancel = Arc::clone(&cancel_requested);
+                handles.push(scope.spawn(move || {
+                    self.run_single_tool_with_events(tool, check_mode, &tx, &cancel)
+                }));
+            }
+            drop(tx);
+
+            let tui_exit = match tui::run_live_tui(&tool_meta, rx, start_time) {
+                Ok(exit) => exit,
+                Err(e) => {
+                    log::warn!("failed to start tool TUI, continuing without live panes: {e}");
+                    tui::TuiExit::Completed
+                }
+            };
+
+            if tui_exit == tui::TuiExit::UserClosed {
+                if let Err(e) = Self::install_post_tui_interrupt_handler() {
+                    log::warn!("failed to install Ctrl-C handler for post-TUI mode: {e}");
+                }
+                POST_TUI_INTERRUPT_REQUESTED.store(false, Ordering::SeqCst);
+                POST_TUI_INTERRUPT_ENABLED.store(true, Ordering::SeqCst);
+            } else {
+                POST_TUI_INTERRUPT_ENABLED.store(false, Ordering::SeqCst);
+            }
+
+            let results = Self::wait_for_tool_threads(handles, &cancel_requested, tui_exit);
+            POST_TUI_INTERRUPT_ENABLED.store(false, Ordering::SeqCst);
+            results
+        });
+
+        let total_duration = start_time.elapsed();
+        let success_count = results.iter().filter(|r| r.success).count();
+        let failure_count = results.len() - success_count;
+
+        AggregatedResults {
+            results,
+            total_duration,
+            success_count,
+            failure_count,
+        }
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn install_post_tui_interrupt_handler() -> Result<(), ctrlc::Error> {
+        if POST_TUI_INTERRUPT_HANDLER_INIT.get().is_some() {
+            return Ok(());
+        }
+
+        ctrlc::set_handler(|| {
+            if POST_TUI_INTERRUPT_ENABLED.load(Ordering::SeqCst) {
+                POST_TUI_INTERRUPT_REQUESTED.store(true, Ordering::SeqCst);
+            }
+        })?;
+
+        let _ = POST_TUI_INTERRUPT_HANDLER_INIT.set(());
+        Ok(())
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn wait_for_tool_threads<'scope>(
+        mut handles: Vec<std::thread::ScopedJoinHandle<'scope, ToolResult>>,
+        cancel_requested: &Arc<AtomicBool>,
+        tui_exit: tui::TuiExit,
+    ) -> Vec<ToolResult> {
+        let mut results = Vec::with_capacity(handles.len());
+
+        while !handles.is_empty() {
+            if tui_exit == tui::TuiExit::UserClosed
+                && POST_TUI_INTERRUPT_REQUESTED.load(Ordering::SeqCst)
+            {
+                cancel_requested.store(true, Ordering::SeqCst);
+            }
+
+            let mut index = 0_usize;
+            while index < handles.len() {
+                if handles[index].is_finished() {
+                    let handle = handles.swap_remove(index);
+                    results.push(handle.join().unwrap_or_else(|_panic| {
+                        ToolResult::failure(
+                            "unknown".to_string(),
+                            "unknown".to_string(),
+                            None,
+                            String::new(),
+                            "Tool execution thread panicked".to_string(),
+                            Duration::ZERO,
+                        )
+                    }));
+                } else {
+                    index += 1;
+                }
+            }
+
+            if !handles.is_empty() {
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+
+        if tui_exit == tui::TuiExit::UserClosed
+            && POST_TUI_INTERRUPT_REQUESTED.load(Ordering::SeqCst)
+        {
+            std::process::exit(130);
+        }
+
+        results
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn build_command_parts(tool: &Tool, check_mode: bool) -> Option<(String, Vec<String>)> {
+        let args = if check_mode {
+            &tool.check_args
+        } else {
+            &tool.format_args
+        };
+
+        if args.is_empty() {
+            return None;
+        }
+
+        let parts = match &tool.kind {
+            ToolKind::Cargo => ("cargo".to_string(), args.clone()),
+            ToolKind::Binary => {
+                let binary = tool
+                    .detected_path
+                    .as_ref()
+                    .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
+                (binary, args.clone())
+            }
+            ToolKind::Runner { runner } => {
+                let mut all_args = vec![tool.binary.clone()];
+                all_args.extend(args.clone());
+                (runner.clone(), all_args)
+            }
+        };
+
+        Some(parts)
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn run_single_tool_with_events(
+        &self,
+        tool: &Tool,
+        check_mode: bool,
+        tx: &mpsc::Sender<ToolEvent>,
+        cancel_requested: &Arc<AtomicBool>,
+    ) -> ToolResult {
+        let start_time = Instant::now();
+
+        let Some((program, final_args)) = Self::build_command_parts(tool, check_mode) else {
+            let result =
+                ToolResult::success(tool.name.clone(), tool.display_name.clone(), Duration::ZERO);
+            let _ = tx.send(ToolEvent::Finished {
+                tool_name: tool.name.clone(),
+                success: true,
+            });
+            return result;
+        };
+
+        let _ = tx.send(ToolEvent::Started {
+            tool_name: tool.name.clone(),
+            display_name: tool.display_name.clone(),
+        });
+
+        let mut command = Command::new(&program);
+        command.args(&final_args);
+        Self::apply_color_env(&mut command, self.effective_color_mode());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        if let Some(dir) = self.working_dir {
+            command.current_dir(dir);
+        }
+
+        match command.spawn() {
+            Ok(mut child) => {
+                let stdout_content = Arc::new(Mutex::new(String::new()));
+                let stderr_content = Arc::new(Mutex::new(String::new()));
+
+                let stdout_handle = child.stdout.take().map(|stdout| {
+                    let tx = tx.clone();
+                    let tool_name = tool.name.clone();
+                    let output = Arc::clone(&stdout_content);
+                    thread::spawn(move || {
+                        let reader = BufReader::new(stdout);
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx.send(ToolEvent::StdoutLine {
+                                tool_name: tool_name.clone(),
+                                line: line.clone(),
+                            });
+                            if let Ok(mut buf) = output.lock() {
+                                buf.push_str(&line);
+                                buf.push('\n');
+                            }
+                        }
+                    })
+                });
+
+                let stderr_handle = child.stderr.take().map(|stderr| {
+                    let tx = tx.clone();
+                    let tool_name = tool.name.clone();
+                    let output = Arc::clone(&stderr_content);
+                    thread::spawn(move || {
+                        let reader = BufReader::new(stderr);
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx.send(ToolEvent::StderrLine {
+                                tool_name: tool_name.clone(),
+                                line: line.clone(),
+                            });
+                            if let Ok(mut buf) = output.lock() {
+                                buf.push_str(&line);
+                                buf.push('\n');
+                            }
+                        }
+                    })
+                });
+
+                let status = loop {
+                    if cancel_requested.load(Ordering::SeqCst)
+                        && let Err(e) = child.kill()
+                        && e.kind() != std::io::ErrorKind::InvalidInput
+                    {
+                        log::debug!("failed to kill tool process '{}': {e}", tool.name);
+                    }
+
+                    match child.try_wait() {
+                        Ok(Some(exit)) => {
+                            break exit;
+                        }
+                        Ok(None) => thread::sleep(Duration::from_millis(25)),
+                        Err(e) => {
+                            let result = ToolResult::failure(
+                                tool.name.clone(),
+                                tool.display_name.clone(),
+                                None,
+                                String::new(),
+                                format!("Failed to wait for process: {e}"),
+                                start_time.elapsed(),
+                            );
+
+                            let _ = tx.send(ToolEvent::Finished {
+                                tool_name: tool.name.clone(),
+                                success: false,
+                            });
+
+                            return result;
+                        }
+                    }
+                };
+
+                if let Some(handle) = stdout_handle {
+                    let _ = handle.join();
+                }
+                if let Some(handle) = stderr_handle {
+                    let _ = handle.join();
+                }
+
+                let stdout = stdout_content
+                    .lock()
+                    .map_or_else(|_| String::new(), |buf| buf.clone());
+                let stderr = stderr_content
+                    .lock()
+                    .map_or_else(|_| String::new(), |buf| buf.clone());
+
+                let duration = start_time.elapsed();
+                let result = if status.success() {
+                    ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
+                } else {
+                    ToolResult::failure(
+                        tool.name.clone(),
+                        tool.display_name.clone(),
+                        status.code(),
+                        stdout,
+                        stderr,
+                        duration,
+                    )
+                };
+
+                let _ = tx.send(ToolEvent::Finished {
+                    tool_name: tool.name.clone(),
+                    success: result.success,
+                });
+
+                result
+            }
+            Err(e) => {
+                let result = ToolResult::failure(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    None,
+                    String::new(),
+                    format!("Failed to spawn process: {e}"),
+                    start_time.elapsed(),
+                );
+                let _ = tx.send(ToolEvent::Finished {
+                    tool_name: tool.name.clone(),
+                    success: false,
+                });
+                result
+            }
         }
     }
 

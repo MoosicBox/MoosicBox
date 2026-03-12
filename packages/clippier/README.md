@@ -1051,6 +1051,14 @@ Color behavior for tool output:
 - `--color never` disables colors in child tool output
 - For `--output json` with `--color auto`, clippier disables colors to keep JSON payloads clean
 
+TUI behavior for tool output:
+
+- In interactive terminals, `check` and `fmt` auto-enable a live pane TUI while tools are running
+- Use `--no-tui` to disable live panes and keep non-interactive streaming behavior
+- Press `q` or `Ctrl-C` while TUI is visible to close only the TUI view
+- After the TUI view closes, pressing `Ctrl-C` cancels running tools and exits clippier
+- After tools complete, clippier exits the TUI and prints full sectioned raw output as usual
+
 #### Supported Tools
 
 | Tool         | Language/Format         | Capabilities | Detection           |
@@ -1313,6 +1321,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
 | `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
+| `--no-tui`      | Disable real-time pane TUI output              | `false`           |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1326,6 +1335,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
 | `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
+| `--no-tui`      | Disable real-time pane TUI output              | `false`           |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration

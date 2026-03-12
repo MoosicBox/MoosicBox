@@ -33,6 +33,8 @@
 
 mod registry;
 mod runner;
+#[cfg(feature = "tools-tui")]
+mod tui;
 mod types;
 
 pub use registry::ToolRegistry;

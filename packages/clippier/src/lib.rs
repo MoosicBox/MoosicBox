@@ -202,6 +202,12 @@ pub enum ColorMode {
     Never,
 }
 
+fn can_use_interactive_tui() -> bool {
+    use std::io::IsTerminal;
+
+    std::io::stdout().is_terminal() && std::io::stderr().is_terminal()
+}
+
 /// Information about a package affected by changes
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AffectedPackageInfo {
@@ -5371,6 +5377,7 @@ pub fn handle_check_command(
     config: tools::ToolsConfig,
     output: OutputType,
     color: ColorMode,
+    enable_tui: bool,
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
@@ -5431,7 +5438,13 @@ pub fn handle_check_command(
         tools::merge_tool_names(&auto_detected, &required_tools)
     };
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let results = runner.run_specific(&name_refs, &[], true)?;
+    let should_use_tui =
+        enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();
+    let results = if should_use_tui {
+        runner.run_specific_with_tui(&name_refs, &[], true)?
+    } else {
+        runner.run_specific(&name_refs, &[], true)?
+    };
 
     match output {
         OutputType::Json => Ok(tools::results_to_json(&results)?),
@@ -5460,6 +5473,7 @@ pub fn handle_fmt_command(
     config: tools::ToolsConfig,
     output: OutputType,
     color: ColorMode,
+    enable_tui: bool,
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
@@ -5525,7 +5539,13 @@ pub fn handle_fmt_command(
         tools::merge_tool_names(&auto_detected, &required_tools)
     };
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let results = runner.run_specific(&name_refs, &[], check_only)?;
+    let should_use_tui =
+        enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();
+    let results = if should_use_tui {
+        runner.run_specific_with_tui(&name_refs, &[], check_only)?
+    } else {
+        runner.run_specific(&name_refs, &[], check_only)?
+    };
 
     match output {
         OutputType::Json => Ok(tools::results_to_json(&results)?),

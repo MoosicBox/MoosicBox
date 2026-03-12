@@ -46,9 +46,11 @@ anyhow      = { workspace = true }
 async-trait = { workspace = true }
 chrono      = { workspace = true }
 clap        = { workspace = true }
+ctrlc       = { workspace = true, optional = true }
 globset     = { workspace = true }
 itertools   = { workspace = true }
 log         = { workspace = true }
+ratatui     = { workspace = true, optional = true }
 rayon       = { workspace = true, optional = true }
 regex       = { workspace = true }
 serde       = { workspace = true }
@@ -73,6 +75,7 @@ default = [
     "format",
     "git-diff",
     "node-workspace",
+    "tools-tui",
     "transforms-vendored",
 ]
 
@@ -94,6 +97,7 @@ check               = ["_tools"]
 format              = ["_tools"]
 git-diff            = ["dep:git2"]
 test-utils          = ["switchy_fs/simulator-real-fs"]
+tools-tui           = ["_tools", "dep:ctrlc", "dep:ratatui"]
 transforms-system   = ["_transforms", "dep:mlua"]
 transforms-vendored = ["_transforms", "mlua/vendored"]
 
