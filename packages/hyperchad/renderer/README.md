@@ -115,7 +115,7 @@ impl Renderer for MyRenderer {
         Ok(())
     }
 
-    fn add_responsive_trigger(&mut self, name: String, trigger: hyperchad_transformer::ResponsiveTrigger) {
+    fn add_responsive_trigger(&mut self, name: String, trigger: hyperchad_renderer::transformer::ResponsiveTrigger) {
         // Add responsive breakpoint trigger
     }
 }
@@ -125,7 +125,7 @@ impl Renderer for MyRenderer {
 
 ```rust
 use hyperchad_renderer::{Content, View};
-use hyperchad_transformer::Container;
+use hyperchad_renderer::transformer::Container;
 
 // Create view content with primary container
 let view_content = Content::builder()
@@ -149,15 +149,15 @@ let container_content = Content::from(Container::default());
 
 ```rust
 use hyperchad_renderer::{HtmlTagRenderer, Color};
-use hyperchad_transformer::Container;
+use hyperchad_renderer::transformer::Container;
 use std::collections::BTreeMap;
 
 struct MyHtmlRenderer {
-    responsive_triggers: BTreeMap<String, hyperchad_transformer::ResponsiveTrigger>,
+    responsive_triggers: BTreeMap<String, hyperchad_renderer::transformer::ResponsiveTrigger>,
 }
 
 impl HtmlTagRenderer for MyHtmlRenderer {
-    fn add_responsive_trigger(&mut self, name: String, trigger: hyperchad_transformer::ResponsiveTrigger) {
+    fn add_responsive_trigger(&mut self, name: String, trigger: hyperchad_renderer::transformer::ResponsiveTrigger) {
         self.responsive_triggers.insert(name, trigger);
     }
 
