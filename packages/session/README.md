@@ -10,6 +10,8 @@ Session management library for the MoosicBox ecosystem, providing basic user ses
 - **Connection Management**: Track device connections and player registrations
 - **Database Integration**: Store session data with PostgreSQL and SQLite support
 - **Event System**: Optional event notifications for player updates
+- **OpenAPI Support**: Optional OpenAPI schema generation for session endpoints
+- **Audio Format Features**: Configurable format support with `aac`, `flac`, `mp3`, `opus`, `all-os-formats`, and `all-formats`
 
 ## Installation
 
@@ -24,6 +26,9 @@ moosicbox_session = { version = "0.1.4", features = ["api"] }
 
 # Enable event system
 moosicbox_session = { version = "0.1.4", features = ["events"] }
+
+# Enable OpenAPI schema generation (requires `api`)
+moosicbox_session = { version = "0.1.4", features = ["api", "openapi"] }
 ```
 
 ## Usage
@@ -81,7 +86,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Managing Connections and Players
 
 ```rust
-use moosicbox_session::{register_connection, get_connections, delete_connection, delete_player};
+use moosicbox_session::{
+    register_connection,
+    get_connections,
+    create_players,
+    get_players,
+    delete_connection,
+    delete_player,
+};
 use moosicbox_session::models::{RegisterConnection, RegisterPlayer};
 use switchy_database::config::ConfigDatabase;
 
@@ -106,6 +118,18 @@ async fn setup_connections(db: &ConfigDatabase) -> Result<(), Box<dyn std::error
     for conn in connections {
         println!("Connection: {} with {} players", conn.name, conn.players.len());
     }
+
+    // Register additional players to an existing connection
+    let additional_players = vec![RegisterPlayer {
+        name: "Kitchen Speaker".to_string(),
+        audio_output_id: "speaker-2".to_string(),
+    }];
+    let created_players = create_players(db, "device-123", &additional_players).await?;
+    println!("Added {} player(s)", created_players.len());
+
+    // Get players for a specific connection
+    let players = get_players(db, "device-123").await?;
+    println!("Device has {} player(s)", players.len());
 
     // Delete a player by ID
     if let Some(conn) = connections.first() {
@@ -206,6 +230,16 @@ let app = App::new().service(bind_services(web::scope("/session")));
 ```
 
 This binds session routes including `/session`, `/sessions`, `/session-playlist`, `/session-playlist-tracks`, `/session-audio-zone`, `/session-playing`, `/register-players`, and `/register-connection`.
+
+### OpenAPI Documentation (`api` + `openapi` features)
+
+When both the `api` and `openapi` features are enabled, export OpenAPI docs with `api::Api`:
+
+```rust
+use utoipa::OpenApi;
+
+let openapi = moosicbox_session::api::Api::openapi();
+```
 
 ### Player Update Events (`events` feature)
 
