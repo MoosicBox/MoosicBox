@@ -61,11 +61,12 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_transformer_models = { path = "../hyperchad/transformer/models" }
 
-# Enable additional features
-hyperchad_transformer_models = {
-    path = "../hyperchad/transformer/models",
-    features = ["serde", "layout", "arb"]
-}
+# Customize features
+# hyperchad_transformer_models = {
+#     path = "../hyperchad/transformer/models",
+#     default-features = false,
+#     features = ["serde", "layout", "arb"]
+# }
 ```
 
 ## Usage
