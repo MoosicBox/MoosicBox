@@ -15,6 +15,8 @@ This package provides low-level web server backend infrastructure. Users typical
 
 To use this package directly, implement the `WebServerResponseProcessor` trait:
 
+Note: the current `RenderRunner::run()` implementation starts a built-in `/example` route and does not invoke `WebServerResponseProcessor` methods yet.
+
 ```rust
 use hyperchad_renderer_html_web_server::*;
 use hyperchad_renderer::{Handle, ToRenderRunner};
@@ -64,6 +66,8 @@ runner.run()?;
 
 ## Public API
 
+- `switchy_web_server` - Re-export of the underlying web server crate for advanced setup
+- `HttpRequest`, `HttpResponse`, `WebServerError` - Re-exported HTTP request/response and error types from `switchy_web_server`
 - `WebServerResponseProcessor<T>` - Trait for request preparation and response/body generation (`prepare_request`, `to_response`, `to_body`)
 - `WebServerApp::new(processor, renderer_event_rx)` - Main constructor for creating a web server renderer application
 - `ToRenderRunner::to_runner(handle)` - Converts `WebServerApp` into a runnable `RenderRunner`
