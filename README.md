@@ -239,8 +239,8 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 - **[moosicbox_app_tauri_bundled](packages/app/tauri/bundled)** - Bundled Tauri application
 - **[moosicbox_app_client](packages/app/tauri/client)** - Tauri client utilities and bindings
-- **[tauri_create_config](packages/app/tauri/create_config)** - Tauri configuration generator
-- **[moosicbox](packages/app/tauri/src-tauri)** - MoosicBox Tauri desktop application
+- **[moosicbox_app_create_config](packages/app/tauri/create_config)** - Tauri configuration generator
+- **[moosicbox_app](packages/app/tauri/src-tauri)** - MoosicBox Tauri desktop application
 - **[app-tauri-plugin-player](packages/app/tauri/tauri-plugin-player)** - Tauri plugin for audio player
 - **[moosicbox_app_ws](packages/app/tauri/ws)** - Tauri WebSocket integration
 
@@ -353,7 +353,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[simvar_harness](packages/simvar/harness)** - Simulation testing framework
 - **[simvar_utils](packages/simvar/utils)** - Simulation utilities and helpers
 - **[moosicbox_arb](packages/arb)** - Arbitrary data generation for testing
-- **[moosicbox_clippier](packages/clippier)** - Workspace analysis and CI generation tool
+- **[clippier](packages/clippier)** - Workspace analysis and CI generation tool
 - **[clippier_test_utilities](packages/clippier/test_utilities)** - Testing utilities for Clippier
 - **[hyperchad_simulator](packages/hyperchad/simulator)** - HyperChad simulation utilities
 - **[hyperchad_test_utils](packages/hyperchad/test_utils)** - HyperChad testing utilities
