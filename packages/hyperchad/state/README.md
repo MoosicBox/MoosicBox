@@ -9,6 +9,7 @@ A state management package for the HyperChad framework, providing in-memory cach
 ## What it provides
 
 - **StateStore** - Main interface for get/set/remove operations
+- **StatePersistence** - Trait for implementing custom persistence backends
 - **In-memory caching** - Fast access using `BTreeMap` with `RwLock`
 - **SQLite persistence** - Store state in SQLite database
 - **Generic type support** - Works with any `Serialize` + `DeserializeOwned` types
@@ -64,6 +65,16 @@ let persistence = SqlitePersistence::new_in_memory().await?;
 ```
 
 Creates a `state` table with `key` and `value` columns.
+
+### Custom backends (`StatePersistence`)
+
+`StatePersistence` is the public trait used by `StateStore` and is the main extension point for custom persistence implementations.
+
+- `set<T>(key, value) -> Result<(), Error>`
+- `get<T>(key) -> Result<Option<T>, Error>`
+- `remove(key) -> Result<(), Error>`
+- `take<T>(key) -> Result<Option<T>, Error>`
+- `clear() -> Result<(), Error>`
 
 ## Features
 
