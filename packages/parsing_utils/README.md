@@ -22,7 +22,7 @@ The Parsing Utils package provides:
 ### Integer Range Parsing
 
 - **Hyphen-separated Ranges**: Parse "1-10" into expanded sequence
-- **Range Limits**: Prevent ranges larger than 100,000 items
+- **Range Limits**: Prevent ranges with more than 100,000 interpolated values
 - **Comma-separated Integers**: Handle comma-separated integers within range boundaries
 
 ### Error Handling
@@ -30,7 +30,7 @@ The Parsing Utils package provides:
 - **Parse Errors**: Invalid integer format detection
 - **Unmatched Ranges**: Detect malformed range syntax
 - **Size Limits**: Prevent memory exhaustion from large ranges
-- **Panic Edge Cases**: `parse_integer_ranges` can panic for reverse/equal ranges and empty range segments
+- **Panic Edge Cases**: `parse_integer_ranges` can panic for reverse/equal ranges
 
 ## Installation
 
@@ -132,7 +132,7 @@ match parse_integer_ranges("1-100000000") {
 
 ### Range Validation
 
-- Maximum range size: 100,000 items
+- Maximum interpolated range span: 100,000 values
 - Prevents memory exhaustion attacks
 - Returns `RangeTooLarge` error for excessive ranges
 
@@ -148,7 +148,7 @@ pub enum ParseIntegersError {
     // Malformed range syntax
     UnmatchedRange(String),
 
-    // Range exceeds 100,000 items
+    // Range exceeds 100,000 interpolated values
     RangeTooLarge(String),
 }
 ```
