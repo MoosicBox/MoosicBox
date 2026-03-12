@@ -128,7 +128,7 @@ let font_size = Number::RealDvw(4.0); // 4dvw
 ### Element Types
 
 ```rust
-use hyperchad_transformer::{Element, Input, HeaderSize};
+use hyperchad_transformer::{Element, HeaderSize, Input, Number};
 use hyperchad_transformer::models::{ImageFit, ImageLoading, LinkTarget};
 
 // Form input
@@ -138,6 +138,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter text...".to_string()),
     },
     name: Some("username".to_string()),
+    autofocus: None,
 };
 
 // Image with responsive loading
@@ -238,6 +239,8 @@ container.overrides.push(ConfigOverride {
 ```rust
 #[cfg(feature = "layout")]
 use hyperchad_transformer::layout::Calc;
+#[cfg(feature = "layout")]
+use hyperchad_transformer::Container;
 
 #[cfg(feature = "layout")]
 {
@@ -253,7 +256,8 @@ use hyperchad_transformer::layout::Calc;
 
     let calculator = MyCalculator;
     let mut container = Container::default();
-    container.partial_calc(&calculator, container.id);
+    let container_id = container.id;
+    container.partial_calc(&calculator, container_id);
 }
 ```
 
@@ -296,6 +300,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter your name".to_string()),
     },
     name: Some("name".to_string()),
+    autofocus: None,
 };
 
 // Checkbox
@@ -304,6 +309,7 @@ let checkbox = Element::Input {
         checked: Some(true),
     },
     name: Some("agree".to_string()),
+    autofocus: None,
 };
 
 // Password input
@@ -313,6 +319,7 @@ let password = Element::Input {
         placeholder: Some("Password".to_string()),
     },
     name: Some("password".to_string()),
+    autofocus: None,
 };
 ```
 
