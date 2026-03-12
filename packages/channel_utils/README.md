@@ -17,8 +17,8 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_channel_utils = "0.1.4"
 
-# Enable futures-channel support (enabled by default)
-moosicbox_channel_utils = { version = "0.1.4", features = ["futures-channel"] }
+# Or explicitly enable futures-channel support (enabled by default)
+# moosicbox_channel_utils = { version = "0.1.4", features = ["futures-channel"] }
 ```
 
 ## Usage
