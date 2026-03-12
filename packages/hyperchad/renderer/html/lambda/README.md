@@ -75,6 +75,7 @@ use lambda_runtime::Error;
 use bytes::Bytes;
 use std::sync::Arc;
 
+#[derive(Clone)]
 struct MyLambdaProcessor;
 
 #[async_trait::async_trait]
@@ -179,7 +180,7 @@ async fn main() -> Result<(), Error> {
     let processor = MyLambdaProcessor;
     let app = LambdaApp::new(processor);
 
-    let runner = app.to_runner(hyperchad_renderer::Handle::current())?;
+    let mut runner = app.to_runner(hyperchad_renderer::Handle::current())?;
     runner.run().map_err(|e| Error::from(e.to_string()))?;
 
     Ok(())
@@ -214,6 +215,7 @@ mod api_example {
         email: String,
     }
 
+    #[derive(Clone)]
     struct ApiProcessor;
 
     #[async_trait::async_trait]
@@ -329,6 +331,7 @@ mod asset_example {
     use bytes::Bytes;
     use std::sync::Arc;
 
+    #[derive(Clone)]
     struct AssetProcessor;
 
     #[async_trait::async_trait]
@@ -428,6 +431,7 @@ use lambda_runtime::Error;
 use bytes::Bytes;
 use std::{env, sync::Arc};
 
+#[derive(Clone)]
 struct ConfigurableProcessor {
     environment: String,
     debug: bool,
