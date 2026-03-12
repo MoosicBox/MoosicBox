@@ -39,11 +39,8 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_arb = { path = "../arb" }
 
-# Enable specific features
-moosicbox_arb = {
-    path = "../arb",
-    features = ["xml", "css", "serde"]
-}
+# Or enable specific features
+# moosicbox_arb = { path = "../arb", features = ["xml", "css", "serde"] }
 ```
 
 ## Usage
@@ -78,7 +75,7 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn valid_css_identifiers(css_id: CssIdentifierString) {
-        // CSS identifiers are non-empty alphanumeric strings
+        // CSS identifiers are non-empty and include at least one alphanumeric character
         prop_assert!(!css_id.0.is_empty());
     }
 }
