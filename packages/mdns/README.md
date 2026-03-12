@@ -4,8 +4,8 @@ MoosicBox mDNS service scanner package for discovering MoosicBox servers on the 
 
 ## Features
 
-- **scanner** - mDNS service scanner for discovering MoosicBox servers
-- **simulator** - Simulated mDNS daemon for testing purposes
+- Built-in mDNS service scanner for discovering MoosicBox servers
+- **simulator** feature - Simulated mDNS daemon for testing purposes
 
 ## Installation
 
