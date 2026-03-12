@@ -75,6 +75,9 @@ sudo dnf group install "C Development Tools and Libraries"
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
+# Install pnpm (required by tauri.conf.json build hooks)
+npm install -g pnpm
+
 # Install Tauri CLI
 cargo install tauri-cli
 ```
@@ -88,7 +91,7 @@ cd MoosicBox
 
 # Build the Tauri application
 cd packages/app/tauri
-npm install
+pnpm install
 cargo tauri build
 
 # Development mode
@@ -109,7 +112,7 @@ The application provides the following Tauri commands that can be invoked from t
 
 - `on_startup()` - Called when the application starts
 - `show_main_window()` - Show the main application window (desktop only)
-- `set_state(state)` - Update application state (connection settings, API URLs, etc.)
+- `set_state(state)` - Update application state with `TauriUpdateAppState` fields (`connection_id`, `connection_name`, `api_url`, `client_id`, `signature_token`, `api_token`, `profile`, `playback_target`, `current_session_id`)
 - `set_playback_quality(quality)` - Set audio playback quality
 - `propagate_ws_message(message)` - Send WebSocket messages to the backend
 - `api_proxy_get(url, headers)` - Proxy GET requests to MoosicBox API
