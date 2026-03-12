@@ -277,7 +277,7 @@ Feature-gated dependencies:
 
 - **futures**: Core Future trait and utilities (enabled with backend features)
 - **tokio**: Tokio async runtime (optional, enabled with `tokio` feature)
-- **tokio-util**: Additional Tokio utilities (optional, enabled with `util` feature)
+- **tokio-util**: Additional Tokio utilities (optional, enabled with `tokio` or `util` features)
 - **flume**: MPSC/MPMC channel implementation (optional, enabled with `sync` feature)
 - **switchy_async_macros**: Macro utilities (optional, enabled with `macros` feature)
 - **switchy_random**: Random number generation for simulator (optional, enabled with `simulator` feature)
