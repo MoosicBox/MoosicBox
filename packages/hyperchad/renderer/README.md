@@ -280,6 +280,26 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 }
 ```
 
+### Viewport APIs (with `viewport` features)
+
+- **`viewport::is_visible(...) -> (bool, f32)`**: Core visibility check used by viewport systems
+- **`viewport::immediate::ViewportListener`**: Immediate mode visibility tracking via `new(...)` and `check()`
+- **`viewport::retained::Viewport`**: Retained mode viewport creation via `Viewport::new(...)`
+- **`viewport::retained::ViewportListener`**: Retained mode callback-driven visibility tracking via `new(...)` and `check()`
+
+```rust
+#[cfg(feature = "viewport")]
+{
+    let (visible, distance) = hyperchad_renderer::viewport::is_visible(
+        0.0, 0.0, 800.0, 600.0,
+        100.0, 100.0, 50.0, 50.0,
+    );
+
+    assert!(visible);
+    assert_eq!(distance, 0.0);
+}
+```
+
 ## Content Types
 
 ### View
