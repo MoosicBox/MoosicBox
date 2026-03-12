@@ -44,6 +44,14 @@ pub struct Track {
 }
 ```
 
+### Playlist
+
+```rust
+pub struct Playlist {
+    pub tracks: Vec<Track>,
+}
+```
+
 ### UpdateState
 
 ```rust
@@ -53,6 +61,14 @@ pub struct UpdateState {
     pub seek: Option<f64>,
     pub volume: Option<f64>,
     pub playlist: Option<Playlist>,
+}
+```
+
+### InitChannel
+
+```rust
+pub struct InitChannel {
+    pub channel: Channel,
 }
 ```
 
@@ -86,11 +102,22 @@ fn main() {
 Access the player from any Tauri context:
 
 ```rust
-use app_tauri_plugin_player::PlayerExt;
+use app_tauri_plugin_player::{InitChannel, PlayerExt, UpdateState};
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Runtime};
 
-fn example<R: Runtime>(app: &AppHandle<R>) {
+fn example<R: Runtime>(app: &AppHandle<R>, channel: Channel) {
     let player = app.player();
-    // Use player methods
+    let _ = player.update_state(UpdateState {
+        playing: Some(true),
+        position: None,
+        seek: None,
+        volume: None,
+        playlist: None,
+    });
+
+    // Mobile: initialize media event channel (desktop returns a stub response)
+    let _ = player.init_channel(InitChannel { channel });
 }
 ```
 
