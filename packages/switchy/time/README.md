@@ -19,13 +19,20 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 switchy_time = "0.1.4"
+```
 
-# Choose your backend
-switchy_time = { version = "0.1.4", features = ["std"] }
-# or for testing
-switchy_time = { version = "0.1.4", features = ["simulator"] }
-# or with chrono support
-switchy_time = { version = "0.1.4", features = ["simulator", "chrono"] }
+Or choose features explicitly:
+
+```toml
+[dependencies]
+# Standard backend only
+switchy_time = { version = "0.1.4", default-features = false, features = ["std"] }
+
+# Simulator backend only
+switchy_time = { version = "0.1.4", default-features = false, features = ["simulator"] }
+
+# Simulator backend with chrono support
+switchy_time = { version = "0.1.4", default-features = false, features = ["simulator", "chrono"] }
 ```
 
 ## Usage
