@@ -54,11 +54,8 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_app_state = { path = "../app/state" }
 
-# Optional: Enable UPnP support
-moosicbox_app_state = {
-    path = "../app/state",
-    features = ["upnp"]
-}
+# Optional: Enable UPnP support explicitly
+# moosicbox_app_state = { path = "../app/state", features = ["upnp"] }
 ```
 
 ## Usage
