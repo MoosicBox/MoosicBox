@@ -64,11 +64,30 @@ hyperchad_renderer = {
 ### Implementing a Renderer
 
 ```rust
-use hyperchad_renderer::{Renderer, View, Color, Handle};
+use hyperchad_renderer::{RenderRunner, Renderer, ToRenderRunner, View, Color, Handle};
 use async_trait::async_trait;
 
 struct MyRenderer {
     // Renderer state
+}
+
+struct MyRunner {
+    renderer: MyRenderer,
+    handle: Handle,
+}
+
+impl RenderRunner for MyRunner {
+    fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let _ = &self.renderer;
+        let _ = &self.handle;
+        Ok(())
+    }
+}
+
+impl ToRenderRunner for MyRenderer {
+    fn to_runner(self, handle: Handle) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+        Ok(Box::new(MyRunner { renderer: self, handle }))
+    }
 }
 
 #[async_trait]
@@ -231,6 +250,16 @@ match event {
 }
 ```
 
+### Viewport Utilities (with `viewport` feature)
+
+```rust
+#[cfg(feature = "viewport")]
+use hyperchad_renderer::viewport::is_visible;
+
+#[cfg(feature = "viewport")]
+let (visible, distance) = is_visible(0.0, 0.0, 800.0, 600.0, 100.0, 100.0, 50.0, 50.0);
+```
+
 ### Canvas Support (with `canvas` feature)
 
 ```rust
@@ -240,6 +269,8 @@ use hyperchad_renderer::canvas::CanvasUpdate;
 #[cfg(feature = "canvas")]
 #[async_trait]
 impl Renderer for MyRenderer {
+    // ...other required Renderer methods...
+
     async fn render_canvas(&self, update: CanvasUpdate) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         // Handle canvas rendering
         Ok(())
