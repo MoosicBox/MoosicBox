@@ -1195,10 +1195,12 @@ mod tests {
 
     static TEMP_DIRS: LazyLock<RwLock<Vec<PathBuf>>> = LazyLock::new(|| RwLock::new(vec![]));
 
+    #[allow(dead_code)]
     #[derive(Debug)]
     struct TestSetup;
 
     impl TestSetup {
+        #[allow(dead_code)]
         pub fn new() -> Self {
             log::debug!("Initializing tests...");
             GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS
@@ -1241,6 +1243,7 @@ mod tests {
             .expect("Failed to recreate_global_search_index");
     }
 
+    #[allow(dead_code)]
     #[dynamic(drop)]
     static mut TEST_SETUP: TestSetup = TestSetup::new();
 

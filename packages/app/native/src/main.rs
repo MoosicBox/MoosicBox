@@ -94,9 +94,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_runtime_handle(runtime.handle())
         .with_background(Color::from_hex("#181a1b"))
         .with_action_handler(move |x, value| {
-            Ok::<_, SendError<(Action, Option<Value>)>>(match Action::try_from(x) {
+            Ok::<_, Box<SendError<(Action, Option<Value>)>>>(match Action::try_from(x) {
                 Ok(action) => {
-                    action_tx.send((action, value.cloned()))?;
+                    action_tx.send((action, value.cloned())).map_err(Box::new)?;
                     true
                 }
                 Err(e) => {

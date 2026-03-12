@@ -849,36 +849,13 @@ pub fn main_internal(input: TokenStream) -> TokenStream {
         .filter(|attr| !attr.path().is_ident("main"))
         .collect();
 
-    // Determine if the return type is a Result type
-    let is_result_type = matches!(fn_output, syn::ReturnType::Type(_, ty) if {
-        if let syn::Type::Path(type_path) = ty.as_ref() {
-            type_path.path.segments.last().is_some_and(|seg| seg.ident == "Result")
-        } else {
-            false
-        }
-    });
-
-    let result = if is_result_type {
-        // For Result return types, propagate the result properly
-        quote! {
-            #(#filtered_attrs)*
-            #fn_vis fn #fn_name() #fn_output {
-                let rt = #crate_path::Builder::new().build().expect("Failed to build runtime");
-                let result = rt.block_on(async move #fn_block);
-                rt.wait().expect("Runtime wait failed");
-                result
-            }
-        }
-    } else {
-        // For non-Result return types (including unit)
-        quote! {
-            #(#filtered_attrs)*
-            #fn_vis fn #fn_name() #fn_output {
-                let rt = #crate_path::Builder::new().build().expect("Failed to build runtime");
-                let result = rt.block_on(async move #fn_block);
-                rt.wait().expect("Runtime wait failed");
-                result
-            }
+    let result = quote! {
+        #(#filtered_attrs)*
+        #fn_vis fn #fn_name() #fn_output {
+            let rt = #crate_path::Builder::new().build().expect("Failed to build runtime");
+            let result = rt.block_on(async move #fn_block);
+            rt.wait().expect("Runtime wait failed");
+            result
         }
     };
 
@@ -1027,36 +1004,13 @@ pub fn tokio_main_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
         .filter(|attr| !attr.path().is_ident("main"))
         .collect();
 
-    // Determine if the return type is a Result type
-    let is_result_type = matches!(fn_output, syn::ReturnType::Type(_, ty) if {
-        if let syn::Type::Path(type_path) = ty.as_ref() {
-            type_path.path.segments.last().is_some_and(|seg| seg.ident == "Result")
-        } else {
-            false
-        }
-    });
-
-    let result = if is_result_type {
-        // For Result return types, propagate the result properly
-        quote! {
-            #(#filtered_attrs)*
-            #fn_vis fn #fn_name() #fn_output {
-                let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
-                let result = rt.block_on(async move #fn_block);
-                rt.wait().expect("Runtime wait failed");
-                result
-            }
-        }
-    } else {
-        // For non-Result return types (including unit)
-        quote! {
-            #(#filtered_attrs)*
-            #fn_vis fn #fn_name() #fn_output {
-                let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
-                let result = rt.block_on(async move #fn_block);
-                rt.wait().expect("Runtime wait failed");
-                result
-            }
+    let result = quote! {
+        #(#filtered_attrs)*
+        #fn_vis fn #fn_name() #fn_output {
+            let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+            let result = rt.block_on(async move #fn_block);
+            rt.wait().expect("Runtime wait failed");
+            result
         }
     };
 

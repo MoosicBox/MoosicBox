@@ -35,7 +35,7 @@ moosicbox_session_models = { path = "../session/models" }
 ## Features
 
 - `api` (default): Enables API-facing models used across session endpoints.
-- `openapi` (default): Enables `utoipa::ToSchema` derives for OpenAPI schema generation.
+- `openapi` (default): Enables `utoipa::ToSchema` derives for `OpenAPI` schema generation.
 - `fail-on-warnings`: Treats warnings as errors for this crate and related model crates.
 - `aac`, `flac`, `mp3`, `opus`: Propagates codec model support to `moosicbox_music_models`.
 

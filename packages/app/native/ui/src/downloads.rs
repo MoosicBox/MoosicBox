@@ -47,7 +47,7 @@ fn download_task_progress(task: &ApiDownloadTask) -> Containers {
             } @else {
                 ""
             }
-            {(task.progress as u64)}"%"
+            (format!("{:.0}%", task.progress))
             @if let Some(speed) = task.speed {
                 (format!(" - {} KiB/s", format_size(speed)))
             } @else {
