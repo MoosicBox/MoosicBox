@@ -4382,7 +4382,11 @@ pub async fn handle_generate_dockerfile_command(
 /// # Errors
 ///
 /// * If fails to find affected packages
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::unused_async
+)]
 pub async fn handle_affected_packages_command(
     workspace_root: &Path,
     changed_files: &[String],
@@ -4871,6 +4875,9 @@ pub async fn handle_packages_command(
         }
         (workspace_members, package_name_to_path)
     };
+
+    #[cfg(not(feature = "git-diff"))]
+    let _ = &workspace_members;
 
     // Get all available package names for wildcard expansion
     let all_package_names: Vec<String> = package_name_to_path.keys().cloned().collect();
