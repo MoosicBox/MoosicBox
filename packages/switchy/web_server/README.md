@@ -463,14 +463,14 @@ The standalone examples are workspace members and can be run directly:
 
 ```bash
 # Run with default features (simulator)
-cargo run -p basic_handler_standalone_example
-cargo run -p json_extractor_standalone_example
-cargo run -p query_extractor_standalone_example
-cargo run -p combined_extractors_standalone_example
+cargo run -p switchy_web_server_example_basic_handler_standalone
+cargo run -p switchy_web_server_example_json_extractor_standalone
+cargo run -p switchy_web_server_example_query_extractor_standalone
+cargo run -p switchy_web_server_example_combined_extractors_standalone
 
 # Run with Actix backend
-cargo run -p basic_handler_standalone_example --features actix --no-default-features
-cargo run -p json_extractor_standalone_example --features actix --no-default-features
+cargo run -p switchy_web_server_example_basic_handler_standalone --features actix --no-default-features
+cargo run -p switchy_web_server_example_json_extractor_standalone --features actix --no-default-features
 ```
 
 ### Available Examples
@@ -482,28 +482,28 @@ Each example is a complete Cargo project with its own dependencies and comprehen
 **Basic Handler** (`basic_handler_standalone/`)
 
 - **Purpose**: Demonstrates RequestData extraction without any serde dependencies
-- **Run**: `cargo run -p basic_handler_standalone_example`
+- **Run**: `cargo run -p switchy_web_server_example_basic_handler_standalone`
 - **Features**: Simple request handling, multiple extractors, no JSON dependencies
 - **[Full Documentation](examples/basic_handler_standalone/README.md)**
 
 **JSON Extractor** (`json_extractor_standalone/`)
 
 - **Purpose**: Shows JSON request/response handling with serde
-- **Run**: `cargo run -p json_extractor_standalone_example`
+- **Run**: `cargo run -p switchy_web_server_example_json_extractor_standalone`
 - **Features**: Json<T> extractor, optional fields, JSON responses, error handling
 - **[Full Documentation](examples/json_extractor_standalone/README.md)**
 
 **Query Extractor** (`query_extractor_standalone/`)
 
 - **Purpose**: Demonstrates query parameter parsing with serde
-- **Run**: `cargo run -p query_extractor_standalone_example`
+- **Run**: `cargo run -p switchy_web_server_example_query_extractor_standalone`
 - **Features**: Query<T> extractor, optional parameters, type-safe parsing
 - **[Full Documentation](examples/query_extractor_standalone/README.md)**
 
 **Combined Extractors** (`combined_extractors_standalone/`)
 
 - **Purpose**: Shows multiple extractors working together
-- **Run**: `cargo run -p combined_extractors_standalone_example`
+- **Run**: `cargo run -p switchy_web_server_example_combined_extractors_standalone`
 - **Features**: Query + RequestData, Json + RequestData combinations, JSON API patterns
 - **[Full Documentation](examples/combined_extractors_standalone/README.md)**
 
@@ -549,8 +549,8 @@ Each example is a complete Cargo project with its own dependencies and comprehen
 
 ```bash
 # Test individual examples
-cargo test -p basic_handler_standalone_example
-cargo test -p json_extractor_standalone_example
+cargo test -p switchy_web_server_example_basic_handler_standalone
+cargo test -p switchy_web_server_example_json_extractor_standalone
 
 # Test the main web_server package
 cargo test -p switchy_web_server --features "actix,serde"
