@@ -19,7 +19,7 @@ The HyperChad Color package provides:
 
 - **Hex Strings**: Parse 3, 4, 6, and 8 character hex strings
 - **Flexible Input**: Support for #-prefixed and plain hex strings
-- **Whitespace Handling**: Automatic whitespace trimming
+- **Whitespace Handling**: Automatic trailing whitespace trimming
 - **Case Insensitive**: Support for both uppercase and lowercase hex
 
 ### Color Formats
@@ -43,12 +43,11 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_color = { path = "../hyperchad/color" }
+```
 
-# Enable additional features
-hyperchad_color = {
-    path = "../hyperchad/color",
-    features = ["serde", "egui", "arb"]
-}
+```toml
+[dependencies]
+hyperchad_color = { path = "../hyperchad/color", features = ["serde", "egui", "arb"] }
 ```
 
 ## Usage
