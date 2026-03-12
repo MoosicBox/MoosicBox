@@ -53,8 +53,12 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_app_state = { path = "../app/state" }
+```
 
-# Optional: Enable UPnP support
+Optional `UPnP` support:
+
+```toml
+[dependencies]
 moosicbox_app_state = {
     path = "../app/state",
     features = ["upnp"]
@@ -79,6 +83,31 @@ let update = UpdateAppState {
 };
 
 app_state.set_state(update).await?;
+```
+
+### Persistence and Connection Management
+
+```rust
+use moosicbox_app_models::Connection;
+use moosicbox_app_state::AppState;
+
+// Configure persistence
+let app_state = AppState::new()
+    .with_persistence("/path/to/app-state.db")
+    .await?;
+
+// Save and select a connection
+let connection = Connection {
+    name: "Primary".to_string(),
+    api_url: "https://api.moosicbox.com".to_string(),
+};
+app_state.add_connection(connection.clone()).await?;
+app_state.set_current_connection(&connection).await?;
+
+// Read and update persisted connection metadata
+let current = app_state.get_current_connection().await?;
+app_state.update_connection_name("Desktop").await?;
+let connection_id = app_state.get_or_init_connection_id().await?;
 ```
 
 ### Player Management
