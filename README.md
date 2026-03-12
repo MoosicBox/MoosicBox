@@ -200,6 +200,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_opus](packages/opus)** - Opus codec integration
 - **[moosicbox_opus_native](packages/opus_native)** - Native Opus codec bindings
 - **[moosicbox_opus_native_libopus](packages/opus_native/libopus)** - LibOpus native library
+- **[moosicbox_opus_native_test_vectors](packages/opus_native/test_vectors)** - Test vectors for Opus decoder validation
 - **[aconverter](packages/aconverter)** - Audio converter helper binary
 
 ### Music Services Integration
@@ -290,6 +291,8 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_tunnel](packages/tunnel)** - Tunneling utilities and protocols
 - **[moosicbox_tunnel_sender](packages/tunnel_sender)** - WebSocket-based tunneling client
 - **[moosicbox_tunnel_server](packages/tunnel_server)** - WebSocket-based tunneling server
+- **[moosicbox_upnp](packages/upnp)** - UPnP player integration and controls
+- **[moosicbox_mdns](packages/mdns)** - mDNS service discovery and scanning
 - **[switchy_tcp](packages/switchy/tcp)** - Generic TCP networking abstraction
 - **[switchy_upnp](packages/switchy/upnp)** - UPnP device discovery and communication
 - **[switchy_mdns](packages/switchy/mdns)** - mDNS service registration and discovery
@@ -354,7 +357,6 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[simvar_utils](packages/simvar/utils)** - Simulation utilities and helpers
 - **[moosicbox_arb](packages/arb)** - Arbitrary data generation for testing
 - **[moosicbox_clippier](packages/clippier)** - Workspace analysis and CI generation tool
-- **[clippier_test_utilities](packages/clippier/test_utilities)** - Testing utilities for Clippier
 - **[hyperchad_simulator](packages/hyperchad/simulator)** - HyperChad simulation utilities
 - **[hyperchad_test_utils](packages/hyperchad/test_utils)** - HyperChad testing utilities
 - **[switchy_schema_test_utils](packages/switchy/schema/test_utils)** - Schema testing utilities
@@ -400,6 +402,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 #### HTTP & Web Server
 
 - **[simple_get](packages/switchy/http/examples/simple_get)** - Simple HTTP GET example
+- **[simple_get](packages/switchy/web_server/examples/simple_get)** - Simple web server GET example
 - **[basic_handler](packages/switchy/web_server/examples/basic_handler)** - Basic web server handler example
 - **[basic_handler_standalone](packages/switchy/web_server/examples/basic_handler_standalone)** - Standalone basic handler
 - **[nested_get](packages/switchy/web_server/examples/nested_get)** - Nested GET routes
@@ -420,6 +423,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[details_summary](packages/hyperchad/examples/details_summary)** - Details/summary collapsible elements
 - **[http_events](packages/hyperchad/examples/http_events)** - HTTP request lifecycle events
 - **[markdown](packages/hyperchad/examples/markdown)** - Markdown rendering with GitHub Flavored Markdown
+- **[select_dropdown](packages/hyperchad/examples/select_dropdown)** - Select/option dropdown elements
 - **[basic_web_server](packages/hyperchad/renderer/html/web_server/examples/basic_web_server)** - HyperChad web server
 
 #### Filesystem
