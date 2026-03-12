@@ -254,7 +254,7 @@ curl -X POST "http://localhost:8000/volume?deviceUdn=uuid:device-123&instanceId=
 cargo test
 
 # Run with specific features
-cargo test --features "api,player"
+cargo test --features "api,openapi"
 
 # Test with simulator
 cargo test --features "simulator"
