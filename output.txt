@@ -1,0 +1,9 @@
+I reviewed `packages/hyperchad/app/README.md` against the public API in `packages/hyperchad/app/src/lib.rs`, `packages/hyperchad/app/src/renderer.rs`, and dependencies/features in `packages/hyperchad/app/Cargo.toml`.
+
+- The README exists and its core claims match implemented functionality.
+- CLI coverage is present for all implemented subcommands (`serve`, `gen`, `clean`, `dynamic-routes`) and includes `--output` usage for relevant commands.
+- Public main entry points are documented at a usable level (`AppBuilder`, `build_default`, `App::run`, `Generator`, `Cleaner`, feature flags).
+- Listed dependencies and feature flags are consistent with `Cargo.toml`.
+- I did not find fundamental inaccuracies or critical omissions that would mislead users or block basic package usage.
+
+No changes required - documentation is accurate
