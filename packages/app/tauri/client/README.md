@@ -26,6 +26,21 @@ Add this to your `Cargo.toml`:
 moosicbox_app_client = { path = "../app/tauri/client" }
 ```
 
+## Usage
+
+Call `init()` during application startup:
+
+```rust
+moosicbox_app_client::init();
+```
+
+To enable strict warning enforcement during builds:
+
+```toml
+[dependencies]
+moosicbox_app_client = { path = "../app/tauri/client", features = ["fail-on-warnings"] }
+```
+
 ## Dependencies
 
 - `moosicbox_assert`: Assertion utilities
