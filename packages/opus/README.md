@@ -17,6 +17,13 @@ The MoosicBox Opus package provides an Opus audio codec decoder that integrates 
 - ✅ Support for all Opus modes (SILK, CELT, Hybrid) via libopus
 - ✅ Codec registry integration
 
+## Installation
+
+```toml
+[dependencies]
+moosicbox_opus = "0.1.1"
+```
+
 ## Usage
 
 Register the Opus decoder with a Symphonia codec registry:
@@ -36,6 +43,26 @@ use moosicbox_opus::create_opus_registry;
 
 let registry = create_opus_registry();
 ```
+
+Parse Opus packets directly when you need RFC 6716 packet inspection:
+
+```rust
+use moosicbox_opus::OpusPacket;
+
+let packet_bytes: &[u8] = &[0b0000_0000];
+let packet = OpusPacket::parse(packet_bytes)?;
+let toc = packet.toc;
+let frame_count = packet.frames.len();
+let padding_len = packet.padding.len();
+```
+
+Core public API items:
+
+- `register_opus_codec` and `create_opus_registry` for Symphonia integration
+- `OpusDecoder` (`symphonia::core::codecs::Decoder` implementation for Opus)
+- `OpusPacket` and `OpusPacket::parse` for packet/frame parsing
+- `TocByte`, `OpusMode`, and `Bandwidth` for TOC and mode/bandwidth interpretation
+- `OpusFrame`, `FramePacking`, and `decode_frame_length` for frame-level packet handling
 
 ## Implementation
 
