@@ -56,18 +56,20 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_music_api_api = { path = "../music_api/api" }
+```
 
-# Enable API endpoints
-moosicbox_music_api_api = {
-    path = "../music_api/api",
-    features = ["api"]
-}
+Enable API endpoints:
 
-# Enable authentication features
-moosicbox_music_api_api = {
-    path = "../music_api/api",
-    features = ["auth-username-password", "auth-poll"]
-}
+```toml
+[dependencies]
+moosicbox_music_api_api = { path = "../music_api/api", features = ["api"] }
+```
+
+Enable authentication features:
+
+```toml
+[dependencies]
+moosicbox_music_api_api = { path = "../music_api/api", features = ["auth-username-password", "auth-poll"] }
 ```
 
 ## Usage
