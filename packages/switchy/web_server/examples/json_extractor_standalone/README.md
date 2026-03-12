@@ -58,6 +58,8 @@ cargo run -p switchy_web_server_example_json_extractor_standalone --features act
 
 ## Example Requests (if using Actix)
 
+The Actix mode in this standalone example creates route definitions but does not start an HTTP listener. Use these requests as handler input examples when integrating the routes into an Actix app.
+
 ### Simple JSON Handler
 
 ```bash
