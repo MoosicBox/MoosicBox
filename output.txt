@@ -1,0 +1,18 @@
+Updated `packages/hyperchad/markdown/README.md` with one fundamental accuracy fix.
+
+- Removed the claim of footnote support from the GFM feature bullet, because the parser option exists but footnote events/definitions are not rendered in `packages/hyperchad/markdown/src/lib.rs`.
+- Left all other README content unchanged since the main public API (`markdown_to_container`, `markdown_to_container_with_options`, `MarkdownOptions`) and feature flags are documented and match the crate.
+
+REGRESSION_CHECK_START
+File: README.md
+Line(s): 7
+Proposed change: Remove footnotes from the GFM feature claim
+Git history checked: YES
+Revert found: NO
+Revert details: None found
+Decision: PROCEED - No revert history blocking this change; current README claim was fundamentally inaccurate relative to implementation.
+REGRESSION_CHECK_END
+
+COMMIT_MESSAGE_START
+- Corrected the README GFM feature claim by removing footnote support, because footnotes are not currently rendered by the markdown conversion implementation
+COMMIT_MESSAGE_END
