@@ -19,13 +19,19 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 switchy_time = "0.1.4"
+```
 
-# Choose your backend
-switchy_time = { version = "0.1.4", features = ["std"] }
-# or for testing
-switchy_time = { version = "0.1.4", features = ["simulator"] }
-# or with chrono support
-switchy_time = { version = "0.1.4", features = ["simulator", "chrono"] }
+Choose your backend/features:
+
+```toml
+# standard backend only
+switchy_time = { version = "0.1.4", default-features = false, features = ["std"] }
+
+# simulator backend only
+switchy_time = { version = "0.1.4", default-features = false, features = ["simulator"] }
+
+# simulator backend with chrono support
+switchy_time = { version = "0.1.4", default-features = false, features = ["simulator", "chrono"] }
 ```
 
 ## Usage
@@ -37,7 +43,7 @@ use switchy_time::{now, instant_now};
 use std::time::{SystemTime, Instant};
 
 fn main() {
-    // Get current system time
+    // Get current time from the active backend
     let current_time: SystemTime = now();
     println!("Current time: {:?}", current_time);
 
@@ -45,7 +51,7 @@ fn main() {
     let current_instant: Instant = instant_now();
     println!("Current instant: {:?}", current_instant);
 
-    // Time behaves like SystemTime::now() in standard mode
+    // Time behaves like SystemTime::now() when using only the std backend
     let duration_since_epoch = current_time
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap();
