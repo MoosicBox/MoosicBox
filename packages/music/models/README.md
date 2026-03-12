@@ -47,11 +47,8 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_music_models = { path = "../music/models" }
-
-# Enable specific features
 moosicbox_music_models = {
-    path = "../music/models",
+    version = "0.1.4",
     features = ["api", "db", "flac", "mp3", "aac", "opus"]
 }
 ```
@@ -71,7 +68,7 @@ let qobuz_source = ApiSource::register("qobuz", "Qobuz");
 let library_source = ApiSource::library();
 
 // Check if source is library
-if source.is_library() {
+if library_source.is_library() {
     println!("This is a local library source");
 }
 ```
@@ -79,7 +76,7 @@ if source.is_library() {
 ### Track Creation
 
 ```rust
-use moosicbox_music_models::{Track, AudioFormat, TrackApiSource};
+use moosicbox_music_models::{ApiSource, AudioFormat, Track, TrackApiSource};
 
 let track = Track {
     id: 1.into(),
@@ -103,6 +100,9 @@ let track = Track {
 
 ```rust
 use moosicbox_music_models::{ApiSources, ApiSource};
+
+let tidal_source = ApiSource::register("tidal", "Tidal");
+let qobuz_source = ApiSource::register("qobuz", "Qobuz");
 
 let mut sources = ApiSources::default();
 sources.add_source(ApiSource::library(), 123.into());
@@ -128,11 +128,28 @@ if let Some(tidal_id) = sources.get(&tidal_source) {
 ### Format Detection
 
 ```rust
-use moosicbox_music_models::from_extension_to_audio_format;
+use moosicbox_music_models::{AudioFormat, from_extension_to_audio_format};
 
 let format = from_extension_to_audio_format("flac");
 assert_eq!(format, Some(AudioFormat::Flac));
 ```
+
+## API Model Types
+
+When the `api` feature is enabled, the crate exposes API-optimized variants:
+
+- **`api::ApiArtist`**: Artist model with `contains_cover` instead of a cover URL
+- **`api::ApiAlbum`**: Album model with API-focused serialization fields
+- **`api::ApiTrack`**: Track model optimized for API payloads
+- **`api::ApiAlbumVersionQuality`**: API variant of album version quality metadata
+
+These types support conversion to and from the core `Artist`, `Album`, `Track`, and `AlbumVersionQuality` types.
+
+## ID Types and Parsing
+
+- **`id::Id`**: Supports both numeric IDs (`Id::Number`) and string IDs (`Id::String`)
+- **`id::ApiId`**: Pairs an `ApiSource` with an `Id` for cross-source identity tracking
+- **`id::parse_id_sequences`** and **`id::parse_id_ranges`**: Parse source-aware ID lists and ranges
 
 ## Quality Management
 
