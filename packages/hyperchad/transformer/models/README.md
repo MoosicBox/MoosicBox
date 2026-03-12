@@ -47,6 +47,8 @@ The HyperChad Transformer Models package provides:
 
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
 - **Selector**: Id, Class, ChildClass, SelfTarget element targeting
+- **Target**: Literal and Ref target values
+- **ElementTarget**: ById, Selector, Class, ChildClass, Id, SelfTarget, LastChild targeting
 - **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
 
@@ -59,10 +61,11 @@ Add this to your `Cargo.toml`:
 hyperchad_transformer_models = { path = "../hyperchad/transformer/models" }
 
 # Enable additional features
-hyperchad_transformer_models = {
-    path = "../hyperchad/transformer/models",
-    features = ["serde", "layout", "arb"]
-}
+# hyperchad_transformer_models = {
+#     path = "../hyperchad/transformer/models",
+#     default-features = false,
+#     features = ["serde", "layout"]
+# }
 ```
 
 ## Usage
@@ -149,6 +152,19 @@ let post_route = Route::Post {
 };
 ```
 
+### Element Targeting
+
+```rust
+use hyperchad_transformer_models::{ElementTarget, Selector, Target};
+
+let by_id = ElementTarget::by_id("content");
+let by_selector = ElementTarget::selector("#content > .item");
+let child_class = ElementTarget::child_class(Target::reference("item_class"));
+
+let parsed = Selector::try_from("#content").expect("valid selector");
+assert_eq!(parsed.to_string(), "#content");
+```
+
 ### Link Targets
 
 ```rust
@@ -232,6 +248,8 @@ use hyperchad_transformer_models::LayoutPosition;
 
 - **Route**: HTTP routing with dynamic content swapping
 - **Selector**: Element selector targeting
+- **Target**: Literal and reference target values
+- **ElementTarget**: Element targeting variants for dynamic updates
 - **SwapStrategy**: Content swap strategies
 - **LinkTarget**: Link navigation targets
 
