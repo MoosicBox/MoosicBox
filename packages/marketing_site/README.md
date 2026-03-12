@@ -18,7 +18,7 @@ The MoosicBox Marketing Website showcases the MoosicBox music server with suppor
 ### From Source
 
 ```bash
-cargo install --path packages/marketing_site --features "default"
+cargo install --path packages/marketing_site
 ```
 
 ### Dependencies
@@ -83,7 +83,29 @@ cargo build --bin moosicbox_marketing_site_lambda_vanilla_js --features "lambda,
 RUST_LOG=debug cargo run --features "dev,console-subscriber"
 
 # Production mode
-cargo run --release --features "default" --no-default-features
+cargo run --release --bin moosicbox_marketing_site --features "actix,html,vanilla-js" --no-default-features
+```
+
+## Public API
+
+When using this crate as a library, the primary entry points are:
+
+- `init()` - Creates an `AppBuilder` with default router, title/description, background color, and window size (`WINDOW_WIDTH`/`WINDOW_HEIGHT`)
+- `build_app(builder)` - Builds the final app and configures responsive triggers used by the renderer
+- `ROUTER` - Public router with routes for `/`, `/home`, `/download`, `/try-now`, `/releases`, `/health`, and `/not-found`
+- `VIEWPORT` - Default viewport value used by the app (`width=device-width`)
+
+Example:
+
+```rust,no_run
+use moosicbox_marketing_site::{build_app, init};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let builder = init();
+    let app = build_app(builder)?;
+    let _ = app;
+    Ok(())
+}
 ```
 
 ## Features
