@@ -211,8 +211,8 @@ match AppBuilder::new().build_default() {
     Err(BuilderError::MissingRouter) => {
         println!("Router is required");
     }
-    Err(BuilderError::MissingRuntime) => {
-        println!("Runtime is required");
+    Err(err) => {
+        println!("Build failed: {err}");
     }
 }
 ```
