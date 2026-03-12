@@ -52,17 +52,11 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_renderer_egui = { path = "../hyperchad/renderer/egui" }
 
-# With GPU acceleration
-hyperchad_renderer_egui = {
-    path = "../hyperchad/renderer/egui",
-    features = ["wgpu"]
-}
+# Or with GPU acceleration
+# hyperchad_renderer_egui = { path = "../hyperchad/renderer/egui", features = ["wgpu"] }
 
-# With profiling
-hyperchad_renderer_egui = {
-    path = "../hyperchad/renderer/egui",
-    features = ["profiling", "profiling-puffin"]
-}
+# Or with profiling
+# hyperchad_renderer_egui = { path = "../hyperchad/renderer/egui", features = ["profiling", "profiling-puffin"] }
 ```
 
 ## Usage
@@ -138,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).await?;
 
         // Create and run the application
-        let runner = renderer.to_runner(Handle::current())?;
+        let mut runner = renderer.to_runner(Handle::current())?;
         runner.run()?;
 
         Ok(())
