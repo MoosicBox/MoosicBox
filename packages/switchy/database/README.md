@@ -22,7 +22,7 @@ The Switchy Database package provides:
 - **PostgreSQL (sqlx)**: Production PostgreSQL using sqlx with connection pooling
 - **MySQL (sqlx)**: MySQL database using sqlx driver
 - **DuckDB**: Embedded analytical database using duckdb driver with `?` placeholders
-- **Turso**: Turso (libSQL) cloud database support
+- **Turso**: Turso (local libSQL/SQLite-compatible) database support
 - **Simulator**: Testing database (delegates to underlying backend)
 
 ### Schema Features
@@ -377,7 +377,7 @@ The following feature flags are available in `Cargo.toml`:
 - `mysql` / `mysql-sqlx` - MySQL backend using sqlx
 - `duckdb` - DuckDB embedded analytical database
 - `duckdb-bundled` - DuckDB with bundled library (no system install required)
-- `turso` - Turso (libSQL) cloud database support
+- `turso` - Turso local database support (file-based or in-memory)
 
 ### Additional Features
 
@@ -537,10 +537,10 @@ One MySQL implementation using sqlx:
 
 ### Turso
 
-Turso (libSQL) cloud database support:
+Turso (libSQL/SQLite-compatible) local database support:
 
 - Uses `?` placeholders
-- Cloud-native database
+- Local file-based and in-memory database support
 - Compatible with SQLite API
 
 ### DuckDB
