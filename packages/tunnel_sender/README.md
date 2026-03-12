@@ -92,6 +92,38 @@ fn setup_tunnel(config_db: ConfigDatabase) {
 }
 ```
 
+### Handling Tunnel Requests
+
+In addition to `start()`, the main request-processing entry points are:
+
+- `TunnelSender::tunnel_request(...)`: Processes HTTP-like tunnel requests (including track streaming, track info, album covers, and localhost proxying)
+- `TunnelSender::ws_request(...)`: Processes tunneled WebSocket messages through a provided `WebsocketSender`
+- `TunnelSender::abort_request(request_id)`: Cancels an in-progress request stream
+- `TunnelSenderHandle::add_player_action(id, action)`: Registers player actions used by WebSocket request processing
+
+```rust
+use moosicbox_tunnel::TunnelEncoding;
+use switchy_http::models::Method;
+
+// Process an HTTP-like tunnel request
+sender
+    .tunnel_request(
+        8500,
+        42,
+        Method::Get,
+        "files/track".to_string(),
+        serde_json::json!({"trackId": "123"}),
+        None,
+        None,
+        Some("default".to_string()),
+        TunnelEncoding::Binary,
+    )
+    .await?;
+
+// Cancel request 42 if needed
+sender.abort_request(42);
+```
+
 The library also provides:
 
 - `TunnelSenderHandle`: Handle for controlling active tunnel connections
