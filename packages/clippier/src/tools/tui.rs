@@ -115,9 +115,17 @@ impl PaneState {
         }
     }
 
-    fn push_line(&mut self, line: String) {
-        self.lines
-            .push_back(parse_ansi_line(&line, &mut self.ansi_state));
+    fn push_line(&mut self, line: String, overwrite: bool) {
+        let parsed = parse_ansi_line(&line, &mut self.ansi_state);
+        if overwrite {
+            if let Some(last) = self.lines.back_mut() {
+                *last = parsed;
+            } else {
+                self.lines.push_back(parsed);
+            }
+        } else {
+            self.lines.push_back(parsed);
+        }
         while self.lines.len() > 2_000 {
             let _ = self.lines.pop_front();
         }
@@ -229,9 +237,18 @@ fn handle_event(event: ToolEvent, panes: &mut BTreeMap<String, PaneState>, compl
                 pane.display_name = display_name;
             }
         }
-        ToolEvent::StdoutLine { tool_name, line } | ToolEvent::StderrLine { tool_name, line } => {
+        ToolEvent::StdoutLine {
+            tool_name,
+            line,
+            overwrite,
+        }
+        | ToolEvent::StderrLine {
+            tool_name,
+            line,
+            overwrite,
+        } => {
             if let Some(pane) = panes.get_mut(&tool_name) {
-                pane.push_line(line);
+                pane.push_line(line, overwrite);
             }
         }
         ToolEvent::Finished { tool_name, success } => {
@@ -646,5 +663,15 @@ mod tests {
         let line = parse_ansi_line("\u{1b}[38;2;12;34;56mcolor", &mut state);
 
         assert_eq!(line.spans[0].style.fg, Some(Color::Rgb(12, 34, 56)));
+    }
+
+    #[test]
+    fn pane_push_line_overwrite_replaces_last_line() {
+        let mut pane = PaneState::new("demo".to_string());
+        pane.push_line("first".to_string(), false);
+        pane.push_line("second".to_string(), true);
+
+        assert_eq!(pane.lines.len(), 1);
+        assert_eq!(pane.lines[0].spans[0].content.as_ref(), "second");
     }
 }

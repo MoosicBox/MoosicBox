@@ -7,6 +7,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "tools-tui")]
+use std::io::Read;
+#[cfg(feature = "tools-tui")]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "tools-tui")]
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
@@ -32,10 +34,12 @@ pub enum ToolEvent {
     StdoutLine {
         tool_name: String,
         line: String,
+        overwrite: bool,
     },
     StderrLine {
         tool_name: String,
         line: String,
+        overwrite: bool,
     },
     Finished {
         tool_name: String,
@@ -529,6 +533,84 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[cfg(feature = "tools-tui")]
+    fn emit_tool_line_event(
+        tx: &mpsc::Sender<ToolEvent>,
+        tool_name: &str,
+        is_stderr: bool,
+        bytes: &[u8],
+        overwrite: bool,
+    ) {
+        let line = String::from_utf8_lossy(bytes).to_string();
+        let event = if is_stderr {
+            ToolEvent::StderrLine {
+                tool_name: tool_name.to_string(),
+                line,
+                overwrite,
+            }
+        } else {
+            ToolEvent::StdoutLine {
+                tool_name: tool_name.to_string(),
+                line,
+                overwrite,
+            }
+        };
+        let _ = tx.send(event);
+    }
+
+    #[cfg(feature = "tools-tui")]
+    fn pump_stream_events<R: Read>(
+        mut reader: R,
+        tx: mpsc::Sender<ToolEvent>,
+        tool_name: String,
+        is_stderr: bool,
+        output: Arc<Mutex<Vec<u8>>>,
+    ) {
+        let mut buffer = [0_u8; 4096];
+        let mut line = Vec::new();
+        let mut overwrite_next = false;
+
+        loop {
+            let read_count = match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => count,
+                Err(_) => break,
+            };
+
+            if let Ok(mut captured) = output.lock() {
+                captured.extend_from_slice(&buffer[..read_count]);
+            }
+
+            for byte in &buffer[..read_count] {
+                match *byte {
+                    b'\r' => {
+                        Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
+                        line.clear();
+                        overwrite_next = true;
+                    }
+                    b'\n' => {
+                        Self::emit_tool_line_event(
+                            &tx,
+                            &tool_name,
+                            is_stderr,
+                            &line,
+                            overwrite_next,
+                        );
+                        line.clear();
+                        overwrite_next = false;
+                    }
+                    value => {
+                        line.push(value);
+                    }
+                }
+            }
+        }
+
+        if !line.is_empty() {
+            Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, overwrite_next);
+        }
+    }
+
+    #[cfg(feature = "tools-tui")]
     fn run_single_tool_with_events(
         &self,
         tool: &Tool,
@@ -565,25 +647,15 @@ impl<'a> ToolRunner<'a> {
 
         match command.spawn() {
             Ok(mut child) => {
-                let stdout_content = Arc::new(Mutex::new(String::new()));
-                let stderr_content = Arc::new(Mutex::new(String::new()));
+                let stdout_content = Arc::new(Mutex::new(Vec::<u8>::new()));
+                let stderr_content = Arc::new(Mutex::new(Vec::<u8>::new()));
 
                 let stdout_handle = child.stdout.take().map(|stdout| {
                     let tx = tx.clone();
                     let tool_name = tool.name.clone();
                     let output = Arc::clone(&stdout_content);
                     thread::spawn(move || {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines().map_while(Result::ok) {
-                            let _ = tx.send(ToolEvent::StdoutLine {
-                                tool_name: tool_name.clone(),
-                                line: line.clone(),
-                            });
-                            if let Ok(mut buf) = output.lock() {
-                                buf.push_str(&line);
-                                buf.push('\n');
-                            }
-                        }
+                        Self::pump_stream_events(stdout, tx, tool_name, false, output);
                     })
                 });
 
@@ -592,17 +664,7 @@ impl<'a> ToolRunner<'a> {
                     let tool_name = tool.name.clone();
                     let output = Arc::clone(&stderr_content);
                     thread::spawn(move || {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines().map_while(Result::ok) {
-                            let _ = tx.send(ToolEvent::StderrLine {
-                                tool_name: tool_name.clone(),
-                                line: line.clone(),
-                            });
-                            if let Ok(mut buf) = output.lock() {
-                                buf.push_str(&line);
-                                buf.push('\n');
-                            }
-                        }
+                        Self::pump_stream_events(stderr, tx, tool_name, true, output);
                     })
                 });
 
@@ -646,12 +708,14 @@ impl<'a> ToolRunner<'a> {
                     let _ = handle.join();
                 }
 
-                let stdout = stdout_content
-                    .lock()
-                    .map_or_else(|_| String::new(), |buf| buf.clone());
-                let stderr = stderr_content
-                    .lock()
-                    .map_or_else(|_| String::new(), |buf| buf.clone());
+                let stdout = stdout_content.lock().map_or_else(
+                    |_| String::new(),
+                    |buf| String::from_utf8_lossy(buf.as_slice()).to_string(),
+                );
+                let stderr = stderr_content.lock().map_or_else(
+                    |_| String::new(),
+                    |buf| String::from_utf8_lossy(buf.as_slice()).to_string(),
+                );
 
                 let duration = start_time.elapsed();
                 let result = if status.success() {
