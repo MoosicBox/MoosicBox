@@ -196,8 +196,12 @@ The package is organized into the following modules:
 - **MoosicBox Session Models**: Session management data structures
 - **switchy_env**: Environment variable utilities with std support
 - **bytesize**: Byte size formatting
+- **log**: Logging support for UI update rendering and diagnostics
 - **rust_decimal**: Decimal number handling
+- **rust_decimal_macros**: Decimal literal macros
 - **serde**: Serialization for actions and state
+- **serde_json**: JSON serialization and deserialization support
+- **strum**: Enum utility derives used by UI model types
 
 ## Feature Flags
 
