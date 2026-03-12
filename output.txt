@@ -1,0 +1,8 @@
+Reviewed `packages/switchy/schema/examples/basic_usage/README.md` against:
+
+- `packages/switchy/schema/examples/basic_usage/src/main.rs`
+- `packages/switchy/schema/examples/basic_usage/Cargo.toml`
+
+I found no fundamental inaccuracies or critical omissions based on the current code and package metadata. The documented migration flow, API usage patterns, run command, and described behavior align with the implemented example.
+
+No changes required - documentation is accurate
