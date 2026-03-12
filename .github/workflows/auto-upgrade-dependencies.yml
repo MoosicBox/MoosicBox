@@ -18,7 +18,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         steps:
             - uses: dtolnay/rust-toolchain@stable
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - name: Setup cargo-upgrade
               uses: BSteffaniak/cache-artifact@master
               with:
@@ -56,7 +56,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         steps:
             - uses: dtolnay/rust-toolchain@stable
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - name: Setup cargo-machete
               uses: BSteffaniak/cache-artifact@master
               with:
@@ -96,7 +96,7 @@ jobs:
             incompatible-branch: ${{ steps.branch.outputs.incompatible }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
@@ -215,7 +215,7 @@ jobs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -274,7 +274,7 @@ jobs:
               run: echo '${{ toJson(matrix) }}'
 
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -381,7 +381,7 @@ jobs:
         if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
@@ -418,7 +418,7 @@ jobs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -478,7 +478,7 @@ jobs:
               run: echo '${{ toJson(matrix) }}'
 
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -579,7 +579,7 @@ jobs:
         if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0

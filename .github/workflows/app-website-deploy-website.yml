@@ -13,7 +13,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - uses: pnpm/action-setup@v3
               name: Install pnpm
@@ -35,7 +35,7 @@ jobs:
                   pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
 
             - name: Upload log
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               if: always()
               with:
                   name: log

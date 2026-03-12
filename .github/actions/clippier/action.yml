@@ -569,7 +569,7 @@ runs:
     steps:
         - name: Checkout repository
           if: inputs.command == 'setup' && inputs.skip-checkout != 'true'
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6
           with:
               fetch-depth: ${{ inputs.checkout-fetch-depth }}
               submodules: ${{ fromJson(inputs.package-json).gitSubmodules || false }}
@@ -600,7 +600,7 @@ runs:
 
         - name: Setup Node.js
           if: inputs.command == 'setup' && (contains(fromJson(inputs.package-json).toolchains || '[]', 'node') || contains(fromJson(inputs.package-json).ciToolchains || '[]', 'node'))
-          uses: actions/setup-node@v4
+          uses: actions/setup-node@v6
           with:
               node-version: latest
 
@@ -613,7 +613,7 @@ runs:
         # workspace-setup steps (use workspace-toolchains-json input)
         - name: Checkout repository (workspace-setup)
           if: inputs.command == 'workspace-setup' && inputs.skip-checkout != 'true'
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6
           with:
               fetch-depth: ${{ inputs.checkout-fetch-depth }}
               submodules: ${{ inputs.workspace-toolchains-json && fromJson(inputs.workspace-toolchains-json).git_submodules || false }}
@@ -650,7 +650,7 @@ runs:
               inputs.command == 'workspace-setup' &&
               inputs.workspace-toolchains-json != '' &&
               contains(fromJson(inputs.workspace-toolchains-json).toolchains || '[]', 'node')
-          uses: actions/setup-node@v4
+          uses: actions/setup-node@v6
           with:
               node-version: latest
 
@@ -671,7 +671,7 @@ runs:
                 inputs.command == 'workspace-toolchains' ||
                 (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6
           with:
               repository: MoosicBox/MoosicBox
               ref: ${{ inputs.clippier-version }}
@@ -716,7 +716,7 @@ runs:
                 inputs.command == 'workspace-toolchains' ||
                 (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
-          uses: actions/cache@v4
+          uses: actions/cache@v5
           with:
               path: ./target/release/clippier
               key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}

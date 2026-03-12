@@ -20,9 +20,9 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v6
               name: Install node
               with:
                   node-version: latest
@@ -39,7 +39,7 @@ jobs:
                   echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
             - name: Cache pnpm dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                   path: ${{ env.STORE_PATH }}
                   key: ${{ runner.os }}-pnpm-store-${{ hashFiles('packages/hyperchad/renderer/vanilla_js/web/pnpm-lock.yaml') }}
@@ -47,7 +47,7 @@ jobs:
                       ${{ runner.os }}-pnpm-store-
 
             - name: Cache Playwright browsers
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                   path: ~/.cache/ms-playwright
                   key: ${{ runner.os }}-playwright-${{ hashFiles('packages/hyperchad/renderer/vanilla_js/web/package.json') }}

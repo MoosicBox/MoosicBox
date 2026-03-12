@@ -70,7 +70,7 @@ jobs:
             branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
@@ -92,7 +92,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   ref: ${{ needs.create-branch.outputs.branch-name }}
                   fetch-depth: 0
@@ -155,7 +155,7 @@ jobs:
 
             - name: Upload AI output for review
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: ai-output-security
                   path: output.txt
@@ -170,7 +170,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   ref: ${{ needs.create-branch.outputs.branch-name }}
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}

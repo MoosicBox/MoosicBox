@@ -53,7 +53,7 @@ jobs:
                   echo "before_hash=$(sha256sum "$AUTH_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
             - name: Checkout repository for auth scripts
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 1
 
@@ -149,7 +149,7 @@ jobs:
 
             - name: Upload encrypted auth artifact
               if: success()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: ${{ steps.encrypt.outputs.auth_artifact_name }}
                   path: /tmp/opencode-auth-artifact/auth.json.gpg

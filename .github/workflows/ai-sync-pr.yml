@@ -84,7 +84,7 @@ jobs:
                   echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
 
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   ref: ${{ steps.pr_details.outputs.head_ref }}

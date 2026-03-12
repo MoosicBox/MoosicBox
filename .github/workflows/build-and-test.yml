@@ -63,7 +63,7 @@ jobs:
                     - licenses
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -89,7 +89,7 @@ jobs:
             docker-count: ${{ steps.analyze.outputs.docker-count }}
             docker-packages-list: ${{ steps.analyze.outputs.docker-packages-list }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -208,7 +208,7 @@ jobs:
         steps:
             - uses: dtolnay/rust-toolchain@stable
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Setup cargo-machete
               uses: BSteffaniak/cache-artifact@master
@@ -248,7 +248,7 @@ jobs:
         if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -270,7 +270,7 @@ jobs:
 
             - name: Upload validation report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: feature-validation-report
                   path: validation-report.json
@@ -294,7 +294,7 @@ jobs:
               shell: bash
               run: echo '${{ toJson(matrix) }}'
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
                   submodules: ${{ matrix.package.gitSubmodules == true }}
@@ -422,7 +422,7 @@ jobs:
 
             - name: Upload failure data for workflow summary
               if: always() && steps.test-suite.outputs.failure-artifact-path != ''
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: ${{ steps.test-suite.outputs.failure-artifact-name }}
                   path: ${{ steps.test-suite.outputs.failure-artifact-path }}
@@ -436,10 +436,10 @@ jobs:
         if: always()
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Download failure artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   pattern: test-results-*
                   path: ./failure-data
@@ -456,7 +456,7 @@ jobs:
 
             - name: Upload failures summary artifact
               if: always() && steps.failures-summary.outputs.aggregate-summary-path != ''
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: workflow-failures-summary
                   path: ${{ steps.failures-summary.outputs.aggregate-summary-path }}
@@ -467,7 +467,7 @@ jobs:
         needs: [determine-affected-packages]
         if: ${{ needs.determine-affected-packages.outputs.has-docker-changes == 'true' }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
@@ -495,7 +495,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
                   submodules: ${{ matrix.gitSubmodules == true }}
@@ -554,7 +554,7 @@ jobs:
         needs: [determine-affected-packages, build]
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
                   path: MoosicBox

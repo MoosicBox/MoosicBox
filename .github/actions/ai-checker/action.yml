@@ -363,7 +363,7 @@ runs:
 
         - name: Setup Node.js for template processing
           if: inputs.command == 'check'
-          uses: actions/setup-node@v4
+          uses: actions/setup-node@v6
           with:
               node-version: "20"
 
@@ -974,7 +974,7 @@ runs:
 
         - name: Upload execution details artifact
           if: always() && inputs.command == 'check' && inputs.enable_execution_details_artifact == 'true' && steps.format_execution_details.outputs.details_file != ''
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v6
           with:
               name: ${{ inputs.artifact_name_prefix != '' && format('execution-details-{0}-{1}', inputs.artifact_name_prefix, inputs.artifact_package_name) || format('execution-details-{0}', inputs.artifact_package_name || 'default') }}
               path: ${{ steps.format_execution_details.outputs.details_file }}
