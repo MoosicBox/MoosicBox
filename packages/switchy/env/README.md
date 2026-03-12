@@ -4,12 +4,14 @@ Deterministic environment variable access for testing and simulation.
 
 ## Features
 
-- **Production**: Uses real environment variables via `std::env`
-- **Simulation**: Uses configurable environment with deterministic defaults
+- **Standard backend**: `switchy_env::standard::*` reads real environment variables via `std::env`
+- **Simulator backend**: `switchy_env::*` uses a configurable environment with deterministic defaults when `simulator` is enabled (default)
 - **Type Safety**: Parse environment variables to specific types
 - **Testing**: Set/remove variables for testing scenarios
 
 ## Usage
+
+With default features, `switchy_env::*` resolves to the simulator backend.
 
 ```rust
 use switchy_env::{var, var_or, var_parse, var_parse_or, var_parse_opt, var_exists, vars};
@@ -38,6 +40,14 @@ if var_exists("FEATURE_FLAG") {
 let all_vars = vars();
 ```
 
+To force real environment access when both default features are enabled, use the `standard` module:
+
+```rust
+use switchy_env::standard::var;
+
+let home = var("HOME")?;
+```
+
 ## Simulator Features
 
 In simulator mode, you can control environment variables:
@@ -63,3 +73,9 @@ reset();
 - `std` (default): Enable real environment variable access
 - `simulator` (default): Enable deterministic simulation mode
 - `fail-on-warnings`: Treat warnings as errors
+
+## Core Types
+
+- `EnvProvider`: Trait for custom environment providers with methods for fetching, parsing, and enumerating variables
+- `EnvError`: Error enum returned by fallible operations (`NotFound`, `InvalidValue`, `ParseError`)
+- `Result<T>`: Convenience alias for `std::result::Result<T, EnvError>`
