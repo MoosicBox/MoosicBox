@@ -53,7 +53,7 @@ let router = setup_cdn_optimization(
 ## How It Works
 
 1. **Detection**: Only activates if root route ("/") is dynamic (not static)
-2. **Skeleton Generation**: Replaces root route with a static route containing optimized skeleton `index.html`
+2. **Skeleton Generation**: Adds a static root route containing optimized skeleton `index.html`
 3. **Dynamic Endpoint**: Registers `/__hyperchad_dynamic_root__` that serves the full application content
 4. **Runtime**: CDN serves skeleton → browser fetches dynamic content via `fetch()` → document replaced using `document.open()/write()/close()`
 
