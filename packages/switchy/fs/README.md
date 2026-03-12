@@ -297,6 +297,28 @@ let real_data = with_real_fs(|| {
 let sim_data = read_to_string("/simulated/file.txt")?;
 ```
 
+### Seeding Simulator from Real Filesystem
+
+When loading fixtures into the simulator, use the seeding APIs:
+
+- `seed_from_real_fs(real_path, sim_path)`: Recursively copy a real filesystem path into a simulator path
+- `seed_from_real_fs_same_path(path)`: Seed using the same path for both real and simulator locations
+- `seed_relative_to(base, relative_paths)`: Seed multiple paths relative to a base directory
+- `is_simulator_enabled()`: Check whether the crate was compiled with simulator support
+
+```rust
+use switchy_fs::{seed_from_real_fs, seed_relative_to};
+
+// Seed one path from real filesystem into a simulator path
+seed_from_real_fs("./tests/fixtures", "/fixtures")?;
+
+// Seed multiple paths relative to a project root
+seed_relative_to(
+    env!("CARGO_MANIFEST_DIR"),
+    ["tests/fixtures", "tests/scripts"],
+)?;
+```
+
 ### Temporary Directories
 
 The package provides temporary directory support that automatically cleans up when dropped:
