@@ -6,10 +6,10 @@ A command-line audio format converter that supports multiple audio formats with 
 
 The Audio Converter (`aconverter`) is a utility that converts audio files between different formats while preserving metadata tags. It supports:
 
-- **Multiple Input Formats**: MP3, FLAC, AAC/M4A, Opus, and more
+- **Multiple Input Formats**: MP3, FLAC, AAC/M4A, Opus
 - **Multiple Output Formats**: AAC, FLAC, MP3, Opus
 - **Metadata Preservation**: Automatically copies tags from source to output
-- **Quality Control**: Configurable encoding quality settings
+- **Quality Control**: Configurable quality parameter (currently parsed but not applied)
 - **Batch Processing**: Convert multiple files efficiently
 
 ## Installation
