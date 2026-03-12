@@ -49,6 +49,50 @@ The upstream source is included as a git submodule in the `opus/` directory.
 
 The build process is handled automatically by `build.rs` and produces a static library that is linked into the Rust crate.
 
+## Installation
+
+This crate is internal and is not published to crates.io (`publish = false`).
+
+Add it as a workspace dependency:
+
+```toml
+[dependencies]
+moosicbox_opus_native_libopus = { workspace = true }
+```
+
+## Usage
+
+Primary entry points are the safe wrappers in `safe`:
+
+- `safe::Encoder::new(sample_rate, channels, application)`
+- `safe::Encoder::encode(pcm, frame_size, output)`
+- `safe::Decoder::new(sample_rate, channels)`
+- `safe::Decoder::decode(data, output, frame_size, decode_fec)`
+
+Use `OPUS_APPLICATION_AUDIO` or `OPUS_APPLICATION_VOIP` for encoder mode selection.
+All fallible operations return `Result<_, safe::OpusError>`.
+
+```rust
+use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, safe::{Decoder, Encoder}};
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let mut encoder = Encoder::new(48_000, 1, OPUS_APPLICATION_AUDIO)?;
+let mut decoder = Decoder::new(48_000, 1)?;
+
+let input_pcm = vec![0i16; 960];
+let mut packet = vec![0u8; 4000];
+let packet_len = encoder.encode(&input_pcm, 960, &mut packet)?;
+
+let mut output_pcm = vec![0i16; 960];
+let _decoded_samples = decoder.decode(&packet[..packet_len], &mut output_pcm, 960, false)?;
+# Ok(())
+# }
+```
+
+## License
+
+Licensed under MPL-2.0.
+
 ## Related Packages
 
 - **`moosicbox_opus_native`**: Parent package containing the pure Rust Opus decoder implementation
