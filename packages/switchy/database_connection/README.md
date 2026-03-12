@@ -178,6 +178,7 @@ export DB_HOST="localhost"
 export DB_NAME="mydb"
 export DB_USER="user"
 export DB_PASSWORD="password"
+export DB_PORT="5432"
 
 # Option 3: AWS SSM Parameters (requires 'creds' feature)
 # Optional - defaults shown below
@@ -364,6 +365,36 @@ let db_path = Path::new("./analytics.duckdb");
 let db = init_duckdb_read_only(db_path)?;
 ```
 
+### DuckDB Configuration
+
+```rust
+// Feature: duckdb (or duckdb-bundled)
+use switchy_database::duckdb::{DuckDbConfig, DuckDbConsistency, DuckDbMode};
+use switchy_database_connection::{init_duckdb_read_only_with_options, init_duckdb_with_options};
+use std::path::Path;
+
+let config = DuckDbConfig {
+    mode: DuckDbMode::Pooled,
+    consistency: DuckDbConsistency::Strict,
+};
+
+let db = init_duckdb_with_options(Some(Path::new("./analytics.duckdb")), config)?;
+
+let read_only_config = DuckDbConfig {
+    mode: DuckDbMode::Pooled,
+    consistency: DuckDbConsistency::Strict,
+};
+
+let db = init_duckdb_read_only_with_options(Path::new("./analytics.duckdb"), read_only_config)?;
+```
+
+`init_duckdb` and `init_duckdb_read_only` also read these environment variables:
+
+```bash
+SWITCHY_DUCKDB_MODE="deterministic" # or "pooled"
+SWITCHY_DUCKDB_CONSISTENCY="strict" # or "relaxed"
+```
+
 ### Non-SQLite Initialization
 
 ```rust
@@ -517,7 +548,6 @@ DB_PASSWORD="password"
 - **OpenSSL**: Alternative TLS implementation (optional)
 - **AWS SDK**: For SSM parameter store credential management (optional)
 - **Thiserror**: Error handling
-- **Tokio**: Async runtime support (optional)
 
 ## Use Cases
 
