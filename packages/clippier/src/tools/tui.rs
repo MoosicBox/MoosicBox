@@ -42,7 +42,7 @@ impl AnsiStyleState {
         style.add_modifier(self.modifiers)
     }
 
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.fg = None;
         self.bg = None;
         self.modifiers = Modifier::empty();
@@ -72,12 +72,12 @@ impl AnsiStyleState {
                 27 => self.modifiers.remove(Modifier::REVERSED),
                 28 => self.modifiers.remove(Modifier::HIDDEN),
                 29 => self.modifiers.remove(Modifier::CROSSED_OUT),
-                30..=37 => self.fg = Some(Color::Indexed((code - 30) as u8)),
+                30..=37 => self.fg = Some(Color::Indexed(to_u8(code - 30))),
                 39 => self.fg = None,
-                40..=47 => self.bg = Some(Color::Indexed((code - 40) as u8)),
+                40..=47 => self.bg = Some(Color::Indexed(to_u8(code - 40))),
                 49 => self.bg = None,
-                90..=97 => self.fg = Some(Color::Indexed((code - 90 + 8) as u8)),
-                100..=107 => self.bg = Some(Color::Indexed((code - 100 + 8) as u8)),
+                90..=97 => self.fg = Some(Color::Indexed(to_u8(code - 90 + 8))),
+                100..=107 => self.bg = Some(Color::Indexed(to_u8(code - 100 + 8))),
                 38 | 48 => {
                     let is_foreground = code == 38;
                     if let Some((color, consumed)) = parse_extended_color(params, index + 1) {
@@ -117,8 +117,8 @@ impl PaneState {
         }
     }
 
-    fn push_line(&mut self, line: String, overwrite: bool) {
-        let parsed = parse_ansi_line(&line, &mut self.ansi_state);
+    fn push_line(&mut self, line: &str, overwrite: bool) {
+        let parsed = parse_ansi_line(line, &mut self.ansi_state);
         if overwrite {
             self.last_overwrite_at = Some(Instant::now());
         }
@@ -136,19 +136,19 @@ impl PaneState {
         }
     }
 
-    fn scroll_up(&mut self, amount: usize) {
+    const fn scroll_up(&mut self, amount: usize) {
         self.scroll_offset = self.scroll_offset.saturating_add(amount);
     }
 
-    fn scroll_down(&mut self, amount: usize) {
+    const fn scroll_down(&mut self, amount: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(amount);
     }
 
-    fn scroll_top(&mut self) {
+    const fn scroll_top(&mut self) {
         self.scroll_offset = usize::MAX;
     }
 
-    fn scroll_bottom(&mut self) {
+    const fn scroll_bottom(&mut self) {
         self.scroll_offset = 0;
     }
 }
@@ -173,6 +173,7 @@ enum UserAction {
     ScrollBottom,
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn run_live_tui(
     tools: &[(String, String)],
     rx: Receiver<ToolEvent>,
@@ -219,7 +220,7 @@ pub fn run_live_tui(
                 total,
                 start_time,
                 focused_index,
-            )
+            );
         })?;
 
         if completed >= total {
@@ -253,7 +254,7 @@ fn handle_event(event: ToolEvent, panes: &mut BTreeMap<String, PaneState>, compl
             overwrite,
         } => {
             if let Some(pane) = panes.get_mut(&tool_name) {
-                pane.push_line(line, overwrite);
+                pane.push_line(&line, overwrite);
             }
         }
         ToolEvent::Finished { tool_name, success } => {
@@ -410,10 +411,11 @@ fn render_panes(
 
     let columns: usize = if tools.len() > 1 { 2 } else { 1 };
     let rows = tools.len().div_ceil(columns);
+    let rows_u32 = u32::try_from(rows).unwrap_or(u32::MAX);
+    let columns_u32 = u32::try_from(columns).unwrap_or(u32::MAX);
 
-    let row_constraints: Vec<Constraint> = (0..rows)
-        .map(|_| Constraint::Ratio(1, rows as u32))
-        .collect();
+    let row_constraints: Vec<Constraint> =
+        (0..rows).map(|_| Constraint::Ratio(1, rows_u32)).collect();
     let row_areas = Layout::default()
         .direction(Direction::Vertical)
         .constraints(row_constraints)
@@ -421,7 +423,7 @@ fn render_panes(
 
     for (row_index, row_area) in row_areas.iter().enumerate() {
         let col_constraints: Vec<Constraint> = (0..columns)
-            .map(|_| Constraint::Ratio(1, columns as u32))
+            .map(|_| Constraint::Ratio(1, columns_u32))
             .collect();
         let col_areas = Layout::default()
             .direction(Direction::Horizontal)
@@ -599,10 +601,10 @@ fn parse_sgr_params(params: &[u8]) -> Vec<i32> {
             let digit = i32::from(byte - b'0');
             let prior = current.unwrap_or(0);
             current = Some(prior.saturating_mul(10).saturating_add(digit));
-        } else if *byte == b';' || *byte == b':' {
-            if let Some(value) = current.take() {
-                values.push(value);
-            }
+        } else if (*byte == b';' || *byte == b':')
+            && let Some(value) = current.take()
+        {
+            values.push(value);
         }
     }
 
@@ -625,7 +627,7 @@ fn parse_extended_color(params: &[i32], index: usize) -> Option<(Color, usize)> 
             }
 
             let value = params[index + 1];
-            let clamped = value.clamp(0, 255) as u8;
+            let clamped = to_u8(value.clamp(0, 255));
             Some((Color::Indexed(clamped), 2))
         }
         2 => {
@@ -633,19 +635,22 @@ fn parse_extended_color(params: &[i32], index: usize) -> Option<(Color, usize)> 
                 return None;
             }
 
-            let r = params[index + 1].clamp(0, 255) as u8;
-            let g = params[index + 2].clamp(0, 255) as u8;
-            let b = params[index + 3].clamp(0, 255) as u8;
+            let r = to_u8(params[index + 1].clamp(0, 255));
+            let g = to_u8(params[index + 2].clamp(0, 255));
+            let b = to_u8(params[index + 3].clamp(0, 255));
             Some((Color::Rgb(r, g, b), 4))
         }
         _ => None,
     }
 }
 
+fn to_u8(value: i32) -> u8 {
+    u8::try_from(value).unwrap_or(0)
+}
+
 fn pane_is_updating(last_overwrite_at: Option<Instant>, now: Instant) -> bool {
     last_overwrite_at
-        .map(|instant| now.saturating_duration_since(instant) <= Duration::from_secs(1))
-        .unwrap_or(false)
+        .is_some_and(|instant| now.saturating_duration_since(instant) <= Duration::from_secs(1))
 }
 
 const fn status_label(status: PaneStatus) -> &'static str {
@@ -704,8 +709,8 @@ mod tests {
     #[test]
     fn pane_push_line_overwrite_replaces_last_line() {
         let mut pane = PaneState::new("demo".to_string());
-        pane.push_line("first".to_string(), false);
-        pane.push_line("second".to_string(), true);
+        pane.push_line("first", false);
+        pane.push_line("second", true);
 
         assert_eq!(pane.lines.len(), 1);
         assert_eq!(pane.lines[0].spans[0].content.as_ref(), "second");

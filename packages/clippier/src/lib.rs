@@ -5465,6 +5465,7 @@ pub fn handle_check_command(
 /// * If a required tool is not found
 /// * If tool execution fails
 #[cfg(feature = "format")]
+#[allow(clippy::too_many_arguments)]
 pub fn handle_fmt_command(
     working_dir: Option<&Path>,
     tool_names: Option<&[String]>,

@@ -245,7 +245,7 @@ impl<'a> ToolRunner<'a> {
                     Self::apply_color_env(command, ColorMode::Always);
                 } else {
                     Self::apply_color_env(command, ColorMode::Never);
-                };
+                }
             }
         }
     }
@@ -454,8 +454,8 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[cfg(feature = "tools-tui")]
-    fn wait_for_tool_threads<'scope>(
-        mut handles: Vec<std::thread::ScopedJoinHandle<'scope, ToolResult>>,
+    fn wait_for_tool_threads(
+        mut handles: Vec<std::thread::ScopedJoinHandle<'_, ToolResult>>,
         cancel_requested: &Arc<AtomicBool>,
         tui_exit: tui::TuiExit,
     ) -> Vec<ToolResult> {
@@ -560,10 +560,10 @@ impl<'a> ToolRunner<'a> {
     #[cfg(feature = "tools-tui")]
     fn pump_stream_events<R: Read>(
         mut reader: R,
-        tx: mpsc::Sender<ToolEvent>,
-        tool_name: String,
+        tx: &mpsc::Sender<ToolEvent>,
+        tool_name: &str,
         is_stderr: bool,
-        output: Arc<Mutex<Vec<u8>>>,
+        output: &Arc<Mutex<Vec<u8>>>,
     ) {
         let mut buffer = [0_u8; 4096];
         let mut line = Vec::new();
@@ -572,9 +572,8 @@ impl<'a> ToolRunner<'a> {
 
         loop {
             let read_count = match reader.read(&mut buffer) {
-                Ok(0) => break,
+                Ok(0) | Err(_) => break,
                 Ok(count) => count,
-                Err(_) => break,
             };
 
             if let Ok(mut captured) = output.lock() {
@@ -584,14 +583,14 @@ impl<'a> ToolRunner<'a> {
             for byte in &buffer[..read_count] {
                 if pending_cr {
                     if *byte == b'\n' {
-                        Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, false);
+                        Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, false);
                         line.clear();
                         overwrite_next = false;
                         pending_cr = false;
                         continue;
                     }
 
-                    Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
+                    Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, true);
                     line.clear();
                     overwrite_next = true;
                     pending_cr = false;
@@ -602,13 +601,7 @@ impl<'a> ToolRunner<'a> {
                         pending_cr = true;
                     }
                     b'\n' => {
-                        Self::emit_tool_line_event(
-                            &tx,
-                            &tool_name,
-                            is_stderr,
-                            &line,
-                            overwrite_next,
-                        );
+                        Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, overwrite_next);
                         line.clear();
                         overwrite_next = false;
                     }
@@ -620,17 +613,18 @@ impl<'a> ToolRunner<'a> {
         }
 
         if pending_cr {
-            Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
+            Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, true);
             line.clear();
             overwrite_next = true;
         }
 
         if !line.is_empty() {
-            Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, overwrite_next);
+            Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, overwrite_next);
         }
     }
 
     #[cfg(feature = "tools-tui")]
+    #[allow(clippy::too_many_lines)]
     fn run_single_tool_with_events(
         &self,
         tool: &Tool,
@@ -671,20 +665,20 @@ impl<'a> ToolRunner<'a> {
                 let stderr_content = Arc::new(Mutex::new(Vec::<u8>::new()));
 
                 let stdout_handle = child.stdout.take().map(|stdout| {
-                    let tx = tx.clone();
                     let tool_name = tool.name.clone();
                     let output = Arc::clone(&stdout_content);
+                    let tx = tx.clone();
                     thread::spawn(move || {
-                        Self::pump_stream_events(stdout, tx, tool_name, false, output);
+                        Self::pump_stream_events(stdout, &tx, &tool_name, false, &output);
                     })
                 });
 
                 let stderr_handle = child.stderr.take().map(|stderr| {
-                    let tx = tx.clone();
                     let tool_name = tool.name.clone();
                     let output = Arc::clone(&stderr_content);
+                    let tx = tx.clone();
                     thread::spawn(move || {
-                        Self::pump_stream_events(stderr, tx, tool_name, true, output);
+                        Self::pump_stream_events(stderr, &tx, &tool_name, true, &output);
                     })
                 });
 
@@ -1190,10 +1184,10 @@ mod tests {
 
         ToolRunner::pump_stream_events(
             Cursor::new(b"hello\r\nworld\n".to_vec()),
-            tx,
-            "tool".to_string(),
+            &tx,
+            "tool",
             false,
-            output,
+            &output,
         );
 
         let events: Vec<ToolEvent> = rx.try_iter().collect();
@@ -1228,10 +1222,10 @@ mod tests {
 
         ToolRunner::pump_stream_events(
             Cursor::new(b"a\rb\n".to_vec()),
-            tx,
-            "tool".to_string(),
+            &tx,
+            "tool",
             false,
-            output,
+            &output,
         );
 
         let events: Vec<ToolEvent> = rx.try_iter().collect();
