@@ -265,9 +265,12 @@ let clamped = mouse_x.clamp(0.0, 100.0);
 
 - **hyperchad_transformer_models**: Core UI model types (Visibility, etc.)
 - **hyperchad_color**: Color parsing and manipulation (optional, with `handler` feature)
+- **moosicbox_assert**: Assertion utilities used by action and logic internals
 - **switchy_time**: Cross-platform timing utilities
 - **moosicbox_arb**: Arbitrary data generation (optional, with `arb` feature)
+- **proptest**: Property-based testing support (optional, with `arb` feature)
 - **serde**: Serialization/deserialization (optional, with `serde` feature)
+- **serde_json**: JSON serialization/deserialization backend (optional, with `serde` feature)
 - **log**: Logging facade
 
 ## Advanced Features
