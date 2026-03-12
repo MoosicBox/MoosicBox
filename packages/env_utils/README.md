@@ -143,7 +143,7 @@ fn main() {
 
 **Required Value Extraction:**
 
-- `env_usize!(name)` - Extract required usize at compile time (panics if not set)
+- `env_usize!(name)` - Extract required usize at compile time (panics if not set or invalid)
 
 **Default Value Extraction (unsigned):**
 
@@ -180,7 +180,7 @@ fn main() {
 
 The library uses compile-time macros that panic on errors rather than returning Result types:
 
-- **`env_usize!`** - Panics if the environment variable is not set at compile time
+- **`env_usize!`** - Panics if the environment variable is not set at compile time or contains an invalid value
 - **`option_env_*!` macros** - Panic if the environment variable is set but contains an invalid value
 - **`ParseIntError`** - Error type for const parsing functions (`parse_usize`, `parse_isize`)
     - `Empty` - The input string was empty
