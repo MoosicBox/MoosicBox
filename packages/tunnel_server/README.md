@@ -27,6 +27,7 @@ The MoosicBox Tunnel Server provides:
 - **Health Check**: `/health` endpoint for service monitoring
 - **WebSocket**: `/ws` endpoint for tunnel connections
 - **Client Registration**: Authentication and client management
+- **Magic Token Auth**: `/auth/magic-token` and `/auth/validate-signature-token`
 - **Track/Album/Artist**: Media proxy endpoints
 - **Tunnel Management**: Basic tunnel lifecycle operations
 
@@ -119,6 +120,16 @@ curl -X POST "http://localhost:8000/auth/register-client?clientId=my-client" \
 # Get signature token (requires client access token in Authorization header)
 curl -X POST "http://localhost:8000/auth/signature-token?clientId=my-client" \
   -H "Authorization: Bearer your-client-access-token"
+
+# Validate a signature token
+curl -X POST "http://localhost:8000/auth/validate-signature-token?clientId=my-client&signature=your-signature-token"
+
+# Register a magic token for a client (requires client access token)
+curl -X POST "http://localhost:8000/auth/magic-token?clientId=my-client&magicToken=your-magic-token" \
+  -H "Authorization: Bearer your-client-access-token"
+
+# Use a magic token
+curl "http://localhost:8000/auth/magic-token?magicToken=your-magic-token"
 ```
 
 ### Tunnel Proxy Request
