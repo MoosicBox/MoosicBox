@@ -93,19 +93,25 @@ runtime.wait()?;
 
 ```rust
 // Tokio backend (when tokio feature enabled)
-#[cfg(all(feature = "tokio", feature = "time"))]
-use switchy_async::{task, time};
+#[cfg(all(feature = "tokio", feature = "time", not(feature = "simulator")))]
+use switchy_async::{Builder, task, time};
 
-#[cfg(all(feature = "tokio", feature = "time"))]
+#[cfg(all(feature = "tokio", feature = "time", not(feature = "simulator")))]
 {
+    let runtime = Builder::new().build()?;
+
     // Spawn tasks
-    let handle = task::spawn(async {
-        time::sleep(time::Duration::from_millis(100)).await;
-        "Task completed"
+    runtime.block_on(async {
+        let handle = task::spawn(async {
+            time::sleep(time::Duration::from_millis(100)).await;
+            "Task completed"
+        });
+
+        let result = handle.await.expect("task should complete");
+        println!("{}", result);
     });
 
-    let result = handle.await?;
-    println!("{}", result);
+    runtime.wait()?;
 }
 
 // Additional modules available with features
