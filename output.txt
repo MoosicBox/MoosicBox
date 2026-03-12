@@ -1,0 +1,16 @@
+Updated `packages/hyperchad/color/README.md` to fix one fundamental installation issue: the previous `Cargo.toml` example used the `hyperchad_color` dependency key twice in one `[dependencies]` block, which is invalid TOML and can prevent users from using the package example directly.
+
+REGRESSION_CHECK_START
+File: README.md
+Line(s): 41-52
+Proposed change: Split the installation example into two valid alternatives so `hyperchad_color` is not declared twice in the same `[dependencies]` table.
+Git history checked: YES
+Revert found: NO
+Revert details: None found
+Decision: PROCEED - Existing example could mislead users and fail when copied into Cargo.toml.
+REGRESSION_CHECK_END
+
+COMMIT_MESSAGE_START
+- Fixed the installation section in `packages/hyperchad/color/README.md` by removing an invalid duplicate dependency key example that could break `Cargo.toml` when copied.
+- Kept both installation paths (basic and feature-enabled) but presented them as separate valid dependency entries so users can apply either configuration correctly.
+COMMIT_MESSAGE_END

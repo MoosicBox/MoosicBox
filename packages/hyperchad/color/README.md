@@ -43,12 +43,13 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_color = { path = "../hyperchad/color" }
+```
 
-# Enable additional features
-hyperchad_color = {
-    path = "../hyperchad/color",
-    features = ["serde", "egui", "arb"]
-}
+To enable additional features, use a single dependency entry:
+
+```toml
+[dependencies]
+hyperchad_color = { path = "../hyperchad/color", features = ["serde", "egui", "arb"] }
 ```
 
 ## Usage
