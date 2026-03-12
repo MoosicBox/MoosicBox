@@ -111,6 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PostgreSQL connection
     let pg_creds = Some(Credentials::new(
         "localhost".to_string(),
+        None,
         "mydb".to_string(),
         "user".to_string(),
         Some("password".to_string()),
@@ -151,6 +152,7 @@ use switchy_database_connection::Credentials;
 // Create credentials manually
 let creds = Credentials::new(
     "database.example.com".to_string(),  // host
+    None,
     "production_db".to_string(),         // database name
     "app_user".to_string(),              // username
     Some("secure_password".to_string()), // password (optional)
@@ -213,6 +215,7 @@ use switchy_database_connection::{init_postgres_raw_native_tls, Credentials};
 
 let creds = Credentials::new(
     "secure-db.example.com".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
@@ -229,6 +232,7 @@ use switchy_database_connection::{init_postgres_raw_openssl, Credentials};
 
 let creds = Credentials::new(
     "ssl-db.example.com".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
@@ -245,6 +249,7 @@ use switchy_database_connection::{init_postgres_raw_no_tls, Credentials};
 
 let creds = Credentials::new(
     "local-db".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
@@ -261,6 +266,7 @@ use switchy_database_connection::{init_postgres_sqlx, Credentials};
 
 let creds = Credentials::new(
     "localhost".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
@@ -277,6 +283,7 @@ use switchy_database_connection::{init_mysql_sqlx, Credentials};
 
 let creds = Credentials::new(
     "localhost".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
@@ -365,6 +372,7 @@ use switchy_database_connection::{init_default_non_sqlite, Credentials};
 // Initialize any non-SQLite database based on features
 let creds = Some(Credentials::new(
     "localhost".to_string(),
+    None,
     "mydb".to_string(),
     "user".to_string(),
     Some("password".to_string()),
