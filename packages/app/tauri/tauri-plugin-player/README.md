@@ -94,6 +94,11 @@ fn example<R: Runtime>(app: &AppHandle<R>) {
 }
 ```
 
+Primary methods on `Player`:
+
+- `update_state(payload: UpdateState) -> Result<StateResponse>`: Updates playback state, position, seek, volume, and playlist
+- `init_channel(payload: InitChannel) -> Result<InitChannelResponse>`: Initializes the media event channel for native play/pause/next/previous events
+
 ### Command API
 
 The plugin exposes the following Tauri command:
