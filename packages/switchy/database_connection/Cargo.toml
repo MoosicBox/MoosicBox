@@ -75,7 +75,7 @@ tls = ["sqlx/tls-rustls", "switchy_database/tls"]
 creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 
 duckdb         = ["dep:duckdb", "dep:switchy_async", "switchy_database/duckdb"]
-duckdb-bundled = ["duckdb", "duckdb/bundled"]
+duckdb-bundled = ["duckdb", "duckdb/bundled", "switchy_database/duckdb-bundled"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 
