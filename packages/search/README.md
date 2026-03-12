@@ -183,7 +183,7 @@ The global search index includes the following fields:
 - `date_released`, `date_added` - Date fields
 - `version_formats`, `version_bit_depths`, `version_sample_rates`, `version_channels`, `version_sources` - Audio format metadata
 
-Each field has variants for different search types (e.g., `artist_title_search` for tokenized search, `artist_title_string` for exact matching).
+Many string fields have variants for different search types (e.g., `artist_title_search` for tokenized search, `artist_title_string` for exact matching).
 
 ## Web API Endpoints
 
