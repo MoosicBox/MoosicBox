@@ -277,6 +277,24 @@ let app = AppBuilder::new()
 // See the renderer module documentation for specific usage
 ```
 
+### App Runtime Commands
+
+`App::run()` dispatches to subcommands. Use one of these when running your binary:
+
+```bash
+# Start serving the application
+your-app serve
+
+# Generate static output (optional custom directory)
+your-app gen --output ./gen
+
+# Clean generated output (optional custom directory)
+your-app clean --output ./gen
+
+# Print dynamic routes
+your-app dynamic-routes
+```
+
 ## Testing
 
 ```bash
