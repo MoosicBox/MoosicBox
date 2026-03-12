@@ -66,6 +66,7 @@ use switchy_schema_test_utils::verify_migrations_with_state;
 
 #[tokio::test]
 async fn test_migrations_with_data() {
+    let db = /* your database connection */;
     let migrations = vec![/* your migrations */];
     verify_migrations_with_state(
         db,
