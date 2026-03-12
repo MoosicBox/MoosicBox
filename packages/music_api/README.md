@@ -354,7 +354,10 @@ This package depends on:
 - `moosicbox_music_models` - Core music domain models (Artist, Album, Track)
 - `moosicbox_paging` - Pagination utilities
 - `moosicbox_profiles` - Profile management
+- `actix-web` (optional) - Actix Web integration for API feature
 - `async-trait` - Async trait support
+- `futures` - Future utilities
+- `log` - Logging facade
 - `switchy_async` - Async utilities
 - `thiserror` - Error derivation
 
