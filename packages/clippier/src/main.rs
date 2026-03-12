@@ -795,8 +795,12 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
         } => {
-            let config =
-                build_tools_config(working_dir.as_deref(), required.as_deref(), skip.as_deref())?;
+            let config = build_tools_config(
+                working_dir.as_deref(),
+                required.as_deref(),
+                skip.as_deref(),
+                tools.as_deref(),
+            )?;
             handle_check_command(
                 working_dir.as_deref(),
                 tools.as_deref(),
@@ -815,8 +819,12 @@ async fn main() -> Result<(), BoxError> {
             skip,
             output,
         } => {
-            let config =
-                build_tools_config(working_dir.as_deref(), required.as_deref(), skip.as_deref())?;
+            let config = build_tools_config(
+                working_dir.as_deref(),
+                required.as_deref(),
+                skip.as_deref(),
+                tools.as_deref(),
+            )?;
             handle_fmt_command(
                 working_dir.as_deref(),
                 tools.as_deref(),

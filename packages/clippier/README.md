@@ -978,6 +978,15 @@ The `check` command automatically detects and runs:
 
 Tools run in parallel by default for maximum performance.
 
+By default, `check` auto-selects tools based on manifest/config files in the working directory:
+
+- `Cargo.toml` -> `clippy`, `rustfmt`, `taplo`
+- `package.json` -> `eslint`, `prettier`, `biome`
+- `pyproject.toml`, `requirements.txt`, or `setup.py` -> `ruff`, `black`
+- `go.mod` -> `gofmt`
+- `taplo.toml` -> `taplo`
+- `.shellcheckrc` -> `shellcheck`
+
 ### Fmt Command (Formatting)
 
 Run all available formatters to fix formatting issues:
@@ -1016,6 +1025,24 @@ The `fmt` command automatically detects and runs:
 - **Python**: `ruff format`, `black`
 - **Go**: `gofmt -w`
 - **Shell**: `shfmt -w`
+
+By default, `fmt` auto-selects tools based on manifest/config files in the working directory:
+
+- `Cargo.toml` -> `rustfmt`, `taplo`
+- `package.json` -> `prettier`, `biome`
+- `pyproject.toml`, `requirements.txt`, or `setup.py` -> `ruff`, `black`
+- `go.mod` -> `gofmt`
+- `taplo.toml` -> `taplo`
+- `.shfmt.conf` -> `shfmt`
+
+Precedence for tool selection is:
+
+1. `--tools` (explicit tool list)
+2. Auto-detected manifest/config defaults
+3. CLI/config `required`
+4. `skip`
+
+When a tool appears in both `required` and `skip`, `skip` wins. When a tool appears in both `--tools` and `skip`, `--tools` wins.
 
 #### Supported Tools
 

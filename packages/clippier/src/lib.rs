@@ -5354,6 +5354,7 @@ pub fn handle_check_command(
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
+    let required_tools = config.required.clone();
     let registry = ToolRegistry::new(config)?;
 
     if list_tools {
@@ -5399,28 +5400,14 @@ pub fn handle_check_command(
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
 
-    let results = if let Some(names) = tool_names {
-        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-        runner.run_specific(&name_refs, &[], true)?
+    let names = if let Some(names) = tool_names {
+        names.to_vec()
     } else {
-        // Run both linters and format checkers
-        let linter_results = runner.run_linters(&[])?;
-        let format_check_results = runner.run_format_check(&[])?;
-
-        // Combine results
-        let mut combined_results = linter_results.results;
-        combined_results.extend(format_check_results.results);
-
-        let success_count = combined_results.iter().filter(|r| r.success).count();
-        let failure_count = combined_results.len() - success_count;
-
-        tools::AggregatedResults {
-            results: combined_results,
-            total_duration: linter_results.total_duration + format_check_results.total_duration,
-            success_count,
-            failure_count,
-        }
+        let auto_detected = tools::auto_detect_check_tools(working_dir)?;
+        tools::merge_tool_names(&auto_detected, &required_tools)
     };
+    let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let results = runner.run_specific(&name_refs, &[], true)?;
 
     match output {
         OutputType::Json => Ok(tools::results_to_json(&results)?),
@@ -5451,6 +5438,7 @@ pub fn handle_fmt_command(
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
+    let required_tools = config.required.clone();
     let registry = ToolRegistry::new(config)?;
 
     if list_tools {
@@ -5501,14 +5489,14 @@ pub fn handle_fmt_command(
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
 
-    let results = if let Some(names) = tool_names {
-        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-        runner.run_specific(&name_refs, &[], check_only)?
-    } else if check_only {
-        runner.run_format_check(&[])?
+    let names = if let Some(names) = tool_names {
+        names.to_vec()
     } else {
-        runner.run_formatters(&[])?
+        let auto_detected = tools::auto_detect_fmt_tools(working_dir)?;
+        tools::merge_tool_names(&auto_detected, &required_tools)
     };
+    let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let results = runner.run_specific(&name_refs, &[], check_only)?;
 
     match output {
         OutputType::Json => Ok(tools::results_to_json(&results)?),

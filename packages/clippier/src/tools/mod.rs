@@ -39,12 +39,22 @@ pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
 pub use types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 fn merge_unique_strings(target: &mut Vec<String>, source: &[String]) {
     for value in source {
         if !target.iter().any(|existing| existing == value) {
             target.push(value.clone());
         }
     }
+}
+
+/// Merges auto-detected and required tool names with de-duplication.
+#[must_use]
+pub fn merge_tool_names(auto_detected: &[String], required: &[String]) -> Vec<String> {
+    let mut merged = auto_detected.to_vec();
+    merge_unique_strings(&mut merged, required);
+    merged
 }
 
 /// Loads tool defaults from `clippier.toml` in the working directory.
@@ -54,9 +64,7 @@ fn merge_unique_strings(target: &mut Vec<String>, source: &[String]) {
 /// # Errors
 ///
 /// Returns an error when the config file cannot be read or parsed.
-pub fn load_tools_config(
-    working_dir: Option<&std::path::Path>,
-) -> Result<ToolsConfig, Box<dyn std::error::Error + Send + Sync>> {
+pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsConfig, BoxError> {
     let base_dir = match working_dir {
         Some(dir) => dir.to_path_buf(),
         None => std::env::current_dir()?,
@@ -83,7 +91,8 @@ pub fn build_tools_config(
     working_dir: Option<&std::path::Path>,
     required: Option<&[String]>,
     skip: Option<&[String]>,
-) -> Result<ToolsConfig, Box<dyn std::error::Error + Send + Sync>> {
+    explicit_tools: Option<&[String]>,
+) -> Result<ToolsConfig, BoxError> {
     let mut config = load_tools_config(working_dir)?;
 
     if let Some(required_tools) = required {
@@ -94,7 +103,133 @@ pub fn build_tools_config(
         merge_unique_strings(&mut config.skip, skip_tools);
     }
 
+    if let Some(explicit) = explicit_tools {
+        config
+            .skip
+            .retain(|tool| !explicit.iter().any(|requested| requested == tool));
+    }
+
     Ok(config)
+}
+
+fn has_file(base: &std::path::Path, relative_path: &str) -> bool {
+    base.join(relative_path).exists()
+}
+
+/// Auto-detects tool names for the `check` command from project manifests.
+///
+/// # Errors
+///
+/// Returns an error if the current directory cannot be read.
+pub fn auto_detect_check_tools(
+    working_dir: Option<&std::path::Path>,
+) -> Result<Vec<String>, BoxError> {
+    let base_dir = match working_dir {
+        Some(dir) => dir.to_path_buf(),
+        None => std::env::current_dir()?,
+    };
+
+    let has_cargo = has_file(&base_dir, "Cargo.toml");
+    let has_package_json = has_file(&base_dir, "package.json");
+    let has_pyproject = has_file(&base_dir, "pyproject.toml");
+    let has_requirements = has_file(&base_dir, "requirements.txt");
+    let has_setup_py = has_file(&base_dir, "setup.py");
+    let has_go_mod = has_file(&base_dir, "go.mod");
+    let has_taplo_config = has_file(&base_dir, "taplo.toml");
+    let has_shellcheck_config = has_file(&base_dir, ".shellcheckrc");
+
+    let mut tools = Vec::new();
+
+    if has_cargo {
+        tools.push("clippy".to_string());
+        tools.push("rustfmt".to_string());
+        tools.push("taplo".to_string());
+    }
+
+    if has_package_json {
+        tools.push("eslint".to_string());
+        tools.push("prettier".to_string());
+        tools.push("biome".to_string());
+    }
+
+    if has_pyproject || has_requirements || has_setup_py {
+        tools.push("ruff".to_string());
+        tools.push("black".to_string());
+    }
+
+    if has_go_mod {
+        tools.push("gofmt".to_string());
+    }
+
+    if has_taplo_config {
+        tools.push("taplo".to_string());
+    }
+
+    if has_shellcheck_config {
+        tools.push("shellcheck".to_string());
+    }
+
+    let mut deduped = Vec::new();
+    merge_unique_strings(&mut deduped, &tools);
+
+    Ok(deduped)
+}
+
+/// Auto-detects tool names for the `fmt` command from project manifests.
+///
+/// # Errors
+///
+/// Returns an error if the current directory cannot be read.
+pub fn auto_detect_fmt_tools(
+    working_dir: Option<&std::path::Path>,
+) -> Result<Vec<String>, BoxError> {
+    let base_dir = match working_dir {
+        Some(dir) => dir.to_path_buf(),
+        None => std::env::current_dir()?,
+    };
+
+    let has_cargo = has_file(&base_dir, "Cargo.toml");
+    let has_package_json = has_file(&base_dir, "package.json");
+    let has_pyproject = has_file(&base_dir, "pyproject.toml");
+    let has_requirements = has_file(&base_dir, "requirements.txt");
+    let has_setup_py = has_file(&base_dir, "setup.py");
+    let has_go_mod = has_file(&base_dir, "go.mod");
+    let has_taplo_config = has_file(&base_dir, "taplo.toml");
+    let has_shfmt_config = has_file(&base_dir, ".shfmt.conf");
+
+    let mut tools = Vec::new();
+
+    if has_cargo {
+        tools.push("rustfmt".to_string());
+        tools.push("taplo".to_string());
+    }
+
+    if has_package_json {
+        tools.push("prettier".to_string());
+        tools.push("biome".to_string());
+    }
+
+    if has_pyproject || has_requirements || has_setup_py {
+        tools.push("ruff".to_string());
+        tools.push("black".to_string());
+    }
+
+    if has_go_mod {
+        tools.push("gofmt".to_string());
+    }
+
+    if has_taplo_config {
+        tools.push("taplo".to_string());
+    }
+
+    if has_shfmt_config {
+        tools.push("shfmt".to_string());
+    }
+
+    let mut deduped = Vec::new();
+    merge_unique_strings(&mut deduped, &tools);
+
+    Ok(deduped)
 }
 
 #[cfg(test)]
@@ -142,11 +277,92 @@ mod tests {
         let required = vec!["taplo".to_string(), "rustfmt".to_string()];
         let skip = vec!["shellcheck".to_string(), "gofmt".to_string()];
 
-        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip))
+        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None)
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt", "taplo"]);
         assert_eq!(merged.skip, vec!["gofmt", "shellcheck"]);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn build_tools_config_explicit_tools_override_skip() {
+        let dir = temp_dir("clippier-tools-skip-override");
+        let config_path = dir.join("clippier.toml");
+        std::fs::write(&config_path, "[tools]\nskip = [\"gofmt\", \"taplo\"]\n")
+            .expect("failed to write clippier.toml");
+
+        let explicit = vec!["gofmt".to_string()];
+        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit))
+            .expect("failed to build tools config");
+
+        assert_eq!(merged.skip, vec!["taplo"]);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_uses_manifest_files() {
+        let dir = temp_dir("clippier-auto-detect");
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nname=\"x\"\nversion=\"0.1.0\"\n",
+        )
+        .expect("failed to write Cargo.toml");
+        std::fs::write(dir.join("package.json"), "{}\n").expect("failed to write package.json");
+        std::fs::write(dir.join("requirements.txt"), "black\n")
+            .expect("failed to write requirements.txt");
+        std::fs::write(dir.join("go.mod"), "module example.com/x\n")
+            .expect("failed to write go.mod");
+
+        let check_tools =
+            auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
+        assert!(check_tools.contains(&"clippy".to_string()));
+        assert!(check_tools.contains(&"rustfmt".to_string()));
+        assert!(check_tools.contains(&"prettier".to_string()));
+        assert!(check_tools.contains(&"biome".to_string()));
+        assert!(check_tools.contains(&"eslint".to_string()));
+        assert!(check_tools.contains(&"ruff".to_string()));
+        assert!(check_tools.contains(&"black".to_string()));
+        assert!(check_tools.contains(&"gofmt".to_string()));
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+        assert!(fmt_tools.contains(&"rustfmt".to_string()));
+        assert!(fmt_tools.contains(&"prettier".to_string()));
+        assert!(fmt_tools.contains(&"biome".to_string()));
+        assert!(fmt_tools.contains(&"ruff".to_string()));
+        assert!(fmt_tools.contains(&"black".to_string()));
+        assert!(fmt_tools.contains(&"gofmt".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn merge_tool_names_includes_required_without_duplicates() {
+        let auto_detected = vec!["rustfmt".to_string(), "taplo".to_string()];
+        let required = vec!["taplo".to_string(), "shfmt".to_string()];
+
+        let merged = merge_tool_names(&auto_detected, &required);
+
+        assert_eq!(merged, vec!["rustfmt", "taplo", "shfmt"]);
+    }
+
+    #[test]
+    fn build_tools_config_keeps_required_and_skip_overlap() {
+        let dir = temp_dir("clippier-tools-required-skip-overlap");
+        let config_path = dir.join("clippier.toml");
+        std::fs::write(
+            &config_path,
+            "[tools]\nrequired = [\"rustfmt\"]\nskip = [\"rustfmt\"]\n",
+        )
+        .expect("failed to write clippier.toml");
+
+        let merged = build_tools_config(Some(&dir), None, None, None)
+            .expect("failed to build merged tools config");
+
+        assert_eq!(merged.required, vec!["rustfmt"]);
+        assert_eq!(merged.skip, vec!["rustfmt"]);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
