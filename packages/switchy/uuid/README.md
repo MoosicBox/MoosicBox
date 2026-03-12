@@ -16,6 +16,13 @@ This package provides UUID v4 generation with configurable behavior:
 - Compatible with standard `uuid::Uuid` type
 - Zero-cost abstraction when using only one mode
 
+## Installation
+
+```toml
+[dependencies]
+switchy_uuid = "0.1.0"
+```
+
 ## Usage
 
 ```rust
@@ -26,6 +33,18 @@ let id = new_v4();
 
 // Generate UUID as string
 let token = new_v4_string();
+```
+
+### Core `Uuid` API
+
+`new_v4()` returns `switchy_uuid::Uuid`, which provides parsing and conversion helpers:
+
+```rust
+use switchy_uuid::Uuid;
+
+let id = Uuid::new_v4();
+let parsed = Uuid::parse_str(&id.to_string()).unwrap();
+assert_eq!(id, parsed);
 ```
 
 ### Simulation Mode
