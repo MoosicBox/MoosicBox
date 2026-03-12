@@ -304,6 +304,31 @@ let interactive_view = container! {
 };
 ```
 
+## Public API
+
+### `VanillaJsTagRenderer`
+
+Primary HTML tag renderer for this crate.
+
+- Construct with `VanillaJsTagRenderer::default()`
+- Use it with `hyperchad_renderer_html::HtmlRenderer` (or `StubApp`) to render HTML that includes HyperChad vanilla JS event/action attributes
+
+### `VanillaJsRenderer`
+
+Renderer extension for publishing runtime updates to connected clients.
+
+- Construct with `VanillaJsRenderer::default()`
+- Implements `ExtendHtmlRenderer` for emitting updates:
+  - `emit_event(publisher, event_name, event_value)`
+  - `render(publisher, view)`
+  - `render_canvas(publisher, update)`
+
+### Script Constants
+
+- `SCRIPT_NAME`: Runtime script filename (`hyperchad.js` in debug builds, `hyperchad.min.js` in release builds)
+- `SCRIPT`: Embedded script source (requires `script` feature)
+- `SCRIPT_NAME_HASHED`: Content-hashed script filename (requires `hash` + `script` features)
+
 ## Available Actions
 
 The renderer supports various action types through the `ActionType` enum. Here are the commonly used actions:
