@@ -273,7 +273,7 @@ match music_api.artist(&artist_id).await {
 The `MusicApis` type provides a collection of registered music APIs:
 
 ```rust
-use moosicbox_music_api::{MusicApis, MusicApi};
+use moosicbox_music_api::{MusicApis, MusicApi, SourceToMusicApi};
 use moosicbox_music_models::ApiSource;
 
 let mut apis = MusicApis::new();
