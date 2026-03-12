@@ -39,7 +39,7 @@ The AST types support the following workflow schema. This section documents the 
 ```yaml
 version: 1.0 # Schema version (required)
 name: workflow-name # Human-readable name (required)
-triggers: { ... } # When to run the workflow (required)
+triggers: [...] # When to run the workflow (required)
 actions: { ... } # Action definitions (required)
 jobs: { ... } # Job definitions with steps (required)
 ```
@@ -48,7 +48,7 @@ jobs: { ... } # Job definitions with steps (required)
 | ---------- | ------ | -------- | -------------------------------- |
 | `version`  | string | ✓        | Schema version (currently "1.0") |
 | `name`     | string | ✓        | Workflow name                    |
-| `triggers` | object | ✓        | When to run the workflow         |
+| `triggers` | array  | ✓        | When to run the workflow         |
 | `actions`  | object | ✓        | Action definitions used in steps |
 | `jobs`     | object | ✓        | Job definitions with steps       |
 
@@ -67,13 +67,13 @@ Example:
 
 ```yaml
 triggers:
-    push:
-        branches: [main, develop]
-    pull_request:
-        types: [opened, synchronize]
-    schedule:
-        cron: '0 0 * * *'
-    manual:
+    - type: push
+      branches: [main, develop]
+    - type: pull_request
+      types: [opened, synchronize]
+    - type: schedule
+      cron: '0 0 * * *'
+    - type: manual
 ```
 
 ### Actions
