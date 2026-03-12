@@ -66,6 +66,8 @@ cargo run -p switchy_web_server_example_combined_extractors_standalone --feature
 
 ## Example Requests (if using Actix)
 
+The Actix mode in this standalone example creates route definitions but does not start an HTTP listener. Use these requests as handler input examples when integrating the routes into an Actix app.
+
 ### Search Handler (Query + RequestData)
 
 ```bash
@@ -170,7 +172,7 @@ async fn search_handler(
 
 ```rust
 async fn update_handler(
-    json: Json<UpdateData>,
+    json: Json<UserUpdate>,
     data: RequestData,
 ) -> Result<HttpResponse, Error> {
     // Use json.0 for the update data
@@ -179,16 +181,15 @@ async fn update_handler(
 }
 ```
 
-### Pagination with Context
+### Double RequestData Pattern
 
 ```rust
-async fn list_handler(
-    query: Query<PaginationQuery>,
-    data: RequestData,
+async fn double_data_handler(
+    data1: RequestData,
+    data2: RequestData,
 ) -> Result<HttpResponse, Error> {
-    // Use query.page and query.per_page for pagination
-    // Use data.path for canonical URLs
-    // Use data.query for next/prev links
+    // Both extractors read the same incoming request
+    // Compare or inspect repeated request metadata extraction
 }
 ```
 
