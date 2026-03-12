@@ -1,0 +1,17 @@
+Updated `packages/hyperchad/examples/http_events/README.md` with one fundamental accuracy fix after verifying against `src/main.rs` and `Cargo.toml`.
+
+- Replaced the feature claim `Form submission with validation feedback` with `Form submission with response fragment updates` because the example does not implement validation logic, but it does return fragment updates (`View::builder().with_primary(...).with_fragment(...)`) after POST handlers.
+
+REGRESSION_CHECK_START
+File: README.md
+Line(s): 16-21
+Proposed change: Replace the validation-feedback feature claim with a response-fragment-updates claim to match implemented behavior
+Git history checked: YES
+Revert found: NO
+Revert details: None found
+Decision: PROCEED - Current README claim was misleading; updated to reflect actual implemented feature
+REGRESSION_CHECK_END
+
+COMMIT_MESSAGE_START
+- Replaced the README claim about validation feedback with response fragment updates because the example handlers return view fragments but do not implement validation logic
+COMMIT_MESSAGE_END

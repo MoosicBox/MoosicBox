@@ -17,7 +17,7 @@ This example demonstrates the complete HTTP request lifecycle event system in Hy
 ✅ Success/error message display  
 ✅ Network error handling  
 ✅ Simulated slow/failing endpoints  
-✅ Form submission with validation feedback  
+✅ Form submission with response fragment updates  
 ✅ Multiple concurrent HTTP event handlers  
 ✅ Real-world task management UI  
 ✅ Clean HyperChad syntax with `fx` DSL
