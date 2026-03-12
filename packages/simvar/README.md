@@ -73,9 +73,9 @@ use simvar::utils;
 
 ## Feature Flags
 
-By default, all features are enabled. Individual features can be selected:
+By default, the `all` feature is enabled. Individual features can be selected:
 
-- **`all`** (default): Enable all features
+- **`all`** (default): Enable the primary simulation feature set
 - **`async`**: Async runtime support
 - **`database`**: Database simulation
 - **`fs`**: Filesystem simulation
