@@ -29,6 +29,12 @@ let mut output = vec![0i16; 960 * 2]; // 20ms @ 48kHz stereo
 let samples = decoder.decode(Some(&packet), &mut output, false)?;
 ```
 
+Critical public API notes:
+
+- Packet loss concealment entry point: pass `None` as input (`decoder.decode(None, &mut output, false)`) to decode a lost packet.
+- SILK delay reporting: call `decoder.algorithmic_delay_samples()` to get the current SILK algorithmic delay included in output.
+- `decode_float` and `reset_state` are public but not implemented yet (Phase 6) and currently panic if called.
+
 ## Features
 
 - `silk` (default): SILK decoder for speech/narrowband content
