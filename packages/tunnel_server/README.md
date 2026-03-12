@@ -104,7 +104,7 @@ curl http://localhost:8000/health
 ### WebSocket Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws');
+const ws = new WebSocket('ws://localhost:8000/ws?clientId=my-client&signature=your-signature-token');
 ws.onopen = () => console.log('Connected');
 ws.onmessage = (event) => console.log('Message:', event.data);
 ```
@@ -118,6 +118,14 @@ curl -X POST "http://localhost:8000/auth/register-client?clientId=my-client" \
 
 # Get signature token (requires client access token in Authorization header)
 curl -X POST "http://localhost:8000/auth/signature-token?clientId=my-client" \
+  -H "Authorization: Bearer your-client-access-token"
+```
+
+### Tunnel Proxy Request
+
+```bash
+# Proxy an HTTP request through the tunnel (requires client access token)
+curl -X GET "http://localhost:8000/library/albums?clientId=my-client" \
   -H "Authorization: Bearer your-client-access-token"
 ```
 
