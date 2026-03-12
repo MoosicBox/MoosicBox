@@ -20,7 +20,7 @@ switchy_web_server_cors = { path = "..." }
 
 ```rust
 use switchy_web_server_cors::Cors;
-use switchy_http_models::Method;
+use switchy_web_server_cors::switchy_http_models::Method;
 
 let cors = Cors::default()
     .allow_origin("https://example.com")
