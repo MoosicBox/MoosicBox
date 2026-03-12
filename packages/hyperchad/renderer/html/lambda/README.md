@@ -354,7 +354,7 @@ mod asset_example {
         ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
             match path.as_str() {
                 "/css/style.css" => {
-                    let css_content = include_bytes!("../assets/style.css");
+                    let css_content = b"body { margin: 0; }";
                     Ok(Some((
                         Content::Raw {
                             data: Bytes::from_static(css_content),
@@ -412,7 +412,7 @@ mod asset_example {
             StaticAssetRoute {
                 route: "/css/style.css".to_string(),
                 target: AssetPathTarget::FileContents(
-                    Bytes::from_static(include_bytes!("../assets/style.css"))
+                    Bytes::from_static(b"body { margin: 0; }")
                 ),
                 not_found_behavior: None,
             },
