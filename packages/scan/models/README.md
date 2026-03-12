@@ -35,7 +35,21 @@ Available features:
 - `api`: API models (enabled by default)
 - `openapi`: OpenAPI schema support via utoipa (enabled by default)
 
+## Usage
+
+The primary API model is `ApiScanPath` in the `api` module:
+
+```rust
+use moosicbox_scan_models::api::ApiScanPath;
+
+let scan_path = ApiScanPath {
+    path: "/music".to_string(),
+};
+```
+
 ## Dependencies
 
 - **Serde**: Serialization and deserialization
+- **log**: Logging facade
+- **moosicbox_assert**: Assertion utilities
 - **utoipa**: OpenAPI schema generation (optional, enabled with `openapi` feature)
