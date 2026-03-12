@@ -19,13 +19,17 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Default enables: reqwest + simulator + json + stream
 switchy_http = "0.1.4"
 
-# Choose your backend (default includes all features)
-switchy_http = { version = "0.1.4", features = ["reqwest"] }
-# or
-switchy_http = { version = "0.1.4", features = ["simulator"] }
+# Real network backend
+# switchy_http = { version = "0.1.4", default-features = false, features = ["reqwest", "json", "stream"] }
+
+# Simulated backend (no network requests)
+# switchy_http = { version = "0.1.4", default-features = false, features = ["simulator", "json", "stream"] }
 ```
+
+When both `reqwest` and `simulator` are enabled, `switchy_http::Client` uses the simulator backend. Enable only one backend if you need deterministic backend selection.
 
 ## Usage
 
