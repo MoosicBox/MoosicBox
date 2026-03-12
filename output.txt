@@ -1,0 +1,19 @@
+Reviewed `packages/hyperchad/examples/markdown/README.md` against:
+
+- `packages/hyperchad/examples/markdown/src/main.rs`
+- `packages/hyperchad/examples/markdown/Cargo.toml`
+- Public API in `packages/hyperchad/markdown/src/lib.rs` for `markdown_to_container`, `markdown_to_container_with_options`, and `MarkdownOptions`
+
+I did not find any fundamental inaccuracies or critical omissions that would mislead users or block usage.
+
+REGRESSION_CHECK_START
+File: README.md
+Line(s): N/A
+Proposed change: None; no fundamental error or critical omission identified
+Git history checked: N/A (no edits proposed)
+Revert found: N/A
+Revert details: None found
+Decision: PROCEED with no changes - README is fundamentally accurate and complete for this example
+REGRESSION_CHECK_END
+
+No changes required - documentation is accurate
