@@ -17,7 +17,7 @@ The HTTP Models package provides:
 ### HTTP Methods
 
 - **Complete Method Set**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, CONNECT, TRACE
-- **Case-insensitive Parsing**: Parse from various string formats
+- **String Parsing**: Parse uppercase, lowercase, and title-case method strings
 - **Display Implementation**: Convert methods back to strings
 - **Serde Integration**: JSON serialization/deserialization
 
@@ -62,7 +62,7 @@ use std::str::FromStr;
 let get = Method::Get;
 let post = Method::Post;
 
-// Parse from strings (case-insensitive)
+// Parse from strings (supports uppercase/lowercase/title-case)
 let method = Method::from_str("GET")?;
 let method = Method::from_str("post")?;
 let method = Method::from_str("Put")?;
