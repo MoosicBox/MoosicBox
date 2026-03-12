@@ -29,7 +29,7 @@ use moosicbox_assert::{assert, die};
 
 fn main() {
     // Set environment variable to enable assertions
-    std::env::set_var("ENABLE_ASSERT", "1");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 
     let value = 42;
 
@@ -64,7 +64,7 @@ fn validate_input(value: i32) -> Result<(), MyError> {
 }
 
 fn main() {
-    std::env::set_var("ENABLE_ASSERT", "1");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 
     match validate_input(-5) {
         Ok(()) => println!("Input is valid"),
@@ -91,7 +91,7 @@ fn main() {
 
     // With ENABLE_ASSERT=1: exits on failure
     // With ENABLE_ASSERT=0: logs error and continues
-    std::env::set_var("ENABLE_ASSERT", "0");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "0"); }
 
     process_data(&[]);  // Will log error but not exit
 }
@@ -111,7 +111,7 @@ fn critical_operation(input: Option<i32>) {
 }
 
 fn main() {
-    std::env::set_var("ENABLE_ASSERT", "1");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 
     critical_operation(Some(42));  // OK
     critical_operation(Some(-1));  // Panics with colored output
@@ -131,7 +131,7 @@ fn experimental_feature(enabled: bool) {
 }
 
 fn main() {
-    std::env::set_var("ENABLE_ASSERT", "1");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 
     experimental_feature(true);   // OK
     experimental_feature(false);  // Calls unimplemented!() with colors
@@ -153,11 +153,11 @@ fn debug_mode_example() {
 
 fn main() {
     // Disable assertions for production
-    std::env::set_var("ENABLE_ASSERT", "0");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "0"); }
     debug_mode_example();  // Assertions are no-ops
 
     // Enable for debugging
-    std::env::set_var("ENABLE_ASSERT", "1");
+    unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
     debug_mode_example();  // Assertions are active
 }
 ```
