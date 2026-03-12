@@ -271,12 +271,12 @@ fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
             match req.path.as_str() {
                 "/css/style.css" => Some(AssetPathTarget::File(PathBuf::from("assets/style.css"))),
                 "/js/app.js" => Some(AssetPathTarget::File(PathBuf::from("assets/app.js"))),
-                path if path.starts_with("/images/") => {
-                    Some(AssetPathTarget::Directory(PathBuf::from("assets/images")))
-                }
-                path if path.starts_with("/uploads/") => {
-                    Some(AssetPathTarget::Directory(PathBuf::from("uploads")))
-                }
+                path if path.starts_with("/images/") => path
+                    .strip_prefix("/images/")
+                    .map(|relative| AssetPathTarget::File(PathBuf::from("assets/images").join(relative))),
+                path if path.starts_with("/uploads/") => path
+                    .strip_prefix("/uploads/")
+                    .map(|relative| AssetPathTarget::File(PathBuf::from("uploads").join(relative))),
                 _ => None,
             }
         })
