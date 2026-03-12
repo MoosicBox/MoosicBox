@@ -30,6 +30,22 @@ Currently, this package provides the complete AST (Abstract Syntax Tree) types f
 - 🔮 **Job Dependencies** - Define complex workflows with job orchestration
 - 🔮 **Step Outputs** - Pass data between steps and jobs
 
+## Installation
+
+Add `gpipe` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+gpipe = "0.1.0"
+```
+
+The `ast` feature is enabled by default. If you disable default features, enable `ast` explicitly:
+
+```toml
+[dependencies]
+gpipe = { version = "0.1.0", default-features = false, features = ["ast"] }
+```
+
 ## Workflow Schema Specification
 
 The AST types support the following workflow schema. This section documents the intended workflow format.
@@ -243,6 +259,8 @@ jobs:
 
 GitHub Actions compatible expressions using `${{ }}` syntax:
 
+When using the Rust AST directly, `if` conditions are represented by the `Expression` enum (`gpipe::ast::Expression`) rather than raw `${{ ... }}` strings.
+
 #### Contexts Available:
 
 - `env` - Environment variables
@@ -321,6 +339,10 @@ gpipe validate workflow.yml
 ## Rust API
 
 This is an umbrella crate that re-exports the core AST types via the `ast` module:
+
+- Primary entry point: `gpipe::ast` (re-export of `gpipe_ast`)
+- Core types: `Workflow`, `Trigger`, `Job`, `Step`, `ActionDef`, `Expression`
+- YAML support: `gpipe::ast::serde_yaml`
 
 ```rust
 use gpipe::ast::*;
