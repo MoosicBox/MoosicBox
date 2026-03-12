@@ -1,0 +1,11 @@
+Reviewed `packages/hyperchad/js_bundler/README.md` against:
+- `packages/hyperchad/js_bundler/Cargo.toml`
+- `packages/hyperchad/js_bundler/src/lib.rs`
+- `packages/hyperchad/js_bundler/src/bundler.rs`
+- `packages/hyperchad/js_bundler/src/esbuild.rs`
+- `packages/hyperchad/js_bundler/src/swc.rs`
+- `packages/hyperchad/js_bundler/src/node.rs`
+
+I did not find any fundamental inaccuracies or critical public-API omissions under your constraints, so I made no edits.
+
+No changes required - documentation is accurate
