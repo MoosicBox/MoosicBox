@@ -54,16 +54,10 @@ cargo build --release --package moosicbox_audio_zone
 moosicbox_audio_zone = { path = "../audio_zone" }
 
 # Optional: Enable API endpoints
-moosicbox_audio_zone = {
-    path = "../audio_zone",
-    features = ["api"]
-}
+# moosicbox_audio_zone = { path = "../audio_zone", default-features = false, features = ["api"] }
 
 # Optional: Enable event system
-moosicbox_audio_zone = {
-    path = "../audio_zone",
-    features = ["events"]
-}
+# moosicbox_audio_zone = { path = "../audio_zone", default-features = false, features = ["events"] }
 ```
 
 ## Usage
