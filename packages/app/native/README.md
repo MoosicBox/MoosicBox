@@ -72,6 +72,17 @@ Or using cargo:
 cargo run --bin moosicbox_app_native --features "default"
 ```
 
+### Library Integration API
+
+If you embed this crate in another Rust application, the primary public entry points are:
+
+- `moosicbox_app_native::init()` - Initializes and returns the application router with all routes registered
+- `moosicbox_app_native::init_app_state(state).await` - Initializes app state persistence and event listeners
+- `moosicbox_app_native::actions::handle_action(action, value).await` - Dispatches UI actions (playback, queue, search, filtering)
+- Global statics: `ROUTER`, `RENDERER`, `STATE_LOCK`, `STATE`, and `PROFILE`
+
+The `visualization` module is also public when the `_canvas` feature is enabled.
+
 ### Connection Configuration
 
 Server connections are configured through the in-app settings interface:
