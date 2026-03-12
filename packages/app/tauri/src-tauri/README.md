@@ -1,12 +1,12 @@
 # MoosicBox Tauri Application
 
-Native desktop application for MoosicBox music streaming platform built with Tauri.
+Tauri application for the MoosicBox music streaming platform.
 
 ## Overview
 
 The MoosicBox Tauri Application provides:
 
-- **Native Desktop App**: Cross-platform desktop application for Windows, macOS, and Linux
+- **Native App**: Cross-platform application for desktop platforms, with Tauri mobile entry point support
 - **Web Integration**: Embedded web view with native API access
 - **Music Streaming**: Full MoosicBox music streaming functionality
 - **Player Integration**: Native media player controls and system integration
@@ -97,7 +97,7 @@ cargo tauri dev
 
 ## Usage
 
-This is a Tauri desktop application. The main entry point is:
+This is a Tauri application. The main entry point is:
 
 ```rust
 fn main() {
@@ -109,12 +109,24 @@ The application provides the following Tauri commands that can be invoked from t
 
 - `on_startup()` - Called when the application starts
 - `show_main_window()` - Show the main application window (desktop only)
-- `set_state(state)` - Update application state (connection settings, API URLs, etc.)
-- `set_playback_quality(quality)` - Set audio playback quality
-- `propagate_ws_message(message)` - Send WebSocket messages to the backend
-- `api_proxy_get(url, headers)` - Proxy GET requests to MoosicBox API
-- `api_proxy_post(url, body, headers)` - Proxy POST requests to MoosicBox API
+- `set_state(state: TauriUpdateAppState)` - Update application state (connection settings, credentials, profile, and playback target/session)
+- `set_playback_quality(quality: PlaybackQuality)` - Set audio playback quality for active players
+- `propagate_ws_message(message: InboundPayload)` - Send WebSocket messages to the backend queue
+- `api_proxy_get(url: String, headers: Option<serde_json::Value>)` - Proxy GET requests to the configured MoosicBox API
+- `api_proxy_post(url: String, body: Option<serde_json::Value>, headers: Option<serde_json::Value>)` - Proxy POST requests to the configured MoosicBox API
 - `fetch_moosicbox_servers()` - Fetch discovered MoosicBox servers via mDNS
+
+`TauriUpdateAppState` fields:
+
+- `connection_id`
+- `connection_name`
+- `api_url`
+- `client_id`
+- `signature_token`
+- `api_token`
+- `profile`
+- `playback_target`
+- `current_session_id`
 
 ## Building and Distribution
 
@@ -220,16 +232,21 @@ cargo tauri build --bundles rpm  # Linux RPM
 
 ### Core Dependencies
 
-- **Tauri**: Desktop application framework
-- **MoosicBox Core**: Music streaming and player functionality
-- **Tokio**: Async runtime
-- **Serde**: Serialization framework
+- **tauri**: Application framework and command bridge
+- **app-tauri-plugin-player**: Native media control plugin integration
+- **moosicbox_app_state**: Shared state and API proxy operations
+- **moosicbox_player**: Playback management
+- **moosicbox_session**: Session models and updates
+- **moosicbox_ws**: WebSocket payload models and communication
+- **moosicbox_mdns**: mDNS service discovery
+- **serde**: Serialization framework
 
 ### Optional Dependencies
 
-- **HyperChad**: Native UI components (with `moosicbox-app-native`)
-- **HTTP Server**: Built-in HTTP server for web interface
-- **WebSocket**: Real-time communication
+- **moosicbox_app_tauri_bundled**: Bundled service runtime (with `bundled`)
+- **moosicbox_app_client**: Client integration (with `client`)
+- **hyperchad**, **moosicbox_app_native**, **moosicbox_app_native_image**, **moosicbox_app_native_ui**: Native UI stack (with `moosicbox-app-native`)
+- **tauri-plugin-log**: Tauri log plugin support (with `tauri-logger`)
 
 ## Platform Support
 
@@ -238,6 +255,7 @@ cargo tauri build --bundles rpm  # Linux RPM
 - **Windows**: Windows 10+ (x86_64, aarch64)
 - **macOS**: macOS 10.15+ (x86_64, aarch64)
 - **Linux**: Ubuntu 18.04+, Debian 10+, Arch Linux, Fedora 31+
+- **Android**: Supported via Tauri mobile entry point
 
 ### System Requirements
 
