@@ -37,7 +37,7 @@ Implement the `ActixResponseProcessor` trait to handle HTTP request/response con
 
 ```rust
 use hyperchad_renderer_html_actix::{ActixApp, ActixResponseProcessor};
-use hyperchad_renderer::{RendererEvent, Content};
+use hyperchad_renderer::{Content, Handle, RendererEvent, ToRenderRunner};
 use actix_web::{HttpRequest, HttpResponse};
 use bytes::Bytes;
 use std::sync::Arc;
@@ -73,7 +73,9 @@ fn main() {
     let (tx, rx) = flume::unbounded::<RendererEvent>();
     let processor = MyProcessor;
     let app = ActixApp::new(processor, rx);
-    // Use app.to_runner() to create a RenderRunner
+    let handle = Handle::current();
+    let mut runner = app.to_runner(handle).expect("failed to create runner");
+    runner.run().expect("failed to run renderer");
 }
 ```
 
@@ -99,6 +101,8 @@ Actions are posted to `/$action` and forwarded through the action channel.
 ### Static Assets
 
 When the `assets` feature is enabled, configure static asset routes via the `static_asset_routes` field on `ActixApp`.
+
+Use `with_asset_not_found_behavior(...)` or `set_asset_not_found_behavior(...)` to control behavior for missing files (`NotFound`, `Fallthrough`, or `InternalServerError`).
 
 ## License
 
