@@ -66,6 +66,14 @@ Add this to your `Cargo.toml`:
 moosicbox_app_native_ui = { path = "../app/native/ui" }
 ```
 
+### Cargo Features
+
+- `default` enables `all-formats`
+- `all-formats` enables `all-os-formats` and `mp3`
+- `all-os-formats` enables `aac`, `flac`, and `opus`
+- Individual format features: `aac`, `flac`, `mp3`, `opus`
+- `fail-on-warnings` forwards strict warning settings to this crate and dependencies
+
 ## Usage
 
 ### Basic UI Components
@@ -95,6 +103,29 @@ use moosicbox_app_native_ui::player;
 
 // Create player interface
 let player_ui = player(&state);
+```
+
+### State and Session Updates
+
+```rust
+use moosicbox_app_native_ui::{page, session_updated};
+use moosicbox_app_native_ui::state::State;
+use moosicbox_session_models::{ApiSession, ApiUpdateSession};
+use hyperchad::template::container;
+
+let state = State::default();
+
+let content = container! {
+    div { "Page content here" }
+};
+
+// Render full page
+let full_page = page(&state, &content);
+
+// Render partial updates when a session changes
+fn render_session_partials(state: &State, update: &ApiUpdateSession, session: &ApiSession) {
+    let partials = session_updated(state, update, session);
+}
 ```
 
 ### Action Handling
@@ -182,5 +213,9 @@ The package is organized into the following modules:
 - **MoosicBox Session Models**: Session management data structures
 - **switchy_env**: Environment variable utilities with std support
 - **bytesize**: Byte size formatting
+- **log**: Logging for UI update and rendering paths
 - **rust_decimal**: Decimal number handling
+- **rust_decimal_macros**: Decimal literals used by formatting helpers
 - **serde**: Serialization for actions and state
+- **serde_json**: JSON serialization/deserialization for actions and state
+- **strum**: Enum utilities used by exported UI formatting and labels
