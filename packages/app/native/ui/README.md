@@ -72,7 +72,10 @@ moosicbox_app_native_ui = { path = "../app/native/ui" }
 
 ```rust
 use moosicbox_app_native_ui::{page, sidebar_navigation, footer};
+use moosicbox_app_native_ui::state::State;
 use hyperchad::template::container;
+
+let state = State::default();
 
 // Create sidebar navigation
 let nav = sidebar_navigation();
@@ -95,6 +98,17 @@ use moosicbox_app_native_ui::player;
 
 // Create player interface
 let player_ui = player(&state);
+```
+
+### Session Update Rendering
+
+```rust
+use moosicbox_app_native_ui::{session_updated, state::State};
+use moosicbox_session_models::{ApiSession, ApiUpdateSession};
+
+fn render_partial_update(state: &State, update: &ApiUpdateSession, session: &ApiSession) {
+    let partials = session_updated(state, update, session);
+}
 ```
 
 ### Action Handling
@@ -184,3 +198,13 @@ The package is organized into the following modules:
 - **bytesize**: Byte size formatting
 - **rust_decimal**: Decimal number handling
 - **serde**: Serialization for actions and state
+
+## Feature Flags
+
+- `all-formats` (default): Enables all supported format features (`all-os-formats` + `mp3`)
+- `all-os-formats`: Enables `aac`, `flac`, and `opus`
+- `aac`: Enables AAC format support
+- `flac`: Enables FLAC format support
+- `mp3`: Enables MP3 format support
+- `opus`: Enables Opus format support
+- `fail-on-warnings`: Enables strict warning enforcement across this crate and dependencies
