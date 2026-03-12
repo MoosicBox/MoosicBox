@@ -33,6 +33,10 @@ Format support is provided through Symphonia and optional feature flags:
 ```toml
 [dependencies]
 moosicbox_audio_decoder = { path = "../audio_decoder" }
+```
+
+```toml
+[dependencies]
 
 # Optional: Enable specific format support
 moosicbox_audio_decoder = {
@@ -120,6 +124,22 @@ async fn decode_async() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     Ok(())
+}
+```
+
+### Unsync Channel-Based Decoding
+
+For pull-based decoding (decoded buffers received over a channel), use the `unsync` module:
+
+```rust
+use moosicbox_audio_decoder::unsync;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::formats::FormatReader;
+
+fn decode_unsync(
+    reader: Box<dyn FormatReader>,
+) -> Result<flume::Receiver<symphonia::core::audio::AudioBuffer<f32>>, moosicbox_audio_decoder::DecodeError> {
+    unsync::decode(reader, None, None, DecoderOptions { verify: false })
 }
 ```
 
