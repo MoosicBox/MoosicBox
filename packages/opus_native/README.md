@@ -2,6 +2,20 @@
 
 Pure Rust implementation of the Opus audio decoder (RFC 6716).
 
+## Installation
+
+```toml
+[dependencies]
+moosicbox_opus_native = "0.1.0"
+```
+
+Enable `resampling` only if you need SILK sample-rate conversion:
+
+```toml
+[dependencies]
+moosicbox_opus_native = { version = "0.1.0", features = ["resampling"] }
+```
+
 ## Usage
 
 ```rust
