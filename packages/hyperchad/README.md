@@ -341,3 +341,16 @@ HyperChad is built on these core concepts:
 - [`hyperchad_actions`] - Action system for events
 - [`hyperchad_color`] - Color management
 - [`hyperchad_transformer`] - Container and element types
+
+[`hyperchad_actions`]: ./actions
+[`hyperchad_app`]: ./app
+[`hyperchad_color`]: ./color
+[`hyperchad_renderer`]: ./renderer
+[`hyperchad_renderer_egui`]: ./renderer/egui
+[`hyperchad_renderer_fltk`]: ./renderer/fltk
+[`hyperchad_renderer_html`]: ./renderer/html
+[`hyperchad_renderer_vanilla_js`]: ./renderer/vanilla_js
+[`hyperchad_router`]: ./router
+[`hyperchad_state`]: ./state
+[`hyperchad_template`]: ./template
+[`hyperchad_transformer`]: ./transformer
