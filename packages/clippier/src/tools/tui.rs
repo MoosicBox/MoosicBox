@@ -102,6 +102,7 @@ struct PaneState {
     status: PaneStatus,
     scroll_offset: usize,
     ansi_state: AnsiStyleState,
+    last_overwrite_at: Option<Instant>,
 }
 
 impl PaneState {
@@ -112,11 +113,15 @@ impl PaneState {
             status: PaneStatus::Pending,
             scroll_offset: 0,
             ansi_state: AnsiStyleState::default(),
+            last_overwrite_at: None,
         }
     }
 
     fn push_line(&mut self, line: String, overwrite: bool) {
         let parsed = parse_ansi_line(&line, &mut self.ansi_state);
+        if overwrite {
+            self.last_overwrite_at = Some(Instant::now());
+        }
         if overwrite {
             if let Some(last) = self.lines.back_mut() {
                 *last = parsed;
@@ -362,6 +367,7 @@ fn render(
     start_time: Instant,
     focused_index: usize,
 ) {
+    let now = Instant::now();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(1)])
@@ -387,7 +393,7 @@ fn render(
     .block(Block::default().borders(Borders::ALL).title("Status"));
     frame.render_widget(header, chunks[0]);
 
-    render_panes(frame, chunks[1], panes, tools, focused_index);
+    render_panes(frame, chunks[1], panes, tools, focused_index, now);
 }
 
 fn render_panes(
@@ -396,6 +402,7 @@ fn render_panes(
     panes: &BTreeMap<String, PaneState>,
     tools: &[(String, String)],
     focused_index: usize,
+    now: Instant,
 ) {
     if tools.is_empty() {
         return;
@@ -468,16 +475,22 @@ fn render_panes(
                 } else {
                     "scroll"
                 };
+                let updating_label = if pane_is_updating(pane.last_overwrite_at, now) {
+                    " | updating"
+                } else {
+                    ""
+                };
 
                 let paragraph = Paragraph::new(content).block(
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(border_style)
                         .title(format!(
-                            "{} [{} | {}]{}",
+                            "{} [{} | {}{}]{}",
                             pane.display_name,
                             status_label(pane.status),
                             scroll_label,
+                            updating_label,
                             if is_focused { " *" } else { "" }
                         )),
                 );
@@ -545,7 +558,15 @@ fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line<'static> {
                 }
                 segment_start = index;
             }
+            b'(' | b')' | b'*' | b'+' | b'-' | b'.' | b'/' => {
+                index += 1;
+                if index < bytes.len() {
+                    index += 1;
+                }
+                segment_start = index;
+            }
             _ => {
+                index += 1;
                 segment_start = index;
             }
         }
@@ -621,6 +642,12 @@ fn parse_extended_color(params: &[i32], index: usize) -> Option<(Color, usize)> 
     }
 }
 
+fn pane_is_updating(last_overwrite_at: Option<Instant>, now: Instant) -> bool {
+    last_overwrite_at
+        .map(|instant| now.saturating_duration_since(instant) <= Duration::from_secs(1))
+        .unwrap_or(false)
+}
+
 const fn status_label(status: PaneStatus) -> &'static str {
     match status {
         PaneStatus::Pending => "pending",
@@ -666,6 +693,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_ansi_line_ignores_charset_escape_sequence() {
+        let mut state = AnsiStyleState::default();
+        let line = parse_ansi_line("\u{1b}(Bhello", &mut state);
+
+        assert_eq!(line.spans.len(), 1);
+        assert_eq!(line.spans[0].content.as_ref(), "hello");
+    }
+
+    #[test]
     fn pane_push_line_overwrite_replaces_last_line() {
         let mut pane = PaneState::new("demo".to_string());
         pane.push_line("first".to_string(), false);
@@ -673,5 +709,12 @@ mod tests {
 
         assert_eq!(pane.lines.len(), 1);
         assert_eq!(pane.lines[0].spans[0].content.as_ref(), "second");
+    }
+
+    #[test]
+    fn pane_is_updating_true_with_recent_overwrite() {
+        let now = Instant::now();
+        assert!(pane_is_updating(Some(now), now));
+        assert!(!pane_is_updating(None, now));
     }
 }

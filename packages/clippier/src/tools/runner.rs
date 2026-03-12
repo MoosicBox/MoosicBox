@@ -568,6 +568,7 @@ impl<'a> ToolRunner<'a> {
         let mut buffer = [0_u8; 4096];
         let mut line = Vec::new();
         let mut overwrite_next = false;
+        let mut pending_cr = false;
 
         loop {
             let read_count = match reader.read(&mut buffer) {
@@ -581,11 +582,24 @@ impl<'a> ToolRunner<'a> {
             }
 
             for byte in &buffer[..read_count] {
+                if pending_cr {
+                    if *byte == b'\n' {
+                        Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, false);
+                        line.clear();
+                        overwrite_next = false;
+                        pending_cr = false;
+                        continue;
+                    }
+
+                    Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
+                    line.clear();
+                    overwrite_next = true;
+                    pending_cr = false;
+                }
+
                 match *byte {
                     b'\r' => {
-                        Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
-                        line.clear();
-                        overwrite_next = true;
+                        pending_cr = true;
                     }
                     b'\n' => {
                         Self::emit_tool_line_event(
@@ -603,6 +617,12 @@ impl<'a> ToolRunner<'a> {
                     }
                 }
             }
+        }
+
+        if pending_cr {
+            Self::emit_tool_line_event(&tx, &tool_name, is_stderr, &line, true);
+            line.clear();
+            overwrite_next = true;
         }
 
         if !line.is_empty() {
@@ -1096,6 +1116,8 @@ pub fn results_to_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "tools-tui")]
+    use std::io::Cursor;
 
     #[test]
     fn effective_color_mode_auto_uses_terminal_presence() {
@@ -1158,5 +1180,81 @@ mod tests {
             envs.get("CARGO_TERM_COLOR"),
             Some(&Some("never".to_string()))
         );
+    }
+
+    #[cfg(feature = "tools-tui")]
+    #[test]
+    fn pump_stream_events_treats_crlf_as_single_newline() {
+        let (tx, rx) = mpsc::channel();
+        let output = Arc::new(Mutex::new(Vec::new()));
+
+        ToolRunner::pump_stream_events(
+            Cursor::new(b"hello\r\nworld\n".to_vec()),
+            tx,
+            "tool".to_string(),
+            false,
+            output,
+        );
+
+        let events: Vec<ToolEvent> = rx.try_iter().collect();
+        assert_eq!(events.len(), 2);
+
+        match &events[0] {
+            ToolEvent::StdoutLine {
+                line, overwrite, ..
+            } => {
+                assert_eq!(line, "hello");
+                assert!(!overwrite);
+            }
+            _ => panic!("unexpected event kind"),
+        }
+
+        match &events[1] {
+            ToolEvent::StdoutLine {
+                line, overwrite, ..
+            } => {
+                assert_eq!(line, "world");
+                assert!(!overwrite);
+            }
+            _ => panic!("unexpected event kind"),
+        }
+    }
+
+    #[cfg(feature = "tools-tui")]
+    #[test]
+    fn pump_stream_events_marks_overwrite_on_carriage_return_updates() {
+        let (tx, rx) = mpsc::channel();
+        let output = Arc::new(Mutex::new(Vec::new()));
+
+        ToolRunner::pump_stream_events(
+            Cursor::new(b"a\rb\n".to_vec()),
+            tx,
+            "tool".to_string(),
+            false,
+            output,
+        );
+
+        let events: Vec<ToolEvent> = rx.try_iter().collect();
+        assert_eq!(events.len(), 2);
+
+        match &events[0] {
+            ToolEvent::StdoutLine {
+                line, overwrite, ..
+            } => {
+                assert_eq!(line, "a");
+                assert!(*overwrite);
+            }
+            _ => panic!("unexpected event kind"),
+        }
+
+        match &events[1] {
+            ToolEvent::StdoutLine {
+                line, overwrite, ..
+            } => {
+                assert_eq!(line, "b");
+                assert!(*overwrite);
+            }
+            _ => panic!("unexpected event kind"),
+        }
     }
 }

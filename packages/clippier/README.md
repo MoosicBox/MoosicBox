@@ -1057,6 +1057,7 @@ TUI behavior for tool output:
 - Use `--no-tui` to disable live panes and keep non-interactive streaming behavior
 - Pane output renders ANSI SGR colors/styles from tool output directly in the TUI
 - Carriage-return updates (progress/spinner style output) are rendered as in-place line updates in focused panes
+- Pane titles show `updating` while recent carriage-return updates are active
 - Press `q` or `Ctrl-C` while TUI is visible to close only the TUI view
 - Use `Tab`/`Shift+Tab` (or left/right arrows) to switch focused pane; use `j`/`k`, up/down, page up/down, home/end to scroll focused output
 - After the TUI view closes, pressing `Ctrl-C` cancels running tools and exits clippier
