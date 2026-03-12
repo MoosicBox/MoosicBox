@@ -19,14 +19,14 @@ A comprehensive schema migration system for the Switchy database ecosystem, prov
 
 The migration runner and CLI support multiple database backends with a mostly shared feature set.
 
-| Capability | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
-| ---------- | ------ | ---------- | ----- | ------ | ------------- |
-| CLI URL support (`switchy-migrate -d ...`) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Migration create/status/migrate/rollback/validate commands | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Runner core flows (apply/list/rollback/checksum/dirty-state) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Savepoint API support in backend | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Full cascade/drop-column dependency behavior parity | ✅ | ✅ | ✅ | ⚠️ | ✅ |
-| Built-in test coverage in this crate (default CI path) | ✅ | ⚠️ | ⚠️ | ✅ | ✅ |
+| Capability                                                   | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
+| ------------------------------------------------------------ | ------ | ---------- | ----- | ------ | ------------- |
+| CLI URL support (`switchy-migrate -d ...`)                   | ✅     | ✅         | ✅    | ✅     | ✅            |
+| Migration create/status/migrate/rollback/validate commands   | ✅     | ✅         | ✅    | ✅     | ✅            |
+| Runner core flows (apply/list/rollback/checksum/dirty-state) | ✅     | ✅         | ✅    | ✅     | ✅            |
+| Savepoint API support in backend                             | ✅     | ✅         | ✅    | ❌     | ✅            |
+| Full cascade/drop-column dependency behavior parity          | ✅     | ✅         | ✅    | ⚠️     | ✅            |
+| Built-in test coverage in this crate (default CI path)       | ✅     | ⚠️         | ⚠️    | ✅     | ✅            |
 
 Notes:
 
@@ -192,6 +192,12 @@ switchy-migrate status -d DATABASE_URL
 
 # Rollback migrations
 switchy-migrate rollback -d DATABASE_URL --steps 1
+
+# Validate migration checksums
+switchy-migrate validate -d DATABASE_URL
+
+# Exit with error if checksums mismatch
+switchy-migrate validate --strict -d DATABASE_URL
 ```
 
 #### Recovery Commands
