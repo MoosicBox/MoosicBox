@@ -120,6 +120,22 @@ HttpServer::new(|| {
 })
 ```
 
+### API Endpoints
+
+The `bind_services` entry point registers these endpoints:
+
+- `GET /artists` - Query artists (`sources`, `sort`, `name`, `search`)
+- `GET /albums` - Query paginated albums (`source`, `albumType`, `sources`, `sort`, `name`, `artist`, `search`, `artistId`, `apiSource`, `offset`, `limit`)
+- `GET /tracks` - Fetch tracks by IDs (`trackIds`, supports comma-separated values and ranges)
+- `GET /album/tracks` - Fetch tracks for one album (`albumId`)
+- `GET /album/versions` - Fetch available album versions (`albumId`, optional `source`)
+- `GET /artist/albums` - Fetch albums for one artist (`artistId`)
+- `GET /artist` - Fetch one artist (`artistId` or `albumId`, optional `source`)
+- `GET /album` - Fetch one album (`albumId`, optional `source`)
+- `POST /album` - Add album to library (`albumId`, `source`)
+- `DELETE /album` - Remove album from library (`albumId`, `source`)
+- `POST /album/re-favorite` - Re-favorite album in library (`albumId`, `source`)
+
 ## Modules
 
 - **`models`** - Re-exported menu data models from `moosicbox_menu_models`
