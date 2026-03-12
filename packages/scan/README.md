@@ -163,6 +163,17 @@ async fn cancel_scan() {
 
 When the `api` feature is enabled, the following endpoints are available:
 
+### Service Binding
+
+Use `moosicbox_scan::api::bind_services` to register all scan endpoints on an Actix scope:
+
+```rust
+use actix_web::web;
+use moosicbox_scan::api::bind_services;
+
+let scan_scope = bind_services(web::scope("/scan"));
+```
+
 - `POST /run-scan?origins=Local,Tidal` - Run a scan synchronously
 - `POST /start-scan?origins=Local` - Start a scan asynchronously
 - `GET /scan-origins` - Get enabled scan origins (requires `local` feature)
