@@ -4,11 +4,11 @@ A binary size analysis tool for Rust workspace packages that helps track and com
 
 ## Overview
 
-The MoosicBox Bloaty package provides binary size analysis for Rust packages in a workspace. It measures the size impact of individual features by building packages with different feature combinations and comparing the resulting binary and library sizes.
+The MoosicBox Bloaty package provides binary size analysis for Rust packages in a workspace. It measures the size impact of individual features by building packages with different feature combinations and comparing the resulting library sizes.
 
 ## Features
 
-- **Feature size analysis**: Measures the size impact of each feature on both rlib and binary targets
+- **Feature size analysis**: Measures the size impact of each feature on rlib targets
 - **Multiple output formats**: Supports text, JSON, and JSONL report formats
 - **Package filtering**: Select specific packages using patterns or explicit lists
 - **Feature filtering**: Skip features using patterns or explicit lists
@@ -201,7 +201,7 @@ Optional external tools:
 2. **Feature Extraction**: Identifies available features from each package's `Cargo.toml`
 3. **Baseline Build**: Builds each target with no features enabled and measures size
 4. **Feature Analysis**: Builds each target with individual features and compares sizes
-5. **Binary Analysis**: For binary targets, measures both library and executable sizes
+5. **Binary Tool Execution**: For binary, cdylib, and dylib targets, runs selected external cargo analysis tools
 6. **Report Generation**: Outputs results in requested formats
 
 ## Contributing
