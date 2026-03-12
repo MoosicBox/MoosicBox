@@ -78,7 +78,7 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn valid_css_identifiers(css_id: CssIdentifierString) {
-        // CSS identifiers are non-empty alphanumeric strings
+        // CSS identifiers are non-empty and may include hyphens/underscores
         prop_assert!(!css_id.0.is_empty());
     }
 }
