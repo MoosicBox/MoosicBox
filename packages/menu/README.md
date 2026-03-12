@@ -5,7 +5,7 @@ A menu library providing menu-related functionality and models for browsing arti
 ## Features
 
 - **Menu Models**: Re-exports menu data models and structures
-- **Library Integration**: Functions for fetching and filtering artists, albums, and tracks from the library
+- **Library Integration**: Functions for fetching and filtering artists and albums from the library
 - **Album Management**: Add, remove, and re-favorite albums from various API sources
 - **API Endpoints**: Optional REST API endpoints for menu operations (requires `api` feature)
 - **OpenAPI Support**: Optional OpenAPI documentation generation (requires `openapi` feature)
@@ -64,6 +64,32 @@ use moosicbox_music_api::models::AlbumsRequest;
 let albums = get_albums_from_source(&db, &*api, request).await?;
 ```
 
+Get a single artist or album:
+
+```rust
+use moosicbox_menu::library::{get_album_from_source, get_artist};
+use moosicbox_music_models::ApiSource;
+
+let artist = get_artist(&*api, Some(&artist_id), None).await?;
+let album = get_album_from_source(&db, profile, &album_id, &ApiSource::library()).await?;
+```
+
+Get album versions from a source:
+
+```rust
+use moosicbox_menu::library::albums::get_album_versions_from_source;
+use moosicbox_music_models::ApiSource;
+
+let versions = get_album_versions_from_source(
+    &db,
+    &library_api,
+    profile,
+    &album_id,
+    ApiSource::library(),
+)
+.await?;
+```
+
 Album management:
 
 ```rust
@@ -99,7 +125,7 @@ HttpServer::new(|| {
 - **`models`** - Re-exported menu data models from `moosicbox_menu_models`
 - **`library`** - Library-specific menu functionality
     - `library::artists` - Functions for fetching, filtering, and sorting artists
-    - `library::albums` - Functions for managing albums (get, add, remove, refavorite)
+    - `library::albums` - Functions for album retrieval, version lookup, and management (get, add, remove, refavorite)
 - **`api`** - Optional REST API endpoints (requires `api` feature)
     - Provides endpoints for artists, albums, tracks, and album management operations
 
