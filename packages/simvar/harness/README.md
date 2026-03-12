@@ -174,13 +174,13 @@ sim.client("load_client", async {
 
 ## Environment Configuration
 
-### Runtime Variables
+### Environment Variables
 
 - `SIMULATOR_RUNS`: Number of simulation runs (default: 1)
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
 - `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
 - `SIMULATOR_SEED`: Fixed seed for deterministic runs
-- `NO_TUI`: Disable TUI interface when available
+- `NO_TUI`: Disable TUI interface when set at compile time
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 
 ### Example Configuration
@@ -190,7 +190,7 @@ sim.client("load_client", async {
 export SIMULATOR_RUNS=10
 export SIMULATOR_MAX_PARALLEL=4
 
-# Disable TUI interface
+# Disable TUI interface (set before compilation)
 export NO_TUI=1
 
 cargo test simulation_test
@@ -214,7 +214,7 @@ When built with the `tui` feature (enabled by default), provides:
 - Error display and debugging
 - Interactive simulation monitoring
 
-Disable with `NO_TUI` environment variable or by excluding default features.
+Disable by excluding default features, or by setting `NO_TUI` at compile time.
 
 ### Optional Features
 
