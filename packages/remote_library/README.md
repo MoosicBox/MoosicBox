@@ -5,7 +5,7 @@ Remote music library client for the MoosicBox ecosystem, providing HTTP-based ac
 ## Features
 
 - **Remote Server Access**: HTTP client for accessing remote MoosicBox servers
-- **Music API Implementation**: Full Music API interface for remote servers
+- **Music API Implementation**: Music API interface for remote read/query operations
 - **Artist/Album/Track Queries**: Browse artists, albums, and tracks remotely
 - **Search Support**: Search functionality across remote libraries
 - **Pagination Support**: Efficient handling of large datasets with pagination
@@ -201,6 +201,7 @@ The library implements the standard `MusicApi` trait, providing:
 - Pagination support
 - Album version management
 - Cover art source handling
+- `add_*`, `remove_*`, `track_size`, and `tracks(None, ...)` return `UnsupportedAction`
 
 ## Dependencies
 
@@ -208,6 +209,10 @@ The library implements the standard `MusicApi` trait, providing:
 - `moosicbox_music_api`: Music API trait definitions
 - `moosicbox_music_models`: Data models for music entities
 - `moosicbox_paging`: Pagination utilities
+- `switchy_async`: Async primitives used by paging fetch callbacks
 - `switchy_http`: HTTP client for API requests
+- `async-trait`: Async trait implementation support
+- `thiserror`: Error type derivations
+- `urlencoding`: Query string encoding for search
 
 This library enables MoosicBox applications to seamlessly access remote music libraries as if they were local, providing a unified interface for distributed music systems.
