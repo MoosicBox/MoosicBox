@@ -196,7 +196,7 @@ let router = Router::new()
 use hyperchad_renderer::Content;
 use bytes::Bytes;
 
-// Static routes (compiled at build time)
+// Static routes (available with the `static-routes` feature)
 let router = Router::new()
     .with_static_route("/static/css/style.css", |_req| async {
         Some(Content::Raw {
@@ -251,9 +251,6 @@ match router.navigate("/api/endpoint").await {
     }
     Err(NavigateError::Handler(e)) => {
         // Handler returned an error
-    }
-    Err(NavigateError::Sender) => {
-        // Channel sender error
     }
 }
 ```
