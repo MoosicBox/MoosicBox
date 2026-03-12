@@ -103,7 +103,7 @@ let releases_html = releases(&[release], &os);
 
 ```rust
 use moosicbox_marketing_site_ui::{header, main, page};
-use hyperchad::template::container;
+use moosicbox_marketing_site_ui::hyperchad_template::container;
 
 // Create site header
 let site_header = header();
