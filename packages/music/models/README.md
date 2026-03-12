@@ -106,7 +106,7 @@ let qobuz_source = ApiSource::register("qobuz", "Qobuz");
 
 let mut sources = ApiSources::default();
 sources.add_source(ApiSource::library(), 123.into());
-sources.add_source(tidal_source, 456.into());
+sources.add_source(tidal_source.clone(), 456.into());
 sources.add_source(qobuz_source, 789.into());
 
 // Get ID for specific source
