@@ -103,7 +103,7 @@ Add to your `Cargo.toml`:
 moosicbox = "0.1.0"
 ```
 
-By default, all components are enabled. You can selectively enable only what you need:
+By default, the `all-default` feature set is enabled (covering the core component set). Streaming sources (`qobuz`, `tidal`, `yt`) are optional; use `all-sources` or enable them individually as needed. You can selectively enable only what you need:
 
 ```toml
 [dependencies]
