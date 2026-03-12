@@ -1,13 +1,13 @@
 # HyperChad Vanilla JS Hash
 
-Content-based hash generation for HyperChad Vanilla JS scripts with plugin-aware cache busting.
+Feature-based hash generation for HyperChad Vanilla JS builds with plugin-aware cache busting.
 
 ## Overview
 
 The HyperChad Vanilla JS Hash package provides:
 
-- **Content-based Hashing**: Generate SHA256 hashes based on script content and enabled plugins
-- **Cache Busting**: Automatic cache invalidation when plugins or content change
+- **Feature-based Hashing**: Generate SHA256 hashes from enabled plugin features
+- **Cache Busting**: Automatic cache invalidation when plugin feature sets change
 - **Plugin Awareness**: Hash includes all enabled plugin features
 - **Compile-time Generation**: Hashes computed at compile time for zero runtime cost
 - **Hex Encoding**: Human-readable hexadecimal hash output
@@ -60,11 +60,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperchad_renderer_vanilla_js_hash = { path = "../hyperchad/renderer/vanilla_js/hash" }
-
-# Enable the same plugins as your main vanilla_js renderer
+# Match the same plugins as your main vanilla_js renderer
 hyperchad_renderer_vanilla_js_hash = {
     path = "../hyperchad/renderer/vanilla_js/hash",
+    default-features = false,
     features = [
         "plugin-nav",
         "plugin-idiomorph",
@@ -276,6 +275,9 @@ plugin-actions-click = []
 ## Feature Flags
 
 All HyperChad Vanilla JS plugin features are supported:
+
+- **`all-plugins`**: Enables the full plugin set (default)
+- **`plugin-actions`**: Enables all action plugin features
 
 ### Core Plugins
 
