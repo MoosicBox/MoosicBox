@@ -1,20 +1,28 @@
 # switchy_mdns
 
-mDNS service registration and discovery for MoosicBox servers.
+mDNS service registration for MoosicBox servers.
 
 ## Features
 
 - **Service Registration**: Register MoosicBox servers on the local network via mDNS
-- **Service Discovery**: Discover MoosicBox servers on the local network (requires `scanner`
-  feature)
-- **Simulator**: Simulated mDNS daemon for testing (requires `simulator` feature)
+- **Simulator**: Simulated mDNS daemon for testing (enabled by default)
 
 ## Cargo Features
 
-| Feature     | Default | Description                                        |
-| ----------- | ------- | -------------------------------------------------- |
-| `scanner`   | Yes     | Enables mDNS service discovery for finding servers |
-| `simulator` | Yes     | Provides a simulated mDNS daemon for testing       |
+| Feature            | Default | Description                                                          |
+| ------------------ | ------- | -------------------------------------------------------------------- |
+| `simulator`        | Yes     | Provides a simulated mDNS daemon for testing                         |
+| `fail-on-warnings` | No      | Enables strict warning handling through the `moosicbox_assert` crate |
+
+## Installation
+
+```toml
+[dependencies]
+switchy_mdns = "0.1.4"
+
+# Or disable default features (disables the simulator)
+switchy_mdns = { version = "0.1.4", default-features = false }
+```
 
 ## Usage
 
@@ -29,25 +37,16 @@ async fn example() -> Result<(), switchy_mdns::RegisterServiceError> {
 }
 ```
 
-### Discovering Servers
+## Public API
 
-With the `scanner` feature enabled, you can discover MoosicBox servers on the network:
-
-```rust,ignore
-use switchy_mdns::scanner::{Context, MoosicBox, service::Service};
-
-// Create a channel to receive discovered servers
-let (tx, rx) = kanal::unbounded_async::<MoosicBox>();
-
-// Create the scanner context and service
-let context = Context::new(tx);
-// Start the service to begin scanning...
-
-// Discovered servers will be sent through the channel
-while let Ok(server) = rx.recv().await {
-    println!("Found server: {} at {}", server.name, server.host);
-}
-```
+- `register_service(instance_name, ip, port)`: Registers a MoosicBox mDNS service instance
+- `SERVICE_TYPE`: The service type constant used for registration (`_moosicboxserver._tcp.local.`)
+- `RegisterServiceError`: Error type returned by `register_service`
+    - `RegisterServiceError::MdnsSd`: Underlying `mdns_sd` daemon or registration error
+    - `RegisterServiceError::IO`: Hostname lookup I/O error
+- `switchy_mdns::service::MdnsServiceDaemon`: Trait abstraction for service daemon implementations
+- `switchy_mdns::service::MdnsSdServiceDaemon`: Wrapper for real `mdns_sd::ServiceDaemon`
+- `switchy_mdns::service::simulator::SimulatorServiceDaemon`: Simulator daemon (available with `simulator` feature)
 
 ## License
 
