@@ -61,18 +61,6 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_renderer_vanilla_js_hash = { path = "../hyperchad/renderer/vanilla_js/hash" }
-
-# Enable the same plugins as your main vanilla_js renderer
-hyperchad_renderer_vanilla_js_hash = {
-    path = "../hyperchad/renderer/vanilla_js/hash",
-    features = [
-        "plugin-nav",
-        "plugin-idiomorph",
-        "plugin-sse",
-        "plugin-actions-click",
-        "plugin-actions-change"
-    ]
-}
 ```
 
 ## Usage
