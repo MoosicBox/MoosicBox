@@ -37,13 +37,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_arb = { path = "../arb" }
-
-# Enable specific features
-moosicbox_arb = {
-    path = "../arb",
-    features = ["xml", "css", "serde"]
-}
+moosicbox_arb = { version = "0.1.4", features = ["xml", "css", "serde"] }
 ```
 
 ## Usage
