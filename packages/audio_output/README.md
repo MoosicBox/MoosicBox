@@ -11,7 +11,7 @@ The MoosicBox Audio Output package provides:
 - **Professional Audio Backend Support**: Optional JACK and ASIO support via CPAL
 - **Audio Format Encoding**: Built-in support for encoding to AAC, FLAC, MP3, and Opus
 - **Device Management**: Scan and select audio output devices
-- **Command-Based Control**: Pause, resume, seek, and volume control via `AudioHandle`
+- **Command-Based Control**: Pause, resume, reset, and volume control via `AudioHandle` (`seek` commands currently return an error for CPAL outputs)
 - **Progress Tracking**: Real-time playback position tracking with callbacks
 
 ## Supported Audio Backends
@@ -108,8 +108,10 @@ async fn playback_control_example() -> Result<(), Box<dyn std::error::Error>> {
     // Resume playback
     handle.resume().await?;
 
-    // Seek to position (in seconds)
-    handle.seek(30.0).await?;
+    // Seek command exists but currently returns an error for CPAL outputs
+    if let Err(err) = handle.seek(30.0).await {
+        eprintln!("Seek not supported by current output backend: {err}");
+    }
 
     // Reset the audio output
     handle.reset().await?;
@@ -174,7 +176,7 @@ The audio output package uses a layered architecture:
 2. **AudioWrite**: Core trait for writing audio buffers to output devices
 3. **AudioOutputFactory**: Factory pattern for creating audio outputs with specific configurations
 4. **CpalAudioOutput**: CPAL-based implementation of `AudioWrite`
-5. **AudioHandle**: Command-based interface for controlling playback (pause, resume, volume, seek)
+5. **AudioHandle**: Command-based interface for controlling playback (pause, resume, reset, volume; seek command currently returns an error for CPAL outputs)
 6. **ProgressTracker**: Tracks and reports playback progress with callbacks
 
 ### Audio Specifications
