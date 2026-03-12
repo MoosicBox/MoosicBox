@@ -15,8 +15,12 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_middleware = "0.1.4"
+```
 
-# Disable tunnel middleware (enabled by default)
+To disable tunnel middleware (enabled by default), use:
+
+```toml
+[dependencies]
 moosicbox_middleware = { version = "0.1.4", default-features = false }
 ```
 
