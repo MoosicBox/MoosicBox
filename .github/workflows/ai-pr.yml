@@ -296,6 +296,8 @@ jobs:
 
             - name: Install OpenCode CLI
               uses: ./.github/actions/opencode-install
+              with:
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
             - name: Run MoosicBox Bot
               id: ai

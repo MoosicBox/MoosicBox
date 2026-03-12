@@ -70,6 +70,8 @@ jobs:
             - name: Install OpenCode
               if: steps.lightweight.outputs.needs_refresh == 'true'
               uses: ./.github/actions/opencode-install
+              with:
+                  github_token: ${{ secrets.OPENCODE_SECRETS_PAT }}
 
             - name: Attempt OpenCode refresh
               if: steps.lightweight.outputs.needs_refresh == 'true'

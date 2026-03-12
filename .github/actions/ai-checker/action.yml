@@ -477,6 +477,8 @@ runs:
         - name: Install OpenCode CLI
           if: inputs.command == 'check'
           uses: ./.github/actions/opencode-install
+          with:
+              github_token: ${{ inputs.github_token }}
 
         - name: Run OpenCode
           if: inputs.command == 'check'

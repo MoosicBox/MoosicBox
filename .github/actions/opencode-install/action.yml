@@ -1,24 +1,60 @@
 name: Install OpenCode
 description: Install latest OpenCode CLI with retries and caching
 
+inputs:
+    github_token:
+        description: GitHub token for authenticated API requests
+        required: false
+
 runs:
     using: composite
     steps:
         - name: Resolve latest OpenCode release
           id: resolve
           shell: bash
+          env:
+              INSTALL_GITHUB_TOKEN: ${{ inputs.github_token }}
           run: |
               set -euo pipefail
 
               ATTEMPTS=5
               DELAY=2
               TAG=""
+              API_URL="https://api.github.com/repos/anomalyco/opencode/releases/latest"
 
               for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
                 echo "🔎 Resolving latest OpenCode release (attempt $ATTEMPT/$ATTEMPTS)"
-                if TAG=$(curl -fsSL --connect-timeout 15 --max-time 30 "https://api.github.com/repos/anomalyco/opencode/releases/latest" | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tag_name","").strip(); print(t) if t else sys.exit(1)'); then
+
+                TMP_DIR=$(mktemp -d)
+                BODY_FILE="$TMP_DIR/release.json"
+                HEADER_FILE="$TMP_DIR/headers.txt"
+
+                AUTH_HEADER=()
+                TOKEN="${INSTALL_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
+                if [ -n "$TOKEN" ]; then
+                  AUTH_HEADER=(-H "Authorization: Bearer $TOKEN")
+                fi
+
+                HTTP_STATUS=$(curl -sS -L --connect-timeout 15 --max-time 30 -D "$HEADER_FILE" -o "$BODY_FILE" -w "%{http_code}" "${AUTH_HEADER[@]}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL" || true)
+
+                TAG=""
+                if [ "$HTTP_STATUS" = "200" ]; then
+                  TAG="$(jq -r '.tag_name // empty' "$BODY_FILE" 2>/dev/null || true)"
+                fi
+
+                if [ -n "$TAG" ]; then
+                  rm -rf "$TMP_DIR"
                   break
                 fi
+
+                echo "⚠️ Failed to fetch release tag (status: ${HTTP_STATUS:-unknown})"
+                if [ "$HTTP_STATUS" = "403" ]; then
+                  REMAINING=$(grep -i '^x-ratelimit-remaining:' "$HEADER_FILE" | awk -F': ' '{print $2}' | tr -d '\r' || true)
+                  RESET=$(grep -i '^x-ratelimit-reset:' "$HEADER_FILE" | awk -F': ' '{print $2}' | tr -d '\r' || true)
+                  echo "ℹ️ GitHub API rate limit headers: remaining=${REMAINING:-unknown}, reset=${RESET:-unknown}"
+                fi
+
+                rm -rf "$TMP_DIR"
 
                 if [ "$ATTEMPT" -eq "$ATTEMPTS" ]; then
                   echo "❌ Failed to fetch latest OpenCode release tag"
