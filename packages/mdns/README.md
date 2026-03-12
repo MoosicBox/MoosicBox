@@ -32,3 +32,9 @@ while let Ok(server) = rx.recv().await {
     println!("Found server: {} at {}", server.name, server.host);
 }
 ```
+
+## Public API
+
+- `scanner::MoosicBox` - Discovered server record with `id`, `name`, `host`, and `dns`
+- `scanner::Context::new(sender)` - Creates scanner context with a `kanal::AsyncSender<MoosicBox>` for discovered servers
+- `scanner::service::Service::new(context)` + `start()` - Starts background mDNS browsing for `_moosicboxserver._tcp.local.` and streams discoveries through the channel
