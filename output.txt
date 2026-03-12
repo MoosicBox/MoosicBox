@@ -1,0 +1,12 @@
+Reviewed `packages/switchy/http/examples/simple_get/README.md` against:
+
+- `packages/switchy/http/examples/simple_get/src/main.rs`
+- `packages/switchy/http/examples/simple_get/Cargo.toml`
+
+I found no fundamental inaccuracies or critical omissions:
+- Behavior matches code (URL arg, GET request, response text output, missing-arg error case).
+- Usage command matches the binary package and invocation pattern.
+- Dependencies listed match `Cargo.toml`.
+- No broken module/file references in the README content.
+
+No changes required - documentation is accurate
