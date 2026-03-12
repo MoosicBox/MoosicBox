@@ -54,9 +54,9 @@ moosicbox_app_native_bundled = { path = "../app/native/bundled" }
 - **default**: Enables `all-decoders` and `all-sources`
 - **tunnel**: Enables server tunnel support via `moosicbox_server/tunnel`
 - **all-formats**: Enables bundled audio format support (`aac`, `flac`, `mp3`, `opus`)
-- **all-os-formats**: Enables OS-specific bundled audio format support (`aac`, `flac`, `opus`)
+- **all-os-formats**: Enables open-source bundled audio format support (`aac`, `flac`, `opus`)
 - **all-decoders**: Enables bundled audio decoder support (`aac`, `flac`, `mp3`, `opus`)
-- **all-os-decoders**: Enables OS-specific bundled audio decoder support (`aac`, `flac`, `opus`)
+- **all-os-decoders**: Enables open-source bundled audio decoder support (`aac`, `flac`, `opus`)
 - **all-sources**: Enables all supported music sources (`qobuz`, `tidal`, `yt`)
 - **qobuz** / **tidal** / **yt**: Enables individual source integrations and related auth features
 
