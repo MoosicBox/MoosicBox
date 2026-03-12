@@ -252,9 +252,6 @@ match router.navigate("/api/endpoint").await {
     Err(NavigateError::Handler(e)) => {
         // Handler returned an error
     }
-    Err(NavigateError::Sender) => {
-        // Channel sender error
-    }
 }
 ```
 
