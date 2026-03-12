@@ -1044,6 +1044,13 @@ Precedence for tool selection is:
 
 When a tool appears in both `required` and `skip`, `skip` wins. When a tool appears in both `--tools` and `skip`, `--tools` wins.
 
+Color behavior for tool output:
+
+- `--color auto` follows terminal detection
+- `--color always` forces colors in child tool output
+- `--color never` disables colors in child tool output
+- For `--output json` with `--color auto`, clippier disables colors to keep JSON payloads clean
+
 #### Supported Tools
 
 | Tool         | Language/Format         | Capabilities | Detection           |
@@ -1305,6 +1312,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--list`        | List available tools instead of running them    | false             |
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
+| `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1317,6 +1325,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--list`        | List available tools instead of running them    | false             |
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
+| `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration

@@ -190,6 +190,18 @@ pub enum OutputType {
     Raw,
 }
 
+/// Color mode for tool output forwarding
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[clap(rename_all = "kebab_case")]
+pub enum ColorMode {
+    /// Auto-detect color support from terminal context
+    Auto,
+    /// Force ANSI colors in tool output
+    Always,
+    /// Disable ANSI colors in tool output
+    Never,
+}
+
 /// Information about a package affected by changes
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AffectedPackageInfo {
@@ -5358,6 +5370,7 @@ pub fn handle_check_command(
     list_tools: bool,
     config: tools::ToolsConfig,
     output: OutputType,
+    color: ColorMode,
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
@@ -5406,6 +5419,10 @@ pub fn handle_check_command(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
+    let runner = runner.with_color_mode(match (output, color) {
+        (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
+        (_, value) => value,
+    });
 
     let names = if let Some(names) = tool_names {
         names.to_vec()
@@ -5442,6 +5459,7 @@ pub fn handle_fmt_command(
     list_tools: bool,
     config: tools::ToolsConfig,
     output: OutputType,
+    color: ColorMode,
 ) -> Result<String, BoxError> {
     use tools::{ToolRegistry, ToolRunner};
 
@@ -5495,6 +5513,10 @@ pub fn handle_fmt_command(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
+    let runner = runner.with_color_mode(match (output, color) {
+        (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
+        (_, value) => value,
+    });
 
     let names = if let Some(names) = tool_names {
         names.to_vec()

@@ -1,13 +1,14 @@
 //! Tool execution and result aggregation.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, IsTerminal};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
+use crate::ColorMode;
 use crate::tools::registry::{ToolError, ToolRegistry};
 use crate::tools::types::{Tool, ToolKind};
 
@@ -104,6 +105,8 @@ pub struct ToolRunner<'a> {
     stream_output: bool,
     /// Whether to run tools in parallel
     parallel: bool,
+    /// Color mode for child tool output
+    color_mode: ColorMode,
 }
 
 impl<'a> ToolRunner<'a> {
@@ -115,6 +118,7 @@ impl<'a> ToolRunner<'a> {
             working_dir: None,
             stream_output: true,
             parallel: true,
+            color_mode: ColorMode::Auto,
         }
     }
 
@@ -137,6 +141,71 @@ impl<'a> ToolRunner<'a> {
     pub const fn with_parallel(mut self, parallel: bool) -> Self {
         self.parallel = parallel;
         self
+    }
+
+    /// Sets color mode for child tool execution
+    #[must_use]
+    pub const fn with_color_mode(mut self, color_mode: ColorMode) -> Self {
+        self.color_mode = color_mode;
+        self
+    }
+
+    fn should_use_color_auto() -> bool {
+        std::io::stdout().is_terminal() || std::io::stderr().is_terminal()
+    }
+
+    const fn effective_color_mode_for_terminals(
+        requested: ColorMode,
+        stdout_is_terminal: bool,
+        stderr_is_terminal: bool,
+    ) -> ColorMode {
+        match requested {
+            ColorMode::Auto => {
+                if stdout_is_terminal || stderr_is_terminal {
+                    ColorMode::Always
+                } else {
+                    ColorMode::Never
+                }
+            }
+            ColorMode::Always => ColorMode::Always,
+            ColorMode::Never => ColorMode::Never,
+        }
+    }
+
+    fn effective_color_mode(&self) -> ColorMode {
+        Self::effective_color_mode_for_terminals(
+            self.color_mode,
+            std::io::stdout().is_terminal(),
+            std::io::stderr().is_terminal(),
+        )
+    }
+
+    fn apply_color_env(command: &mut Command, mode: ColorMode) {
+        match mode {
+            ColorMode::Always => {
+                command.env("CLICOLOR_FORCE", "1");
+                command.env("FORCE_COLOR", "1");
+                command.env("CARGO_TERM_COLOR", "always");
+                command.env("PY_COLORS", "1");
+                command.env_remove("NO_COLOR");
+                command.env_remove("CLICOLOR");
+            }
+            ColorMode::Never => {
+                command.env("NO_COLOR", "1");
+                command.env("CLICOLOR", "0");
+                command.env("CARGO_TERM_COLOR", "never");
+                command.env_remove("CLICOLOR_FORCE");
+                command.env_remove("FORCE_COLOR");
+                command.env_remove("PY_COLORS");
+            }
+            ColorMode::Auto => {
+                if Self::should_use_color_auto() {
+                    Self::apply_color_env(command, ColorMode::Always);
+                } else {
+                    Self::apply_color_env(command, ColorMode::Never);
+                }
+            }
+        }
     }
 
     /// Runs all available formatters
@@ -275,6 +344,7 @@ impl<'a> ToolRunner<'a> {
 
         let mut command = Command::new(&program);
         command.args(&final_args);
+        Self::apply_color_env(&mut command, self.effective_color_mode());
 
         if let Some(dir) = self.working_dir {
             command.current_dir(dir);
@@ -425,6 +495,7 @@ impl<'a> ToolRunner<'a> {
 
         let mut command = Command::new(&program);
         command.args(&final_args);
+        Self::apply_color_env(&mut command, self.effective_color_mode());
 
         if let Some(dir) = self.working_dir {
             command.current_dir(dir);
@@ -567,4 +638,72 @@ pub fn results_to_json(
     });
 
     Ok(serde_json::to_string_pretty(&output)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effective_color_mode_auto_uses_terminal_presence() {
+        assert_eq!(
+            ToolRunner::effective_color_mode_for_terminals(ColorMode::Auto, true, false),
+            ColorMode::Always
+        );
+        assert_eq!(
+            ToolRunner::effective_color_mode_for_terminals(ColorMode::Auto, false, true),
+            ColorMode::Always
+        );
+        assert_eq!(
+            ToolRunner::effective_color_mode_for_terminals(ColorMode::Auto, false, false),
+            ColorMode::Never
+        );
+    }
+
+    #[test]
+    fn apply_color_env_sets_expected_vars_for_always() {
+        let mut command = Command::new("true");
+        ToolRunner::apply_color_env(&mut command, ColorMode::Always);
+
+        let envs: BTreeMap<String, Option<String>> = command
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        assert_eq!(envs.get("CLICOLOR_FORCE"), Some(&Some("1".to_string())));
+        assert_eq!(envs.get("FORCE_COLOR"), Some(&Some("1".to_string())));
+        assert_eq!(
+            envs.get("CARGO_TERM_COLOR"),
+            Some(&Some("always".to_string()))
+        );
+        assert_eq!(envs.get("PY_COLORS"), Some(&Some("1".to_string())));
+    }
+
+    #[test]
+    fn apply_color_env_sets_expected_vars_for_never() {
+        let mut command = Command::new("true");
+        ToolRunner::apply_color_env(&mut command, ColorMode::Never);
+
+        let envs: BTreeMap<String, Option<String>> = command
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        assert_eq!(envs.get("NO_COLOR"), Some(&Some("1".to_string())));
+        assert_eq!(envs.get("CLICOLOR"), Some(&Some("0".to_string())));
+        assert_eq!(
+            envs.get("CARGO_TERM_COLOR"),
+            Some(&Some("never".to_string()))
+        );
+    }
 }

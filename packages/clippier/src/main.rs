@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use clippier::{
-    OutputType, handle_affected_packages_command, handle_ci_steps_command,
+    ColorMode, OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
     handle_generate_dockerfile_command, handle_packages_command,
     handle_validate_feature_propagation_command, handle_workspace_deps_command,
@@ -462,6 +462,10 @@ enum Commands {
         /// Output format
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
+
+        /// Color mode for tool output
+        #[arg(long, value_enum, default_value_t=ColorMode::Auto)]
+        color: ColorMode,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -493,6 +497,10 @@ enum Commands {
         /// Output format
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
+
+        /// Color mode for tool output
+        #[arg(long, value_enum, default_value_t=ColorMode::Auto)]
+        color: ColorMode,
     },
 }
 
@@ -794,6 +802,7 @@ async fn main() -> Result<(), BoxError> {
             required,
             skip,
             output,
+            color,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -807,6 +816,7 @@ async fn main() -> Result<(), BoxError> {
                 list,
                 config,
                 output,
+                color,
             )?
         }
         #[cfg(feature = "format")]
@@ -818,6 +828,7 @@ async fn main() -> Result<(), BoxError> {
             required,
             skip,
             output,
+            color,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -832,6 +843,7 @@ async fn main() -> Result<(), BoxError> {
                 list,
                 config,
                 output,
+                color,
             )?
         }
     };
