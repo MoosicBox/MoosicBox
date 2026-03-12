@@ -9,7 +9,7 @@ The Parsing Utils package provides:
 - **Integer Sequence Parsing**: Parse comma-separated integer lists
 - **Integer Range Parsing**: Parse hyphen-separated integer ranges
 - **Range Validation**: Prevent excessive range sizes
-- **Error Handling**: Comprehensive error types for parsing failures
+- **Error Handling**: Parse error types for invalid input plus documented panic edge cases
 
 ## Features
 
@@ -30,6 +30,7 @@ The Parsing Utils package provides:
 - **Parse Errors**: Invalid integer format detection
 - **Unmatched Ranges**: Detect malformed range syntax
 - **Size Limits**: Prevent memory exhaustion from large ranges
+- **Panic Edge Cases**: `parse_integer_ranges` can panic for reverse/equal ranges and empty range segments
 
 ## Installation
 
