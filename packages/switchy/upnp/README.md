@@ -100,7 +100,8 @@ let device_url = device.url();
 
 // Get current volume
 let volume_info = get_volume(&service, device_url, 0, "Master").await?;
-println!("Current volume: {}", volume_info.get("CurrentVolume").unwrap_or(&"0".to_string()));
+let current_volume = volume_info.get("CurrentVolume").map_or("0", String::as_str);
+println!("Current volume: {current_volume}");
 
 // Set volume to 75
 set_volume(&service, device_url, 0, "Master", 75).await?;
