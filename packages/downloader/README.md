@@ -55,7 +55,7 @@ moosicbox_downloader = { path = "../downloader" }
 ```rust
 use moosicbox_downloader::{download, DownloadRequest, DownloadApiSource, TrackAudioQuality};
 use moosicbox_music_api::MusicApis;
-use moosicbox_music_models::id::Id;
+use moosicbox_music_models::{ApiSource, id::Id};
 use switchy_database::profiles::LibraryDatabase;
 use std::path::PathBuf;
 
@@ -63,6 +63,7 @@ use std::path::PathBuf;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = LibraryDatabase { /* ... */ };
     let music_apis = MusicApis::default();
+    let api_source = ApiSource::library();
 
     // Download a single track
     let request = DownloadRequest {
@@ -86,13 +87,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Download Multiple Tracks
 
 ```rust
-use moosicbox_downloader::{download, DownloadRequest, DownloadApiSource};
-use moosicbox_music_models::id::Id;
+use moosicbox_downloader::{download, DownloadRequest, DownloadApiSource, TrackAudioQuality};
+use moosicbox_music_models::{ApiSource, id::Id};
 use std::path::PathBuf;
 
 async fn download_tracks() -> Result<(), Box<dyn std::error::Error>> {
     let db = /* ... */;
     let music_apis = /* ... */;
+    let api_source = ApiSource::library();
 
     let request = DownloadRequest {
         directory: PathBuf::from("./downloads"),
@@ -115,13 +117,14 @@ async fn download_tracks() -> Result<(), Box<dyn std::error::Error>> {
 ### Download Albums
 
 ```rust
-use moosicbox_downloader::{download, DownloadRequest, DownloadApiSource};
-use moosicbox_music_models::id::Id;
+use moosicbox_downloader::{download, DownloadRequest, DownloadApiSource, TrackAudioQuality};
+use moosicbox_music_models::{ApiSource, id::Id};
 use std::path::PathBuf;
 
 async fn download_album() -> Result<(), Box<dyn std::error::Error>> {
     let db = /* ... */;
     let music_apis = /* ... */;
+    let api_source = ApiSource::library();
 
     // Download entire album with covers
     let request = DownloadRequest {
@@ -200,7 +203,7 @@ use moosicbox_downloader::{
     DownloadApiSource, TrackAudioQuality,
 };
 use moosicbox_music_api::MusicApi;
-use moosicbox_music_models::id::Id;
+use moosicbox_music_models::{ApiSource, id::Id};
 use std::sync::Arc;
 use atomic_float::AtomicF64;
 
@@ -209,6 +212,7 @@ async fn manual_downloads(
     db: &LibraryDatabase,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let speed = Arc::new(AtomicF64::new(0.0));
+    let api_source = ApiSource::library();
 
     let on_progress = Arc::new(switchy_async::sync::Mutex::new(Box::new(|event| {
         Box::pin(async move {
