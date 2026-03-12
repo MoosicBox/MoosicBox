@@ -86,6 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     writer.write("Hello".to_string());
     writer.write("World".to_string());
 
+    // Drop writer so the stream can complete
+    drop(writer);
+
     // Read from the stream
     while let Some(data) = stream.next().await {
         println!("Received: {}", data);
