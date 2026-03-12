@@ -67,5 +67,5 @@ Runtime shut down cleanly
 
 ## Related
 
-- [`switchy_async`](../../README.md) - Main async runtime package
+- [`switchy_async`](../../../README.md) - Main async runtime package
 - [Simulated Example](../simulated/README.md) - Task spawning example

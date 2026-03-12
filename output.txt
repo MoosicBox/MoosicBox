@@ -1,0 +1,15 @@
+Updated `packages/switchy/async/examples/cancel/README.md` with one fundamental fix: the `switchy_async` related link was broken (`../../README.md` pointed to a non-existent file under `examples/`), so I corrected it to `../../../README.md`, which resolves to the actual async package README.
+
+REGRESSION_CHECK_START
+File: README.md
+Line(s): 70
+Proposed change: Fix broken related link from `../../README.md` to `../../../README.md`
+Git history checked: YES
+Revert found: NO
+Revert details: None found
+Decision: PROCEED - History shows initial placeholder addition only; no revert/discussion blocking this correction.
+REGRESSION_CHECK_END
+
+COMMIT_MESSAGE_START
+- Fixed the `switchy_async` related README link to point to the actual async package README so users are not sent to a non-existent path.
+COMMIT_MESSAGE_END
