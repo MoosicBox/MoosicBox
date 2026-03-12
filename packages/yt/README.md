@@ -40,7 +40,7 @@ use switchy_database::profiles::LibraryDatabase;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "db")]
-    let db = LibraryDatabase::new().await?;
+    let db: LibraryDatabase = todo!("Provide your configured LibraryDatabase");
 
     #[cfg(feature = "db")]
     let yt_api = YtMusicApi::builder()
@@ -62,7 +62,8 @@ use moosicbox_yt::{device_authorization, device_authorization_token};
 #[cfg(feature = "db")]
 use switchy_database::profiles::LibraryDatabase;
 
-async fn authenticate_user() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(feature = "db")]
+async fn authenticate_user(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let client_id = "your-client-id".to_string();
     let client_secret = "your-client-secret".to_string();
 
@@ -75,15 +76,12 @@ async fn authenticate_user() -> Result<(), Box<dyn std::error::Error>> {
     // Wait for user to authorize, then get token
     let device_code = auth_response["device_code"].as_str().unwrap().to_string();
 
-    #[cfg(feature = "db")]
-    let db = LibraryDatabase::new().await?;
-
     let token_response = device_authorization_token(
-        #[cfg(feature = "db")] &db,
+        db,
         client_id,
         client_secret,
         device_code,
-        #[cfg(feature = "db")] Some(true), // persist token
+        Some(true), // persist token
     ).await?;
 
     println!("Authentication successful!");
@@ -95,13 +93,12 @@ async fn authenticate_user() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use moosicbox_yt::{favorite_artists, YtArtistOrder, YtArtistOrderDirection};
+use switchy_database::profiles::LibraryDatabase;
 
 #[cfg(feature = "db")]
-async fn browse_favorite_artists() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
-
+async fn browse_favorite_artists(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let artists_result = favorite_artists(
-        &db,
+        db,
         Some(0),     // offset
         Some(20),    // limit
         Some(YtArtistOrder::Date),
@@ -127,14 +124,13 @@ async fn browse_favorite_artists() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_yt::{favorite_albums, album, album_tracks, add_favorite_album};
 use moosicbox_music_models::Id;
+use switchy_database::profiles::LibraryDatabase;
 
 #[cfg(feature = "db")]
-async fn manage_albums() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
-
+async fn manage_albums(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Get favorite albums
     let albums_result = favorite_albums(
-        &db,
+        db,
         Some(0),     // offset
         Some(10),    // limit
         None,        // order
@@ -151,12 +147,12 @@ async fn manage_albums() -> Result<(), Box<dyn std::error::Error>> {
 
         // Get album details
         let album_id = Id::String(album.id.clone());
-        let album_detail = album(&db, &album_id, None, None, None, None).await?;
+        let album_detail = album(db, &album_id, None, None, None, None).await?;
         println!("  Tracks: {}", album_detail.number_of_tracks);
 
         // Get album tracks
         let tracks_result = album_tracks(
-            &db, &album_id, Some(0), Some(5), None, None, None, None
+            db, &album_id, Some(0), Some(5), None, None, None, None
         ).await?;
 
         println!("  First 5 tracks:");
@@ -167,7 +163,7 @@ async fn manage_albums() -> Result<(), Box<dyn std::error::Error>> {
 
     // Add new favorite album
     let new_album_id = Id::String("album123".to_string());
-    add_favorite_album(&db, &new_album_id, None, None, None, None, None).await?;
+    add_favorite_album(db, &new_album_id, None, None, None, None, None).await?;
     println!("Added album to favorites");
 
     Ok(())
@@ -214,15 +210,15 @@ async fn search_content() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_yt::{track_file_url, track_playback_info, YtAudioQuality};
 use moosicbox_music_models::Id;
+use switchy_database::profiles::LibraryDatabase;
 
 #[cfg(feature = "db")]
-async fn stream_audio() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
+async fn stream_audio(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let track_id = Id::String("track123".to_string());
 
     // Get streaming URLs
     let urls = track_file_url(
-        &db,
+        db,
         YtAudioQuality::High,
         &track_id,
         None, // access_token
@@ -234,7 +230,7 @@ async fn stream_audio() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get detailed playback info
     let playback_info = track_playback_info(
-        &db,
+        db,
         YtAudioQuality::High,
         &track_id,
         None,
@@ -255,15 +251,15 @@ async fn stream_audio() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_yt::{artist_albums, YtAlbumType};
 use moosicbox_music_models::Id;
+use switchy_database::profiles::LibraryDatabase;
 
 #[cfg(feature = "db")]
-async fn browse_artist_content() -> Result<(), Box<dyn std::error::Error>> {
-    let db = LibraryDatabase::new().await?;
+async fn browse_artist_content(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let artist_id = Id::String("artist123".to_string());
 
     // Get artist's studio albums
     let albums_result = artist_albums(
-        &db,
+        db,
         &artist_id,
         Some(0),     // offset
         Some(10),    // limit
@@ -284,7 +280,7 @@ async fn browse_artist_content() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get EPs and singles
     let eps_result = artist_albums(
-        &db, &artist_id, Some(0), Some(10),
+        db, &artist_id, Some(0), Some(10),
         Some(YtAlbumType::EpsAndSingles), None, None, None, None
     ).await?;
 
@@ -303,11 +299,12 @@ async fn browse_artist_content() -> Result<(), Box<dyn std::error::Error>> {
 use moosicbox_yt::YtMusicApi;
 use moosicbox_music_api::MusicApi;
 use moosicbox_music_api::models::AlbumsRequest;
+use switchy_database::profiles::LibraryDatabase;
 
 #[cfg(feature = "db")]
-async fn use_music_api_trait() -> Result<(), Box<dyn std::error::Error>> {
+async fn use_music_api_trait(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
     let yt_api = YtMusicApi::builder()
-        .with_db(LibraryDatabase::new().await?)
+        .with_db(db)
         .build()
         .await?;
 
@@ -321,9 +318,7 @@ async fn use_music_api_trait() -> Result<(), Box<dyn std::error::Error>> {
 
     // Search functionality
     let search_results = yt_api.search("rock music", Some(0), Some(20)).await?;
-    if let Some(artists) = &search_results.artists {
-        println!("Found {} artists", artists.len());
-    }
+    println!("Found {} search results", search_results.results.len());
 
     Ok(())
 }
