@@ -41,19 +41,21 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-switchy_async = { path = "../async" }
+switchy_async = "0.1.4"
+```
 
-# Enable specific features
-switchy_async = {
-    path = "../async",
-    features = ["tokio", "rt-multi-thread", "io", "sync", "time", "macros"]
-}
+With Tokio backend features:
 
-# For testing with simulation
-switchy_async = {
-    path = "../async",
-    features = ["simulator", "macros"]
-}
+```toml
+[dependencies]
+switchy_async = { version = "0.1.4", default-features = false, features = ["tokio", "rt-multi-thread", "io", "sync", "time", "macros"] }
+```
+
+For testing with simulation:
+
+```toml
+[dependencies]
+switchy_async = { version = "0.1.4", default-features = false, features = ["simulator", "macros"] }
 ```
 
 ## Usage
@@ -185,6 +187,19 @@ use switchy_async::{inject_yields, inject_yields_mod};
 #[inject_yields]
 async fn my_async_function() {
     // Function body with automatic yield injection for deterministic testing
+}
+
+// Runtime entry-point macros
+#[cfg(feature = "macros")]
+#[switchy_async::main]
+async fn main() {
+    println!("Runs with the selected switchy_async backend");
+}
+
+#[cfg(feature = "macros")]
+#[switchy_async::test]
+async fn my_test() {
+    assert_eq!(2 + 2, 4);
 }
 ```
 
