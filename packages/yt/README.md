@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 moosicbox_yt = "0.1.4"
 
 # Enable features as needed
-moosicbox_yt = { version = "0.1.4", features = ["db", "api", "openapi"] }
+# moosicbox_yt = { version = "0.1.4", features = ["db", "api", "openapi"] }
 ```
 
 ## Usage
@@ -302,7 +302,7 @@ async fn browse_artist_content() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_yt::YtMusicApi;
 use moosicbox_music_api::MusicApi;
-use moosicbox_music_api_models::AlbumsRequest;
+use moosicbox_music_api::models::AlbumsRequest;
 
 #[cfg(feature = "db")]
 async fn use_music_api_trait() -> Result<(), Box<dyn std::error::Error>> {
