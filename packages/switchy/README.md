@@ -71,11 +71,22 @@ switchy = { path = "../switchy", features = [
 ### Async Utilities
 
 ```rust
-// Enable with features = ["async"]
+// Enable with features = ["async", "async-time"]
 use switchy::unsync;
 
-// Use async utilities
+// Primary async entry points are under switchy::unsync
+use switchy::unsync::time::{sleep, Duration};
+
+// Runtime-agnostic sleep (Tokio or simulator backend based on features)
+sleep(Duration::from_secs(1)).await;
 ```
+
+When `async-macros` is enabled, these main async macros are also available:
+
+- `switchy::unsync::select!`
+- `switchy::unsync::join!`
+- `switchy::unsync::try_join!`
+- `#[switchy::unsync::main]`
 
 ### Database Operations
 
@@ -204,7 +215,7 @@ Each module has additional sub-features for fine-grained control:
 
 **HTTP Models**: `http-models-actix`, `http-models-reqwest`, `http-models-serde`
 
-**mDNS**: `mdns-scanner`, `mdns-simulator`
+**mDNS**: `mdns-simulator`
 
 **Random**: `random-rand`, `random-simulator`
 
@@ -214,7 +225,7 @@ Each module has additional sub-features for fine-grained control:
 
 **Time**: `time-simulator`, `time-std`
 
-**UPnP**: `upnp-api`, `upnp-listener`, `upnp-openapi`, `upnp-player`, `upnp-simulator`
+**UPnP**: `upnp-api`, `upnp-openapi`, `upnp-simulator`
 
 **UUID**: `uuid-serde`, `uuid-simulator`, `uuid-uuid`
 
