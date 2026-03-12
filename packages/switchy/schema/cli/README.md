@@ -20,11 +20,11 @@ The binary is installed as `switchy-migrate`.
 
 ## Capability Matrix
 
-| Capability | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
-| ---------- | ------ | ---------- | ----- | ------ | ------------- |
-| `create` / `status` / `migrate` / `rollback` / `validate` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `--database-url` scheme support | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Default test coverage in this crate | ✅ | ⚠️ | ⚠️ | ✅ | ✅ |
+| Capability                                                | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
+| --------------------------------------------------------- | ------ | ---------- | ----- | ------ | ------------- |
+| `create` / `status` / `migrate` / `rollback` / `validate` | ✅     | ✅         | ✅    | ✅     | ✅            |
+| `--database-url` scheme support                           | ✅     | ✅         | ✅    | ✅     | ✅            |
+| Default test coverage in this crate                       | ✅     | ⚠️         | ⚠️    | ✅     | ✅            |
 
 Notes:
 
@@ -108,6 +108,7 @@ switchy-migrate migrate -d sqlite://db.sqlite --steps 3
 - `--steps <N>`: Run only this many migrations
 - `--dry-run`: Show what would be done without executing
 - `--force`: Force migration even if dirty state detected (dangerous)
+- `--retry-failed`: Automatically retry failed migrations
 - `--require-checksum-validation`: Require checksum validation before running migrations
 
 ### rollback
