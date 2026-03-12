@@ -50,10 +50,12 @@ use moosicbox_upnp::player::UpnpPlayer;
 - `player::DEFAULT_SEEK_RETRY_OPTIONS`
     - Default retry policy used for UPnP seek behavior.
 - `listener` module (enabled by `listener` feature)
+    - Service lifecycle entry points: `Service::new(UpnpContext::new())`, `Service::handle()`, `Service::start()`.
     - `Handle::subscribe_media_info(interval, instance_id, udn, service_id, action)`
     - `Handle::subscribe_position_info(interval, instance_id, udn, service_id, action)`
     - `Handle::subscribe_transport_info(interval, instance_id, udn, service_id, action)`
     - `Handle::unsubscribe(subscription_id)`
+    - Shutdown support via `listener::Commander` trait (`handle.shutdown()`).
     - Callback types: `MediaInfoSubscriptionAction`, `PositionInfoSubscriptionAction`, `TransportInfoSubscriptionAction`
 
 ## License
