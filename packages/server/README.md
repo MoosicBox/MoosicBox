@@ -73,6 +73,21 @@ moosicbox_server 8001
 
 Note: `STATIC_TOKEN` must be set at compile-time when using the `static-token-auth` feature.
 
+### Library API
+
+If you are embedding the server in your own Rust binary, use the exported entry points from `moosicbox_server`:
+
+- `run_basic(...)` - Starts the server with default optional behavior.
+- `run(...)` - Starts the server with full configuration, including optional pre-bound listener and feature-gated player/UPnP/telemetry settings.
+
+```rust,no_run
+use moosicbox_config::AppType;
+
+async fn start() -> std::io::Result<()> {
+    moosicbox_server::run_basic(AppType::App, "0.0.0.0", 8000, None, |_| {}).await
+}
+```
+
 ## Configuration
 
 ### Environment Variables
