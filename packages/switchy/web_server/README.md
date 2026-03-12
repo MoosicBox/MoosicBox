@@ -20,9 +20,6 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-switchy_web_server = "0.1.0"
-
-# Enable features as needed
 switchy_web_server = {
     version = "0.1.0",
     features = ["actix", "cors", "compress", "openapi"]
@@ -134,9 +131,9 @@ async fn get_user(Path(user_id): Path<u32>) -> Result<HttpResponse, Error> {
 
 #[cfg(feature = "serde")]
 async fn get_user_post(Path((username, post_id)): Path<(String, u32)>) -> Result<HttpResponse, Error> {
-    // Extract multiple path parameters from routes like "/users/john/posts/456"
+    // Extract the last two path segments from routes like "/users/john/posts/456"
     Ok(HttpResponse::ok().with_body(format!(
-        r#"{{"username": "{}", "post_id": {}}}"#,
+        r#"{{"segment": "{}", "post_id": {}}}"#,
         username, post_id
     )))
 }
@@ -291,7 +288,7 @@ fn another_condition() -> bool { false }
 
 ```rust
 #[cfg(feature = "openapi")]
-use switchy_web_server::{utoipa, openapi};
+use switchy_web_server::{HttpResponse, Scope, utoipa, openapi};
 #[cfg(feature = "openapi")]
 use utoipa::openapi::OpenApi;
 
@@ -338,6 +335,7 @@ fn create_server_with_openapi() {
 - **`HttpResponse`** - HTTP response builder
 - **`Scope`** - Route grouping and nesting
 - **`Route`** - Individual route definition
+- **`StaticFiles`** - Static file serving configuration
 - **`Error`** - HTTP error types with status codes
 
 ### Extractors
@@ -382,6 +380,7 @@ fn create_server_with_openapi() {
 
 - `with_addr()`, `with_port()` - Server address configuration
 - `with_scope()` - Add route scope
+- `with_static_files()` - Configure static file serving
 - `with_cors()` - Configure CORS (requires `cors` feature)
 - `with_compress()` - Enable compression (requires `compress` feature)
 - `build()` - Build the web server
