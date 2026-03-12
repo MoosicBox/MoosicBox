@@ -18,7 +18,7 @@ With optional features enabled:
 
 - **Track Management**: Handle audio track files, metadata, and streaming with pooling support (requires `files` feature)
 - **Album/Artist Artwork**: Fetch, cache, and manage album and artist cover images (requires `files` feature)
-- **HTTP Range Support**: Parse and handle HTTP byte range requests (requires `range` feature)
+- **HTTP Range Support**: Parse HTTP byte range requests (requires `range` feature); enable `/track` range responses with `track-range`
 - **REST API Endpoints**: Actix-web endpoints for serving files, tracks, and artwork (requires `api` feature)
 - **Audio Codec Support**: Decode/encode various audio formats including AAC, FLAC, MP3, and Opus (requires decoder/encoder features)
 
@@ -31,7 +31,7 @@ Add this to your `Cargo.toml`:
 moosicbox_files = "0.1.4"
 
 # Enable additional features
-moosicbox_files = { version = "0.1.4", features = ["files", "range", "api"] }
+# moosicbox_files = { version = "0.1.4", features = ["files", "range", "api"] }
 ```
 
 ## Usage
@@ -261,10 +261,13 @@ With the `files` feature enabled:
 With the `api` feature enabled:
 
 - `api` - Actix-web endpoints for file serving, track streaming, and artwork delivery
+- `api::bind_services(scope)` - Register all files endpoints on an Actix `Scope`
 
 With the `range` feature enabled:
 
 - `range` - HTTP byte range parsing utilities
+- `range::Range` - Range type with optional `start`/`end` bounds
+- `range::parse_range()` / `range::parse_ranges()` - Parse one or more byte range expressions
 
 ## Error Handling
 
@@ -281,6 +284,7 @@ The package provides several optional features:
 
 - `files` - Enable track management, album/artist handling, and audio file pooling
 - `range` - Enable HTTP range request support
+- `track-range` - Enable byte-range handling on the `/track` API endpoint
 - `api` - Enable Actix-web API endpoints for file serving (implies `files` and `range`)
 - `openapi` - Enable OpenAPI/utoipa documentation support
 - `image` - Enable image processing with `moosicbox_image`
