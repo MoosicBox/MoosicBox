@@ -10,6 +10,7 @@ The HyperChad Transformer Models package provides:
 - **Alignment Types**: Content and item alignment options
 - **Position Models**: Element positioning and cursor types
 - **Route Models**: HTTP routing and dynamic content swapping
+- **Element Targets**: Flexible element targeting with literal and reference values
 - **Visual Models**: Visibility, image, and text styling options
 - **Typography Models**: Font weight and text decoration options
 - **Serialization**: Optional serde support for all models
@@ -47,6 +48,8 @@ The HyperChad Transformer Models package provides:
 
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
 - **Selector**: Id, Class, ChildClass, SelfTarget element targeting
+- **ElementTarget**: ById, Selector, Class, ChildClass, Id, SelfTarget, LastChild targeting
+- **Target**: Literal and Ref target value forms for element targeting
 - **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
 
@@ -149,6 +152,23 @@ let post_route = Route::Post {
 };
 ```
 
+### Element Targeting
+
+```rust
+use hyperchad_transformer_models::{ElementTarget, Selector, Target};
+
+let target = ElementTarget::by_id("results");
+let selector_target = ElementTarget::selector(Target::reference("itemSelector"));
+let child_target = ElementTarget::child_class("entry");
+
+let selector = Selector::try_from("> .entry").unwrap();
+
+assert_eq!(target.to_string(), "#results");
+assert_eq!(selector_target.to_string(), "itemSelector");
+assert_eq!(child_target.to_string(), "> .entry");
+assert_eq!(selector.to_string(), "> .entry");
+```
+
 ### Link Targets
 
 ```rust
@@ -232,6 +252,8 @@ use hyperchad_transformer_models::LayoutPosition;
 
 - **Route**: HTTP routing with dynamic content swapping
 - **Selector**: Element selector targeting
+- **ElementTarget**: Targeting by id, class, selector, or structural position
+- **Target**: Literal and reference target values
 - **SwapStrategy**: Content swap strategies
 - **LinkTarget**: Link navigation targets
 
