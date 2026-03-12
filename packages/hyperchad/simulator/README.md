@@ -16,7 +16,7 @@ Simulation framework for HyperChad applications using simvar for deterministic t
 
 ```rust
 use hyperchad_simulator::{HyperChadSimulator, RendererType, SimulationData};
-use hyperchad_test_utils::{TestPlan, FormData};
+use hyperchad_simulator::test_utils::{FormData, TestPlan};
 
 // Create simulation data
 let simulation_data = SimulationData {
@@ -41,11 +41,19 @@ let plan = TestPlan::new()
 let result = simulator.run_test_plan(plan)?;
 ```
 
+## Public API
+
+- `HyperChadSimulator::new()` creates a simulator with default `AppConfig` and empty `SimulationData`
+- `with_app_config`, `with_renderer`/`with_renderers`, `with_mock_data`, and `with_web_server` configure simulation behavior
+- `run_test_plan` executes a `TestPlan` and is available with the `test-utils` feature
+- `start_simulation_server` starts a configured `SimulationWebServer`
+- Core types: `HyperChadSimulator`, `RendererType`, `AppConfig`, `SimulationData`, `SimulatorError`
+
 ## Features
 
 Enable the `test-utils` feature to use `TestPlan` execution:
 
 ```toml
 [dependencies]
-hyperchad_simulator = { version = "0.1", features = ["test-utils"] }
+hyperchad_simulator = { version = "0.1.0", features = ["test-utils"] }
 ```
