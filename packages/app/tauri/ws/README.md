@@ -77,6 +77,14 @@ handle.close();
 - `async fn send(&self, data: &str) -> Result<(), WebsocketSendError>`: Sends a text message
 - `async fn ping(&self) -> Result<(), WebsocketSendError>`: Sends a ping message
 
+### `WebsocketSendError` enum
+
+- `Unknown(String)`: Returned when a send or ping operation fails
+
+### `ConnectWsError` enum
+
+- `Unauthorized`: Returned by `WsClient::start` when the server rejects the WebSocket handshake with HTTP 401
+
 ### `WsMessage` enum
 
 - `TextMessage(String)`: Text message
