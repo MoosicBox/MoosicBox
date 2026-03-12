@@ -40,7 +40,10 @@ The MoosicBox Music API Models package provides:
 
 ### Search Integration
 
-- **Search Models**: Search response types (with `api-search` feature)
+- **Search Models**: Search response types in `moosicbox_music_api_models::search::api` (with `api-search` feature)
+- **ApiGlobalSearchResult**: Tagged enum for artist/album/track search results
+- **ApiSearchResultsResponse**: Search result collection with pagination position
+- **ApiGlobalArtistSearchResult/ApiGlobalAlbumSearchResult/ApiGlobalTrackSearchResult**: Typed entity-specific search results
 
 ## Installation
 
@@ -48,11 +51,16 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_music_api_models = { path = "../music_api/models" }
+moosicbox_music_api_models = "0.1.4"
+```
+
+```toml
+[dependencies]
 
 # Enable API search functionality
 moosicbox_music_api_models = {
-    path = "../music_api/models",
+    version = "0.1.4",
+    default-features = false,
     features = ["api-search"]
 }
 ```
