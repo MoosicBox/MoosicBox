@@ -30,9 +30,18 @@ Currently, this package provides the complete AST (Abstract Syntax Tree) types f
 - 🔮 **Job Dependencies** - Define complex workflows with job orchestration
 - 🔮 **Step Outputs** - Pass data between steps and jobs
 
+## Installation
+
+```toml
+[dependencies]
+gpipe = "0.1.0"
+```
+
+The default feature enables the `ast` module re-export. If you disable default features, re-enable `ast` explicitly.
+
 ## Workflow Schema Specification
 
-The AST types support the following workflow schema. This section documents the intended workflow format.
+The following YAML documents the intended generic workflow format. The current AST serde representation is available today and uses explicit enum structures (for example, `triggers` is a list of entries with a `type` field).
 
 ### Top-Level Structure
 
@@ -321,6 +330,9 @@ gpipe validate workflow.yml
 ## Rust API
 
 This is an umbrella crate that re-exports the core AST types via the `ast` module:
+
+- Main entry point: `gpipe::ast`
+- Core types: `Workflow`, `Trigger`, `TriggerType`, `TriggerConfig`, `ActionDef`, `ActionType`, `ActionConfig`, `Job`, `Step`, `Expression`
 
 ```rust
 use gpipe::ast::*;
