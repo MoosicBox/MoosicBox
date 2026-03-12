@@ -266,7 +266,7 @@ let html = template.into_string();
 
 ```rust
 use hyperchad_template::{container, IntoBorder};
-use hyperchad_color::Color;
+use hyperchad_template::color::Color;
 
 let template = container! {
     div
@@ -296,7 +296,7 @@ let template = container! {
 ## Container List Wrapper
 
 ```rust
-use hyperchad_template::{ContainerList, container};
+use hyperchad_template::{Container, ContainerList, container};
 
 // Wrap containers in a list
 let containers = container! {
