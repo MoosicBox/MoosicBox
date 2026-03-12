@@ -33,7 +33,7 @@ use moosicbox_channel_utils::futures_channel::unbounded;
 
 // PrioritizedSender implements MoosicBoxSender
 let (tx, mut rx) = unbounded::<String>();
-tx.send("Hello".to_string())?;  // Uses the MoosicBoxSender trait
+tx.send("Hello".to_string()).unwrap();  // Uses the MoosicBoxSender trait
 ```
 
 ### Prioritized Channels
