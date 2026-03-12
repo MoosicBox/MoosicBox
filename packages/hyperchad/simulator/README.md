@@ -12,10 +12,18 @@ Simulation framework for HyperChad applications using simvar for deterministic t
 
 **Note**: Renderer simulation implementations are currently placeholders. Full renderer testing capabilities are planned.
 
+## Core API
+
+- `HyperChadSimulator::new()` creates a simulator with default `AppConfig` and empty `SimulationData`
+- `with_app_config`, `with_renderer`/`with_renderers`, `with_mock_data`, and `with_web_server` configure simulation inputs
+- `run_test_plan` executes a `TestPlan` and is available only with the `test-utils` feature
+- `start_simulation_server` starts the configured `SimulationWebServer`
+- `AppConfig`, `SimulationData`, and `RendererType` are the primary configuration types
+
 ## Usage
 
 ```rust
-use hyperchad_simulator::{HyperChadSimulator, RendererType, SimulationData};
+use hyperchad_simulator::{AppConfig, HyperChadSimulator, RendererType, SimulationData};
 use hyperchad_test_utils::{TestPlan, FormData};
 
 // Create simulation data
@@ -27,7 +35,13 @@ let simulation_data = SimulationData {
 
 // Create simulator
 let simulator = HyperChadSimulator::new()
-    .with_renderer(RendererType::VanillaJs)
+    .with_app_config(AppConfig {
+        name: "my-app".to_string(),
+        routes: vec!["/login".to_string(), "/dashboard".to_string()],
+        static_assets: std::collections::BTreeMap::new(),
+        environment: std::collections::BTreeMap::new(),
+    })
+    .with_renderers(vec![RendererType::Html, RendererType::VanillaJs])
     .with_mock_data(simulation_data);
 
 // Create test plan
@@ -41,11 +55,26 @@ let plan = TestPlan::new()
 let result = simulator.run_test_plan(plan)?;
 ```
 
+Start a simulation web server:
+
+```rust
+use std::sync::Arc;
+
+use hyperchad_simulator::{web_server::SimulationWebServer, HyperChadSimulator};
+
+# async fn example() -> Result<(), hyperchad_simulator::SimulatorError> {
+let web_server = Arc::new(SimulationWebServer::new());
+let simulator = HyperChadSimulator::new().with_web_server(web_server);
+simulator.start_simulation_server().await?;
+# Ok(())
+# }
+```
+
 ## Features
 
 Enable the `test-utils` feature to use `TestPlan` execution:
 
 ```toml
 [dependencies]
-hyperchad_simulator = { version = "0.1", features = ["test-utils"] }
+hyperchad_simulator = { version = "0.1.0", features = ["test-utils"] }
 ```
