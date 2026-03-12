@@ -20,8 +20,12 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_library = "0.1.4"
+```
 
-# Enable additional features
+Enable additional features:
+
+```toml
+[dependencies]
 moosicbox_library = { version = "0.1.4", features = ["api"] }
 ```
 
@@ -301,6 +305,10 @@ async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>>
 - `search()` - Search across library content
 - `track_file_url()` - Get file URL for track playback
 - `reindex_global_search_index()` - Rebuild the search index from library data
+
+### API Integration (`api` feature)
+
+- `api::bind_services()` - Register all library HTTP endpoints on an Actix-web scope
 
 ### Management Functions
 
