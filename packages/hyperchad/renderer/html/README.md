@@ -45,20 +45,24 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_renderer_html = { path = "../hyperchad/renderer/html" }
+```
 
-# With Actix Web support
+Enable optional integrations by adding features to the same dependency declaration:
+
+```toml
+# Actix Web support
 hyperchad_renderer_html = {
     path = "../hyperchad/renderer/html",
     features = ["actix"]
 }
 
-# With Lambda support
+# Lambda support
 hyperchad_renderer_html = {
     path = "../hyperchad/renderer/html",
     features = ["lambda"]
 }
 
-# With asset serving
+# Static asset serving
 hyperchad_renderer_html = {
     path = "../hyperchad/renderer/html",
     features = ["assets"]
@@ -149,8 +153,7 @@ async fn main() -> std::io::Result<()> {
 
     // Create HTML renderer with Actix integration
     let renderer = router_to_actix(tag_renderer, router)
-        .with_title(Some("My App".to_string()))
-        .with_viewport(Some("width=device-width, initial-scale=1".to_string()));
+        .with_title(Some("My App".to_string()));
 
     // Convert to runner and start server
     let runner = renderer.to_runner(Handle::current())?;
@@ -181,8 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create HTML renderer with Lambda integration
     let _renderer = router_to_lambda(tag_renderer, router)
-        .with_title(Some("My Serverless App".to_string()))
-        .with_viewport(Some("width=device-width, initial-scale=1".to_string()));
+        .with_title(Some("My Serverless App".to_string()));
 
     // The Lambda runtime and handler are managed internally
     // Use this renderer within your Lambda function handler
