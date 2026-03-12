@@ -64,11 +64,28 @@ hyperchad_renderer = {
 ### Implementing a Renderer
 
 ```rust
-use hyperchad_renderer::{Renderer, View, Color, Handle};
+use hyperchad_renderer::{Renderer, RenderRunner, ToRenderRunner, View, Color, Handle};
 use async_trait::async_trait;
 
 struct MyRenderer {
     // Renderer state
+}
+
+struct MyRunner;
+
+impl RenderRunner for MyRunner {
+    fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        Ok(())
+    }
+}
+
+impl ToRenderRunner for MyRenderer {
+    fn to_runner(
+        self,
+        _handle: Handle,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+        Ok(Box::new(MyRunner))
+    }
 }
 
 #[async_trait]
