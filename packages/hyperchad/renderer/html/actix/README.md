@@ -73,7 +73,7 @@ fn main() {
     let (tx, rx) = flume::unbounded::<RendererEvent>();
     let processor = MyProcessor;
     let app = ActixApp::new(processor, rx);
-    // Use app.to_runner() to create a RenderRunner
+    // Use app.to_runner(handle) to create a RenderRunner
 }
 ```
 
