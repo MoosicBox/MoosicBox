@@ -250,25 +250,36 @@ pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWrite
 ## Error Handling
 
 ```rust
-use switchy_tcp::{Error, TcpStream};
+use switchy_tcp::{Error, TcpListener, TcpStream};
 
 async fn handle_tcp_errors() {
+    // Listener binding uses switchy_tcp::Error
+    match TcpListener::bind("invalid-address").await {
+        Ok(listener) => {
+            // Handle successful bind
+        }
+        Err(Error::IO(io_err)) => {
+            eprintln!("Listener I/O error: {}", io_err);
+        }
+        Err(Error::AddrParse(parse_err)) => {
+            eprintln!("Listener address parse error: {}", parse_err);
+        }
+        Err(Error::ParseInt(int_err)) => {
+            eprintln!("Listener integer parse error: {}", int_err);
+        }
+        #[cfg(feature = "simulator")]
+        Err(Error::Send) => {
+            eprintln!("Listener simulator send error");
+        }
+    }
+
+    // Stream connection uses std::io::Result
     match TcpStream::connect("invalid-address").await {
         Ok(stream) => {
             // Handle successful connection
         }
-        Err(Error::IO(io_err)) => {
-            eprintln!("I/O error: {}", io_err);
-        }
-        Err(Error::AddrParse(parse_err)) => {
-            eprintln!("Address parse error: {}", parse_err);
-        }
-        Err(Error::ParseInt(int_err)) => {
-            eprintln!("Integer parse error: {}", int_err);
-        }
-        #[cfg(feature = "simulator")]
-        Err(Error::Send) => {
-            eprintln!("Simulator send error");
+        Err(io_err) => {
+            eprintln!("Stream I/O error: {}", io_err);
         }
     }
 }
