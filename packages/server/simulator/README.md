@@ -23,7 +23,7 @@ The MoosicBox Server Simulator package provides:
 ### Connection Utilities
 
 - **Retry Logic**: Automatic connection retry with backoff
-- **Timeout Handling**: Configurable connection timeouts
+- **Timeout Handling**: 5-second timeout per connection attempt
 - **Error Recovery**: Handle connection refused and reset scenarios
 
 ### Simulation Integration
@@ -82,6 +82,49 @@ fn on_step(sim: &mut impl Sim) {
     perform_simulation_step(sim);
 }
 ```
+
+### Full Simulator Bootstrap
+
+```rust
+use moosicbox_server_simulator::{client, handle_actions, host};
+use simvar::{Sim, SimBootstrap};
+
+struct Simulator;
+
+impl SimBootstrap for Simulator {
+    fn on_start(&self, sim: &mut impl Sim) {
+        host::moosicbox_server::start(sim, None);
+        client::health_checker::start(sim);
+        client::fault_injector::start(sim);
+    }
+
+    fn on_step(&self, sim: &mut impl Sim) {
+        handle_actions(sim);
+    }
+}
+```
+
+### HTTP Utilities
+
+```rust
+use moosicbox_server_simulator::{http, try_connect};
+
+let mut stream = try_connect("127.0.0.1:1234", 5).await?;
+let raw = http::http_request("GET", &mut stream, "/health").await?;
+let parsed = http::parse_http_response(&raw)?;
+
+assert_eq!(parsed.status_code, 200);
+```
+
+### Running the Simulator Binary
+
+```bash
+cargo run -p moosicbox_server_simulator
+```
+
+Optional environment variable:
+
+- `PORT`: service port used by `host::moosicbox_server::start` in the simulator binary
 
 ## Modules
 
