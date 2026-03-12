@@ -44,22 +44,25 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperchad_renderer_html_lambda = { path = "../hyperchad/renderer/html/lambda" }
-hyperchad_template = { path = "../hyperchad/template" }  # For template DSL support
-
-# With JSON support
-hyperchad_renderer_html_lambda = {
-    path = "../hyperchad/renderer/html/lambda",
-    features = ["json"]
-}
-
-# With asset serving
-hyperchad_renderer_html_lambda = {
-    path = "../hyperchad/renderer/html/lambda",
-    features = ["assets"]
-}
+hyperchad_renderer_html_lambda = "0.1.4"
+hyperchad_template = "0.1.4"  # For template DSL support
 ```
 
+With JSON support:
+
+```toml
+[dependencies]
+hyperchad_renderer_html_lambda = { version = "0.1.4", features = ["json"] }
+hyperchad_template = "0.1.4"
+```
+
+With asset serving:
+
+```toml
+[dependencies]
+hyperchad_renderer_html_lambda = { version = "0.1.4", features = ["assets"] }
+hyperchad_template = "0.1.4"
+```
 ## Usage
 
 > **Note**: The examples below use the HyperChad template DSL (`container!` macro from `hyperchad_template`). While the Lambda renderer itself only handles HTML strings, most users will be using HyperChad templates to generate that HTML. You can also use raw HTML strings or any other templating approach that returns a `String`.
@@ -75,6 +78,7 @@ use lambda_runtime::Error;
 use bytes::Bytes;
 use std::sync::Arc;
 
+#[derive(Clone)]
 struct MyLambdaProcessor;
 
 #[async_trait::async_trait]
@@ -179,7 +183,7 @@ async fn main() -> Result<(), Error> {
     let processor = MyLambdaProcessor;
     let app = LambdaApp::new(processor);
 
-    let runner = app.to_runner(hyperchad_renderer::Handle::current())?;
+    let mut runner = app.to_runner(hyperchad_renderer::Handle::current())?;
     runner.run().map_err(|e| Error::from(e.to_string()))?;
 
     Ok(())
@@ -214,6 +218,7 @@ mod api_example {
         email: String,
     }
 
+    #[derive(Clone)]
     struct ApiProcessor;
 
     #[async_trait::async_trait]
@@ -329,6 +334,7 @@ mod asset_example {
     use bytes::Bytes;
     use std::sync::Arc;
 
+    #[derive(Clone)]
     struct AssetProcessor;
 
     #[async_trait::async_trait]
@@ -428,6 +434,7 @@ use lambda_runtime::Error;
 use bytes::Bytes;
 use std::{env, sync::Arc};
 
+#[derive(Clone)]
 struct ConfigurableProcessor {
     environment: String,
     debug: bool,
@@ -570,9 +577,12 @@ sam deploy --guided
 - **lambda_http**: AWS Lambda HTTP event handling
 - **lambda_runtime**: AWS Lambda runtime integration
 - **hyperchad_renderer**: Core HTML rendering functionality
+- **moosicbox_assert**: Runtime assertion utilities used by the renderer
+- **moosicbox_env_utils**: Environment variable helpers used by the renderer
 - **flate2**: Gzip compression support
 - **bytes**: Efficient byte buffer handling
 - **async-trait**: Async trait support
+- **log**: Logging support
 - **serde_json**: JSON serialization (optional, enabled by default)
 
 ## Integration
