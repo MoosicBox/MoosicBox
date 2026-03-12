@@ -8,7 +8,8 @@ use ratatui::{
     Frame,
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
 };
 
@@ -22,11 +23,85 @@ enum PaneStatus {
     Failed,
 }
 
+#[derive(Clone, Debug, Default)]
+struct AnsiStyleState {
+    fg: Option<Color>,
+    bg: Option<Color>,
+    modifiers: Modifier,
+}
+
+impl AnsiStyleState {
+    fn as_style(&self) -> Style {
+        let mut style = Style::default();
+        if let Some(fg) = self.fg {
+            style = style.fg(fg);
+        }
+        if let Some(bg) = self.bg {
+            style = style.bg(bg);
+        }
+        style.add_modifier(self.modifiers)
+    }
+
+    fn reset(&mut self) {
+        self.fg = None;
+        self.bg = None;
+        self.modifiers = Modifier::empty();
+    }
+
+    fn apply_sgr_params(&mut self, params: &[i32]) {
+        let mut index = 0_usize;
+        while index < params.len() {
+            let code = params[index];
+            match code {
+                0 => self.reset(),
+                1 => self.modifiers.insert(Modifier::BOLD),
+                2 => self.modifiers.insert(Modifier::DIM),
+                3 => self.modifiers.insert(Modifier::ITALIC),
+                4 => self.modifiers.insert(Modifier::UNDERLINED),
+                5 => self.modifiers.insert(Modifier::SLOW_BLINK),
+                6 => self.modifiers.insert(Modifier::RAPID_BLINK),
+                7 => self.modifiers.insert(Modifier::REVERSED),
+                8 => self.modifiers.insert(Modifier::HIDDEN),
+                9 => self.modifiers.insert(Modifier::CROSSED_OUT),
+                22 => self.modifiers.remove(Modifier::BOLD | Modifier::DIM),
+                23 => self.modifiers.remove(Modifier::ITALIC),
+                24 => self.modifiers.remove(Modifier::UNDERLINED),
+                25 => self
+                    .modifiers
+                    .remove(Modifier::SLOW_BLINK | Modifier::RAPID_BLINK),
+                27 => self.modifiers.remove(Modifier::REVERSED),
+                28 => self.modifiers.remove(Modifier::HIDDEN),
+                29 => self.modifiers.remove(Modifier::CROSSED_OUT),
+                30..=37 => self.fg = Some(Color::Indexed((code - 30) as u8)),
+                39 => self.fg = None,
+                40..=47 => self.bg = Some(Color::Indexed((code - 40) as u8)),
+                49 => self.bg = None,
+                90..=97 => self.fg = Some(Color::Indexed((code - 90 + 8) as u8)),
+                100..=107 => self.bg = Some(Color::Indexed((code - 100 + 8) as u8)),
+                38 | 48 => {
+                    let is_foreground = code == 38;
+                    if let Some((color, consumed)) = parse_extended_color(params, index + 1) {
+                        if is_foreground {
+                            self.fg = Some(color);
+                        } else {
+                            self.bg = Some(color);
+                        }
+                        index += consumed;
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+    }
+}
+
 struct PaneState {
     display_name: String,
-    lines: VecDeque<String>,
+    lines: VecDeque<Line<'static>>,
     status: PaneStatus,
     scroll_offset: usize,
+    ansi_state: AnsiStyleState,
 }
 
 impl PaneState {
@@ -36,11 +111,13 @@ impl PaneState {
             lines: VecDeque::new(),
             status: PaneStatus::Pending,
             scroll_offset: 0,
+            ansi_state: AnsiStyleState::default(),
         }
     }
 
     fn push_line(&mut self, line: String) {
-        self.lines.push_back(strip_ansi_sequences(&line));
+        self.lines
+            .push_back(parse_ansi_line(&line, &mut self.ansi_state));
         while self.lines.len() > 2_000 {
             let _ = self.lines.pop_front();
         }
@@ -332,18 +409,19 @@ fn render_panes(
             if let Some((tool_name, _)) = tools.get(tool_index)
                 && let Some(pane) = panes.get(tool_name)
             {
-                let style = match pane.status {
-                    PaneStatus::Pending => Style::default().fg(Color::DarkGray),
-                    PaneStatus::Running => Style::default().fg(Color::Yellow),
-                    PaneStatus::Passed => Style::default().fg(Color::Green),
-                    PaneStatus::Failed => Style::default().fg(Color::Red),
+                let status_color = match pane.status {
+                    PaneStatus::Pending => Color::DarkGray,
+                    PaneStatus::Running => Color::Yellow,
+                    PaneStatus::Passed => Color::Green,
+                    PaneStatus::Failed => Color::Red,
                 };
                 let is_focused = tool_index == focused_index;
 
                 let max_lines = col_area.height.saturating_sub(2) as usize;
                 let total_lines = pane.lines.len();
                 let max_start = total_lines.saturating_sub(max_lines);
-                let desired_start = total_lines.saturating_sub(max_lines + pane.scroll_offset);
+                let distance_from_tail = max_lines.saturating_add(pane.scroll_offset);
+                let desired_start = total_lines.saturating_sub(distance_from_tail);
                 let start = desired_start.min(max_start);
 
                 let visible_lines = if total_lines > max_lines {
@@ -358,15 +436,15 @@ fn render_panes(
                 };
 
                 let content = if visible_lines.is_empty() {
-                    String::new()
+                    Text::raw("")
                 } else {
-                    visible_lines.join("\n")
+                    Text::from(visible_lines)
                 };
 
                 let border_style = if is_focused {
                     Style::default().fg(Color::Cyan)
                 } else {
-                    Style::default()
+                    Style::default().fg(status_color)
                 };
                 let scroll_label = if pane.scroll_offset == 0 {
                     "tail"
@@ -374,7 +452,7 @@ fn render_panes(
                     "scroll"
                 };
 
-                let paragraph = Paragraph::new(content).style(style).block(
+                let paragraph = Paragraph::new(content).block(
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(border_style)
@@ -392,6 +470,140 @@ fn render_panes(
     }
 }
 
+fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line<'static> {
+    let bytes = input.as_bytes();
+    let mut index = 0_usize;
+    let mut segment_start = 0_usize;
+    let mut spans: Vec<Span<'static>> = Vec::new();
+
+    while index < bytes.len() {
+        if bytes[index] != 0x1B {
+            index += 1;
+            continue;
+        }
+
+        if segment_start < index {
+            spans.push(Span::styled(
+                input[segment_start..index].to_string(),
+                state.as_style(),
+            ));
+        }
+
+        index += 1;
+        if index >= bytes.len() {
+            break;
+        }
+
+        match bytes[index] {
+            b'[' => {
+                index += 1;
+                let params_start = index;
+                while index < bytes.len() && !(0x40..=0x7E).contains(&bytes[index]) {
+                    index += 1;
+                }
+
+                if index < bytes.len() {
+                    let final_byte = bytes[index];
+                    if final_byte == b'm' {
+                        let params = parse_sgr_params(&bytes[params_start..index]);
+                        state.apply_sgr_params(&params);
+                    }
+                    index += 1;
+                }
+                segment_start = index;
+            }
+            b']' => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == 0x07 {
+                        index += 1;
+                        break;
+                    }
+                    if index + 1 < bytes.len() && bytes[index] == 0x1B && bytes[index + 1] == b'\\'
+                    {
+                        index += 2;
+                        break;
+                    }
+                    index += 1;
+                }
+                segment_start = index;
+            }
+            _ => {
+                segment_start = index;
+            }
+        }
+    }
+
+    if segment_start < input.len() {
+        spans.push(Span::styled(
+            input[segment_start..].to_string(),
+            state.as_style(),
+        ));
+    }
+
+    if spans.is_empty() {
+        Line::from(String::new())
+    } else {
+        Line::from(spans)
+    }
+}
+
+fn parse_sgr_params(params: &[u8]) -> Vec<i32> {
+    if params.is_empty() {
+        return vec![0];
+    }
+
+    let mut values = Vec::new();
+    let mut current: Option<i32> = None;
+
+    for byte in params {
+        if byte.is_ascii_digit() {
+            let digit = i32::from(byte - b'0');
+            let prior = current.unwrap_or(0);
+            current = Some(prior.saturating_mul(10).saturating_add(digit));
+        } else if *byte == b';' || *byte == b':' {
+            if let Some(value) = current.take() {
+                values.push(value);
+            }
+        }
+    }
+
+    if let Some(value) = current {
+        values.push(value);
+    }
+
+    if values.is_empty() { vec![0] } else { values }
+}
+
+fn parse_extended_color(params: &[i32], index: usize) -> Option<(Color, usize)> {
+    if index >= params.len() {
+        return None;
+    }
+
+    match params[index] {
+        5 => {
+            if index + 1 >= params.len() {
+                return None;
+            }
+
+            let value = params[index + 1];
+            let clamped = value.clamp(0, 255) as u8;
+            Some((Color::Indexed(clamped), 2))
+        }
+        2 => {
+            if index + 3 >= params.len() {
+                return None;
+            }
+
+            let r = params[index + 1].clamp(0, 255) as u8;
+            let g = params[index + 2].clamp(0, 255) as u8;
+            let b = params[index + 3].clamp(0, 255) as u8;
+            Some((Color::Rgb(r, g, b), 4))
+        }
+        _ => None,
+    }
+}
+
 const fn status_label(status: PaneStatus) -> &'static str {
     match status {
         PaneStatus::Pending => "pending",
@@ -401,50 +613,38 @@ const fn status_label(status: PaneStatus) -> &'static str {
     }
 }
 
-fn strip_ansi_sequences(input: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch != '\u{1B}' {
-            output.push(ch);
-            continue;
-        }
-
-        match chars.next() {
-            Some('[') => {
-                for c in chars.by_ref() {
-                    if ('@'..='~').contains(&c) {
-                        break;
-                    }
-                }
-            }
-            Some(']') => {
-                let mut prev_was_esc = false;
-                for c in chars.by_ref() {
-                    if c == '\u{7}' {
-                        break;
-                    }
-                    if prev_was_esc && c == '\\' {
-                        break;
-                    }
-                    prev_was_esc = c == '\u{1B}';
-                }
-            }
-            Some(_) | None => {}
-        }
-    }
-
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn strip_ansi_sequences_removes_csi_codes() {
-        let input = "\u{1b}[1m\u{1b}[92mhello\u{1b}[0m world";
-        assert_eq!(strip_ansi_sequences(input), "hello world");
+    fn parse_ansi_line_applies_basic_color() {
+        let mut state = AnsiStyleState::default();
+        let line = parse_ansi_line("\u{1b}[31mhello\u{1b}[0m", &mut state);
+
+        assert_eq!(line.spans.len(), 1);
+        assert_eq!(line.spans[0].content.as_ref(), "hello");
+        assert_eq!(line.spans[0].style.fg, Some(Color::Indexed(1)));
+        assert_eq!(state.fg, None);
+    }
+
+    #[test]
+    fn parse_ansi_line_persists_style_across_lines() {
+        let mut state = AnsiStyleState::default();
+        let first = parse_ansi_line("\u{1b}[32mgreen", &mut state);
+        let second = parse_ansi_line("still green", &mut state);
+        let _third = parse_ansi_line("\u{1b}[0mreset", &mut state);
+
+        assert_eq!(first.spans[0].style.fg, Some(Color::Indexed(2)));
+        assert_eq!(second.spans[0].style.fg, Some(Color::Indexed(2)));
+        assert_eq!(state.fg, None);
+    }
+
+    #[test]
+    fn parse_ansi_line_supports_truecolor() {
+        let mut state = AnsiStyleState::default();
+        let line = parse_ansi_line("\u{1b}[38;2;12;34;56mcolor", &mut state);
+
+        assert_eq!(line.spans[0].style.fg, Some(Color::Rgb(12, 34, 56)));
     }
 }
