@@ -34,10 +34,7 @@ The MoosicBox Stream Utils package provides:
 moosicbox_stream_utils = { path = "../stream_utils" }
 
 # Optional: Enable specific features
-moosicbox_stream_utils = {
-    path = "../stream_utils",
-    features = ["stalled-monitor", "remote-bytestream"]
-}
+# moosicbox_stream_utils = { path = "../stream_utils", features = ["stalled-monitor", "remote-bytestream"] }
 ```
 
 ## Usage
