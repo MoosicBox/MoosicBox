@@ -24,7 +24,7 @@ The MoosicBox Tauri Config Generator provides:
 
 - **Build-time Generation**: Generate config during build process
 - **Path Flexibility**: Configurable output file paths
-- **Atomic Writes**: Safe file writing with truncation
+- **Overwrite Writes**: Recreates output using create + truncate behavior
 
 ### Command-Line Interface
 
