@@ -12,6 +12,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+hyperchad_template = { version = "0.1.4" }
 hyperchad_template_macros = { version = "0.1.4" }
 ```
 
@@ -118,4 +119,4 @@ Supported units: `%`, `vw`, `vh`, `dvw`, `dvh`, `px`, `em`, `rem`, `ch`, `ex`, `
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+See the [LICENSE](../../../../LICENSE) file for details.
