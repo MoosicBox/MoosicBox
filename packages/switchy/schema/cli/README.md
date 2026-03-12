@@ -50,6 +50,7 @@ Precedence: CLI flags override environment variables.
 - `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
 - `SWITCHY_DUCKDB_MODE`: DuckDB routing mode (`deterministic` or `pooled`)
 - `SWITCHY_DUCKDB_CONSISTENCY`: DuckDB consistency policy (`strict` or `relaxed`)
+- `MIGRATION_REQUIRE_CHECKSUM_VALIDATION`: Require checksum validation during `migrate` when set to `true` or `1`
 
 ## Commands
 
