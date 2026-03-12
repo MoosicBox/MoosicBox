@@ -37,6 +37,34 @@ Or using cargo:
 cargo run --bin moosicbox_lb
 ```
 
+### Library API
+
+For embedding load-balancing routing into another Rust service:
+
+```rust,no_run
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use moosicbox_load_balancer::{PORT, Router, SSL_CRT_PATH, SSL_KEY_PATH, SSL_PORT};
+use pingora_load_balancing::{LoadBalancer, selection::RoundRobin};
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let upstreams = ["127.0.0.1:8001", "127.0.0.1:8002"];
+let lb = Arc::new(LoadBalancer::<RoundRobin>::try_from_iter(&upstreams)?);
+
+let mut routes = BTreeMap::new();
+routes.insert("*".to_string(), lb);
+
+let _router = Router::new(routes);
+
+let _http_port: u16 = *PORT;
+let _https_port: u16 = *SSL_PORT;
+let _crt_path: &str = SSL_CRT_PATH.as_str();
+let _key_path: &str = SSL_KEY_PATH.as_str();
+# Ok(())
+# }
+```
+
 ### Configuration
 
 The load balancer is configured through environment variables.
