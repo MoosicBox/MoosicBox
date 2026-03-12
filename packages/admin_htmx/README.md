@@ -88,13 +88,13 @@ The package provides HTMX-compatible HTML endpoints:
 - `DELETE /admin/scan-paths` - Remove a scan path
 - `POST /admin/run-scan` - Trigger a library scan
 
-**Qobuz Integration (requires `qobuz` feature):**
+**Qobuz Integration (requires `qobuz` feature; `scan` also required for run-scan):**
 
 - `GET /admin/qobuz/settings` - Qobuz settings and login status
 - `POST /admin/qobuz/auth/user-login` - Login to Qobuz
 - `POST /admin/qobuz/run-scan` - Run Qobuz library scan
 
-**Tidal Integration (requires `tidal` feature):**
+**Tidal Integration (requires `tidal` feature; `scan` also required for run-scan):**
 
 - `GET /admin/tidal/settings` - Tidal settings and login status
 - `POST /admin/tidal/auth/device-authorization` - Start Tidal device auth
