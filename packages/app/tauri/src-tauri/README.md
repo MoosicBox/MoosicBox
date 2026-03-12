@@ -224,15 +224,16 @@ cargo tauri build --bundles rpm  # Linux RPM
 ### Core Dependencies
 
 - **Tauri**: Desktop application framework
-- **MoosicBox Core**: Music streaming and player functionality
-- **Tokio**: Async runtime
+- **moosicbox_app_state**: Shared application state and source configuration
+- **moosicbox_player**: Playback engine and output backends
+- **moosicbox_ws**: WebSocket protocol models and messaging support
 - **Serde**: Serialization framework
 
 ### Optional Dependencies
 
-- **HyperChad**: Native UI components (with `moosicbox-app-native`)
-- **HTTP Server**: Built-in HTTP server for web interface
-- **WebSocket**: Real-time communication
+- **HyperChad / moosicbox_app_native**: Native UI components (with `moosicbox-app-native`)
+- **moosicbox_app_tauri_bundled**: Bundled embedded services (with `bundled`)
+- **moosicbox_app_client**: Client integration hooks (with `client`)
 
 ## Platform Support
 
