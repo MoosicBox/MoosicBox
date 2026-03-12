@@ -49,7 +49,7 @@ The main interface for controlling playback:
 use moosicbox_player::{PlaybackHandler, Player};
 
 // Create a player implementation (e.g., LocalPlayer)
-let handler = PlaybackHandler::new(player);
+let mut handler = PlaybackHandler::new(player);
 
 // Control playback
 handler.play_track(session_id, profile, track, seek, volume, quality, playback_target, retry_options).await?;
@@ -310,61 +310,62 @@ on_playback_event(my_event_handler);
 ## HTTP API Integration
 
 When used with the MoosicBox Server, the player provides REST endpoints for playback control.
+All endpoints require a profile via either `moosicbox-profile` header or `moosicboxProfile` query parameter.
 
 ### Play Track
 
 ```bash
-POST /player/play/track?sessionId=1&trackId=123&volume=0.8
+POST /player/play/track?moosicboxProfile=default&sessionId=1&trackId=123&volume=0.8
 ```
 
 ### Play Album
 
 ```bash
-POST /player/play/album?sessionId=1&albumId=456&position=0
+POST /player/play/album?moosicboxProfile=default&sessionId=1&albumId=456&position=0
 ```
 
 ### Play Multiple Tracks
 
 ```bash
-POST /player/play/tracks?sessionId=1&trackIds=123,124,125&position=0
+POST /player/play/tracks?moosicboxProfile=default&sessionId=1&trackIds=123,124,125&position=0
 ```
 
 ### Pause/Resume
 
 ```bash
-POST /player/pause
-POST /player/resume
+POST /player/pause?moosicboxProfile=default
+POST /player/resume?moosicboxProfile=default
 ```
 
 ### Seek
 
 ```bash
-POST /player/seek?seek=45.5
+POST /player/seek?moosicboxProfile=default&seek=45.5
 ```
 
 ### Next/Previous Track
 
 ```bash
-POST /player/next-track
-POST /player/previous-track
+POST /player/next-track?moosicboxProfile=default
+POST /player/previous-track?moosicboxProfile=default
 ```
 
 ### Stop
 
 ```bash
-POST /player/stop
+POST /player/stop?moosicboxProfile=default
 ```
 
 ### Get Status
 
 ```bash
-GET /player/status
+GET /player/status?moosicboxProfile=default
 ```
 
 ### Update Playback
 
 ```bash
-POST /player/update-playback?playing=true&position=2&volume=0.7
+POST /player/update-playback?moosicboxProfile=default&playing=true&position=2&volume=0.7
 ```
 
 ## Configuration
