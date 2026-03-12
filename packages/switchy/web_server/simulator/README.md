@@ -13,10 +13,10 @@ In-memory HTTP request/response simulation for deterministic testing. This packa
 
 ## Core Types
 
-- `SimulationWebServer`: Main server implementation with route and mock management
-- `SimulatedRequest`: Represents an HTTP request with method, path, headers, and body
-- `SimulatedResponse`: Represents an HTTP response with status code, headers, and body
-- `RouteHandler`: Async handler function for processing requests
+- `SimulationWebServer`: Main server implementation with route and mock management (`add_route`, `add_mock_response`, `start`, `stop`, `handle_request`, `get_request_log`, `clear_request_log`)
+- `SimulatedRequest`: Represents an HTTP request with method, path, headers, and body (`new`, `with_query_string`, `with_header`, `with_headers`, `with_body`, `with_json_body`)
+- `SimulatedResponse`: Represents an HTTP response with status code, headers, and body (`new`, `ok`, `not_found`, `internal_server_error`, `with_header`, `with_body`, `with_text_body`, `with_html_body`, `with_json_body`)
+- `RouteHandler`: Async handler function for processing requests (`RouteHandler::new` for custom handlers)
 - `Error`: Error types for route matching and handler execution
 
 ## Usage
