@@ -83,17 +83,21 @@ async fn manage_paths(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Er
 ### Managing Scan Origins
 
 ```rust
+use std::str::FromStr;
+
 use moosicbox_scan::{enable_scan_origin, disable_scan_origin, get_scan_origins, ScanOrigin};
 
 async fn manage_origins(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    let tidal = ScanOrigin::from_str("API:TIDAL")?;
+
     // Enable a music API origin
-    enable_scan_origin(db, &ScanOrigin::Tidal).await?;
+    enable_scan_origin(db, &tidal).await?;
 
     // Get all enabled origins
     let origins = get_scan_origins(db).await?;
 
     // Disable an origin
-    disable_scan_origin(db, &ScanOrigin::Tidal).await?;
+    disable_scan_origin(db, &tidal).await?;
 
     Ok(())
 }
@@ -102,15 +106,19 @@ async fn manage_origins(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::
 ### Running Scans
 
 ```rust
+use std::str::FromStr;
+
 use moosicbox_scan::{run_scan, ScanOrigin};
 
 async fn scan_library(
     db: &LibraryDatabase,
     music_apis: MusicApis,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let tidal = ScanOrigin::from_str("API:TIDAL")?;
+
     // Scan specific origins
     run_scan(
-        Some(vec![ScanOrigin::Local, ScanOrigin::Tidal]),
+        Some(vec![ScanOrigin::Local, tidal]),
         db,
         music_apis,
     ).await?;
@@ -174,11 +182,11 @@ use moosicbox_scan::api::bind_services;
 let scan_scope = bind_services(web::scope("/scan"));
 ```
 
-- `POST /run-scan?origins=Local,Tidal` - Run a scan synchronously
-- `POST /start-scan?origins=Local` - Start a scan asynchronously
+- `POST /run-scan?origins=LOCAL,API:TIDAL` - Run a scan synchronously
+- `POST /start-scan?origins=LOCAL` - Start a scan asynchronously
 - `GET /scan-origins` - Get enabled scan origins (requires `local` feature)
-- `POST /scan-origins?origin=Tidal` - Enable a scan origin
-- `DELETE /scan-origins?origin=Tidal` - Disable a scan origin
+- `POST /scan-origins?origin=API:TIDAL` - Enable a scan origin
+- `DELETE /scan-origins?origin=API:TIDAL` - Disable a scan origin
 - `GET /scan-paths` - Get local scan paths (requires `local` feature)
 - `POST /scan-paths?path=/music` - Add a local scan path (requires `local` feature)
 - `DELETE /scan-paths?path=/music` - Remove a local scan path (requires `local` feature)
