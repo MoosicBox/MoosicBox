@@ -194,6 +194,32 @@ async fn query_sessions(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::
 }
 ```
 
+### API Endpoints (`api` feature)
+
+When the `api` feature is enabled, mount the session endpoints with `api::bind_services`:
+
+```rust
+use actix_web::{App, web};
+use moosicbox_session::api::bind_services;
+
+let app = App::new().service(bind_services(web::scope("/session")));
+```
+
+This binds session routes including `/session`, `/sessions`, `/session-playlist`, `/session-playlist-tracks`, `/session-audio-zone`, `/session-playing`, `/register-players`, and `/register-connection`.
+
+### Player Update Events (`events` feature)
+
+When the `events` feature is enabled, subscribe to and trigger player update events:
+
+```rust
+use moosicbox_session::events::{on_players_updated_event, trigger_players_updated_event};
+
+async fn events_example() {
+    on_players_updated_event(|| async { Ok(()) }).await;
+    let _ = trigger_players_updated_event().await;
+}
+```
+
 ## Core Types
 
 ### Session
