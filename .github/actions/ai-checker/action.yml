@@ -474,17 +474,81 @@ runs:
 
               chmod 600 "$AUTH_DIR/auth.json"
 
+        - name: Install OpenCode CLI
+          if: inputs.command == 'check'
+          shell: bash
+          run: |
+              set -euo pipefail
+              curl -fsSL https://opencode.ai/install | bash
+              echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
         - name: Run OpenCode
           if: inputs.command == 'check'
           id: opencode
-          uses: anomalyco/opencode/github@latest
+          shell: bash
           env:
               GITHUB_TOKEN: ${{ inputs.github_token }}
-          with:
-              model: ${{ steps.config.outputs.model }}
-              prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
-              use_github_token: "true"
-              mentions: "@moosicboxbot"
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              set -euo pipefail
+
+              TARGET_BRANCH="${{ steps.setup_branch.outputs.branch_name }}"
+              CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+              if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+                echo "❌ Expected to run on branch '$TARGET_BRANCH' but found '$CURRENT_BRANCH'"
+                exit 1
+              fi
+
+              GUARD_FILE="/tmp/opencode-guard.md"
+              PROMPT_FILE="/tmp/opencode-prompt.md"
+              OUTPUT_FILE="output.txt"
+
+              cat > "$GUARD_FILE" << 'EOF'
+              CRITICAL WORKFLOW CONSTRAINTS:
+              - You are running inside a controlled CI workflow.
+              - The target branch is already created and checked out for you.
+              - NEVER create, switch, rename, or delete git branches.
+              - NEVER run git checkout/switch/rebase/reset/cherry-pick.
+              - NEVER run git commit or git push.
+              - Modify files only; commit/push is handled by the workflow after you finish.
+              EOF
+
+              {
+                cat "$GUARD_FILE"
+                printf '\n\n'
+                cat << 'EOF'
+              ${{ steps.resolve_template.outputs.rendered_prompt }}
+              EOF
+              } > "$PROMPT_FILE"
+
+              set +e
+              opencode run --model "${{ steps.config.outputs.model }}" "$(cat "$PROMPT_FILE")" | tee "$OUTPUT_FILE"
+              OPENCODE_EXIT=${PIPESTATUS[0]}
+              set -e
+
+              echo "execution_file=" >> "$GITHUB_OUTPUT"
+
+              if [ "$OPENCODE_EXIT" -ne 0 ]; then
+                echo "❌ OpenCode run failed with exit code $OPENCODE_EXIT"
+                exit "$OPENCODE_EXIT"
+              fi
+
+        - name: Validate branch integrity
+          if: inputs.command == 'check'
+          shell: bash
+          run: |
+              set -euo pipefail
+
+              TARGET_BRANCH="${{ steps.setup_branch.outputs.branch_name }}"
+              CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+              if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+                echo "❌ OpenCode changed branches unexpectedly"
+                echo "   Expected: $TARGET_BRANCH"
+                echo "   Actual:   $CURRENT_BRANCH"
+                exit 1
+              fi
 
         - name: Detect changes
           if: inputs.command == 'check'
