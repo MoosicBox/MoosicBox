@@ -1200,6 +1200,8 @@ This command scans all packages in the workspace and collects their toolchains, 
 
 | Option                    | Description                      | Default                |
 | ------------------------- | -------------------------------- | ---------------------- |
+| `--git-ref`               | Git ref for git URL workspaces   | `master`               |
+| `--no-default-features`   | Disable default feature set      | false                  |
 | `--base-image`            | Docker builder image             | `rust:1-bookworm`      |
 | `--final-image`           | Docker runtime image             | `debian:bookworm-slim` |
 | `--build-args`            | Cargo build arguments            | -                      |
