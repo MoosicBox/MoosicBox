@@ -18,7 +18,7 @@ The MoosicBox Date Utilities package provides:
 - **Year Only**: "2023" → NaiveDateTime
 - **Date Only**: "2023-12-25" → NaiveDateTime
 - **ISO 8601**: "2023-12-25T15:30:45Z" → NaiveDateTime
-- **With Timezone**: "2023-12-25T15:30:45+00:00" → NaiveDateTime
+- **With UTC Offset (+00:00 only)**: "2023-12-25T15:30:45+00:00" → NaiveDateTime
 - **With Microseconds**: "2023-12-25T15:30:45.123456" → NaiveDateTime
 
 ## Installation
@@ -51,6 +51,8 @@ let iso_format = parse_date_time("2023-12-25T15:30:45Z")?;
 let with_tz = parse_date_time("2023-12-25T15:30:45+00:00")?;
 let with_micros = parse_date_time("2023-12-25T15:30:45.123456")?;
 ```
+
+`parse_date_time` supports UTC datetime strings with `Z` or `+00:00` offsets.
 
 ## Dependencies
 
