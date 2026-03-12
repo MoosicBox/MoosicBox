@@ -79,14 +79,14 @@ use switchy_async_macros::inject_yields;
 
 // Original function
 #[inject_yields]
-async fn my_async_function() {
+async fn my_async_function() -> i32 {
     let result1 = some_async_operation().await;
     let result2 = another_async_operation().await;
     result1 + result2
 }
 
 // With simulator feature enabled, transforms to:
-// async fn my_async_function() {
+// async fn my_async_function() -> i32 {
 //     let result1 = {
 //         let __yield_res = some_async_operation().await;
 //         switchy::unsync::task::yield_now().await;
