@@ -162,7 +162,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     height=30
                     background="green"
                     color="white"
-                    fx-click=fx { show("message") }
                 {
                     "Show"
                 }
@@ -172,7 +171,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     height=30
                     background="red"
                     color="white"
-                    fx-click=fx { hide("message") }
                 {
                     "Hide"
                 }
@@ -185,7 +183,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 background="yellow"
                 padding=10
                 align-self="center"
-                visibility="hidden"
             {
                 "Hello from FLTK! This is a native desktop application."
             }
@@ -305,7 +302,6 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=1") }
             {}
 
             img
@@ -313,7 +309,6 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=2") }
             {}
 
             img
@@ -321,7 +316,6 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=3") }
             {}
         }
 
