@@ -1,5 +1,6 @@
 use moosicbox_opus_native_test_vectors::{calculate_snr, test_vectors_dir};
 
+#[cfg(feature = "celt")]
 fn detect_algorithmic_delay(expected: &[i16], actual: &[i16], _channels: usize) -> usize {
     let max_delay = 20;
 

@@ -236,7 +236,7 @@ mod tests {
 
     #[test_log::test]
     fn test_rand_rng_mutable_rng_core_interface() {
-        use ::rand::RngCore;
+        use rand::RngCore;
 
         let mut rng = RandRng::new(42_u64);
 

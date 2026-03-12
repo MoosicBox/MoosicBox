@@ -654,6 +654,7 @@ fn postgres_library_migrations() -> CodeMigrationSource<'static> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "postgres", feature = "sqlite"))]
     use super::*;
 
     #[cfg(any(feature = "postgres", feature = "sqlite"))]

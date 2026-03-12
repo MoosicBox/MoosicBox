@@ -51,7 +51,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use ::rand::RngCore;
+extern crate rand as external_rand;
+use external_rand::RngCore;
 
 /// Standard random number generation backend.
 ///
@@ -168,7 +169,7 @@ impl<R: GenericRng> GenericRng for RngWrapper<R> {
 #[allow(unused)]
 macro_rules! impl_rng {
     ($module:ident, $type:ty $(,)?) => {
-        use ::rand::distributions::Distribution as _;
+        use external_rand::distributions::Distribution as _;
 
         pub use $module::rng;
 
@@ -438,7 +439,7 @@ impl_rng!(simulator, simulator::SimulatorRng);
 #[cfg(all(not(feature = "simulator"), feature = "rand"))]
 impl_rng!(rand, rand::RandRng);
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "simulator", feature = "rand")))]
 mod tests {
     use super::*;
 
@@ -882,7 +883,7 @@ mod tests {
 
     #[test_log::test]
     fn test_rng_wrapper_mutable_rng_core_interface() {
-        use ::rand::RngCore;
+        use external_rand::RngCore;
 
         let mut rng = Rng::from_seed(42_u64);
 
@@ -910,7 +911,7 @@ mod tests {
 
     #[test_log::test]
     fn test_sample_with_uniform_distribution() {
-        use ::rand::distributions::Uniform;
+        use external_rand::distributions::Uniform;
 
         let rng = Rng::from_seed(42_u64);
         let dist = Uniform::new(0, 100);

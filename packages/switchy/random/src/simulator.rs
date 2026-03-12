@@ -369,7 +369,7 @@ mod tests {
 
     #[test_log::test]
     fn test_simulator_rng_mutable_rng_core_interface() {
-        use ::rand::RngCore;
+        use rand::RngCore;
 
         let mut sim_rng = SimulatorRng::new(42_u64);
 

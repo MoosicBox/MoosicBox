@@ -11,8 +11,10 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+#[cfg(any(feature = "check", feature = "format"))]
+use clippier::ColorMode;
 use clippier::{
-    ColorMode, OutputType, handle_affected_packages_command, handle_ci_steps_command,
+    OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
     handle_generate_dockerfile_command, handle_packages_command,
     handle_validate_feature_propagation_command, handle_workspace_deps_command,
