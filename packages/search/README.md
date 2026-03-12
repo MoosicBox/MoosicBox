@@ -10,7 +10,7 @@ A full-text search implementation for the MoosicBox music ecosystem. Built on Ta
 - **Fuzzy Matching**: Find results even with typos or partial matches
 - **Ranking & Scoring**: Relevance-based result ordering with custom boost logic
 - **Multi-Field Search**: Search across artist, album, and track fields simultaneously
-- **Async Operations**: Non-blocking search operations with Tokio
+- **Async Operations**: Non-blocking index population and reindexing with Tokio
 - **API Integration**: RESTful API endpoints for web applications (with `api` feature)
 - **Index Management**: Efficient index building, updating, and optimization
 
@@ -192,6 +192,15 @@ When the `api` feature is enabled:
 ```text
 GET /global-search?query={query}&offset={offset}&limit={limit}
 GET /raw-global-search?query={query}&offset={offset}&limit={limit}
+```
+
+To register these routes on an Actix scope:
+
+```rust,ignore
+use actix_web::web;
+use moosicbox_search::api::bind_services;
+
+let scope = bind_services(web::scope(""));
 ```
 
 ### API Usage Examples
