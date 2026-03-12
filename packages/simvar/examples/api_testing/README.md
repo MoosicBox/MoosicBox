@@ -222,7 +222,7 @@ This example could be extended to test:
 
 This simulation can be used in continuous integration pipelines:
 
-- Run as part of automated testing (exit code reflects test results)
+- Run as part of automated testing (parse output for pass/fail status; exit code only reflects runtime failures)
 - Parse output for test result summaries
 - Use as a template for building more comprehensive API test suites
 
