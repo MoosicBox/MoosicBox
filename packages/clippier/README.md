@@ -1056,6 +1056,7 @@ TUI behavior for tool output:
 - In interactive terminals, `check` and `fmt` auto-enable a live pane TUI while tools are running
 - Use `--no-tui` to disable live panes and keep non-interactive streaming behavior
 - Press `q` or `Ctrl-C` while TUI is visible to close only the TUI view
+- Use `Tab`/`Shift+Tab` (or left/right arrows) to switch focused pane; use `j`/`k`, up/down, page up/down, home/end to scroll focused output
 - After the TUI view closes, pressing `Ctrl-C` cancels running tools and exits clippier
 - After tools complete, clippier exits the TUI and prints full sectioned raw output as usual
 
