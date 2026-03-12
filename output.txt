@@ -1,0 +1,8 @@
+Reviewed `packages/switchy/schema/examples/basic_migration_test/README.md` against:
+
+- `packages/switchy/schema/examples/basic_migration_test/src/main.rs`
+- `packages/switchy/schema/examples/basic_migration_test/Cargo.toml`
+
+I did not find any fundamental inaccuracies or critical omissions that would mislead users or prevent use of the example. The README’s feature claims, migration structure, and usage command match the implemented example.
+
+No changes required - documentation is accurate
