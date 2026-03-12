@@ -172,7 +172,7 @@ remove_favorite_track(
 
 - `default` - Enables `api`, `db`, `openapi`, and `scan` features
 - `api` - Enable HTTP API endpoints (requires actix-web)
-- `db` - Enable database persistence for credentials and scanning
+- `db` - Enable database persistence for credentials
 - `openapi` - Enable OpenAPI/Swagger documentation (requires utoipa)
 - `scan` - Enable library scanning functionality
 - `fail-on-warnings` - Treat warnings as errors during compilation
