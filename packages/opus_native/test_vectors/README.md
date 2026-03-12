@@ -77,7 +77,7 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
 # 1. Load test vectors from $OUT_DIR/generated
 # 2. Decode packets with moosicbox_opus_native decoder
 # 3. Compare output to expected PCM (from libopus)
-# 4. Assert bit-exact match (SNR = ∞)
+# 4. Assert expected quality thresholds (bit-exact for SILK checks, SNR thresholds for CELT/hybrid)
 ```
 
 **Note**: Test vectors are generated automatically during the build, so they're always available when tests run.
