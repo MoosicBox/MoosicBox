@@ -18,6 +18,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_assert = "0.1.4"
+log = "0.4.29"
 ```
 
 ## Usage
