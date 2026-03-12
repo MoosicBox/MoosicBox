@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_assert = "0.1.4"
-log = "0.4.29"
+log = "0.4.29" # Required only if you use logging macros (for example assert_or_error!/die_or_error!/die_or_warn!)
 ```
 
 ## Usage
