@@ -81,8 +81,6 @@ If you embed this crate in another Rust application, the primary public entry po
 - `moosicbox_app_native::actions::handle_action(action, value).await` - Dispatches UI actions (playback, queue, search, filtering)
 - Global statics: `ROUTER`, `RENDERER`, `STATE_LOCK`, `STATE`, and `PROFILE`
 
-The `visualization` module is also public when the `_canvas` feature is enabled.
-
 ### Connection Configuration
 
 Server connections are configured through the in-app settings interface:
