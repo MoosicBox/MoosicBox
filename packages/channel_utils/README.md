@@ -60,11 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tx_with_priority.send("Another normal message".to_string())?;
     tx_with_priority.send("URGENT message".to_string())?;
 
-    // Messages will be received in priority order
+    // The first send is delivered directly; buffered messages follow priority order
     while let Some(message) = rx.next().await {
         println!("Received: {}", message);
     }
-    // Output order will prioritize URGENT, then HIGH, then normal messages
+    // Output order: first "Normal message", then URGENT, HIGH, then remaining normal messages
 
     Ok(())
 }
