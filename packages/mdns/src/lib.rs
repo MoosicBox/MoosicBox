@@ -14,7 +14,6 @@
 //! ```rust,no_run
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! use moosicbox_mdns::scanner::{MoosicBox, Context, service};
-//! use moosicbox_async_service::Service as _;
 //!
 //! // Create a channel to receive discovered servers
 //! let (tx, rx) = kanal::unbounded_async();

@@ -26,7 +26,7 @@
 //! # #[cfg(any(feature = "sqlite", feature = "duckdb"))]
 //! let db = init(None, Some(creds)).await?;
 //! # #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
-//! # let db = init(Some(creds), None).await?;
+//! # let db = init(Some(creds)).await?;
 //! # Ok(())
 //! # }
 //! ```
