@@ -74,7 +74,6 @@ switchy_async = { workspace = true, features = [
     "tokio",
 ] }
 switchy_database_connection = { workspace = true, features = [
-    "duckdb",
     "mysql-sqlx",
     "postgres-native-tls",
     "postgres-raw",
@@ -82,7 +81,7 @@ switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
     "turso",
-] }
+], default-features = false }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 uuid = { workspace = true }

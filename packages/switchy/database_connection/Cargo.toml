@@ -17,7 +17,7 @@ examples = true
 group = "switchy"
 
 [dependencies]
-switchy_database = { workspace = true }
+switchy_database = { workspace = true, default-features = false }
 switchy_env      = { workspace = true, features = ["std"] }
 
 # DB Dependencies
