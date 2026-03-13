@@ -25,7 +25,7 @@ use clippier::{
 use clippier::handle_check_command;
 #[cfg(feature = "format")]
 use clippier::handle_fmt_command;
-#[cfg(feature = "_tools")]
+#[cfg(any(feature = "check", feature = "format"))]
 use clippier::tools::build_tools_config;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;

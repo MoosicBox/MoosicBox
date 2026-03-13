@@ -8,10 +8,9 @@
 use std::collections::BTreeSet;
 
 use clippier::test_utils::test_resources::{get_test_workspace_path, load_node_test_workspace};
-use clippier::workspace::{
-    NodePackageManager, NodeWorkspace, Workspace, WorkspaceType, detect_workspaces,
-    select_primary_workspace,
-};
+use clippier::workspace::{NodePackageManager, NodeWorkspace, Workspace};
+#[cfg(feature = "cargo-workspace")]
+use clippier::workspace::{WorkspaceType, detect_workspaces, select_primary_workspace};
 
 // =============================================================================
 // Workspace Detection Tests

@@ -202,6 +202,7 @@ pub enum ColorMode {
     Never,
 }
 
+#[cfg(any(feature = "check", feature = "format"))]
 fn can_use_interactive_tui() -> bool {
     use std::io::IsTerminal;
 
