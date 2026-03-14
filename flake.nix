@@ -51,6 +51,7 @@
           pkg-config
           gnumake
           gcc
+          cargo-deny
           duckdb
           libiconv
           autoconf
