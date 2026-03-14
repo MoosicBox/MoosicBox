@@ -3345,6 +3345,7 @@ mod tests {
     async fn test_database_creation_memory() {
         let db = TursoDatabase::new(":memory:").await;
         assert!(db.is_ok(), "Should create in-memory database");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3357,6 +3358,7 @@ mod tests {
         assert!(db.is_ok(), "Should create file-based database");
 
         let _ = std::fs::remove_file(&db_path);
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3366,6 +3368,7 @@ mod tests {
             .exec_raw("CREATE TABLE test_users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
             .await;
         assert!(result.is_ok(), "Should create table");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3387,6 +3390,7 @@ mod tests {
 
         assert!(result.is_ok(), "Should insert data");
         assert_eq!(result.unwrap(), 1, "Should affect 1 row");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3416,6 +3420,7 @@ mod tests {
             row.get("name"),
             Some(DatabaseValue::String("Bob".to_string()))
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3454,6 +3459,7 @@ mod tests {
             Some(DatabaseValue::String("Charlie".to_string()))
         );
         assert_eq!(row.get("active"), Some(DatabaseValue::Int64(1)));
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3538,6 +3544,7 @@ mod tests {
         );
         assert!(matches!(row.get("bool_val"), Some(DatabaseValue::Int64(1))));
         assert_eq!(row.get("null_val"), Some(DatabaseValue::Null));
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3568,6 +3575,7 @@ mod tests {
         assert_eq!(row.get("a"), Some(DatabaseValue::Int64(100)));
         assert_eq!(row.get("b"), Some(DatabaseValue::Null));
         assert_eq!(row.get("c"), Some(DatabaseValue::Real64(99.9)));
+        drop(db);
     }
 
     #[cfg(feature = "decimal")]
@@ -3600,6 +3608,7 @@ mod tests {
             row.get("price"),
             Some(DatabaseValue::String("123.456789".to_string()))
         );
+        drop(db);
     }
 
     #[cfg(feature = "uuid")]
@@ -3631,6 +3640,7 @@ mod tests {
             row.get("user_id"),
             Some(DatabaseValue::String(uuid_val.to_string()))
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3664,6 +3674,7 @@ mod tests {
                 dt.format("%Y-%m-%d %H:%M:%S").to_string()
             ))
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3696,6 +3707,7 @@ mod tests {
             matches!(row.get("created_at"), Some(DatabaseValue::String(_))),
             "Should have timestamp"
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3740,6 +3752,7 @@ mod tests {
             matches!(row.get("expires_at"), Some(DatabaseValue::String(_))),
             "Should have future timestamp"
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3748,6 +3761,7 @@ mod tests {
 
         let result = db.query_raw("SELECT * FROM nonexistent_table").await;
         assert!(result.is_err(), "Should return error for invalid query");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3768,6 +3782,7 @@ mod tests {
             result.is_ok(),
             "SQLite should handle TEXT -> INTEGER conversion"
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3803,6 +3818,7 @@ mod tests {
                 Some(DatabaseValue::String(format!("value_{expected_id}")))
             );
         }
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3819,6 +3835,7 @@ mod tests {
             .expect("Failed to query");
 
         assert_eq!(rows.len(), 0, "Should return empty result set");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3849,6 +3866,7 @@ mod tests {
             row.get("FirstName").is_none(),
             "Column names are case-sensitive"
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3873,6 +3891,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
         assert_eq!(row.get("nullable_field"), Some(DatabaseValue::Null));
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3893,6 +3912,7 @@ mod tests {
             result.is_err(),
             "u64::MAX should overflow i64 and cause error"
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3913,6 +3933,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok(), "u64 within i64::MAX range should work");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3947,6 +3968,7 @@ mod tests {
             rows[0].get("name"),
             Some(DatabaseValue::String("Alice".to_string()))
         );
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -3976,6 +3998,7 @@ mod tests {
             .expect("Failed to query");
 
         assert_eq!(rows.len(), 0, "Should have 0 rows after rollback");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -4016,6 +4039,7 @@ mod tests {
             .expect("Failed to query after commit");
 
         assert_eq!(rows_after.len(), 2, "Should have 2 rows after commit");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -4059,6 +4083,7 @@ mod tests {
         );
 
         Box::new(tx).commit().await.expect("Failed to commit");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -4087,6 +4112,7 @@ mod tests {
         );
 
         Box::new(tx).rollback().await.expect("Failed to rollback");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -4116,6 +4142,7 @@ mod tests {
             .expect("Failed to query");
 
         assert_eq!(rows.len(), 1, "Transaction was committed successfully");
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4140,6 +4167,7 @@ mod tests {
                 .expect("Failed to check table existence"),
             "nonexistent_table should not exist"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4160,6 +4188,7 @@ mod tests {
         assert!(tables.len() >= 2, "Should have at least 2 tables");
         assert!(tables.contains(&"users".to_string()));
         assert!(tables.contains(&"posts".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4208,6 +4237,7 @@ mod tests {
             "email should have default value"
         );
         assert_eq!(email_col.ordinal_position, 4);
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4239,6 +4269,7 @@ mod tests {
                 .expect("Failed to check column existence"),
             "nonexistent column should not exist"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4270,6 +4301,7 @@ mod tests {
             nonexistent.is_none(),
             "Nonexistent table should return None"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4303,6 +4335,7 @@ mod tests {
             !name_col.auto_increment,
             "name should not be auto_increment"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4326,6 +4359,7 @@ mod tests {
 
         assert!(id_col.is_primary_key, "id should be primary key");
         assert!(!id_col.auto_increment, "id should NOT be auto_increment");
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4357,6 +4391,7 @@ mod tests {
             .values()
             .any(|idx| idx.columns.contains(&"name".to_string()));
         assert!(has_name_index, "Should have index on name column");
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4400,6 +4435,7 @@ mod tests {
         assert_eq!(fk.referenced_table, "departments");
         assert_eq!(fk.referenced_column, "id");
         assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4453,6 +4489,7 @@ mod tests {
         assert_eq!(fk.referenced_table, "categories");
         assert_eq!(fk.on_update, Some("CASCADE".to_string()));
         assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4483,6 +4520,7 @@ mod tests {
         assert_eq!(table_info.foreign_keys.len(), 1);
         let fk = table_info.foreign_keys.values().next().unwrap();
         assert_eq!(fk.on_delete, Some("SET DEFAULT".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4513,6 +4551,7 @@ mod tests {
         assert_eq!(table_info.foreign_keys.len(), 1);
         let fk = table_info.foreign_keys.values().next().unwrap();
         assert_eq!(fk.on_delete, None, "NO ACTION should map to None");
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4550,6 +4589,7 @@ mod tests {
             fk.on_delete, None,
             "Omitted action should default to None (NO ACTION)"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4594,6 +4634,7 @@ mod tests {
                 "Action {action} not detected correctly"
             );
         }
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4635,6 +4676,7 @@ mod tests {
             Some("CASCADE".to_string()),
             "Should detect lowercase 'on delete cascade'"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4674,6 +4716,7 @@ mod tests {
             Some("SET NULL".to_string()),
             "Should detect mixed case 'On DeLeTe SeT nUlL'"
         );
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4709,6 +4752,7 @@ mod tests {
         let fk = table_info.foreign_keys.values().next().unwrap();
         assert_eq!(fk.referenced_table, "parent");
         assert_eq!(fk.referenced_column, "id");
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4746,6 +4790,7 @@ mod tests {
         assert_eq!(fk.referenced_table, "café");
         assert_eq!(fk.referenced_column, "id");
         assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4783,6 +4828,7 @@ mod tests {
         assert_eq!(fk.referenced_table, "родитель");
         assert_eq!(fk.referenced_column, "идентификатор");
         assert_eq!(fk.on_update, Some("RESTRICT".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4821,6 +4867,7 @@ mod tests {
         assert_eq!(fk.referenced_column, "id");
         assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
         assert_eq!(fk.on_update, Some("SET DEFAULT".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4881,6 +4928,7 @@ mod tests {
             .expect("Should have FK on c_id");
         assert_eq!(fk_c.on_delete, Some("RESTRICT".to_string()));
         assert_eq!(fk_c.on_update, Some("SET DEFAULT".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4919,6 +4967,7 @@ mod tests {
             "Quotes should be stripped from table name"
         );
         assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4953,6 +5002,7 @@ mod tests {
             "Escaped quotes should be unescaped"
         );
         assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -4987,6 +5037,7 @@ mod tests {
             "Escaped backticks should be unescaped"
         );
         assert_eq!(fk.on_update, Some("RESTRICT".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -5021,6 +5072,7 @@ mod tests {
             "Square brackets should be stripped"
         );
         assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
+        drop(db);
     }
 
     #[cfg(feature = "schema")]
@@ -5055,6 +5107,7 @@ mod tests {
             "Single quotes should be stripped"
         );
         assert_eq!(fk.on_update, Some("CASCADE".to_string()));
+        drop(db);
     }
 
     #[cfg(all(feature = "schema", feature = "cascade"))]
@@ -5081,6 +5134,7 @@ mod tests {
         assert_eq!(dependents.len(), 2, "Should find child and parent");
         assert_eq!(dependents[0], "child", "Child should be first");
         assert_eq!(dependents[1], "parent", "Parent should be last");
+        drop(db);
     }
 
     #[cfg(all(feature = "schema", feature = "cascade"))]
@@ -5105,6 +5159,7 @@ mod tests {
             .expect("Failed to check dependents");
 
         assert!(has_deps, "Parent should have dependents");
+        drop(db);
     }
 
     #[cfg(all(feature = "schema", feature = "cascade"))]
@@ -5123,6 +5178,7 @@ mod tests {
             .expect("Failed to check dependents");
 
         assert!(!has_deps, "Standalone table should have no dependents");
+        drop(db);
     }
 
     #[cfg(all(feature = "schema", feature = "cascade"))]
@@ -5166,6 +5222,7 @@ mod tests {
             "Should include parent"
         );
         assert_eq!(dependents[2], "grandparent", "Grandparent should be last");
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -5198,6 +5255,7 @@ mod tests {
             Ok(_) => panic!("Expected InvalidQuery error, but savepoint was created successfully"),
             Err(e) => panic!("Expected InvalidQuery error, got different error type: {e}"),
         }
+        drop(db);
     }
 
     #[switchy_async::test]
@@ -5217,5 +5275,6 @@ mod tests {
         // Try with special characters
         let result = tx.savepoint("sp-test").await;
         assert!(result.is_err(), "Savepoint name with dash should error");
+        drop(db);
     }
 }

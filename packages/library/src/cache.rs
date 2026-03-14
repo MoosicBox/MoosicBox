@@ -7,7 +7,7 @@
 
 use enum_as_inner::EnumAsInner;
 use futures::Future;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::{Arc, LazyLock, RwLock};
@@ -15,14 +15,14 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use crate::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 struct CacheItem {
     expiration: u128,
     data: CacheItemType,
 }
 
 /// Types of cacheable library items.
-#[derive(Debug, Serialize, Deserialize, Clone, EnumAsInner)]
+#[derive(Debug, Serialize, Clone, EnumAsInner)]
 #[serde(untagged)]
 pub enum CacheItemType {
     /// Cached list of albums.
