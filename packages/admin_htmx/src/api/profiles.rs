@@ -163,7 +163,13 @@ pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled:
                 type="text"
                 name="profile"
                 placeholder="profile..."
-                value={ (value.unwrap_or_else(|| if bundled { whoami::realname() } else { String::new() })) }
+                value={ (value.unwrap_or_else(|| {
+                    if bundled {
+                        whoami::realname().unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
+                })) }
             ;
             button type="submit" { "Create" }
         }

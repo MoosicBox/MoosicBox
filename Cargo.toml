@@ -368,7 +368,7 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
     "metrics-prometheus",
     "prometheus",
 ] }
-actix-ws = "0.3.1"
+actix-ws = "0.4.0"
 anyhow = "1.0.102"
 arrayvec = "0.7.6"
 assert_cmd = "2.2.0"
@@ -399,7 +399,7 @@ colored = { version = "3.1.1" }
 console-subscriber = "0.5.0"
 const-hex = "1.18.1"
 const_format = "0.2.35"
-convert_case = "0.10.0"
+convert_case = "0.11.0"
 cpal = "0.17.3"
 ctrlc = "3.5.2"
 deadpool-postgres = "0.14.1"
@@ -409,7 +409,7 @@ duckdb = { version = "1.10500.0", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
-enum-as-inner = "0.6.1"
+enum-as-inner = "0.7.0"
 env_logger = "0.11.9"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
@@ -423,7 +423,7 @@ futures-core = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false, features = [
     "std",
 ] }
-getrandom = "0.3.4"
+getrandom = "0.4.2"
 gh-emoji = { version = "1.0.8", default-features = false }
 git2 = "0.20.4"
 glob = "0.3.3"
@@ -448,7 +448,7 @@ local-ip-address = "0.6.10"
 log = { version = "0.4.29", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.17.2"
+mdns-sd = "0.18.2"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
 mlua = { version = "0.11.6", default-features = false }
@@ -456,7 +456,7 @@ moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.2"
-mysql = { version = "26.0.1", features = [
+mysql = { version = "27.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
@@ -464,7 +464,7 @@ nanoid = "0.4.0"
 native-tls = "0.2.18"
 net2 = "0.2.39"
 ogg = "0.9.2"
-oneshot = "0.1.13"
+oneshot = "0.2.1"
 open = "5.3.3"
 openssl = { version = "0.10.76", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
@@ -476,11 +476,11 @@ paste = "1.0.15"
 pin-project = "1.1.11"
 pin-project-lite = "0.2.17"
 pin-utils = "0.1.0"
-pingora = "0.6.0"
-pingora-core = "0.6.0"
-pingora-http = "0.6.0"
-pingora-load-balancing = "0.6.0"
-pingora-proxy = "0.6.0"
+pingora = "0.8.0"
+pingora-core = "0.8.0"
+pingora-http = "0.8.0"
+pingora-load-balancing = "0.8.0"
+pingora-proxy = "0.8.0"
 postgres-native-tls = "0.5.2"
 postgres-openssl = "0.5.2"
 postgres-protocol = "0.6.10"
@@ -498,15 +498,15 @@ qstring = "0.7.2"
 test-strategy = { version = "0.4.5", default-features = false }
 
 quote = "1.0.45"
-rand = "0.9.2"
+rand = "0.10.0"
 rangemap = "1.7.1"
 ratatui = "0.30.0"
 rayon = { version = "1.11.0", default-features = false }
 rb = "0.4.1"
 rcgen = "0.14.7"
 regex = "1.12.3"
-reqwest = { version = "0.12.28", default-features = false, features = [
-    "rustls-tls",
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "rustls",
     "stream",
 ] }
 roxmltree = "0.21.1"
@@ -541,19 +541,19 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
     "chrono",
 ] }
 static_init = "1.0.4"
-strum = "0.27.2"
-strum_macros = "0.27.2"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 subtle = "2.6.1"
-swc_bundler = "39.0.0"
-swc_common = { version = "18.0.1", features = ["tty-emitter"] }
-swc_ecma_ast = "19.0.0"
-swc_ecma_codegen = "21.0.0"
-swc_ecma_loader = { version = "18.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "41.0.1"
-swc_ecma_parser = "31.0.0"
-swc_ecma_transforms_base = "34.0.0"
-swc_ecma_transforms_typescript = "37.0.0"
-swc_ecma_visit = "19.0.0"
+swc_bundler = "44.0.0"
+swc_common = { version = "19.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "21.0.0"
+swc_ecma_codegen = "24.0.0"
+swc_ecma_loader = { version = "19.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "46.0.0"
+swc_ecma_parser = "35.0.0"
+swc_ecma_transforms_base = "38.0.0"
+swc_ecma_transforms_typescript = "42.0.0"
+swc_ecma_visit = "21.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
 syn = "2.0.117"
 syntect = "5.3.0"
@@ -582,13 +582,13 @@ tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-webpki-roots",
 ] }
 tokio-util = "0.7.18"
-toml = "0.9.12"
+toml = "1.0.6"
 tracing = "0.1.44"
 tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.116"
-turso = "0.3.2"
+turso = "0.5.1"
 uaparser = "0.6.4"
 url = "2.5.8"
 urlencoding = "2.1.3"
@@ -601,7 +601,7 @@ uuid = { version = "1.22.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 which = { version = "8.0.2", default-features = false }
-whoami = "1.6.1"
+whoami = "2.1.1"
 xml = "1.2.1"
 
 # Benchmarking

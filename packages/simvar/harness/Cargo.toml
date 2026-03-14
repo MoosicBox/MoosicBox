@@ -39,7 +39,7 @@ shell-words     = { workspace = true }
 thiserror       = { workspace = true }
 
 # TUI
-oneshot = { workspace = true, optional = true }
+oneshot = { workspace = true, optional = true, features = ["std"] }
 ratatui = { workspace = true, optional = true }
 
 # Logging

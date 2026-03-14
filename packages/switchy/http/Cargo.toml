@@ -45,10 +45,10 @@ default = ["json", "reqwest", "simulator", "stream"]
 
 fail-on-warnings = ["switchy_http_models/fail-on-warnings"]
 
-reqwest   = ["dep:reqwest", "switchy_http_models/reqwest"]
+reqwest   = ["dep:reqwest", "reqwest?/query", "switchy_http_models/reqwest"]
 simulator = []
 
-json   = ["dep:serde_json", "reqwest?/json", "serde"]
+json   = ["dep:serde_json", "reqwest?/form", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]
 
 # Compression (decompression) features
