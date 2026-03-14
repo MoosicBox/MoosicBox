@@ -1194,6 +1194,66 @@ pub fn expand_features_from_cargo_toml(cargo_toml: &Value, patterns: &[String]) 
     expand_pattern_list(patterns, &all_features)
 }
 
+/// Expands requested package features to include all transitively activated package features.
+///
+/// This follows Cargo feature-to-feature edges defined in `[features]` and is cycle-safe.
+/// Dependency feature edges like `dep:foo`, `foo/bar`, and `foo?/bar` are ignored unless the
+/// left-hand side is also a package feature name.
+#[must_use]
+pub fn expand_active_package_features(
+    cargo_toml: &Value,
+    requested_features: &[String],
+) -> BTreeSet<String> {
+    let mut visited = BTreeSet::new();
+
+    let Some(Value::Table(features_table)) = cargo_toml.get("features") else {
+        visited.extend(requested_features.iter().cloned());
+        return visited;
+    };
+
+    let feature_names = features_table.keys().cloned().collect::<BTreeSet<_>>();
+    let mut adjacency: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for (feature_name, feature_value) in features_table {
+        let mut next_features = Vec::new();
+
+        if let Value::Array(items) = feature_value {
+            for item in items {
+                let Some(item_str) = item.as_str() else {
+                    continue;
+                };
+
+                if feature_names.contains(item_str) {
+                    next_features.push(item_str.to_string());
+                    continue;
+                }
+
+                if let Some((left, _)) = item_str.split_once('/')
+                    && feature_names.contains(left)
+                {
+                    next_features.push(left.to_string());
+                }
+            }
+        }
+
+        adjacency.insert(feature_name.clone(), next_features);
+    }
+
+    let mut stack = requested_features.to_vec();
+
+    while let Some(feature) = stack.pop() {
+        if !visited.insert(feature.clone()) {
+            continue;
+        }
+
+        if let Some(next) = adjacency.get(&feature) {
+            stack.extend(next.iter().cloned());
+        }
+    }
+
+    visited
+}
+
 /// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
@@ -1466,6 +1526,7 @@ pub async fn process_configs(
                         // This handles the case where all features are skipped via --skip-features
                         packages.push(create_map(
                             &workspace_context,
+                            &value,
                             &name,
                             conf.as_ref(),
                             &config,
@@ -1478,6 +1539,7 @@ pub async fn process_configs(
                         for features in x {
                             packages.push(create_map(
                                 &workspace_context,
+                                &value,
                                 &name,
                                 conf.as_ref(),
                                 &config,
@@ -1492,6 +1554,7 @@ pub async fn process_configs(
                 FeaturesList::NotChunked(x) => {
                     packages.push(create_map(
                         &workspace_context,
+                        &value,
                         &name,
                         conf.as_ref(),
                         &config,
@@ -1617,6 +1680,7 @@ pub fn apply_max_parallel_rechunking(
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub fn create_map(
     context: &WorkspaceContext,
+    cargo_toml: &Value,
     package_name: &str,
     conf: Option<&ClippierConf>,
     config: &ClippierConfiguration,
@@ -1640,6 +1704,8 @@ pub fn create_map(
     let workspace_conf = context.workspace_config().ok().flatten();
 
     let mut map = serde_json::Map::new();
+    let expanded_features = expand_active_package_features(cargo_toml, features);
+
     map.insert("os".to_string(), serde_json::to_value(&config.os)?);
     map.insert("path".to_string(), serde_json::to_value(file)?);
     map.insert(
@@ -1689,7 +1755,7 @@ pub fn create_map(
             .filter(|x| {
                 x.features.as_ref().is_none_or(|f| {
                     f.iter()
-                        .any(|required| features.iter().any(|x| x == required))
+                        .any(|required| expanded_features.contains(required))
                 })
             })
             .collect::<Vec<_>>();
@@ -1741,7 +1807,7 @@ pub fn create_map(
             ClippierEnv::Value(..) => true,
             ClippierEnv::FilteredValue { features: f, .. } => f.as_ref().is_none_or(|f| {
                 f.iter()
-                    .any(|required| features.iter().any(|x| x == required))
+                    .any(|required| expanded_features.contains(required))
             }),
         })
         .map(|(k, v)| {
@@ -1813,7 +1879,7 @@ pub fn create_map(
         .filter(|x| {
             x.features.as_ref().is_none_or(|f| {
                 f.iter()
-                    .any(|required| features.iter().any(|x| x == required))
+                    .any(|required| expanded_features.contains(required))
             })
         })
         .collect::<Vec<_>>();
@@ -6634,6 +6700,89 @@ production = []
         assert!(expanded.contains(&"enable-bob".to_string()));
         assert!(expanded.contains(&"enable-sally".to_string()));
         assert!(expanded.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_expand_active_package_features_transitive_default() {
+        let cargo_toml_str = r#"
+[features]
+default = ["backend"]
+backend = ["duckdb"]
+duckdb = ["dep:duckdb"]
+sqlite = []
+"#;
+        let cargo_toml: Value = toml::from_str(cargo_toml_str).unwrap();
+
+        let expanded = expand_active_package_features(&cargo_toml, &["default".to_string()]);
+
+        assert!(expanded.contains("default"));
+        assert!(expanded.contains("backend"));
+        assert!(expanded.contains("duckdb"));
+        assert!(!expanded.contains("sqlite"));
+    }
+
+    #[test]
+    fn test_expand_active_package_features_cycle_safe() {
+        let cargo_toml_str = r#"
+[features]
+a = ["b"]
+b = ["c"]
+c = ["a"]
+"#;
+        let cargo_toml: Value = toml::from_str(cargo_toml_str).unwrap();
+
+        let expanded = expand_active_package_features(&cargo_toml, &["a".to_string()]);
+
+        assert!(expanded.contains("a"));
+        assert!(expanded.contains("b"));
+        assert!(expanded.contains("c"));
+        assert_eq!(expanded.len(), 3);
+    }
+
+    #[switchy_async::test]
+    async fn test_dependency_filter_uses_transitive_feature_expansion() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = ["backend"]
+backend = ["duckdb"]
+duckdb = []
+"#;
+        switchy_fs::sync::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "install duckdb"
+features = ["duckdb"]
+"#;
+        switchy_fs::sync::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["default".to_string()]),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let deps = result[0].get("dependencies").and_then(|x| x.as_str());
+        assert_eq!(deps, Some("install duckdb"));
     }
 
     #[switchy_async::test]
