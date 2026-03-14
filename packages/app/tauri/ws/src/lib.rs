@@ -552,7 +552,7 @@ mod tests {
         let result = handle.send("test message").await;
 
         assert!(result.is_ok());
-        let received = rx.try_next().unwrap().unwrap();
+        let received = rx.try_recv().unwrap();
         match received {
             WsMessage::TextMessage(s) => assert_eq!(s, "test message"),
             _ => panic!("Expected TextMessage"),
@@ -604,7 +604,7 @@ mod tests {
         let result = handle.ping().await;
 
         assert!(result.is_ok());
-        let received = rx.try_next().unwrap().unwrap();
+        let received = rx.try_recv().unwrap();
         assert!(matches!(received, WsMessage::Ping));
     }
 
