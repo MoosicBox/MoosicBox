@@ -2835,119 +2835,99 @@ impl Generator {
             let function_name = path_expr.path.segments[0].ident.to_string();
 
             match function_name.as_str() {
-                "calc" => {
+                "calc" if call_expr.args.len() == 1 => {
                     // Handle calc() expressions
-                    if call_expr.args.len() == 1 {
-                        let calc_expr = &call_expr.args[0];
-                        return Self::handle_calc_expression(calc_expr);
-                    }
+                    let calc_expr = &call_expr.args[0];
+                    return Self::handle_calc_expression(calc_expr);
                 }
-                "min" => {
+                "min" if call_expr.args.len() >= 2 => {
                     // Handle min() expressions outside of calc()
-                    if call_expr.args.len() >= 2 {
-                        // For multiple arguments, chain binary min operations
-                        // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
-                        let mut result =
-                            Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
-                        for i in (0..call_expr.args.len() - 1).rev() {
-                            let left = Self::build_calculation_ast(&call_expr.args[i]);
-                            result = quote! {
-                                hyperchad_transformer::Calculation::Min(
-                                    Box::new(#left),
-                                    Box::new(#result)
-                                )
-                            };
-                        }
-                        return quote! {
-                            hyperchad_transformer::Number::Calc(#result)
-                        };
-                    }
-                }
-                "max" => {
-                    // Handle max() expressions outside of calc()
-                    if call_expr.args.len() >= 2 {
-                        // For multiple arguments, chain binary max operations
-                        // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
-                        let mut result =
-                            Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
-                        for i in (0..call_expr.args.len() - 1).rev() {
-                            let left = Self::build_calculation_ast(&call_expr.args[i]);
-                            result = quote! {
-                                hyperchad_transformer::Calculation::Max(
-                                    Box::new(#left),
-                                    Box::new(#result)
-                                )
-                            };
-                        }
-                        return quote! {
-                            hyperchad_transformer::Number::Calc(#result)
-                        };
-                    }
-                }
-                "clamp" => {
-                    // Handle clamp() expressions outside of calc()
-                    if call_expr.args.len() == 3 {
-                        // clamp(min, preferred, max) = max(min, min(preferred, max))
-                        let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
-                        let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
-                        let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
-                        return quote! {
-                            hyperchad_transformer::Number::Calc(
-                                hyperchad_transformer::Calculation::Max(
-                                    Box::new(#min_arg),
-                                    Box::new(hyperchad_transformer::Calculation::Min(
-                                        Box::new(#preferred_arg),
-                                        Box::new(#max_arg)
-                                    ))
-                                )
+                    // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
+                    let mut result =
+                        Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                    for i in (0..call_expr.args.len() - 1).rev() {
+                        let left = Self::build_calculation_ast(&call_expr.args[i]);
+                        result = quote! {
+                            hyperchad_transformer::Calculation::Min(
+                                Box::new(#left),
+                                Box::new(#result)
                             )
                         };
                     }
+                    return quote! {
+                        hyperchad_transformer::Number::Calc(#result)
+                    };
                 }
-                "percent" => {
+                "max" if call_expr.args.len() >= 2 => {
+                    // Handle max() expressions outside of calc()
+                    // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
+                    let mut result =
+                        Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                    for i in (0..call_expr.args.len() - 1).rev() {
+                        let left = Self::build_calculation_ast(&call_expr.args[i]);
+                        result = quote! {
+                            hyperchad_transformer::Calculation::Max(
+                                Box::new(#left),
+                                Box::new(#result)
+                            )
+                        };
+                    }
+                    return quote! {
+                        hyperchad_transformer::Number::Calc(#result)
+                    };
+                }
+                "clamp" if call_expr.args.len() == 3 => {
+                    // Handle clamp() expressions outside of calc()
+                    // clamp(min, preferred, max) = max(min, min(preferred, max))
+                    let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
+                    let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                    let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
+                    return quote! {
+                        hyperchad_transformer::Number::Calc(
+                            hyperchad_transformer::Calculation::Max(
+                                Box::new(#min_arg),
+                                Box::new(hyperchad_transformer::Calculation::Min(
+                                    Box::new(#preferred_arg),
+                                    Box::new(#max_arg)
+                                ))
+                            )
+                        )
+                    };
+                }
+                "percent" if call_expr.args.len() == 1 => {
                     // Helper function: percent(value) -> Number::*Percent
-                    if call_expr.args.len() == 1 {
-                        let value_expr = &call_expr.args[0];
-                        return quote! {
-                            hyperchad_template::calc::to_percent_number(#value_expr)
-                        };
-                    }
+                    let value_expr = &call_expr.args[0];
+                    return quote! {
+                        hyperchad_template::calc::to_percent_number(#value_expr)
+                    };
                 }
-                "vh" => {
+                "vh" if call_expr.args.len() == 1 => {
                     // Helper function: vh(value) -> Number::*Vh
-                    if call_expr.args.len() == 1 {
-                        let value_expr = &call_expr.args[0];
-                        return quote! {
-                            hyperchad_template::calc::to_vh_number(#value_expr)
-                        };
-                    }
+                    let value_expr = &call_expr.args[0];
+                    return quote! {
+                        hyperchad_template::calc::to_vh_number(#value_expr)
+                    };
                 }
-                "vw" => {
+                "vw" if call_expr.args.len() == 1 => {
                     // Helper function: vw(value) -> Number::*Vw
-                    if call_expr.args.len() == 1 {
-                        let value_expr = &call_expr.args[0];
-                        return quote! {
-                            hyperchad_template::calc::to_vw_number(#value_expr)
-                        };
-                    }
+                    let value_expr = &call_expr.args[0];
+                    return quote! {
+                        hyperchad_template::calc::to_vw_number(#value_expr)
+                    };
                 }
-                "dvh" => {
+                "dvh" if call_expr.args.len() == 1 => {
                     // Helper function: dvh(value) -> Number::*Dvh
-                    if call_expr.args.len() == 1 {
-                        let value_expr = &call_expr.args[0];
-                        return quote! {
-                            hyperchad_template::calc::to_dvh_number(#value_expr)
-                        };
-                    }
+                    let value_expr = &call_expr.args[0];
+                    return quote! {
+                        hyperchad_template::calc::to_dvh_number(#value_expr)
+                    };
                 }
-                "dvw" => {
+                "dvw" if call_expr.args.len() == 1 => {
                     // Helper function: dvw(value) -> Number::*Dvw
-                    if call_expr.args.len() == 1 {
-                        let value_expr = &call_expr.args[0];
-                        return quote! {
-                            hyperchad_template::calc::to_dvw_number(#value_expr)
-                        };
-                    }
+                    let value_expr = &call_expr.args[0];
+                    return quote! {
+                        hyperchad_template::calc::to_dvw_number(#value_expr)
+                    };
                 }
                 _ => {}
             }
