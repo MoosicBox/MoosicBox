@@ -1,6 +1,6 @@
 ---
 source: packages/clippier/tests/business_logic_tests.rs
-expression: parsed
+expression: normalize_paths(parsed)
 ---
 - name: api
   os: ubuntu-latest

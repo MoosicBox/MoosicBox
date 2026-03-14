@@ -1345,7 +1345,7 @@ async fn test_handle_packages_command_basic() {
         assert_eq!(package["os"].as_str().unwrap(), "ubuntu-latest");
     }
 
-    insta::assert_yaml_snapshot!("packages_command_basic", parsed);
+    insta::assert_yaml_snapshot!("packages_command_basic", normalize_paths(parsed));
 }
 
 #[cfg(feature = "cargo-workspace")]
@@ -1381,7 +1381,7 @@ async fn test_handle_packages_command_json_output() {
     let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
     assert!(parsed.is_array());
 
-    insta::assert_yaml_snapshot!("packages_command_json_output", parsed);
+    insta::assert_yaml_snapshot!("packages_command_json_output", normalize_paths(parsed));
 }
 
 #[cfg(feature = "cargo-workspace")]
@@ -1467,7 +1467,10 @@ async fn test_handle_packages_command_with_specific_packages() {
         );
     }
 
-    insta::assert_yaml_snapshot!("packages_command_specific_packages", parsed);
+    insta::assert_yaml_snapshot!(
+        "packages_command_specific_packages",
+        normalize_paths(parsed)
+    );
 }
 
 #[cfg(feature = "cargo-workspace")]
@@ -1504,7 +1507,7 @@ async fn test_handle_packages_command_with_max_parallel() {
     let packages = parsed.as_array().unwrap();
     assert_eq!(packages.len(), 3, "Should truncate to max_parallel limit");
 
-    insta::assert_yaml_snapshot!("packages_command_max_parallel", parsed);
+    insta::assert_yaml_snapshot!("packages_command_max_parallel", normalize_paths(parsed));
 }
 
 #[cfg(feature = "cargo-workspace")]

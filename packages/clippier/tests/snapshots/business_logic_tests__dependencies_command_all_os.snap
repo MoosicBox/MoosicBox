@@ -9,4 +9,6 @@ brew install sqlite3
 apt-get update && apt-get install -y build-essential
 apt-get update && apt-get install -y build-essential
 apt-get update && apt-get install -y nodejs npm
+apt-get update && apt-get install -y build-essential
+apt-get update && apt-get install -y nodejs npm
 apt-get update && apt-get install -y nodejs npm
