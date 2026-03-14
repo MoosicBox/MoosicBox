@@ -11,4 +11,4 @@ os = "ubuntu"
 
 [[config.dependencies]]
 command  = "wget -q https://github.com/duckdb/duckdb/releases/download/v1.5.0/libduckdb-linux-amd64.zip && sudo unzip -o libduckdb-linux-amd64.zip -d /usr/local/lib/duckdb"
-features = ["duckdb"]
+features = ["default", "duckdb"]
