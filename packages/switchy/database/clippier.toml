@@ -1,9 +1,14 @@
 [parallelization]
 chunked = 10
 
+[env]
+DUCKDB_INCLUDE_DIR = "/usr/local/lib/duckdb"
+DUCKDB_LIB_DIR     = "/usr/local/lib/duckdb"
+LD_LIBRARY_PATH    = "/usr/local/lib/duckdb"
+
 [[config]]
 os = "ubuntu"
 
 [[config.dependencies]]
-command  = "sudo apt-get update && sudo apt-get install -y libduckdb-dev"
+command  = "wget -q https://github.com/duckdb/duckdb/releases/download/v1.5.0/libduckdb-linux-amd64.zip && sudo unzip -o libduckdb-linux-amd64.zip -d /usr/local/lib/duckdb"
 features = ["duckdb"]
