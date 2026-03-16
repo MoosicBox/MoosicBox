@@ -163,14 +163,14 @@ impl ToolRegistry {
         None
     }
 
-    fn nix_runner_resolution(package: &str, binary: &str) -> ToolResolution {
+    fn nix_runner_resolution(packages: &[String], binary: &str) -> ToolResolution {
+        let mut runner_args = vec!["shell".to_string()];
+        runner_args.extend(packages.iter().cloned());
+        runner_args.push("--command".to_string());
+
         ToolResolution::Runner {
             runner: "nix".to_string(),
-            runner_args: vec![
-                "shell".to_string(),
-                package.to_string(),
-                "--command".to_string(),
-            ],
+            runner_args,
             tool_binary: binary.to_string(),
         }
     }
@@ -272,7 +272,7 @@ impl ToolRegistry {
                 if Self::nix_fallback_enabled(config)
                     && let Some(package) = Self::nix_package_for_tool(config, "mdformat")
                 {
-                    return Some(Self::nix_runner_resolution(&package, "mdformat"));
+                    return Some(Self::nix_runner_resolution(&[package], "mdformat"));
                 }
 
                 None
@@ -289,7 +289,7 @@ impl ToolRegistry {
                 if Self::nix_fallback_enabled(config)
                     && let Some(package) = Self::nix_package_for_tool(config, "yamlfmt")
                 {
-                    return Some(Self::nix_runner_resolution(&package, "yamlfmt"));
+                    return Some(Self::nix_runner_resolution(&[package], "yamlfmt"));
                 }
 
                 None

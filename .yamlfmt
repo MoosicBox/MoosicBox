@@ -1,0 +1,10 @@
+line_ending: lf
+gitignore_excludes: true
+exclude:
+  - "**/pnpm-lock.yaml"
+  - "**/pnpm-lock.yml"
+formatter:
+  type: basic
+  indent: 4
+  trim_trailing_whitespace: true
+  eof_newline: true
