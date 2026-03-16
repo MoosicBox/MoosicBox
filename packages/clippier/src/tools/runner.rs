@@ -521,8 +521,12 @@ impl<'a> ToolRunner<'a> {
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
                 (binary, args.clone())
             }
-            ToolKind::Runner { runner } => {
-                let mut all_args = vec![tool.binary.clone()];
+            ToolKind::Runner {
+                runner,
+                runner_args,
+            } => {
+                let mut all_args = runner_args.clone();
+                all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
                 (runner.clone(), all_args)
             }
@@ -798,8 +802,12 @@ impl<'a> ToolRunner<'a> {
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
                 (binary, args.clone())
             }
-            ToolKind::Runner { runner } => {
-                let mut all_args = vec![tool.binary.clone()];
+            ToolKind::Runner {
+                runner,
+                runner_args,
+            } => {
+                let mut all_args = runner_args.clone();
+                all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
                 (runner.clone(), all_args)
             }
@@ -949,8 +957,12 @@ impl<'a> ToolRunner<'a> {
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
                 (binary, args.clone())
             }
-            ToolKind::Runner { runner } => {
-                let mut all_args = vec![tool.binary.clone()];
+            ToolKind::Runner {
+                runner,
+                runner_args,
+            } => {
+                let mut all_args = runner_args.clone();
+                all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
                 (runner.clone(), all_args)
             }

@@ -22,7 +22,7 @@
 //! use clippier::tools::{ToolRegistry, ToolsConfig};
 //!
 //! let config = ToolsConfig::default();
-//! let registry = ToolRegistry::new(config);
+//! let registry = ToolRegistry::new(config, None)?;
 //!
 //! // Run all available formatters
 //! let results = registry.run_formatters(&["src/"])?;
@@ -94,8 +94,13 @@ pub fn build_tools_config(
     required: Option<&[String]>,
     skip: Option<&[String]>,
     explicit_tools: Option<&[String]>,
+    no_runner_fallback: bool,
 ) -> Result<ToolsConfig, BoxError> {
     let mut config = load_tools_config(working_dir)?;
+
+    if no_runner_fallback {
+        config.runner_fallback = false;
+    }
 
     if let Some(required_tools) = required {
         merge_unique_strings(&mut config.required, required_tools);
@@ -353,7 +358,7 @@ mod tests {
         let required = vec!["taplo".to_string(), "rustfmt".to_string()];
         let skip = vec!["shellcheck".to_string(), "gofmt".to_string()];
 
-        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None)
+        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None, false)
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt", "taplo"]);
@@ -370,7 +375,7 @@ mod tests {
             .expect("failed to write clippier.toml");
 
         let explicit = vec!["gofmt".to_string()];
-        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit))
+        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false)
             .expect("failed to build tools config");
 
         assert_eq!(merged.skip, vec!["taplo"]);
@@ -481,11 +486,22 @@ mod tests {
         )
         .expect("failed to write clippier.toml");
 
-        let merged = build_tools_config(Some(&dir), None, None, None)
+        let merged = build_tools_config(Some(&dir), None, None, None, false)
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt"]);
         assert_eq!(merged.skip, vec!["rustfmt"]);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn build_tools_config_disables_runner_fallback_with_cli_override() {
+        let dir = temp_dir("clippier-tools-runner-fallback-override");
+        let merged = build_tools_config(Some(&dir), None, None, None, true)
+            .expect("failed to build merged tools config");
+
+        assert!(!merged.runner_fallback);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

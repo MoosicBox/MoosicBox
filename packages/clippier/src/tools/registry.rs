@@ -5,6 +5,14 @@ use std::path::{Path, PathBuf};
 
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
+enum ToolResolution {
+    Binary(PathBuf),
+    Runner {
+        runner: String,
+        runner_args: Vec<String>,
+    },
+}
+
 /// Error type for tool-related operations
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -82,21 +90,56 @@ impl ToolRegistry {
         None
     }
 
-    fn resolve_preferred_tool_path(name: &str, tool: &Tool, base_dir: &Path) -> Option<PathBuf> {
+    fn resolve_preferred_tool(
+        name: &str,
+        tool: &Tool,
+        base_dir: &Path,
+        runner_fallback: bool,
+    ) -> Option<ToolResolution> {
         match name {
             "prettier" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, "prettier") {
-                    return Some(path);
+                    return Some(ToolResolution::Binary(path));
                 }
-                which::which("prettier").ok()
+
+                if let Ok(path) = which::which("prettier") {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if which::which("bunx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "bunx".to_string(),
+                        runner_args: vec![],
+                    });
+                }
+
+                if which::which("pnpm").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "pnpm".to_string(),
+                        runner_args: vec!["dlx".to_string()],
+                    });
+                }
+
+                if which::which("npx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "npx".to_string(),
+                        runner_args: vec![],
+                    });
+                }
+
+                None
             }
             "biome" | "eslint" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
-                    return Some(path);
+                    return Some(ToolResolution::Binary(path));
                 }
-                which::which(&tool.binary).ok()
+                which::which(&tool.binary).ok().map(ToolResolution::Binary)
             }
-            _ => which::which(&tool.binary).ok(),
+            _ => which::which(&tool.binary).ok().map(ToolResolution::Binary),
         }
     }
 
@@ -259,9 +302,30 @@ impl ToolRegistry {
             }
 
             // Auto-detect from local node bins and/or PATH
-            if let Some(path) = Self::resolve_preferred_tool_path(name, tool, &self.working_dir) {
-                log::debug!("Tool '{name}' detected at: {}", path.display());
-                let available_tool = tool.clone().with_detected_path(path);
+            if let Some(resolution) = Self::resolve_preferred_tool(
+                name,
+                tool,
+                &self.working_dir,
+                self.config.runner_fallback,
+            ) {
+                let available_tool = match resolution {
+                    ToolResolution::Binary(path) => {
+                        log::debug!("Tool '{name}' detected at: {}", path.display());
+                        tool.clone().with_detected_path(path)
+                    }
+                    ToolResolution::Runner {
+                        runner,
+                        runner_args,
+                    } => {
+                        log::debug!("Tool '{name}' will run via runner: {runner} {runner_args:?}");
+                        let mut available_tool = tool.clone();
+                        available_tool.kind = ToolKind::Runner {
+                            runner,
+                            runner_args,
+                        };
+                        available_tool
+                    }
+                };
                 self.available.insert(name.clone(), available_tool);
             } else {
                 log::debug!("Tool '{name}' not found");
@@ -384,10 +448,15 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &dir)
+        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, true)
             .expect("expected prettier variant to resolve");
 
-        assert!(detected.ends_with("node_modules/.bin/prettier"));
+        let path = match detected {
+            ToolResolution::Binary(path) => path,
+            ToolResolution::Runner { .. } => panic!("expected binary resolution"),
+        };
+
+        assert!(path.ends_with("node_modules/.bin/prettier"));
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 
@@ -410,10 +479,90 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &nested)
+        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &nested, true)
             .expect("expected prettier variant to resolve");
 
-        assert!(detected.ends_with("node_modules/.bin/prettier"));
+        let path = match detected {
+            ToolResolution::Binary(path) => path,
+            ToolResolution::Runner { .. } => panic!("expected binary resolution"),
+        };
+
+        assert!(path.ends_with("node_modules/.bin/prettier"));
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn resolve_preferred_prettier_uses_runner_when_enabled_and_binary_missing() {
+        let dir = temp_dir("clippier-prettier-runner");
+
+        let tool = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, true);
+
+        if which::which("prettier").is_ok() {
+            if let Some(ToolResolution::Binary(_)) = detected {
+                std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+                return;
+            }
+            panic!("expected direct prettier binary resolution when prettier is installed");
+        }
+
+        let detected = detected.expect("expected fallback resolution");
+
+        match detected {
+            ToolResolution::Binary(_) => panic!("expected runner fallback resolution"),
+            ToolResolution::Runner {
+                runner,
+                runner_args,
+            } => {
+                if which::which("bunx").is_ok() {
+                    assert_eq!(runner, "bunx");
+                    assert!(runner_args.is_empty());
+                } else if which::which("pnpm").is_ok() {
+                    assert_eq!(runner, "pnpm");
+                    assert_eq!(runner_args, vec!["dlx"]);
+                } else if which::which("npx").is_ok() {
+                    assert_eq!(runner, "npx");
+                    assert!(runner_args.is_empty());
+                } else {
+                    panic!("expected at least one runner in test environment");
+                }
+            }
+        }
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn resolve_preferred_prettier_returns_none_when_runner_fallback_disabled() {
+        let dir = temp_dir("clippier-prettier-runner-disabled");
+
+        let tool = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, false);
+
+        if which::which("prettier").is_ok() {
+            assert!(matches!(detected, Some(ToolResolution::Binary(_))));
+        } else {
+            assert!(detected.is_none());
+        }
+
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 }

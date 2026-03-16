@@ -24,6 +24,8 @@ pub enum ToolKind {
     Runner {
         /// The runner command (e.g., "npx", "pnpm exec")
         runner: String,
+        /// Additional arguments passed before tool binary (e.g., `dlx`)
+        runner_args: Vec<String>,
     },
 }
 
@@ -102,7 +104,7 @@ impl Tool {
 }
 
 /// Configuration for tool detection and execution
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ToolsConfig {
     /// Tools that MUST be installed (error if missing)
@@ -116,6 +118,25 @@ pub struct ToolsConfig {
     /// Explicit paths for tools that can't be auto-detected
     #[serde(default)]
     pub paths: std::collections::BTreeMap<String, String>,
+
+    /// Allow executing missing tools through package manager runners
+    #[serde(default = "default_true")]
+    pub runner_fallback: bool,
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+impl Default for ToolsConfig {
+    fn default() -> Self {
+        Self {
+            required: Vec::new(),
+            skip: Vec::new(),
+            paths: std::collections::BTreeMap::new(),
+            runner_fallback: true,
+        }
+    }
 }
 
 impl ToolsConfig {

@@ -1042,7 +1042,14 @@ For Prettier specifically, clippier also auto-selects it when:
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
-For `prettier` execution, clippier resolves `node_modules/.bin/prettier` in the working directory or its ancestors before falling back to `prettier` in PATH. Explicit `tools.paths.prettier` always takes precedence.
+For `prettier` execution, clippier resolves in this order:
+
+1. Explicit `tools.paths.prettier`
+2. `node_modules/.bin/prettier` in the working directory or ancestors
+3. `prettier` in PATH
+4. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx`
+
+Use `--no-runner-fallback` to disable runner fallback for a command.
 
 Precedence for tool selection is:
 
@@ -1074,19 +1081,19 @@ TUI behavior for tool output:
 
 #### Supported Tools
 
-| Tool         | Language/Format         | Capabilities | Detection                                                                  |
-| ------------ | ----------------------- | ------------ | -------------------------------------------------------------------------- |
-| `rustfmt`    | Rust                    | Format       | `cargo` in PATH                                                            |
-| `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                            |
-| `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                             |
-| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` (supports `node_modules/.bin` and PATH)                         |
-| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary                                                             |
-| `eslint`     | JS/TS                   | Lint         | `eslint` binary                                                            |
-| `ruff`       | Python                  | Format, Lint | `ruff` binary                                                              |
-| `black`      | Python                  | Format       | `black` binary                                                             |
-| `gofmt`      | Go                      | Format       | `gofmt` binary                                                             |
-| `shfmt`      | Shell                   | Format       | `shfmt` binary                                                             |
-| `shellcheck` | Shell                   | Lint         | `shellcheck` binary                                                        |
+| Tool         | Language/Format         | Capabilities | Detection                                                                 |
+| ------------ | ----------------------- | ------------ | ------------------------------------------------------------------------- |
+| `rustfmt`    | Rust                    | Format       | `cargo` in PATH                                                           |
+| `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                           |
+| `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                            |
+| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
+| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary                                                            |
+| `eslint`     | JS/TS                   | Lint         | `eslint` binary                                                           |
+| `ruff`       | Python                  | Format, Lint | `ruff` binary                                                             |
+| `black`      | Python                  | Format       | `black` binary                                                            |
+| `gofmt`      | Go                      | Format       | `gofmt` binary                                                            |
+| `shfmt`      | Shell                   | Format       | `shfmt` binary                                                            |
+| `shellcheck` | Shell                   | Lint         | `shellcheck` binary                                                       |
 
 #### Output Format (JSON)
 
@@ -1326,30 +1333,32 @@ These options are shared across multiple subcommands (they are not top-level glo
 
 ### Check Command Options
 
-| Option          | Description                                     | Default           |
-| --------------- | ----------------------------------------------- | ----------------- |
-| `--working-dir` | Working directory to run in                     | Current directory |
-| `--tools`       | Specific tools to run (comma-separated)         | All detected      |
-| `--list`        | List available tools instead of running them    | false             |
-| `--required`    | Tools that MUST be installed (error if missing) | -                 |
-| `--skip`        | Tools to skip even if detected                  | -                 |
-| `--color`       | Color mode: `auto`, `always`, `never`           | `auto`            |
-| `--no-tui`      | Disable real-time pane TUI output               | `false`           |
-| `--output`      | Output format: `json`, `raw`                    | `raw`             |
+| Option                 | Description                                     | Default           |
+| ---------------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir`        | Working directory to run in                     | Current directory |
+| `--tools`              | Specific tools to run (comma-separated)         | All detected      |
+| `--list`               | List available tools instead of running them    | false             |
+| `--required`           | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`               | Tools to skip even if detected                  | -                 |
+| `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`             | Disable real-time pane TUI output               | `false`           |
+| `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
 
-| Option          | Description                                     | Default           |
-| --------------- | ----------------------------------------------- | ----------------- |
-| `--working-dir` | Working directory to run in                     | Current directory |
-| `--check`       | Only check formatting without modifying files   | false             |
-| `--tools`       | Specific tools to run (comma-separated)         | All detected      |
-| `--list`        | List available tools instead of running them    | false             |
-| `--required`    | Tools that MUST be installed (error if missing) | -                 |
-| `--skip`        | Tools to skip even if detected                  | -                 |
-| `--color`       | Color mode: `auto`, `always`, `never`           | `auto`            |
-| `--no-tui`      | Disable real-time pane TUI output               | `false`           |
-| `--output`      | Output format: `json`, `raw`                    | `raw`             |
+| Option                 | Description                                     | Default           |
+| ---------------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir`        | Working directory to run in                     | Current directory |
+| `--check`              | Only check formatting without modifying files   | false             |
+| `--tools`              | Specific tools to run (comma-separated)         | All detected      |
+| `--list`               | List available tools instead of running them    | false             |
+| `--required`           | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`               | Tools to skip even if detected                  | -                 |
+| `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`             | Disable real-time pane TUI output               | `false`           |
+| `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration
 

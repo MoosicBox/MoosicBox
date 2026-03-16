@@ -472,6 +472,10 @@ enum Commands {
         /// Disable real-time pane TUI output
         #[arg(long, default_value_t = false)]
         no_tui: bool,
+
+        /// Disable package-manager runner fallback (bunx/pnpm/npx)
+        #[arg(long, default_value_t = false)]
+        no_runner_fallback: bool,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -511,6 +515,10 @@ enum Commands {
         /// Disable real-time pane TUI output
         #[arg(long, default_value_t = false)]
         no_tui: bool,
+
+        /// Disable package-manager runner fallback (bunx/pnpm/npx)
+        #[arg(long, default_value_t = false)]
+        no_runner_fallback: bool,
     },
 }
 
@@ -814,12 +822,14 @@ async fn main() -> Result<(), BoxError> {
             output,
             color,
             no_tui,
+            no_runner_fallback,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
                 skip.as_deref(),
                 tools.as_deref(),
+                no_runner_fallback,
             )?;
             handle_check_command(
                 working_dir.as_deref(),
@@ -842,12 +852,14 @@ async fn main() -> Result<(), BoxError> {
             output,
             color,
             no_tui,
+            no_runner_fallback,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
                 skip.as_deref(),
                 tools.as_deref(),
+                no_runner_fallback,
             )?;
             handle_fmt_command(
                 working_dir.as_deref(),
