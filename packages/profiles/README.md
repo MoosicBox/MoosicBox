@@ -8,7 +8,7 @@ A simple profile name management system for the MoosicBox ecosystem, providing b
 - **Profile Validation**: Verify profile names exist before processing requests
 - **Thread-Safe Operations**: Safe concurrent access to profile data
 - **API Integration**: Extract profile names from HTTP headers and query parameters
-- **Event System**: Subscribe to profile addition and removal events (requires `events` feature)
+- **Event System**: Subscribe to manually triggered profile addition and removal events (requires `events` feature)
 
 ## Installation
 
