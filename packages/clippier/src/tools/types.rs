@@ -142,6 +142,7 @@ impl Tool {
 /// Configuration for tool detection and execution
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolsConfig {
     /// Tools that MUST be installed (error if missing)
     #[serde(default)]
@@ -170,6 +171,14 @@ pub struct ToolsConfig {
     /// Suppress overlap warnings for specific tool pairs/capabilities/extensions
     #[serde(default)]
     pub overlap_warning_suppress: Vec<OverlapWarningSuppressRule>,
+
+    /// Allow Nix-based ephemeral tool fallback when running on Nix systems
+    #[serde(default = "default_true")]
+    pub nix_fallback: bool,
+
+    /// Optional per-tool Nix package overrides (e.g. `nixpkgs#yamlfmt`)
+    #[serde(default)]
+    pub nix_packages: std::collections::BTreeMap<String, String>,
 }
 
 const fn default_true() -> bool {
@@ -186,6 +195,8 @@ impl Default for ToolsConfig {
             biome_use_editorconfig: true,
             biome_use_vcs_ignore: true,
             overlap_warning_suppress: Vec::new(),
+            nix_fallback: true,
+            nix_packages: std::collections::BTreeMap::new(),
         }
     }
 }

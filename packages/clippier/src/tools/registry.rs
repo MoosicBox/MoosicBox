@@ -97,12 +97,91 @@ impl ToolRegistry {
         None
     }
 
+    fn is_nix_system() -> bool {
+        if std::env::var_os("IN_NIX_SHELL").is_some() {
+            return true;
+        }
+
+        if Path::new("/etc/NIXOS").exists() {
+            return true;
+        }
+
+        if let Some(path) = std::env::var_os("PATH") {
+            let path_value = path.to_string_lossy();
+            if path_value.contains("/nix/store")
+                || path_value.contains("/etc/profiles/per-user")
+                || path_value.contains("/nix/var/nix/profiles")
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn nix_fallback_enabled(config: &ToolsConfig) -> bool {
+        config.nix_fallback && Self::is_nix_system() && which::which("nix").is_ok()
+    }
+
+    fn nix_package_for_tool(config: &ToolsConfig, tool_name: &str) -> Option<String> {
+        if let Some(value) = config.nix_packages.get(tool_name) {
+            return Some(value.clone());
+        }
+
+        match tool_name {
+            "mdformat" => Some("nixpkgs#mdformat".to_string()),
+            "yamlfmt" => Some("nixpkgs#yamlfmt".to_string()),
+            _ => None,
+        }
+    }
+
+    fn node_runner_resolution(tool_binary: &str) -> Option<ToolResolution> {
+        if which::which("bunx").is_ok() {
+            return Some(ToolResolution::Runner {
+                runner: "bunx".to_string(),
+                runner_args: vec![],
+                tool_binary: tool_binary.to_string(),
+            });
+        }
+
+        if which::which("pnpm").is_ok() {
+            return Some(ToolResolution::Runner {
+                runner: "pnpm".to_string(),
+                runner_args: vec!["dlx".to_string()],
+                tool_binary: tool_binary.to_string(),
+            });
+        }
+
+        if which::which("npx").is_ok() {
+            return Some(ToolResolution::Runner {
+                runner: "npx".to_string(),
+                runner_args: vec!["--yes".to_string()],
+                tool_binary: tool_binary.to_string(),
+            });
+        }
+
+        None
+    }
+
+    fn nix_runner_resolution(package: &str, binary: &str) -> ToolResolution {
+        ToolResolution::Runner {
+            runner: "nix".to_string(),
+            runner_args: vec![
+                "shell".to_string(),
+                package.to_string(),
+                "--command".to_string(),
+            ],
+            tool_binary: binary.to_string(),
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     fn resolve_preferred_tool(
         name: &str,
         tool: &Tool,
         base_dir: &Path,
         runner_fallback: bool,
+        config: &ToolsConfig,
     ) -> Option<ToolResolution> {
         match name {
             "prettier" => {
@@ -118,31 +197,7 @@ impl ToolRegistry {
                     return None;
                 }
 
-                if which::which("bunx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "bunx".to_string(),
-                        runner_args: vec![],
-                        tool_binary: "prettier".to_string(),
-                    });
-                }
-
-                if which::which("pnpm").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "pnpm".to_string(),
-                        runner_args: vec!["dlx".to_string()],
-                        tool_binary: "prettier".to_string(),
-                    });
-                }
-
-                if which::which("npx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "npx".to_string(),
-                        runner_args: vec!["--yes".to_string()],
-                        tool_binary: "prettier".to_string(),
-                    });
-                }
-
-                None
+                Self::node_runner_resolution("prettier")
             }
             "biome" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
@@ -157,31 +212,7 @@ impl ToolRegistry {
                     return None;
                 }
 
-                if which::which("bunx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "bunx".to_string(),
-                        runner_args: vec![],
-                        tool_binary: "@biomejs/biome".to_string(),
-                    });
-                }
-
-                if which::which("pnpm").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "pnpm".to_string(),
-                        runner_args: vec!["dlx".to_string()],
-                        tool_binary: "@biomejs/biome".to_string(),
-                    });
-                }
-
-                if which::which("npx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "npx".to_string(),
-                        runner_args: vec!["--yes".to_string()],
-                        tool_binary: "@biomejs/biome".to_string(),
-                    });
-                }
-
-                None
+                Self::node_runner_resolution("@biomejs/biome")
             }
             "eslint" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
@@ -196,31 +227,7 @@ impl ToolRegistry {
                     return None;
                 }
 
-                if which::which("bunx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "bunx".to_string(),
-                        runner_args: vec![],
-                        tool_binary: "eslint".to_string(),
-                    });
-                }
-
-                if which::which("pnpm").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "pnpm".to_string(),
-                        runner_args: vec!["dlx".to_string()],
-                        tool_binary: "eslint".to_string(),
-                    });
-                }
-
-                if which::which("npx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "npx".to_string(),
-                        runner_args: vec!["--yes".to_string()],
-                        tool_binary: "eslint".to_string(),
-                    });
-                }
-
-                None
+                Self::node_runner_resolution("eslint")
             }
             "dprint" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
@@ -235,28 +242,54 @@ impl ToolRegistry {
                     return None;
                 }
 
-                if which::which("bunx").is_ok() {
+                Self::node_runner_resolution("dprint")
+            }
+            "mdformat" => {
+                if let Ok(path) = which::which("mdformat") {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if which::which("uvx").is_ok() {
                     return Some(ToolResolution::Runner {
-                        runner: "bunx".to_string(),
+                        runner: "uvx".to_string(),
                         runner_args: vec![],
-                        tool_binary: "dprint".to_string(),
+                        tool_binary: "mdformat".to_string(),
                     });
                 }
 
-                if which::which("pnpm").is_ok() {
+                if which::which("pipx").is_ok() {
                     return Some(ToolResolution::Runner {
-                        runner: "pnpm".to_string(),
-                        runner_args: vec!["dlx".to_string()],
-                        tool_binary: "dprint".to_string(),
+                        runner: "pipx".to_string(),
+                        runner_args: vec!["run".to_string()],
+                        tool_binary: "mdformat".to_string(),
                     });
                 }
 
-                if which::which("npx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "npx".to_string(),
-                        runner_args: vec!["--yes".to_string()],
-                        tool_binary: "dprint".to_string(),
-                    });
+                if Self::nix_fallback_enabled(config)
+                    && let Some(package) = Self::nix_package_for_tool(config, "mdformat")
+                {
+                    return Some(Self::nix_runner_resolution(&package, "mdformat"));
+                }
+
+                None
+            }
+            "yamlfmt" => {
+                if let Ok(path) = which::which("yamlfmt") {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if Self::nix_fallback_enabled(config)
+                    && let Some(package) = Self::nix_package_for_tool(config, "yamlfmt")
+                {
+                    return Some(Self::nix_runner_resolution(&package, "yamlfmt"));
                 }
 
                 None
@@ -577,6 +610,7 @@ impl ToolRegistry {
                 tool,
                 &self.working_dir,
                 self.config.runner_fallback,
+                &self.config,
             ) {
                 let available_tool = match resolution {
                     ToolResolution::Binary(path) => {
@@ -731,8 +765,14 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, true)
-            .expect("expected prettier variant to resolve");
+        let detected = ToolRegistry::resolve_preferred_tool(
+            "prettier",
+            &tool,
+            &dir,
+            true,
+            &ToolsConfig::default(),
+        )
+        .expect("expected prettier variant to resolve");
 
         let path = match detected {
             ToolResolution::Binary(path) => path,
@@ -762,8 +802,14 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &nested, true)
-            .expect("expected prettier variant to resolve");
+        let detected = ToolRegistry::resolve_preferred_tool(
+            "prettier",
+            &tool,
+            &nested,
+            true,
+            &ToolsConfig::default(),
+        )
+        .expect("expected prettier variant to resolve");
 
         let path = match detected {
             ToolResolution::Binary(path) => path,
@@ -788,7 +834,13 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, true);
+        let detected = ToolRegistry::resolve_preferred_tool(
+            "prettier",
+            &tool,
+            &dir,
+            true,
+            &ToolsConfig::default(),
+        );
 
         if which::which("prettier").is_ok() {
             if let Some(ToolResolution::Binary(_)) = detected {
@@ -842,7 +894,13 @@ mod tests {
             vec![],
         );
 
-        let detected = ToolRegistry::resolve_preferred_tool("prettier", &tool, &dir, false);
+        let detected = ToolRegistry::resolve_preferred_tool(
+            "prettier",
+            &tool,
+            &dir,
+            false,
+            &ToolsConfig::default(),
+        );
 
         if which::which("prettier").is_ok() {
             assert!(matches!(detected, Some(ToolResolution::Binary(_))));
@@ -921,5 +979,32 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn nix_package_defaults_include_mdformat_and_yamlfmt() {
+        let config = ToolsConfig::default();
+
+        assert_eq!(
+            ToolRegistry::nix_package_for_tool(&config, "mdformat"),
+            Some("nixpkgs#mdformat".to_string())
+        );
+        assert_eq!(
+            ToolRegistry::nix_package_for_tool(&config, "yamlfmt"),
+            Some("nixpkgs#yamlfmt".to_string())
+        );
+    }
+
+    #[test]
+    fn nix_package_overrides_are_applied() {
+        let mut config = ToolsConfig::default();
+        config
+            .nix_packages
+            .insert("yamlfmt".to_string(), "flake#custom-yamlfmt".to_string());
+
+        assert_eq!(
+            ToolRegistry::nix_package_for_tool(&config, "yamlfmt"),
+            Some("flake#custom-yamlfmt".to_string())
+        );
     }
 }
