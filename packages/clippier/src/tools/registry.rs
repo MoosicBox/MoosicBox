@@ -1,10 +1,11 @@
 //! Tool registry for managing available tools.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
+#[derive(Debug, Clone)]
 enum ToolResolution {
     Binary(PathBuf),
     Runner {
@@ -135,6 +136,236 @@ impl ToolRegistry {
         }
     }
 
+    fn nix_package_for_mdformat_extension(config: &ToolsConfig, extension: &str) -> Option<String> {
+        if let Some(value) = config.nix_packages.get(&format!("mdformat-{extension}")) {
+            return Some(value.clone());
+        }
+
+        match extension {
+            "gfm" => Some("nixpkgs#python3Packages.mdformat-gfm".to_string()),
+            _ => None,
+        }
+    }
+
+    fn find_file_in_ancestors(base_dir: &Path, names: &[&str]) -> Option<PathBuf> {
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            for name in names {
+                let candidate = dir.join(name);
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn parse_mdformat_requested_extensions(base_dir: &Path) -> BTreeSet<String> {
+        fn parse_extensions(value: &toml::Value) -> BTreeSet<String> {
+            value
+                .as_array()
+                .into_iter()
+                .flat_map(|values| values.iter())
+                .filter_map(toml::Value::as_str)
+                .map(|value| value.trim().to_ascii_lowercase())
+                .filter(|value| value == "gfm" || value == "mdx" || value == "frontmatter")
+                .collect()
+        }
+
+        let mut requested = BTreeSet::new();
+
+        if let Some(path) = Self::find_file_in_ancestors(base_dir, &[".mdformat.toml"])
+            && let Ok(contents) = std::fs::read_to_string(path)
+            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+            && let Some(extensions) = parsed.get("extensions")
+        {
+            requested.extend(parse_extensions(extensions));
+        }
+
+        if let Some(path) = Self::find_file_in_ancestors(base_dir, &["pyproject.toml"])
+            && let Ok(contents) = std::fs::read_to_string(path)
+            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+            && let Some(extensions) = parsed
+                .get("tool")
+                .and_then(|tool| tool.get("mdformat"))
+                .and_then(|mdformat| mdformat.get("extensions"))
+        {
+            requested.extend(parse_extensions(extensions));
+        }
+
+        requested
+    }
+
+    fn mdformat_resolution_supports_extension(
+        resolution: &ToolResolution,
+        extension: &str,
+        base_dir: &Path,
+    ) -> bool {
+        let (program, mut args) = match resolution {
+            ToolResolution::Binary(path) => (path.display().to_string(), Vec::new()),
+            ToolResolution::Runner {
+                runner,
+                runner_args,
+                tool_binary,
+            } => {
+                let mut values = runner_args.clone();
+                values.push(tool_binary.clone());
+                (runner.clone(), values)
+            }
+        };
+
+        args.extend([
+            "--check".to_string(),
+            "--extensions".to_string(),
+            extension.to_string(),
+            "-".to_string(),
+        ]);
+
+        let mut command = std::process::Command::new(program);
+        command
+            .args(args)
+            .current_dir(base_dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+
+        let Ok(mut child) = command.spawn() else {
+            return false;
+        };
+
+        if let Some(mut child_stdin) = child.stdin.take() {
+            use std::io::Write as _;
+            let _ = child_stdin.write_all(b"# mdformat extension probe\n");
+        }
+
+        child.wait().is_ok_and(|status| status.success())
+    }
+
+    fn mdformat_supported_extensions_for_resolution(
+        resolution: &ToolResolution,
+        requested_extensions: &BTreeSet<String>,
+        base_dir: &Path,
+    ) -> BTreeSet<String> {
+        requested_extensions
+            .iter()
+            .filter(|extension| {
+                Self::mdformat_resolution_supports_extension(resolution, extension, base_dir)
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn mdformat_extension_subsets_desc(
+        requested_extensions: &BTreeSet<String>,
+    ) -> Vec<Vec<String>> {
+        let values = requested_extensions.iter().cloned().collect::<Vec<_>>();
+        let mut subsets = Vec::new();
+
+        let total = 1_usize << values.len();
+        for mask in 1..total {
+            let mut subset = Vec::new();
+            for (index, value) in values.iter().enumerate() {
+                if mask & (1 << index) != 0 {
+                    subset.push(value.clone());
+                }
+            }
+            subsets.push(subset);
+        }
+
+        subsets.sort_by_key(|subset| std::cmp::Reverse(subset.len()));
+        subsets
+    }
+
+    fn mdformat_runner_candidates(
+        config: &ToolsConfig,
+        requested_extensions: &BTreeSet<String>,
+    ) -> Vec<ToolResolution> {
+        let mut candidates = Vec::new();
+        let extension_subsets = Self::mdformat_extension_subsets_desc(requested_extensions);
+
+        if which::which("uvx").is_ok() {
+            if extension_subsets.is_empty() {
+                candidates.push(ToolResolution::Runner {
+                    runner: "uvx".to_string(),
+                    runner_args: Vec::new(),
+                    tool_binary: "mdformat".to_string(),
+                });
+            }
+
+            for subset in &extension_subsets {
+                let mut runner_args = Vec::new();
+                for extension in subset {
+                    let package = match extension.as_str() {
+                        "gfm" => "mdformat-gfm",
+                        "mdx" => "mdformat-mdx",
+                        "frontmatter" => "mdformat-frontmatter",
+                        _ => continue,
+                    };
+                    runner_args.push("--with".to_string());
+                    runner_args.push(package.to_string());
+                }
+
+                candidates.push(ToolResolution::Runner {
+                    runner: "uvx".to_string(),
+                    runner_args,
+                    tool_binary: "mdformat".to_string(),
+                });
+            }
+        }
+
+        if Self::nix_fallback_enabled(config) && !requested_extensions.is_empty() {
+            for subset in &extension_subsets {
+                let mut runner_args = vec![
+                    "shell".to_string(),
+                    "nixpkgs#uv".to_string(),
+                    "--command".to_string(),
+                    "uvx".to_string(),
+                ];
+                for extension in subset {
+                    let package = match extension.as_str() {
+                        "gfm" => "mdformat-gfm",
+                        "mdx" => "mdformat-mdx",
+                        "frontmatter" => "mdformat-frontmatter",
+                        _ => continue,
+                    };
+                    runner_args.push("--with".to_string());
+                    runner_args.push(package.to_string());
+                }
+
+                candidates.push(ToolResolution::Runner {
+                    runner: "nix".to_string(),
+                    runner_args,
+                    tool_binary: "mdformat".to_string(),
+                });
+            }
+        }
+
+        if requested_extensions.is_empty() && which::which("pipx").is_ok() {
+            candidates.push(ToolResolution::Runner {
+                runner: "pipx".to_string(),
+                runner_args: vec!["run".to_string()],
+                tool_binary: "mdformat".to_string(),
+            });
+        }
+
+        if Self::nix_fallback_enabled(config)
+            && let Some(mdformat_package) = Self::nix_package_for_tool(config, "mdformat")
+        {
+            let mut packages = vec![mdformat_package];
+
+            for extension in requested_extensions {
+                if let Some(package) = Self::nix_package_for_mdformat_extension(config, extension) {
+                    packages.push(package);
+                }
+            }
+
+            candidates.push(Self::nix_runner_resolution(&packages, "mdformat"));
+        }
+
+        candidates
+    }
+
     fn node_runner_resolution(tool_binary: &str) -> Option<ToolResolution> {
         if which::which("bunx").is_ok() {
             return Some(ToolResolution::Runner {
@@ -245,6 +476,32 @@ impl ToolRegistry {
                 Self::node_runner_resolution("dprint")
             }
             "mdformat" => {
+                let requested_extensions = Self::parse_mdformat_requested_extensions(base_dir);
+
+                if !requested_extensions.is_empty() && runner_fallback {
+                    let mut candidates =
+                        Self::mdformat_runner_candidates(config, &requested_extensions);
+                    if let Ok(path) = which::which("mdformat") {
+                        candidates.push(ToolResolution::Binary(path));
+                    }
+
+                    let mut best: Option<(usize, ToolResolution)> = None;
+                    for candidate in candidates {
+                        let supported = Self::mdformat_supported_extensions_for_resolution(
+                            &candidate,
+                            &requested_extensions,
+                            base_dir,
+                        )
+                        .len();
+
+                        if best.as_ref().is_none_or(|(count, _)| supported > *count) {
+                            best = Some((supported, candidate));
+                        }
+                    }
+
+                    return best.map(|(_, candidate)| candidate);
+                }
+
                 if let Ok(path) = which::which("mdformat") {
                     return Some(ToolResolution::Binary(path));
                 }
@@ -253,29 +510,9 @@ impl ToolRegistry {
                     return None;
                 }
 
-                if which::which("uvx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "uvx".to_string(),
-                        runner_args: vec![],
-                        tool_binary: "mdformat".to_string(),
-                    });
-                }
-
-                if which::which("pipx").is_ok() {
-                    return Some(ToolResolution::Runner {
-                        runner: "pipx".to_string(),
-                        runner_args: vec!["run".to_string()],
-                        tool_binary: "mdformat".to_string(),
-                    });
-                }
-
-                if Self::nix_fallback_enabled(config)
-                    && let Some(package) = Self::nix_package_for_tool(config, "mdformat")
-                {
-                    return Some(Self::nix_runner_resolution(&[package], "mdformat"));
-                }
-
-                None
+                Self::mdformat_runner_candidates(config, &requested_extensions)
+                    .into_iter()
+                    .next()
             }
             "yamlfmt" => {
                 if let Ok(path) = which::which("yamlfmt") {

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, IsTerminal};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -505,7 +505,7 @@ impl<'a> ToolRunner<'a> {
         tool: &Tool,
         check_mode: bool,
         working_dir: Option<&Path>,
-    ) -> Option<(String, Vec<String>)> {
+    ) -> Option<(String, Vec<String>, Vec<String>)> {
         let args = if check_mode {
             &tool.check_args
         } else {
@@ -537,8 +537,211 @@ impl<'a> ToolRunner<'a> {
         };
 
         Self::append_prettier_ignore_path_arg(tool, &mut parts.1, working_dir, args_start_index);
+        let warnings =
+            Self::append_mdformat_extension_args(tool, &mut parts.1, working_dir, args_start_index);
 
-        Some(parts)
+        Some((parts.0, parts.1, warnings))
+    }
+
+    fn working_dir_absolute(working_dir: Option<&Path>) -> PathBuf {
+        let base_dir = working_dir.map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
+            Path::to_path_buf,
+        );
+        if base_dir.is_absolute() {
+            base_dir
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| Path::new(".").to_path_buf())
+                .join(base_dir)
+        }
+    }
+
+    fn mdformat_supports_extension(
+        tool: &Tool,
+        working_dir: Option<&Path>,
+        extension: &str,
+    ) -> bool {
+        let mut args = match &tool.kind {
+            ToolKind::Cargo => return false,
+            ToolKind::Binary => vec![],
+            ToolKind::Runner { runner_args, .. } => {
+                let mut values = runner_args.clone();
+                values.push(tool.binary.clone());
+                values
+            }
+        };
+
+        args.push("--check".to_string());
+        args.push("--extensions".to_string());
+        args.push(extension.to_string());
+        args.push("-".to_string());
+
+        let program = match &tool.kind {
+            ToolKind::Cargo => return false,
+            ToolKind::Binary => tool
+                .detected_path
+                .as_ref()
+                .map_or_else(|| tool.binary.clone(), |p| p.display().to_string()),
+            ToolKind::Runner { runner, .. } => runner.clone(),
+        };
+
+        let mut command = Command::new(program);
+        command.args(args);
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+        command.stdin(Stdio::piped());
+        if let Some(dir) = working_dir {
+            command.current_dir(dir);
+        }
+
+        let Ok(mut child) = command.spawn() else {
+            return false;
+        };
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write as _;
+            let _ = stdin.write_all(b"# mdformat extension probe\n");
+        }
+
+        child.wait().is_ok_and(|status| status.success())
+    }
+
+    fn find_file_in_ancestors(base_dir: &Path, names: &[&str]) -> Option<PathBuf> {
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            for name in names {
+                let candidate = dir.join(name);
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn mdformat_requested_extensions(
+        working_dir: Option<&Path>,
+    ) -> std::collections::BTreeSet<String> {
+        fn parse_extensions(value: &toml::Value) -> std::collections::BTreeSet<String> {
+            value
+                .as_array()
+                .into_iter()
+                .flat_map(|values| values.iter())
+                .filter_map(toml::Value::as_str)
+                .map(|value| value.trim().to_ascii_lowercase())
+                .filter(|value| value == "gfm" || value == "mdx" || value == "frontmatter")
+                .collect()
+        }
+
+        let mut requested = std::collections::BTreeSet::new();
+        let base_dir = Self::working_dir_absolute(working_dir);
+
+        if let Some(path) = Self::find_file_in_ancestors(&base_dir, &[".mdformat.toml"])
+            && let Ok(contents) = std::fs::read_to_string(path)
+            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+            && let Some(extensions) = parsed.get("extensions")
+        {
+            requested.extend(parse_extensions(extensions));
+        }
+
+        if let Some(path) = Self::find_file_in_ancestors(&base_dir, &["pyproject.toml"])
+            && let Ok(contents) = std::fs::read_to_string(path)
+            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+            && let Some(extensions) = parsed
+                .get("tool")
+                .and_then(|tool| tool.get("mdformat"))
+                .and_then(|mdformat| mdformat.get("extensions"))
+        {
+            requested.extend(parse_extensions(extensions));
+        }
+
+        requested
+    }
+
+    fn mdformat_runtime_label(tool: &Tool) -> String {
+        match &tool.kind {
+            ToolKind::Binary => tool
+                .detected_path
+                .as_ref()
+                .map_or_else(|| tool.binary.clone(), |path| path.display().to_string()),
+            ToolKind::Runner {
+                runner,
+                runner_args,
+            } => {
+                let mut parts = vec![runner.clone()];
+                parts.extend(runner_args.clone());
+                parts.push(tool.binary.clone());
+                parts.join(" ")
+            }
+            ToolKind::Cargo => "cargo".to_string(),
+        }
+    }
+
+    fn append_mdformat_extension_args(
+        tool: &Tool,
+        args: &mut Vec<String>,
+        working_dir: Option<&Path>,
+        args_start_index: usize,
+    ) -> Vec<String> {
+        if tool.name != "mdformat" {
+            return Vec::new();
+        }
+
+        let insert_index = args
+            .iter()
+            .enumerate()
+            .skip(args_start_index)
+            .find_map(|(index, arg)| {
+                if arg.starts_with('-') {
+                    None
+                } else {
+                    Some(index)
+                }
+            })
+            .unwrap_or(args.len());
+
+        let requested_extensions = Self::mdformat_requested_extensions(working_dir);
+        if requested_extensions.is_empty() {
+            return Vec::new();
+        }
+
+        let mut extension_args = Vec::new();
+        let mut missing_extensions = Vec::new();
+        for extension in &requested_extensions {
+            if Self::mdformat_supports_extension(tool, working_dir, extension) {
+                extension_args.push("--extensions".to_string());
+                extension_args.push(extension.clone());
+            } else {
+                missing_extensions.push(extension.clone());
+            }
+        }
+
+        if !extension_args.is_empty() {
+            args.splice(insert_index..insert_index, extension_args);
+        }
+
+        if missing_extensions.is_empty() {
+            return Vec::new();
+        }
+
+        let enabled_extensions = requested_extensions
+            .iter()
+            .filter(|extension| !missing_extensions.contains(extension))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        vec![format!(
+            "WARNING: mdformat requested extensions unavailable in resolved runtime ({runtime}): {missing}. Continuing with available extensions: {enabled}.",
+            runtime = Self::mdformat_runtime_label(tool),
+            missing = missing_extensions.join(", "),
+            enabled = if enabled_extensions.is_empty() {
+                "none".to_string()
+            } else {
+                enabled_extensions.join(", ")
+            }
+        )]
     }
 
     fn find_prettier_ignore_path(base_dir: &Path) -> Option<std::path::PathBuf> {
@@ -689,7 +892,7 @@ impl<'a> ToolRunner<'a> {
     ) -> ToolResult {
         let start_time = Instant::now();
 
-        let Some((program, final_args)) =
+        let Some((program, final_args, warnings)) =
             Self::build_command_parts(tool, check_mode, self.working_dir)
         else {
             let result =
@@ -705,6 +908,13 @@ impl<'a> ToolRunner<'a> {
             tool_name: tool.name.clone(),
             display_name: tool.display_name.clone(),
         });
+        for warning in &warnings {
+            let _ = tx.send(ToolEvent::StderrLine {
+                tool_name: tool.name.clone(),
+                line: warning.clone(),
+                overwrite: false,
+            });
+        }
 
         let mut command = Command::new(&program);
         command.args(&final_args);
@@ -787,6 +997,11 @@ impl<'a> ToolRunner<'a> {
                     |_| String::new(),
                     |buf| String::from_utf8_lossy(buf.as_slice()).to_string(),
                 );
+                let warning_text = if warnings.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}\n", warnings.join("\n"))
+                };
 
                 let duration = start_time.elapsed();
                 let result = if status.success() {
@@ -797,7 +1012,7 @@ impl<'a> ToolRunner<'a> {
                         tool.display_name.clone(),
                         status.code(),
                         stdout,
-                        stderr,
+                        format!("{warning_text}{stderr}"),
                         duration,
                     )
                 };
@@ -872,6 +1087,17 @@ impl<'a> ToolRunner<'a> {
             self.working_dir,
             args_start_index,
         );
+        let warnings = Self::append_mdformat_extension_args(
+            tool,
+            &mut final_args,
+            self.working_dir,
+            args_start_index,
+        );
+        let warning_text = if warnings.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", warnings.join("\n"))
+        };
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");
@@ -892,7 +1118,11 @@ impl<'a> ToolRunner<'a> {
             match command.spawn() {
                 Ok(mut child) => {
                     let mut stdout_content = String::new();
-                    let mut stderr_content = String::new();
+                    let mut stderr_content = warning_text;
+
+                    for warning in &warnings {
+                        eprintln!("{warning}");
+                    }
 
                     // Read stdout
                     if let Some(stdout) = child.stdout.take() {
@@ -961,7 +1191,8 @@ impl<'a> ToolRunner<'a> {
                 Ok(output) => {
                     let duration = start_time.elapsed();
                     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    let stderr =
+                        format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
                     let exit_code = output.status.code();
 
                     if output.status.success() {
@@ -1033,6 +1264,17 @@ impl<'a> ToolRunner<'a> {
             self.working_dir,
             args_start_index,
         );
+        let warnings = Self::append_mdformat_extension_args(
+            tool,
+            &mut final_args,
+            self.working_dir,
+            args_start_index,
+        );
+        let warning_text = if warnings.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", warnings.join("\n"))
+        };
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");
@@ -1050,7 +1292,7 @@ impl<'a> ToolRunner<'a> {
             Ok(output) => {
                 let duration = start_time.elapsed();
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stderr = format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
                 let exit_code = output.status.code();
 
                 if output.status.success() {
