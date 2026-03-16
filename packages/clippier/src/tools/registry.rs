@@ -15,6 +15,10 @@ enum ToolResolution {
 }
 
 const BIOME_EDITORCONFIG_FLAG: &str = "--use-editorconfig=true";
+const BIOME_VCS_ENABLED_TRUE_FLAG: &str = "--vcs-enabled=true";
+const BIOME_VCS_ENABLED_FALSE_FLAG: &str = "--vcs-enabled=false";
+const BIOME_VCS_IGNORE_TRUE_FLAG: &str = "--vcs-use-ignore-file=true";
+const BIOME_FILES_IGNORE_UNKNOWN_TRUE_FLAG: &str = "--files-ignore-unknown=true";
 
 /// Error type for tool-related operations
 #[derive(Debug, thiserror::Error)]
@@ -261,53 +265,83 @@ impl ToolRegistry {
         }
     }
 
-    fn maybe_apply_biome_editorconfig(tool: &mut Tool, enabled: bool) {
-        if tool.name != "biome" || !enabled {
+    fn to_absolute_path(path: &Path) -> PathBuf {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
+        }
+    }
+
+    fn insert_biome_flag(args: &mut Vec<String>, flag: &str) {
+        if args.iter().any(|arg| arg == flag) {
             return;
         }
 
-        if !tool
-            .check_args
+        let insert_index = args
             .iter()
-            .any(|arg| arg == BIOME_EDITORCONFIG_FLAG)
-        {
-            let insert_index = tool
-                .check_args
-                .iter()
-                .enumerate()
-                .skip(1)
-                .find_map(|(index, arg)| {
-                    if arg.starts_with('-') {
-                        None
-                    } else {
-                        Some(index)
-                    }
-                })
-                .unwrap_or(tool.check_args.len());
-            tool.check_args
-                .insert(insert_index, BIOME_EDITORCONFIG_FLAG.to_string());
+            .enumerate()
+            .skip(1)
+            .find_map(|(index, arg)| {
+                if arg.starts_with('-') {
+                    None
+                } else {
+                    Some(index)
+                }
+            })
+            .unwrap_or(args.len());
+        args.insert(insert_index, flag.to_string());
+    }
+
+    fn insert_biome_vcs_root(args: &mut Vec<String>, vcs_root: &Path) {
+        let already_set = args
+            .iter()
+            .any(|arg| arg == "--vcs-root" || arg.starts_with("--vcs-root="));
+        if already_set {
+            return;
         }
 
-        if !tool
-            .format_args
+        let insert_index = args
             .iter()
-            .any(|arg| arg == BIOME_EDITORCONFIG_FLAG)
-        {
-            let insert_index = tool
-                .format_args
-                .iter()
-                .enumerate()
-                .skip(1)
-                .find_map(|(index, arg)| {
-                    if arg.starts_with('-') {
-                        None
-                    } else {
-                        Some(index)
-                    }
-                })
-                .unwrap_or(tool.format_args.len());
-            tool.format_args
-                .insert(insert_index, BIOME_EDITORCONFIG_FLAG.to_string());
+            .enumerate()
+            .skip(1)
+            .find_map(|(index, arg)| {
+                if arg.starts_with('-') {
+                    None
+                } else {
+                    Some(index)
+                }
+            })
+            .unwrap_or(args.len());
+        args.insert(insert_index, "--vcs-root".to_string());
+        args.insert(insert_index + 1, vcs_root.display().to_string());
+    }
+
+    fn maybe_apply_biome_settings(tool: &mut Tool, config: &ToolsConfig, working_dir: &Path) {
+        if tool.name != "biome" {
+            return;
+        }
+
+        if config.biome_use_editorconfig {
+            Self::insert_biome_flag(&mut tool.check_args, BIOME_EDITORCONFIG_FLAG);
+            Self::insert_biome_flag(&mut tool.format_args, BIOME_EDITORCONFIG_FLAG);
+        }
+
+        Self::insert_biome_flag(&mut tool.check_args, BIOME_FILES_IGNORE_UNKNOWN_TRUE_FLAG);
+        Self::insert_biome_flag(&mut tool.format_args, BIOME_FILES_IGNORE_UNKNOWN_TRUE_FLAG);
+
+        if config.biome_use_vcs_ignore {
+            Self::insert_biome_flag(&mut tool.check_args, BIOME_VCS_ENABLED_TRUE_FLAG);
+            Self::insert_biome_flag(&mut tool.check_args, BIOME_VCS_IGNORE_TRUE_FLAG);
+            Self::insert_biome_flag(&mut tool.format_args, BIOME_VCS_ENABLED_TRUE_FLAG);
+            Self::insert_biome_flag(&mut tool.format_args, BIOME_VCS_IGNORE_TRUE_FLAG);
+
+            let absolute_root = Self::to_absolute_path(working_dir);
+            Self::insert_biome_vcs_root(&mut tool.check_args, &absolute_root);
+            Self::insert_biome_vcs_root(&mut tool.format_args, &absolute_root);
+        } else {
+            Self::insert_biome_flag(&mut tool.check_args, BIOME_VCS_ENABLED_FALSE_FLAG);
+            Self::insert_biome_flag(&mut tool.format_args, BIOME_VCS_ENABLED_FALSE_FLAG);
         }
     }
 
@@ -480,9 +514,10 @@ impl ToolRegistry {
                     log::debug!("Tool '{name}' found at configured path: {path}");
                     let mut available_tool = tool.clone();
                     available_tool.detected_path = Some(path_buf);
-                    Self::maybe_apply_biome_editorconfig(
+                    Self::maybe_apply_biome_settings(
                         &mut available_tool,
-                        self.config.biome_use_editorconfig,
+                        &self.config,
+                        &self.working_dir,
                     );
                     self.available.insert(name.clone(), available_tool);
                     continue;
@@ -503,9 +538,10 @@ impl ToolRegistry {
                     ToolResolution::Binary(path) => {
                         log::debug!("Tool '{name}' detected at: {}", path.display());
                         let mut detected_tool = tool.clone().with_detected_path(path);
-                        Self::maybe_apply_biome_editorconfig(
+                        Self::maybe_apply_biome_settings(
                             &mut detected_tool,
-                            self.config.biome_use_editorconfig,
+                            &self.config,
+                            &self.working_dir,
                         );
                         detected_tool
                     }
@@ -521,9 +557,10 @@ impl ToolRegistry {
                             runner_args,
                         };
                         available_tool.binary = tool_binary;
-                        Self::maybe_apply_biome_editorconfig(
+                        Self::maybe_apply_biome_settings(
                             &mut available_tool,
-                            self.config.biome_use_editorconfig,
+                            &self.config,
+                            &self.working_dir,
                         );
                         available_tool
                     }
@@ -768,6 +805,76 @@ mod tests {
         } else {
             assert!(detected.is_none());
         }
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn biome_settings_include_editorconfig_and_vcs_flags_by_default() {
+        let dir = temp_dir("clippier-biome-settings-default");
+        let mut tool = Tool::new(
+            "biome",
+            "Biome",
+            "biome",
+            ToolKind::Binary,
+            vec![ToolCapability::Format, ToolCapability::Lint],
+            vec!["check".to_string(), ".".to_string()],
+            vec!["format".to_string(), "--write".to_string(), ".".to_string()],
+        );
+
+        let config = ToolsConfig::default();
+        ToolRegistry::maybe_apply_biome_settings(&mut tool, &config, &dir);
+
+        assert!(
+            tool.check_args
+                .iter()
+                .any(|arg| arg == BIOME_EDITORCONFIG_FLAG)
+        );
+        assert!(
+            tool.check_args
+                .iter()
+                .any(|arg| arg == BIOME_VCS_ENABLED_TRUE_FLAG)
+        );
+        assert!(
+            tool.check_args
+                .iter()
+                .any(|arg| arg == BIOME_VCS_IGNORE_TRUE_FLAG)
+        );
+        assert!(tool.check_args.iter().any(|arg| arg == "--vcs-root"));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn biome_settings_disable_vcs_when_configured_off() {
+        let dir = temp_dir("clippier-biome-settings-no-vcs");
+        let mut tool = Tool::new(
+            "biome",
+            "Biome",
+            "biome",
+            ToolKind::Binary,
+            vec![ToolCapability::Format, ToolCapability::Lint],
+            vec!["check".to_string(), ".".to_string()],
+            vec!["format".to_string(), "--write".to_string(), ".".to_string()],
+        );
+
+        let config = ToolsConfig {
+            biome_use_vcs_ignore: false,
+            ..ToolsConfig::default()
+        };
+        ToolRegistry::maybe_apply_biome_settings(&mut tool, &config, &dir);
+
+        assert!(
+            tool.check_args
+                .iter()
+                .any(|arg| arg == BIOME_VCS_ENABLED_FALSE_FLAG)
+        );
+        assert!(
+            !tool
+                .check_args
+                .iter()
+                .any(|arg| arg == BIOME_VCS_IGNORE_TRUE_FLAG)
+        );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

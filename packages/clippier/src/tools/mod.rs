@@ -135,6 +135,7 @@ pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsC
 /// # Errors
 ///
 /// Returns an error when loading config from disk fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_tools_config(
     working_dir: Option<&std::path::Path>,
     required: Option<&[String]>,
@@ -143,6 +144,7 @@ pub fn build_tools_config(
     no_runner_fallback: bool,
     tool_paths: &[String],
     biome_use_editorconfig_override: Option<bool>,
+    biome_use_vcs_ignore_override: Option<bool>,
 ) -> Result<ToolsConfig, BoxError> {
     let mut config = load_tools_config(working_dir)?;
 
@@ -158,6 +160,10 @@ pub fn build_tools_config(
 
     if let Some(value) = biome_use_editorconfig_override {
         config.biome_use_editorconfig = value;
+    }
+
+    if let Some(value) = biome_use_vcs_ignore_override {
+        config.biome_use_vcs_ignore = value;
     }
 
     if let Some(required_tools) = required {
@@ -444,6 +450,7 @@ mod tests {
             false,
             &[],
             None,
+            None,
         )
         .expect("failed to build merged tools config");
 
@@ -461,8 +468,17 @@ mod tests {
             .expect("failed to write clippier.toml");
 
         let explicit = vec!["gofmt".to_string()];
-        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false, &[], None)
-            .expect("failed to build tools config");
+        let merged = build_tools_config(
+            Some(&dir),
+            None,
+            None,
+            Some(&explicit),
+            false,
+            &[],
+            None,
+            None,
+        )
+        .expect("failed to build tools config");
 
         assert_eq!(merged.skip, vec!["taplo"]);
 
@@ -575,7 +591,7 @@ mod tests {
         )
         .expect("failed to write clippier.toml");
 
-        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], None)
+        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], None, None)
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt"]);
@@ -587,7 +603,7 @@ mod tests {
     #[test]
     fn build_tools_config_disables_runner_fallback_with_cli_override() {
         let dir = temp_dir("clippier-tools-runner-fallback-override");
-        let merged = build_tools_config(Some(&dir), None, None, None, true, &[], None)
+        let merged = build_tools_config(Some(&dir), None, None, None, true, &[], None, None)
             .expect("failed to build merged tools config");
 
         assert!(!merged.runner_fallback);
@@ -613,6 +629,7 @@ mod tests {
             false,
             &["prettier=/from/cli/prettier".to_string()],
             None,
+            None,
         )
         .expect("failed to build merged tools config");
 
@@ -629,6 +646,7 @@ mod tests {
             false,
             &["unknown=/tmp/tool".to_string()],
             None,
+            None,
         )
         .expect_err("expected unknown tool path override to fail");
         assert!(err.to_string().contains("Unknown tool 'unknown'"));
@@ -639,10 +657,20 @@ mod tests {
     #[test]
     fn build_tools_config_cli_override_sets_biome_editorconfig_behavior() {
         let dir = temp_dir("clippier-tools-biome-editorconfig-override");
-        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], Some(false))
-            .expect("failed to build merged tools config");
+        let merged = build_tools_config(
+            Some(&dir),
+            None,
+            None,
+            None,
+            false,
+            &[],
+            Some(false),
+            Some(false),
+        )
+        .expect("failed to build merged tools config");
 
         assert!(!merged.biome_use_editorconfig);
+        assert!(!merged.biome_use_vcs_ignore);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

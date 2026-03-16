@@ -488,6 +488,14 @@ enum Commands {
         /// Disable biome .editorconfig support
         #[arg(long, default_value_t = false)]
         no_biome_use_editorconfig: bool,
+
+        /// Force biome VCS ignore semantics
+        #[arg(long, default_value_t = false)]
+        biome_use_vcs_ignore: bool,
+
+        /// Disable biome VCS ignore semantics
+        #[arg(long, default_value_t = false)]
+        no_biome_use_vcs_ignore: bool,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -543,6 +551,14 @@ enum Commands {
         /// Disable biome .editorconfig support
         #[arg(long, default_value_t = false)]
         no_biome_use_editorconfig: bool,
+
+        /// Force biome VCS ignore semantics
+        #[arg(long, default_value_t = false)]
+        biome_use_vcs_ignore: bool,
+
+        /// Disable biome VCS ignore semantics
+        #[arg(long, default_value_t = false)]
+        no_biome_use_vcs_ignore: bool,
     },
 }
 
@@ -850,6 +866,8 @@ async fn main() -> Result<(), BoxError> {
             tool_path,
             biome_use_editorconfig,
             no_biome_use_editorconfig,
+            biome_use_vcs_ignore,
+            no_biome_use_vcs_ignore,
         } => {
             if biome_use_editorconfig && no_biome_use_editorconfig {
                 return Err(
@@ -864,6 +882,18 @@ async fn main() -> Result<(), BoxError> {
             } else {
                 None
             };
+            if biome_use_vcs_ignore && no_biome_use_vcs_ignore {
+                return Err(
+                    "Cannot pass both --biome-use-vcs-ignore and --no-biome-use-vcs-ignore".into(),
+                );
+            }
+            let biome_vcs_ignore_override = if biome_use_vcs_ignore {
+                Some(true)
+            } else if no_biome_use_vcs_ignore {
+                Some(false)
+            } else {
+                None
+            };
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
@@ -872,6 +902,7 @@ async fn main() -> Result<(), BoxError> {
                 no_runner_fallback,
                 &tool_path,
                 biome_editorconfig_override,
+                biome_vcs_ignore_override,
             )?;
             handle_check_command(
                 working_dir.as_deref(),
@@ -898,6 +929,8 @@ async fn main() -> Result<(), BoxError> {
             tool_path,
             biome_use_editorconfig,
             no_biome_use_editorconfig,
+            biome_use_vcs_ignore,
+            no_biome_use_vcs_ignore,
         } => {
             if biome_use_editorconfig && no_biome_use_editorconfig {
                 return Err(
@@ -912,6 +945,18 @@ async fn main() -> Result<(), BoxError> {
             } else {
                 None
             };
+            if biome_use_vcs_ignore && no_biome_use_vcs_ignore {
+                return Err(
+                    "Cannot pass both --biome-use-vcs-ignore and --no-biome-use-vcs-ignore".into(),
+                );
+            }
+            let biome_vcs_ignore_override = if biome_use_vcs_ignore {
+                Some(true)
+            } else if no_biome_use_vcs_ignore {
+                Some(false)
+            } else {
+                None
+            };
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
@@ -920,6 +965,7 @@ async fn main() -> Result<(), BoxError> {
                 no_runner_fallback,
                 &tool_path,
                 biome_editorconfig_override,
+                biome_vcs_ignore_override,
             )?;
             handle_fmt_command(
                 working_dir.as_deref(),

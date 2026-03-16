@@ -965,6 +965,7 @@ skip = ["gofmt"]
 required = ["rustfmt", "taplo"]
 runner-fallback = true
 biome-use-editorconfig = true
+biome-use-vcs-ignore = true
 ```
 
 CLI values are additive: `--skip` and `--required` are merged with config values.
@@ -1058,6 +1059,8 @@ Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.pr
 When both `biome` and `prettier` are auto-detected, clippier defaults to `biome` to avoid competing formatters. Use `--tools` to explicitly run both.
 
 Biome uses `.editorconfig` by default (`--use-editorconfig=true`). You can opt out via config (`tools.biome-use-editorconfig = false`) or CLI (`--no-biome-use-editorconfig`).
+
+Biome also uses VCS ignore semantics by default (`--vcs-enabled=true --vcs-use-ignore-file=true --vcs-root <working-dir>`). You can opt out via config (`tools.biome-use-vcs-ignore = false`) or CLI (`--no-biome-use-vcs-ignore`).
 
 Precedence for tool selection is:
 
@@ -1355,6 +1358,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
 | `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
 | `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
+| `--biome-use-vcs-ignore` | Force Biome VCS ignore semantics              | `false`           |
+| `--no-biome-use-vcs-ignore` | Disable Biome VCS ignore semantics        | `false`           |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1373,6 +1378,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
 | `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
 | `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
+| `--biome-use-vcs-ignore` | Force Biome VCS ignore semantics              | `false`           |
+| `--no-biome-use-vcs-ignore` | Disable Biome VCS ignore semantics        | `false`           |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration
