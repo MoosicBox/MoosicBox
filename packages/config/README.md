@@ -59,7 +59,7 @@ moosicbox_config = { path = "../config" }
 moosicbox_config = {
     path = "../config",
     default-features = false,
-    features = ["db"]  # Choose specific features: api, db, openapi
+    features = ["db"]  # Choose specific features: api, db, file, openapi
 }
 ```
 
