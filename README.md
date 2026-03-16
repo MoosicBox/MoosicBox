@@ -322,6 +322,8 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[switchy_env](packages/switchy/env)** - Environment configuration utilities
 - **[moosicbox_env_utils](packages/env_utils)** - Environment variable parsing utilities
 - **[moosicbox_logging](packages/logging)** - Logging utilities with feature-gated modules
+- **[moosicbox_log_runtime](packages/log_runtime)** - Generic log runtime paths and initialization
+- **[moosicbox_log_watch](packages/log_watch)** - Generic log watching, filtering, and optional TUI
 - **[switchy_telemetry](packages/switchy/telemetry)** - OpenTelemetry integration for distributed tracing
 - **[moosicbox_async_service](packages/async_service)** - Service framework for async applications
 - **[switchy_time](packages/switchy/time)** - Time abstraction utilities
