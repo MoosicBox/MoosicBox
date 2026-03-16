@@ -163,6 +163,14 @@ When you need to publish updates to connected clients (for example with SSE), us
 
 `VanillaJsRenderer` implements `hyperchad_renderer_html::extend::ExtendHtmlRenderer`, so bring that trait into scope when calling these methods.
 
+### JavaScript Asset Constants
+
+Use these public constants when serving the embedded runtime asset:
+
+- `SCRIPT_NAME` - Runtime filename (`hyperchad.js` in debug builds, `hyperchad.min.js` in release builds)
+- `SCRIPT` - Embedded runtime JavaScript source (requires `script` feature)
+- `SCRIPT_NAME_HASHED` - Content-hashed runtime filename (requires both `script` and `hash` features)
+
 ### Form Handling
 
 ```rust
