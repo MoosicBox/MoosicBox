@@ -257,12 +257,12 @@ fn error_examples() -> Vec<Error> {
 
         Error::from_http_status_code(
             StatusCode::UnprocessableEntity,
-            "Validation failed"
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Validation failed")
         ),
 
         Error::from_http_status_code_u16(
             429,
-            "Rate limit exceeded"
+            std::io::Error::new(std::io::ErrorKind::Other, "Rate limit exceeded")
         ),
     ]
 }
