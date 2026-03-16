@@ -41,6 +41,15 @@ Then open your browser to: **http://localhost:3131**
 PORT=3131 cargo run --no-default-features --features actix,vanilla-js -- serve
 ```
 
+## CLI Commands
+
+- `serve` - Starts the application server
+- `dynamic-routes` - Prints dynamic routes registered in the router
+- `gen` - Generates static output for all routes
+- `clean` - Cleans generated output
+
+Use `cargo run -- --help` to view all command options.
+
 ## Features
 
 - `dev` - Enables embedded assets for local development (includes the bundled JavaScript)
