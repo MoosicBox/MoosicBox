@@ -17,7 +17,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-moosicbox_menu_models = { path = "../menu/models" }
+moosicbox_menu_models = "0.1.4"
 ```
 
 ## Dependencies
@@ -44,6 +44,8 @@ The crate also provides conversions between these types:
 
 - `From<AlbumVersion> for api::ApiAlbumVersion`
 - `From<api::ApiAlbumVersion> for AlbumVersion`
+- `From<&api::ApiAlbumVersion> for moosicbox_music_models::AlbumVersionQuality`
+- `From<api::ApiAlbumVersion> for moosicbox_music_models::AlbumVersionQuality`
 
 ```rust
 use moosicbox_menu_models::AlbumVersion;
