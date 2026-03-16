@@ -293,7 +293,9 @@ async fn query_albums(db: &dyn Database) -> Result<(), Box<dyn std::error::Error
 ```rust
 use moosicbox_json_utils::ParseError;
 
-match json_value.to_value_type::<String>() {
+let result: Result<String, ParseError> = json_value.to_value_type();
+
+match result {
     Ok(string_value) => {
         println!("Parsed string: {}", string_value);
     }
