@@ -20,14 +20,22 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_session = "0.1.4"
+```
 
-# Enable API endpoints
+Enable optional features as needed:
+
+```toml
+[dependencies]
 moosicbox_session = { version = "0.1.4", features = ["api"] }
+```
 
-# Enable event system
+```toml
+[dependencies]
 moosicbox_session = { version = "0.1.4", features = ["events"] }
+```
 
-# Enable OpenAPI schema generation (requires `api`)
+```toml
+[dependencies]
 moosicbox_session = { version = "0.1.4", features = ["api", "openapi"] }
 ```
 
