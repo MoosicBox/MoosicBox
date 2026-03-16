@@ -15,7 +15,7 @@ The Switchy package provides:
 
 ### Available Modules
 
-- **`async`**: Async runtime utilities (via `switchy_async`)
+- **`async`**: Async runtime utilities (exposed under `switchy::unsync`, via `switchy_async`)
 - **`async-macros`**: Async macro utilities (via `switchy_async_macros`)
 - **`database`**: Database abstraction layer (via `switchy_database`)
 - **`database-connection`**: Database connection management (via `switchy_database_connection`)
@@ -34,7 +34,7 @@ The Switchy package provides:
 ### Module Structure
 
 - **Individual Features**: Each module is behind its own feature flag
-- **Nested Modules**: HTTP module contains both client and models
+- **Nested Modules**: HTTP module can expose both client and models based on enabled features
 - **Clean Imports**: Simple import paths for all functionality
 
 ## Installation
