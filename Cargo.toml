@@ -591,7 +591,7 @@ tokio-tungstenite = { version = "0.28.0", features = [
 tokio-util = "0.7.18"
 toml = "1.0.6"
 tracing = "0.1.44"
-tracing-appender = "0.2.3"
+tracing-appender = "0.2.4"
 tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }
