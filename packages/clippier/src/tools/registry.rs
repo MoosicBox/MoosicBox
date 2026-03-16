@@ -127,7 +127,7 @@ impl ToolRegistry {
                 if which::which("npx").is_ok() {
                     return Some(ToolResolution::Runner {
                         runner: "npx".to_string(),
-                        runner_args: vec![],
+                        runner_args: vec!["--yes".to_string()],
                     });
                 }
 
@@ -196,8 +196,18 @@ impl ToolRegistry {
             "prettier",
             ToolKind::Binary,
             vec![ToolCapability::Format],
-            vec!["--check".to_string(), ".".to_string()],
-            vec!["--write".to_string(), ".".to_string()],
+            vec![
+                "--check".to_string(),
+                "--ignore-unknown".to_string(),
+                "--no-error-on-unmatched-pattern".to_string(),
+                "**/*.{js,jsx,ts,tsx,json,md,mdx,yaml,yml,html,css,scss,less}".to_string(),
+            ],
+            vec![
+                "--write".to_string(),
+                "--ignore-unknown".to_string(),
+                "--no-error-on-unmatched-pattern".to_string(),
+                "**/*.{js,jsx,ts,tsx,json,md,mdx,yaml,yml,html,css,scss,less}".to_string(),
+            ],
         ));
 
         // JavaScript/TypeScript - Biome
