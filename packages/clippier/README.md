@@ -1042,6 +1042,8 @@ For Prettier specifically, clippier also auto-selects it when:
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
+For `prettier` execution, clippier prefers `prettierd` when available, then falls back to `prettier`. Explicit `tools.paths.prettier` always takes precedence.
+
 Precedence for tool selection is:
 
 1. `--tools` (explicit tool list)
@@ -1072,19 +1074,19 @@ TUI behavior for tool output:
 
 #### Supported Tools
 
-| Tool         | Language/Format         | Capabilities | Detection           |
-| ------------ | ----------------------- | ------------ | ------------------- |
-| `rustfmt`    | Rust                    | Format       | `cargo` in PATH     |
-| `clippy`     | Rust                    | Lint         | `cargo` in PATH     |
-| `taplo`      | TOML                    | Format, Lint | `taplo` binary      |
-| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` binary   |
-| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary      |
-| `eslint`     | JS/TS                   | Lint         | `eslint` binary     |
-| `ruff`       | Python                  | Format, Lint | `ruff` binary       |
-| `black`      | Python                  | Format       | `black` binary      |
-| `gofmt`      | Go                      | Format       | `gofmt` binary      |
-| `shfmt`      | Shell                   | Format       | `shfmt` binary      |
-| `shellcheck` | Shell                   | Lint         | `shellcheck` binary |
+| Tool         | Language/Format         | Capabilities | Detection                                                                  |
+| ------------ | ----------------------- | ------------ | -------------------------------------------------------------------------- |
+| `rustfmt`    | Rust                    | Format       | `cargo` in PATH                                                            |
+| `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                            |
+| `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                             |
+| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettierd`/`prettier` (prefers `prettierd`, supports `node_modules/.bin`) |
+| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary                                                             |
+| `eslint`     | JS/TS                   | Lint         | `eslint` binary                                                            |
+| `ruff`       | Python                  | Format, Lint | `ruff` binary                                                              |
+| `black`      | Python                  | Format       | `black` binary                                                             |
+| `gofmt`      | Go                      | Format       | `gofmt` binary                                                             |
+| `shfmt`      | Shell                   | Format       | `shfmt` binary                                                             |
+| `shellcheck` | Shell                   | Lint         | `shellcheck` binary                                                        |
 
 #### Output Format (JSON)
 
@@ -1331,8 +1333,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--list`        | List available tools instead of running them    | false             |
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
-| `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
-| `--no-tui`      | Disable real-time pane TUI output              | `false`           |
+| `--color`       | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`      | Disable real-time pane TUI output               | `false`           |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1345,8 +1347,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--list`        | List available tools instead of running them    | false             |
 | `--required`    | Tools that MUST be installed (error if missing) | -                 |
 | `--skip`        | Tools to skip even if detected                  | -                 |
-| `--color`       | Color mode: `auto`, `always`, `never`          | `auto`            |
-| `--no-tui`      | Disable real-time pane TUI output              | `false`           |
+| `--color`       | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`      | Disable real-time pane TUI output               | `false`           |
 | `--output`      | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration

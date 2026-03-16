@@ -5449,7 +5449,7 @@ pub fn handle_check_command(
     use tools::{ToolRegistry, ToolRunner};
 
     let required_tools = config.required.clone();
-    let registry = ToolRegistry::new(config)?;
+    let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
         let tool_info = registry.list_tools();
@@ -5546,7 +5546,7 @@ pub fn handle_fmt_command(
     use tools::{ToolRegistry, ToolRunner};
 
     let required_tools = config.required.clone();
-    let registry = ToolRegistry::new(config)?;
+    let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
         let tool_info: Vec<_> = registry

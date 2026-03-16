@@ -1,7 +1,7 @@
 //! Tool registry for managing available tools.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
@@ -32,6 +32,9 @@ pub struct ToolRegistry {
 
     /// Configuration for tool selection
     config: ToolsConfig,
+
+    /// Working directory used for local tool discovery
+    working_dir: PathBuf,
 }
 
 impl ToolRegistry {
@@ -40,11 +43,17 @@ impl ToolRegistry {
     /// # Errors
     ///
     /// Returns an error if a required tool is not found.
-    pub fn new(config: ToolsConfig) -> Result<Self, ToolError> {
+    pub fn new(config: ToolsConfig, working_dir: Option<&Path>) -> Result<Self, ToolError> {
+        let resolved_working_dir = match working_dir {
+            Some(path) => path.to_path_buf(),
+            None => Self::current_working_dir()?,
+        };
+
         let mut registry = Self {
             tools: BTreeMap::new(),
             available: BTreeMap::new(),
             config,
+            working_dir: resolved_working_dir,
         };
 
         // Register all built-in tools
@@ -54,6 +63,48 @@ impl ToolRegistry {
         registry.detect_tools()?;
 
         Ok(registry)
+    }
+
+    fn current_working_dir() -> Result<PathBuf, ToolError> {
+        std::env::current_dir()
+            .map_err(|e| ToolError::DetectionFailed("cwd".to_string(), e.to_string()))
+    }
+
+    fn resolve_node_bin_in_ancestors(base_dir: &Path, bin_name: &str) -> Option<PathBuf> {
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            let candidate = dir.join("node_modules").join(".bin").join(bin_name);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn resolve_preferred_tool_path(name: &str, tool: &Tool, base_dir: &Path) -> Option<PathBuf> {
+        match name {
+            "prettier" => {
+                for bin_name in ["prettierd", "prettier"] {
+                    if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, bin_name) {
+                        return Some(path);
+                    }
+                }
+                for bin_name in ["prettierd", "prettier"] {
+                    if let Ok(path) = which::which(bin_name) {
+                        return Some(path);
+                    }
+                }
+                None
+            }
+            "biome" | "eslint" => {
+                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
+                    return Some(path);
+                }
+                which::which(&tool.binary).ok()
+            }
+            _ => which::which(&tool.binary).ok(),
+        }
     }
 
     /// Registers a tool definition
@@ -214,8 +265,8 @@ impl ToolRegistry {
                 );
             }
 
-            // Auto-detect using which
-            if let Ok(path) = which::which(&tool.binary) {
+            // Auto-detect from local node bins and/or PATH
+            if let Some(path) = Self::resolve_preferred_tool_path(name, tool, &self.working_dir) {
                 log::debug!("Tool '{name}' detected at: {}", path.display());
                 let available_tool = tool.clone().with_detected_path(path);
                 self.available.insert(name.clone(), available_tool);
@@ -306,4 +357,71 @@ pub struct ToolInfo {
     pub capabilities: Vec<ToolCapability>,
     /// Path to the tool binary if detected
     pub path: Option<PathBuf>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
+        std::fs::create_dir_all(&path).expect("failed to create temp dir");
+        path
+    }
+
+    #[test]
+    fn resolve_preferred_prettier_path_prefers_local_prettierd_over_prettier() {
+        let dir = temp_dir("clippier-prettier-priority");
+        let bin_dir = dir.join("node_modules").join(".bin");
+        std::fs::create_dir_all(&bin_dir).expect("failed to create node bin dir");
+        std::fs::write(bin_dir.join("prettier"), "").expect("failed to write prettier file");
+        std::fs::write(bin_dir.join("prettierd"), "").expect("failed to write prettierd file");
+
+        let tool = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &dir)
+            .expect("expected prettier variant to resolve");
+
+        assert!(detected.ends_with("node_modules/.bin/prettierd"));
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn resolve_preferred_prettier_path_uses_ancestor_node_bin() {
+        let dir = temp_dir("clippier-prettier-ancestor");
+        let root_bin = dir.join("node_modules").join(".bin");
+        let nested = dir.join("packages").join("service");
+        std::fs::create_dir_all(&root_bin).expect("failed to create root node bin dir");
+        std::fs::create_dir_all(&nested).expect("failed to create nested dir");
+        std::fs::write(root_bin.join("prettierd"), "").expect("failed to write prettierd file");
+
+        let tool = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &nested)
+            .expect("expected prettier variant to resolve");
+
+        assert!(detected.ends_with("node_modules/.bin/prettierd"));
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
 }
