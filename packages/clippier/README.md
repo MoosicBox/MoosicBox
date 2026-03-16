@@ -947,6 +947,9 @@ clippier check --tools "clippy,eslint"
 # List available tools without running them
 clippier check --list
 
+# Include execution metadata in JSON output (`cargo` / `binary` / `runner`)
+clippier check --list --output json
+
 # Require specific tools (fail if not installed)
 clippier check --required "clippy,prettier"
 
@@ -979,9 +982,8 @@ The `check` command automatically detects and runs:
 
 - **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
 - **TOML**: `taplo fmt --check`
-- **JavaScript/TypeScript**: `prettier --check`, `biome format`, `eslint`
-- **Markdown**: `mdformat --check`
-- **YAML**: `yamlfmt -lint`
+- **JavaScript/TypeScript**: `biome format`, `eslint`
+- **Markdown/YAML**: `dprint check`
 - **Python**: `ruff check`, `black --check`
 - **Go**: `gofmt -l`
 - **Shell**: `shfmt -d`, `shellcheck`
@@ -991,11 +993,12 @@ Tools run in parallel by default for maximum performance.
 By default, `check` auto-selects tools based on manifest/config files in the working directory:
 
 - `Cargo.toml` -> `clippy`, `rustfmt`, `taplo`
-- `package.json` -> `eslint`, `prettier`, `biome`
+- `package.json` -> `eslint`, `biome`
 - `pyproject.toml`, `requirements.txt`, or `setup.py` -> `ruff`, `black`
 - `go.mod` -> `gofmt`
 - `taplo.toml` -> `taplo`
 - `.shellcheckrc` -> `shellcheck`
+- `dprint.json`/`dprint.jsonc` -> `dprint`
 
 ### Fmt Command (Formatting)
 
@@ -1017,6 +1020,9 @@ clippier fmt --tools "rustfmt,prettier"
 # List available formatters without running them
 clippier fmt --list
 
+# Include execution metadata in JSON output (`cargo` / `binary` / `runner`)
+clippier fmt --list --output json
+
 # Require specific formatters (fail if not installed)
 clippier fmt --required "rustfmt"
 
@@ -1031,9 +1037,8 @@ The `fmt` command automatically detects and runs:
 
 - **Rust**: `cargo fmt`
 - **TOML**: `taplo fmt`
-- **JavaScript/TypeScript**: `prettier --write`, `biome format --write`
-- **Markdown**: `mdformat`
-- **YAML**: `yamlfmt`
+- **JavaScript/TypeScript**: `biome format --write`
+- **Markdown/YAML**: `dprint fmt`
 - **Python**: `ruff format`, `black`
 - **Go**: `gofmt -w`
 - **Shell**: `shfmt -w`
@@ -1041,16 +1046,12 @@ The `fmt` command automatically detects and runs:
 By default, `fmt` auto-selects tools based on manifest/config files in the working directory:
 
 - `Cargo.toml` -> `rustfmt`, `taplo`
-- `package.json` -> `prettier`, `biome`
+- `package.json` -> `biome`
 - `pyproject.toml`, `requirements.txt`, or `setup.py` -> `ruff`, `black`
 - `go.mod` -> `gofmt`
 - `taplo.toml` -> `taplo`
 - `.shfmt.conf` -> `shfmt`
-
-For Prettier specifically, clippier also auto-selects it when:
-
-- `package.json` exists in an ancestor directory (for nested package/workspace runs)
-- generic Prettier-target files are present (`.md`, `.mdx`, `.json`, `.yaml`, `.yml`, `.html`, `.css`, `.scss`, `.less`, `.js`, `.jsx`, `.ts`, `.tsx`)
+- `dprint.json`/`dprint.jsonc` -> `dprint`
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
@@ -1065,7 +1066,7 @@ Tool resolution precedence (for `prettier`, `biome`, `eslint`, and `dprint`) is:
 Use `--no-runner-fallback` to disable runner fallback for a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
 
-When both `biome` and `prettier` are auto-detected, clippier runs both and emits overlap warnings when they can target the same extensions.
+When both `biome` and `prettier` are explicitly selected, clippier emits overlap warnings when they can target the same extensions.
 Overlap warnings are computed dynamically from files currently present in the working directory plus relevant tool config filters (`biome.json` `files.includes` and `.prettierignore`).
 
 Suppress overlap warnings with pair-specific config rules (case-insensitive tool/extension matching):
@@ -1124,8 +1125,8 @@ TUI behavior for tool output:
 | `biome`      | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
 | `eslint`     | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
 | `dprint`     | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `mdformat`   | Markdown                | Format       | `mdformat` binary                                                         |
-| `yamlfmt`    | YAML                    | Format       | `yamlfmt` binary                                                          |
+| `mdformat`   | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
+| `yamlfmt`    | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
 | `ruff`       | Python                  | Format, Lint | `ruff` binary                                                             |
 | `black`      | Python                  | Format       | `black` binary                                                            |
 | `gofmt`      | Go                      | Format       | `gofmt` binary                                                            |

@@ -1,0 +1,24 @@
+{
+    "indentWidth": 4,
+    "includes": [
+        "**/*.md",
+        "**/*.mdx",
+        "**/*.yml",
+        "**/*.yaml"
+    ],
+    "excludes": [
+        "**/node_modules/**",
+        "**/target/**",
+        "**/dist/**",
+        "**/gen/**",
+        "**/.direnv/**",
+        "**/pnpm-lock.yaml",
+        "**/pnpm-lock.yml",
+        "packages/opus_native/libopus/**",
+        "kubernetes/cert-manager.yaml"
+    ],
+    "plugins": [
+        "https://plugins.dprint.dev/markdown-0.21.1.wasm",
+        "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"
+    ]
+}

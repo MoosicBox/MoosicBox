@@ -5466,6 +5466,8 @@ pub fn handle_check_command(
                             "required": t.required,
                             "skipped": t.skipped,
                             "path": t.path,
+                            "execution_mode": t.execution_mode,
+                            "runner": t.runner,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5483,7 +5485,12 @@ pub fn handle_check_command(
                     } else {
                         "not found"
                     };
-                    let _ = writeln!(output, "{}: {}", tool.display_name, status);
+                    let mode = if let Some(runner) = &tool.runner {
+                        format!("{} ({runner})", tool.execution_mode)
+                    } else {
+                        tool.execution_mode.clone()
+                    };
+                    let _ = writeln!(output, "{}: {} [{}]", tool.display_name, status, mode);
                 }
                 Ok(output)
             }
@@ -5581,6 +5588,8 @@ pub fn handle_fmt_command(
                             "required": t.required,
                             "skipped": t.skipped,
                             "path": t.path,
+                            "execution_mode": t.execution_mode,
+                            "runner": t.runner,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5598,7 +5607,12 @@ pub fn handle_fmt_command(
                     } else {
                         "not found"
                     };
-                    let _ = writeln!(output, "{}: {}", tool.display_name, status);
+                    let mode = if let Some(runner) = &tool.runner {
+                        format!("{} ({runner})", tool.execution_mode)
+                    } else {
+                        tool.execution_mode.clone()
+                    };
+                    let _ = writeln!(output, "{}: {} [{}]", tool.display_name, status, mode);
                 }
                 Ok(output)
             }

@@ -935,17 +935,23 @@ impl ToolRegistry {
     pub fn list_tools(&self) -> Vec<ToolInfo> {
         self.tools
             .values()
-            .map(|tool| ToolInfo {
-                name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-                available: self.available.contains_key(&tool.name),
-                required: self.config.is_required(&tool.name),
-                skipped: self.config.should_skip(&tool.name),
-                capabilities: tool.capabilities.clone(),
-                path: self
-                    .available
-                    .get(&tool.name)
-                    .and_then(|t| t.detected_path.clone()),
+            .map(|tool| {
+                let effective_tool = self.available.get(&tool.name).unwrap_or(tool);
+                let (execution_mode, runner) = execution_metadata(effective_tool);
+                ToolInfo {
+                    name: tool.name.clone(),
+                    display_name: tool.display_name.clone(),
+                    available: self.available.contains_key(&tool.name),
+                    required: self.config.is_required(&tool.name),
+                    skipped: self.config.should_skip(&tool.name),
+                    capabilities: tool.capabilities.clone(),
+                    path: self
+                        .available
+                        .get(&tool.name)
+                        .and_then(|t| t.detected_path.clone()),
+                    execution_mode,
+                    runner,
+                }
             })
             .collect()
     }
@@ -968,6 +974,18 @@ pub struct ToolInfo {
     pub capabilities: Vec<ToolCapability>,
     /// Path to the tool binary if detected
     pub path: Option<PathBuf>,
+    /// Effective execution mode for this tool (`cargo`, `binary`, `runner`)
+    pub execution_mode: String,
+    /// Runner command when execution mode is `runner` (e.g. `bunx`, `uvx`, `nix`)
+    pub runner: Option<String>,
+}
+
+fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
+    match &tool.kind {
+        ToolKind::Cargo => ("cargo".to_string(), None),
+        ToolKind::Binary => ("binary".to_string(), None),
+        ToolKind::Runner { runner, .. } => ("runner".to_string(), Some(runner.clone())),
+    }
 }
 
 #[cfg(test)]
@@ -1243,5 +1261,41 @@ mod tests {
             ToolRegistry::nix_package_for_tool(&config, "yamlfmt"),
             Some("flake#custom-yamlfmt".to_string())
         );
+    }
+
+    #[test]
+    fn list_tools_includes_runner_execution_metadata() {
+        let mut tools = BTreeMap::new();
+        let mut available = BTreeMap::new();
+
+        let base = Tool::new(
+            "dprint",
+            "dprint",
+            "dprint",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec!["check".to_string()],
+            vec!["fmt".to_string()],
+        );
+        tools.insert("dprint".to_string(), base.clone());
+
+        let mut resolved = base;
+        resolved.kind = ToolKind::Runner {
+            runner: "nix".to_string(),
+            runner_args: vec!["shell".to_string()],
+        };
+        available.insert("dprint".to_string(), resolved);
+
+        let registry = ToolRegistry {
+            tools,
+            available,
+            config: ToolsConfig::default(),
+            working_dir: std::env::temp_dir(),
+        };
+
+        let info = registry.list_tools();
+        assert_eq!(info.len(), 1);
+        assert_eq!(info[0].execution_mode, "runner");
+        assert_eq!(info[0].runner, Some("nix".to_string()));
     }
 }
