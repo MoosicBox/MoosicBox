@@ -85,17 +85,10 @@ impl ToolRegistry {
     fn resolve_preferred_tool_path(name: &str, tool: &Tool, base_dir: &Path) -> Option<PathBuf> {
         match name {
             "prettier" => {
-                for bin_name in ["prettierd", "prettier"] {
-                    if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, bin_name) {
-                        return Some(path);
-                    }
+                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, "prettier") {
+                    return Some(path);
                 }
-                for bin_name in ["prettierd", "prettier"] {
-                    if let Ok(path) = which::which(bin_name) {
-                        return Some(path);
-                    }
-                }
-                None
+                which::which("prettier").ok()
             }
             "biome" | "eslint" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
@@ -375,12 +368,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_preferred_prettier_path_prefers_local_prettierd_over_prettier() {
+    fn resolve_preferred_prettier_path_uses_local_prettier_bin() {
         let dir = temp_dir("clippier-prettier-priority");
         let bin_dir = dir.join("node_modules").join(".bin");
         std::fs::create_dir_all(&bin_dir).expect("failed to create node bin dir");
         std::fs::write(bin_dir.join("prettier"), "").expect("failed to write prettier file");
-        std::fs::write(bin_dir.join("prettierd"), "").expect("failed to write prettierd file");
 
         let tool = Tool::new(
             "prettier",
@@ -395,7 +387,7 @@ mod tests {
         let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &dir)
             .expect("expected prettier variant to resolve");
 
-        assert!(detected.ends_with("node_modules/.bin/prettierd"));
+        assert!(detected.ends_with("node_modules/.bin/prettier"));
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 
@@ -406,7 +398,7 @@ mod tests {
         let nested = dir.join("packages").join("service");
         std::fs::create_dir_all(&root_bin).expect("failed to create root node bin dir");
         std::fs::create_dir_all(&nested).expect("failed to create nested dir");
-        std::fs::write(root_bin.join("prettierd"), "").expect("failed to write prettierd file");
+        std::fs::write(root_bin.join("prettier"), "").expect("failed to write prettier file");
 
         let tool = Tool::new(
             "prettier",
@@ -421,7 +413,7 @@ mod tests {
         let detected = ToolRegistry::resolve_preferred_tool_path("prettier", &tool, &nested)
             .expect("expected prettier variant to resolve");
 
-        assert!(detected.ends_with("node_modules/.bin/prettierd"));
+        assert!(detected.ends_with("node_modules/.bin/prettier"));
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 }

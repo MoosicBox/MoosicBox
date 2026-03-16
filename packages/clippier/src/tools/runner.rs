@@ -1,8 +1,6 @@
 //! Tool execution and result aggregation.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::fs;
 use std::io::{BufRead, BufReader, IsTerminal};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -533,248 +531,6 @@ impl<'a> ToolRunner<'a> {
         Some(parts)
     }
 
-    fn is_prettierd_detected(tool: &Tool) -> bool {
-        tool.name == "prettier"
-            && tool
-                .detected_path
-                .as_ref()
-                .and_then(|path| path.file_name())
-                .is_some_and(|name| name.to_string_lossy().contains("prettierd"))
-    }
-
-    fn should_skip_prettier_scan_dir(name: &str) -> bool {
-        matches!(
-            name,
-            ".git" | "target" | "node_modules" | "dist" | "build" | ".next"
-        )
-    }
-
-    fn is_prettier_format_target(path: &Path) -> bool {
-        path.extension()
-            .and_then(std::ffi::OsStr::to_str)
-            .is_some_and(|ext| {
-                matches!(
-                    ext,
-                    "js" | "jsx"
-                        | "ts"
-                        | "tsx"
-                        | "json"
-                        | "md"
-                        | "mdx"
-                        | "yaml"
-                        | "yml"
-                        | "html"
-                        | "css"
-                        | "scss"
-                        | "less"
-                )
-            })
-    }
-
-    fn collect_prettier_target_files(base_dir: &Path) -> Vec<std::path::PathBuf> {
-        let mut files = Vec::new();
-        let mut stack = vec![base_dir.to_path_buf()];
-
-        while let Some(dir) = stack.pop() {
-            let Ok(entries) = fs::read_dir(&dir) else {
-                continue;
-            };
-
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let Ok(file_type) = entry.file_type() else {
-                    continue;
-                };
-
-                if file_type.is_dir() {
-                    if let Some(name) = entry.file_name().to_str()
-                        && Self::should_skip_prettier_scan_dir(name)
-                    {
-                        continue;
-                    }
-                    stack.push(path);
-                } else if file_type.is_file() && Self::is_prettier_format_target(&path) {
-                    files.push(path);
-                }
-            }
-        }
-
-        files
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn run_prettierd_tool(
-        &self,
-        tool: &Tool,
-        check_mode: bool,
-        cancel_requested: Option<&AtomicBool>,
-    ) -> ToolResult {
-        let start_time = Instant::now();
-        let Some(program_path) = tool.detected_path.as_ref() else {
-            return ToolResult::failure(
-                tool.name.clone(),
-                tool.display_name.clone(),
-                None,
-                String::new(),
-                "Prettierd was selected but no detected path was available".to_string(),
-                start_time.elapsed(),
-            );
-        };
-
-        let base_dir = self.working_dir.map_or_else(
-            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
-            Path::to_path_buf,
-        );
-        let target_files = Self::collect_prettier_target_files(&base_dir);
-
-        if target_files.is_empty() {
-            return ToolResult::success(
-                tool.name.clone(),
-                tool.display_name.clone(),
-                start_time.elapsed(),
-            );
-        }
-
-        let mut stdout = String::new();
-        let mut stderr = String::new();
-        let mut exit_code = Some(0);
-        let mut success = true;
-
-        for file_path in target_files {
-            if cancel_requested.is_some_and(|flag| flag.load(Ordering::SeqCst)) {
-                success = false;
-                exit_code = Some(130);
-                stderr.push_str("prettierd execution cancelled\n");
-                break;
-            }
-
-            let file_content = match fs::read_to_string(&file_path) {
-                Ok(content) => content,
-                Err(e) => {
-                    success = false;
-                    exit_code = Some(1);
-                    let _ = writeln!(stderr, "failed to read '{}': {e}", file_path.display());
-                    continue;
-                }
-            };
-
-            let file_arg = file_path
-                .strip_prefix(&base_dir)
-                .unwrap_or(&file_path)
-                .to_string_lossy()
-                .to_string();
-
-            let mut command = Command::new(program_path);
-            if check_mode {
-                command.arg("--check");
-            }
-            command.arg(&file_arg);
-            command.stdin(Stdio::piped());
-            command.stdout(Stdio::piped());
-            command.stderr(Stdio::piped());
-            command.current_dir(&base_dir);
-            Self::apply_color_env(&mut command, self.effective_color_mode());
-
-            match command.spawn() {
-                Ok(mut child) => {
-                    if let Some(mut stdin) = child.stdin.take()
-                        && let Err(e) =
-                            std::io::Write::write_all(&mut stdin, file_content.as_bytes())
-                    {
-                        success = false;
-                        exit_code = Some(1);
-                        let _ = writeln!(
-                            stderr,
-                            "failed to write prettierd stdin for '{}': {e}",
-                            file_path.display()
-                        );
-                        continue;
-                    }
-
-                    match child.wait_with_output() {
-                        Ok(output) => {
-                            let file_stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                            let file_stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-                            if !file_stdout.is_empty() {
-                                stdout.push_str(&file_stdout);
-                                if !file_stdout.ends_with('\n') {
-                                    stdout.push('\n');
-                                }
-                            }
-
-                            if !file_stderr.is_empty() {
-                                stderr.push_str(&file_stderr);
-                                if !file_stderr.ends_with('\n') {
-                                    stderr.push('\n');
-                                }
-                            }
-
-                            if output.status.success() {
-                                if !check_mode
-                                    && !file_stdout.is_empty()
-                                    && file_stdout != file_content
-                                    && let Err(e) = fs::write(&file_path, file_stdout)
-                                {
-                                    success = false;
-                                    exit_code = Some(1);
-                                    let _ = writeln!(
-                                        stderr,
-                                        "failed to write formatted file '{}': {e}",
-                                        file_path.display()
-                                    );
-                                }
-                            } else {
-                                success = false;
-                                exit_code = output.status.code().or(Some(1));
-                            }
-                        }
-                        Err(e) => {
-                            success = false;
-                            exit_code = Some(1);
-                            let _ = writeln!(
-                                stderr,
-                                "failed waiting for prettierd on '{}': {e}",
-                                file_path.display()
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    success = false;
-                    exit_code = Some(1);
-                    let _ = writeln!(
-                        stderr,
-                        "failed to spawn prettierd for '{}': {e}",
-                        file_path.display()
-                    );
-                }
-            }
-        }
-
-        let duration = start_time.elapsed();
-        if success {
-            ToolResult {
-                tool_name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-                success: true,
-                exit_code,
-                stdout,
-                stderr,
-                duration,
-            }
-        } else {
-            ToolResult::failure(
-                tool.name.clone(),
-                tool.display_name.clone(),
-                exit_code,
-                stdout,
-                stderr,
-                duration,
-            )
-        }
-    }
-
     #[cfg(feature = "tools-tui")]
     fn emit_tool_line_event(
         tx: &mpsc::Sender<ToolEvent>,
@@ -875,37 +631,6 @@ impl<'a> ToolRunner<'a> {
         tx: &mpsc::Sender<ToolEvent>,
         cancel_requested: &Arc<AtomicBool>,
     ) -> ToolResult {
-        if Self::is_prettierd_detected(tool) {
-            let _ = tx.send(ToolEvent::Started {
-                tool_name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-            });
-
-            let result = self.run_prettierd_tool(tool, check_mode, Some(cancel_requested));
-
-            for line in result.stdout.lines() {
-                let _ = tx.send(ToolEvent::StdoutLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_string(),
-                    overwrite: false,
-                });
-            }
-            for line in result.stderr.lines() {
-                let _ = tx.send(ToolEvent::StderrLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_string(),
-                    overwrite: false,
-                });
-            }
-
-            let _ = tx.send(ToolEvent::Finished {
-                tool_name: tool.name.clone(),
-                success: result.success,
-            });
-
-            return result;
-        }
-
         let start_time = Instant::now();
 
         let Some((program, final_args)) = Self::build_command_parts(tool, check_mode) else {
@@ -1047,10 +772,6 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
-        if Self::is_prettierd_detected(tool) {
-            return self.run_prettierd_tool(tool, check_mode, None);
-        }
-
         let start_time = Instant::now();
 
         let args = if check_mode {
@@ -1202,10 +923,6 @@ impl<'a> ToolRunner<'a> {
 
     /// Runs a single tool with buffered output (for parallel execution)
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
-        if Self::is_prettierd_detected(tool) {
-            return self.run_prettierd_tool(tool, check_mode, None);
-        }
-
         let start_time = Instant::now();
 
         let args = if check_mode {

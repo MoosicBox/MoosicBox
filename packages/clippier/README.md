@@ -1042,7 +1042,7 @@ For Prettier specifically, clippier also auto-selects it when:
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
-For `prettier` execution, clippier prefers `prettierd` when available, then falls back to `prettier`. Explicit `tools.paths.prettier` always takes precedence.
+For `prettier` execution, clippier resolves `node_modules/.bin/prettier` in the working directory or its ancestors before falling back to `prettier` in PATH. Explicit `tools.paths.prettier` always takes precedence.
 
 Precedence for tool selection is:
 
@@ -1079,7 +1079,7 @@ TUI behavior for tool output:
 | `rustfmt`    | Rust                    | Format       | `cargo` in PATH                                                            |
 | `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                            |
 | `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                             |
-| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettierd`/`prettier` (prefers `prettierd`, supports `node_modules/.bin`) |
+| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` (supports `node_modules/.bin` and PATH)                         |
 | `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary                                                             |
 | `eslint`     | JS/TS                   | Lint         | `eslint` binary                                                            |
 | `ruff`       | Python                  | Format, Lint | `ruff` binary                                                              |
