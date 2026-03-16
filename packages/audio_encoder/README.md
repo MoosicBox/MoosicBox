@@ -133,7 +133,13 @@ Each encoder module provides consistent functions:
 - **AAC** (`aac` feature): `encoder_aac()` creates encoder, `encode_aac(encoder, input, buf)` encodes i16 PCM data
 - **FLAC** (`flac` feature): `encoder_flac()` creates encoder, `encode_flac(encoder, input, buf)` encodes i32 PCM data
 - **MP3** (`mp3` feature): `encoder_mp3()` creates encoder, `encode_mp3(encoder, input)` encodes i16 PCM data and returns output buffer
-- **Opus** (`opus` feature): `encoder_opus()` creates encoder, `encode_opus_float(encoder, input, output)` encodes f32 PCM data, also includes `encode_audiopus()` and OGG container utilities
+- **Opus** (`opus` feature): `encoder_opus()` creates encoder, `encode_opus_float(encoder, input, output)` encodes f32 PCM data, and `encode_audiopus(samples)` produces length-prefixed Opus packets
+
+Opus/Ogg helpers exported by the `opus` module:
+
+- `OpusWrite::new(path)` creates an Ogg/Opus stream writer that implements `std::io::Write`
+- `write_ogg(file, content)` writes one Ogg packet with end-of-stream marker
+- `read_write_ogg(read, write)` copies packets from one Ogg stream to another
 
 ## Features
 
