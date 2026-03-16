@@ -118,6 +118,76 @@ fn has_file(base: &std::path::Path, relative_path: &str) -> bool {
     base.join(relative_path).exists()
 }
 
+fn has_file_in_ancestors(base: &std::path::Path, relative_path: &str) -> bool {
+    let mut current = Some(base);
+    while let Some(dir) = current {
+        if has_file(dir, relative_path) {
+            return true;
+        }
+        current = dir.parent();
+    }
+    false
+}
+
+fn should_skip_prettier_scan_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "target" | "node_modules" | "dist" | "build" | ".next"
+    )
+}
+
+fn is_prettier_format_target(path: &std::path::Path) -> bool {
+    let Some(extension) = path.extension().and_then(std::ffi::OsStr::to_str) else {
+        return false;
+    };
+
+    matches!(
+        extension,
+        "js" | "jsx"
+            | "ts"
+            | "tsx"
+            | "json"
+            | "md"
+            | "mdx"
+            | "yaml"
+            | "yml"
+            | "html"
+            | "css"
+            | "scss"
+            | "less"
+    )
+}
+
+fn has_prettier_format_targets(base: &std::path::Path) -> bool {
+    let mut stack = vec![base.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+
+            if file_type.is_dir() {
+                if let Some(name) = entry.file_name().to_str()
+                    && should_skip_prettier_scan_dir(name)
+                {
+                    continue;
+                }
+                stack.push(path);
+            } else if file_type.is_file() && is_prettier_format_target(&path) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 /// Auto-detects tool names for the `check` command from project manifests.
 ///
 /// # Errors
@@ -192,6 +262,7 @@ pub fn auto_detect_fmt_tools(
 
     let has_cargo = has_file(&base_dir, "Cargo.toml");
     let has_package_json = has_file(&base_dir, "package.json");
+    let has_package_json_ancestor = has_file_in_ancestors(&base_dir, "package.json");
     let has_pyproject = has_file(&base_dir, "pyproject.toml");
     let has_requirements = has_file(&base_dir, "requirements.txt");
     let has_setup_py = has_file(&base_dir, "setup.py");
@@ -206,8 +277,11 @@ pub fn auto_detect_fmt_tools(
         tools.push("taplo".to_string());
     }
 
-    if has_package_json {
+    if has_package_json || has_package_json_ancestor || has_prettier_format_targets(&base_dir) {
         tools.push("prettier".to_string());
+    }
+
+    if has_package_json || has_package_json_ancestor {
         tools.push("biome".to_string());
     }
 
@@ -336,6 +410,53 @@ mod tests {
         assert!(fmt_tools.contains(&"ruff".to_string()));
         assert!(fmt_tools.contains(&"black".to_string()));
         assert!(fmt_tools.contains(&"gofmt".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_fmt_tools_includes_prettier_for_generic_files() {
+        let dir = temp_dir("clippier-auto-detect-prettier-files");
+        std::fs::write(dir.join("README.md"), "# test\n").expect("failed to write README.md");
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+
+        assert!(fmt_tools.contains(&"prettier".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_fmt_tools_includes_prettier_from_ancestor_package_json() {
+        let dir = temp_dir("clippier-auto-detect-prettier-ancestor");
+        std::fs::write(dir.join("package.json"), "{}\n").expect("failed to write package.json");
+        let nested = dir.join("packages").join("service");
+        std::fs::create_dir_all(&nested).expect("failed to create nested dir");
+        std::fs::write(
+            nested.join("Cargo.toml"),
+            "[package]\nname=\"x\"\nversion=\"0.1.0\"\n",
+        )
+        .expect("failed to write Cargo.toml");
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&nested)).expect("failed to detect fmt tools");
+
+        assert!(fmt_tools.contains(&"prettier".to_string()));
+        assert!(fmt_tools.contains(&"biome".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_fmt_tools_ignores_generated_dirs_for_prettier_scan() {
+        let dir = temp_dir("clippier-auto-detect-prettier-generated");
+        let target_dir = dir.join("target");
+        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
+        std::fs::write(target_dir.join("README.md"), "# generated\n")
+            .expect("failed to write generated markdown");
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+
+        assert!(!fmt_tools.contains(&"prettier".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

@@ -1035,6 +1035,13 @@ By default, `fmt` auto-selects tools based on manifest/config files in the worki
 - `taplo.toml` -> `taplo`
 - `.shfmt.conf` -> `shfmt`
 
+For Prettier specifically, clippier also auto-selects it when:
+
+- `package.json` exists in an ancestor directory (for nested package/workspace runs)
+- generic Prettier-target files are present (`.md`, `.mdx`, `.json`, `.yaml`, `.yml`, `.html`, `.css`, `.scss`, `.less`, `.js`, `.jsx`, `.ts`, `.tsx`)
+
+Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
+
 Precedence for tool selection is:
 
 1. `--tools` (explicit tool list)
