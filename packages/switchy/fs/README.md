@@ -265,6 +265,7 @@ let sync_options = async_options.into_sync();
 #[cfg(test)]
 mod tests {
     use switchy_fs::sync::{File, OpenOptions, read_to_string};
+    use std::io::Write;
 
     #[test]
     fn test_file_operations() {
@@ -289,7 +290,7 @@ With the `simulator-real-fs` feature, you can temporarily access the real filesy
 
 ```rust
 #[cfg(all(feature = "simulator", feature = "simulator-real-fs"))]
-use switchy_fs::with_real_fs;
+use switchy_fs::{sync::read_to_string, with_real_fs};
 
 // In simulator mode, but need to access real filesystem temporarily
 let real_data = with_real_fs(|| {
