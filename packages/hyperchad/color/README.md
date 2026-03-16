@@ -42,13 +42,12 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperchad_color = { path = "../hyperchad/color" }
+hyperchad_color = "0.1.4"
+```
 
-# Enable additional features
-hyperchad_color = {
-    path = "../hyperchad/color",
-    features = ["serde", "egui", "arb"]
-}
+```toml
+[dependencies]
+hyperchad_color = { version = "0.1.4", features = ["serde", "egui", "arb"] }
 ```
 
 ## Usage
