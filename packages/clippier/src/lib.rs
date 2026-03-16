@@ -5449,6 +5449,7 @@ pub fn handle_check_command(
     use tools::{ToolRegistry, ToolRunner};
 
     let required_tools = config.required.clone();
+    let overlap_warning_suppress = config.overlap_warning_suppress.clone();
     let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
@@ -5504,6 +5505,18 @@ pub fn handle_check_command(
         let auto_detected = tools::auto_detect_check_tools(working_dir)?;
         tools::merge_tool_names(&auto_detected, &required_tools)
     };
+    if output == OutputType::Raw {
+        let warnings = tools::overlap_warnings_for_selected_tools(
+            &registry,
+            &names,
+            &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+            &overlap_warning_suppress,
+            working_dir,
+        );
+        for warning in warnings {
+            eprintln!("{warning}");
+        }
+    }
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let should_use_tui =
         enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();
@@ -5546,6 +5559,7 @@ pub fn handle_fmt_command(
     use tools::{ToolRegistry, ToolRunner};
 
     let required_tools = config.required.clone();
+    let overlap_warning_suppress = config.overlap_warning_suppress.clone();
     let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
@@ -5606,6 +5620,18 @@ pub fn handle_fmt_command(
         let auto_detected = tools::auto_detect_fmt_tools(working_dir)?;
         tools::merge_tool_names(&auto_detected, &required_tools)
     };
+    if output == OutputType::Raw {
+        let warnings = tools::overlap_warnings_for_selected_tools(
+            &registry,
+            &names,
+            &[tools::ToolCapability::Format],
+            &overlap_warning_suppress,
+            working_dir,
+        );
+        for warning in warnings {
+            eprintln!("{warning}");
+        }
+    }
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let should_use_tui =
         enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();

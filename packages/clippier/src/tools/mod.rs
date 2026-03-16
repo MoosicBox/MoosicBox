@@ -39,9 +39,24 @@ mod types;
 
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
-pub use types::{Tool, ToolCapability, ToolKind, ToolsConfig};
+pub use types::{
+    OverlapWarningCapability, OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind,
+    ToolsConfig,
+};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+#[derive(Debug, Clone)]
+struct WorkspaceFile {
+    relative_path: String,
+    extension: String,
+}
+
+#[derive(Debug, Clone)]
+struct GlobRule {
+    negated: bool,
+    matcher: globset::GlobMatcher,
+}
 
 const KNOWN_TOOL_NAMES: &[&str] = &[
     "rustfmt",
@@ -103,6 +118,445 @@ pub fn merge_tool_names(auto_detected: &[String], required: &[String]) -> Vec<St
     let mut merged = auto_detected.to_vec();
     merge_unique_strings(&mut merged, required);
     merged
+}
+
+fn normalize_tool_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase()
+}
+
+fn normalize_extension(extension: &str) -> String {
+    extension
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase()
+}
+
+fn normalized_tool_pair(a: &str, b: &str) -> (String, String) {
+    let mut pair = [normalize_tool_name(a), normalize_tool_name(b)];
+    pair.sort();
+    (pair[0].clone(), pair[1].clone())
+}
+
+fn should_skip_overlap_scan_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "target" | "node_modules" | "dist" | "build" | ".next" | ".direnv"
+    )
+}
+
+fn collect_workspace_files(base_dir: &std::path::Path) -> Vec<WorkspaceFile> {
+    let mut files = Vec::new();
+    let mut stack = vec![base_dir.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+
+            if file_type.is_dir() {
+                if let Some(name) = entry.file_name().to_str()
+                    && should_skip_overlap_scan_dir(name)
+                {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let Some(extension) = path
+                .extension()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(normalize_extension)
+            else {
+                continue;
+            };
+
+            let Ok(relative) = path.strip_prefix(base_dir) else {
+                continue;
+            };
+
+            files.push(WorkspaceFile {
+                relative_path: relative.to_string_lossy().replace('\\', "/"),
+                extension,
+            });
+        }
+    }
+
+    files
+}
+
+fn find_file_in_ancestors(
+    base_dir: &std::path::Path,
+    names: &[&str],
+) -> Option<std::path::PathBuf> {
+    let mut current = Some(base_dir);
+    while let Some(dir) = current {
+        for name in names {
+            let candidate = dir.join(name);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+fn parse_glob_rules(raw_patterns: &[String]) -> Vec<GlobRule> {
+    raw_patterns
+        .iter()
+        .filter_map(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            let (negated, pattern) = trimmed
+                .strip_prefix('!')
+                .map_or((false, trimmed), |rest| (true, rest));
+
+            let Ok(glob) = globset::Glob::new(pattern) else {
+                return None;
+            };
+
+            Some(GlobRule {
+                negated,
+                matcher: glob.compile_matcher(),
+            })
+        })
+        .collect()
+}
+
+fn parse_prettier_ignore_rules(base_dir: &std::path::Path) -> Vec<GlobRule> {
+    let Some(path) = find_file_in_ancestors(base_dir, &[".prettierignore"]) else {
+        return Vec::new();
+    };
+
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+
+    let patterns = contents
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return None;
+            }
+            Some(trimmed.to_string())
+        })
+        .collect::<Vec<_>>();
+    parse_glob_rules(&patterns)
+}
+
+fn parse_biome_include_rules(base_dir: &std::path::Path) -> Option<Vec<String>> {
+    let path = find_file_in_ancestors(base_dir, &["biome.json", "biome.jsonc"])?;
+    let contents = std::fs::read_to_string(path).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&contents).ok()?;
+    let includes = value
+        .get("files")
+        .and_then(|files| files.get("includes"))
+        .and_then(serde_json::Value::as_array)?;
+
+    Some(
+        includes
+            .iter()
+            .filter_map(|item| item.as_str().map(ToString::to_string))
+            .collect(),
+    )
+}
+
+fn is_prettier_ignored(path: &str, rules: &[GlobRule]) -> bool {
+    let mut ignored = false;
+    for rule in rules {
+        if rule.matcher.is_match(path) {
+            ignored = !rule.negated;
+        }
+    }
+    ignored
+}
+
+fn is_biome_included(path: &str, include_patterns: &[String]) -> bool {
+    if include_patterns.is_empty() {
+        return true;
+    }
+
+    let mut included = false;
+    let mut force_ignored = false;
+    for pattern in include_patterns {
+        if let Some(rest) = pattern.strip_prefix("!!") {
+            if let Ok(glob) = globset::Glob::new(rest)
+                && glob.compile_matcher().is_match(path)
+            {
+                force_ignored = true;
+            }
+            continue;
+        }
+
+        if let Some(rest) = pattern.strip_prefix('!') {
+            if let Ok(glob) = globset::Glob::new(rest)
+                && glob.compile_matcher().is_match(path)
+            {
+                included = false;
+            }
+            continue;
+        }
+
+        if let Ok(glob) = globset::Glob::new(pattern)
+            && glob.compile_matcher().is_match(path)
+        {
+            included = true;
+        }
+    }
+
+    included && !force_ignored
+}
+
+fn dynamic_extensions_for_tools(
+    base_dir: &std::path::Path,
+    tools: &[&Tool],
+    capabilities: &[ToolCapability],
+) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
+    let workspace_files = collect_workspace_files(base_dir);
+    let prettier_ignore_rules = parse_prettier_ignore_rules(base_dir);
+    let biome_includes = parse_biome_include_rules(base_dir).unwrap_or_default();
+
+    let mut dynamic = std::collections::BTreeMap::new();
+    for tool in tools {
+        let normalized_name = normalize_tool_name(&tool.name);
+        let mut extensions = std::collections::BTreeSet::new();
+
+        for capability in capabilities {
+            if !tool.capabilities.contains(capability) {
+                continue;
+            }
+
+            let default_extensions = default_extensions_for_tool(&tool.name, *capability);
+            if default_extensions.is_empty() {
+                continue;
+            }
+
+            for file in &workspace_files {
+                if !default_extensions.contains(&file.extension) {
+                    continue;
+                }
+
+                let tool_allows_file = match normalized_name.as_str() {
+                    "prettier" => !is_prettier_ignored(&file.relative_path, &prettier_ignore_rules),
+                    "biome" => {
+                        if biome_includes.is_empty() {
+                            true
+                        } else {
+                            is_biome_included(&file.relative_path, &biome_includes)
+                        }
+                    }
+                    _ => true,
+                };
+
+                if tool_allows_file {
+                    extensions.insert(file.extension.clone());
+                }
+            }
+        }
+
+        dynamic.insert(normalized_name, extensions);
+    }
+
+    dynamic
+}
+
+fn default_extensions_for_tool(
+    tool_name: &str,
+    capability: ToolCapability,
+) -> std::collections::BTreeSet<String> {
+    let normalized = normalize_tool_name(tool_name);
+    let entries: &[&str] = match capability {
+        ToolCapability::Format => match normalized.as_str() {
+            "rustfmt" => &["rs"],
+            "taplo" => &["toml"],
+            "prettier" => &[
+                "js", "jsx", "ts", "tsx", "json", "md", "mdx", "yaml", "yml", "html", "css",
+                "scss", "less",
+            ],
+            "biome" => &[
+                "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
+            ],
+            "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
+            "ruff" | "black" => &["py", "pyi", "ipynb"],
+            "gofmt" => &["go"],
+            "shfmt" => &["sh", "bash"],
+            _ => &[],
+        },
+        ToolCapability::Lint => match normalized.as_str() {
+            "clippy" => &["rs"],
+            "taplo" => &["toml"],
+            "biome" => &[
+                "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
+            ],
+            "eslint" => &["js", "jsx", "ts", "tsx"],
+            "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
+            "ruff" => &["py", "pyi", "ipynb"],
+            "shellcheck" => &["sh", "bash"],
+            _ => &[],
+        },
+    };
+
+    entries.iter().map(|value| (*value).to_string()).collect()
+}
+
+fn apply_overlap_suppressions(
+    overlap_extensions: &mut std::collections::BTreeSet<String>,
+    capability: ToolCapability,
+    tool_a: &str,
+    tool_b: &str,
+    suppressions: &[OverlapWarningSuppressRule],
+) {
+    let normalized_pair = normalized_tool_pair(tool_a, tool_b);
+
+    for suppression in suppressions {
+        if !suppression.capability.matches(capability) {
+            continue;
+        }
+
+        if suppression.tools.len() != 2 {
+            log::warn!(
+                "ignoring overlap-warning-suppress rule for {:?}: expected exactly 2 tools",
+                suppression.tools
+            );
+            continue;
+        }
+
+        let suppression_pair = normalized_tool_pair(&suppression.tools[0], &suppression.tools[1]);
+        if suppression_pair != normalized_pair {
+            continue;
+        }
+
+        if suppression.extensions.is_empty() {
+            overlap_extensions.clear();
+            return;
+        }
+
+        let normalized_extensions = suppression
+            .extensions
+            .iter()
+            .map(|value| normalize_extension(value))
+            .collect::<std::collections::BTreeSet<_>>();
+        overlap_extensions.retain(|extension| !normalized_extensions.contains(extension));
+
+        if overlap_extensions.is_empty() {
+            return;
+        }
+    }
+}
+
+fn overlap_warnings_for_tools(
+    tools: &[&Tool],
+    capabilities: &[ToolCapability],
+    suppressions: &[OverlapWarningSuppressRule],
+    dynamic_extensions: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    for (index, left) in tools.iter().enumerate() {
+        for right in tools.iter().skip(index + 1) {
+            for capability in capabilities {
+                if !left.capabilities.contains(capability)
+                    || !right.capabilities.contains(capability)
+                {
+                    continue;
+                }
+
+                let left_extensions = dynamic_extensions
+                    .get(&normalize_tool_name(&left.name))
+                    .cloned()
+                    .unwrap_or_else(|| default_extensions_for_tool(&left.name, *capability));
+                let right_extensions = dynamic_extensions
+                    .get(&normalize_tool_name(&right.name))
+                    .cloned()
+                    .unwrap_or_else(|| default_extensions_for_tool(&right.name, *capability));
+                if left_extensions.is_empty() || right_extensions.is_empty() {
+                    continue;
+                }
+
+                let mut overlap_extensions = left_extensions
+                    .intersection(&right_extensions)
+                    .cloned()
+                    .collect::<std::collections::BTreeSet<_>>();
+                if overlap_extensions.is_empty() {
+                    continue;
+                }
+
+                apply_overlap_suppressions(
+                    &mut overlap_extensions,
+                    *capability,
+                    &left.name,
+                    &right.name,
+                    suppressions,
+                );
+                if overlap_extensions.is_empty() {
+                    continue;
+                }
+
+                let capability_label = match capability {
+                    ToolCapability::Format => "format",
+                    ToolCapability::Lint => "lint",
+                };
+                warnings.push(format!(
+                    "WARNING: potential {capability_label} overlap between '{}' and '{}' on extensions: {}",
+                    left.name,
+                    right.name,
+                    overlap_extensions.into_iter().collect::<Vec<_>>().join(", ")
+                ));
+                warnings.push(format!(
+                    "HINT: suppress intentionally shared coverage via [[tools.overlap-warning-suppress]] with capability='{capability_label}', tools=['{}','{}'], and extensions=[...].",
+                    left.name, right.name
+                ));
+            }
+        }
+    }
+
+    warnings
+}
+
+/// Computes overlap warnings for selected and available tools.
+#[must_use]
+pub fn overlap_warnings_for_selected_tools(
+    registry: &ToolRegistry,
+    tool_names: &[String],
+    capabilities: &[ToolCapability],
+    suppressions: &[OverlapWarningSuppressRule],
+    working_dir: Option<&std::path::Path>,
+) -> Vec<String> {
+    let mut selected = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+
+    for name in tool_names {
+        let key = normalize_tool_name(name);
+        if !seen.insert(key) {
+            continue;
+        }
+        if let Some(tool) = registry.get(name) {
+            selected.push(tool);
+        }
+    }
+
+    let base_dir = working_dir.map_or_else(
+        || std::env::current_dir().unwrap_or_else(|_| std::path::Path::new(".").to_path_buf()),
+        std::path::Path::to_path_buf,
+    );
+    let dynamic_extensions = dynamic_extensions_for_tools(&base_dir, &selected, capabilities);
+
+    overlap_warnings_for_tools(&selected, capabilities, suppressions, &dynamic_extensions)
 }
 
 /// Loads tool defaults from `clippier.toml` in the working directory.
@@ -319,10 +773,6 @@ pub fn auto_detect_check_tools(
     let mut deduped = Vec::new();
     merge_unique_strings(&mut deduped, &tools);
 
-    if deduped.iter().any(|tool| tool == "biome") {
-        deduped.retain(|tool| tool != "prettier");
-    }
-
     Ok(deduped)
 }
 
@@ -389,10 +839,6 @@ pub fn auto_detect_fmt_tools(
 
     let mut deduped = Vec::new();
     merge_unique_strings(&mut deduped, &tools);
-
-    if deduped.iter().any(|tool| tool == "biome") {
-        deduped.retain(|tool| tool != "prettier");
-    }
 
     Ok(deduped)
 }
@@ -504,7 +950,7 @@ mod tests {
             auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
         assert!(check_tools.contains(&"clippy".to_string()));
         assert!(check_tools.contains(&"rustfmt".to_string()));
-        assert!(!check_tools.contains(&"prettier".to_string()));
+        assert!(check_tools.contains(&"prettier".to_string()));
         assert!(check_tools.contains(&"biome".to_string()));
         assert!(check_tools.contains(&"eslint".to_string()));
         assert!(check_tools.contains(&"ruff".to_string()));
@@ -514,7 +960,7 @@ mod tests {
 
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
         assert!(fmt_tools.contains(&"rustfmt".to_string()));
-        assert!(!fmt_tools.contains(&"prettier".to_string()));
+        assert!(fmt_tools.contains(&"prettier".to_string()));
         assert!(fmt_tools.contains(&"biome".to_string()));
         assert!(fmt_tools.contains(&"ruff".to_string()));
         assert!(fmt_tools.contains(&"black".to_string()));
@@ -550,7 +996,7 @@ mod tests {
 
         let fmt_tools = auto_detect_fmt_tools(Some(&nested)).expect("failed to detect fmt tools");
 
-        assert!(!fmt_tools.contains(&"prettier".to_string()));
+        assert!(fmt_tools.contains(&"prettier".to_string()));
         assert!(fmt_tools.contains(&"biome".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
@@ -671,6 +1117,143 @@ mod tests {
 
         assert!(!merged.biome_use_editorconfig);
         assert!(!merged.biome_use_vcs_ignore);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn overlap_warnings_include_biome_and_prettier_by_default() {
+        let biome = Tool::new(
+            "biome",
+            "Biome",
+            "biome",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+        let prettier = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let warnings = overlap_warnings_for_tools(
+            &[&biome, &prettier],
+            &[ToolCapability::Format],
+            &[],
+            &std::collections::BTreeMap::new(),
+        );
+
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings[0].contains("biome"));
+        assert!(warnings[0].contains("prettier"));
+        assert!(warnings[0].contains("js"));
+        assert!(warnings[1].contains("HINT"));
+    }
+
+    #[test]
+    fn overlap_warnings_respect_pair_extension_suppressions_case_insensitive() {
+        let biome = Tool::new(
+            "biome",
+            "Biome",
+            "biome",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+        let prettier = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+        let suppressions = vec![OverlapWarningSuppressRule {
+            capability: OverlapWarningCapability::Format,
+            tools: vec!["Prettier".to_string(), "BIOME".to_string()],
+            extensions: vec!["JS".to_string(), ".Ts".to_string()],
+        }];
+
+        let warnings = overlap_warnings_for_tools(
+            &[&biome, &prettier],
+            &[ToolCapability::Format],
+            &suppressions,
+            &std::collections::BTreeMap::new(),
+        );
+
+        assert_eq!(warnings.len(), 2);
+        assert!(!warnings[0].contains(", js,"));
+        assert!(!warnings[0].contains(", ts,"));
+        assert!(warnings[0].contains("json"));
+        assert!(warnings[1].contains("HINT"));
+    }
+
+    #[test]
+    fn overlap_warnings_can_be_fully_suppressed_for_pair() {
+        let biome = Tool::new(
+            "biome",
+            "Biome",
+            "biome",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+        let prettier = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+        let suppressions = vec![OverlapWarningSuppressRule {
+            capability: OverlapWarningCapability::Format,
+            tools: vec!["biome".to_string(), "prettier".to_string()],
+            extensions: Vec::new(),
+        }];
+
+        let warnings = overlap_warnings_for_tools(
+            &[&biome, &prettier],
+            &[ToolCapability::Format],
+            &suppressions,
+            &std::collections::BTreeMap::new(),
+        );
+
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn build_tools_config_parses_overlap_warning_suppress_rules() {
+        let dir = temp_dir("clippier-tools-overlap-suppress");
+        let config_path = dir.join("clippier.toml");
+        std::fs::write(
+            &config_path,
+            "[tools]\n[[tools.overlap-warning-suppress]]\ncapability = \"format\"\ntools = [\"biome\", \"prettier\"]\nextensions = [\"md\", \"mdx\"]\n",
+        )
+        .expect("failed to write clippier.toml");
+
+        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], None, None)
+            .expect("failed to build merged tools config");
+
+        assert_eq!(merged.overlap_warning_suppress.len(), 1);
+        assert_eq!(
+            merged.overlap_warning_suppress[0].tools,
+            vec!["biome".to_string(), "prettier".to_string()]
+        );
+        assert_eq!(
+            merged.overlap_warning_suppress[0].extensions,
+            vec!["md".to_string(), "mdx".to_string()]
+        );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

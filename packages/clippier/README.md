@@ -966,6 +966,11 @@ required = ["rustfmt", "taplo"]
 runner-fallback = true
 biome-use-editorconfig = true
 biome-use-vcs-ignore = true
+
+[[tools.overlap-warning-suppress]]
+capability = "format"
+tools = ["biome", "prettier"]
+extensions = ["md", "mdx"]
 ```
 
 CLI values are additive: `--skip` and `--required` are merged with config values.
@@ -974,7 +979,7 @@ The `check` command automatically detects and runs:
 
 - **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
 - **TOML**: `taplo fmt --check`
-- **JavaScript/TypeScript**: `prettier --check`, `biome check`, `eslint`
+- **JavaScript/TypeScript**: `prettier --check`, `biome format`, `eslint`
 - **Python**: `ruff check`, `black --check`
 - **Go**: `gofmt -l`
 - **Shell**: `shfmt -d`, `shellcheck`
@@ -1056,7 +1061,21 @@ Tool resolution precedence (for `prettier`, `biome`, `eslint`, and `dprint`) is:
 Use `--no-runner-fallback` to disable runner fallback for a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
 
-When both `biome` and `prettier` are auto-detected, clippier defaults to `biome` to avoid competing formatters. Use `--tools` to explicitly run both.
+When both `biome` and `prettier` are auto-detected, clippier runs both and emits overlap warnings when they can target the same extensions.
+Overlap warnings are computed dynamically from files currently present in the working directory plus relevant tool config filters (`biome.json` `files.includes` and `.prettierignore`).
+
+Suppress overlap warnings with pair-specific config rules (case-insensitive tool/extension matching):
+
+```toml
+[tools]
+
+[[tools.overlap-warning-suppress]]
+capability = "format"
+tools = ["biome", "prettier"]
+extensions = ["md", "mdx"]
+```
+
+Use `extensions = []` (or omit `extensions`) to suppress all overlap warnings for a pair/capability.
 
 Biome uses `.editorconfig` by default (`--use-editorconfig=true`). You can opt out via config (`tools.biome-use-editorconfig = false`) or CLI (`--no-biome-use-editorconfig`).
 
@@ -1345,42 +1364,42 @@ These options are shared across multiple subcommands (they are not top-level glo
 
 ### Check Command Options
 
-| Option                 | Description                                     | Default           |
-| ---------------------- | ----------------------------------------------- | ----------------- |
-| `--working-dir`        | Working directory to run in                     | Current directory |
-| `--tools`              | Specific tools to run (comma-separated)         | All detected      |
-| `--list`               | List available tools instead of running them    | false             |
-| `--required`           | Tools that MUST be installed (error if missing) | -                 |
-| `--skip`               | Tools to skip even if detected                  | -                 |
-| `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
-| `--no-tui`             | Disable real-time pane TUI output               | `false`           |
-| `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
-| `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
-| `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
-| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
-| `--biome-use-vcs-ignore` | Force Biome VCS ignore semantics              | `false`           |
-| `--no-biome-use-vcs-ignore` | Disable Biome VCS ignore semantics        | `false`           |
-| `--output`             | Output format: `json`, `raw`                    | `raw`             |
+| Option                        | Description                                     | Default           |
+| ----------------------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir`               | Working directory to run in                     | Current directory |
+| `--tools`                     | Specific tools to run (comma-separated)         | All detected      |
+| `--list`                      | List available tools instead of running them    | false             |
+| `--required`                  | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`                      | Tools to skip even if detected                  | -                 |
+| `--color`                     | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`                    | Disable real-time pane TUI output               | `false`           |
+| `--no-runner-fallback`        | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--tool-path`                 | Override tool path (`key=value`, repeatable)    | -                 |
+| `--biome-use-editorconfig`    | Force Biome `.editorconfig` support             | `false`           |
+| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support           | `false`           |
+| `--biome-use-vcs-ignore`      | Force Biome VCS ignore semantics                | `false`           |
+| `--no-biome-use-vcs-ignore`   | Disable Biome VCS ignore semantics              | `false`           |
+| `--output`                    | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
 
-| Option                 | Description                                     | Default           |
-| ---------------------- | ----------------------------------------------- | ----------------- |
-| `--working-dir`        | Working directory to run in                     | Current directory |
-| `--check`              | Only check formatting without modifying files   | false             |
-| `--tools`              | Specific tools to run (comma-separated)         | All detected      |
-| `--list`               | List available tools instead of running them    | false             |
-| `--required`           | Tools that MUST be installed (error if missing) | -                 |
-| `--skip`               | Tools to skip even if detected                  | -                 |
-| `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
-| `--no-tui`             | Disable real-time pane TUI output               | `false`           |
-| `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
-| `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
-| `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
-| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
-| `--biome-use-vcs-ignore` | Force Biome VCS ignore semantics              | `false`           |
-| `--no-biome-use-vcs-ignore` | Disable Biome VCS ignore semantics        | `false`           |
-| `--output`             | Output format: `json`, `raw`                    | `raw`             |
+| Option                        | Description                                     | Default           |
+| ----------------------------- | ----------------------------------------------- | ----------------- |
+| `--working-dir`               | Working directory to run in                     | Current directory |
+| `--check`                     | Only check formatting without modifying files   | false             |
+| `--tools`                     | Specific tools to run (comma-separated)         | All detected      |
+| `--list`                      | List available tools instead of running them    | false             |
+| `--required`                  | Tools that MUST be installed (error if missing) | -                 |
+| `--skip`                      | Tools to skip even if detected                  | -                 |
+| `--color`                     | Color mode: `auto`, `always`, `never`           | `auto`            |
+| `--no-tui`                    | Disable real-time pane TUI output               | `false`           |
+| `--no-runner-fallback`        | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--tool-path`                 | Override tool path (`key=value`, repeatable)    | -                 |
+| `--biome-use-editorconfig`    | Force Biome `.editorconfig` support             | `false`           |
+| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support           | `false`           |
+| `--biome-use-vcs-ignore`      | Force Biome VCS ignore semantics                | `false`           |
+| `--no-biome-use-vcs-ignore`   | Disable Biome VCS ignore semantics              | `false`           |
+| `--output`                    | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration
 

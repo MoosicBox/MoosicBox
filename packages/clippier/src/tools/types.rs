@@ -13,6 +13,42 @@ pub enum ToolCapability {
     Lint,
 }
 
+/// Capability scope used for overlap warning suppression rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverlapWarningCapability {
+    /// Formatter overlap warnings
+    Format,
+    /// Linter/check overlap warnings
+    Lint,
+}
+
+impl OverlapWarningCapability {
+    /// Returns true when this suppression capability matches a tool capability.
+    #[must_use]
+    pub const fn matches(self, capability: ToolCapability) -> bool {
+        matches!(
+            (self, capability),
+            (Self::Format, ToolCapability::Format) | (Self::Lint, ToolCapability::Lint)
+        )
+    }
+}
+
+/// Rule for suppressing overlap warnings between tools.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct OverlapWarningSuppressRule {
+    /// Capability scope for this suppression
+    pub capability: OverlapWarningCapability,
+
+    /// Pair of tools to suppress warnings for (order-insensitive)
+    pub tools: Vec<String>,
+
+    /// Optional extension subset (case-insensitive, without leading dot)
+    #[serde(default)]
+    pub extensions: Vec<String>,
+}
+
 /// The kind of tool (how it's invoked)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolKind {
@@ -130,6 +166,10 @@ pub struct ToolsConfig {
     /// Make biome use VCS ignore semantics for file traversal
     #[serde(default = "default_true")]
     pub biome_use_vcs_ignore: bool,
+
+    /// Suppress overlap warnings for specific tool pairs/capabilities/extensions
+    #[serde(default)]
+    pub overlap_warning_suppress: Vec<OverlapWarningSuppressRule>,
 }
 
 const fn default_true() -> bool {
@@ -145,6 +185,7 @@ impl Default for ToolsConfig {
             runner_fallback: true,
             biome_use_editorconfig: true,
             biome_use_vcs_ignore: true,
+            overlap_warning_suppress: Vec::new(),
         }
     }
 }
