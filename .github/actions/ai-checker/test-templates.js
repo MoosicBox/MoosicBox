@@ -136,9 +136,7 @@ function evaluateExpression(expression, vars) {
 
         return result !== undefined && result !== null ? String(result) : '';
     } catch (error) {
-        console.warn(
-            `  ⚠️ Expression failed: ${expression} - ${error.message}`,
-        );
+        console.warn(`  ⚠️ Expression failed: ${expression} - ${error.message}`);
         return '${' + expression + '}';
     }
 }

@@ -70,7 +70,7 @@
 }
 
 .search-label:before {
-    content: '';
+    content: "";
     position: absolute;
     padding: 0px;
     left: 10px;
@@ -78,7 +78,7 @@
     width: 20px;
     height: 20px;
     transform: translateY(-50%);
-    background: url('/img/magnifying-glass.svg') center / contain no-repeat;
+    background: url("/img/magnifying-glass.svg") center / contain no-repeat;
     cursor: pointer;
     z-index: 21;
 }

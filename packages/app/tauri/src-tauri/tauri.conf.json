@@ -39,12 +39,7 @@
         "security": {
             "csp": null,
             "assetProtocol": {
-                "scope": [
-                    "https://*",
-                    "http://*",
-                    "wss://*",
-                    "ws://*"
-                ],
+                "scope": ["https://*", "http://*", "wss://*", "ws://*"],
                 "enable": true
             }
         }

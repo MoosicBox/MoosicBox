@@ -106,16 +106,16 @@ export function evaluate<T>(
     // prettier-ignore
     // get_context
     const g = () => ({
-        'a': a,
-        'drn': drn,
-        'ss': ss,
-        'cf': cf,
-        'rs': rs,
-        'throttle': throttle,
-        'delay': delay,
-        'element': c.element,
-        'event': c.event,
-        'value': c.value,
+        a: a,
+        drn: drn,
+        ss: ss,
+        cf: cf,
+        rs: rs,
+        throttle: throttle,
+        delay: delay,
+        element: c.element,
+        event: c.event,
+        value: c.value,
     });
 
     return eval(`const ctx=${g.name}();${script}`);
