@@ -229,6 +229,7 @@ cargo run --features simulator
 
 - `now()` - Returns `SystemTime` from appropriate backend
 - `instant_now()` - Returns `Instant` from appropriate backend
+- When `simulator` is enabled, these top-level functions use the simulator backend; they use the standard backend only when `simulator` is disabled.
 
 ### Chrono Functions (with `chrono` feature)
 
