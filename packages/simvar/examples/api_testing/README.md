@@ -97,7 +97,7 @@ RUST_LOG=debug cargo run -p simvar_api_testing_example
 Customize the testing by modifying `ApiTestingBootstrap`:
 
 ```rust
-ApiTestingBootstrap {
+let bootstrap = ApiTestingBootstrap {
     server_port: 8082,
     test_scenarios: vec![
         TestScenario::HappyPath,
@@ -105,7 +105,8 @@ ApiTestingBootstrap {
         TestScenario::EdgeCases,
         TestScenario::Concurrency,
     ],
-}
+    ..ApiTestingBootstrap::new()
+};
 ```
 
 ## Expected Output
