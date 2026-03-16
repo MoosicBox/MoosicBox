@@ -14,6 +14,8 @@ enum ToolResolution {
     },
 }
 
+const BIOME_EDITORCONFIG_FLAG: &str = "--use-editorconfig=true";
+
 /// Error type for tool-related operations
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -259,6 +261,56 @@ impl ToolRegistry {
         }
     }
 
+    fn maybe_apply_biome_editorconfig(tool: &mut Tool, enabled: bool) {
+        if tool.name != "biome" || !enabled {
+            return;
+        }
+
+        if !tool
+            .check_args
+            .iter()
+            .any(|arg| arg == BIOME_EDITORCONFIG_FLAG)
+        {
+            let insert_index = tool
+                .check_args
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find_map(|(index, arg)| {
+                    if arg.starts_with('-') {
+                        None
+                    } else {
+                        Some(index)
+                    }
+                })
+                .unwrap_or(tool.check_args.len());
+            tool.check_args
+                .insert(insert_index, BIOME_EDITORCONFIG_FLAG.to_string());
+        }
+
+        if !tool
+            .format_args
+            .iter()
+            .any(|arg| arg == BIOME_EDITORCONFIG_FLAG)
+        {
+            let insert_index = tool
+                .format_args
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find_map(|(index, arg)| {
+                    if arg.starts_with('-') {
+                        None
+                    } else {
+                        Some(index)
+                    }
+                })
+                .unwrap_or(tool.format_args.len());
+            tool.format_args
+                .insert(insert_index, BIOME_EDITORCONFIG_FLAG.to_string());
+        }
+    }
+
     /// Registers a tool definition
     pub fn register(&mut self, tool: Tool) {
         self.tools.insert(tool.name.clone(), tool);
@@ -428,6 +480,10 @@ impl ToolRegistry {
                     log::debug!("Tool '{name}' found at configured path: {path}");
                     let mut available_tool = tool.clone();
                     available_tool.detected_path = Some(path_buf);
+                    Self::maybe_apply_biome_editorconfig(
+                        &mut available_tool,
+                        self.config.biome_use_editorconfig,
+                    );
                     self.available.insert(name.clone(), available_tool);
                     continue;
                 }
@@ -446,7 +502,12 @@ impl ToolRegistry {
                 let available_tool = match resolution {
                     ToolResolution::Binary(path) => {
                         log::debug!("Tool '{name}' detected at: {}", path.display());
-                        tool.clone().with_detected_path(path)
+                        let mut detected_tool = tool.clone().with_detected_path(path);
+                        Self::maybe_apply_biome_editorconfig(
+                            &mut detected_tool,
+                            self.config.biome_use_editorconfig,
+                        );
+                        detected_tool
                     }
                     ToolResolution::Runner {
                         runner,
@@ -460,6 +521,10 @@ impl ToolRegistry {
                             runner_args,
                         };
                         available_tool.binary = tool_binary;
+                        Self::maybe_apply_biome_editorconfig(
+                            &mut available_tool,
+                            self.config.biome_use_editorconfig,
+                        );
                         available_tool
                     }
                 };

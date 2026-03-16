@@ -963,6 +963,8 @@ clippier check --output json
 [tools]
 skip = ["gofmt"]
 required = ["rustfmt", "taplo"]
+runner-fallback = true
+biome-use-editorconfig = true
 ```
 
 CLI values are additive: `--skip` and `--required` are merged with config values.
@@ -1052,6 +1054,10 @@ Tool resolution precedence (for `prettier`, `biome`, `eslint`, and `dprint`) is:
 
 Use `--no-runner-fallback` to disable runner fallback for a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
+
+When both `biome` and `prettier` are auto-detected, clippier defaults to `biome` to avoid competing formatters. Use `--tools` to explicitly run both.
+
+Biome uses `.editorconfig` by default (`--use-editorconfig=true`). You can opt out via config (`tools.biome-use-editorconfig = false`) or CLI (`--no-biome-use-editorconfig`).
 
 Precedence for tool selection is:
 
@@ -1347,6 +1353,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--no-tui`             | Disable real-time pane TUI output               | `false`           |
 | `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
 | `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
+| `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
+| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1363,6 +1371,8 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--no-tui`             | Disable real-time pane TUI output               | `false`           |
 | `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
 | `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
+| `--biome-use-editorconfig` | Force Biome `.editorconfig` support         | `false`           |
+| `--no-biome-use-editorconfig` | Disable Biome `.editorconfig` support   | `false`           |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration

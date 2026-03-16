@@ -122,6 +122,14 @@ pub struct ToolsConfig {
     /// Allow executing missing tools through package manager runners
     #[serde(default = "default_true")]
     pub runner_fallback: bool,
+
+    /// Make biome read `.editorconfig` when formatting/linting
+    #[serde(default = "default_true")]
+    pub biome_use_editorconfig: bool,
+
+    /// Make biome use VCS ignore semantics for file traversal
+    #[serde(default = "default_true")]
+    pub biome_use_vcs_ignore: bool,
 }
 
 const fn default_true() -> bool {
@@ -135,6 +143,8 @@ impl Default for ToolsConfig {
             skip: Vec::new(),
             paths: std::collections::BTreeMap::new(),
             runner_fallback: true,
+            biome_use_editorconfig: true,
+            biome_use_vcs_ignore: true,
         }
     }
 }

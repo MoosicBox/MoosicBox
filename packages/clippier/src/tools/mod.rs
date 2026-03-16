@@ -142,6 +142,7 @@ pub fn build_tools_config(
     explicit_tools: Option<&[String]>,
     no_runner_fallback: bool,
     tool_paths: &[String],
+    biome_use_editorconfig_override: Option<bool>,
 ) -> Result<ToolsConfig, BoxError> {
     let mut config = load_tools_config(working_dir)?;
 
@@ -153,6 +154,10 @@ pub fn build_tools_config(
 
     if no_runner_fallback {
         config.runner_fallback = false;
+    }
+
+    if let Some(value) = biome_use_editorconfig_override {
+        config.biome_use_editorconfig = value;
     }
 
     if let Some(required_tools) = required {
@@ -308,6 +313,10 @@ pub fn auto_detect_check_tools(
     let mut deduped = Vec::new();
     merge_unique_strings(&mut deduped, &tools);
 
+    if deduped.iter().any(|tool| tool == "biome") {
+        deduped.retain(|tool| tool != "prettier");
+    }
+
     Ok(deduped)
 }
 
@@ -375,6 +384,10 @@ pub fn auto_detect_fmt_tools(
     let mut deduped = Vec::new();
     merge_unique_strings(&mut deduped, &tools);
 
+    if deduped.iter().any(|tool| tool == "biome") {
+        deduped.retain(|tool| tool != "prettier");
+    }
+
     Ok(deduped)
 }
 
@@ -423,8 +436,16 @@ mod tests {
         let required = vec!["taplo".to_string(), "rustfmt".to_string()];
         let skip = vec!["shellcheck".to_string(), "gofmt".to_string()];
 
-        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None, false, &[])
-            .expect("failed to build merged tools config");
+        let merged = build_tools_config(
+            Some(&dir),
+            Some(&required),
+            Some(&skip),
+            None,
+            false,
+            &[],
+            None,
+        )
+        .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt", "taplo"]);
         assert_eq!(merged.skip, vec!["gofmt", "shellcheck"]);
@@ -440,7 +461,7 @@ mod tests {
             .expect("failed to write clippier.toml");
 
         let explicit = vec!["gofmt".to_string()];
-        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false, &[])
+        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false, &[], None)
             .expect("failed to build tools config");
 
         assert_eq!(merged.skip, vec!["taplo"]);
@@ -467,7 +488,7 @@ mod tests {
             auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
         assert!(check_tools.contains(&"clippy".to_string()));
         assert!(check_tools.contains(&"rustfmt".to_string()));
-        assert!(check_tools.contains(&"prettier".to_string()));
+        assert!(!check_tools.contains(&"prettier".to_string()));
         assert!(check_tools.contains(&"biome".to_string()));
         assert!(check_tools.contains(&"eslint".to_string()));
         assert!(check_tools.contains(&"ruff".to_string()));
@@ -477,7 +498,7 @@ mod tests {
 
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
         assert!(fmt_tools.contains(&"rustfmt".to_string()));
-        assert!(fmt_tools.contains(&"prettier".to_string()));
+        assert!(!fmt_tools.contains(&"prettier".to_string()));
         assert!(fmt_tools.contains(&"biome".to_string()));
         assert!(fmt_tools.contains(&"ruff".to_string()));
         assert!(fmt_tools.contains(&"black".to_string()));
@@ -513,7 +534,7 @@ mod tests {
 
         let fmt_tools = auto_detect_fmt_tools(Some(&nested)).expect("failed to detect fmt tools");
 
-        assert!(fmt_tools.contains(&"prettier".to_string()));
+        assert!(!fmt_tools.contains(&"prettier".to_string()));
         assert!(fmt_tools.contains(&"biome".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
@@ -554,7 +575,7 @@ mod tests {
         )
         .expect("failed to write clippier.toml");
 
-        let merged = build_tools_config(Some(&dir), None, None, None, false, &[])
+        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], None)
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt"]);
@@ -566,7 +587,7 @@ mod tests {
     #[test]
     fn build_tools_config_disables_runner_fallback_with_cli_override() {
         let dir = temp_dir("clippier-tools-runner-fallback-override");
-        let merged = build_tools_config(Some(&dir), None, None, None, true, &[])
+        let merged = build_tools_config(Some(&dir), None, None, None, true, &[], None)
             .expect("failed to build merged tools config");
 
         assert!(!merged.runner_fallback);
@@ -591,6 +612,7 @@ mod tests {
             None,
             false,
             &["prettier=/from/cli/prettier".to_string()],
+            None,
         )
         .expect("failed to build merged tools config");
 
@@ -606,9 +628,21 @@ mod tests {
             None,
             false,
             &["unknown=/tmp/tool".to_string()],
+            None,
         )
         .expect_err("expected unknown tool path override to fail");
         assert!(err.to_string().contains("Unknown tool 'unknown'"));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn build_tools_config_cli_override_sets_biome_editorconfig_behavior() {
+        let dir = temp_dir("clippier-tools-biome-editorconfig-override");
+        let merged = build_tools_config(Some(&dir), None, None, None, false, &[], Some(false))
+            .expect("failed to build merged tools config");
+
+        assert!(!merged.biome_use_editorconfig);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

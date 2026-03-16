@@ -480,6 +480,14 @@ enum Commands {
         /// Override tool executable path (repeatable: --tool-path key=value)
         #[arg(long = "tool-path", action = clap::ArgAction::Append)]
         tool_path: Vec<String>,
+
+        /// Force biome to use .editorconfig
+        #[arg(long, default_value_t = false)]
+        biome_use_editorconfig: bool,
+
+        /// Disable biome .editorconfig support
+        #[arg(long, default_value_t = false)]
+        no_biome_use_editorconfig: bool,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -527,6 +535,14 @@ enum Commands {
         /// Override tool executable path (repeatable: --tool-path key=value)
         #[arg(long = "tool-path", action = clap::ArgAction::Append)]
         tool_path: Vec<String>,
+
+        /// Force biome to use .editorconfig
+        #[arg(long, default_value_t = false)]
+        biome_use_editorconfig: bool,
+
+        /// Disable biome .editorconfig support
+        #[arg(long, default_value_t = false)]
+        no_biome_use_editorconfig: bool,
     },
 }
 
@@ -832,7 +848,22 @@ async fn main() -> Result<(), BoxError> {
             no_tui,
             no_runner_fallback,
             tool_path,
+            biome_use_editorconfig,
+            no_biome_use_editorconfig,
         } => {
+            if biome_use_editorconfig && no_biome_use_editorconfig {
+                return Err(
+                    "Cannot pass both --biome-use-editorconfig and --no-biome-use-editorconfig"
+                        .into(),
+                );
+            }
+            let biome_editorconfig_override = if biome_use_editorconfig {
+                Some(true)
+            } else if no_biome_use_editorconfig {
+                Some(false)
+            } else {
+                None
+            };
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
@@ -840,6 +871,7 @@ async fn main() -> Result<(), BoxError> {
                 tools.as_deref(),
                 no_runner_fallback,
                 &tool_path,
+                biome_editorconfig_override,
             )?;
             handle_check_command(
                 working_dir.as_deref(),
@@ -864,7 +896,22 @@ async fn main() -> Result<(), BoxError> {
             no_tui,
             no_runner_fallback,
             tool_path,
+            biome_use_editorconfig,
+            no_biome_use_editorconfig,
         } => {
+            if biome_use_editorconfig && no_biome_use_editorconfig {
+                return Err(
+                    "Cannot pass both --biome-use-editorconfig and --no-biome-use-editorconfig"
+                        .into(),
+                );
+            }
+            let biome_editorconfig_override = if biome_use_editorconfig {
+                Some(true)
+            } else if no_biome_use_editorconfig {
+                Some(false)
+            } else {
+                None
+            };
             let config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
@@ -872,6 +919,7 @@ async fn main() -> Result<(), BoxError> {
                 tools.as_deref(),
                 no_runner_fallback,
                 &tool_path,
+                biome_editorconfig_override,
             )?;
             handle_fmt_command(
                 working_dir.as_deref(),
