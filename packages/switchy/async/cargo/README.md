@@ -82,7 +82,7 @@ warning: src/handlers.rs: async method `handle_request` in impl is missing #[inj
 - name: Check async functions
   run: |
       cargo install --path packages/switchy/async/cargo
-      switchy_async_cargo
+      switchy_async_cargo --root "${{ github.workspace }}"
 ```
 
 ## Attribute Rules
