@@ -59,25 +59,30 @@ The Database Connection package provides:
 
 Add this to your `Cargo.toml`:
 
+If you want real database connections through `init`, disable default features (the default feature set includes `simulator`).
+
 ```toml
 [dependencies]
-switchy_database_connection = { path = "../database_connection" }
+switchy_database_connection = { path = "../database_connection", default-features = false }
 
 # PostgreSQL with native TLS
 switchy_database_connection = {
     path = "../database_connection",
+    default-features = false,
     features = ["postgres-raw", "postgres-native-tls"]
 }
 
 # SQLite with rusqlite
 switchy_database_connection = {
     path = "../database_connection",
+    default-features = false,
     features = ["sqlite", "sqlite-rusqlite"]
 }
 
 # Multiple backends
 switchy_database_connection = {
     path = "../database_connection",
+    default-features = false,
     features = [
         "postgres-sqlx",
         "sqlite-sqlx",
@@ -88,17 +93,21 @@ switchy_database_connection = {
 # Turso database
 switchy_database_connection = {
     path = "../database_connection",
+    default-features = false,
     features = ["turso"]
 }
 
 # DuckDB with bundled library
 switchy_database_connection = {
     path = "../database_connection",
+    default-features = false,
     features = ["duckdb-bundled"]
 }
 ```
 
 ## Usage
+
+The examples below assume `simulator` is not enabled.
 
 ### Basic Database Initialization
 
