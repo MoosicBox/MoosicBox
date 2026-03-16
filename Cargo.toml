@@ -70,6 +70,8 @@ members = [
     "packages/library/models",
     "packages/library/music_api",
     "packages/load_balancer",
+    "packages/log_runtime",
+    "packages/log_watch",
     "packages/logging",
     "packages/marketing_site",
     "packages/marketing_site/ui",
@@ -246,6 +248,8 @@ moosicbox_library                  = { version = "0.1.1", default-features = fal
 moosicbox_library_models           = { version = "0.1.1", default-features = false, path = "packages/library/models" }
 moosicbox_library_music_api        = { version = "0.1.1", default-features = false, path = "packages/library/music_api" }
 moosicbox_load_balancer            = { version = "0.1.1", default-features = false, path = "packages/load_balancer" }
+moosicbox_log_runtime              = { version = "0.1.0", default-features = false, path = "packages/log_runtime" }
+moosicbox_log_watch                = { version = "0.1.0", default-features = false, path = "packages/log_watch" }
 moosicbox_logging                  = { version = "0.1.1", default-features = false, path = "packages/logging" }
 moosicbox_marketing_site           = { version = "0.1.1", default-features = false, path = "packages/marketing_site" }
 moosicbox_marketing_site_ui        = { version = "0.1.1", default-features = false, path = "packages/marketing_site/ui" }
@@ -401,10 +405,12 @@ const-hex = "1.18.1"
 const_format = "0.2.35"
 convert_case = "0.11.0"
 cpal = "0.17.3"
+crossterm = "0.28.1"
 ctrlc = "3.5.2"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
+dirs = "6.0.0"
 duckdb = { version = "1.10500.0", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
@@ -496,6 +502,7 @@ puffin_http = "0.16.1"
 pulldown-cmark = { version = "0.13.1", default-features = false }
 qstring = "0.7.2"
 test-strategy = { version = "0.4.5", default-features = false }
+time = "0.3.47"
 
 quote = "1.0.45"
 rand = "0.10.0"
@@ -584,6 +591,7 @@ tokio-tungstenite = { version = "0.28.0", features = [
 tokio-util = "0.7.18"
 toml = "1.0.6"
 tracing = "0.1.44"
+tracing-appender = "0.2.3"
 tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }

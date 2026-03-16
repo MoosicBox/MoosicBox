@@ -1,0 +1,25 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Generic log runtime paths and initialization"
+edition     = { workspace = true }
+keywords    = ["log", "logging", "tracing"]
+license     = { workspace = true }
+name        = "moosicbox_log_runtime"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+dirs = { workspace = true }
+
+thiserror          = { workspace = true }
+tracing            = { workspace = true, optional = true }
+tracing-appender   = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[features]
+default = []
+
+file = ["dep:tracing-appender", "init"]
+init = ["dep:tracing", "dep:tracing-subscriber"]

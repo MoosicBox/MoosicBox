@@ -1,0 +1,27 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Generic log watching, filtering, and optional TUI"
+edition     = { workspace = true }
+keywords    = ["log", "ratatui", "tail", "watch"]
+license     = { workspace = true }
+name        = "moosicbox_log_watch"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+regex  = { workspace = true }
+time   = { workspace = true, features = ["formatting", "parsing"] }
+
+crossterm  = { workspace = true, optional = true }
+ratatui    = { workspace = true, optional = true }
+serde      = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = []
+
+persistence-json = ["dep:serde", "dep:serde_json"]
+tui              = ["dep:crossterm", "dep:ratatui"]
