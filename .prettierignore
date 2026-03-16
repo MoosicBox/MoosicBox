@@ -16,6 +16,9 @@ kubernetes/cert-manager.yaml
 **/*.css
 **/*.html
 **/*.js
+**/*.jsx
 **/*.json
+**/*.less
+**/*.scss
 **/*.ts
 **/*.tsx
