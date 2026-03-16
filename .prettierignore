@@ -10,3 +10,4 @@ node_modules/
 src-tauri/
 package-lock.json
 test-resources/
+wix/**/*.wxs
