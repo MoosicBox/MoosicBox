@@ -196,11 +196,14 @@ match remote_api.artist(&artist_id).await {
 
 The library implements the standard `MusicApi` trait, providing:
 
+- `RemoteLibraryMusicApi::new(host, api_source, profile)` as the primary client entry point
 - Artist, album, and track queries
+- Album list queries through `albums(&AlbumsRequest)` for filtering/paging
 - Search functionality
 - Pagination support
 - Album version management
 - Cover art source handling
+- Remote playback URLs through `track_source(...)`
 - `add_*`, `remove_*`, `track_size`, and `tracks(None, ...)` return `UnsupportedAction`
 
 ## Dependencies
