@@ -267,7 +267,7 @@ use hyperchad_transformer::layout::Calc;
 
     let calculator = MyCalculator;
     let mut container = Container::default();
-    container.partial_calc(&calculator, container.id);
+    let _changed = calculator.calc(&mut container);
 }
 ```
 
