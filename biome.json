@@ -30,6 +30,9 @@
         "ignoreUnknown": true,
         "includes": [
             "**",
+            "!!**/sst-env.d.ts",
+            "!!packages/app/tauri/tauri-plugin-player/permissions",
+            "!!**/cdk.context.json",
             "!!**/.direnv",
             "!!**/target",
             "!!packages/opus_native/libopus"

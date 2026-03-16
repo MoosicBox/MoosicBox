@@ -13,3 +13,9 @@ test-resources/
 **/wix/**/*.wxs
 target/
 kubernetes/cert-manager.yaml
+**/*.css
+**/*.html
+**/*.js
+**/*.json
+**/*.ts
+**/*.tsx
