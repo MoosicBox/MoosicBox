@@ -18,7 +18,6 @@ The MoosicBox Music API Models package provides:
 
 - **AlbumsRequest**: Album query with filtering, sorting, and pagination
 - **AlbumFilters**: Advanced album filtering by name, artist, type, etc.
-- **PagingRequest**: Pagination parameters for large result sets
 
 ### Ordering & Sorting
 
