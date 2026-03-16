@@ -44,6 +44,14 @@ pub struct Track {
 }
 ```
 
+### Playlist
+
+```rust
+pub struct Playlist {
+    pub tracks: Vec<Track>,
+}
+```
+
 ### UpdateState
 
 ```rust
@@ -63,6 +71,14 @@ pub struct MediaEvent {
     pub play: Option<bool>,
     pub next_track: Option<bool>,
     pub prev_track: Option<bool>,
+}
+```
+
+### InitChannel
+
+```rust
+pub struct InitChannel {
+    pub channel: Channel,
 }
 ```
 
