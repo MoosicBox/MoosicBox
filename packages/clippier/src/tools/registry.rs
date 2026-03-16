@@ -199,14 +199,12 @@ impl ToolRegistry {
             vec![
                 "--check".to_string(),
                 "--ignore-unknown".to_string(),
-                "--no-error-on-unmatched-pattern".to_string(),
-                "**/*.{js,jsx,ts,tsx,json,md,mdx,yaml,yml,html,css,scss,less}".to_string(),
+                ".".to_string(),
             ],
             vec![
                 "--write".to_string(),
                 "--ignore-unknown".to_string(),
-                "--no-error-on-unmatched-pattern".to_string(),
-                "**/*.{js,jsx,ts,tsx,json,md,mdx,yaml,yml,html,css,scss,less}".to_string(),
+                ".".to_string(),
             ],
         ));
 

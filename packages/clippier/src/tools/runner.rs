@@ -501,7 +501,11 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[cfg(feature = "tools-tui")]
-    fn build_command_parts(tool: &Tool, check_mode: bool) -> Option<(String, Vec<String>)> {
+    fn build_command_parts(
+        tool: &Tool,
+        check_mode: bool,
+        working_dir: Option<&Path>,
+    ) -> Option<(String, Vec<String>)> {
         let args = if check_mode {
             &tool.check_args
         } else {
@@ -512,7 +516,7 @@ impl<'a> ToolRunner<'a> {
             return None;
         }
 
-        let parts = match &tool.kind {
+        let mut parts = match &tool.kind {
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
                 let binary = tool
@@ -532,7 +536,48 @@ impl<'a> ToolRunner<'a> {
             }
         };
 
+        Self::append_prettier_ignore_path_arg(tool, &mut parts.1, working_dir);
+
         Some(parts)
+    }
+
+    fn find_prettier_ignore_path(base_dir: &Path) -> Option<std::path::PathBuf> {
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            let candidate = dir.join(".prettierignore");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn append_prettier_ignore_path_arg(
+        tool: &Tool,
+        args: &mut Vec<String>,
+        working_dir: Option<&Path>,
+    ) {
+        if tool.name != "prettier" || args.iter().any(|arg| arg == "--ignore-path") {
+            return;
+        }
+
+        let base_dir = working_dir.map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
+            Path::to_path_buf,
+        );
+        let base_dir = if base_dir.is_absolute() {
+            base_dir
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| Path::new(".").to_path_buf())
+                .join(base_dir)
+        };
+
+        if let Some(ignore_path) = Self::find_prettier_ignore_path(&base_dir) {
+            args.push("--ignore-path".to_string());
+            args.push(ignore_path.display().to_string());
+        }
     }
 
     #[cfg(feature = "tools-tui")]
@@ -637,7 +682,9 @@ impl<'a> ToolRunner<'a> {
     ) -> ToolResult {
         let start_time = Instant::now();
 
-        let Some((program, final_args)) = Self::build_command_parts(tool, check_mode) else {
+        let Some((program, final_args)) =
+            Self::build_command_parts(tool, check_mode, self.working_dir)
+        else {
             let result =
                 ToolResult::success(tool.name.clone(), tool.display_name.clone(), Duration::ZERO);
             let _ = tx.send(ToolEvent::Finished {
@@ -793,7 +840,7 @@ impl<'a> ToolRunner<'a> {
             );
         }
 
-        let (program, final_args) = match &tool.kind {
+        let (program, mut final_args) = match &tool.kind {
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
                 let binary = tool
@@ -812,6 +859,7 @@ impl<'a> ToolRunner<'a> {
                 (runner.clone(), all_args)
             }
         };
+        Self::append_prettier_ignore_path_arg(tool, &mut final_args, self.working_dir);
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");
@@ -948,7 +996,7 @@ impl<'a> ToolRunner<'a> {
             );
         }
 
-        let (program, final_args) = match &tool.kind {
+        let (program, mut final_args) = match &tool.kind {
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
                 let binary = tool
@@ -967,6 +1015,7 @@ impl<'a> ToolRunner<'a> {
                 (runner.clone(), all_args)
             }
         };
+        Self::append_prettier_ignore_path_arg(tool, &mut final_args, self.working_dir);
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");

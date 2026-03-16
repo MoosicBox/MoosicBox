@@ -1050,7 +1050,7 @@ For `prettier` execution, clippier resolves in this order:
 4. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx`
 
 Use `--no-runner-fallback` to disable runner fallback for a command.
-Prettier is invoked with `--ignore-unknown` so unsupported files (for example `.wxs`) are skipped instead of failing the run.
+Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
 
 Precedence for tool selection is:
 
