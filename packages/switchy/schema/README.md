@@ -858,9 +858,10 @@ use switchy_schema::{
     discovery::directory::DirectoryMigrationSource,
 };
 use switchy_database::Database;
+use std::path::PathBuf;
 
 async fn run_migrations(db: &dyn Database) -> switchy_schema::Result<()> {
-    let source = DirectoryMigrationSource::from_path("./migrations");
+    let source = DirectoryMigrationSource::from_path(PathBuf::from("./migrations"));
     let runner = MigrationRunner::new(Box::new(source))
         .with_table_name("__switchy_migrations");
 
