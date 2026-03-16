@@ -78,6 +78,24 @@ let update = UpdateAppState {
 app_state.set_state(update).await?;
 ```
 
+### Persistence and Connection Management
+
+```rust
+use moosicbox_app_state::AppState;
+
+// Initialize persistence (required before using connection persistence APIs)
+let app_state = AppState::new().with_persistence_in_memory().await?;
+
+// Persist a connection name and default download location
+app_state.update_connection_name("Local Server").await?;
+app_state
+    .set_default_download_location("/music/downloads".to_string())
+    .await?;
+
+// Initialize and persist a stable connection ID
+let connection_id = app_state.get_or_init_connection_id().await?;
+```
+
 ### Player Management
 
 ```rust
