@@ -28,28 +28,26 @@ The HyperChad JavaScript Bundler package provides:
 
 ## Installation
 
-Add this to your `Cargo.toml`:
+Choose one dependency declaration and add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 hyperchad_js_bundler = { path = "../hyperchad/js_bundler" }
+```
 
-# Enable specific bundlers (default enables both esbuild and swc)
-hyperchad_js_bundler = {
-    path = "../hyperchad/js_bundler",
-    features = ["esbuild"]  # Requires node feature
-}
+```toml
+[dependencies]
+hyperchad_js_bundler = { path = "../hyperchad/js_bundler", features = ["esbuild"] }
+```
 
-hyperchad_js_bundler = {
-    path = "../hyperchad/js_bundler",
-    features = ["swc"]
-}
+```toml
+[dependencies]
+hyperchad_js_bundler = { path = "../hyperchad/js_bundler", features = ["swc"] }
+```
 
-# Enable specific package managers
-hyperchad_js_bundler = {
-    path = "../hyperchad/js_bundler",
-    features = ["npm"]  # or "pnpm", "bun"
-}
+```toml
+[dependencies]
+hyperchad_js_bundler = { path = "../hyperchad/js_bundler", features = ["npm"] } # or "pnpm", "bun"
 ```
 
 **Note:** The default features include `all-web-toolchains`, `esbuild`, and `swc`.
