@@ -301,20 +301,36 @@ impl ToolRegistry {
             return;
         }
 
-        let insert_index = args
+        args.push("--vcs-root".to_string());
+        args.push(vcs_root.display().to_string());
+    }
+
+    fn find_biome_config_path(base_dir: &Path) -> Option<PathBuf> {
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            let jsonc = dir.join("biome.jsonc");
+            if jsonc.exists() {
+                return Some(jsonc);
+            }
+            let json = dir.join("biome.json");
+            if json.exists() {
+                return Some(json);
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn insert_biome_config_path(args: &mut Vec<String>, config_path: &Path) {
+        let already_set = args
             .iter()
-            .enumerate()
-            .skip(1)
-            .find_map(|(index, arg)| {
-                if arg.starts_with('-') {
-                    None
-                } else {
-                    Some(index)
-                }
-            })
-            .unwrap_or(args.len());
-        args.insert(insert_index, "--vcs-root".to_string());
-        args.insert(insert_index + 1, vcs_root.display().to_string());
+            .any(|arg| arg == "--config-path" || arg.starts_with("--config-path="));
+        if already_set {
+            return;
+        }
+
+        args.push("--config-path".to_string());
+        args.push(config_path.display().to_string());
     }
 
     fn maybe_apply_biome_settings(tool: &mut Tool, config: &ToolsConfig, working_dir: &Path) {
@@ -342,6 +358,12 @@ impl ToolRegistry {
         } else {
             Self::insert_biome_flag(&mut tool.check_args, BIOME_VCS_ENABLED_FALSE_FLAG);
             Self::insert_biome_flag(&mut tool.format_args, BIOME_VCS_ENABLED_FALSE_FLAG);
+        }
+
+        if let Some(config_path) = Self::find_biome_config_path(working_dir) {
+            let absolute_path = Self::to_absolute_path(&config_path);
+            Self::insert_biome_config_path(&mut tool.check_args, &absolute_path);
+            Self::insert_biome_config_path(&mut tool.format_args, &absolute_path);
         }
     }
 
@@ -416,9 +438,9 @@ impl ToolRegistry {
             "Biome",
             "biome",
             ToolKind::Binary,
-            vec![ToolCapability::Format, ToolCapability::Lint],
-            vec!["check".to_string(), ".".to_string()],
-            vec!["format".to_string(), "--write".to_string(), ".".to_string()],
+            vec![ToolCapability::Format],
+            vec!["format".to_string()],
+            vec!["format".to_string(), "--write".to_string()],
         ));
 
         // JavaScript/TypeScript - ESLint
