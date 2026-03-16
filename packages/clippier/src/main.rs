@@ -476,6 +476,10 @@ enum Commands {
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
         no_runner_fallback: bool,
+
+        /// Override tool executable path (repeatable: --tool-path key=value)
+        #[arg(long = "tool-path", action = clap::ArgAction::Append)]
+        tool_path: Vec<String>,
     },
     /// Run formatters
     #[cfg(feature = "format")]
@@ -519,6 +523,10 @@ enum Commands {
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
         no_runner_fallback: bool,
+
+        /// Override tool executable path (repeatable: --tool-path key=value)
+        #[arg(long = "tool-path", action = clap::ArgAction::Append)]
+        tool_path: Vec<String>,
     },
 }
 
@@ -823,6 +831,7 @@ async fn main() -> Result<(), BoxError> {
             color,
             no_tui,
             no_runner_fallback,
+            tool_path,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -830,6 +839,7 @@ async fn main() -> Result<(), BoxError> {
                 skip.as_deref(),
                 tools.as_deref(),
                 no_runner_fallback,
+                &tool_path,
             )?;
             handle_check_command(
                 working_dir.as_deref(),
@@ -853,6 +863,7 @@ async fn main() -> Result<(), BoxError> {
             color,
             no_tui,
             no_runner_fallback,
+            tool_path,
         } => {
             let config = build_tools_config(
                 working_dir.as_deref(),
@@ -860,6 +871,7 @@ async fn main() -> Result<(), BoxError> {
                 skip.as_deref(),
                 tools.as_deref(),
                 no_runner_fallback,
+                &tool_path,
             )?;
             handle_fmt_command(
                 working_dir.as_deref(),

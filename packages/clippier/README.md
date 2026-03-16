@@ -1042,12 +1042,13 @@ For Prettier specifically, clippier also auto-selects it when:
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
-For `prettier` execution, clippier resolves in this order:
+Tool resolution precedence (for `prettier`, `biome`, `eslint`, and `dprint`) is:
 
-1. Explicit `tools.paths.prettier`
-2. `node_modules/.bin/prettier` in the working directory or ancestors
-3. `prettier` in PATH
-4. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx`
+1. CLI `--tool-path key=value` override
+2. Configured path in `tools.paths.<tool>`
+3. `node_modules/.bin/<tool>` in the working directory or ancestors
+4. Standalone `<tool>` in PATH
+5. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx --yes`
 
 Use `--no-runner-fallback` to disable runner fallback for a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
@@ -1088,8 +1089,9 @@ TUI behavior for tool output:
 | `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                           |
 | `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                            |
 | `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
-| `biome`      | JS/TS/JSON              | Format, Lint | `biome` binary                                                            |
-| `eslint`     | JS/TS                   | Lint         | `eslint` binary                                                           |
+| `biome`      | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
+| `eslint`     | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `dprint`     | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
 | `ruff`       | Python                  | Format, Lint | `ruff` binary                                                             |
 | `black`      | Python                  | Format       | `black` binary                                                            |
 | `gofmt`      | Go                      | Format       | `gofmt` binary                                                            |
@@ -1344,6 +1346,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
 | `--no-tui`             | Disable real-time pane TUI output               | `false`           |
 | `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ### Fmt Command Options
@@ -1359,6 +1362,7 @@ These options are shared across multiple subcommands (they are not top-level glo
 | `--color`              | Color mode: `auto`, `always`, `never`           | `auto`            |
 | `--no-tui`             | Disable real-time pane TUI output               | `false`           |
 | `--no-runner-fallback` | Disable bunx/pnpm/npx fallback for tools        | `false`           |
+| `--tool-path`          | Override tool path (`key=value`, repeatable)    | -                 |
 | `--output`             | Output format: `json`, `raw`                    | `raw`             |
 
 ## Configuration

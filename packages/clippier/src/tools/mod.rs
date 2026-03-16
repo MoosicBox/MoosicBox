@@ -43,6 +43,52 @@ pub use types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+const KNOWN_TOOL_NAMES: &[&str] = &[
+    "rustfmt",
+    "clippy",
+    "taplo",
+    "prettier",
+    "biome",
+    "eslint",
+    "dprint",
+    "ruff",
+    "black",
+    "gofmt",
+    "shfmt",
+    "shellcheck",
+];
+
+fn parse_tool_path_overrides(
+    tool_paths: &[String],
+) -> Result<std::collections::BTreeMap<String, String>, BoxError> {
+    let mut overrides = std::collections::BTreeMap::new();
+
+    for entry in tool_paths {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(format!("Invalid --tool-path '{entry}'. Expected format key=value").into());
+        };
+
+        if key.is_empty() || value.is_empty() {
+            return Err(format!(
+                "Invalid --tool-path '{entry}'. Tool name and value must be non-empty"
+            )
+            .into());
+        }
+
+        if !KNOWN_TOOL_NAMES.iter().any(|name| name == &key) {
+            return Err(format!(
+                "Unknown tool '{key}' in --tool-path. Supported tools: {}",
+                KNOWN_TOOL_NAMES.join(", ")
+            )
+            .into());
+        }
+
+        overrides.insert(key.to_string(), value.to_string());
+    }
+
+    Ok(overrides)
+}
+
 fn merge_unique_strings(target: &mut Vec<String>, source: &[String]) {
     for value in source {
         if !target.iter().any(|existing| existing == value) {
@@ -95,8 +141,15 @@ pub fn build_tools_config(
     skip: Option<&[String]>,
     explicit_tools: Option<&[String]>,
     no_runner_fallback: bool,
+    tool_paths: &[String],
 ) -> Result<ToolsConfig, BoxError> {
     let mut config = load_tools_config(working_dir)?;
+
+    let cli_path_overrides = parse_tool_path_overrides(tool_paths)?;
+
+    for (name, path) in cli_path_overrides {
+        config.paths.insert(name, path);
+    }
 
     if no_runner_fallback {
         config.runner_fallback = false;
@@ -213,6 +266,8 @@ pub fn auto_detect_check_tools(
     let has_setup_py = has_file(&base_dir, "setup.py");
     let has_go_mod = has_file(&base_dir, "go.mod");
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
+    let has_dprint_config =
+        has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
     let has_shellcheck_config = has_file(&base_dir, ".shellcheckrc");
 
     let mut tools = Vec::new();
@@ -240,6 +295,10 @@ pub fn auto_detect_check_tools(
 
     if has_taplo_config {
         tools.push("taplo".to_string());
+    }
+
+    if has_dprint_config {
+        tools.push("dprint".to_string());
     }
 
     if has_shellcheck_config {
@@ -273,6 +332,8 @@ pub fn auto_detect_fmt_tools(
     let has_setup_py = has_file(&base_dir, "setup.py");
     let has_go_mod = has_file(&base_dir, "go.mod");
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
+    let has_dprint_config =
+        has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
     let has_shfmt_config = has_file(&base_dir, ".shfmt.conf");
 
     let mut tools = Vec::new();
@@ -301,6 +362,10 @@ pub fn auto_detect_fmt_tools(
 
     if has_taplo_config {
         tools.push("taplo".to_string());
+    }
+
+    if has_dprint_config {
+        tools.push("dprint".to_string());
     }
 
     if has_shfmt_config {
@@ -358,7 +423,7 @@ mod tests {
         let required = vec!["taplo".to_string(), "rustfmt".to_string()];
         let skip = vec!["shellcheck".to_string(), "gofmt".to_string()];
 
-        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None, false)
+        let merged = build_tools_config(Some(&dir), Some(&required), Some(&skip), None, false, &[])
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt", "taplo"]);
@@ -375,7 +440,7 @@ mod tests {
             .expect("failed to write clippier.toml");
 
         let explicit = vec!["gofmt".to_string()];
-        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false)
+        let merged = build_tools_config(Some(&dir), None, None, Some(&explicit), false, &[])
             .expect("failed to build tools config");
 
         assert_eq!(merged.skip, vec!["taplo"]);
@@ -396,6 +461,7 @@ mod tests {
             .expect("failed to write requirements.txt");
         std::fs::write(dir.join("go.mod"), "module example.com/x\n")
             .expect("failed to write go.mod");
+        std::fs::write(dir.join("dprint.json"), "{}\n").expect("failed to write dprint.json");
 
         let check_tools =
             auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
@@ -407,6 +473,7 @@ mod tests {
         assert!(check_tools.contains(&"ruff".to_string()));
         assert!(check_tools.contains(&"black".to_string()));
         assert!(check_tools.contains(&"gofmt".to_string()));
+        assert!(check_tools.contains(&"dprint".to_string()));
 
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
         assert!(fmt_tools.contains(&"rustfmt".to_string()));
@@ -415,6 +482,7 @@ mod tests {
         assert!(fmt_tools.contains(&"ruff".to_string()));
         assert!(fmt_tools.contains(&"black".to_string()));
         assert!(fmt_tools.contains(&"gofmt".to_string()));
+        assert!(fmt_tools.contains(&"dprint".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
@@ -486,7 +554,7 @@ mod tests {
         )
         .expect("failed to write clippier.toml");
 
-        let merged = build_tools_config(Some(&dir), None, None, None, false)
+        let merged = build_tools_config(Some(&dir), None, None, None, false, &[])
             .expect("failed to build merged tools config");
 
         assert_eq!(merged.required, vec!["rustfmt"]);
@@ -498,10 +566,49 @@ mod tests {
     #[test]
     fn build_tools_config_disables_runner_fallback_with_cli_override() {
         let dir = temp_dir("clippier-tools-runner-fallback-override");
-        let merged = build_tools_config(Some(&dir), None, None, None, true)
+        let merged = build_tools_config(Some(&dir), None, None, None, true, &[])
             .expect("failed to build merged tools config");
 
         assert!(!merged.runner_fallback);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn build_tools_config_tool_path_cli_overrides_config_and_validates_tool_names() {
+        let dir = temp_dir("clippier-tools-path-override");
+        let config_path = dir.join("clippier.toml");
+        std::fs::write(
+            &config_path,
+            "[tools.paths]\nprettier=\"/from/config/prettier\"\n",
+        )
+        .expect("failed to write clippier.toml");
+
+        let merged = build_tools_config(
+            Some(&dir),
+            None,
+            None,
+            None,
+            false,
+            &["prettier=/from/cli/prettier".to_string()],
+        )
+        .expect("failed to build merged tools config");
+
+        assert_eq!(
+            merged.paths.get("prettier"),
+            Some(&"/from/cli/prettier".to_string())
+        );
+
+        let err = build_tools_config(
+            Some(&dir),
+            None,
+            None,
+            None,
+            false,
+            &["unknown=/tmp/tool".to_string()],
+        )
+        .expect_err("expected unknown tool path override to fail");
+        assert!(err.to_string().contains("Unknown tool 'unknown'"));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

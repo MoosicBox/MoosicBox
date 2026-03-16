@@ -10,6 +10,7 @@ enum ToolResolution {
     Runner {
         runner: String,
         runner_args: Vec<String>,
+        tool_binary: String,
     },
 }
 
@@ -90,6 +91,7 @@ impl ToolRegistry {
         None
     }
 
+    #[allow(clippy::too_many_lines)]
     fn resolve_preferred_tool(
         name: &str,
         tool: &Tool,
@@ -114,6 +116,7 @@ impl ToolRegistry {
                     return Some(ToolResolution::Runner {
                         runner: "bunx".to_string(),
                         runner_args: vec![],
+                        tool_binary: "prettier".to_string(),
                     });
                 }
 
@@ -121,6 +124,7 @@ impl ToolRegistry {
                     return Some(ToolResolution::Runner {
                         runner: "pnpm".to_string(),
                         runner_args: vec!["dlx".to_string()],
+                        tool_binary: "prettier".to_string(),
                     });
                 }
 
@@ -128,16 +132,128 @@ impl ToolRegistry {
                     return Some(ToolResolution::Runner {
                         runner: "npx".to_string(),
                         runner_args: vec!["--yes".to_string()],
+                        tool_binary: "prettier".to_string(),
                     });
                 }
 
                 None
             }
-            "biome" | "eslint" => {
+            "biome" => {
                 if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
                     return Some(ToolResolution::Binary(path));
                 }
-                which::which(&tool.binary).ok().map(ToolResolution::Binary)
+
+                if let Ok(path) = which::which(&tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if which::which("bunx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "bunx".to_string(),
+                        runner_args: vec![],
+                        tool_binary: "@biomejs/biome".to_string(),
+                    });
+                }
+
+                if which::which("pnpm").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "pnpm".to_string(),
+                        runner_args: vec!["dlx".to_string()],
+                        tool_binary: "@biomejs/biome".to_string(),
+                    });
+                }
+
+                if which::which("npx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "npx".to_string(),
+                        runner_args: vec!["--yes".to_string()],
+                        tool_binary: "@biomejs/biome".to_string(),
+                    });
+                }
+
+                None
+            }
+            "eslint" => {
+                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if let Ok(path) = which::which(&tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if which::which("bunx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "bunx".to_string(),
+                        runner_args: vec![],
+                        tool_binary: "eslint".to_string(),
+                    });
+                }
+
+                if which::which("pnpm").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "pnpm".to_string(),
+                        runner_args: vec!["dlx".to_string()],
+                        tool_binary: "eslint".to_string(),
+                    });
+                }
+
+                if which::which("npx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "npx".to_string(),
+                        runner_args: vec!["--yes".to_string()],
+                        tool_binary: "eslint".to_string(),
+                    });
+                }
+
+                None
+            }
+            "dprint" => {
+                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if let Ok(path) = which::which(&tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                if which::which("bunx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "bunx".to_string(),
+                        runner_args: vec![],
+                        tool_binary: "dprint".to_string(),
+                    });
+                }
+
+                if which::which("pnpm").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "pnpm".to_string(),
+                        runner_args: vec!["dlx".to_string()],
+                        tool_binary: "dprint".to_string(),
+                    });
+                }
+
+                if which::which("npx").is_ok() {
+                    return Some(ToolResolution::Runner {
+                        runner: "npx".to_string(),
+                        runner_args: vec!["--yes".to_string()],
+                        tool_binary: "dprint".to_string(),
+                    });
+                }
+
+                None
             }
             _ => which::which(&tool.binary).ok().map(ToolResolution::Binary),
         }
@@ -228,6 +344,17 @@ impl ToolRegistry {
             vec![ToolCapability::Lint],
             vec![".".to_string()],
             vec!["--fix".to_string(), ".".to_string()],
+        ));
+
+        // Dprint
+        self.register(Tool::new(
+            "dprint",
+            "Dprint",
+            "dprint",
+            ToolKind::Binary,
+            vec![ToolCapability::Format, ToolCapability::Lint],
+            vec!["check".to_string()],
+            vec!["fmt".to_string()],
         ));
 
         // Python - Ruff
@@ -324,6 +451,7 @@ impl ToolRegistry {
                     ToolResolution::Runner {
                         runner,
                         runner_args,
+                        tool_binary,
                     } => {
                         log::debug!("Tool '{name}' will run via runner: {runner} {runner_args:?}");
                         let mut available_tool = tool.clone();
@@ -331,6 +459,7 @@ impl ToolRegistry {
                             runner,
                             runner_args,
                         };
+                        available_tool.binary = tool_binary;
                         available_tool
                     }
                 };
@@ -530,16 +659,20 @@ mod tests {
             ToolResolution::Runner {
                 runner,
                 runner_args,
+                tool_binary,
             } => {
                 if which::which("bunx").is_ok() {
                     assert_eq!(runner, "bunx");
                     assert!(runner_args.is_empty());
+                    assert_eq!(tool_binary, "prettier");
                 } else if which::which("pnpm").is_ok() {
                     assert_eq!(runner, "pnpm");
                     assert_eq!(runner_args, vec!["dlx"]);
+                    assert_eq!(tool_binary, "prettier");
                 } else if which::which("npx").is_ok() {
                     assert_eq!(runner, "npx");
-                    assert!(runner_args.is_empty());
+                    assert_eq!(runner_args, vec!["--yes"]);
+                    assert_eq!(tool_binary, "prettier");
                 } else {
                     panic!("expected at least one runner in test environment");
                 }
