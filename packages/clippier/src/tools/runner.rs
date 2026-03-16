@@ -790,6 +790,211 @@ impl<'a> ToolRunner<'a> {
         }
     }
 
+    fn remark_check_output_dir() -> Result<PathBuf, std::io::Error> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let dir = std::env::temp_dir().join(format!(
+            "clippier-remark-check-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    fn collect_remark_markdown_outputs(
+        root: &Path,
+        current: &Path,
+        outputs: &mut Vec<PathBuf>,
+    ) -> Result<(), std::io::Error> {
+        for entry in std::fs::read_dir(current)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                Self::collect_remark_markdown_outputs(root, &path, outputs)?;
+                continue;
+            }
+
+            let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if extension != "md" && extension != "mdx" {
+                continue;
+            }
+
+            if let Ok(relative) = path.strip_prefix(root) {
+                outputs.push(relative.to_path_buf());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn append_or_replace_remark_output_arg(args: &mut Vec<String>, output_dir: &Path) {
+        let output_value = output_dir.display().to_string();
+        if let Some(index) = args.iter().position(|arg| arg == "--output" || arg == "-o") {
+            if args.get(index + 1).is_none_or(|next| next.starts_with('-')) {
+                args.insert(index + 1, output_value);
+            } else {
+                args[index + 1] = output_value;
+            }
+            return;
+        }
+
+        args.push("--output".to_string());
+        args.push(output_value);
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn run_remark_strict_check(&self, tool: &Tool, start_time: Instant) -> ToolResult {
+        let args = &tool.format_args;
+        if args.is_empty() {
+            return ToolResult::success(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                Duration::ZERO,
+            );
+        }
+
+        let working_dir = self.working_dir.map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
+            Path::to_path_buf,
+        );
+
+        let output_dir = match Self::remark_check_output_dir() {
+            Ok(path) => path,
+            Err(error) => {
+                return ToolResult::failure(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    None,
+                    String::new(),
+                    format!("Failed to create temporary directory for remark check: {error}"),
+                    start_time.elapsed(),
+                );
+            }
+        };
+
+        let (program, mut final_args) = match &tool.kind {
+            ToolKind::Cargo => ("cargo".to_string(), args.clone()),
+            ToolKind::Binary => {
+                let binary = tool
+                    .detected_path
+                    .as_ref()
+                    .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
+                (binary, args.clone())
+            }
+            ToolKind::Runner {
+                runner,
+                runner_args,
+            } => {
+                let mut all_args = runner_args.clone();
+                all_args.push(tool.binary.clone());
+                all_args.extend(args.clone());
+                (runner.clone(), all_args)
+            }
+        };
+
+        Self::append_or_replace_remark_output_arg(&mut final_args, &output_dir);
+
+        let mut command = Command::new(&program);
+        command.args(&final_args);
+        command.current_dir(&working_dir);
+        Self::apply_color_env(&mut command, self.effective_color_mode());
+
+        let output = match command.output() {
+            Ok(output) => output,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&output_dir);
+                return ToolResult::failure(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    None,
+                    String::new(),
+                    format!("Failed to execute strict remark check: {error}"),
+                    start_time.elapsed(),
+                );
+            }
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        if !output.status.success() {
+            let _ = std::fs::remove_dir_all(&output_dir);
+            return ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                output.status.code(),
+                stdout,
+                stderr,
+                start_time.elapsed(),
+            );
+        }
+
+        let mut generated = Vec::new();
+        if let Err(error) =
+            Self::collect_remark_markdown_outputs(&output_dir, &output_dir, &mut generated)
+        {
+            let _ = std::fs::remove_dir_all(&output_dir);
+            return ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                None,
+                stdout,
+                format!("Failed to inspect strict remark output: {error}"),
+                start_time.elapsed(),
+            );
+        }
+
+        generated.sort();
+
+        let mut changed = Vec::new();
+        for relative in &generated {
+            let formatted_path = output_dir.join(relative);
+            let source_path = working_dir.join(relative);
+
+            let formatted = std::fs::read(&formatted_path).ok();
+            let source = std::fs::read(&source_path).ok();
+            if formatted.as_deref() != source.as_deref() {
+                changed.push(relative.display().to_string());
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&output_dir);
+
+        if changed.is_empty() {
+            return ToolResult::success(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                start_time.elapsed(),
+            );
+        }
+
+        let sample = changed
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n  - ");
+        let extra = if changed.len() > 10 {
+            format!("\n  ... and {} more", changed.len() - 10)
+        } else {
+            String::new()
+        };
+
+        ToolResult::failure(
+            tool.name.clone(),
+            tool.display_name.clone(),
+            Some(1),
+            stdout,
+            format!(
+                "remark strict check found {} file(s) requiring formatting:\n  - {sample}{extra}",
+                changed.len()
+            ),
+            start_time.elapsed(),
+        )
+    }
+
     #[cfg(feature = "tools-tui")]
     fn emit_tool_line_event(
         tx: &mpsc::Sender<ToolEvent>,
@@ -891,6 +1096,33 @@ impl<'a> ToolRunner<'a> {
         cancel_requested: &Arc<AtomicBool>,
     ) -> ToolResult {
         let start_time = Instant::now();
+
+        if check_mode && tool.name == "remark" {
+            let _ = tx.send(ToolEvent::Started {
+                tool_name: tool.name.clone(),
+                display_name: tool.display_name.clone(),
+            });
+            let result = self.run_remark_strict_check(tool, start_time);
+            for line in result.stdout.lines() {
+                let _ = tx.send(ToolEvent::StdoutLine {
+                    tool_name: tool.name.clone(),
+                    line: line.to_string(),
+                    overwrite: false,
+                });
+            }
+            for line in result.stderr.lines() {
+                let _ = tx.send(ToolEvent::StderrLine {
+                    tool_name: tool.name.clone(),
+                    line: line.to_string(),
+                    overwrite: false,
+                });
+            }
+            let _ = tx.send(ToolEvent::Finished {
+                tool_name: tool.name.clone(),
+                success: result.success,
+            });
+            return result;
+        }
 
         let Some((program, final_args, warnings)) =
             Self::build_command_parts(tool, check_mode, self.working_dir)
@@ -1046,6 +1278,10 @@ impl<'a> ToolRunner<'a> {
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
         let start_time = Instant::now();
+
+        if check_mode && tool.name == "remark" {
+            return self.run_remark_strict_check(tool, start_time);
+        }
 
         let args = if check_mode {
             &tool.check_args
@@ -1223,6 +1459,10 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool with buffered output (for parallel execution)
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
         let start_time = Instant::now();
+
+        if check_mode && tool.name == "remark" {
+            return self.run_remark_strict_check(tool, start_time);
+        }
 
         let args = if check_mode {
             &tool.check_args
@@ -1429,7 +1669,7 @@ pub fn results_to_json(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ToolCapability;
+    use crate::tools::{ToolCapability, ToolsConfig};
     #[cfg(feature = "tools-tui")]
     use std::io::Cursor;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -1544,6 +1784,84 @@ mod tests {
             args.get(ignore_flag_index + 1)
                 .is_some_and(|v| v.ends_with(".prettierignore"))
         );
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn remark_strict_check_fails_when_formatted_output_differs() {
+        let dir = temp_dir("clippier-remark-strict-check-fail");
+        std::fs::write(dir.join("README.md"), "- bad\n").expect("failed to write README.md");
+
+        let formatter_script = dir.join("remark_formatter.py");
+        std::fs::write(
+            &formatter_script,
+            "import pathlib\nimport sys\nargs = sys.argv[1:]\nout = None\nfor i, arg in enumerate(args):\n    if arg in ('--output', '-o') and i + 1 < len(args):\n        out = args[i + 1]\n        break\nif out is None:\n    sys.exit(2)\nroot = pathlib.Path('.')\nfor path in root.rglob('*.md'):\n    rel = path.relative_to(root)\n    target = pathlib.Path(out) / rel\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_text(path.read_text().replace('bad', 'good'))\n",
+        )
+        .expect("failed to write remark formatter script");
+
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(&dir))
+            .expect("failed to create registry");
+        let runner = ToolRunner::new(&registry).with_working_dir(&dir);
+
+        let tool = Tool::new(
+            "remark",
+            "remark",
+            "python3",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![".".to_string()],
+            vec![
+                formatter_script.display().to_string(),
+                ".".to_string(),
+                "--output".to_string(),
+                "--ext".to_string(),
+                "md,mdx".to_string(),
+            ],
+        );
+
+        let result = runner.run_remark_strict_check(&tool, Instant::now());
+        assert!(!result.success);
+        assert!(result.stderr.contains("requiring formatting"));
+        assert!(result.stderr.contains("README.md"));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn remark_strict_check_passes_when_formatted_output_matches() {
+        let dir = temp_dir("clippier-remark-strict-check-pass");
+        std::fs::write(dir.join("README.md"), "- stable\n").expect("failed to write README.md");
+
+        let formatter_script = dir.join("remark_formatter.py");
+        std::fs::write(
+            &formatter_script,
+            "import pathlib\nimport sys\nargs = sys.argv[1:]\nout = None\nfor i, arg in enumerate(args):\n    if arg in ('--output', '-o') and i + 1 < len(args):\n        out = args[i + 1]\n        break\nif out is None:\n    sys.exit(2)\nroot = pathlib.Path('.')\nfor path in root.rglob('*.md'):\n    rel = path.relative_to(root)\n    target = pathlib.Path(out) / rel\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_text(path.read_text())\n",
+        )
+        .expect("failed to write remark formatter script");
+
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(&dir))
+            .expect("failed to create registry");
+        let runner = ToolRunner::new(&registry).with_working_dir(&dir);
+
+        let tool = Tool::new(
+            "remark",
+            "remark",
+            "python3",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![".".to_string()],
+            vec![
+                formatter_script.display().to_string(),
+                ".".to_string(),
+                "--output".to_string(),
+                "--ext".to_string(),
+                "md,mdx".to_string(),
+            ],
+        );
+
+        let result = runner.run_remark_strict_check(&tool, Instant::now());
+        assert!(result.success);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

@@ -1,0 +1,7 @@
+**/node_modules/**
+**/target/**
+**/dist/**
+**/gen/**
+**/.direnv/**
+packages/opus_native/libopus/**
+kubernetes/cert-manager.yaml

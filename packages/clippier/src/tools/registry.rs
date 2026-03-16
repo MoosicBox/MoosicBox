@@ -394,6 +394,28 @@ impl ToolRegistry {
         None
     }
 
+    fn remark_runner_resolution() -> Option<ToolResolution> {
+        if which::which("npx").is_ok() {
+            return Some(ToolResolution::Runner {
+                runner: "npx".to_string(),
+                runner_args: vec![
+                    "--yes".to_string(),
+                    "--package".to_string(),
+                    "remark-cli".to_string(),
+                    "--package".to_string(),
+                    "remark-frontmatter".to_string(),
+                    "--package".to_string(),
+                    "remark-gfm".to_string(),
+                    "--package".to_string(),
+                    "remark-mdx".to_string(),
+                ],
+                tool_binary: "remark".to_string(),
+            });
+        }
+
+        None
+    }
+
     fn nix_runner_resolution(packages: &[String], binary: &str) -> ToolResolution {
         let mut runner_args = vec!["shell".to_string()];
         runner_args.extend(packages.iter().cloned());
@@ -474,6 +496,21 @@ impl ToolRegistry {
                 }
 
                 Self::node_runner_resolution("dprint")
+            }
+            "remark" => {
+                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if let Ok(path) = which::which(&tool.binary) {
+                    return Some(ToolResolution::Binary(path));
+                }
+
+                if !runner_fallback {
+                    return None;
+                }
+
+                Self::remark_runner_resolution()
             }
             "mdformat" => {
                 let requested_extensions = Self::parse_mdformat_requested_extensions(base_dir);
@@ -733,6 +770,22 @@ impl ToolRegistry {
             vec![ToolCapability::Format, ToolCapability::Lint],
             vec!["check".to_string()],
             vec!["fmt".to_string()],
+        ));
+
+        // Markdown/MDX - remark
+        self.register(Tool::new(
+            "remark",
+            "remark",
+            "remark",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![".".to_string(), "--ext".to_string(), "md,mdx".to_string()],
+            vec![
+                ".".to_string(),
+                "--output".to_string(),
+                "--ext".to_string(),
+                "md,mdx".to_string(),
+            ],
         ));
 
         // Markdown - mdformat

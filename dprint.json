@@ -1,8 +1,6 @@
 {
     "indentWidth": 4,
     "includes": [
-        "**/*.md",
-        "**/*.mdx",
         "**/*.yml",
         "**/*.yaml"
     ],
@@ -18,7 +16,6 @@
         "kubernetes/cert-manager.yaml"
     ],
     "plugins": [
-        "https://plugins.dprint.dev/markdown-0.21.1.wasm",
         "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"
     ]
 }

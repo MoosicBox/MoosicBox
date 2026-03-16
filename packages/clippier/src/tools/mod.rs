@@ -80,6 +80,7 @@ const KNOWN_TOOL_NAMES: &[&str] = &[
     "biome",
     "eslint",
     "dprint",
+    "remark",
     "mdformat",
     "yamlfmt",
     "ruff",
@@ -449,6 +450,12 @@ fn effective_extensions_for_tool(
         return extensions;
     }
 
+    if normalized == "dprint"
+        && let Some(dprint_extensions) = parse_dprint_include_extensions(base_dir)
+    {
+        return dprint_extensions;
+    }
+
     default_extensions_for_tool(&tool.name, capability)
 }
 
@@ -541,6 +548,50 @@ fn query_prettier_support_info_extensions(
     parse_prettier_support_info_extensions(&stdout)
 }
 
+fn parse_dprint_include_extensions(
+    base_dir: &std::path::Path,
+) -> Option<std::collections::BTreeSet<String>> {
+    let config_path = if base_dir.join("dprint.json").exists() {
+        base_dir.join("dprint.json")
+    } else if base_dir.join("dprint.jsonc").exists() {
+        // `serde_json` doesn't parse JSONC; keep fallback behavior for this case.
+        return None;
+    } else {
+        return None;
+    };
+
+    let contents = std::fs::read_to_string(config_path).ok()?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&contents).ok()?;
+    let includes = parsed.get("includes")?.as_array()?;
+
+    let mut extensions = std::collections::BTreeSet::new();
+    for value in includes {
+        let Some(pattern) = value.as_str() else {
+            continue;
+        };
+
+        if let Some(extension) = pattern.rsplit_once("*.").map(|(_, ext)| ext)
+            && !extension.contains('/')
+            && !extension.contains('{')
+            && !extension.contains('}')
+            && !extension.contains(',')
+            && !extension.contains('*')
+            && !extension.contains('?')
+        {
+            let normalized = normalize_extension(extension);
+            if !normalized.is_empty() {
+                extensions.insert(normalized);
+            }
+        }
+    }
+
+    if extensions.is_empty() {
+        None
+    } else {
+        Some(extensions)
+    }
+}
+
 fn default_extensions_for_tool(
     tool_name: &str,
     capability: ToolCapability,
@@ -558,6 +609,7 @@ fn default_extensions_for_tool(
                 "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
             ],
             "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
+            "remark" => &["md", "mdx"],
             "mdformat" => &["md"],
             "yamlfmt" => &["yaml", "yml"],
             "ruff" | "black" => &["py", "pyi", "ipynb"],
@@ -842,6 +894,18 @@ pub fn auto_detect_check_tools(
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
+    let has_remark_config = [
+        ".remarkrc",
+        ".remarkrc.json",
+        ".remarkrc.yml",
+        ".remarkrc.yaml",
+        ".remarkrc.js",
+        ".remarkrc.cjs",
+        ".remarkrc.mjs",
+        ".remarkignore",
+    ]
+    .iter()
+    .any(|path| has_file_in_ancestors(&base_dir, path));
     let has_shellcheck_config = has_file(&base_dir, ".shellcheckrc");
 
     let mut tools = Vec::new();
@@ -872,6 +936,10 @@ pub fn auto_detect_check_tools(
 
     if has_dprint_config {
         tools.push("dprint".to_string());
+    }
+
+    if has_remark_config {
+        tools.push("remark".to_string());
     }
 
     if has_shellcheck_config {
@@ -907,6 +975,18 @@ pub fn auto_detect_fmt_tools(
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
+    let has_remark_config = [
+        ".remarkrc",
+        ".remarkrc.json",
+        ".remarkrc.yml",
+        ".remarkrc.yaml",
+        ".remarkrc.js",
+        ".remarkrc.cjs",
+        ".remarkrc.mjs",
+        ".remarkignore",
+    ]
+    .iter()
+    .any(|path| has_file_in_ancestors(&base_dir, path));
     let has_shfmt_config = has_file(&base_dir, ".shfmt.conf");
 
     let mut tools = Vec::new();
@@ -935,6 +1015,10 @@ pub fn auto_detect_fmt_tools(
 
     if has_dprint_config {
         tools.push("dprint".to_string());
+    }
+
+    if has_remark_config {
+        tools.push("remark".to_string());
     }
 
     if has_shfmt_config {
@@ -1128,6 +1212,40 @@ mod tests {
 
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
         assert!(!fmt_tools.contains(&"mdformat".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_include_remark_when_remark_config_exists() {
+        let dir = temp_dir("clippier-auto-detect-remark");
+        std::fs::write(dir.join(".remarkrc.yml"), "plugins: []\n")
+            .expect("failed to write .remarkrc.yml");
+
+        let check_tools =
+            auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+
+        assert!(check_tools.contains(&"remark".to_string()));
+        assert!(fmt_tools.contains(&"remark".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_include_remark_from_ancestor_config() {
+        let dir = temp_dir("clippier-auto-detect-remark-ancestor");
+        std::fs::write(dir.join(".remarkrc.yml"), "plugins: []\n")
+            .expect("failed to write .remarkrc.yml");
+        let nested = dir.join("docs").join("nested");
+        std::fs::create_dir_all(&nested).expect("failed to create nested dir");
+
+        let check_tools =
+            auto_detect_check_tools(Some(&nested)).expect("failed to detect check tools");
+        let fmt_tools = auto_detect_fmt_tools(Some(&nested)).expect("failed to detect fmt tools");
+
+        assert!(check_tools.contains(&"remark".to_string()));
+        assert!(fmt_tools.contains(&"remark".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
