@@ -2,7 +2,7 @@
 packages/opus_native/libopus/opus/
 packages/app/tauri/tauri-plugin-player/permissions/
 sst-env.d.ts
-app-website/**/*
+/app-website/
 pnpm-lock.yaml
 dist/
 gen/
@@ -10,4 +10,6 @@ node_modules/
 src-tauri/
 package-lock.json
 test-resources/
-wix/**/*.wxs
+**/wix/**/*.wxs
+target/
+kubernetes/cert-manager.yaml
