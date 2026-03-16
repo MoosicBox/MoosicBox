@@ -41,6 +41,7 @@ moosicbox_app_native_image = { path = "../app/native/image" }
 
 ```rust
 use moosicbox_app_native_image::{Asset, get_asset_arc_bytes};
+use rust_embed::RustEmbed;
 
 // Get an embedded asset
 let asset = Asset::get("/public/logo.png").unwrap();
