@@ -302,15 +302,15 @@ let conn2 = Connection::open_in_memory()?;
 
 **Issue**: DuckDB reports types differently than other backends in `information_schema.columns`.
 
-| DuckDB Type | Mapped `DataType` | Notes |
-| --- | --- | --- |
-| `INTEGER` | `Int` | 32-bit (not 64-bit like some expect) |
-| `BIGINT` | `BigInt` | 64-bit |
-| `VARCHAR` | `VarChar(n)` | Includes length |
-| `BOOLEAN` | `Bool` | Native boolean type |
-| `HUGEINT` | Lossy → `String` | 128-bit integer, no direct mapping |
-| `LIST`, `STRUCT`, `MAP` | Lossy → `Null` | Complex types logged as warnings |
-| `INTERVAL` | Lossy → `String` | Converted to human-readable string |
+| DuckDB Type             | Mapped `DataType` | Notes                                |
+| ----------------------- | ----------------- | ------------------------------------ |
+| `INTEGER`               | `Int`             | 32-bit (not 64-bit like some expect) |
+| `BIGINT`                | `BigInt`          | 64-bit                               |
+| `VARCHAR`               | `VarChar(n)`      | Includes length                      |
+| `BOOLEAN`               | `Bool`            | Native boolean type                  |
+| `HUGEINT`               | Lossy → `String`  | 128-bit integer, no direct mapping   |
+| `LIST`, `STRUCT`, `MAP` | Lossy → `Null`    | Complex types logged as warnings     |
+| `INTERVAL`              | Lossy → `String`  | Converted to human-readable string   |
 
 **Lossy Conversions**: DuckDB types without a direct `DatabaseValue` mapping are converted with a warning log. `HUGEINT` and `UHUGEINT` become strings, `LIST`/`STRUCT`/`MAP`/`UNION` become `Null`.
 
@@ -326,10 +326,10 @@ let conn2 = Connection::open_in_memory()?;
 
 **Issue**: Same DataType enum maps to different native types across backends.
 
-| DataType | SQLite             | PostgreSQL              | MySQL         | DuckDB                   |
-| -------- | ------------------ | ----------------------- | ------------- | ------------------------ |
-| `Real`   | 64-bit REAL        | 32-bit REAL             | 32-bit FLOAT  | 32-bit FLOAT             |
-| `Double` | N/A (maps to Real) | 64-bit DOUBLE PRECISION | 64-bit DOUBLE | 64-bit DOUBLE            |
+| DataType | SQLite             | PostgreSQL              | MySQL         | DuckDB        |
+| -------- | ------------------ | ----------------------- | ------------- | ------------- |
+| `Real`   | 64-bit REAL        | 32-bit REAL             | 32-bit FLOAT  | 32-bit FLOAT  |
+| `Double` | N/A (maps to Real) | 64-bit DOUBLE PRECISION | 64-bit DOUBLE | 64-bit DOUBLE |
 
 **Solution**: Be aware of precision differences when migrating between backends.
 

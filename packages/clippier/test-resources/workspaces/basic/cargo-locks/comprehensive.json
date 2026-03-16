@@ -17,9 +17,7 @@
             "name": "tokio",
             "version": "1.35.0",
             "source": "registry+https://github.com/rust-lang/crates.io-index",
-            "dependencies": [
-                "pin-project-lite 0.2.0"
-            ]
+            "dependencies": ["pin-project-lite 0.2.0"]
         },
         {
             "name": "pin-project-lite",
@@ -41,10 +39,7 @@
             "name": "serde_json",
             "version": "1.0.111",
             "source": "registry+https://github.com/rust-lang/crates.io-index",
-            "dependencies": [
-                "serde 1.0.195",
-                "itoa 1.0.0"
-            ]
+            "dependencies": ["serde 1.0.195", "itoa 1.0.0"]
         },
         {
             "name": "itoa",
@@ -67,18 +62,13 @@
             "name": "client",
             "version": "0.1.0",
             "source": null,
-            "dependencies": [
-                "models 0.1.0",
-                "reqwest 0.11.24"
-            ]
+            "dependencies": ["models 0.1.0", "reqwest 0.11.24"]
         },
         {
             "name": "models",
             "version": "0.1.0",
             "source": null,
-            "dependencies": [
-                "serde 1.0.195"
-            ]
+            "dependencies": ["serde 1.0.195"]
         }
     ]
 }

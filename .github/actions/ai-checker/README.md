@@ -150,9 +150,9 @@ jobs:
 
 ### Required
 
-| Input          | Description                                                 |
-| -------------- | ----------------------------------------------------------- |
-| `github_token` | GitHub token with write permissions (required for all)      |
+| Input                    | Description                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `github_token`           | GitHub token with write permissions (required for all)                                                                   |
 | `OPENCODE_AUTH_JSON_B64` | Base64-encoded OpenCode auth payload in env/secrets (optional if `~/.local/share/opencode/auth.json` is already present) |
 
 ### Prompt Template (required for `check` command)
@@ -168,39 +168,39 @@ jobs:
 | Input             | Description                           | Default                   |
 | ----------------- | ------------------------------------- | ------------------------- |
 | `branch_name`     | Branch name (auto-generated if empty) |                           |
-| `branch_prefix`   | Branch prefix for auto-generation     | `ai-updates`          |
+| `branch_prefix`   | Branch prefix for auto-generation     | `ai-updates`              |
 | `existing_branch` | Use existing branch if it exists      | `true`                    |
 | `git_user_name`   | Git user name for commits             | `github-actions[bot]`     |
 | `git_user_email`  | Git user email                        | `github-actions[bot]@...` |
 
 ### PR Creation (`create-pr` command)
 
-| Input                   | Description                          | Default                            |
-| ----------------------- | ------------------------------------ | ---------------------------------- |
-| `branch_name`           | Branch name (required for create-pr) |                                    |
-| `pr_base_branch`        | Base branch for PR                   | `master`                           |
+| Input                   | Description                          | Default                        |
+| ----------------------- | ------------------------------------ | ------------------------------ |
+| `branch_name`           | Branch name (required for create-pr) |                                |
+| `pr_base_branch`        | Base branch for PR                   | `master`                       |
 | `pr_title`              | PR title (supports ${variables})     | `📝 Automated updates from AI` |
-| `pr_body`               | PR body (supports ${variables})      | `""`                               |
-| `pr_labels`             | Comma-separated PR labels            | `automated`                        |
-| `pr_skip_if_no_changes` | Skip PR creation if no changes       | `true`                             |
+| `pr_body`               | PR body (supports ${variables})      | `""`                           |
+| `pr_labels`             | Comma-separated PR labels            | `automated`                    |
+| `pr_skip_if_no_changes` | Skip PR creation if no changes       | `true`                         |
 
 ### Optional (`check` command)
 
-| Input                              | Description                                                              | Default                           |
-| ---------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
-| `template_vars`                    | YAML/JSON object of variables                                            | `{}`                              |
-| `verification_profile`             | Built-in profile: `auto`, `rust`, `typescript`, `python`, `go`, `custom` | `auto`                            |
+| Input                              | Description                                                              | Default                       |
+| ---------------------------------- | ------------------------------------------------------------------------ | ----------------------------- |
+| `template_vars`                    | YAML/JSON object of variables                                            | `{}`                          |
+| `verification_profile`             | Built-in profile: `auto`, `rust`, `typescript`, `python`, `go`, `custom` | `auto`                        |
 | `verification_config_file`         | Path to verification config YAML                                         | `.github/ai-verification.yml` |
-| `verification_config_inline`       | Inline verification config (YAML)                                        |                                   |
-| `branch_name`                      | Branch to commit to (overrides template default)                         |                                   |
-| `commit_message`                   | Commit message (supports template variables)                             |                                   |
-| `auto_commit`                      | Automatically commit changes                                             | `true`                            |
-| `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                           |
+| `verification_config_inline`       | Inline verification config (YAML)                                        |                               |
+| `branch_name`                      | Branch to commit to (overrides template default)                         |                               |
+| `commit_message`                   | Commit message (supports template variables)                             |                               |
+| `auto_commit`                      | Automatically commit changes                                             | `true`                        |
+| `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                       |
 | `summary_title`                    | Title for workflow summary section                                       | `💭 AI Execution Details`     |
-| `model`                            | Model                                                             |                                   |
-| `max_turns`                        | Max turns                                                                |                                   |
-| `model_args`                      | Additional model arguments                                         |                                   |
-| `working_directory`                | Working directory                                                        | `.`                               |
+| `model`                            | Model                                                                    |                               |
+| `max_turns`                        | Max turns                                                                |                               |
+| `model_args`                       | Additional model arguments                                               |                               |
+| `working_directory`                | Working directory                                                        | `.`                           |
 
 ## Outputs
 
