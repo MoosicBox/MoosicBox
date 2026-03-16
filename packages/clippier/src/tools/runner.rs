@@ -516,14 +516,14 @@ impl<'a> ToolRunner<'a> {
             return None;
         }
 
-        let mut parts = match &tool.kind {
-            ToolKind::Cargo => ("cargo".to_string(), args.clone()),
+        let (mut parts, args_start_index) = match &tool.kind {
+            ToolKind::Cargo => (("cargo".to_string(), args.clone()), 0),
             ToolKind::Binary => {
                 let binary = tool
                     .detected_path
                     .as_ref()
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
-                (binary, args.clone())
+                ((binary, args.clone()), 0)
             }
             ToolKind::Runner {
                 runner,
@@ -532,11 +532,11 @@ impl<'a> ToolRunner<'a> {
                 let mut all_args = runner_args.clone();
                 all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
-                (runner.clone(), all_args)
+                ((runner.clone(), all_args), runner_args.len() + 1)
             }
         };
 
-        Self::append_prettier_ignore_path_arg(tool, &mut parts.1, working_dir);
+        Self::append_prettier_ignore_path_arg(tool, &mut parts.1, working_dir, args_start_index);
 
         Some(parts)
     }
@@ -557,6 +557,7 @@ impl<'a> ToolRunner<'a> {
         tool: &Tool,
         args: &mut Vec<String>,
         working_dir: Option<&Path>,
+        args_start_index: usize,
     ) {
         if tool.name != "prettier" || args.iter().any(|arg| arg == "--ignore-path") {
             return;
@@ -575,8 +576,14 @@ impl<'a> ToolRunner<'a> {
         };
 
         if let Some(ignore_path) = Self::find_prettier_ignore_path(&base_dir) {
-            args.push("--ignore-path".to_string());
-            args.push(ignore_path.display().to_string());
+            let insert_index = args
+                .iter()
+                .enumerate()
+                .skip(args_start_index)
+                .position(|(_, arg)| !arg.starts_with('-') && arg != "--")
+                .map_or(args.len(), |idx| idx + args_start_index);
+            args.insert(insert_index, "--ignore-path".to_string());
+            args.insert(insert_index + 1, ignore_path.display().to_string());
         }
     }
 
@@ -840,14 +847,14 @@ impl<'a> ToolRunner<'a> {
             );
         }
 
-        let (program, mut final_args) = match &tool.kind {
-            ToolKind::Cargo => ("cargo".to_string(), args.clone()),
+        let (program, mut final_args, args_start_index) = match &tool.kind {
+            ToolKind::Cargo => ("cargo".to_string(), args.clone(), 0),
             ToolKind::Binary => {
                 let binary = tool
                     .detected_path
                     .as_ref()
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
-                (binary, args.clone())
+                (binary, args.clone(), 0)
             }
             ToolKind::Runner {
                 runner,
@@ -856,10 +863,15 @@ impl<'a> ToolRunner<'a> {
                 let mut all_args = runner_args.clone();
                 all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
-                (runner.clone(), all_args)
+                (runner.clone(), all_args, runner_args.len() + 1)
             }
         };
-        Self::append_prettier_ignore_path_arg(tool, &mut final_args, self.working_dir);
+        Self::append_prettier_ignore_path_arg(
+            tool,
+            &mut final_args,
+            self.working_dir,
+            args_start_index,
+        );
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");
@@ -996,14 +1008,14 @@ impl<'a> ToolRunner<'a> {
             );
         }
 
-        let (program, mut final_args) = match &tool.kind {
-            ToolKind::Cargo => ("cargo".to_string(), args.clone()),
+        let (program, mut final_args, args_start_index) = match &tool.kind {
+            ToolKind::Cargo => ("cargo".to_string(), args.clone(), 0),
             ToolKind::Binary => {
                 let binary = tool
                     .detected_path
                     .as_ref()
                     .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
-                (binary, args.clone())
+                (binary, args.clone(), 0)
             }
             ToolKind::Runner {
                 runner,
@@ -1012,10 +1024,15 @@ impl<'a> ToolRunner<'a> {
                 let mut all_args = runner_args.clone();
                 all_args.push(tool.binary.clone());
                 all_args.extend(args.clone());
-                (runner.clone(), all_args)
+                (runner.clone(), all_args, runner_args.len() + 1)
             }
         };
-        Self::append_prettier_ignore_path_arg(tool, &mut final_args, self.working_dir);
+        Self::append_prettier_ignore_path_arg(
+            tool,
+            &mut final_args,
+            self.working_dir,
+            args_start_index,
+        );
 
         log::info!("Running {} ({})...", tool.display_name, tool.name);
         log::debug!("Command: {program} {final_args:?}");
@@ -1170,8 +1187,20 @@ pub fn results_to_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::ToolCapability;
     #[cfg(feature = "tools-tui")]
     use std::io::Cursor;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(prefix: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
+        std::fs::create_dir_all(&path).expect("failed to create temp dir");
+        path
+    }
 
     #[test]
     fn effective_color_mode_auto_uses_terminal_presence() {
@@ -1234,6 +1263,47 @@ mod tests {
             envs.get("CARGO_TERM_COLOR"),
             Some(&Some("never".to_string()))
         );
+    }
+
+    #[test]
+    fn prettier_ignore_path_is_inserted_before_positional_patterns() {
+        let dir = temp_dir("clippier-prettier-arg-order");
+        std::fs::write(dir.join(".prettierignore"), "target/\n")
+            .expect("failed to write prettier ignore");
+
+        let tool = Tool::new(
+            "prettier",
+            "Prettier",
+            "prettier",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec![],
+            vec![],
+        );
+
+        let mut args = vec![
+            "--check".to_string(),
+            "--ignore-unknown".to_string(),
+            ".".to_string(),
+        ];
+        ToolRunner::append_prettier_ignore_path_arg(&tool, &mut args, Some(&dir), 0);
+
+        let pattern_index = args
+            .iter()
+            .position(|arg| arg == ".")
+            .expect("missing positional pattern");
+        let ignore_flag_index = args
+            .iter()
+            .position(|arg| arg == "--ignore-path")
+            .expect("missing ignore-path flag");
+
+        assert!(ignore_flag_index < pattern_index);
+        assert!(
+            args.get(ignore_flag_index + 1)
+                .is_some_and(|v| v.ends_with(".prettierignore"))
+        );
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 
     #[cfg(feature = "tools-tui")]
