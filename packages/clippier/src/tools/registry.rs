@@ -465,6 +465,28 @@ impl ToolRegistry {
             vec!["fmt".to_string()],
         ));
 
+        // Markdown - mdformat
+        self.register(Tool::new(
+            "mdformat",
+            "mdformat",
+            "mdformat",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec!["--check".to_string(), ".".to_string()],
+            vec![".".to_string()],
+        ));
+
+        // YAML - yamlfmt
+        self.register(Tool::new(
+            "yamlfmt",
+            "yamlfmt",
+            "yamlfmt",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec!["-lint".to_string(), ".".to_string()],
+            vec![".".to_string()],
+        ));
+
         // Python - Ruff
         self.register(Tool::new(
             "ruff",

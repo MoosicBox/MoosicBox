@@ -80,6 +80,8 @@ const KNOWN_TOOL_NAMES: &[&str] = &[
     "biome",
     "eslint",
     "dprint",
+    "mdformat",
+    "yamlfmt",
     "ruff",
     "black",
     "gofmt",
@@ -290,6 +292,65 @@ fn parse_biome_include_rules(base_dir: &std::path::Path) -> Option<Vec<String>> 
     )
 }
 
+fn toml_value_contains_mdx(value: &toml::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().any(|item| {
+            item.as_str()
+                .is_some_and(|entry| normalize_extension(entry) == "mdx")
+        })
+    })
+}
+
+fn mdformat_config_supports_mdx(base_dir: &std::path::Path) -> bool {
+    if let Some(path) = find_file_in_ancestors(base_dir, &[".mdformat.toml"])
+        && let Ok(contents) = std::fs::read_to_string(path)
+        && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+        && parsed
+            .get("extensions")
+            .is_some_and(toml_value_contains_mdx)
+    {
+        return true;
+    }
+
+    if let Some(path) = find_file_in_ancestors(base_dir, &["pyproject.toml"])
+        && let Ok(contents) = std::fs::read_to_string(path)
+        && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+        && parsed
+            .get("tool")
+            .and_then(|tool| tool.get("mdformat"))
+            .and_then(|mdformat| mdformat.get("extensions"))
+            .is_some_and(toml_value_contains_mdx)
+    {
+        return true;
+    }
+
+    false
+}
+
+fn probe_mdformat_supports_mdx_from_path(base_dir: &std::path::Path) -> bool {
+    let Ok(mdformat_path) = which::which("mdformat") else {
+        return false;
+    };
+
+    let Ok(mut child) = std::process::Command::new(mdformat_path)
+        .args(["--check", "--extensions", "mdx", "-"])
+        .current_dir(base_dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+
+    if let Some(mut child_stdin) = child.stdin.take() {
+        use std::io::Write as _;
+        let _ = child_stdin.write_all(b"# mdx-probe\n");
+    }
+
+    child.wait().is_ok_and(|status| status.success())
+}
+
 fn is_prettier_ignored(path: &str, rules: &[GlobRule]) -> bool {
     let mut ignored = false;
     for rule in rules {
@@ -394,7 +455,9 @@ fn effective_extensions_for_tool(
     tool: &Tool,
     capability: ToolCapability,
 ) -> std::collections::BTreeSet<String> {
-    if normalize_tool_name(&tool.name) == "prettier"
+    let normalized = normalize_tool_name(&tool.name);
+
+    if normalized == "prettier"
         && capability == ToolCapability::Format
         && let Some(prettier_extensions) = query_prettier_support_info_extensions(base_dir, tool)
         && !prettier_extensions.is_empty()
@@ -402,7 +465,75 @@ fn effective_extensions_for_tool(
         return prettier_extensions;
     }
 
+    if normalized == "mdformat" && capability == ToolCapability::Format {
+        let mut extensions = default_extensions_for_tool(&tool.name, capability);
+        if mdformat_config_supports_mdx(base_dir) || probe_mdformat_supports_mdx(base_dir, tool) {
+            extensions.insert("mdx".to_string());
+        }
+        return extensions;
+    }
+
     default_extensions_for_tool(&tool.name, capability)
+}
+
+fn run_tool_probe_command(
+    base_dir: &std::path::Path,
+    tool: &Tool,
+    args: &[&str],
+    stdin: Option<&str>,
+) -> Option<std::process::Output> {
+    let mut command = match &tool.kind {
+        ToolKind::Binary => {
+            let executable = tool.detected_path.as_ref().map_or_else(
+                || std::ffi::OsString::from(&tool.binary),
+                |path| path.as_os_str().to_os_string(),
+            );
+            std::process::Command::new(executable)
+        }
+        ToolKind::Runner {
+            runner,
+            runner_args,
+        } => {
+            let mut command = std::process::Command::new(runner);
+            for arg in runner_args {
+                command.arg(arg);
+            }
+            command.arg(&tool.binary);
+            command
+        }
+        ToolKind::Cargo => return None,
+    };
+
+    command.args(args).current_dir(base_dir);
+    command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if stdin.is_some() {
+        command.stdin(std::process::Stdio::piped());
+    }
+
+    let mut child = command.spawn().ok()?;
+    if let Some(input) = stdin
+        && let Some(mut child_stdin) = child.stdin.take()
+    {
+        use std::io::Write as _;
+        let _ = child_stdin.write_all(input.as_bytes());
+    }
+
+    child.wait_with_output().ok()
+}
+
+fn probe_mdformat_supports_mdx(base_dir: &std::path::Path, tool: &Tool) -> bool {
+    let Some(output) = run_tool_probe_command(
+        base_dir,
+        tool,
+        &["--check", "--extensions", "mdx", "-"],
+        Some("# mdx-probe\n"),
+    ) else {
+        return false;
+    };
+
+    output.status.success()
 }
 
 fn parse_prettier_support_info_extensions(
@@ -424,37 +555,7 @@ fn query_prettier_support_info_extensions(
     base_dir: &std::path::Path,
     tool: &Tool,
 ) -> Option<std::collections::BTreeSet<String>> {
-    let output = match &tool.kind {
-        ToolKind::Binary => {
-            let executable = tool.detected_path.as_ref().map_or_else(
-                || std::ffi::OsString::from(&tool.binary),
-                |path| path.as_os_str().to_os_string(),
-            );
-
-            std::process::Command::new(executable)
-                .arg("--support-info")
-                .current_dir(base_dir)
-                .output()
-                .ok()?
-        }
-        ToolKind::Runner {
-            runner,
-            runner_args,
-        } => {
-            let mut command = std::process::Command::new(runner);
-            for arg in runner_args {
-                command.arg(arg);
-            }
-
-            command
-                .arg(&tool.binary)
-                .arg("--support-info")
-                .current_dir(base_dir)
-                .output()
-                .ok()?
-        }
-        ToolKind::Cargo => return None,
-    };
+    let output = run_tool_probe_command(base_dir, tool, &["--support-info"], None)?;
 
     if !output.status.success() {
         return None;
@@ -481,6 +582,8 @@ fn default_extensions_for_tool(
                 "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
             ],
             "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
+            "mdformat" => &["md"],
+            "yamlfmt" => &["yaml", "yml"],
             "ruff" | "black" => &["py", "pyi", "ipynb"],
             "gofmt" => &["go"],
             "shfmt" => &["sh", "bash"],
@@ -748,6 +851,51 @@ fn should_skip_prettier_scan_dir(name: &str) -> bool {
     )
 }
 
+fn has_files_with_extensions(base: &std::path::Path, extensions: &[&str]) -> bool {
+    let mut stack = vec![base.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+
+            if file_type.is_dir() {
+                if let Some(name) = entry.file_name().to_str()
+                    && should_skip_prettier_scan_dir(name)
+                {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let Some(extension) = path
+                .extension()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(str::to_ascii_lowercase)
+            else {
+                continue;
+            };
+
+            if extensions.iter().any(|candidate| *candidate == extension) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 fn is_prettier_format_target(path: &std::path::Path) -> bool {
     let Some(extension) = path.extension().and_then(std::ffi::OsStr::to_str) else {
         return false;
@@ -823,6 +971,12 @@ pub fn auto_detect_check_tools(
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
     let has_shellcheck_config = has_file(&base_dir, ".shellcheckrc");
+    let has_markdown_files = has_files_with_extensions(&base_dir, &["md"]);
+    let has_mdx_files = has_files_with_extensions(&base_dir, &["mdx"]);
+    let has_yaml_files = has_files_with_extensions(&base_dir, &["yml", "yaml"]);
+    let mdformat_has_mdx = has_mdx_files
+        && (mdformat_config_supports_mdx(&base_dir)
+            || probe_mdformat_supports_mdx_from_path(&base_dir));
 
     let mut tools = Vec::new();
 
@@ -859,6 +1013,14 @@ pub fn auto_detect_check_tools(
         tools.push("shellcheck".to_string());
     }
 
+    if has_markdown_files || (has_mdx_files && mdformat_has_mdx) {
+        tools.push("mdformat".to_string());
+    }
+
+    if has_yaml_files {
+        tools.push("yamlfmt".to_string());
+    }
+
     let mut deduped = Vec::new();
     merge_unique_strings(&mut deduped, &tools);
 
@@ -889,6 +1051,12 @@ pub fn auto_detect_fmt_tools(
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
     let has_shfmt_config = has_file(&base_dir, ".shfmt.conf");
+    let has_markdown_files = has_files_with_extensions(&base_dir, &["md"]);
+    let has_mdx_files = has_files_with_extensions(&base_dir, &["mdx"]);
+    let has_yaml_files = has_files_with_extensions(&base_dir, &["yml", "yaml"]);
+    let mdformat_has_mdx = has_mdx_files
+        && (mdformat_config_supports_mdx(&base_dir)
+            || probe_mdformat_supports_mdx_from_path(&base_dir));
 
     let mut tools = Vec::new();
 
@@ -924,6 +1092,14 @@ pub fn auto_detect_fmt_tools(
 
     if has_shfmt_config {
         tools.push("shfmt".to_string());
+    }
+
+    if has_markdown_files || (has_mdx_files && mdformat_has_mdx) {
+        tools.push("mdformat".to_string());
+    }
+
+    if has_yaml_files {
+        tools.push("yamlfmt".to_string());
     }
 
     let mut deduped = Vec::new();
@@ -1067,6 +1243,56 @@ mod tests {
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
 
         assert!(fmt_tools.contains(&"prettier".to_string()));
+        assert!(fmt_tools.contains(&"mdformat".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_include_yamlfmt_when_yaml_files_exist() {
+        let dir = temp_dir("clippier-auto-detect-yamlfmt");
+        std::fs::write(dir.join("config.yaml"), "a: 1\n").expect("failed to write yaml file");
+
+        let check_tools =
+            auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+
+        assert!(check_tools.contains(&"yamlfmt".to_string()));
+        assert!(fmt_tools.contains(&"yamlfmt".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_include_mdformat_for_mdx_when_mdx_extension_is_configured() {
+        let dir = temp_dir("clippier-auto-detect-mdx-mdformat");
+        std::fs::write(dir.join("doc.mdx"), "# mdx\n").expect("failed to write mdx file");
+        std::fs::write(
+            dir.join(".mdformat.toml"),
+            "extensions = [\"gfm\", \"mdx\"]\n",
+        )
+        .expect("failed to write .mdformat.toml");
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+
+        assert!(fmt_tools.contains(&"mdformat".to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn auto_detect_tools_do_not_include_mdformat_for_mdx_without_plugin_config() {
+        let dir = temp_dir("clippier-auto-detect-mdx-no-mdformat");
+        std::fs::write(dir.join("doc.mdx"), "# mdx\n").expect("failed to write mdx file");
+
+        let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
+        let runtime_has_mdx = probe_mdformat_supports_mdx_from_path(&dir);
+
+        if runtime_has_mdx {
+            assert!(fmt_tools.contains(&"mdformat".to_string()));
+        } else {
+            assert!(!fmt_tools.contains(&"mdformat".to_string()));
+        }
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }

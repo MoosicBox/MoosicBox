@@ -980,6 +980,8 @@ The `check` command automatically detects and runs:
 - **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
 - **TOML**: `taplo fmt --check`
 - **JavaScript/TypeScript**: `prettier --check`, `biome format`, `eslint`
+- **Markdown**: `mdformat --check`
+- **YAML**: `yamlfmt -lint`
 - **Python**: `ruff check`, `black --check`
 - **Go**: `gofmt -l`
 - **Shell**: `shfmt -d`, `shellcheck`
@@ -1030,6 +1032,8 @@ The `fmt` command automatically detects and runs:
 - **Rust**: `cargo fmt`
 - **TOML**: `taplo fmt`
 - **JavaScript/TypeScript**: `prettier --write`, `biome format --write`
+- **Markdown**: `mdformat`
+- **YAML**: `yamlfmt`
 - **Python**: `ruff format`, `black`
 - **Go**: `gofmt -w`
 - **Shell**: `shfmt -w`
@@ -1120,6 +1124,8 @@ TUI behavior for tool output:
 | `biome`      | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
 | `eslint`     | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
 | `dprint`     | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `mdformat`   | Markdown                | Format       | `mdformat` binary                                                         |
+| `yamlfmt`    | YAML                    | Format       | `yamlfmt` binary                                                          |
 | `ruff`       | Python                  | Format, Lint | `ruff` binary                                                             |
 | `black`      | Python                  | Format       | `black` binary                                                            |
 | `gofmt`      | Go                      | Format       | `gofmt` binary                                                            |
