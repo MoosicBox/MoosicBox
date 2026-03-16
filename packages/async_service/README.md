@@ -144,8 +144,7 @@ async_service_body!(MyCommand, MyContext, false); // concurrent
 ### Error Handling
 
 ```rust
-use moosicbox_async_service::CommanderError;
-
+// CommanderError is generated in the same module as your service types.
 match handle.send_command_async(command).await {
     Ok(()) => println!("Command sent successfully"),
     Err(CommanderError::Send) => eprintln!("Failed to send command"),
