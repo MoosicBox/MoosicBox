@@ -37,6 +37,8 @@ mod runner;
 mod tui;
 mod types;
 
+use serde::Deserialize;
+
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
 pub use types::{
@@ -56,6 +58,18 @@ struct WorkspaceFile {
 struct GlobRule {
     negated: bool,
     matcher: globset::GlobMatcher,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrettierSupportInfo {
+    #[serde(default)]
+    languages: Vec<PrettierLanguage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrettierLanguage {
+    #[serde(default)]
+    extensions: Vec<String>,
 }
 
 const KNOWN_TOOL_NAMES: &[&str] = &[
@@ -341,7 +355,7 @@ fn dynamic_extensions_for_tools(
                 continue;
             }
 
-            let default_extensions = default_extensions_for_tool(&tool.name, *capability);
+            let default_extensions = effective_extensions_for_tool(base_dir, tool, *capability);
             if default_extensions.is_empty() {
                 continue;
             }
@@ -373,6 +387,81 @@ fn dynamic_extensions_for_tools(
     }
 
     dynamic
+}
+
+fn effective_extensions_for_tool(
+    base_dir: &std::path::Path,
+    tool: &Tool,
+    capability: ToolCapability,
+) -> std::collections::BTreeSet<String> {
+    if normalize_tool_name(&tool.name) == "prettier"
+        && capability == ToolCapability::Format
+        && let Some(prettier_extensions) = query_prettier_support_info_extensions(base_dir, tool)
+        && !prettier_extensions.is_empty()
+    {
+        return prettier_extensions;
+    }
+
+    default_extensions_for_tool(&tool.name, capability)
+}
+
+fn parse_prettier_support_info_extensions(
+    json: &str,
+) -> Option<std::collections::BTreeSet<String>> {
+    let parsed = serde_json::from_str::<PrettierSupportInfo>(json).ok()?;
+    Some(
+        parsed
+            .languages
+            .into_iter()
+            .flat_map(|language| language.extensions.into_iter())
+            .map(|extension| normalize_extension(&extension))
+            .filter(|extension| !extension.is_empty())
+            .collect(),
+    )
+}
+
+fn query_prettier_support_info_extensions(
+    base_dir: &std::path::Path,
+    tool: &Tool,
+) -> Option<std::collections::BTreeSet<String>> {
+    let output = match &tool.kind {
+        ToolKind::Binary => {
+            let executable = tool.detected_path.as_ref().map_or_else(
+                || std::ffi::OsString::from(&tool.binary),
+                |path| path.as_os_str().to_os_string(),
+            );
+
+            std::process::Command::new(executable)
+                .arg("--support-info")
+                .current_dir(base_dir)
+                .output()
+                .ok()?
+        }
+        ToolKind::Runner {
+            runner,
+            runner_args,
+        } => {
+            let mut command = std::process::Command::new(runner);
+            for arg in runner_args {
+                command.arg(arg);
+            }
+
+            command
+                .arg(&tool.binary)
+                .arg("--support-info")
+                .current_dir(base_dir)
+                .output()
+                .ok()?
+        }
+        ToolKind::Cargo => return None,
+    };
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    parse_prettier_support_info_extensions(&stdout)
 }
 
 fn default_extensions_for_tool(
@@ -1256,5 +1345,23 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn parse_prettier_support_info_extensions_extracts_normalized_extensions() {
+        let json = r#"{
+            "languages": [
+                {"extensions": [".js", ".TS", ".md"]},
+                {"extensions": [".json"]}
+            ]
+        }"#;
+
+        let extensions = parse_prettier_support_info_extensions(json)
+            .expect("expected parsed support info extensions");
+
+        assert!(extensions.contains("js"));
+        assert!(extensions.contains("ts"));
+        assert!(extensions.contains("md"));
+        assert!(extensions.contains("json"));
     }
 }
