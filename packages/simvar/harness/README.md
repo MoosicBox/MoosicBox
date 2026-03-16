@@ -223,6 +223,7 @@ Disable by excluding default features, or by setting `NO_TUI` at compile time.
 - **fs**: File system simulation (via switchy)
 - **http**: HTTP simulation (via switchy)
 - **mdns**: mDNS simulation (via switchy)
+- **random**: Randomness simulation controls (via switchy)
 - **tcp**: TCP network simulation (via switchy)
 - **telemetry**: Telemetry support (via switchy)
 - **time**: Time manipulation for simulation (via switchy)
