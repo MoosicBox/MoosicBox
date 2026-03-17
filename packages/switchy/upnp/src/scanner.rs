@@ -52,6 +52,11 @@ impl UpnpScanner for RupnpScanner {
 
 #[cfg(feature = "simulator")]
 pub mod simulator {
+    //! Simulated scanner implementation for testing.
+    //!
+    //! This module provides a scanner that returns an empty device stream so callers can
+    //! exercise discovery code paths without requiring real `UPnP` devices.
+
     use std::{pin::Pin, time::Duration};
 
     use async_trait::async_trait;

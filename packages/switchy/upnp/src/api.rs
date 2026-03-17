@@ -124,6 +124,11 @@ impl From<UpnpDeviceScannerError> for actix_web::Error {
     )
 )]
 #[route("/scan-devices", method = "GET")]
+/// Scans the network for `UPnP` devices and returns discovered devices.
+///
+/// # Errors
+///
+/// * If device discovery fails
 pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
     scan_devices().await?;
     Ok(Json(devices().await))
@@ -163,6 +168,13 @@ pub struct GetTransportInfoQuery {
     )
 )]
 #[route("/transport-info", method = "GET")]
+/// Retrieves transport information for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn get_transport_info_endpoint(
     query: web::Query<GetTransportInfoQuery>,
 ) -> Result<Json<TransportInfo>> {
@@ -212,6 +224,13 @@ pub struct GetMediaInfoQuery {
     )
 )]
 #[route("/media-info", method = "GET")]
+/// Retrieves media information for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn get_media_info_endpoint(
     query: web::Query<GetMediaInfoQuery>,
 ) -> Result<Json<MediaInfo>> {
@@ -261,6 +280,13 @@ pub struct GetPositionInfoQuery {
     )
 )]
 #[route("/position-info", method = "GET")]
+/// Retrieves playback position information for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn get_position_info_endpoint(
     query: web::Query<GetPositionInfoQuery>,
 ) -> Result<Json<PositionInfo>> {
@@ -313,6 +339,13 @@ pub struct GetVolumeQuery {
     )
 )]
 #[route("/volume", method = "GET")]
+/// Retrieves current volume values for a `UPnP` `RenderingControl` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn get_volume_endpoint(
     query: web::Query<GetVolumeQuery>,
 ) -> Result<Json<BTreeMap<String, String>>> {
@@ -374,6 +407,13 @@ pub struct SetVolumeQuery {
     )
 )]
 #[route("/volume", method = "POST")]
+/// Sets the volume for a `UPnP` `RenderingControl` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn set_volume_endpoint(
     query: web::Query<SetVolumeQuery>,
 ) -> Result<Json<BTreeMap<String, String>>> {
@@ -430,6 +470,13 @@ pub struct SubscribeQuery {
     )
 )]
 #[route("/subscribe", method = "POST")]
+/// Subscribes to event notifications for a `UPnP` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the event subscription call fails
 pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Json<String>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, &query.service_id)?
@@ -490,6 +537,13 @@ pub struct PauseQuery {
     )
 )]
 #[route("/pause", method = "POST")]
+/// Pauses playback for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn pause_endpoint(
     query: web::Query<PauseQuery>,
 ) -> Result<Json<BTreeMap<String, String>>> {
@@ -542,6 +596,13 @@ pub struct PlayQuery {
     )
 )]
 #[route("/play", method = "POST")]
+/// Starts playback for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
@@ -601,6 +662,13 @@ pub struct SeekQuery {
     )
 )]
 #[route("/seek", method = "POST")]
+/// Seeks playback position for a `UPnP` `AVTransport` service.
+///
+/// # Errors
+///
+/// * If neither `device_udn` nor `device_url` is provided in the query
+/// * If the target device or service is not found
+/// * If the `UPnP` action call fails
 pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?

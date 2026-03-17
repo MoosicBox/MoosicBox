@@ -406,6 +406,33 @@ static SEC_NS: &str = "http://www.sec.co.kr/";
 /// # Errors
 ///
 /// * If the action failed to execute
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use switchy_upnp::{get_device_and_service, set_av_transport_uri};
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # let device_udn = "uuid:device-id";
+/// let (device, service) =
+///     get_device_and_service(device_udn, "urn:upnp-org:serviceId:AVTransport")?;
+/// set_av_transport_uri(
+///     &service,
+///     device.url(),
+///     0,
+///     "https://example.com/track.flac",
+///     "flac",
+///     Some("Track Title"),
+///     Some("Creator"),
+///     Some("Artist"),
+///     Some("Album"),
+///     Some(1),
+///     Some(211),
+///     None,
+/// )
+/// .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[allow(clippy::too_many_arguments)]
 pub async fn set_av_transport_uri(
     service: &Service,
@@ -1126,6 +1153,7 @@ pub async fn scan_devices() -> Result<(), UpnpDeviceScannerError> {
 }
 
 /// Returns the list of cached `UPnP` devices from the last scan.
+#[must_use]
 pub async fn devices() -> Vec<UpnpDevice> {
     UPNP_DEVICE_SCANNER.lock().await.devices.clone()
 }
