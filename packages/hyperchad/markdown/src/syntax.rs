@@ -31,6 +31,27 @@ pub struct CodeBlockState {
 /// based on the syntax highlighting theme.
 ///
 /// If the language is not recognized, falls back to plain text syntax.
+///
+/// # Examples
+///
+/// ```ignore
+/// use hyperchad_markdown::syntax::highlight_code_to_containers;
+///
+/// let containers = highlight_code_to_containers("fn main() {}", Some("rust"));
+/// assert!(!containers.is_empty());
+/// ```
+///
+/// ```ignore
+/// use hyperchad_markdown::syntax::highlight_code_to_containers;
+///
+/// let containers = highlight_code_to_containers("plain text", Some("unknown-language"));
+/// assert!(!containers.is_empty());
+/// ```
+///
+/// # Panics
+///
+/// Panics if the built-in `base16-ocean.dark` theme cannot be found in
+/// the loaded `syntect` theme set.
 #[must_use]
 pub fn highlight_code_to_containers(code: &str, language: Option<&str>) -> Vec<Container> {
     let syntax = language
