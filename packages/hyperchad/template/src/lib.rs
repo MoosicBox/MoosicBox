@@ -145,7 +145,10 @@ pub use hyperchad_transformer_models as transformer_models;
 ///
 /// This module is designed to be imported via `use hyperchad_template::prelude::*`
 /// to bring all commonly needed traits and types into scope.
+#[allow(clippy::mixed_attributes_style)]
 pub mod prelude {
+    //! Re-exports the traits, helpers, and crate aliases most templates need.
+
     pub use crate::{
         self as hyperchad_template, ContainerVecExt, ContainerVecMethods, IntoActionEffect,
         IntoBorder, ToBool, actions as hyperchad_actions, calc, color as hyperchad_color, fx,
@@ -729,6 +732,7 @@ pub trait IntoActionEffect {
     ///
     /// This method transforms the implementing type into an `ActionEffect`
     /// that can be used in template action handlers.
+    #[must_use]
     fn into_action_effect(self) -> actions::ActionEffect;
 }
 
@@ -1043,7 +1047,10 @@ impl IntoBorder for (String, f64) {
 ///     }
 /// };
 /// ```
+#[allow(clippy::mixed_attributes_style)]
 pub mod calc {
+    //! Provides helpers for `calc(...)` expressions and `Number` math.
+
     use hyperchad_transformer::Number;
 
     /// Converts any type that can be converted to `Number` into a `Number`.
@@ -1393,7 +1400,10 @@ pub mod calc {
 ///     }
 /// };
 /// ```
+#[allow(clippy::mixed_attributes_style)]
 pub mod unit_functions {
+    //! Provides function-style constructors for viewport-relative `Number` values.
+
     use hyperchad_transformer::Number;
 
     /// Helper function to convert Number to f32 for fallback cases.
@@ -1504,6 +1514,7 @@ pub mod unit_functions {
 /// The function itself is just a marker - the actual processing is done by the
 /// template macro system during compilation. The macro detects `fx` calls and
 /// processes them through the `actions_dsl!` macro.
+#[must_use]
 pub fn fx<T>(content: T) -> actions::ActionEffect
 where
     T: IntoActionEffect,
@@ -1548,7 +1559,10 @@ where
 ///     }
 /// };
 /// ```
+#[allow(clippy::mixed_attributes_style)]
 pub mod color_functions {
+    //! Provides CSS-style color helper functions and conversion traits.
+
     use alloc::string::String;
     use hyperchad_color::Color;
 
