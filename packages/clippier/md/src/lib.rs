@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
-use comrak::{Options as ComrakOptions, markdown_to_commonmark};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{WalkBuilder, WalkState};
 use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
+use markdown::{Constructs, ParseOptions, mdast::Node, to_mdast};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -701,32 +701,170 @@ fn should_use_color(mode: ColorMode) -> bool {
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn format_markdown(input: &str, config: &Config) -> String {
-    if config.engine == FormatterEngine::Ast && supports_ast_engine(config) {
-        return format_markdown_ast(input, config);
+    if config.engine == FormatterEngine::Legacy {
+        return format_markdown_legacy(input, config);
     }
 
-    format_markdown_legacy(input, config)
-}
-
-fn supports_ast_engine(config: &Config) -> bool {
-    config.list_style == ListStyle::Preserve
-        && config.list_indentation == ListIndentationMode::Preserve
-        && config.heading_indentation == HeadingIndentationMode::Normalize
-        && config.prose_wrap == ProseWrapMode::Preserve
+    format_markdown_ast(input, config)
 }
 
 fn format_markdown_ast(input: &str, config: &Config) -> String {
-    let mut options = ComrakOptions::default();
-    options.extension.strikethrough = true;
-    options.extension.tagfilter = false;
-    options.extension.table = true;
-    options.extension.autolink = true;
-    options.extension.tasklist = true;
-    options.extension.footnotes = true;
-    options.extension.front_matter_delimiter = Some("---".to_string());
+    let mut options = ParseOptions::gfm();
+    options.constructs = Constructs {
+        frontmatter: true,
+        mdx_esm: true,
+        mdx_expression_flow: true,
+        mdx_expression_text: true,
+        mdx_jsx_flow: true,
+        mdx_jsx_text: true,
+        ..Constructs::gfm()
+    };
 
-    let rendered = markdown_to_commonmark(input, &options);
+    let Ok(root) = to_mdast(input, &options) else {
+        return finalize_markdown_output(input, config);
+    };
+
+    let rendered = render_ast_document(&root, input, config);
     finalize_markdown_output(&rendered, config)
+}
+
+fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
+    let Node::Root(root_node) = root else {
+        return source.to_string();
+    };
+
+    let mut out = String::new();
+    let mut cursor = 0usize;
+
+    for child in &root_node.children {
+        let Some((start, end)) = node_offsets(child) else {
+            continue;
+        };
+
+        if cursor < start {
+            out.push_str(&source[cursor..start]);
+        }
+
+        if should_normalize_ast_node(child, config) {
+            out.push_str(&render_normalized_ast_node(child, source, config));
+        } else {
+            out.push_str(&source[start..end]);
+        }
+
+        cursor = end;
+    }
+
+    if cursor < source.len() {
+        out.push_str(&source[cursor..]);
+    }
+
+    out
+}
+
+fn should_normalize_ast_node(node: &Node, config: &Config) -> bool {
+    match node {
+        Node::Heading(_) => true,
+        Node::Paragraph(_) => config.prose_wrap == ProseWrapMode::Always,
+        Node::List(_) => {
+            config.list_style != ListStyle::Preserve
+                || config.list_indentation == ListIndentationMode::Normalize
+        }
+        _ => false,
+    }
+}
+
+fn render_normalized_ast_node(node: &Node, source: &str, config: &Config) -> String {
+    match node {
+        Node::Heading(heading) => {
+            let text = heading
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>();
+            let heading_text =
+                format!("{} {}", "#".repeat(usize::from(heading.depth)), text.trim());
+            if config.heading_indentation == HeadingIndentationMode::Preserve
+                && let Some(position) = &heading.position
+            {
+                return format!(
+                    "{}{}",
+                    " ".repeat(position.start.column.saturating_sub(1)),
+                    heading_text
+                );
+            }
+            heading_text
+        }
+        Node::Paragraph(paragraph) => {
+            let text = paragraph
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>();
+            wrap_line(text.trim(), config.line_width).join("\n")
+        }
+        Node::List(_) => {
+            if let Some((start, end)) = node_offsets(node) {
+                format_markdown_legacy(&source[start..end], config)
+                    .trim_end()
+                    .to_string()
+            } else {
+                String::new()
+            }
+        }
+        _ => {
+            if let Some((start, end)) = node_offsets(node) {
+                source[start..end].to_string()
+            } else {
+                String::new()
+            }
+        }
+    }
+}
+
+fn render_inline_text(node: &Node) -> String {
+    match node {
+        Node::Text(text) => text.value.clone(),
+        Node::InlineCode(code) => format!("`{}`", code.value),
+        Node::Emphasis(emphasis) => format!(
+            "*{}*",
+            emphasis
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>()
+        ),
+        Node::Strong(strong) => format!(
+            "**{}**",
+            strong
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>()
+        ),
+        Node::Delete(delete) => format!(
+            "~~{}~~",
+            delete
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>()
+        ),
+        Node::Link(link) => format!(
+            "[{}]({})",
+            link.children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>(),
+            link.url
+        ),
+        Node::Break(_) => "  \n".to_string(),
+        _ => String::new(),
+    }
+}
+
+fn node_offsets(node: &Node) -> Option<(usize, usize)> {
+    let position = node.position()?;
+    Some((position.start.offset, position.end.offset))
 }
 
 #[allow(clippy::too_many_lines)]
@@ -863,6 +1001,29 @@ fn finalize_markdown_output(input: &str, config: &Config) -> String {
         .lines()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
+
+    let mut in_fence = false;
+    let mut fence_prefix = String::new();
+    for line in &mut lines {
+        if is_fence_start(line) {
+            let trimmed = line.trim_start();
+            if !in_fence {
+                in_fence = true;
+                fence_prefix = trimmed
+                    .chars()
+                    .take_while(|c| *c == '`' || *c == '~')
+                    .collect();
+            } else if trimmed.starts_with(&fence_prefix) {
+                in_fence = false;
+                fence_prefix.clear();
+            }
+            continue;
+        }
+
+        if !in_fence && let Some(updated) = normalize_heading_line(line, config) {
+            *line = updated;
+        }
+    }
 
     if config.trim_trailing_whitespace {
         for line in &mut lines {
@@ -1440,7 +1601,7 @@ mod tests {
             ..Config::default()
         };
         let output = format_markdown(input, &config);
-        assert_eq!(output, "\\#Title\n\nparagraph\n");
+        assert_eq!(output, "# Title\n\nparagraph\n");
     }
 
     #[test]
