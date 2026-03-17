@@ -246,6 +246,11 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
 impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static>
     ToRenderRunner for ActixApp<T, R>
 {
+    /// Converts this Actix application into a render runner.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation currently does not return an error.
     fn to_runner(
         self,
         handle: Handle,

@@ -38,6 +38,15 @@ pub struct ActionPayload {
 /// # Panics
 ///
 /// * Panics if JSON serialization of the action value fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use actix_web::web;
+///
+/// // Register the action endpoint in your Actix app configuration.
+/// let _route = web::resource("/$action").route(web::post().to(handle_action::<(), _>));
+/// ```
 #[allow(clippy::future_not_send)]
 pub async fn handle_action<
     T: Send + Sync + Clone + 'static,

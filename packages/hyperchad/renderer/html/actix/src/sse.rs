@@ -143,6 +143,15 @@ impl Event {
 ///
 /// * Panics if JSON serialization of canvas update fails
 /// * Panics if compression encoding fails (gzip, deflate, or zstd)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use actix_web::web;
+///
+/// // Register the SSE endpoint in your Actix app configuration.
+/// let _route = web::resource("/$sse").route(web::get().to(handle_sse::<(), _>));
+/// ```
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn handle_sse<
     T: Send + Sync + Clone + 'static,
