@@ -118,7 +118,7 @@ impl Uuid {
     ///
     /// # Errors
     ///
-    /// Returns an error if the slice length is not 16 bytes.
+    /// * Returns [`ParseError`] if `slice` does not contain exactly 16 bytes.
     ///
     /// # Examples
     ///
@@ -254,7 +254,8 @@ impl Uuid {
     ///
     /// # Errors
     ///
-    /// Returns an error if the string is not a valid UUID format.
+    /// * Returns [`ParseError`] if `input` is not a valid UUID string in any
+    ///   supported format.
     ///
     /// # Accepted formats
     ///
