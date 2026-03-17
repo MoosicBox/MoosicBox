@@ -90,6 +90,22 @@ impl RemoteLibraryMusicApi {
     /// * `host` - Base URL of the remote `MoosicBox` server (e.g., `"http://localhost:8000"`)
     /// * `api_source` - The API source identifier for this connection
     /// * `profile` - Profile name to use for authentication/authorization
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_music_api::MusicApi;
+    /// use moosicbox_music_models::ApiSource;
+    /// use moosicbox_remote_library::RemoteLibraryMusicApi;
+    ///
+    /// let api = RemoteLibraryMusicApi::new(
+    ///     "http://localhost:8000".to_string(),
+    ///     ApiSource::library(),
+    ///     "default".to_string(),
+    /// );
+    ///
+    /// assert_eq!(api.source(), &ApiSource::library());
+    /// ```
     #[must_use]
     pub const fn new(host: String, api_source: ApiSource, profile: String) -> Self {
         Self {
