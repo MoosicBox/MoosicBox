@@ -195,6 +195,10 @@ pub async fn auth_signature_token_endpoint(
 ///
 /// Checks if the provided signature token is valid. Returns a success response
 /// if the token is valid, or an unauthorized error if invalid.
+///
+/// # Errors
+///
+/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
 #[route("/auth/validate-signature-token", method = "POST", method = "HEAD")]
 pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> Result<Json<Value>> {
     Ok(Json(json!({"valid": true})))

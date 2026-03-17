@@ -125,6 +125,7 @@ impl std::fmt::Display for Command {
     }
 }
 
+/// Async service wrapper types for [`WsServer`] commands and handle operations.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::WsServer);
 }
