@@ -820,8 +820,9 @@ pub fn should_trigger_action(trigger: &ActionTrigger, event_type: &str) -> bool 
     }
 }
 
-/// Common utilities and helper implementations
 pub mod utils {
+    //! Utilities for integrating and running action handlers.
+
     use super::{
         ActionContainer, ActionContext, ActionHandler, ActionTrigger, BTreeMap,
         BTreeMapStyleManager, Color, ElementFinder, StyleManager, StyleTrigger, Visibility,
@@ -856,6 +857,7 @@ pub mod utils {
 
     impl<'a, C: ActionContainer> ContainerElementFinder<'a, C> {
         /// Creates a new container-based element finder
+        #[must_use]
         pub const fn new(
             container: &'a C,
             positions: &'a BTreeMap<usize, (f32, f32)>,
@@ -984,9 +986,10 @@ pub mod utils {
     }
 }
 
-/// Example integration showing how to use the shared action handler in a renderer
 #[cfg(all(test, feature = "logic"))]
 pub mod example_integration {
+    //! Example renderer integration for the action handler.
+
     use super::*;
     use flume::Sender;
     use std::sync::{Arc, RwLock};
@@ -1004,6 +1007,8 @@ pub mod example_integration {
     }
 
     impl ExampleActionContext {
+        /// Creates a new example action context.
+        #[must_use]
         pub fn new(
             navigation_sender: Sender<String>,
             action_sender: Sender<(String, Option<Value>)>,
@@ -1086,6 +1091,7 @@ pub mod example_integration {
     }
 
     impl<C: ActionContainer> ExampleRenderer<C> {
+        /// Creates a new empty example renderer.
         #[must_use]
         pub const fn new() -> Self {
             Self {

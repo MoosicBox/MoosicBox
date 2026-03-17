@@ -1390,8 +1390,9 @@ impl<'a> TryFrom<&'a str> for StyleAction {
     }
 }
 
-/// Prelude module that re-exports commonly used items.
 pub mod prelude {
+    //! Convenience re-exports for common action APIs.
+
     pub use crate::{
         Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
         dsl::*,
