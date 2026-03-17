@@ -41,6 +41,8 @@ pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
 /// # Panics
 ///
 /// * If fails to find and open port within the specified range
+/// * If the cancellation token `Mutex` fails to lock
+/// * If the server handle `Mutex` fails to lock
 pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")

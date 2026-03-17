@@ -48,7 +48,9 @@ pub fn headers_contains_in_order(
 ///
 /// # Errors
 ///
-/// * If fails to read/write any bytes from/to the `TcpStream`
+/// * If writing the request to the `TcpStream` fails
+/// * If flushing the `TcpStream` fails
+/// * If reading the response from the `TcpStream` fails
 pub async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> io::Result<String> {
     let host = "127.0.0.1";
 
@@ -82,6 +84,19 @@ pub async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> i
 /// * If no headers on HTTP response
 /// * If invalid status line
 /// * If invalid status code
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_server_simulator::http::parse_http_response;
+///
+/// let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"healthy\":true}";
+/// let parsed = parse_http_response(raw).expect("response should parse");
+///
+/// assert_eq!(parsed.status_code, 200);
+/// assert_eq!(parsed.headers.get("Content-Type"), Some(&"application/json".to_string()));
+/// assert_eq!(parsed.body, "{\"healthy\":true}");
+/// ```
 pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static str> {
     // Split the response into headers and body sections
     let parts: Vec<&str> = raw_response.split("\r\n\r\n").collect();

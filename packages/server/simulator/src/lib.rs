@@ -107,7 +107,21 @@ fn clear_actions() {
 ///
 /// # Errors
 ///
-/// * If fails to connect to the TCP stream after `max_attempts` tries
+/// * If connecting fails with a non-retryable `std::io::ErrorKind`
+/// * If connecting keeps failing until `max_attempts` is reached
+/// * If the connection attempt times out after 5000ms
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_server_simulator::try_connect;
+///
+/// let stream = try_connect("127.0.0.1:1234", 3).await?;
+/// drop(stream);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn try_connect(addr: &str, max_attempts: usize) -> Result<TcpStream, std::io::Error> {
     let mut count = 0;
     Ok(loop {
