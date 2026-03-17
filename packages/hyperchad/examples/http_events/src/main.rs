@@ -431,6 +431,10 @@ fn create_router() -> Router {
 /// * The async runtime cannot be created
 /// * The web server fails to start or bind to port 8080
 /// * Application initialization fails
+///
+/// # Panics
+///
+/// Panics if static asset route registration fails when the `assets` feature is enabled.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::init();
