@@ -32,6 +32,12 @@ pub enum ListStyle {
     Asterisk,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProseWrapMode {
+    Always,
+    Preserve,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub line_width: usize,
@@ -45,6 +51,7 @@ pub struct Config {
     pub exclude: Vec<String>,
     pub skip_dirs: Vec<String>,
     pub check_diff: CheckDiffConfig,
+    pub prose_wrap: ProseWrapMode,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +87,7 @@ impl Default for Config {
             exclude: Vec::new(),
             skip_dirs: Vec::new(),
             check_diff: CheckDiffConfig::default(),
+            prose_wrap: ProseWrapMode::Always,
         }
     }
 }
@@ -476,13 +484,19 @@ pub fn format_markdown(input: &str, config: &Config) -> String {
             }
             index += 1;
         }
-        let paragraph = lines[start..index]
-            .iter()
-            .map(|line| line.trim())
-            .collect::<Vec<_>>()
-            .join(" ");
-        for wrapped in wrap_line(&paragraph, config.line_width) {
-            output.push(wrapped);
+        if config.prose_wrap == ProseWrapMode::Preserve {
+            for line in &lines[start..index] {
+                output.push(finish_line(line, config));
+            }
+        } else {
+            let paragraph = lines[start..index]
+                .iter()
+                .map(|line| line.trim())
+                .collect::<Vec<_>>()
+                .join(" ");
+            for wrapped in wrap_line(&paragraph, config.line_width) {
+                output.push(wrapped);
+            }
         }
     }
 
@@ -617,6 +631,22 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
             .filter_map(toml::Value::as_str)
             .map(ToString::to_string)
             .collect();
+    }
+    if let Some(mode) = value.get("prose-wrap").and_then(toml::Value::as_str) {
+        config.prose_wrap = match mode {
+            "preserve" => ProseWrapMode::Preserve,
+            _ => ProseWrapMode::Always,
+        };
+    }
+    if let Some(mode) = value
+        .get("prose")
+        .and_then(|section| section.get("wrap"))
+        .and_then(toml::Value::as_str)
+    {
+        config.prose_wrap = match mode {
+            "preserve" => ProseWrapMode::Preserve,
+            _ => ProseWrapMode::Always,
+        };
     }
     if let Some(cap) = value
         .get("check")
@@ -914,6 +944,18 @@ mod tests {
         };
         let output = format_markdown(input, &config);
         assert!(output.lines().all(|line| line.len() <= 20));
+    }
+
+    #[test]
+    fn preserves_prose_line_breaks_when_configured() {
+        let input = "This is a very long line that should stay as authored and not be wrapped by the formatter.\nAnd this is another long line that should also remain unchanged.\n";
+        let config = Config {
+            line_width: 20,
+            prose_wrap: ProseWrapMode::Preserve,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
+        assert_eq!(output, input);
     }
 
     #[test]

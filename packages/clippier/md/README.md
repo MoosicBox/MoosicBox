@@ -25,6 +25,7 @@ Example:
 ```toml
 line-width = 80
 trim-trailing-whitespace = true
+prose-wrap = "always"
 
 [list]
 indent-width = 4
@@ -43,6 +44,15 @@ cap = true
 context = 3
 max-files = 50
 max-lines-per-file = 400
+```
+
+To preserve authored markdown prose line breaks (similar to Prettier `proseWrap: preserve`), set:
+
+```toml
+line-width = 999999
+
+[prose]
+wrap = "preserve"
 ```
 
 In `--check` mode, `clippier-md` prints unified diffs by default.
