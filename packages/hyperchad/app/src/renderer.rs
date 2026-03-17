@@ -134,6 +134,8 @@ pub type DefaultRenderer = stub::StubRenderer;
 
 #[cfg(feature = "egui")]
 mod egui {
+    //! Egui renderer integration and builder helpers.
+
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -281,6 +283,8 @@ mod egui {
 
 #[cfg(feature = "fltk")]
 mod fltk {
+    //! FLTK renderer integration and builder helpers.
+
     use async_trait::async_trait;
     use hyperchad_router::{DEFAULT_CLIENT_INFO, Router};
 
@@ -367,6 +371,8 @@ mod fltk {
 /// This module provides HTML rendering capabilities with support for Actix web server,
 /// AWS Lambda serverless deployment, and vanilla JavaScript interactivity.
 pub mod html {
+    //! HTML renderer integrations and backend-specific builder helpers.
+
     use std::{path::PathBuf, sync::LazyLock};
 
     use async_trait::async_trait;
@@ -683,6 +689,8 @@ pub mod html {
 
     #[cfg(feature = "actix")]
     pub mod actix {
+        //! Actix-backed HTML renderer types and builder helpers.
+
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with Actix web server backend.
@@ -742,6 +750,8 @@ pub mod html {
 
         #[cfg(feature = "vanilla-js")]
         pub mod vanilla_js {
+            //! Actix + vanilla JavaScript HTML renderer types and builder helpers.
+
             use crate::{App, AppBuilder, BuilderError};
 
             /// Type alias for an HTML renderer with vanilla JavaScript and Actix web server backend.
@@ -815,6 +825,8 @@ pub mod html {
 
     #[cfg(feature = "lambda")]
     pub mod lambda {
+        //! Lambda-backed HTML renderer types and builder helpers.
+
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with AWS Lambda backend.
@@ -874,6 +886,8 @@ pub mod html {
 
         #[cfg(feature = "vanilla-js")]
         pub mod vanilla_js {
+            //! Lambda + vanilla JavaScript HTML renderer types and builder helpers.
+
             use crate::{App, AppBuilder, BuilderError};
 
             /// Type alias for an HTML renderer with vanilla JavaScript and AWS Lambda backend.
@@ -938,6 +952,8 @@ pub mod html {
 
     #[cfg(feature = "vanilla-js")]
     pub mod vanilla_js {
+        //! Standalone vanilla JavaScript HTML renderer types and builder helpers.
+
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with vanilla JavaScript (no backend server).
@@ -997,6 +1013,8 @@ pub mod html {
 /// This module provides a `StubRenderer` that implements all renderer traits but performs
 /// no actual rendering. Useful for testing, documentation examples, or as a placeholder.
 pub mod stub {
+    //! Stub renderer and runner used for tests and no-op execution.
+
     use async_trait::async_trait;
     use hyperchad_renderer::{
         Color, Handle, RenderRunner, Renderer, ToRenderRunner, View, transformer::ResponsiveTrigger,
@@ -1012,7 +1030,7 @@ pub mod stub {
     impl Renderer for StubRenderer {
         /// # Errors
         ///
-        /// Will error if `Renderer` implementation app fails to start
+        /// * If the underlying renderer implementation fails to initialize
         #[allow(clippy::too_many_arguments)]
         async fn init(
             &mut self,
@@ -1033,7 +1051,7 @@ pub mod stub {
 
         /// # Errors
         ///
-        /// Will error if `Renderer` implementation fails to emit the event.
+        /// * If the underlying renderer implementation fails to emit the event
         async fn emit_event(
             &self,
             _event_name: String,
@@ -1044,7 +1062,7 @@ pub mod stub {
 
         /// # Errors
         ///
-        /// Will error if `Renderer` implementation fails to render the view.
+        /// * If the underlying renderer implementation fails to render the view
         async fn render(
             &self,
             _view: View,
