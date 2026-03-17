@@ -905,6 +905,22 @@ fn render_option_child(
 /// styles, and child elements. Handles various element types including images,
 /// forms, buttons, tables, and semantic HTML elements.
 ///
+/// # Examples
+///
+/// ```rust,ignore
+/// use hyperchad_renderer_html::{DefaultHtmlTagRenderer, html::element_to_html};
+/// use hyperchad_router::Container;
+///
+/// let mut out = Vec::new();
+/// element_to_html(
+///     &mut out,
+///     &Container::default(),
+///     &DefaultHtmlTagRenderer::default(),
+///     false,
+/// )
+/// .expect("element should render");
+/// ```
+///
 /// # Errors
 ///
 /// * If there were any IO errors writing the element as HTML
@@ -1434,6 +1450,31 @@ pub fn container_element_to_html(
 /// Generates a full HTML page with doctype, head section (including CSS and metadata),
 /// and body containing the rendered container. This is used for serving complete
 /// HTML pages in web applications.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use std::collections::BTreeMap;
+///
+/// use hyperchad_renderer_html::{DefaultHtmlTagRenderer, html::container_element_to_html_response};
+/// use hyperchad_router::Container;
+///
+/// let html = container_element_to_html_response(
+///     &BTreeMap::new(),
+///     &Container::default(),
+///     Some("width=device-width, initial-scale=1"),
+///     None,
+///     Some("My App"),
+///     Some("Example page"),
+///     &DefaultHtmlTagRenderer::default(),
+///     &[],
+///     &[],
+///     &[],
+/// )
+/// .expect("html response should render");
+///
+/// assert!(html.contains("<!DOCTYPE html>"));
+/// ```
 ///
 /// # Errors
 ///

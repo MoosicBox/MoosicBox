@@ -520,6 +520,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
 /// viewport settings, and page metadata like title and description.
 pub trait HtmlApp {
     /// Returns a reference to the HTML tag renderer.
+    #[must_use]
     fn tag_renderer(&self) -> &dyn HtmlTagRenderer;
 
     /// Adds a responsive trigger and returns the modified app.

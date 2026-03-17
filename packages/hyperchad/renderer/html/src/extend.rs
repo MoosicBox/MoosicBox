@@ -51,9 +51,11 @@ impl HtmlRendererEventPub {
 /// like server-sent events, WebSocket updates, or other real-time features.
 #[async_trait]
 pub trait ExtendHtmlRenderer {
+    /// Emits a custom renderer event.
+    ///
     /// # Errors
     ///
-    /// Will error if `ExtendHtmlRenderer` implementation fails to emit the event.
+    /// * If the `ExtendHtmlRenderer` implementation fails to emit the event
     async fn emit_event(
         &self,
         _pub: HtmlRendererEventPub,
@@ -63,9 +65,11 @@ pub trait ExtendHtmlRenderer {
         Ok(())
     }
 
+    /// Renders a view update.
+    ///
     /// # Errors
     ///
-    /// Will error if `ExtendHtmlRenderer` implementation fails to render the view.
+    /// * If the `ExtendHtmlRenderer` implementation fails to render the view
     async fn render(
         &self,
         _pub: HtmlRendererEventPub,
@@ -74,9 +78,11 @@ pub trait ExtendHtmlRenderer {
         Ok(())
     }
 
+    /// Renders a canvas update.
+    ///
     /// # Errors
     ///
-    /// Will error if `ExtendHtmlRenderer` implementation fails to render the canvas update.
+    /// * If the `ExtendHtmlRenderer` implementation fails to render the canvas update
     async fn render_canvas(
         &self,
         _pub: HtmlRendererEventPub,
