@@ -25,7 +25,17 @@ use hyperchad_router::Router;
 /// * `title` - Optional page title for the skeleton HTML
 /// * `viewport` - Optional viewport meta tag content for the skeleton HTML
 ///
-/// # Example
+/// # Errors
+///
+/// * This function does not return errors directly.
+/// * Errors produced by the original `"/"` handler are propagated when
+///   `"/__hyperchad_dynamic_root__"` is requested.
+///
+/// # Panics
+///
+/// This function does not panic.
+///
+/// # Examples
 ///
 /// ```rust
 /// use hyperchad_router::Router;
