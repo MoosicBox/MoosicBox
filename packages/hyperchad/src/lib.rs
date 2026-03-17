@@ -86,49 +86,70 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Action system and event handling APIs.
 #[cfg(feature = "actions")]
 pub use hyperchad_actions as actions;
+/// Application builder and runtime APIs.
 #[cfg(feature = "app")]
 pub use hyperchad_app as app;
+/// Color management and theming APIs.
 #[cfg(feature = "color")]
 pub use hyperchad_color as color;
+/// JavaScript bundling utilities for web targets.
 #[cfg(feature = "js-bundler")]
 pub use hyperchad_js_bundler as js_bundler;
+/// Markdown parsing and rendering APIs.
 #[cfg(feature = "markdown")]
 pub use hyperchad_markdown as markdown;
+/// Base renderer traits and shared renderer APIs.
 #[cfg(feature = "renderer")]
 pub use hyperchad_renderer as renderer;
+/// Egui desktop renderer APIs.
 #[cfg(feature = "renderer-egui")]
 pub use hyperchad_renderer_egui as renderer_egui;
+/// FLTK desktop renderer APIs.
 #[cfg(feature = "renderer-fltk")]
 pub use hyperchad_renderer_fltk as renderer_fltk;
+/// Base HTML renderer APIs.
 #[cfg(feature = "renderer-html")]
 pub use hyperchad_renderer_html as renderer_html;
+/// Actix web server renderer APIs.
 #[cfg(feature = "renderer-html-actix")]
 pub use hyperchad_renderer_html_actix as renderer_html_actix;
+/// CDN-hosted HTML renderer APIs.
 #[cfg(feature = "renderer-html-cdn")]
 pub use hyperchad_renderer_html_cdn as renderer_html_cdn;
+/// HTTP server renderer APIs.
 #[cfg(feature = "renderer-html-http")]
 pub use hyperchad_renderer_html_http as renderer_html_http;
+/// AWS Lambda HTML renderer APIs.
 #[cfg(feature = "renderer-html-lambda")]
 pub use hyperchad_renderer_html_lambda as renderer_html_lambda;
+/// Generic web server HTML renderer APIs.
 #[cfg(feature = "renderer-html-web-server")]
 pub use hyperchad_renderer_html_web_server as renderer_html_web_server;
+/// Vanilla JavaScript client-side renderer APIs.
 #[cfg(feature = "renderer-vanilla-js")]
 pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
+/// Routing APIs for application navigation.
 #[cfg(feature = "router")]
 pub use hyperchad_router as router;
+/// State persistence APIs.
 #[cfg(feature = "state")]
 pub use hyperchad_state as state;
+/// Template macros and UI composition APIs.
 #[cfg(feature = "template")]
 pub use hyperchad_template as template;
+/// Transformer APIs for container and element processing.
 #[cfg(feature = "transformer")]
 pub use hyperchad_transformer as transformer;
+/// Shared data models for transformer APIs.
 #[cfg(feature = "transformer-models")]
 pub use hyperchad_transformer_models as transformer_models;
 
-// Simulation modules
+/// Testing and simulation utilities.
 #[cfg(feature = "simulator")]
 pub use hyperchad_simulator as simulator;
+/// Shared testing helpers and utilities.
 #[cfg(feature = "test-utils")]
 pub use hyperchad_test_utils as test_utils;
