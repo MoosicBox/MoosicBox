@@ -1,3 +1,6 @@
 [submodule "packages/opus_native/libopus/opus"]
 	path = packages/opus_native/libopus/opus
 	url = https://gitlab.xiph.org/xiph/opus.git
+[submodule "packages/clippier/md/tests/vendor/commonmark-spec"]
+	path = packages/clippier/md/tests/vendor/commonmark-spec
+	url = https://github.com/commonmark/commonmark-spec.git

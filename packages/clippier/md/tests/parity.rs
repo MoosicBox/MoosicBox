@@ -31,27 +31,168 @@ fn prettier_parity_commonmark_gfm_fixtures() {
         ..Config::default()
     };
 
+    let mut failures = Vec::new();
+
     for dir in fixture_dirs {
         let input = read_fixture_file(&dir, "input").expect("missing input fixture");
         let prettier = run_prettier(&input.0, &input.1);
         let output = format_markdown(&input.1, &config);
 
-        assert_eq!(
-            output,
-            prettier,
-            "Parity mismatch for fixture '{}': input={:?}",
-            dir.display(),
-            input.0,
-        );
+        if output != prettier {
+            failures.push(ParityFailure {
+                scope: format!("fixture:{}", dir.display()),
+                kind: "parity".to_string(),
+                details: first_difference_summary(&prettier, &output),
+            });
+        }
 
         let idempotent = format_markdown(&output, &config);
-        assert_eq!(
-            idempotent,
-            output,
-            "Idempotence mismatch for fixture '{}'",
-            dir.display()
-        );
+        if idempotent != output {
+            failures.push(ParityFailure {
+                scope: format!("fixture:{}", dir.display()),
+                kind: "idempotence".to_string(),
+                details: first_difference_summary(&output, &idempotent),
+            });
+        }
     }
+
+    let spec_path = fixtures_base
+        .join("..")
+        .join("..")
+        .join("vendor")
+        .join("commonmark-spec")
+        .join("spec.txt");
+    assert!(
+        spec_path.exists(),
+        "CommonMark spec not found at '{}'. Run: git submodule update --init --recursive",
+        spec_path.display()
+    );
+
+    let spec_contents = std::fs::read_to_string(&spec_path).unwrap_or_else(|error| {
+        panic!(
+            "Failed to read CommonMark spec at '{}': {error}",
+            spec_path.display()
+        )
+    });
+    let examples = parse_commonmark_examples(&spec_contents);
+    assert!(
+        !examples.is_empty(),
+        "No examples parsed from CommonMark spec at '{}'",
+        spec_path.display()
+    );
+
+    for example in examples {
+        let input = example.markdown.replace('→', "\t");
+        let prettier = run_prettier(Path::new("commonmark-spec.md"), &input);
+        let output = format_markdown(&input, &config);
+
+        if output != prettier {
+            failures.push(ParityFailure {
+                scope: format!("commonmark-spec#{}", example.id),
+                kind: "parity".to_string(),
+                details: first_difference_summary(&prettier, &output),
+            });
+        }
+
+        let idempotent = format_markdown(&output, &config);
+        if idempotent != output {
+            failures.push(ParityFailure {
+                scope: format!("commonmark-spec#{}", example.id),
+                kind: "idempotence".to_string(),
+                details: first_difference_summary(&output, &idempotent),
+            });
+        }
+    }
+
+    if !failures.is_empty() {
+        let mut report = format!("Found {} parity failure(s):\n", failures.len());
+        for failure in &failures {
+            report.push_str(&format!(
+                "- [{}] {}\n  {}\n",
+                failure.kind, failure.scope, failure.details
+            ));
+        }
+        panic!("{report}");
+    }
+}
+
+#[derive(Debug)]
+struct ParityFailure {
+    scope: String,
+    kind: String,
+    details: String,
+}
+
+fn first_difference_summary(expected: &str, actual: &str) -> String {
+    let expected_lines = expected.lines().collect::<Vec<_>>();
+    let actual_lines = actual.lines().collect::<Vec<_>>();
+    let max = expected_lines.len().max(actual_lines.len());
+
+    for index in 0..max {
+        let left = expected_lines.get(index).copied();
+        let right = actual_lines.get(index).copied();
+        if left != right {
+            return format!(
+                "line {}: expected {:?}, actual {:?}",
+                index + 1,
+                left.unwrap_or("<missing>"),
+                right.unwrap_or("<missing>"),
+            );
+        }
+    }
+
+    format!(
+        "byte mismatch with equal line splits (expected {} bytes, actual {} bytes)",
+        expected.len(),
+        actual.len()
+    )
+}
+
+#[derive(Debug)]
+struct CommonmarkExample {
+    id: usize,
+    markdown: String,
+}
+
+fn parse_commonmark_examples(spec: &str) -> Vec<CommonmarkExample> {
+    let mut examples = Vec::new();
+    let mut lines = spec.lines().peekable();
+    let mut id = 0usize;
+
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_end();
+        if !trimmed.ends_with(" example") {
+            continue;
+        }
+        let fence = trimmed.trim_end_matches(" example");
+        if fence.is_empty() || !fence.chars().all(|char| char == '`') {
+            continue;
+        }
+
+        let mut markdown_lines = Vec::new();
+        let mut reading_markdown = true;
+        for body_line in lines.by_ref() {
+            let body_trimmed = body_line.trim_end();
+            if body_trimmed == fence {
+                break;
+            }
+            if reading_markdown && body_trimmed == "." {
+                reading_markdown = false;
+                continue;
+            }
+            if reading_markdown {
+                markdown_lines.push(body_line.to_string());
+            }
+        }
+
+        id += 1;
+        examples.push(CommonmarkExample {
+            id,
+            markdown: markdown_lines.join("\n"),
+        });
+    }
+
+    examples
 }
 
 #[test]
