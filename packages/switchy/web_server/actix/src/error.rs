@@ -11,6 +11,19 @@ use switchy_http_models::{StatusCode, TryFromU16StatusCodeError};
 ///
 /// This function provides the same functionality as the `From` implementation
 /// in the main crate, but as a standalone function to work around orphan rules.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_web_server::Error as WebServerError;
+/// use switchy_web_server_actix::into_actix_error;
+///
+/// let source = std::io::Error::other("invalid request");
+/// let error = WebServerError::bad_request(source);
+/// let actix_error = into_actix_error(error);
+///
+/// assert_eq!(actix_error.error_response().status().as_u16(), 400);
+/// ```
 #[must_use]
 pub fn into_actix_error(value: switchy_web_server::Error) -> Error {
     match value {
@@ -96,7 +109,21 @@ pub fn into_actix_error(value: switchy_web_server::Error) -> Error {
 ///
 /// # Errors
 ///
-/// Returns `TryFromU16StatusCodeError` if the status code conversion fails.
+/// * Returns [`TryFromU16StatusCodeError`] if the status code from the Actix error
+///   response cannot be converted into [`StatusCode`].
+///
+/// # Examples
+///
+/// ```rust
+/// use actix_web::error;
+/// use switchy_web_server_actix::try_from_actix_error;
+///
+/// let actix_error = error::ErrorBadRequest("invalid payload");
+/// let web_server_error = try_from_actix_error(&actix_error)
+///     .expect("status code should map to switchy_http_models::StatusCode");
+///
+/// assert_eq!(web_server_error.status_code(), switchy_http_models::StatusCode::BadRequest);
+/// ```
 pub fn try_from_actix_error(
     value: &Error,
 ) -> Result<switchy_web_server::Error, TryFromU16StatusCodeError> {
@@ -132,8 +159,8 @@ pub trait TryIntoWebServerError {
     ///
     /// # Errors
     ///
-    /// Returns `TryFromU16StatusCodeError` if the HTTP status code cannot be
-    /// converted to a known `StatusCode` variant.
+    /// * Returns [`TryFromU16StatusCodeError`] if the HTTP status code cannot be
+    ///   converted to a known [`StatusCode`] variant.
     fn try_into_web_server_error(
         self,
     ) -> Result<switchy_web_server::Error, TryFromU16StatusCodeError>;
