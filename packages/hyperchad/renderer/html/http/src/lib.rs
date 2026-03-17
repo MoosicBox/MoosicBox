@@ -159,12 +159,37 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     /// * `Error::Http` - If HTTP response construction fails
     /// * `Error::IO` - If file I/O operations fail (asset serving)
     /// * `Error::Navigate` - If routing fails
+    /// * `Error::Renderer` - If rendering view content to HTML fails
     /// * `Error::SerdeJson` - If JSON serialization fails (with `json` feature)
     ///
     /// # Panics
     ///
-    /// * If action channel send fails (with `actions` feature)
-    /// * If path string conversion fails during asset serving (with `assets` feature)
+    /// * If JSON content is returned while the `json` feature is disabled
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hyperchad_renderer_html::DefaultHtmlTagRenderer;
+    /// use hyperchad_renderer_html_http::HttpApp;
+    /// use hyperchad_router::{RequestInfo, RouteRequest, Router};
+    /// use switchy::http::models::Method;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let app = HttpApp::new(DefaultHtmlTagRenderer::default(), Router::new());
+    /// let req = RouteRequest {
+    ///     path: "/".to_string(),
+    ///     method: Method::Get,
+    ///     query: std::collections::BTreeMap::new(),
+    ///     headers: std::collections::BTreeMap::new(),
+    ///     cookies: std::collections::BTreeMap::new(),
+    ///     info: RequestInfo::default(),
+    ///     body: None,
+    /// };
+    ///
+    /// let _response = app.process(&req).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::too_many_lines)]
     pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
         static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);

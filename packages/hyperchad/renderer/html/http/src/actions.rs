@@ -38,6 +38,34 @@ pub struct ActionPayload {
 ///
 /// * `Error::Http` - If HTTP response construction fails
 ///
+/// # Examples
+///
+/// ```rust
+/// use bytes::Bytes;
+/// use hyperchad_renderer_html_http::http;
+/// use hyperchad_router::{RequestInfo, RouteRequest};
+/// use std::{collections::BTreeMap, sync::Arc};
+/// use switchy::http::models::Method;
+///
+/// # #[cfg(feature = "actions")]
+/// # {
+/// let (tx, rx) = flume::unbounded();
+/// let req = RouteRequest {
+///     path: "/$action".to_string(),
+///     method: Method::Post,
+///     query: BTreeMap::new(),
+///     headers: BTreeMap::new(),
+///     cookies: BTreeMap::new(),
+///     info: RequestInfo::default(),
+///     body: Some(Arc::new(Bytes::from_static(br#"{"action":"save"}"#))),
+/// };
+///
+/// let response = handle_action(&tx, &req).unwrap();
+/// assert_eq!(response.status(), http::StatusCode::NO_CONTENT);
+/// assert_eq!(rx.try_recv().unwrap().0, "save");
+/// # }
+/// ```
+///
 /// # Panics
 ///
 /// * If the channel sender fails to send the action (channel receiver has been dropped)
