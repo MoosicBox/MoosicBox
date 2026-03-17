@@ -208,7 +208,7 @@ pub enum LayoutPosition {
 #[cfg(feature = "layout")]
 impl LayoutPosition {
     /// Returns the row index if this is a `Wrap` position.
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub const fn row(&self) -> Option<u32> {
         match self {
             Self::Wrap { row, .. } => Some(*row),
@@ -217,7 +217,7 @@ impl LayoutPosition {
     }
 
     /// Returns the column index if this is a `Wrap` position.
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub const fn column(&self) -> Option<u32> {
         match self {
             Self::Wrap { col, .. } => Some(*col),
@@ -330,6 +330,21 @@ impl TryFrom<&str> for Selector {
     /// # Errors
     ///
     /// * Returns `ParseSelectorError` if the string does not match any valid selector format
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperchad_transformer_models::Selector;
+    ///
+    /// assert_eq!(Selector::try_from("self")?, Selector::SelfTarget);
+    /// assert_eq!(Selector::try_from("#title")?, Selector::Id("title".to_string()));
+    /// assert_eq!(
+    ///     Selector::try_from("> .item")?,
+    ///     Selector::ChildClass("item".to_string())
+    /// );
+    ///
+    /// # Ok::<(), hyperchad_transformer_models::ParseSelectorError>(())
+    /// ```
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
             "self" => Self::SelfTarget,
@@ -385,7 +400,7 @@ impl From<&Self> for Target {
 
 impl Target {
     /// Returns the string value of the target, regardless of whether it's literal or a reference.
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Literal(x) | Self::Ref(x) => Some(x),
