@@ -12,9 +12,8 @@ describe('actions-event', () => {
     });
 
     it('triggers on custom event with v-onevent attribute', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-event');
 
@@ -41,9 +40,8 @@ describe('actions-event', () => {
     });
 
     it('parses event name from attribute value', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-event');
 
@@ -79,9 +77,8 @@ describe('actions-event', () => {
     });
 
     it('provides element in context', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-event');
 
@@ -107,9 +104,8 @@ describe('actions-event', () => {
     });
 
     it('provides event detail in context value', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-event');
 
