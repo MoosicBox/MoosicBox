@@ -149,6 +149,20 @@ pub fn cancel_global_simulation() {
 /// Returns `Some(output)` if the future completes, or `None` if either the global
 /// or thread-local simulation cancellation token is triggered.
 ///
+/// # Examples
+///
+/// ```rust
+/// use simvar_utils::{reset_global_simulator_cancellation_token, reset_simulator_cancellation_token, run_until_simulation_cancelled};
+///
+/// # async fn example() {
+/// reset_global_simulator_cancellation_token();
+/// reset_simulator_cancellation_token();
+///
+/// let output = run_until_simulation_cancelled(async { 7_u8 }).await;
+/// assert_eq!(output, Some(7));
+/// # }
+/// ```
+///
 /// # Panics
 ///
 /// * If the `GLOBAL_SIMULATOR_CANCELLATION_TOKEN` `RwLock` fails to read from
