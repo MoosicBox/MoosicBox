@@ -170,6 +170,10 @@ impl<T: Serialize> Serialize for Page<T> {
     /// # Errors
     ///
     /// * If serialization fails
+    ///
+    /// # Panics
+    ///
+    /// * If `items.len()` cannot be represented as a `u32` for total-based pages
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -309,6 +313,10 @@ impl<T> Page<T> {
     }
 
     /// Returns the number of remaining items after this page, if the total is known.
+    ///
+    /// # Panics
+    ///
+    /// * In debug builds, if `offset + limit` is greater than `total`
     #[must_use]
     pub const fn remaining(&self) -> Option<u32> {
         match self {
@@ -343,6 +351,24 @@ impl<T> Page<T> {
     ///
     /// This method consumes the page and returns a new page with transformed items,
     /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_paging::Page;
+    ///
+    /// let page = Page::WithTotal {
+    ///     items: vec![1, 2, 3],
+    ///     offset: 0,
+    ///     limit: 3,
+    ///     total: 6,
+    /// };
+    ///
+    /// let mapped = page.map(|value| value * 2);
+    ///
+    /// assert_eq!(mapped.items(), &[2, 4, 6]);
+    /// assert_eq!(mapped.total(), Some(6));
+    /// ```
     #[must_use]
     pub fn map<U, F>(self, mut f: F) -> Page<U>
     where
@@ -701,6 +727,40 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_paging::{Page, PagingResponse};
+    ///
+    /// # async fn example() -> Result<(), String> {
+    /// let response = PagingResponse::new(
+    ///     Page::WithTotal {
+    ///         items: vec![1, 2],
+    ///         offset: 0,
+    ///         limit: 2,
+    ///         total: 4,
+    ///     },
+    ///     |_offset, _limit| {
+    ///         Box::pin(async {
+    ///             Ok(PagingResponse::new(
+    ///                 Page::WithTotal {
+    ///                     items: vec![3, 4],
+    ///                     offset: 2,
+    ///                     limit: 2,
+    ///                     total: 4,
+    ///                 },
+    ///                 |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+    ///             ))
+    ///         })
+    ///     },
+    /// );
+    ///
+    /// let items = response.with_rest_of_items().await?;
+    /// assert_eq!(items, vec![1, 2, 3, 4]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn with_rest_of_items(self) -> Result<Vec<T>, E> {
         Ok(self
             .with_rest_of_pages()
