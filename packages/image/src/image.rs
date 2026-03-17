@@ -41,6 +41,18 @@ use crate::Encoding;
 ///
 /// * [`image::error::ImageError`] - If the image file cannot be opened or decoded
 /// * [`image::error::ImageError`] - If the image encoder fails to encode the resized image
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_image::{Encoding, image::try_resize_local_file};
+///
+/// # fn main() -> Result<(), image::error::ImageError> {
+/// let bytes = try_resize_local_file(800, 600, "./cover.jpg", Encoding::Jpeg, 85)?;
+/// assert!(bytes.is_some());
+/// # Ok(())
+/// # }
+/// ```
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn try_resize_local_file(
     width: u32,
@@ -90,6 +102,18 @@ pub enum ResizeImageError {
 ///
 /// * [`ResizeImageError::Image`] - If the image file cannot be opened, decoded, or encoded
 /// * [`ResizeImageError::Join`] - If the blocking task fails to complete
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_image::{Encoding, image::try_resize_local_file_async};
+///
+/// # async fn run() -> Result<(), moosicbox_image::image::ResizeImageError> {
+/// let bytes = try_resize_local_file_async(800, 600, "./cover.jpg", Encoding::Webp, 80).await?;
+/// assert!(bytes.is_some());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn try_resize_local_file_async(
     width: u32,
     height: u32,

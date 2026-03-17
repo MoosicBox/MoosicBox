@@ -68,6 +68,21 @@ pub fn get_error() -> String {
 /// # Panics
 ///
 /// Panics if the libvips library cannot be initialized on first access.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(all(not(target_os = "windows"), feature = "libvips"))]
+/// # {
+/// use moosicbox_image::libvips::resize_local_file;
+///
+/// # fn main() -> Result<(), libvips::error::Error> {
+/// let bytes = resize_local_file(1024, 1024, "./cover.jpg")?;
+/// assert!(!bytes.is_empty());
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 pub fn resize_local_file(
     width: u32,
     height: u32,
@@ -102,6 +117,22 @@ pub fn resize_local_file(
 /// # Panics
 ///
 /// Panics if the libvips library cannot be initialized on first access.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(all(not(target_os = "windows"), feature = "libvips"))]
+/// # {
+/// use moosicbox_image::libvips::resize_bytes;
+///
+/// # fn main() -> Result<(), libvips::error::Error> {
+/// let source = std::fs::read("./cover.jpg").expect("cover image should exist");
+/// let bytes = resize_bytes(512, 512, &source)?;
+/// assert!(!bytes.is_empty());
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 pub fn resize_bytes(width: u32, height: u32, bytes: &[u8]) -> Result<Bytes, libvips::error::Error> {
     let _app = &VIPS;
     let options = ops::ThumbnailBufferOptions {
