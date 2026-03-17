@@ -199,6 +199,7 @@ impl ChecksumDatabase {
     /// This consumes the `ChecksumDatabase` and returns the final SHA-256 hash
     /// as a 32-byte `Bytes` value. The hash represents all database operations
     /// that were performed on this instance.
+    #[must_use]
     pub async fn finalize(self) -> bytes::Bytes {
         match Arc::try_unwrap(self.hasher) {
             Ok(mutex) => {

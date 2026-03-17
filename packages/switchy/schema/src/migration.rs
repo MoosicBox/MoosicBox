@@ -217,6 +217,11 @@ impl ToValueType<MigrationStatus> for DatabaseValue {
 }
 
 #[async_trait]
+/// Core trait for executable database migrations.
+///
+/// Implement this trait for types that represent a single schema migration.
+/// Migrations expose a unique ID, execute forward changes with [`Self::up`],
+/// and can optionally support rollback with [`Self::down`].
 pub trait Migration<'a>: Send + Sync + 'a {
     /// Get the unique identifier for this migration
     ///
@@ -251,7 +256,7 @@ pub trait Migration<'a>: Send + Sync + 'a {
     ///
     /// # Errors
     ///
-    /// Returns an error if checksum calculation fails
+    /// * Returns an error if checksum calculation fails
     async fn up_checksum(&self) -> Result<bytes::Bytes> {
         // Default returns 32 zero bytes
         Ok(bytes::Bytes::from(vec![0u8; 32]))
@@ -261,7 +266,7 @@ pub trait Migration<'a>: Send + Sync + 'a {
     ///
     /// # Errors
     ///
-    /// Returns an error if checksum calculation fails
+    /// * Returns an error if checksum calculation fails
     async fn down_checksum(&self) -> Result<bytes::Bytes> {
         // Default returns 32 zero bytes
         Ok(bytes::Bytes::from(vec![0u8; 32]))
@@ -285,6 +290,11 @@ pub trait Migration<'a>: Send + Sync + 'a {
 }
 
 #[async_trait]
+/// Source of migrations discoverable at runtime.
+///
+/// Implementors provide migration discovery and listing behavior for different
+/// backends, such as embedded directories, filesystem paths, or code-defined
+/// migration registries.
 pub trait MigrationSource<'a>: Send + Sync {
     /// Get all available migrations from this source
     ///

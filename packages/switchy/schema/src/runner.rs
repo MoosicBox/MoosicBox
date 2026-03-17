@@ -752,7 +752,6 @@ impl<'a> MigrationRunner<'a> {
     ///
     /// * If database operations fail
     /// * If a migration's `down()` method fails
-    /// * If a migration doesn't have a `down()` method when validation is enabled
     ///
     /// # Panics
     ///
@@ -786,7 +785,8 @@ impl<'a> MigrationRunner<'a> {
     /// // Roll back to a specific migration (not including it)
     /// runner.rollback(db, RollbackStrategy::DownTo("20240101_initial".to_string())).await?;
     /// # Ok(())
-    /// # }    /// ```
+    /// # }
+    /// ```
     pub async fn rollback(&self, db: &dyn Database, strategy: RollbackStrategy) -> Result<()> {
         // Ensure migrations table exists
         self.version_tracker.ensure_table_exists(db).await?;
