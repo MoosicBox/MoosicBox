@@ -70,6 +70,17 @@ impl TestVector {
     /// * Path does not exist or is not a directory
     /// * Required files (packet.bin, expected.pcm, meta.json) are missing
     /// * JSON metadata is malformed or missing required fields
+    /// * PCM data cannot be read or metadata values cannot be converted to expected numeric types
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_opus_native_test_vectors::TestVector;
+    ///
+    /// let vector = TestVector::load("/path/to/vector")?;
+    /// assert!(!vector.packet.is_empty());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let path = path.as_ref();
         let name = path
@@ -112,7 +123,20 @@ impl TestVector {
     ///
     /// # Errors
     ///
-    /// Returns error if directory cannot be read or accessed
+    /// Returns error if:
+    /// * The provided directory does not exist or cannot be read
+    /// * A directory entry cannot be read while scanning for vectors
+    /// * Entry type metadata cannot be read for an item in the directory
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_opus_native_test_vectors::{TestVector, test_vectors_dir};
+    ///
+    /// let vectors = TestVector::load_all(test_vectors_dir().join("silk"))?;
+    /// println!("Loaded {} vectors", vectors.len());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn load_all(dir: impl AsRef<Path>) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let mut vectors = Vec::new();
@@ -140,6 +164,18 @@ impl TestVector {
 /// * `f64::INFINITY` - Signals are identical (no noise)
 /// * `f64::NEG_INFINITY` - Signals have different lengths
 /// * `0.0` - Reference signal has negligible power
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_opus_native_test_vectors::calculate_snr;
+///
+/// let reference = [1000, -1000, 500, -500];
+/// let decoded = [995, -1005, 490, -510];
+///
+/// let snr = calculate_snr(&reference, &decoded);
+/// assert!(snr > 30.0);
+/// ```
 #[must_use]
 pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
     if reference.len() != decoded.len() {
