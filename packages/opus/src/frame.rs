@@ -51,6 +51,16 @@ pub enum FramePacking {
 ///
 /// * `PacketTooShort` - If the data is empty or doesn't contain enough bytes for the length encoding
 /// * `InvalidFrameLength` - If the decoded length exceeds the maximum of 1275 bytes
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_opus::decode_frame_length;
+///
+/// let (len, consumed) = decode_frame_length(&[120]).expect("valid short frame length");
+/// assert_eq!(len, 120);
+/// assert_eq!(consumed, 1);
+/// ```
 pub fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
     if data.is_empty() {
         return Err(Error::PacketTooShort(0));

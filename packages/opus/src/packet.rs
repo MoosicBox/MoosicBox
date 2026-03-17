@@ -44,6 +44,18 @@ impl OpusPacket {
     ///
     /// * `PacketTooShort` - If the packet is empty or too short for the declared structure
     /// * `InvalidPacket` - If the packet structure is invalid according to RFC 6716
+    /// * `InvalidFrameLength` - If a variable frame length encoding exceeds RFC 6716 limits
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_opus::OpusPacket;
+    ///
+    /// // TOC byte with frame code 0 + a one-byte payload frame.
+    /// let packet = OpusPacket::parse(&[0b0000_0000, 0xAB]).expect("valid code 0 packet");
+    /// assert_eq!(packet.frames.len(), 1);
+    /// assert_eq!(packet.frames[0].data, vec![0xAB]);
+    /// ```
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.is_empty() {
             return Err(Error::PacketTooShort(0));

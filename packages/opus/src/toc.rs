@@ -37,7 +37,8 @@ impl TocByte {
     ///
     /// # Errors
     ///
-    /// Currently never returns an error, but uses Result for future compatibility.
+    /// * This function currently never returns an error.
+    /// * The `Result` return type is preserved for API forward compatibility.
     pub const fn parse(byte: u8) -> Result<Self> {
         let config = (byte >> 3) & 0x1F;
         let stereo = (byte & 0x04) != 0;
