@@ -61,6 +61,17 @@ use switchy_time::now;
 /// # Errors
 ///
 /// * Returns an error if the runtime fails to wait on spawned tasks
+///
+/// # Panics
+///
+/// * Panics if the system clock is earlier than `UNIX_EPOCH` when converting
+///   timestamps for log output.
+///
+/// # Examples
+///
+/// ```text
+/// cargo run --package async_simulated --features simulator
+/// ```
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
