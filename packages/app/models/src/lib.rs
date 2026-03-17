@@ -73,11 +73,12 @@ impl AsRef<Self> for MusicApiSettings {
 }
 
 #[cfg(feature = "music-api-api")]
-/// Conversions between music API models.
-///
-/// Provides `From` trait implementations to convert from API-level
-/// music API models to application-level settings.
 pub mod music_api_api {
+    //! Conversions between music API models.
+    //!
+    //! Provides `From` trait implementations to convert from API-level
+    //! music API models to application-level settings.
+
     use moosicbox_music_api_api::models::ApiMusicApi;
 
     use crate::MusicApiSettings;
