@@ -327,6 +327,11 @@ pub struct YtDeviceAuthorizationQuery {
     )
 )]
 #[route("/auth/device-authorization", method = "POST")]
+/// Starts the `YouTube` Music OAuth device authorization flow.
+///
+/// # Errors
+///
+/// * Returns an error when the upstream device authorization request fails.
 pub async fn device_authorization_endpoint(
     query: web::Query<YtDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
@@ -368,6 +373,11 @@ pub struct YtDeviceAuthorizationTokenQuery {
     )
 )]
 #[route("/auth/device-authorization/token", method = "POST")]
+/// Exchanges a device code for `YouTube` Music access and refresh tokens.
+///
+/// # Errors
+///
+/// * Returns an error when token exchange fails or the token response is invalid.
 pub async fn device_authorization_token_endpoint(
     query: web::Query<YtDeviceAuthorizationTokenQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
@@ -415,6 +425,15 @@ pub struct YtTrackFileUrlQuery {
     )
 )]
 #[route("/track/url", method = "GET")]
+/// Resolves stream URLs for a `YouTube` Music track at a requested quality.
+///
+/// # Errors
+///
+/// * Returns an error when the track URL request fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackFileUrlQuery>,
@@ -463,6 +482,15 @@ pub struct YtTrackPlaybackInfoQuery {
     )
 )]
 #[route("/track/playback-info", method = "GET")]
+/// Fetches playback metadata for a `YouTube` Music track.
+///
+/// # Errors
+///
+/// * Returns an error when playback metadata retrieval fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackPlaybackInfoQuery>,
@@ -523,6 +551,15 @@ pub struct YtFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "GET")]
+/// Returns a paginated list of favorited `YouTube` Music artists.
+///
+/// # Errors
+///
+/// * Returns an error when fetching artists fails or response mapping fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteArtistsQuery>,
@@ -585,6 +622,15 @@ pub struct YtAddFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "POST")]
+/// Adds an artist to the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the favorite operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteArtistsQuery>,
@@ -644,6 +690,15 @@ pub struct YtRemoveFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "DELETE")]
+/// Removes an artist from the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the remove operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteArtistsQuery>,
@@ -709,6 +764,15 @@ pub struct YtFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "GET")]
+/// Returns a paginated list of favorited `YouTube` Music albums.
+///
+/// # Errors
+///
+/// * Returns an error when fetching albums fails or album conversion fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteAlbumsQuery>,
@@ -777,6 +841,15 @@ pub struct YtAddFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "POST")]
+/// Adds an album to the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the favorite operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteAlbumsQuery>,
@@ -836,6 +909,15 @@ pub struct YtRemoveFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "DELETE")]
+/// Removes an album from the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the remove operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteAlbumsQuery>,
@@ -895,6 +977,15 @@ pub struct YtAddFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "POST")]
+/// Adds a track to the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the favorite operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtAddFavoriteTracksQuery>,
@@ -954,6 +1045,15 @@ pub struct YtRemoveFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "DELETE")]
+/// Removes a track from the user's `YouTube` Music favorites.
+///
+/// # Errors
+///
+/// * Returns an error when the remove operation fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<YtRemoveFavoriteTracksQuery>,
@@ -1019,6 +1119,15 @@ pub struct YtFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "GET")]
+/// Returns a paginated list of favorited `YouTube` Music tracks.
+///
+/// # Errors
+///
+/// * Returns an error when fetching tracks fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtFavoriteTracksQuery>,
@@ -1108,6 +1217,15 @@ impl From<AlbumType> for YtAlbumType {
     )
 )]
 #[route("/artists/albums", method = "GET")]
+/// Returns a page of albums for the specified `YouTube` Music artist.
+///
+/// # Errors
+///
+/// * Returns an error when fetching artist albums fails or album conversion fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistAlbumsQuery>,
@@ -1177,6 +1295,15 @@ pub struct YtAlbumTracksQuery {
     )
 )]
 #[route("/albums/tracks", method = "GET")]
+/// Returns a page of tracks for the specified `YouTube` Music album.
+///
+/// # Errors
+///
+/// * Returns an error when fetching album tracks fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumTracksQuery>,
@@ -1234,6 +1361,15 @@ pub struct YtAlbumQuery {
     )
 )]
 #[route("/albums", method = "GET")]
+/// Fetches a single album by `YouTube` Music album ID.
+///
+/// # Errors
+///
+/// * Returns an error when album lookup fails or response conversion fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<YtAlbumQuery>,
@@ -1288,6 +1424,15 @@ pub struct YtArtistQuery {
     )
 )]
 #[route("/artists", method = "GET")]
+/// Fetches a single artist by `YouTube` Music artist ID.
+///
+/// # Errors
+///
+/// * Returns an error when artist lookup fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<YtArtistQuery>,
@@ -1342,6 +1487,15 @@ pub struct YtTrackQuery {
     )
 )]
 #[route("/tracks", method = "GET")]
+/// Fetches a single track by `YouTube` Music track ID.
+///
+/// # Errors
+///
+/// * Returns an error when track lookup fails.
+///
+/// # Panics
+///
+/// * Panics if `x-yt-access-token` contains invalid UTF-8 data.
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<YtTrackQuery>,
@@ -1394,6 +1548,11 @@ pub struct YtSearchQuery {
     )
 )]
 #[route("/search", method = "GET")]
+/// Searches `YouTube` Music for artists, albums, and tracks.
+///
+/// # Errors
+///
+/// * Returns an error when the search request fails.
 pub async fn search_endpoint(
     query: web::Query<YtSearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {

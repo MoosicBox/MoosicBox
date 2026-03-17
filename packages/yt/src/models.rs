@@ -164,7 +164,6 @@ impl YtSearchArtist {
     /// Constructs the full URL for the artist's profile picture at the specified size.
     ///
     /// Returns `None` if the artist has no profile picture.
-    #[must_use]
     pub fn picture_url(&self, size: YtArtistImageSize) -> Option<String> {
         self.picture.as_ref().map(|picture| {
             let picture_path = picture.replace('-', "/");
@@ -372,7 +371,6 @@ impl YtSearchAlbum {
     /// Constructs the full URL for the album's cover artwork at the specified size.
     ///
     /// Returns `None` if the album has no cover artwork.
-    #[must_use]
     pub fn cover_url(&self, size: YtAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -411,7 +409,6 @@ impl YtAlbum {
     /// Constructs the full URL for the album's cover artwork at the specified size.
     ///
     /// Returns `None` if the album has no cover artwork.
-    #[must_use]
     pub fn cover_url(&self, size: YtAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
