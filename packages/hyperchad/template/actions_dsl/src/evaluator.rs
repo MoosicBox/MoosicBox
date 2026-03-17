@@ -41,6 +41,10 @@ impl Context {
     /// Adds a variable to the current scope
     ///
     /// The variable is added to the front of the most recent scope.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the scope stack is unexpectedly empty
     pub fn add_variable(&mut self, name: &str) {
         self.scopes
             .front_mut()

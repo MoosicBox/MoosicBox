@@ -23,6 +23,21 @@ use hyperchad_actions::dsl::{
 /// * Returns parse error if the input contains invalid syntax
 /// * Returns error on unexpected end of input
 /// * Returns error if a statement cannot be parsed
+///
+/// # Examples
+///
+/// ```ignore
+/// use quote::quote;
+/// use syn::parse::Parser;
+///
+/// let input = quote! {
+///     let name = "modal";
+///     show(name);
+/// };
+///
+/// let dsl = Parser::parse2(parse_dsl, input).expect("valid DSL input");
+/// assert_eq!(dsl.statements.len(), 2);
+/// ```
 pub fn parse_dsl(input: ParseStream) -> Result<Dsl> {
     let mut statements = Vec::new();
 
@@ -1040,6 +1055,16 @@ fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
 /// the entire input as raw Rust code.
 ///
 /// The returned `Dsl` structure should be used for code generation.
+///
+/// # Examples
+///
+/// ```ignore
+/// use proc_macro2::TokenStream;
+///
+/// let input: TokenStream = "unknown_runtime_fn(arg1, arg2)".parse().expect("valid tokens");
+/// let dsl = parse_dsl_with_fallback(&input);
+/// assert_eq!(dsl.statements.len(), 1);
+/// ```
 #[must_use]
 pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
     // Check if the input starts with a known DSL function or control flow construct

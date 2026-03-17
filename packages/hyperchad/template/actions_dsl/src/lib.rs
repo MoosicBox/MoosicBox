@@ -56,6 +56,10 @@ use syn::parse::Parser;
 ///
 /// This macro allows you to write Rust-like syntax for defining actions:
 ///
+/// # Errors
+///
+/// * Emits a `compile_error!` in the expanded token stream when parsing or code generation fails
+///
 /// # Examples
 ///
 /// ```ignore
