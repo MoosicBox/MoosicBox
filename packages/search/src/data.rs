@@ -209,6 +209,15 @@ pub enum ReindexFromDbError {
 /// * `RecreateIndexError::CreateIndex` if failed to create the new index
 /// * `RecreateIndexError::GetIndexReader` if failed to get the index reader
 /// * `RecreateIndexError::Join` if the tokio task failed to join
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn run() -> Result<(), moosicbox_search::RecreateIndexError> {
+/// moosicbox_search::data::recreate_global_search_index().await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
     let permit = SEMAPHORE.acquire().await;
     switchy_async::runtime::Handle::current()

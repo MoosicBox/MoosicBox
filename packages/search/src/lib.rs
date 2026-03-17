@@ -1,3 +1,8 @@
+//! Search indexing and query utilities for the MoosicBox music catalog.
+//!
+//! This crate provides Tantivy-backed indexing, mutation, and query functions used
+//! by the search API and database integration layers.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -372,6 +377,22 @@ pub enum DataValue {
 /// * `PopulateIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
 /// * `PopulateIndexError::Tantivy` if Tantivy encounters an indexing error
 /// * `PopulateIndexError::Join` if the blocking task fails to join
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::{DataValue, populate_global_search_index};
+///
+/// # async fn run() -> Result<(), moosicbox_search::PopulateIndexError> {
+/// let rows = vec![vec![
+///     ("document_type", DataValue::String("artists".to_string())),
+///     ("artist_title", DataValue::String("Elder".to_string())),
+///     ("artist_id", DataValue::String("51".to_string())),
+/// ]];
+/// populate_global_search_index(&rows, false).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn populate_global_search_index(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -421,6 +442,20 @@ pub async fn populate_global_search_index(
 /// * `PopulateIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
 /// * `PopulateIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
 /// * `PopulateIndexError::Tantivy` if Tantivy encounters an indexing error
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::{DataValue, populate_global_search_index_sync};
+///
+/// let rows = vec![vec![
+///     ("document_type", DataValue::String("artists".to_string())),
+///     ("artist_title", DataValue::String("Elder".to_string())),
+///     ("artist_id", DataValue::String("51".to_string())),
+/// ]];
+/// populate_global_search_index_sync(&rows, false)?;
+/// # Ok::<(), moosicbox_search::PopulateIndexError>(())
+/// ```
 pub fn populate_global_search_index_sync(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -579,6 +614,16 @@ pub enum DeleteFromIndexError {
 /// * `DeleteFromIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
 /// * `DeleteFromIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
 /// * `DeleteFromIndexError::Tantivy` if Tantivy encounters a deletion error
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::{DataValue, delete_from_global_search_index};
+///
+/// let terms = [("artist_id_string", DataValue::String("51".to_string()))];
+/// delete_from_global_search_index(&terms)?;
+/// # Ok::<(), moosicbox_search::DeleteFromIndexError>(())
+/// ```
 pub fn delete_from_global_search_index(
     data: &[(&str, DataValue)],
 ) -> Result<(), DeleteFromIndexError> {
@@ -678,6 +723,22 @@ pub enum ReindexError {
 /// * `ReindexError::RecreateIndex` if failed to recreate the index
 /// * `ReindexError::PopulateIndex` if failed to populate the index with data
 /// * `ReindexError::Join` if the blocking task fails to join
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::{DataValue, reindex_global_search_index};
+///
+/// # async fn run() -> Result<(), moosicbox_search::ReindexError> {
+/// let rows = vec![vec![
+///     ("document_type", DataValue::String("artists".to_string())),
+///     ("artist_title", DataValue::String("Elder".to_string())),
+///     ("artist_id", DataValue::String("51".to_string())),
+/// ]];
+/// reindex_global_search_index(&rows).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn reindex_global_search_index(
     data: &[Vec<(&str, DataValue)>],
 ) -> Result<(), ReindexError> {
@@ -1028,6 +1089,16 @@ fn construct_global_search_query(
 /// * `SearchIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
 /// * `SearchIndexError::Tantivy` if Tantivy encounters a search error
 /// * `SearchIndexError::QueryParser` if the query string is invalid
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::search_global_search_index;
+///
+/// let docs = search_global_search_index("elder", 0, 10)?;
+/// assert!(docs.len() <= 10);
+/// # Ok::<(), moosicbox_search::SearchIndexError>(())
+/// ```
 pub fn search_global_search_index(
     search: &str,
     offset: u32,
@@ -1132,6 +1203,16 @@ pub fn search_global_search_index(
 /// * `SearchIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
 /// * `SearchIndexError::Tantivy` if Tantivy encounters a search error
 /// * `SearchIndexError::QueryParser` if the query string is invalid
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_search::global_search;
+///
+/// let response = global_search("elder", Some(0), Some(10))?;
+/// assert!(response.position >= response.results.len() as u32);
+/// # Ok::<(), moosicbox_search::SearchIndexError>(())
+/// ```
 pub fn global_search(
     query: &str,
     offset: Option<u32>,
