@@ -129,9 +129,17 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
 
 /// Initializes the application router with all route handlers.
 ///
+/// # Examples
+///
+/// ```ignore
+/// let router = moosicbox_app_native::init();
+/// // Use the router with an application runtime or renderer.
+/// ```
+///
 /// # Panics
 ///
 /// * If the [`ROUTER`] has already been initialized
+#[must_use]
 pub fn init() -> Router {
     moosicbox_player::on_playback_event(events::on_playback_event);
 

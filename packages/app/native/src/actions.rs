@@ -19,6 +19,18 @@ use crate::{PROFILE, RENDERER, STATE};
 
 /// Handles UI actions and dispatches them to the appropriate handlers.
 ///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_app_native::actions::handle_action;
+/// use moosicbox_app_native_ui::Action;
+///
+/// # async fn run() -> Result<(), moosicbox_app_state::AppStateError> {
+/// handle_action(Action::TogglePlayback, None).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * If the action is missing required parameters
