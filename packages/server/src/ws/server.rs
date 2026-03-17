@@ -572,6 +572,10 @@ impl WsServerHandle {
     }
 
     /// Register client message sender and obtain connection ID.
+    ///
+    /// # Panics
+    ///
+    /// * If the response channel from the WebSocket server is closed unexpectedly
     pub async fn connect(&self, profile: String, conn_tx: mpsc::Sender<String>) -> ConnId {
         log::trace!("Sending Connect command");
 

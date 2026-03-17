@@ -14,6 +14,12 @@ use thiserror::Error;
 
 use crate::{CONFIG_DB, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
 
+/// Global collection of discovered `UPnP` players and their playback handlers.
+///
+/// Each entry stores:
+/// * The audio output descriptor
+/// * The concrete `UPnP` player instance
+/// * The associated playback handler
 pub static UPNP_PLAYERS: LazyLock<
     switchy_async::sync::RwLock<
         Vec<(
@@ -94,6 +100,13 @@ pub async fn init(
 /// # Errors
 ///
 /// * [`switchy_upnp::UpnpDeviceScannerError`] - If `UPnP` device discovery fails
+///
+/// # Panics
+///
+/// * If the global `UPNP_LISTENER_HANDLE` lock is poisoned
+/// * If the `UPNP_LISTENER_HANDLE` has not been initialized
+/// * If an audio output factory cannot be created for a discovered `UPnP` player
+/// * If a player playback handler lock is poisoned
 pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerError> {
     static SERVICE_ID: &str = "urn:upnp-org:serviceId:AVTransport";
 
@@ -285,6 +298,11 @@ fn handle_upnp_playback_update(
 ///
 /// * [`moosicbox_ws::WebsocketSendError`] - If player registration with the WebSocket server fails
 /// * [`moosicbox_ws::WebsocketSendError`] - If the WebSocket server handle is not available
+///
+/// # Panics
+///
+/// * If the static `CONFIG_DB` lock is poisoned
+/// * If `CONFIG_DB` has not been initialized
 #[allow(unused)]
 pub async fn register_upnp_player(
     ws: crate::ws::server::WsServerHandle,

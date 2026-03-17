@@ -17,6 +17,9 @@ use switchy_database::profiles::PROFILES;
 
 use crate::{CONFIG_DB, ws::server::WsServerHandle};
 
+/// Global handle to the playback event service.
+///
+/// This is set during server startup and used by [`on_event`] to dispatch playback updates.
 pub static PLAYBACK_EVENT_HANDLE: LazyLock<Arc<std::sync::RwLock<Option<service::Handle>>>> =
     LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
@@ -24,6 +27,10 @@ pub static PLAYBACK_EVENT_HANDLE: LazyLock<Arc<std::sync::RwLock<Option<service:
 ///
 /// This function is called when playback state changes occur (play, pause, seek, track change,
 /// etc.) and dispatches the update to connected WebSocket clients via the playback event service.
+///
+/// # Panics
+///
+/// * If the static `PLAYBACK_EVENT_HANDLE` lock is poisoned
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn on_event(update: &UpdateSession, _current: &Playback) {
     let update = update.clone();
@@ -55,6 +62,8 @@ impl Display for Command {
 }
 
 pub mod service {
+    //! Async service definitions for playback event command processing.
+
     use crate::ws::server::WsServerHandle;
 
     moosicbox_async_service::async_service!(super::Command, super::Context<WsServerHandle>);

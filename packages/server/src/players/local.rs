@@ -14,6 +14,10 @@ use thiserror::Error;
 
 use crate::WS_SERVER_HANDLE;
 
+/// Global registry of local players managed by the server.
+///
+/// The map key is the session ID. Each value stores the local player instance and its
+/// associated playback handler.
 pub static SERVER_PLAYERS: LazyLock<
     switchy_async::sync::RwLock<
         BTreeMap<

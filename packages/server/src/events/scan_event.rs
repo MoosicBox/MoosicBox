@@ -15,6 +15,11 @@ use crate::WS_SERVER_HANDLE;
 /// Sets up throttled event handlers that broadcast scan progress (item count updates, items scanned,
 /// scan completion) to connected WebSocket clients. Events are throttled to a maximum of one update
 /// per 200ms to prevent excessive message traffic.
+///
+/// # Panics
+///
+/// * If the throttling mutex lock is poisoned
+/// * If the `WS_SERVER_HANDLE` has not been initialized
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init() {
     let scan_throttle = Arc::new(std::sync::Mutex::new(throttle::Throttle::new(

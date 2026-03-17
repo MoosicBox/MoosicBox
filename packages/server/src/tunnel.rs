@@ -45,6 +45,13 @@ pub enum SetupTunnelError {
 /// # Errors
 ///
 /// * [`SetupTunnelError::IO`] - If authentication with the tunnel server fails
+///
+/// # Panics
+///
+/// * If `WS_HOST` is set to an invalid URL
+/// * If the parsed `WS_HOST` URL does not contain a hostname
+/// * If an incoming tunnel text message cannot be parsed as JSON
+/// * If an unsupported tunnel message type is received (`Binary` or `Frame`)
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
 pub async fn setup_tunnel(

@@ -12,6 +12,11 @@ use crate::{CONFIG_DB, WS_SERVER_HANDLE};
 ///
 /// Sets up an event handler that broadcasts session and player updates to all connected WebSocket
 /// clients whenever players are registered, deregistered, or their state changes.
+///
+/// # Panics
+///
+/// * If the static `CONFIG_DB` lock is poisoned
+/// * If `CONFIG_DB` has not been initialized
 pub async fn init() {
     moosicbox_session::events::on_players_updated_event({
         move || async move {
