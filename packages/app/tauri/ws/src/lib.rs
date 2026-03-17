@@ -265,6 +265,23 @@ impl WsClient {
     /// # Panics
     ///
     /// * Panics if the internal `RwLock` is poisoned
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_app_ws::{WsClient, WsMessage};
+    /// use switchy_async::sync::mpsc;
+    ///
+    /// # async fn run() -> Result<(), moosicbox_app_ws::ConnectWsError> {
+    /// let (client, _handle) = WsClient::new("ws://localhost:8080".to_string());
+    /// let (tx, _rx) = mpsc::unbounded::<WsMessage>();
+    ///
+    /// client
+    ///     .start(None, None, "default".to_string(), || {}, tx)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn start(
         &self,
         client_id: Option<String>,
