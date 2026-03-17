@@ -1,3 +1,5 @@
+//! Core formatting and diff-reporting APIs for `clippier-md`.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -19,83 +21,134 @@ use markdown::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Output format for formatter summaries.
 pub enum OutputFormat {
+    /// Human-readable text output.
     Text,
+    /// Machine-readable JSON output.
     Json,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// ANSI color handling mode for text output.
 pub enum ColorMode {
+    /// Enable colors only when the output supports it.
     Auto,
+    /// Always emit ANSI colors.
     Always,
+    /// Never emit ANSI colors.
     Never,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How YAML frontmatter is handled.
 pub enum FrontmatterMode {
+    /// Keep frontmatter formatting exactly as authored.
     Preserve,
+    /// Normalize frontmatter formatting.
     Normalize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Preferred marker style for unordered lists.
 pub enum ListStyle {
+    /// Keep existing marker styles.
     Preserve,
+    /// Normalize markers to `-`.
     Dash,
+    /// Normalize markers to `+`.
     Plus,
+    /// Normalize markers to `*`.
     Asterisk,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How list indentation is handled.
 pub enum ListIndentationMode {
+    /// Keep original indentation.
     Preserve,
+    /// Normalize indentation using configured width.
     Normalize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How prose lines are wrapped.
 pub enum ProseWrapMode {
+    /// Reflow prose to `Config::line_width`.
     Always,
+    /// Preserve authored line breaks.
     Preserve,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How heading indentation is handled.
 pub enum HeadingIndentationMode {
+    /// Keep authored indentation before heading markers.
     Preserve,
+    /// Remove heading indentation and normalize to canonical form.
     Normalize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Formatter implementation engine.
 pub enum FormatterEngine {
+    /// Legacy line-based formatter.
     Legacy,
+    /// AST-based formatter using Comrak.
     Ast,
 }
 
 #[derive(Debug, Clone)]
+/// Top-level formatter configuration.
 pub struct Config {
+    /// Maximum prose line width when wrapping is enabled.
     pub line_width: usize,
+    /// Whether trailing whitespace should be removed.
     pub trim_trailing_whitespace: bool,
+    /// Whether to ensure a trailing newline at end of file.
     pub end_of_file_newline: bool,
+    /// Maximum number of consecutive blank lines.
     pub blank_lines_max_consecutive: usize,
+    /// Number of spaces per indentation level for normalized lists.
     pub list_indent_width: usize,
+    /// List marker normalization policy.
     pub list_style: ListStyle,
+    /// List indentation normalization policy.
     pub list_indentation: ListIndentationMode,
+    /// Frontmatter formatting policy.
     pub frontmatter_mode: FrontmatterMode,
+    /// Whether ignore files are respected during path discovery.
     pub respect_gitignore: bool,
+    /// Glob patterns to exclude from processing.
     pub exclude: Vec<String>,
+    /// Directory names to skip while walking paths.
     pub skip_dirs: Vec<String>,
+    /// Diff rendering controls used by check mode.
     pub check_diff: CheckDiffConfig,
+    /// Prose wrapping policy.
     pub prose_wrap: ProseWrapMode,
+    /// Heading indentation policy.
     pub heading_indentation: HeadingIndentationMode,
+    /// Formatter implementation to use.
     pub engine: FormatterEngine,
 }
 
 #[derive(Debug, Clone)]
+/// Diff-output configuration used by check mode.
 pub struct CheckDiffConfig {
+    /// Whether file/line diff caps are applied.
     pub cap: bool,
+    /// Number of context lines in unified diff hunks.
     pub context: u32,
+    /// Maximum number of files that include rendered diffs.
     pub max_files: usize,
+    /// Maximum number of diff lines rendered per file.
     pub max_lines_per_file: usize,
+    /// Whether intraline changes are highlighted.
     pub intraline: bool,
+    /// Whether tabs/trailing spaces are visualized in diffs.
     pub show_invisible_whitespace: bool,
+    /// Maximum line length eligible for intraline highlighting.
     pub max_intraline_line_length: usize,
 }
 
@@ -136,18 +189,28 @@ impl Default for Config {
 }
 
 #[derive(Debug, Clone)]
+/// Summary produced after a formatter run.
 pub struct RunSummary {
+    /// Number of markdown files examined.
     pub checked: usize,
+    /// Paths that would change in check mode or were updated in write mode.
     pub changed: Vec<PathBuf>,
+    /// Rendered diffs for changed files (subject to caps).
     pub diff_reports: Vec<DiffReport>,
+    /// Number of files whose diffs were omitted by caps.
     pub diff_omitted_files: usize,
 }
 
 #[derive(Debug, Clone)]
+/// Rendered diff details for a single markdown file.
 pub struct DiffReport {
+    /// Path to the markdown file.
     pub path: PathBuf,
+    /// Unified diff text.
     pub diff: String,
+    /// Whether the rendered diff was truncated.
     pub truncated: bool,
+    /// Number of omitted lines when truncation occurs.
     pub omitted_lines: usize,
 }
 
@@ -197,6 +260,8 @@ pub fn load_config(working_dir: &Path, explicit_config: Option<&Path>) -> Result
 /// # Errors
 ///
 /// * Returns an error when any traversed directory cannot be read.
+/// * Returns an error when `files.exclude` contains an invalid glob pattern.
+/// * Returns an error when internal synchronization for file collection fails.
 pub fn collect_markdown_files(
     paths: &[PathBuf],
     config: &Config,
@@ -276,6 +341,7 @@ pub fn collect_markdown_files(
 /// * Returns an error when a source file cannot be read.
 /// * Returns an error when a formatted file cannot be written.
 /// * Returns an error when directory traversal fails.
+/// * Returns an error when path filtering contains invalid glob configuration.
 pub fn run_fmt(
     paths: &[PathBuf],
     check: bool,
@@ -573,6 +639,7 @@ fn truncate_diff_lines(diff: &str, cap_enabled: bool, max_lines: usize) -> (Stri
 }
 
 #[must_use]
+/// Converts a formatter run summary into text or JSON output.
 pub fn summary_to_output(
     summary: &RunSummary,
     format: OutputFormat,
@@ -704,6 +771,17 @@ fn should_use_color(mode: ColorMode) -> bool {
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
+/// Formats markdown content according to the provided configuration.
+///
+/// # Examples
+///
+/// ```
+/// use clippier_md::{Config, format_markdown};
+///
+/// let input = "#Title\n\nhello world\n";
+/// let output = format_markdown(input, &Config::default());
+/// assert_eq!(output, "# Title\n\nhello world\n");
+/// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
     if config.frontmatter_mode == FrontmatterMode::Preserve
         && let Some((frontmatter, body)) = split_frontmatter(input)
