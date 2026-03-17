@@ -313,6 +313,14 @@ pub struct PlayAlbumQuery {
     )
 )]
 #[post("/play/album")]
+/// Plays an album for the requested playback target.
+///
+/// # Errors
+///
+/// * If the requested album ID is invalid
+/// * If the source does not map to a configured music API
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying playback call fails
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
     profile: ProfileName,
@@ -396,6 +404,14 @@ pub struct PlayTrackQuery {
     )
 )]
 #[post("/play/track")]
+/// Plays a single track for the requested playback target.
+///
+/// # Errors
+///
+/// * If the source does not map to a configured music API
+/// * If the track ID does not resolve to an existing track
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying playback call fails
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
     music_apis: MusicApis,
@@ -485,6 +501,14 @@ pub struct PlayTracksQuery {
     )
 )]
 #[post("/play/tracks")]
+/// Plays multiple tracks for the requested playback target.
+///
+/// # Errors
+///
+/// * If the source does not map to a configured music API
+/// * If one or more track IDs cannot be parsed or resolved
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying playback call fails
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
     profile: ProfileName,
@@ -548,6 +572,12 @@ pub struct StopTrackQuery {
     )
 )]
 #[post("/stop")]
+/// Stops playback for the requested playback target.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying stop call fails
 pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -589,6 +619,12 @@ pub struct SeekTrackQuery {
     )
 )]
 #[post("/seek")]
+/// Seeks playback to the requested position.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying seek call fails
 pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -661,6 +697,14 @@ pub struct UpdatePlaybackQuery {
     )
 )]
 #[post("/update-playback")]
+/// Updates playback state for the requested playback target.
+///
+/// # Errors
+///
+/// * If the source does not map to a configured music API
+/// * If one or more provided track IDs cannot be parsed or resolved
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying playback update call fails
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
     profile: ProfileName,
@@ -736,6 +780,13 @@ pub struct NextTrackQuery {
     )
 )]
 #[post("/next-track")]
+/// Advances playback to the next track.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If there is no active playback or the playlist is already at the end
+/// * If the underlying next-track call fails
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -775,6 +826,12 @@ pub struct PauseQuery {
     )
 )]
 #[post("/pause")]
+/// Pauses playback for the requested playback target.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying pause call fails
 pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -814,6 +871,12 @@ pub struct ResumeQuery {
     )
 )]
 #[post("/resume")]
+/// Resumes playback for the requested playback target.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying resume call fails
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -856,6 +919,13 @@ pub struct PreviousTrackQuery {
     )
 )]
 #[post("/previous-track")]
+/// Moves playback to the previous track.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If there is no active playback or the playlist is already at the beginning
+/// * If the underlying previous-track call fails
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
 ) -> Result<Json<PlaybackStatus>> {
@@ -895,6 +965,12 @@ pub struct PlayerStatusQuery {
     )
 )]
 #[get("/status")]
+/// Returns current playback status for the requested playback target.
+///
+/// # Errors
+///
+/// * If a player instance cannot be created for the requested host
+/// * If the underlying player status lookup fails
 pub async fn player_status_endpoint(
     query: web::Query<PlayerStatusQuery>,
 ) -> Result<Json<ApiPlaybackStatus>> {
