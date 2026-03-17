@@ -800,7 +800,7 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
         }
 
         if should_normalize_ast_node(child, config) {
-            out.push_str(&render_normalized_ast_node(child, source, config));
+            out.push_str(&render_normalized_ast_node(child, source, config, 0));
         } else {
             out.push_str(&source[start..end]);
         }
@@ -823,11 +823,20 @@ fn should_normalize_ast_node(node: &Node, config: &Config) -> bool {
             config.list_style != ListStyle::Preserve
                 || config.list_indentation == ListIndentationMode::Normalize
         }
+        Node::Blockquote(blockquote) => blockquote
+            .children
+            .iter()
+            .any(|child| should_normalize_ast_node(child, config)),
         _ => false,
     }
 }
 
-fn render_normalized_ast_node(node: &Node, source: &str, config: &Config) -> String {
+fn render_normalized_ast_node(
+    node: &Node,
+    source: &str,
+    config: &Config,
+    base_indent: usize,
+) -> String {
     match node {
         Node::Heading(heading) => {
             let text = heading
@@ -856,15 +865,8 @@ fn render_normalized_ast_node(node: &Node, source: &str, config: &Config) -> Str
                 .collect::<String>();
             wrap_line(text.trim(), config.line_width).join("\n")
         }
-        Node::List(_) => {
-            if let Some((start, end)) = node_offsets(node) {
-                format_markdown_legacy(&source[start..end], config)
-                    .trim_end()
-                    .to_string()
-            } else {
-                String::new()
-            }
-        }
+        Node::List(list) => render_list_node(list, source, config, base_indent),
+        Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config),
         Node::Table(table) => render_table_node(table),
         _ => {
             if let Some((start, end)) = node_offsets(node) {
@@ -874,6 +876,169 @@ fn render_normalized_ast_node(node: &Node, source: &str, config: &Config) -> Str
             }
         }
     }
+}
+
+fn render_blockquote_node(
+    blockquote: &markdown::mdast::Blockquote,
+    source: &str,
+    config: &Config,
+) -> String {
+    let mut rendered_children = Vec::new();
+    for child in &blockquote.children {
+        if should_normalize_ast_node(child, config) {
+            rendered_children.push(render_normalized_ast_node(child, source, config, 0));
+        } else if let Some(extracted) = node_source_without_trailing_newlines(child, source) {
+            rendered_children.push(extracted);
+        }
+    }
+
+    rendered_children
+        .join("\n\n")
+        .lines()
+        .map(|line| {
+            if line.is_empty() {
+                ">".to_string()
+            } else {
+                format!("> {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_list_node(
+    list: &markdown::mdast::List,
+    source: &str,
+    config: &Config,
+    base_indent: usize,
+) -> String {
+    let mut out = String::new();
+
+    for (index, child) in list.children.iter().enumerate() {
+        let Node::ListItem(item) = child else {
+            continue;
+        };
+
+        if index > 0 {
+            if list.spread || item.spread {
+                out.push_str("\n\n");
+            } else {
+                out.push('\n');
+            }
+        }
+
+        let marker = render_list_item_marker(list, child, source, config, index);
+        out.push_str(&render_list_item(
+            item,
+            &marker,
+            source,
+            config,
+            base_indent,
+        ));
+    }
+
+    out
+}
+
+fn render_list_item_marker(
+    list: &markdown::mdast::List,
+    item_node: &Node,
+    source: &str,
+    config: &Config,
+    index: usize,
+) -> String {
+    if list.ordered {
+        let number = list
+            .start
+            .unwrap_or(1)
+            .saturating_add(u32::try_from(index).unwrap_or(0));
+        return format!("{number}.  ");
+    }
+
+    let marker = match config.list_style {
+        ListStyle::Dash => '-',
+        ListStyle::Plus => '+',
+        ListStyle::Asterisk => '*',
+        ListStyle::Preserve => {
+            if let Some((start, end)) = node_offsets(item_node)
+                && let Some(value) = source[start..end].trim_start().chars().next()
+                && matches!(value, '-' | '+' | '*')
+            {
+                value
+            } else {
+                '-'
+            }
+        }
+    };
+
+    format!("{marker} ")
+}
+
+fn render_list_item(
+    item: &markdown::mdast::ListItem,
+    marker: &str,
+    source: &str,
+    config: &Config,
+    base_indent: usize,
+) -> String {
+    let mut blocks = Vec::new();
+    for child in &item.children {
+        if should_normalize_ast_node(child, config) {
+            blocks.push(render_normalized_ast_node(child, source, config, 0));
+        } else if let Some(extracted) = node_source_without_trailing_newlines(child, source) {
+            blocks.push(extracted);
+        }
+    }
+
+    if blocks.is_empty() {
+        return format!("{}{}", " ".repeat(base_indent), marker.trim_end());
+    }
+
+    let mut out = String::new();
+    let item_indent = " ".repeat(base_indent);
+    let continuation = " ".repeat(base_indent + config.list_indent_width);
+    let checkbox_prefix = match item.checked {
+        Some(true) => "[x] ",
+        Some(false) => "[ ] ",
+        None => "",
+    };
+
+    for (block_index, block) in blocks.iter().enumerate() {
+        if block_index > 0 {
+            if item.spread {
+                out.push_str("\n\n");
+            } else {
+                out.push('\n');
+            }
+        }
+
+        let block_lines = block.lines().collect::<Vec<_>>();
+
+        for (line_index, line) in block_lines.iter().enumerate() {
+            if block_index == 0 && line_index == 0 {
+                out.push_str(&item_indent);
+                out.push_str(marker);
+                out.push_str(checkbox_prefix);
+            } else {
+                out.push_str(&continuation);
+            }
+            out.push_str(line);
+            if line_index + 1 < block_lines.len() {
+                out.push('\n');
+            }
+        }
+    }
+
+    out
+}
+
+fn node_source_without_trailing_newlines(node: &Node, source: &str) -> Option<String> {
+    let (start, end) = node_offsets(node)?;
+    Some(
+        source[start..end]
+            .trim_end_matches(['\n', '\r'])
+            .to_string(),
+    )
 }
 
 fn render_inline_text(node: &Node) -> String {

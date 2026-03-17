@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use std::{io::Write as IoWrite, str};
 
 use clippier_md::{
-    Config, FormatterEngine, HeadingIndentationMode, ListIndentationMode, ProseWrapMode,
+    Config, FormatterEngine, HeadingIndentationMode, ListIndentationMode, ListStyle, ProseWrapMode,
     format_markdown,
 };
 
@@ -25,9 +25,10 @@ fn prettier_parity_commonmark_gfm_fixtures() {
 
     let config = Config {
         engine: FormatterEngine::Ast,
-        prose_wrap: ProseWrapMode::Preserve,
+        prose_wrap: ProseWrapMode::Always,
         heading_indentation: HeadingIndentationMode::Normalize,
-        list_indentation: ListIndentationMode::Preserve,
+        list_indentation: ListIndentationMode::Normalize,
+        list_style: ListStyle::Dash,
         ..Config::default()
     };
 
