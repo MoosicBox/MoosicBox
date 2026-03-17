@@ -75,6 +75,9 @@ pub struct CheckDiffConfig {
     pub context: u32,
     pub max_files: usize,
     pub max_lines_per_file: usize,
+    pub intraline: bool,
+    pub show_invisible_whitespace: bool,
+    pub max_intraline_line_length: usize,
 }
 
 impl Default for CheckDiffConfig {
@@ -84,6 +87,9 @@ impl Default for CheckDiffConfig {
             context: 3,
             max_files: 50,
             max_lines_per_file: 400,
+            intraline: true,
+            show_invisible_whitespace: true,
+            max_intraline_line_length: 400,
         }
     }
 }
@@ -273,8 +279,10 @@ pub fn run_fmt(
                 } else {
                     let raw_diff =
                         render_unified_diff(file, &input, &output, config.check_diff.context);
+                    let enhanced_diff =
+                        enhance_unified_diff_presentation(&raw_diff, &config.check_diff);
                     let (diff, truncated, omitted_lines) = truncate_diff_lines(
-                        &raw_diff,
+                        &enhanced_diff,
                         config.check_diff.cap,
                         config.check_diff.max_lines_per_file,
                     );
@@ -317,6 +325,211 @@ fn render_unified_diff(path: &Path, before: &str, after: &str, context: u32) -> 
             .to_string(),
     );
     rendered
+}
+
+#[allow(clippy::too_many_lines)]
+fn enhance_unified_diff_presentation(diff: &str, config: &CheckDiffConfig) -> String {
+    let lines = diff.lines().map(ToString::to_string).collect::<Vec<_>>();
+    let mut output = Vec::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = &lines[index];
+        if is_removed_diff_line(line) {
+            let mut removed = Vec::new();
+            while index < lines.len() && is_removed_diff_line(&lines[index]) {
+                removed.push(lines[index].clone());
+                index += 1;
+            }
+
+            let mut added = Vec::new();
+            let mut lookahead = index;
+            while lookahead < lines.len() && is_added_diff_line(&lines[lookahead]) {
+                added.push(lines[lookahead].clone());
+                lookahead += 1;
+            }
+
+            if config.intraline && !added.is_empty() {
+                let paired = removed.len().min(added.len());
+                for pair_index in 0..paired {
+                    let removed_content = &removed[pair_index][1..];
+                    let added_content = &added[pair_index][1..];
+                    let highlight = removed_content.len() <= config.max_intraline_line_length
+                        && added_content.len() <= config.max_intraline_line_length;
+
+                    let removed_rendered = render_changed_line(
+                        '-',
+                        removed_content,
+                        config.show_invisible_whitespace,
+                        if highlight { Some(added_content) } else { None },
+                        true,
+                    );
+                    let added_rendered = render_changed_line(
+                        '+',
+                        added_content,
+                        config.show_invisible_whitespace,
+                        if highlight {
+                            Some(removed_content)
+                        } else {
+                            None
+                        },
+                        false,
+                    );
+
+                    output.push(removed_rendered);
+                    output.push(added_rendered);
+
+                    if removed_content.trim_end() == added_content.trim_end()
+                        && removed_content != added_content
+                    {
+                        let removed_trailing = removed_content
+                            .len()
+                            .saturating_sub(removed_content.trim_end().len());
+                        let added_trailing = added_content
+                            .len()
+                            .saturating_sub(added_content.trim_end().len());
+                        output.push(format!(
+                            "~~ whitespace-only change (trailing spaces {removed_trailing} -> {added_trailing})"
+                        ));
+                    }
+                }
+
+                for removed_line in removed.iter().skip(paired) {
+                    output.push(render_changed_line(
+                        '-',
+                        &removed_line[1..],
+                        config.show_invisible_whitespace,
+                        None,
+                        true,
+                    ));
+                }
+                for added_line in added.iter().skip(paired) {
+                    output.push(render_changed_line(
+                        '+',
+                        &added_line[1..],
+                        config.show_invisible_whitespace,
+                        None,
+                        false,
+                    ));
+                }
+
+                index = lookahead;
+                continue;
+            }
+
+            for removed_line in removed {
+                output.push(render_changed_line(
+                    '-',
+                    &removed_line[1..],
+                    config.show_invisible_whitespace,
+                    None,
+                    true,
+                ));
+            }
+            continue;
+        }
+
+        if is_added_diff_line(line) {
+            output.push(render_changed_line(
+                '+',
+                &line[1..],
+                config.show_invisible_whitespace,
+                None,
+                false,
+            ));
+            index += 1;
+            continue;
+        }
+
+        output.push(line.clone());
+        index += 1;
+    }
+
+    output.join("\n")
+}
+
+fn is_removed_diff_line(line: &str) -> bool {
+    line.starts_with('-') && !line.starts_with("---")
+}
+
+fn is_added_diff_line(line: &str) -> bool {
+    line.starts_with('+') && !line.starts_with("+++")
+}
+
+fn render_changed_line(
+    prefix: char,
+    current: &str,
+    show_invisible_whitespace: bool,
+    other: Option<&str>,
+    removed: bool,
+) -> String {
+    let visible_current = if show_invisible_whitespace {
+        visualize_whitespace(current)
+    } else {
+        current.to_string()
+    };
+
+    let Some(other_line) = other else {
+        return format!("{prefix}{visible_current}");
+    };
+
+    let visible_other = if show_invisible_whitespace {
+        visualize_whitespace(other_line)
+    } else {
+        other_line.to_string()
+    };
+
+    let (prefix_shared, current_change, suffix_shared, _other_change) =
+        intraline_segments(&visible_current, &visible_other);
+
+    if current_change.is_empty() {
+        return format!("{prefix}{visible_current}");
+    }
+
+    let highlighted = if removed {
+        format!("{prefix_shared}[-{current_change}-]{suffix_shared}")
+    } else {
+        format!("{prefix_shared}{{+{current_change}+}}{suffix_shared}")
+    };
+    format!("{prefix}{highlighted}")
+}
+
+fn visualize_whitespace(input: &str) -> String {
+    let without_trailing = input.trim_end_matches(' ');
+    let trailing_count = input.len().saturating_sub(without_trailing.len());
+    let mut rendered = without_trailing.replace('\t', "⇥");
+    if trailing_count > 0 {
+        rendered.push_str(&"␠".repeat(trailing_count));
+    }
+    rendered
+}
+
+fn intraline_segments(current: &str, other: &str) -> (String, String, String, String) {
+    let left = current.chars().collect::<Vec<_>>();
+    let right = other.chars().collect::<Vec<_>>();
+
+    let mut prefix = 0usize;
+    while prefix < left.len() && prefix < right.len() && left[prefix] == right[prefix] {
+        prefix += 1;
+    }
+
+    let mut suffix = 0usize;
+    while suffix + prefix < left.len()
+        && suffix + prefix < right.len()
+        && left[left.len() - 1 - suffix] == right[right.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+
+    let left_end = left.len().saturating_sub(suffix);
+    let right_end = right.len().saturating_sub(suffix);
+
+    (
+        left[..prefix].iter().collect(),
+        left[prefix..left_end].iter().collect(),
+        left[left_end..].iter().collect(),
+        right[prefix..right_end].iter().collect(),
+    )
 }
 
 fn truncate_diff_lines(diff: &str, cap_enabled: bool, max_lines: usize) -> (String, bool, usize) {
@@ -432,7 +645,7 @@ fn colorize_unified_diff(diff: &str, mode: ColorMode) -> String {
                 format!("\x1b[32m{line}\x1b[0m")
             } else if line.starts_with('-') {
                 format!("\x1b[31m{line}\x1b[0m")
-            } else if line.starts_with("... truncated") {
+            } else if line.starts_with("... truncated") || line.starts_with("~~ ") {
                 format!("\x1b[33m{line}\x1b[0m")
             } else {
                 line.to_string()
@@ -768,6 +981,31 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
         .and_then(|value| usize::try_from(value).ok())
     {
         config.check_diff.max_lines_per_file = max_lines_per_file;
+    }
+    if let Some(intraline) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("intraline"))
+        .and_then(toml::Value::as_bool)
+    {
+        config.check_diff.intraline = intraline;
+    }
+    if let Some(show_invisible_whitespace) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("show-invisible-whitespace"))
+        .and_then(toml::Value::as_bool)
+    {
+        config.check_diff.show_invisible_whitespace = show_invisible_whitespace;
+    }
+    if let Some(max_intraline_line_length) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("max-intraline-line-length"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+    {
+        config.check_diff.max_intraline_line_length = max_intraline_line_length;
     }
 }
 
@@ -1220,5 +1458,21 @@ mod tests {
         let output = summary_to_output(&summary, OutputFormat::Text, true, ColorMode::Always);
         assert!(output.contains("\x1b[31m-old\x1b[0m"));
         assert!(output.contains("\x1b[32m+new\x1b[0m"));
+    }
+
+    #[test]
+    fn enhanced_diff_shows_trailing_whitespace_changes() {
+        let diff = "--- a/x.md\n+++ b/x.md\n@@ -1 +1 @@\n-hello  \n+hello\n";
+        let enhanced = enhance_unified_diff_presentation(diff, &CheckDiffConfig::default());
+        assert!(enhanced.contains("[-␠␠-]"));
+        assert!(enhanced.contains("~~ whitespace-only change"));
+    }
+
+    #[test]
+    fn enhanced_diff_shows_intraline_markers() {
+        let diff = "--- a/x.md\n+++ b/x.md\n@@ -1 +1 @@\n-abc old xyz\n+abc new xyz\n";
+        let enhanced = enhance_unified_diff_presentation(diff, &CheckDiffConfig::default());
+        assert!(enhanced.contains("[-old-]"));
+        assert!(enhanced.contains("{+new+}"));
     }
 }

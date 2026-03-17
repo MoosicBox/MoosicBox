@@ -46,6 +46,9 @@ cap = true
 context = 3
 max-files = 50
 max-lines-per-file = 400
+intraline = true
+show-invisible-whitespace = true
+max-intraline-line-length = 400
 ```
 
 To preserve authored markdown prose line breaks (similar to Prettier `proseWrap: preserve`), set:
@@ -60,3 +63,5 @@ wrap = "preserve"
 In `--check` mode, `clippier-md` prints unified diffs by default.
 Use `--no-diff` to disable diff output.
 Use `--color auto|always|never` to control ANSI diff colors.
+When `show-invisible-whitespace = true`, trailing spaces are shown as `␠`
+and tabs as `⇥` on changed lines.
