@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use clippier_md::{Config, OutputFormat, run_fmt, summary_to_output};
+use clippier_md::{ColorMode, Config, OutputFormat, run_fmt, summary_to_output};
 
 #[derive(Debug, Parser)]
 #[command(name = "clippier-md")]
@@ -49,6 +49,9 @@ struct FmtArgs {
     /// Output mode
     #[arg(long, value_enum, default_value_t = OutputArg::Text)]
     output: OutputArg,
+    /// Color mode for check diff output
+    #[arg(long, value_enum, default_value_t = ColorArg::Auto)]
+    color: ColorArg,
     /// Optional config file path
     #[arg(long)]
     config: Option<PathBuf>,
@@ -68,6 +71,13 @@ enum OutputArg {
     Json,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ColorArg {
+    Auto,
+    Always,
+    Never,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -82,7 +92,12 @@ fn run_fmt_command(args: &FmtArgs) -> Result<()> {
 
     let check = args.check || args.dry_run;
     let summary = run_fmt(&args.paths, check, !args.no_diff, &config)?;
-    let output = summary_to_output(&summary, to_output_format(args.output), check);
+    let output = summary_to_output(
+        &summary,
+        to_output_format(args.output),
+        check,
+        to_color_mode(args.color),
+    );
     println!("{output}");
 
     if check && !summary.changed.is_empty() {
@@ -117,5 +132,13 @@ const fn to_output_format(output: OutputArg) -> OutputFormat {
     match output {
         OutputArg::Text => OutputFormat::Text,
         OutputArg::Json => OutputFormat::Json,
+    }
+}
+
+const fn to_color_mode(color: ColorArg) -> ColorMode {
+    match color {
+        ColorArg::Auto => ColorMode::Auto,
+        ColorArg::Always => ColorMode::Always,
+        ColorArg::Never => ColorMode::Never,
     }
 }

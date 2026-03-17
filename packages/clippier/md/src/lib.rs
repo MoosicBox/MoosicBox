@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +17,13 @@ use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDi
 pub enum OutputFormat {
     Text,
     Json,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorMode {
+    Auto,
+    Always,
+    Never,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -323,7 +331,12 @@ fn truncate_diff_lines(diff: &str, cap_enabled: bool, max_lines: usize) -> (Stri
 }
 
 #[must_use]
-pub fn summary_to_output(summary: &RunSummary, format: OutputFormat, check: bool) -> String {
+pub fn summary_to_output(
+    summary: &RunSummary,
+    format: OutputFormat,
+    check: bool,
+    color_mode: ColorMode,
+) -> String {
     match format {
         OutputFormat::Text => {
             if check {
@@ -350,7 +363,7 @@ pub fn summary_to_output(summary: &RunSummary, format: OutputFormat, check: bool
                         let diffs = summary
                             .diff_reports
                             .iter()
-                            .map(|report| report.diff.trim_end().to_string())
+                            .map(|report| colorize_unified_diff(report.diff.trim_end(), color_mode))
                             .collect::<Vec<_>>()
                             .join("\n\n");
                         output.push_str("\n\nDiffs:\n");
@@ -393,6 +406,57 @@ pub fn summary_to_output(summary: &RunSummary, format: OutputFormat, check: bool
             "check": check,
         })
         .to_string(),
+    }
+}
+
+fn colorize_unified_diff(diff: &str, mode: ColorMode) -> String {
+    if !should_use_color(mode) {
+        return diff.to_string();
+    }
+
+    diff.lines()
+        .map(|line| {
+            if line.starts_with("+++") || line.starts_with("---") {
+                format!("\x1b[1m{line}\x1b[0m")
+            } else if line.starts_with("@@") {
+                format!("\x1b[36m{line}\x1b[0m")
+            } else if line.starts_with('+') {
+                format!("\x1b[32m{line}\x1b[0m")
+            } else if line.starts_with('-') {
+                format!("\x1b[31m{line}\x1b[0m")
+            } else if line.starts_with("... truncated") {
+                format!("\x1b[33m{line}\x1b[0m")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn should_use_color(mode: ColorMode) -> bool {
+    match mode {
+        ColorMode::Always => true,
+        ColorMode::Never => false,
+        ColorMode::Auto => {
+            if std::env::var_os("NO_COLOR").is_some() {
+                return false;
+            }
+
+            if std::env::var_os("CLICOLOR").is_some_and(|value| value == "0") {
+                return false;
+            }
+
+            if std::env::var_os("CLICOLOR_FORCE").is_some_and(|value| value != "0") {
+                return true;
+            }
+
+            if std::env::var_os("FORCE_COLOR").is_some_and(|value| value != "0") {
+                return true;
+            }
+
+            std::io::stdout().is_terminal()
+        }
     }
 }
 
@@ -1059,7 +1123,7 @@ mod tests {
             diff_omitted_files: 0,
         };
 
-        let output = summary_to_output(&summary, OutputFormat::Text, true);
+        let output = summary_to_output(&summary, OutputFormat::Text, true, ColorMode::Never);
         assert!(output.contains("--- a/README.md"));
         assert!(output.contains("+++ b/README.md"));
         assert!(output.contains("@@ -1 +1 @@"));
@@ -1081,5 +1145,24 @@ mod tests {
         assert!(!is_truncated);
         assert_eq!(omitted_lines, 0);
         assert_eq!(result, diff);
+    }
+
+    #[test]
+    fn summary_output_can_colorize_diff_in_always_mode() {
+        let summary = RunSummary {
+            checked: 1,
+            changed: vec![PathBuf::from("README.md")],
+            diff_reports: vec![DiffReport {
+                path: PathBuf::from("README.md"),
+                diff: "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n".to_string(),
+                truncated: false,
+                omitted_lines: 0,
+            }],
+            diff_omitted_files: 0,
+        };
+
+        let output = summary_to_output(&summary, OutputFormat::Text, true, ColorMode::Always);
+        assert!(output.contains("\x1b[31m-old\x1b[0m"));
+        assert!(output.contains("\x1b[32m+new\x1b[0m"));
     }
 }

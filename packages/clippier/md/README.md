@@ -9,6 +9,7 @@ clippier-md fmt .
 clippier-md fmt --check .
 clippier-md fmt --check --no-diff .
 clippier-md fmt --check --no-diff-cap .
+clippier-md fmt --check --color always .
 ```
 
 ## Config
@@ -57,3 +58,4 @@ wrap = "preserve"
 
 In `--check` mode, `clippier-md` prints unified diffs by default.
 Use `--no-diff` to disable diff output.
+Use `--color auto|always|never` to control ANSI diff colors.
