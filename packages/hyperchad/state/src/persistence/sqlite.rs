@@ -29,6 +29,17 @@ impl SqlitePersistence {
     ///
     /// * [`Error::InitDb`] - If the database connection cannot be established
     /// * [`Error::Database`] - If the state table cannot be created
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hyperchad_state::sqlite::SqlitePersistence;
+    ///
+    /// # async fn example() -> Result<(), hyperchad_state::Error> {
+    /// let _persistence = SqlitePersistence::new_in_memory().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new_in_memory() -> Result<Self, Error> {
         let db = switchy::database_connection::init(None, None).await?;
 
@@ -65,6 +76,17 @@ impl SqlitePersistence {
     ///
     /// * [`Error::InitDb`] - If the database connection cannot be established
     /// * [`Error::Database`] - If the state table cannot be created
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hyperchad_state::sqlite::SqlitePersistence;
+    ///
+    /// # async fn example() -> Result<(), hyperchad_state::Error> {
+    /// let _persistence = SqlitePersistence::new("hyperchad-state.db").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
         let db = switchy::database_connection::init(Some(db_path.as_ref()), None).await?;
 

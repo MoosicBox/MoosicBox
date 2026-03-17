@@ -15,6 +15,23 @@ use serde_json::Value;
 use crate::{Error, persistence::StatePersistence};
 
 /// In-memory state store that can be optionally backed by persistent storage
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "persistence-sqlite")]
+/// # {
+/// use hyperchad_state::{StateStore, sqlite::SqlitePersistence};
+///
+/// # async fn example() -> Result<(), hyperchad_state::Error> {
+/// let persistence = SqlitePersistence::new_in_memory().await?;
+/// let store = StateStore::new(persistence);
+///
+/// store.set("theme", &"light").await?;
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 pub struct StateStore<P: StatePersistence> {
     persistence: Arc<P>,
     cache: Arc<RwLock<BTreeMap<String, Value>>>,
@@ -39,6 +56,23 @@ impl<P: StatePersistence> StateStore<P> {
     /// * [`Error::Serde`] - If the value cannot be serialized to JSON
     /// * [`Error::Database`] - If the persistence backend database operation fails
     /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "persistence-sqlite")]
+    /// # {
+    /// use hyperchad_state::{StateStore, sqlite::SqlitePersistence};
+    ///
+    /// # async fn example() -> Result<(), hyperchad_state::Error> {
+    /// let persistence = SqlitePersistence::new_in_memory().await?;
+    /// let store = StateStore::new(persistence);
+    ///
+    /// store.set("volume", &60_u8).await?;
+    /// # Ok(())
+    /// # }
+    /// # }
+    /// ```
     pub async fn set<T: Serialize + Send + Sync>(
         &self,
         key: impl Into<String> + Send + Sync,
@@ -63,6 +97,25 @@ impl<P: StatePersistence> StateStore<P> {
     /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
     /// * [`Error::Database`] - If the persistence backend database operation fails
     /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "persistence-sqlite")]
+    /// # {
+    /// use hyperchad_state::{StateStore, sqlite::SqlitePersistence};
+    ///
+    /// # async fn example() -> Result<(), hyperchad_state::Error> {
+    /// let persistence = SqlitePersistence::new_in_memory().await?;
+    /// let store = StateStore::new(persistence);
+    ///
+    /// store.set("username", &"moosic").await?;
+    /// let username: Option<String> = store.get("username").await?;
+    /// assert_eq!(username.as_deref(), Some("moosic"));
+    /// # Ok(())
+    /// # }
+    /// # }
+    /// ```
     pub async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -117,6 +170,25 @@ impl<P: StatePersistence> StateStore<P> {
     /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
     /// * [`Error::Database`] - If the persistence backend database operation fails
     /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "persistence-sqlite")]
+    /// # {
+    /// use hyperchad_state::{StateStore, sqlite::SqlitePersistence};
+    ///
+    /// # async fn example() -> Result<(), hyperchad_state::Error> {
+    /// let persistence = SqlitePersistence::new_in_memory().await?;
+    /// let store = StateStore::new(persistence);
+    ///
+    /// store.set("token", &"abc123").await?;
+    /// let token: Option<String> = store.take("token").await?;
+    /// assert_eq!(token.as_deref(), Some("abc123"));
+    /// # Ok(())
+    /// # }
+    /// # }
+    /// ```
     pub async fn take<T: DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
