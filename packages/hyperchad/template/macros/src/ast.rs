@@ -98,7 +98,14 @@ impl<E: MaybeElement> Markup<E> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the token stream cannot be parsed as valid markup.
+    /// * Returns an error if the token stream cannot be parsed as valid markup.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Internally used while parsing a block body in the `container!` macro.
+    /// let markup = Markup::<ContainerElement>::diagnostic_parse_in_block(input, diagnostics)?;
+    /// ```
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn diagnostic_parse_in_block(
         input: ParseStream,
@@ -2099,7 +2106,7 @@ pub trait DiagnosticParse: Sized {
     ///
     /// # Errors
     ///
-    /// Returns an error if parsing fails fatally and cannot continue.
+    /// * Returns an error if parsing fails fatally and cannot continue.
     fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>)
     -> syn::Result<Self>;
 }
