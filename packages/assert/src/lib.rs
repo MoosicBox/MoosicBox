@@ -172,7 +172,7 @@ macro_rules! assert {
 ///
 /// # Errors
 ///
-/// Returns the specified error when the condition is false and `ENABLE_ASSERT` is not "1".
+/// * Returns the specified error when the condition is false and `ENABLE_ASSERT` is not "1".
 ///
 /// # Panics
 ///
@@ -514,7 +514,7 @@ macro_rules! die_or_warn {
 ///
 /// # Errors
 ///
-/// Returns the specified error when `ENABLE_ASSERT` is not "1".
+/// * Returns the specified error when `ENABLE_ASSERT` is not "1".
 ///
 /// # Panics
 ///
@@ -613,7 +613,8 @@ macro_rules! die_or_error {
 ///
 /// # Errors
 ///
-/// Propagates the error from the result when `ENABLE_ASSERT` is not "1".
+/// * Propagates the error from the evaluated `Result` when it is `Err` and `ENABLE_ASSERT` is not
+///   "1".
 ///
 /// # Panics
 ///
