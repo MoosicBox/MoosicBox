@@ -153,41 +153,49 @@ pub trait GenericClientBuilder<RB, C: GenericClient<RB>>: Send + Sync {
 /// Generic trait for HTTP clients.
 pub trait GenericClient<RB>: Send + Sync {
     /// Create a GET request builder.
+    #[must_use]
     fn get(&self, url: &str) -> RB {
         self.request(Method::Get, url)
     }
 
     /// Create a POST request builder.
+    #[must_use]
     fn post(&self, url: &str) -> RB {
         self.request(Method::Post, url)
     }
 
     /// Create a PUT request builder.
+    #[must_use]
     fn put(&self, url: &str) -> RB {
         self.request(Method::Put, url)
     }
 
     /// Create a PATCH request builder.
+    #[must_use]
     fn patch(&self, url: &str) -> RB {
         self.request(Method::Patch, url)
     }
 
     /// Create a DELETE request builder.
+    #[must_use]
     fn delete(&self, url: &str) -> RB {
         self.request(Method::Delete, url)
     }
 
     /// Create a HEAD request builder.
+    #[must_use]
     fn head(&self, url: &str) -> RB {
         self.request(Method::Head, url)
     }
 
     /// Create an OPTIONS request builder.
+    #[must_use]
     fn options(&self, url: &str) -> RB {
         self.request(Method::Options, url)
     }
 
     /// Create a request builder with the specified HTTP method.
+    #[must_use]
     fn request(&self, method: Method, url: &str) -> RB;
 }
 
@@ -195,8 +203,10 @@ pub trait GenericClient<RB>: Send + Sync {
 #[async_trait]
 pub trait GenericResponse: Send + Sync {
     /// Get the HTTP status code of the response.
+    #[must_use]
     fn status(&self) -> StatusCode;
     /// Get the response headers.
+    #[must_use]
     fn headers(&mut self) -> &BTreeMap<String, String>;
     /// Get the response body as text.
     ///
