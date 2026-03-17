@@ -1,9 +1,9 @@
 //! Integration tests demonstrating new migration capabilities
 //!
 //! These tests showcase the advanced features of the migration system:
-//! - Rollback functionality
-//! - Complex breakpoint patterns
-//! - Environment variable integration
+//! * Rollback functionality
+//! * Complex breakpoint patterns
+//! * Environment variable integration
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -15,11 +15,25 @@
 ///
 /// # Errors
 ///
-/// * `TestError` if database operations fail or rollback doesn't work correctly
+/// * If creating the in-memory database fails
+/// * If migration execution or rollback fails
+/// * If schema verification queries fail
 ///
 /// # Panics
 ///
 /// * If the table `users` exists after rollback
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "sqlite")]
+/// # {
+/// # async fn example() -> Result<(), switchy_schema_test_utils::TestError> {
+/// switchy_schema_test_utils::integration_tests::demonstrate_rollback_functionality().await?;
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[cfg(feature = "sqlite")]
 pub async fn demonstrate_rollback_functionality() -> Result<(), crate::TestError> {
     use std::sync::Arc;
@@ -66,11 +80,26 @@ pub async fn demonstrate_rollback_functionality() -> Result<(), crate::TestError
 ///
 /// # Errors
 ///
-/// Returns `TestError` if database operations fail or breakpoints don't work correctly
+/// * If creating the in-memory database fails
+/// * If migration or breakpoint execution fails
+/// * If post-migration validation queries fail
 ///
 /// # Panics
 ///
 /// * If any of the assertions fail
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "sqlite")]
+/// # {
+/// # async fn example() -> Result<(), switchy_schema_test_utils::TestError> {
+/// switchy_schema_test_utils::integration_tests::demonstrate_complex_breakpoint_patterns()
+///     .await?;
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[cfg(feature = "sqlite")]
 pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::TestError> {
     use std::sync::Arc;
@@ -176,11 +205,26 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
 ///
 /// # Errors
 ///
-/// Returns `TestError` if environment variable handling fails
+/// * If creating the in-memory database fails
+/// * If migration execution fails while the environment variable is set
+/// * If migration table verification queries fail
 ///
 /// # Panics
 ///
 /// * If any of the assertions fail
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(all(test, feature = "sqlite"))]
+/// # {
+/// # async fn example() -> Result<(), switchy_schema_test_utils::TestError> {
+/// switchy_schema_test_utils::integration_tests::demonstrate_environment_variable_integration()
+///     .await?;
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[cfg(all(test, feature = "sqlite"))]
 pub async fn demonstrate_environment_variable_integration() -> Result<(), crate::TestError> {
     use switchy_database::query::FilterableQuery as _;
