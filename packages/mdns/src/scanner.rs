@@ -60,10 +60,6 @@ pub struct Context {
 
 impl Context {
     /// Creates a new scanner context with the given channel sender.
-    ///
-    /// # Panics
-    ///
-    /// * During scanning, panics if a discovered service has an invalid DNS name format (missing '.')
     #[must_use]
     pub fn new(sender: kanal::AsyncSender<MoosicBox>) -> Self {
         Self {
@@ -74,12 +70,13 @@ impl Context {
     }
 }
 
-/// Async service implementation for the mDNS scanner.
-///
-/// This module provides the async service wrapper for the mDNS scanner, enabling
-/// background scanning of the network for `MoosicBox` servers. The service automatically
-/// handles lifecycle management through the `Processor` trait implementation.
 pub mod service {
+    //! Async service implementation for the mDNS scanner.
+    //!
+    //! This module provides the async service wrapper for the mDNS scanner, enabling
+    //! background scanning of the network for `MoosicBox` servers. The service automatically
+    //! handles lifecycle management through the `Processor` trait implementation.
+
     moosicbox_async_service::async_service!(super::Command, super::Context, super::Error);
 }
 
@@ -94,7 +91,11 @@ impl service::Processor for service::Service {
     ///
     /// # Errors
     ///
-    /// * [`Error::MdnsSd`] - If the mDNS service daemon fails to initialize or browse
+    /// This method never returns an error directly.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if a discovered service reports a DNS fullname without a `.` separator
     async fn on_start(&mut self) -> Result<(), Self::Error> {
         let mut ctx = self.ctx.write().await;
 
@@ -162,6 +163,7 @@ impl service::Processor for service::Service {
     ///
     /// * [`Error::Join`] - If the background task fails to join
     /// * [`Error::MdnsSd`] - If the background task encountered an mDNS error
+    /// * [`Error::Send`] - If forwarding a discovered server through the channel failed
     async fn on_shutdown(ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
         let handle = &mut ctx.write().await.handle;
 
