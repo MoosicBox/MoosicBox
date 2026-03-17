@@ -249,6 +249,21 @@ fn load_config_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, Conf
 /// * If the config directory cannot be found
 /// * If the config file cannot be read
 /// * If the config file is malformed
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "file")]
+/// # fn example() -> Result<(), moosicbox_config::file::ConfigError> {
+/// use moosicbox_config::{AppType, file::load_global_config};
+///
+/// let config = load_global_config(AppType::Server)?;
+/// if let Some(default_profile) = config.default_profile {
+///     println!("Default profile: {default_profile}");
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError> {
     let config_dir =
         crate::get_app_config_dir_path(app_type).ok_or(ConfigError::ConfigDirNotFound)?;
@@ -266,6 +281,19 @@ pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError
 /// * If the profile directory cannot be found
 /// * If the config file cannot be read
 /// * If the config file is malformed
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "file")]
+/// # fn example() -> Result<(), moosicbox_config::file::ConfigError> {
+/// use moosicbox_config::{AppType, file::load_profile_config};
+///
+/// let profile = load_profile_config(AppType::Server, "production")?;
+/// println!("Library paths: {:?}", profile.library_paths);
+/// # Ok(())
+/// # }
+/// ```
 pub fn load_profile_config(app_type: AppType, profile: &str) -> Result<ProfileConfig, ConfigError> {
     let profile_dir =
         crate::get_profile_dir_path(app_type, profile).ok_or(ConfigError::ConfigDirNotFound)?;
@@ -295,6 +323,20 @@ pub struct MergedConfig {
 /// * If the config directories cannot be found
 /// * If the config files cannot be read
 /// * If the config files are malformed
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "file")]
+/// # fn example() -> Result<(), moosicbox_config::file::ConfigError> {
+/// use moosicbox_config::{AppType, file::load_merged_config};
+///
+/// let merged = load_merged_config(AppType::Server, "production")?;
+/// println!("Global default: {:?}", merged.global.default_profile);
+/// println!("Profile playback: {:?}", merged.profile.playback);
+/// # Ok(())
+/// # }
+/// ```
 pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConfig, ConfigError> {
     let global = load_global_config(app_type)?;
     let profile = load_profile_config(app_type, profile)?;

@@ -259,6 +259,19 @@ mod db_impl {
     ///
     /// * If a database error occurs
     /// * If the server identity cannot be created or retrieved
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "db")]
+    /// # async fn example(db: &switchy_database::config::ConfigDatabase) -> Result<(), moosicbox_config::db::GetOrInitServerIdentityError> {
+    /// use moosicbox_config::get_or_init_server_identity;
+    ///
+    /// let identity = get_or_init_server_identity(db).await?;
+    /// println!("Server identity: {identity}");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_or_init_server_identity(
         db: &ConfigDatabase,
     ) -> Result<String, GetOrInitServerIdentityError> {
