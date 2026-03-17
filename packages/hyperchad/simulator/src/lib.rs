@@ -223,6 +223,21 @@ impl HyperChadSimulator {
     ///
     /// * `SimulatorError::SimulationFailed` - If the simulation fails to start or returns no results
     /// * `SimulatorError::Simvar` - If the underlying simvar simulation fails
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hyperchad_simulator::HyperChadSimulator;
+    ///
+    /// # #[cfg(feature = "test-utils")]
+    /// # {
+    /// use hyperchad_simulator::test_utils::TestPlan;
+    ///
+    /// let simulator = HyperChadSimulator::new();
+    /// let plan = TestPlan::default();
+    /// let _result = simulator.run_test_plan(plan);
+    /// # }
+    /// ```
     #[cfg(feature = "test-utils")]
     pub fn run_test_plan(&self, plan: TestPlan) -> Result<TestResult, SimulatorError> {
         log::info!(
