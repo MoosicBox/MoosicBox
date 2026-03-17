@@ -35,6 +35,25 @@ pub struct Config {
 impl Config {
     /// Converts the configuration to a JSON string formatted for TypeScript consumption.
     ///
+    /// # Errors
+    ///
+    /// This function does not return errors. Serialization failures are reported as panics.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_app_create_config::Config;
+    ///
+    /// let config = Config {
+    ///     web: false,
+    ///     app: true,
+    ///     bundled: true,
+    /// };
+    ///
+    /// let json = config.to_json();
+    /// assert_eq!(json, "export const config = {\"web\":false,\"app\":true,\"bundled\":true} as const;");
+    /// ```
+    ///
     /// # Panics
     ///
     /// * If the `Config` fails to serialize
@@ -50,6 +69,18 @@ impl Config {
 ///
 /// Creates a TypeScript configuration file with web disabled, app enabled,
 /// and the bundled flag set according to the `bundled` parameter.
+///
+/// # Errors
+///
+/// This function does not return errors. File open and write failures are reported as panics.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_app_create_config::generate;
+///
+/// generate(false, "src/config.ts");
+/// ```
 ///
 /// # Panics
 ///
