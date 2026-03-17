@@ -112,7 +112,24 @@ impl SimulatedRequest {
     ///
     /// # Errors
     ///
-    /// * Returns `Error::Serialization` if JSON serialization fails
+    /// * Returns `Error::Serialization` if JSON serialization of `body` fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_http_models::Method;
+    /// use switchy_web_server_simulator::SimulatedRequest;
+    ///
+    /// #[derive(serde::Serialize)]
+    /// struct Payload {
+    ///     id: u64,
+    /// }
+    ///
+    /// let request = SimulatedRequest::new(Method::Post, "/items")
+    ///     .with_json_body(&Payload { id: 7 })
+    ///     .expect("payload should serialize");
+    /// assert_eq!(request.headers.get("content-type"), Some(&"application/json".to_string()));
+    /// ```
     pub fn with_json_body<T: Serialize>(mut self, body: &T) -> Result<Self, Error> {
         let json = serde_json::to_vec(body)?;
         self.body = Some(json.into());
@@ -180,7 +197,23 @@ impl SimulatedResponse {
     ///
     /// # Errors
     ///
-    /// * Returns `Error::Serialization` if JSON serialization fails
+    /// * Returns `Error::Serialization` if JSON serialization of `body` fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_web_server_simulator::SimulatedResponse;
+    ///
+    /// #[derive(serde::Serialize)]
+    /// struct Health {
+    ///     status: &'static str,
+    /// }
+    ///
+    /// let response = SimulatedResponse::ok()
+    ///     .with_json_body(&Health { status: "ok" })
+    ///     .expect("payload should serialize");
+    /// assert_eq!(response.headers.get("content-type"), Some(&"application/json".to_string()));
+    /// ```
     pub fn with_json_body<T: Serialize>(mut self, body: &T) -> Result<Self, Error> {
         let json = serde_json::to_vec(body)?;
         self.body = Some(json.into());
@@ -239,6 +272,19 @@ impl Clone for RouteHandler {
 
 impl RouteHandler {
     /// Creates a new route handler for the specified method, path pattern, and handler function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_http_models::Method;
+    /// use switchy_web_server_simulator::{RouteHandler, SimulatedResponse};
+    ///
+    /// let handler = RouteHandler::new(Method::Get, "/health", |_request| async {
+    ///     Ok(SimulatedResponse::ok())
+    /// });
+    ///
+    /// assert!(handler.matches(&Method::Get, "/health"));
+    /// ```
     #[must_use]
     pub fn new<F, Fut>(method: HttpMethod, path_pattern: impl Into<String>, handler: F) -> Self
     where
@@ -256,7 +302,7 @@ impl RouteHandler {
     ///
     /// # Errors
     ///
-    /// * Returns `Error::HandlerFailed` if the handler execution fails
+    /// * Returns any [`enum@Error`] returned by the registered handler.
     pub async fn handle(&self, request: SimulatedRequest) -> Result<SimulatedResponse, Error> {
         (self.handler)(request).await
     }
@@ -311,13 +357,32 @@ impl SimulationWebServer {
     ///
     /// # Errors
     ///
-    /// * Returns `Error::ServerNotStarted` if the server is not running
-    /// * Returns `Error::RouteNotFound` if no matching route or mock response is found
-    /// * Returns errors from the handler if handler execution fails
+    /// * Returns [`Error::ServerNotStarted`] if the server is not running.
+    /// * Returns [`Error::RouteNotFound`] if no matching route or mock response is found.
+    /// * Returns any [`enum@Error`] propagated from the matched route handler.
     ///
     /// # Panics
     ///
-    /// * If the request log mutex is poisoned
+    /// * Panics if the request log mutex is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use switchy_http_models::Method;
+    /// use switchy_web_server_simulator::{SimulatedRequest, SimulatedResponse, SimulationWebServer};
+    ///
+    /// # switchy_async::block_on(async {
+    /// let server = SimulationWebServer::new();
+    /// server.start().await.expect("server should start");
+    /// server.add_mock_response("GET /ping", SimulatedResponse::ok()).await;
+    ///
+    /// let response = server
+    ///     .handle_request(SimulatedRequest::new(Method::Get, "/ping"))
+    ///     .await
+    ///     .expect("request should succeed");
+    /// assert_eq!(response.status_code, switchy_http_models::StatusCode::Ok);
+    /// # });
+    /// ```
     pub async fn handle_request(
         &self,
         request: SimulatedRequest,
