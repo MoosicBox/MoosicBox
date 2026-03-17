@@ -117,7 +117,12 @@ pub struct EguiRenderRunner<C: EguiCalc + Clone + Send + Sync> {
 impl<C: EguiCalc + Clone + Send + Sync + 'static> RenderRunner for EguiRenderRunner<C> {
     /// # Errors
     ///
-    /// Will error if egui fails to run the event loop.
+    /// * This implementation currently always returns `Ok(())`.
+    /// * Failures from `eframe::run_native` are logged and not propagated as errors.
+    ///
+    /// # Panics
+    ///
+    /// * If internal renderer `RwLock`/`Mutex` values are poisoned while initializing egui.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         let mut viewport =
             egui::ViewportBuilder::default().with_inner_size([self.width, self.height]);
@@ -410,12 +415,12 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRenderer<C> {
     /// # Errors
     ///
-    /// Will error if egui fails to run the event loop.
+    /// * This implementation currently always returns `Ok`.
     ///
     /// # Panics
     ///
-    /// Will panic if the `RwLock` for view transmission or render buffer is poisoned,
-    /// or if width or height were not set during initialization.
+    /// * If the `RwLock` for view transmission or render buffer is poisoned.
+    /// * If width or height were not set during initialization.
     fn to_runner(
         self,
         _handle: Handle,
@@ -464,15 +469,19 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
 
 #[async_trait]
 impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
+    /// Registers a responsive trigger.
+    ///
+    /// The egui renderer v1 currently does not use named responsive triggers,
+    /// so this method is a no-op.
     fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
 
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * If internal renderer `RwLock`/`Mutex` values are poisoned.
     ///
     /// # Errors
     ///
-    /// Will error if egui app fails to start
+    /// * This implementation currently always returns `Ok(())`.
     async fn init(
         &mut self,
         width: f32,
@@ -510,7 +519,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
     /// # Errors
     ///
-    /// Will error if egui app fails to emit the event.
+    /// * If the blocking runtime task fails to join.
     async fn emit_event(
         &self,
         event_name: String,
@@ -532,11 +541,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
     /// # Errors
     ///
-    /// Will error if egui fails to render the view.
+    /// * If the blocking runtime task fails to join.
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * If internal renderer `RwLock`/`Mutex` values are poisoned.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let Some(primary) = view.primary else {
             return Ok(());
@@ -604,11 +613,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
     /// # Errors
     ///
-    /// Will error if egui fails to render the canvas update.
+    /// * If the blocking runtime task fails to join.
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * If internal renderer `RwLock`/`Mutex` values are poisoned.
     async fn render_canvas(
         &self,
         mut update: CanvasUpdate,

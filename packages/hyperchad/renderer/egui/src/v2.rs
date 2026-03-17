@@ -113,7 +113,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
 {
     /// # Errors
     ///
-    /// Will error if egui fails to run the event loop.
+    /// * This implementation currently always returns `Ok(())`.
+    /// * Failures from `eframe::run_native` are logged and not propagated as errors.
+    ///
+    /// # Panics
+    ///
+    /// * If internal renderer `RwLock` values are poisoned while initializing egui.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         let mut viewport =
             egui::ViewportBuilder::default().with_inner_size([self.width, self.height]);
@@ -169,11 +174,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::ToRenderRu
 {
     /// # Errors
     ///
-    /// Will error if egui fails to run the event loop.
+    /// * This implementation currently always returns `Ok`.
     ///
     /// # Panics
     ///
-    /// Will panic if width or height were not set during initialization.
+    /// * If width or height were not set during initialization.
     fn to_runner(
         self,
         _handle: hyperchad_renderer::Handle,
@@ -723,6 +728,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
 #[async_trait]
 impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer for EguiRenderer<C> {
+    /// Registers a responsive trigger.
+    ///
+    /// The egui renderer v2 currently does not use named responsive triggers,
+    /// so this method is a no-op.
     fn add_responsive_trigger(
         &mut self,
         _name: String,
@@ -733,7 +742,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
     /// # Errors
     ///
-    /// Will error if egui app fails to start.
+    /// * This implementation currently always returns `Ok(())`.
     async fn init(
         &mut self,
         width: f32,
@@ -771,7 +780,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
     /// # Errors
     ///
-    /// Will error if egui app fails to emit the event.
+    /// * This implementation currently always returns `Ok(())`.
     async fn emit_event(
         &self,
         event_name: String,
@@ -784,11 +793,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
     /// # Errors
     ///
-    /// Will error if egui fails to render the view.
+    /// * This implementation currently always returns `Ok(())`.
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * If internal renderer `RwLock` values are poisoned.
     async fn render(
         &self,
         view: hyperchad_renderer::View,
@@ -834,7 +843,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
     /// # Errors
     ///
-    /// Will error if egui fails to render the canvas update.
+    /// * This implementation currently always returns `Ok(())`.
     async fn render_canvas(
         &self,
         _update: CanvasUpdate,
