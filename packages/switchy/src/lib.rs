@@ -35,17 +35,18 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-/// Async runtime abstractions and utilities.
-///
-/// This module provides runtime-agnostic async primitives that work with both
-/// Tokio and the simulator runtime. The actual backend is selected via feature flags.
-///
-/// # Feature Flags
-///
-/// * `async-tokio` - Use Tokio as the backend
-/// * `simulator` - Use simulator runtime for testing
 #[cfg(feature = "async")]
 pub mod unsync {
+    //! Async runtime abstractions and utilities.
+    //!
+    //! This module provides runtime-agnostic async primitives that work with both
+    //! Tokio and the simulator runtime. The actual backend is selected via feature flags.
+    //!
+    //! # Feature Flags
+    //!
+    //! * `async-tokio` - Use Tokio as the backend
+    //! * `simulator` - Use simulator runtime for testing
+
     // Re-export everything from switchy_async
     pub use switchy_async::*;
 
@@ -80,6 +81,7 @@ pub mod unsync {
         };
     }
 
+    /// Re-exports [`select!`](crate::select) in the `switchy::unsync` namespace.
     #[cfg(feature = "async-macros")]
     pub use select;
 
@@ -115,6 +117,7 @@ pub mod unsync {
         };
     }
 
+    /// Re-exports [`join!`](crate::join) in the `switchy::unsync` namespace.
     #[cfg(feature = "async-macros")]
     pub use join;
 
@@ -151,6 +154,7 @@ pub mod unsync {
         };
     }
 
+    /// Re-exports [`try_join!`](crate::try_join) in the `switchy::unsync` namespace.
     #[cfg(feature = "async-macros")]
     pub use try_join;
 
@@ -179,17 +183,19 @@ pub mod unsync {
     pub use crate::unsync_macros::unsync_main as main;
 
     // Re-export test attribute macro
+    /// Attribute macro for asynchronous test functions.
     #[cfg(all(test, feature = "async-macros"))]
     pub use crate::unsync_macros::unsync_test as test;
 }
 
-/// Internal macro support for async operations.
-///
-/// This module contains the internal implementation details for the `select!`, `join!`,
-/// and `try_join!` macros. Users should use the macros from the `unsync` module instead
-/// of accessing this module directly.
 #[cfg(feature = "async-macros")]
 pub mod unsync_macros {
+    //! Internal macro support for async operations.
+    //!
+    //! This module contains the internal implementation details for the `select!`, `join!`,
+    //! and `try_join!` macros. Users should use the macros from the `unsync` module instead
+    //! of accessing this module directly.
+
     // Re-export everything from switchy_async_macros
     pub use switchy_async_macros::*;
 
@@ -425,14 +431,15 @@ pub use switchy_web_server as web_server;
 #[cfg(feature = "web-server-core")]
 pub use switchy_web_server_core as web_server_core;
 
-/// HTTP client and model abstractions.
-///
-/// This module provides HTTP functionality through two main components:
-///
-/// * HTTP client abstractions (when `http` feature is enabled)
-/// * HTTP model types and conversions (when `http-models` feature is enabled)
 #[cfg(any(feature = "http", feature = "http-models"))]
 pub mod http {
+    //! HTTP client and model abstractions.
+    //!
+    //! This module provides HTTP functionality through two main components:
+    //!
+    //! * HTTP client abstractions (when `http` feature is enabled)
+    //! * HTTP model types and conversions (when `http-models` feature is enabled)
+
     #[cfg(feature = "http")]
     pub use switchy_http::*;
     #[cfg(feature = "http-models")]
