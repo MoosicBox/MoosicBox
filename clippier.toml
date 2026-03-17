@@ -10,3 +10,12 @@ toolchain = "taplo"
 
 [tools]
 skip = ["gofmt"]
+
+[tools.clippier-md]
+line-width = 999999
+
+[tools.clippier-md.prose]
+wrap = "preserve"
+
+[tools.clippier-md.files]
+exclude = ["packages/opus_native/libopus/**"]
