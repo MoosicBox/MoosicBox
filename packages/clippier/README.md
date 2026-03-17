@@ -983,7 +983,7 @@ The `check` command automatically detects and runs:
 - **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
 - **TOML**: `taplo fmt --check`
 - **JavaScript/TypeScript**: `biome format`, `eslint`
-- **Markdown/MDX**: `remark` strict check
+- **Markdown/MDX**: `clippier_md` strict check
 - **YAML**: `dprint check`
 - **Python**: `ruff check`, `black --check`
 - **Go**: `gofmt -l`
@@ -1000,7 +1000,7 @@ By default, `check` auto-selects tools based on manifest/config files in the wor
 - `taplo.toml` -> `taplo`
 - `.shellcheckrc` -> `shellcheck`
 - `dprint.json`/`dprint.jsonc` -> `dprint`
-- `.remarkrc*`/`.remarkignore` -> `remark`
+- workspace includes `packages/clippier/md/Cargo.toml` -> `clippier_md`
 
 ### Fmt Command (Formatting)
 
@@ -1040,7 +1040,7 @@ The `fmt` command automatically detects and runs:
 - **Rust**: `cargo fmt`
 - **TOML**: `taplo fmt`
 - **JavaScript/TypeScript**: `biome format --write`
-- **Markdown/MDX**: `remark --output`
+- **Markdown/MDX**: `clippier_md fmt`
 - **YAML**: `dprint fmt`
 - **Python**: `ruff format`, `black`
 - **Go**: `gofmt -w`
@@ -1055,11 +1055,11 @@ By default, `fmt` auto-selects tools based on manifest/config files in the worki
 - `taplo.toml` -> `taplo`
 - `.shfmt.conf` -> `shfmt`
 - `dprint.json`/`dprint.jsonc` -> `dprint`
-- `.remarkrc*`/`.remarkignore` -> `remark`
+- workspace includes `packages/clippier/md/Cargo.toml` -> `clippier_md`
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
-Tool resolution precedence (for `prettier`, `biome`, `eslint`, `dprint`, and `remark`) is:
+Tool resolution precedence (for `prettier`, `biome`, `eslint`, `dprint`, `remark`, and `clippier_md`) is:
 
 1. CLI `--tool-path key=value` override
 2. Configured path in `tools.paths.<tool>`
@@ -1069,7 +1069,7 @@ Tool resolution precedence (for `prettier`, `biome`, `eslint`, `dprint`, and `re
 
 Use `--no-runner-fallback` to disable runner fallback for a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
-`remark` uses a strict check mode in `fmt --check`: clippier formats into a temporary directory and fails if any generated markdown output differs from the source files.
+`clippier_md` provides native strict check behavior for markdown in `fmt --check` and is the default markdown formatter in this workspace.
 
 When both `biome` and `prettier` are explicitly selected, clippier emits overlap warnings when they can target the same extensions.
 Overlap warnings are computed dynamically from files currently present in the working directory plus relevant tool config filters (`biome.json` `files.includes` and `.prettierignore`).
@@ -1130,6 +1130,7 @@ TUI behavior for tool output:
 | `biome`      | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
 | `eslint`     | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
 | `dprint`     | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `clippier_md`| Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                          |
 | `remark`     | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
 | `mdformat`   | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
 | `yamlfmt`    | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |

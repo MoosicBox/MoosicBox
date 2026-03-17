@@ -26,6 +26,7 @@ members = [
     "packages/bloaty",
     "packages/channel_utils",
     "packages/clippier",
+    "packages/clippier/md",
     "packages/config",
     "packages/date_utils",
     "packages/downloader",
@@ -440,6 +441,7 @@ hostname = "0.4.2"
 html-escape = "0.2.13"
 http = "1.4.0"
 id3 = "1.16.4"
+ignore = { version = "0.4.25", default-features = false }
 image = "0.25.10"
 include_dir = "0.7.4"
 insta = "1.46.3"

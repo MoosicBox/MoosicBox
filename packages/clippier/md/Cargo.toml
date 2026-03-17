@@ -1,0 +1,36 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Configurable Markdown formatter for clippier"
+edition     = { workspace = true }
+keywords    = ["clippier", "formatter", "markdown"]
+license     = { workspace = true }
+name        = "clippier_md"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+independent = true
+
+[[bin]]
+name = "clippier-md"
+path = "src/main.rs"
+
+[dependencies]
+anyhow     = { workspace = true }
+clap       = { workspace = true, features = ["derive"] }
+globset    = { workspace = true }
+ignore     = { workspace = true }
+regex      = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+toml       = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

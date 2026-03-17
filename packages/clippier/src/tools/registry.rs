@@ -772,6 +772,32 @@ impl ToolRegistry {
             vec!["fmt".to_string()],
         ));
 
+        // Markdown/MDX - clippier_md
+        self.register(Tool::new(
+            "clippier_md",
+            "Clippier MD",
+            "cargo",
+            ToolKind::Cargo,
+            vec![ToolCapability::Format],
+            vec![
+                "run".to_string(),
+                "-p".to_string(),
+                "clippier_md".to_string(),
+                "--".to_string(),
+                "fmt".to_string(),
+                "--check".to_string(),
+                ".".to_string(),
+            ],
+            vec![
+                "run".to_string(),
+                "-p".to_string(),
+                "clippier_md".to_string(),
+                "--".to_string(),
+                "fmt".to_string(),
+                ".".to_string(),
+            ],
+        ));
+
         // Markdown/MDX - remark
         self.register(Tool::new(
             "remark",

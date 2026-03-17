@@ -80,6 +80,7 @@ const KNOWN_TOOL_NAMES: &[&str] = &[
     "biome",
     "eslint",
     "dprint",
+    "clippier_md",
     "remark",
     "mdformat",
     "yamlfmt",
@@ -609,7 +610,7 @@ fn default_extensions_for_tool(
                 "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
             ],
             "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
-            "remark" => &["md", "mdx"],
+            "clippier_md" | "remark" => &["md", "mdx"],
             "mdformat" => &["md"],
             "yamlfmt" => &["yaml", "yml"],
             "ruff" | "black" => &["py", "pyi", "ipynb"],
@@ -894,18 +895,8 @@ pub fn auto_detect_check_tools(
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
-    let has_remark_config = [
-        ".remarkrc",
-        ".remarkrc.json",
-        ".remarkrc.yml",
-        ".remarkrc.yaml",
-        ".remarkrc.js",
-        ".remarkrc.cjs",
-        ".remarkrc.mjs",
-        ".remarkignore",
-    ]
-    .iter()
-    .any(|path| has_file_in_ancestors(&base_dir, path));
+    let has_clippier_md_package =
+        has_file_in_ancestors(&base_dir, "packages/clippier/md/Cargo.toml");
     let has_shellcheck_config = has_file(&base_dir, ".shellcheckrc");
 
     let mut tools = Vec::new();
@@ -938,8 +929,8 @@ pub fn auto_detect_check_tools(
         tools.push("dprint".to_string());
     }
 
-    if has_remark_config {
-        tools.push("remark".to_string());
+    if has_clippier_md_package {
+        tools.push("clippier_md".to_string());
     }
 
     if has_shellcheck_config {
@@ -975,18 +966,8 @@ pub fn auto_detect_fmt_tools(
     let has_taplo_config = has_file(&base_dir, "taplo.toml");
     let has_dprint_config =
         has_file(&base_dir, "dprint.json") || has_file(&base_dir, "dprint.jsonc");
-    let has_remark_config = [
-        ".remarkrc",
-        ".remarkrc.json",
-        ".remarkrc.yml",
-        ".remarkrc.yaml",
-        ".remarkrc.js",
-        ".remarkrc.cjs",
-        ".remarkrc.mjs",
-        ".remarkignore",
-    ]
-    .iter()
-    .any(|path| has_file_in_ancestors(&base_dir, path));
+    let has_clippier_md_package =
+        has_file_in_ancestors(&base_dir, "packages/clippier/md/Cargo.toml");
     let has_shfmt_config = has_file(&base_dir, ".shfmt.conf");
 
     let mut tools = Vec::new();
@@ -1017,8 +998,8 @@ pub fn auto_detect_fmt_tools(
         tools.push("dprint".to_string());
     }
 
-    if has_remark_config {
-        tools.push("remark".to_string());
+    if has_clippier_md_package {
+        tools.push("clippier_md".to_string());
     }
 
     if has_shfmt_config {
@@ -1217,8 +1198,8 @@ mod tests {
     }
 
     #[test]
-    fn auto_detect_tools_include_remark_when_remark_config_exists() {
-        let dir = temp_dir("clippier-auto-detect-remark");
+    fn auto_detect_tools_do_not_default_remark_even_with_remark_config() {
+        let dir = temp_dir("clippier-auto-detect-no-remark-default");
         std::fs::write(dir.join(".remarkrc.yml"), "plugins: []\n")
             .expect("failed to write .remarkrc.yml");
 
@@ -1226,28 +1207,23 @@ mod tests {
             auto_detect_check_tools(Some(&dir)).expect("failed to detect check tools");
         let fmt_tools = auto_detect_fmt_tools(Some(&dir)).expect("failed to detect fmt tools");
 
-        assert!(check_tools.contains(&"remark".to_string()));
-        assert!(fmt_tools.contains(&"remark".to_string()));
+        assert!(!check_tools.contains(&"remark".to_string()));
+        assert!(!fmt_tools.contains(&"remark".to_string()));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 
     #[test]
-    fn auto_detect_tools_include_remark_from_ancestor_config() {
-        let dir = temp_dir("clippier-auto-detect-remark-ancestor");
-        std::fs::write(dir.join(".remarkrc.yml"), "plugins: []\n")
-            .expect("failed to write .remarkrc.yml");
-        let nested = dir.join("docs").join("nested");
-        std::fs::create_dir_all(&nested).expect("failed to create nested dir");
+    fn auto_detect_tools_include_clippier_md_in_workspace() {
+        let workspace_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
         let check_tools =
-            auto_detect_check_tools(Some(&nested)).expect("failed to detect check tools");
-        let fmt_tools = auto_detect_fmt_tools(Some(&nested)).expect("failed to detect fmt tools");
+            auto_detect_check_tools(Some(&workspace_path)).expect("failed to detect check tools");
+        let fmt_tools =
+            auto_detect_fmt_tools(Some(&workspace_path)).expect("failed to detect fmt tools");
 
-        assert!(check_tools.contains(&"remark".to_string()));
-        assert!(fmt_tools.contains(&"remark".to_string()));
-
-        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+        assert!(check_tools.contains(&"clippier_md".to_string()));
+        assert!(fmt_tools.contains(&"clippier_md".to_string()));
     }
 
     #[test]

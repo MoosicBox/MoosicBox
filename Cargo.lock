@@ -2995,6 +2995,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "clippier_md"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "globset",
+ "ignore",
+ "regex",
+ "serde",
+ "serde_json",
+ "toml 1.0.6+spec-1.1.0",
+]
+
+[[package]]
 name = "clippier_test_utilities"
 version = "0.1.4"
 dependencies = [
@@ -5653,6 +5667,7 @@ checksum = "52dfc19153a48bde0cbd630453615c8151bce3a5adfac7a0aebfbf0a1e1f57e3"
 dependencies = [
  "aho-corasick",
  "bstr",
+ "log 0.4.29",
  "regex-automata",
  "regex-syntax",
 ]
@@ -7128,6 +7143,22 @@ name = "if_chain"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd62e6b5e86ea8eeeb8db1de02880a6abc01a397b2ebb64b5d74ac255318f5cb"
+
+[[package]]
+name = "ignore"
+version = "0.4.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3d782a365a015e0f5c04902246139249abf769125006fbe7649e2ee88169b4a"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log 0.4.29",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
+]
 
 [[package]]
 name = "image"
