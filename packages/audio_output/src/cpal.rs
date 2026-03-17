@@ -119,9 +119,24 @@ impl AudioOutputSample for f64 {}
 impl CpalAudioOutput {
     /// Creates a new CPAL audio output for the specified device and sample format.
     ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use moosicbox_audio_output::cpal::CpalAudioOutput;
+    /// # fn demo(device: cpal::Device, format: cpal::SampleFormat) {
+    /// let output = CpalAudioOutput::new(device, format);
+    /// assert!(output.is_ok());
+    /// # }
+    /// ```
+    ///
     /// # Errors
     ///
-    /// * If the relevant `CpalAudioOutputImpl` fails to initialize
+    /// * If querying or applying the device's default output configuration fails.
+    /// * If the underlying `CpalAudioOutputImpl` fails to initialize.
+    ///
+    /// # Panics
+    ///
+    /// * If CPAL introduces a new `SampleFormat` variant that is not yet handled.
     pub fn new(device: cpal::Device, format: SampleFormat) -> Result<Self, AudioOutputError> {
         Ok(Self {
             write: match format {

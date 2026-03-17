@@ -80,9 +80,19 @@ pub struct GetAudioOutputs {
 ///
 /// Returns a paginated list of available audio output devices.
 ///
+/// # Examples
+///
+/// ```text
+/// GET /audio-outputs?offset=0&limit=30
+/// ```
+///
 /// # Errors
 ///
-/// * If pagination parameters are invalid
+/// * If Actix fails to deserialize query parameters.
+///
+/// # Panics
+///
+/// * If the total number of outputs exceeds `u32::MAX` while building pagination metadata.
 pub async fn audio_outputs_endpoint(
     query: web::Query<GetAudioOutputs>,
 ) -> Result<Json<Page<ApiAudioOutput>>> {
