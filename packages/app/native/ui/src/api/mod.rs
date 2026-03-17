@@ -5,4 +5,5 @@
 
 pub mod tidal;
 
-pub use tidal::*; 
+/// Re-exports Tidal API integration functions.
+pub use tidal::*;

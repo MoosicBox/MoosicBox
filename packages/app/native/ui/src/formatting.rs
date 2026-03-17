@@ -74,6 +74,11 @@ impl TrackApiSourceFormat for TrackApiSource {
 /// Formats audio format values into human-readable strings.
 pub trait AudioFormatFormat {
     /// Converts the audio format to a formatted string.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if this crate is built without the corresponding format feature
+    ///   and the audio format variant is encountered at runtime
     fn into_formatted(self) -> String;
 }
 
@@ -103,6 +108,10 @@ impl AudioFormatFormat for AudioFormat {
 /// Includes format, sample rate, and bit depth information.
 pub trait AlbumVersionQualityFormat {
     /// Converts the album version quality to a formatted string.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the source is local and no audio format is present
     fn into_formatted(self) -> String;
 }
 
@@ -147,6 +156,26 @@ impl AlbumVersionQualityFormat for ApiAlbumVersionQuality {
 /// Displays a list of album version qualities as a single formatted string.
 ///
 /// Qualities are separated by " / " and truncated with a count indicator if they exceed `max_characters`.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_app_native_ui::formatting::{AlbumVersionQualityFormat, display_album_version_qualities};
+///
+/// struct Quality(&'static str);
+///
+/// impl AlbumVersionQualityFormat for Quality {
+///     fn into_formatted(self) -> String {
+///         self.0.to_string()
+///     }
+/// }
+///
+/// let formatted = display_album_version_qualities(
+///     vec![Quality("FLAC"), Quality("MP3")].into_iter(),
+///     None,
+/// );
+/// assert_eq!(formatted, "FLAC / MP3");
+/// ```
 #[must_use]
 pub fn display_album_version_qualities<T: AlbumVersionQualityFormat>(
     mut qualities: impl Iterator<Item = T>,

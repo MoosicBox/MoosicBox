@@ -26,6 +26,11 @@ pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
 ///
 /// Returns `None` if authentication cannot be started due to missing credentials,
 /// network errors, or invalid responses from the Tidal API.
+///
+/// # Panics
+///
+/// * Panics in the spawned background polling task if `TIDAL_CLIENT_ID` or
+///   `TIDAL_CLIENT_SECRET` are not available when polling for an access token
 pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
     let client_id = match switchy_env::var("TIDAL_CLIENT_ID") {
         Ok(id) => id,
