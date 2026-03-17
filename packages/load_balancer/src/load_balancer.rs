@@ -52,6 +52,24 @@ impl Router {
     /// # Arguments
     ///
     /// * `upstreams` - Map of hostnames to their corresponding load balancers
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use std::collections::BTreeMap;
+    /// use std::sync::Arc;
+    /// use moosicbox_load_balancer::Router;
+    /// use pingora_load_balancing::LoadBalancer;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let lb = Arc::new(LoadBalancer::try_from_iter(["127.0.0.1:8080"])?);
+    /// let mut upstreams = BTreeMap::new();
+    /// upstreams.insert("example.com".to_string(), lb);
+    ///
+    /// let _router = Router::new(upstreams);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub const fn new(upstreams: BTreeMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
         Self(upstreams)
@@ -80,7 +98,7 @@ impl ProxyHttp for Router {
     ///
     /// # Errors
     ///
-    /// This implementation never returns an error.
+    /// * This implementation never returns an error.
     async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
 
