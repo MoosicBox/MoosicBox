@@ -52,11 +52,12 @@ impl std::fmt::Display for Command {
     }
 }
 
-/// Async service implementation for processing application commands.
-///
-/// This module provides the service infrastructure for handling [`Command`]
-/// instances asynchronously, managing server lifecycle and event processing.
 pub mod service {
+    //! Async service implementation for processing application commands.
+    //!
+    //! This module provides the service infrastructure for handling [`Command`]
+    //! instances asynchronously, managing server lifecycle and event processing.
+
     moosicbox_async_service::async_service!(super::Command, super::Context);
 }
 
@@ -144,6 +145,16 @@ impl Context {
     ///
     /// The server listens on `0.0.0.0:8016` and signals startup completion
     /// through an internal channel.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_app_native_bundled::Context;
+    ///
+    /// # fn example(handle: &moosicbox_async_service::runtime::Handle) {
+    /// let _ctx = Context::new(handle);
+    /// # }
+    /// ```
     #[must_use]
     pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
         let (sender, receiver) = switchy_async::sync::oneshot::channel();
@@ -172,6 +183,18 @@ impl Context {
     /// # Errors
     ///
     /// * Returns an error if shutting down the server fails during `ExitRequested` handling
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_app_native_bundled::Context;
+    /// use tauri::RunEvent;
+    ///
+    /// # fn example(ctx: &Context, event: &RunEvent) -> Result<(), std::io::Error> {
+    /// ctx.handle_event(event)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn handle_event(&self, event: &RunEvent) -> Result<(), std::io::Error> {
         if let tauri::RunEvent::ExitRequested { .. } = *event {
             self.shutdown()?;
