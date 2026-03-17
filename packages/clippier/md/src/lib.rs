@@ -41,6 +41,12 @@ pub enum ListStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListIndentationMode {
+    Preserve,
+    Normalize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProseWrapMode {
     Always,
     Preserve,
@@ -54,6 +60,7 @@ pub struct Config {
     pub blank_lines_max_consecutive: usize,
     pub list_indent_width: usize,
     pub list_style: ListStyle,
+    pub list_indentation: ListIndentationMode,
     pub frontmatter_mode: FrontmatterMode,
     pub respect_gitignore: bool,
     pub exclude: Vec<String>,
@@ -90,6 +97,7 @@ impl Default for Config {
             blank_lines_max_consecutive: 2,
             list_indent_width: 4,
             list_style: ListStyle::Preserve,
+            list_indentation: ListIndentationMode::Preserve,
             frontmatter_mode: FrontmatterMode::Preserve,
             respect_gitignore: true,
             exclude: Vec::new(),
@@ -463,7 +471,11 @@ fn should_use_color(mode: ColorMode) -> bool {
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn format_markdown(input: &str, config: &Config) -> String {
-    let source_indent = detect_list_indent_unit(input);
+    let source_indent = if config.list_indentation == ListIndentationMode::Normalize {
+        Some(detect_list_indent_unit(input))
+    } else {
+        None
+    };
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
     let lines = normalized.lines().collect::<Vec<_>>();
     let mut output = Vec::new();
@@ -655,6 +667,16 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
             "plus" => ListStyle::Plus,
             "asterisk" => ListStyle::Asterisk,
             _ => ListStyle::Preserve,
+        };
+    }
+    if let Some(mode) = value
+        .get("list")
+        .and_then(|section| section.get("indentation"))
+        .and_then(toml::Value::as_str)
+    {
+        config.list_indentation = match mode {
+            "normalize" => ListIndentationMode::Normalize,
+            _ => ListIndentationMode::Preserve,
         };
     }
     if let Some(mode) = value
@@ -876,15 +898,29 @@ fn detect_list_indent_unit(input: &str) -> usize {
     }
 }
 
-fn normalize_list_line(line: &str, config: &Config, source_indent: usize) -> Option<String> {
+fn normalize_list_line(
+    line: &str,
+    config: &Config,
+    source_indent: Option<usize>,
+) -> Option<String> {
     if let Some((leading, marker, content)) = is_unordered_list_line(line) {
-        let level = leading / source_indent.max(1);
         let marker = match config.list_style {
             ListStyle::Preserve => marker,
             ListStyle::Dash => "-".to_string(),
             ListStyle::Plus => "+".to_string(),
             ListStyle::Asterisk => "*".to_string(),
         };
+
+        if config.list_indentation == ListIndentationMode::Preserve {
+            return Some(format!(
+                "{}{} {}",
+                " ".repeat(leading),
+                marker,
+                content.trim_start()
+            ));
+        }
+
+        let level = leading / source_indent.unwrap_or(1).max(1);
         return Some(format!(
             "{}{} {}",
             " ".repeat(level * config.list_indent_width),
@@ -894,7 +930,16 @@ fn normalize_list_line(line: &str, config: &Config, source_indent: usize) -> Opt
     }
 
     if let Some((leading, marker, content)) = is_ordered_list_line(line) {
-        let level = leading / source_indent.max(1);
+        if config.list_indentation == ListIndentationMode::Preserve {
+            return Some(format!(
+                "{}{} {}",
+                " ".repeat(leading),
+                marker,
+                content.trim_start()
+            ));
+        }
+
+        let level = leading / source_indent.unwrap_or(1).max(1);
         return Some(format!(
             "{}{} {}",
             " ".repeat(level * config.list_indent_width),
@@ -995,8 +1040,19 @@ mod tests {
     #[test]
     fn normalizes_nested_list_indent_width() {
         let input = "- one\n  - two\n";
-        let output = format_markdown(input, &Config::default());
+        let config = Config {
+            list_indentation: ListIndentationMode::Normalize,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
         assert_eq!(output, "- one\n    - two\n");
+    }
+
+    #[test]
+    fn preserves_nested_list_indentation_by_default() {
+        let input = "- one\n  - two\n";
+        let output = format_markdown(input, &Config::default());
+        assert_eq!(output, input);
     }
 
     #[test]

@@ -31,6 +31,7 @@ prose-wrap = "always"
 [list]
 indent-width = 4
 style = "preserve"
+indentation = "preserve"
 
 [frontmatter]
 mode = "preserve"
