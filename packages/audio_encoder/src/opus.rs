@@ -34,13 +34,28 @@ impl From<::opus::Error> for EncoderError {
 /// format begins with a 4-byte big-endian sample count, followed by a series of
 /// encoded packets, each prefixed with a 2-byte big-endian length.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::opus::encode_audiopus;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let samples = vec![0.0_f32; 1_920];
+/// let (sample_rate, encoded) = encode_audiopus(&samples)?;
+/// assert_eq!(sample_rate, 48_000);
+/// assert!(encoded.len() >= 4);
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the samples
 ///
 /// # Panics
 ///
-/// * If the samples len fails to convert to u32 type
+/// * If `samples.len()` does not fit in `u32` for the framing header
+/// * If an encoded packet length does not fit in `u16` for packet framing
 pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> {
     use audiopus::{
         Application, Bitrate, Channels, Error as OpusError, ErrorCode as OpusErrorCode, SampleRate,
@@ -108,6 +123,17 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
 ///
 /// Configures the encoder for 48kHz stereo audio.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::opus::encoder_opus;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let _encoder = encoder_opus()?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * If the encoder fails to initialize
@@ -119,6 +145,21 @@ pub fn encoder_opus() -> Result<::opus::Encoder, EncoderError> {
 }
 
 /// Encodes floating-point PCM audio samples to Opus format.
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::opus::{encode_opus_float, encoder_opus};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut encoder = encoder_opus()?;
+/// let input = vec![0.0_f32; 960];
+/// let mut output = vec![0_u8; 4_000];
+/// let info = encode_opus_float(&mut encoder, &input, &mut output)?;
+/// assert_eq!(info.input_consumed, input.len());
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Errors
 ///
@@ -140,6 +181,19 @@ pub fn encode_opus_float(
 ///
 /// Reads all packets from the input Ogg stream and writes them to the output,
 /// preserving packet boundaries, stream serial numbers, and page structure.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_audio_encoder::opus::read_write_ogg;
+///
+/// # fn main() -> std::io::Result<()> {
+/// let input = std::fs::File::open("input.ogg")?;
+/// let output = std::fs::File::create("output.ogg")?;
+/// read_write_ogg(input, output);
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Panics
 ///
@@ -189,6 +243,19 @@ pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
 ///
 /// Creates an Ogg packet writer and writes the provided content as a single packet
 /// with stream end marker. Errors during writing are logged but not propagated.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_audio_encoder::opus::write_ogg;
+///
+/// # fn main() -> std::io::Result<()> {
+/// let file = std::fs::File::create("packet.ogg")?;
+/// let packet = [0_u8; 16];
+/// write_ogg(file, &packet);
+/// # Ok(())
+/// # }
+/// ```
 pub fn write_ogg(file: std::fs::File, content: &[u8]) {
     let mut writer = PacketWriter::new(file);
 
@@ -267,6 +334,14 @@ pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 23] = [
 
 impl OpusWrite<'_> {
     /// Creates a new Ogg/Opus stream writer for the specified file path.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_audio_encoder::opus::OpusWrite;
+    ///
+    /// let _writer = OpusWrite::new("out.ogg");
+    /// ```
     ///
     /// # Panics
     ///

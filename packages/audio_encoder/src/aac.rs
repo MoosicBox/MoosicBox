@@ -38,6 +38,17 @@ impl From<fdk_aac::enc::EncoderError> for EncoderError {
 /// Configures the encoder for MPEG-4 Low Complexity AAC at 44.1kHz stereo with
 /// very high variable bitrate, outputting ADTS format.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::aac::encoder_aac;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let _encoder = encoder_aac()?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * If the encoder fails to initialize
@@ -54,9 +65,24 @@ pub fn encoder_aac() -> Result<Encoder, EncoderError> {
 
 /// Encodes PCM audio samples to AAC format.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::aac::{encode_aac, encoder_aac};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let encoder = encoder_aac()?;
+/// let input = vec![0_i16; 2048];
+/// let mut output = vec![0_u8; 8192];
+/// let info = encode_aac(&encoder, &input, &mut output)?;
+/// assert_eq!(info.input_consumed, input.len());
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
-/// * If the encoder fails to encode the input bytes
+/// * If the encoder fails to encode the provided PCM samples
 pub fn encode_aac(
     encoder: &Encoder,
     input: &[i16],

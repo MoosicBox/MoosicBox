@@ -46,17 +46,29 @@ impl From<mp3lame_encoder::BuildError> for EncoderError {
 /// Configures the encoder for 320kbps stereo at 44.1kHz with best quality settings
 /// and default ID3 tags.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::mp3::encoder_mp3;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let _encoder = encoder_mp3()?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Panics
 ///
 /// * If the `mp3lame_encoder::Builder` fails to initialize.
-/// * If fails to set the number of channels
-/// * If fails to set the sample rate
-/// * If fails to set the bit rate
-/// * If fails to set the quality
+/// * If setting the number of channels fails
+/// * If setting the sample rate fails
+/// * If setting the bit rate fails
+/// * If setting encoder quality fails
 ///
 /// # Errors
 ///
-/// * If the encoder fails to initialize
+/// * If setting the ID3 tag fails
+/// * If final encoder build fails
 pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
     use mp3lame_encoder::{Builder, Id3Tag};
 
@@ -89,9 +101,24 @@ pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
 /// input samples consumed. The encoder flushes remaining data to ensure complete
 /// encoding of the input buffer.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::mp3::{encode_mp3, encoder_mp3};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut encoder = encoder_mp3()?;
+/// let input = vec![0_i16; 2048];
+/// let (_bytes, info) = encode_mp3(&mut encoder, &input)?;
+/// assert_eq!(info.input_consumed, input.len());
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
-/// * If the encoder fails to encode the input bytes
+/// * If encoding PCM samples into MP3 frames fails
+/// * If flushing buffered MP3 data fails
 pub fn encode_mp3(
     encoder: &mut mp3lame_encoder::Encoder,
     input: &[i16],

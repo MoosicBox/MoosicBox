@@ -51,9 +51,21 @@ impl From<flacenc::error::EncodeError> for EncoderError {
 ///
 /// Configures the encoder with a block size of 512 samples for streaming encoding.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::flac::encoder_flac;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let _encoder = encoder_flac()?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
-/// * If the encoder fails to initialize
+/// * If FLAC encoder configuration verification fails
+/// * If the encoder cannot allocate or initialize internal output state
 pub fn encoder_flac() -> Result<Encoder, EncoderError> {
     let mut encoder = flacenc::config::Encoder::default();
     encoder.block_size = 512;
@@ -70,9 +82,29 @@ pub fn encoder_flac() -> Result<Encoder, EncoderError> {
 
 /// Encodes PCM audio samples to FLAC format.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_audio_encoder::flac::{encode_flac, encoder_flac};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut encoder = encoder_flac()?;
+/// let input = vec![0_i32; 1024];
+/// let mut output = vec![0_u8; 16 * 1024];
+/// let info = encode_flac(&mut encoder, &input, &mut output)?;
+/// assert_eq!(info.input_consumed, input.len());
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
-/// * If the encoder fails to encode the input bytes
+/// * If frame encoding fails for the provided PCM input
+/// * If writing encoded FLAC stream data into the internal sink fails
+///
+/// # Panics
+///
+/// * If `buf` is smaller than the number of encoded bytes produced in this call
 pub fn encode_flac(
     encoder: &mut Encoder,
     input: &[i32],
