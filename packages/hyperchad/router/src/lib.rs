@@ -890,6 +890,34 @@ impl RouteRequest {
     /// * [`ParseError::ParseUtf8`] - Failed to parse form field as UTF-8
     /// * [`ParseError::IO`] - I/O error reading uploaded file
     /// * [`ParseError::CustomDeserialize`] - Failed to deserialize form data into the target type
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(all(feature = "serde", feature = "form"))]
+    /// # {
+    /// use bytes::Bytes;
+    /// use hyperchad_router::{RequestInfo, RouteRequest};
+    /// use serde::Deserialize;
+    /// use std::sync::Arc;
+    ///
+    /// #[derive(Debug, Deserialize, PartialEq)]
+    /// struct LoginForm {
+    ///     username: String,
+    /// }
+    ///
+    /// let mut req = RouteRequest::from_path("/login", RequestInfo::default());
+    /// req.headers.insert(
+    ///     "content-type".to_string(),
+    ///     "application/x-www-form-urlencoded".to_string(),
+    /// );
+    /// req.body = Some(Arc::new(Bytes::from("username=moosic")));
+    ///
+    /// let form: LoginForm = req.parse_form()?;
+    /// assert_eq!(form, LoginForm { username: "moosic".to_string() });
+    /// # Ok::<(), hyperchad_router::ParseError>(())
+    /// # }
+    /// ```
     #[cfg(feature = "form")]
     pub fn parse_form<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         use std::io::{Cursor, Read as _};
@@ -1006,6 +1034,30 @@ impl RouteRequest {
     ///
     /// * [`ParseError::MissingBody`] - The request body is missing
     /// * [`ParseError::SerdeJson`] - Failed to deserialize JSON data
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "serde")]
+    /// # {
+    /// use bytes::Bytes;
+    /// use hyperchad_router::{RequestInfo, RouteRequest};
+    /// use serde::Deserialize;
+    /// use std::sync::Arc;
+    ///
+    /// #[derive(Debug, Deserialize, PartialEq)]
+    /// struct Payload {
+    ///     value: String,
+    /// }
+    ///
+    /// let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+    /// req.body = Some(Arc::new(Bytes::from(r#"{"value":"ok"}"#)));
+    ///
+    /// let payload: Payload = req.parse_body()?;
+    /// assert_eq!(payload, Payload { value: "ok".to_string() });
+    /// # Ok::<(), hyperchad_router::ParseError>(())
+    /// # }
+    /// ```
     #[cfg(feature = "serde")]
     pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         if let Some(body) = &self.body {
@@ -1703,7 +1755,11 @@ impl Router {
     ///
     /// # Errors
     ///
-    /// The returned `JoinHandle` resolves to an error if navigation fails.
+    /// * The returned `JoinHandle` resolves to an error if navigation fails
+    ///
+    /// # Panics
+    ///
+    /// * Panics if called outside of an active async runtime
     #[must_use]
     pub fn navigate_spawn(
         &self,
@@ -1720,7 +1776,7 @@ impl Router {
     ///
     /// # Errors
     ///
-    /// The returned `JoinHandle` resolves to an error if navigation fails.
+    /// * The returned `JoinHandle` resolves to an error if navigation fails
     #[must_use]
     pub fn navigate_spawn_on(
         &self,
