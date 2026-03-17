@@ -53,6 +53,20 @@ pub enum InitError {
 /// * `InitError::Logs` - Failed to initialize the logging system
 /// * `InitError::BuildLogsConfig` - Failed to build the logs configuration
 /// * `InitError::BuildFileWriterConfig` - Failed to build the file writer configuration
+///
+/// # Examples
+///
+/// ```no_run
+/// use moosicbox_logging::{InitError, init};
+///
+/// match init(Some("app.log"), None) {
+///     Ok(layer) => drop(layer),
+///     Err(InitError::Logs(_)) => {
+///         // Another logger may already be initialized.
+///     }
+///     Err(err) => eprintln!("Failed to initialize logging: {err}"),
+/// }
+/// ```
 pub fn init(
     filename: Option<&str>,
     layers: Option<Vec<DynLayer>>,
