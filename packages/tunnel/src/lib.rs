@@ -164,6 +164,26 @@ impl TryFrom<Bytes> for TunnelResponse {
     /// # Panics
     ///
     /// Panics if the byte slice is shorter than 13 bytes (minimum required for header data).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bytes::Bytes;
+    /// use moosicbox_tunnel::TunnelResponse;
+    ///
+    /// let bytes = Bytes::from(vec![
+    ///     0, 0, 0, 0, 0, 0, 0, 1, // request_id = 1
+    ///     0, 0, 0, 2, // packet_id = 2
+    ///     1, // last = true
+    ///     b'o', b'k',
+    /// ]);
+    ///
+    /// let response = TunnelResponse::try_from(bytes).expect("valid tunnel response");
+    /// assert_eq!(response.request_id, 1);
+    /// assert_eq!(response.packet_id, 2);
+    /// assert!(response.last);
+    /// assert_eq!(response.bytes.as_ref(), b"ok");
+    /// ```
     fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let mut data = bytes.slice(13..);
         let request_id = u64::from_be_bytes(bytes[..8].try_into()?);
@@ -220,6 +240,19 @@ impl TryFrom<&str> for TunnelResponse {
     ///
     /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
     /// * JSON deserialization of headers fails
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use moosicbox_tunnel::TunnelResponse;
+    ///
+    /// let encoded = "TUNNEL_RESPONSE:1|2|1b2s=";
+    /// let response = TunnelResponse::try_from(encoded).expect("valid encoded response");
+    /// assert_eq!(response.request_id, 1);
+    /// assert_eq!(response.packet_id, 2);
+    /// assert!(response.last);
+    /// assert_eq!(response.bytes.as_ref(), b"ok");
+    /// ```
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
         use base64::{Engine, engine::general_purpose};
 
@@ -304,6 +337,19 @@ impl TryFrom<String> for TunnelResponse {
     ///
     /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
     /// * JSON deserialization of headers fails
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use moosicbox_tunnel::TunnelResponse;
+    ///
+    /// let encoded = String::from("TUNNEL_RESPONSE:1|2|1b2s=");
+    /// let response = TunnelResponse::try_from(encoded).expect("valid encoded response");
+    /// assert_eq!(response.request_id, 1);
+    /// assert_eq!(response.packet_id, 2);
+    /// assert!(response.last);
+    /// assert_eq!(response.bytes.as_ref(), b"ok");
+    /// ```
     fn try_from(base64: String) -> Result<Self, Self::Error> {
         base64.as_str().try_into()
     }
@@ -347,6 +393,22 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
     /// * `rx` - Channel receiver for incoming response packets
     /// * `abort_token` - Token to signal stream cancellation
     /// * `on_end` - Callback invoked when the stream completes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use moosicbox_tunnel::{TunnelResponse, TunnelStream};
+    /// use switchy_async::sync::mpsc;
+    /// use switchy_async::util::CancellationToken;
+    ///
+    /// async fn on_end(_request_id: u64) -> Result<(), Box<dyn std::error::Error>> {
+    ///     Ok(())
+    /// }
+    ///
+    /// let (_tx, rx) = mpsc::unbounded::<TunnelResponse>();
+    /// let abort_token = CancellationToken::new();
+    /// let _stream = TunnelStream::new(42, rx, abort_token, &on_end);
+    /// ```
     #[must_use]
     pub fn new(
         request_id: u64,
