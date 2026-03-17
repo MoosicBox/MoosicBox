@@ -701,11 +701,56 @@ fn should_use_color(mode: ColorMode) -> bool {
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn format_markdown(input: &str, config: &Config) -> String {
+    if config.frontmatter_mode == FrontmatterMode::Preserve
+        && let Some((frontmatter, body)) = split_frontmatter(input)
+    {
+        let formatted_body = if config.engine == FormatterEngine::Legacy {
+            format_markdown_legacy(body, config)
+        } else {
+            format_markdown_ast(body, config)
+        };
+        return format!("{frontmatter}{formatted_body}");
+    }
+
     if config.engine == FormatterEngine::Legacy {
         return format_markdown_legacy(input, config);
     }
 
     format_markdown_ast(input, config)
+}
+
+fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
+    let first_newline = input.find('\n')?;
+    let first_line = &input[..=first_newline];
+    let delimiter = if first_line.trim_end_matches(['\r', '\n']) == "---" {
+        "---"
+    } else if first_line.trim_end_matches(['\r', '\n']) == "+++" {
+        "+++"
+    } else {
+        return None;
+    };
+
+    let mut offset = first_newline + 1;
+    loop {
+        let remaining = &input[offset..];
+        if remaining.is_empty() {
+            return None;
+        }
+
+        if let Some(next_newline) = remaining.find('\n') {
+            let line_end = offset + next_newline + 1;
+            let line = &input[offset..line_end];
+            if line.trim_end_matches(['\r', '\n']) == delimiter {
+                return Some(input.split_at(line_end));
+            }
+            offset = line_end;
+        } else {
+            if remaining.trim_end_matches(['\r', '\n']) == delimiter {
+                return Some(input.split_at(input.len()));
+            }
+            return None;
+        }
+    }
 }
 
 fn format_markdown_ast(input: &str, config: &Config) -> String {

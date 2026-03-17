@@ -71,5 +71,13 @@ When `show-invisible-whitespace = true`, trailing spaces are shown as `␠`
 and tabs as `⇥` on changed lines.
 
 `engine = "ast"` uses markdown AST parsing/printing for robust structure-aware
-formatting. If AST parsing fails or unsupported normalization options are set,
-`clippier-md` falls back to the legacy formatter engine.
+formatting.
+
+## Parity Fixtures
+
+`packages/clippier/md/tests/parity/fixtures/` contains parity source fixtures for
+CommonMark + GFM behavior. Tests run `prettier` (pinned to `3.8.1`) at runtime
+and compare output byte-for-byte with `clippier-md`.
+
+Frontmatter (`---` YAML and `+++` TOML) is treated as immutable in preserve
+mode and validated byte-for-byte in parity tests.
