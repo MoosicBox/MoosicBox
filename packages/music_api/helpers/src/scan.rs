@@ -13,7 +13,8 @@ use switchy::database::profiles::LibraryDatabase;
 ///
 /// # Errors
 ///
-/// * If there was a database error
+/// * Returns [`moosicbox_music_api::Error::Other`] if enabling the scan origin fails
+///   due to a database-level error.
 pub async fn enable_scan(
     music_api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -30,7 +31,8 @@ pub async fn enable_scan(
 ///
 /// # Errors
 ///
-/// * If there was a database error
+/// * Returns [`moosicbox_music_api::Error::Other`] if reading the scan-origin status
+///   fails due to a database-level error.
 pub async fn scan_enabled(
     music_api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -48,14 +50,32 @@ pub async fn scan_enabled(
 ///
 /// # Errors
 ///
-/// * If the user is not logged in (returns `Error::Unauthorized`)
-/// * If the music API is not found for the profile
-/// * If there was a database error
-/// * If the scan fails
+/// * Returns [`moosicbox_music_api::Error::Unauthorized`] when the source requires
+///   authentication and the current auth session is not logged in.
+/// * Returns [`moosicbox_music_api::Error::Other`] wrapping
+///   [`moosicbox_music_api::Error::MusicApiNotFound`] when no music API exists for
+///   the current source/profile combination.
+/// * Returns [`moosicbox_music_api::Error::Other`] when building the scanner fails,
+///   such as from database access errors.
+/// * Returns [`moosicbox_music_api::Error::Other`] when the underlying scan operation
+///   fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn run(
+/// #     music_api: &dyn moosicbox_music_api::MusicApi,
+/// #     db: &switchy::database::profiles::LibraryDatabase,
+/// # ) -> Result<(), moosicbox_music_api::Error> {
+/// moosicbox_music_api_helpers::scan::scan(music_api, db).await?;
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Panics
 ///
-/// * If the profile is missing
+/// * Panics if the hard-coded `master` profile is missing from
+///   [`moosicbox_music_api::profiles::PROFILES`].
 pub async fn scan(
     music_api: &dyn MusicApi,
     db: &LibraryDatabase,
