@@ -1,3 +1,8 @@
+//! Test utility primitives for building `HyperChad` integration test plans.
+//!
+//! This crate provides composable data structures for defining navigation,
+//! interaction, form, HTTP, wait, and control-flow test steps.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -8,9 +13,13 @@ use std::{collections::BTreeMap, time::Duration};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Form handling utilities for test workflows.
 pub mod forms;
+/// HTTP request testing utilities.
 pub mod http;
+/// Browser navigation utilities for test workflows.
 pub mod navigation;
+/// Interaction and control-flow workflow utilities.
 pub mod workflow;
 
 pub use forms::*;
