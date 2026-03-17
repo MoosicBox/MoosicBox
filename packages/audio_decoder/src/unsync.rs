@@ -27,6 +27,11 @@ struct PlayTrackOptions {
 /// This function spawns a separate thread to decode audio packets and sends the decoded
 /// buffers through a channel, allowing the caller to consume audio at their own pace.
 ///
+/// # Examples
+///
+/// Most callers should use [`crate::decode_file_path_str`] for simple file decoding.
+/// Use this function when you need pull-based buffer consumption via a channel receiver.
+///
 /// # Errors
 ///
 /// * Returns [`DecodeError::AudioDecode`] if no supported track is found or decoding fails

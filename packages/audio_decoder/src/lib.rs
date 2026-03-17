@@ -316,6 +316,27 @@ struct PlayTrackOptions {
 ///
 /// This function runs the decoding in a blocking task to avoid blocking the async runtime.
 ///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_audio_decoder::{AudioDecodeHandler, decode_file_path_str_async};
+///
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let status = decode_file_path_str_async(
+///     "./music/song.flac",
+///     || Ok(AudioDecodeHandler::new()),
+///     true,
+///     false,
+///     None,
+///     None,
+/// )
+/// .await?;
+///
+/// assert_eq!(status, 0);
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * Returns [`DecodeError::Symphonia`] if the file cannot be opened or format detection fails
@@ -348,6 +369,17 @@ pub async fn decode_file_path_str_async(
 /// Decodes audio from a file path (blocking).
 ///
 /// This function synchronously decodes audio from the specified file path.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_audio_decoder::{AudioDecodeHandler, DecodeError, decode_file_path_str};
+///
+/// fn decode_once(path: &str) -> Result<i32, DecodeError> {
+///     let mut handler = AudioDecodeHandler::new();
+///     decode_file_path_str(path, &mut handler, true, false, None, None)
+/// }
+/// ```
 ///
 /// # Errors
 ///
@@ -397,6 +429,36 @@ pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, DecodeError>;
 /// Decodes audio from a custom media source asynchronously.
 ///
 /// This function runs the decoding in a blocking task to avoid blocking the async runtime.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::fs::File;
+///
+/// use moosicbox_audio_decoder::{AudioDecodeHandler, decode_media_source_async};
+/// use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+/// use symphonia::core::probe::Hint;
+///
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let file = File::open("./music/song.flac")?;
+/// let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
+/// let hint = Hint::new();
+///
+/// let status = decode_media_source_async(
+///     mss,
+///     &hint,
+///     || Ok(AudioDecodeHandler::new()),
+///     true,
+///     false,
+///     None,
+///     None,
+/// )
+/// .await?;
+///
+/// assert_eq!(status, 0);
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Errors
 ///
@@ -493,6 +555,11 @@ fn decode_media_source(
 ///
 /// This is the core decoding function that processes packets from a format reader
 /// and sends decoded audio to the provided handler.
+///
+/// # Examples
+///
+/// Most callers should use [`decode_file_path_str`] or [`decode_media_source_async`] instead
+/// of constructing a [`FormatReader`] directly.
 ///
 /// # Errors
 ///

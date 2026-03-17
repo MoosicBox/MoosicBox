@@ -45,6 +45,17 @@ impl StreamableFileAsync {
     ///
     /// This function performs a HEAD request to determine the file size before streaming begins.
     ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use moosicbox_audio_decoder::media_sources::streamable_file_async::StreamableFileAsync;
+    ///
+    /// # async fn run() {
+    /// let source = StreamableFileAsync::new("https://example.com/song.mp3".to_string()).await;
+    /// assert!(source.is_seekable());
+    /// # }
+    /// ```
+    ///
     /// # Panics
     ///
     /// * Panics if the HTTP request fails
