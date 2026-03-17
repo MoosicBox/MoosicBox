@@ -394,7 +394,7 @@ impl LibraryTrack {
     ///
     /// * If the file path has no parent directory
     /// * If the parent path contains invalid UTF-8
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()

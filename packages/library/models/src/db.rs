@@ -507,8 +507,20 @@ impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
 ///
 /// # Errors
 ///
-/// * If fails to get the data from the database
-/// * If fails to parse the data from the database
+/// * If the database query fails while fetching album track quality rows
+/// * If any returned row cannot be parsed into `AlbumVersionQuality`
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use switchy_database::profiles::LibraryDatabase;
+/// # use moosicbox_library_models::db::get_album_version_qualities;
+/// # async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+/// let versions = get_album_version_qualities(db, 42).await?;
+/// let _version_count = versions.len();
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_album_version_qualities(
     db: &LibraryDatabase,
     album_id: u64,
