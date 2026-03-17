@@ -619,7 +619,8 @@ impl TunnelSender {
     ///
     /// # Errors
     ///
-    /// * If failed to send the bytes
+    /// * If no active tunnel sender is available.
+    /// * If the tunnel response channel rejects the packet.
     pub fn send_bytes(
         &self,
         request_id: u64,
@@ -654,7 +655,8 @@ impl TunnelSender {
     ///
     /// # Errors
     ///
-    /// * If failed to send the message
+    /// * If no active tunnel sender is available.
+    /// * If the tunnel response channel rejects the packet.
     pub fn send_message(
         &self,
         request_id: u64,
@@ -1279,7 +1281,45 @@ impl TunnelSender {
     ///
     /// # Errors
     ///
-    /// * If an error occurs processing the tunnel request
+    /// * If `path` expects query parameters and `query` cannot be deserialized for that route.
+    /// * If request data is malformed (for example, invalid byte-range syntax).
+    /// * If the route requires a `profile` and none is available.
+    /// * If the route or method is unsupported by the tunnel sender.
+    /// * If downstream APIs, HTTP forwarding, streaming, serialization, I/O, regex, or task joins fail.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// # use moosicbox_tunnel::TunnelEncoding;
+    /// # use moosicbox_tunnel_sender::sender::TunnelSender;
+    /// # use serde_json::json;
+    /// # use switchy_database::config::ConfigDatabase;
+    /// # use switchy_http::models::Method;
+    /// # async fn example(config_db: ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    /// let (sender, _handle) = TunnelSender::new(
+    ///     "https://example.com".to_string(),
+    ///     "wss://example.com/tunnel".to_string(),
+    ///     "client-id".to_string(),
+    ///     "access-token".to_string(),
+    ///     config_db,
+    /// );
+    ///
+    /// sender
+    ///     .tunnel_request(
+    ///         8080,
+    ///         42,
+    ///         Method::Get,
+    ///         "files/track/info".to_string(),
+    ///         json!({"trackId": "123"}),
+    ///         None,
+    ///         None,
+    ///         Some("default".to_string()),
+    ///         TunnelEncoding::Binary,
+    ///     )
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(
         clippy::too_many_arguments,
         clippy::too_many_lines,
@@ -1759,11 +1799,42 @@ impl TunnelSender {
     ///
     /// # Panics
     ///
-    /// * If any of the relevant `RwLock`s are poisoned
+    /// * If any of the relevant `RwLock`s are poisoned.
+    /// * If an internal sender has not been initialized yet.
     ///
     /// # Errors
     ///
-    /// * If the websocket request fails to process
+    /// * If websocket message processing fails.
+    /// * If a tunnel response cannot be sent to the remote side.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// # use moosicbox_tunnel_sender::sender::TunnelSender;
+    /// # use moosicbox_ws::WebsocketSender;
+    /// # use serde_json::json;
+    /// # use switchy_database::config::ConfigDatabase;
+    /// # async fn example<S: WebsocketSender>(config_db: ConfigDatabase, root_sender: S) -> Result<(), Box<dyn std::error::Error>> {
+    /// let (sender, _handle) = TunnelSender::new(
+    ///     "https://example.com".to_string(),
+    ///     "wss://example.com/tunnel".to_string(),
+    ///     "client-id".to_string(),
+    ///     "access-token".to_string(),
+    ///     config_db,
+    /// );
+    ///
+    /// sender
+    ///     .ws_request(
+    ///         100,
+    ///         77,
+    ///         json!({"action": "ping"}),
+    ///         Some("default".to_string()),
+    ///         root_sender,
+    ///     )
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn ws_request(
         &self,
         conn_id: u64,
