@@ -171,6 +171,18 @@ pub async fn migrate_config_sqlite(
 ///
 /// * `MigrateError::Database` - If database connection or query fails
 /// * `MigrateError::Schema` - If migration execution fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_schema::migrate_config;
+///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+/// migrate_config(&*db).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_config(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
@@ -207,6 +219,25 @@ pub async fn migrate_library_postgres(
 ///
 /// * `MigrateError::Database` - If database connection or query fails
 /// * `MigrateError::Schema` - If migration execution fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_schema::migrate_library_postgres_until;
+///
+/// let db = switchy_database_connection::init_postgres_sqlx(
+///     "postgres://user:pass@localhost/test",
+/// )
+/// .await?;
+/// migrate_library_postgres_until(
+///     &*db,
+///     Some("2024-09-21-130720_set_journal_mode_to_wal"),
+/// )
+/// .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "postgres")]
 pub async fn migrate_library_postgres_until(
     db: &dyn switchy_database::Database,
@@ -270,6 +301,22 @@ pub async fn migrate_library_sqlite(
 ///
 /// * `MigrateError::Database` - If database connection or query fails
 /// * `MigrateError::Schema` - If migration execution fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_schema::migrate_library_sqlite_until;
+///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+/// migrate_library_sqlite_until(
+///     &*db,
+///     Some("2024-09-21-130720_set_journal_mode_to_wal"),
+/// )
+/// .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "sqlite")]
 pub async fn migrate_library_sqlite_until(
     db: &dyn switchy_database::Database,
@@ -324,6 +371,18 @@ pub async fn migrate_library_sqlite_until(
 ///
 /// * `MigrateError::Database` - If database connection or query fails
 /// * `MigrateError::Schema` - If migration execution fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_schema::migrate_library;
+///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+/// migrate_library(&*db).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     migrate_library_until(db, None).await
@@ -340,6 +399,18 @@ pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), 
 ///
 /// * `MigrateError::Database` - If database connection or query fails
 /// * `MigrateError::Schema` - If migration execution fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// use moosicbox_schema::migrate_library_until;
+///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+/// migrate_library_until(&*db, Some("2024-09-21-130720_set_journal_mode_to_wal")).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library_until(
     db: &dyn switchy_database::Database,
