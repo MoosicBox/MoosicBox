@@ -196,9 +196,26 @@ pub fn current_step() -> u64 {
 ///
 /// Simulated time is calculated based on the epoch offset, step counter, and step multiplier.
 ///
+/// # Examples
+///
+/// ```rust
+/// use std::time::UNIX_EPOCH;
+/// use switchy_time::simulator::{now, reset_step, set_step};
+///
+/// reset_step();
+/// let _ = set_step(0);
+/// let t0 = now();
+/// let _ = set_step(1);
+/// let t1 = now();
+///
+/// assert!(t1.duration_since(t0).is_ok());
+/// assert!(t0.duration_since(UNIX_EPOCH).is_ok());
+/// ```
+///
 /// # Panics
 ///
-/// * If the simulated `UNIX_EPOCH` offset is larger than a `u64` can store
+/// * If multiplication or addition overflows while calculating simulated milliseconds
+/// * If adding the simulated duration to `UNIX_EPOCH` overflows
 #[must_use]
 pub fn now() -> SystemTime {
     if REAL_TIME.is_set() {
@@ -225,9 +242,23 @@ static BASE_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
 ///
 /// Simulated instant is calculated based on the current step and step multiplier.
 ///
+/// # Examples
+///
+/// ```rust
+/// use switchy_time::simulator::{instant_now, reset_step, set_step};
+///
+/// reset_step();
+/// let _ = set_step(0);
+/// let i0 = instant_now();
+/// let _ = set_step(1);
+/// let i1 = instant_now();
+///
+/// assert!(i1 >= i0);
+/// ```
+///
 /// # Panics
 ///
-/// * If the simulated duration causes an overflow
+/// * If multiplication overflows while calculating simulated milliseconds
 #[must_use]
 pub fn instant_now() -> Instant {
     if REAL_TIME.is_set() {
@@ -247,6 +278,10 @@ pub fn instant_now() -> Instant {
 }
 
 /// Returns the current simulated local date and time, or real time if in a `with_real_time` context.
+///
+/// # Panics
+///
+/// * If [`now`] panics while calculating simulated time
 #[cfg(feature = "chrono")]
 #[must_use]
 pub fn datetime_local_now() -> chrono::DateTime<chrono::Local> {
@@ -260,6 +295,10 @@ pub fn datetime_local_now() -> chrono::DateTime<chrono::Local> {
 }
 
 /// Returns the current simulated UTC date and time, or real time if in a `with_real_time` context.
+///
+/// # Panics
+///
+/// * If [`now`] panics while calculating simulated time
 #[cfg(feature = "chrono")]
 #[must_use]
 pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
