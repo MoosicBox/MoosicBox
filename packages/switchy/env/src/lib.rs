@@ -143,6 +143,7 @@ pub trait EnvProvider: Send + Sync {
     fn var(&self, name: &str) -> Result<String>;
 
     /// Get an environment variable with a default value
+    #[must_use]
     fn var_or(&self, name: &str, default: &str) -> String {
         self.var(name).unwrap_or_else(|_| default.to_string())
     }
@@ -165,6 +166,7 @@ pub trait EnvProvider: Send + Sync {
     }
 
     /// Get an environment variable parsed with a default value
+    #[must_use]
     fn var_parse_or<T>(&self, name: &str, default: T) -> T
     where
         T: std::str::FromStr,
@@ -200,11 +202,13 @@ pub trait EnvProvider: Send + Sync {
     }
 
     /// Check if an environment variable exists
+    #[must_use]
     fn var_exists(&self, name: &str) -> bool {
         self.var(name).is_ok()
     }
 
     /// Get all environment variables
+    #[must_use]
     fn vars(&self) -> BTreeMap<String, String>;
 }
 
