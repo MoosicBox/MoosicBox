@@ -231,6 +231,11 @@ pub fn spawn(state: DisplayState) -> JoinHandle<std::io::Result<()>> {
 /// * Returns an error if the event loop fails
 /// * Returns an error if terminal restoration fails
 /// * Returns an error if the render loop fails
+///
+/// # Panics
+///
+/// * If signaling TUI startup completion fails because the receiver was dropped.
+/// * If joining the event loop thread fails.
 pub fn start(start_tx: Sender<()>, state: &DisplayState) -> std::io::Result<()> {
     state.init_terminal()?;
     start_tx.send(()).unwrap();

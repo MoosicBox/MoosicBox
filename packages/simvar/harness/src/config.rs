@@ -1,3 +1,9 @@
+//! Simulation configuration and result types.
+//!
+//! This module defines the core data structures used to configure simulation runs
+//! and report their outcomes, including [`SimConfig`], [`SimProperties`],
+//! [`SimRunProperties`], and [`SimResult`].
+
 use std::{sync::LazyLock, time::Duration};
 
 use switchy::random::{rng, simulator::seed};
@@ -73,6 +79,20 @@ impl SimConfig {
     /// Uses the current RNG to generate configuration values suitable for
     /// testing. The `SIMULATOR_DURATION` environment variable can be used
     /// to override the duration.
+    ///
+    /// # Panics
+    ///
+    /// * If `SIMULATOR_DURATION` is set but cannot be parsed as a supported
+    ///   duration format.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use simvar_harness::SimConfig;
+    ///
+    /// let config = SimConfig::from_rng();
+    /// assert!(config.max_message_latency >= config.min_message_latency);
+    /// ```
     #[must_use]
     pub fn from_rng() -> Self {
         static DURATION: LazyLock<Duration> = LazyLock::new(|| {

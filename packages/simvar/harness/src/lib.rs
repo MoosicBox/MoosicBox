@@ -196,13 +196,42 @@ fn try_get_backtrace() -> Option<String> {
 ///
 /// # Panics
 ///
-/// * If system time went backwards
+/// * If `SIMULATOR_RUNS` or `SIMULATOR_MAX_PARALLEL` is set but cannot be parsed
+///   as a `u64`.
+/// * If the Ctrl-C handler cannot be installed.
+/// * If converting the available parallelism value to `u64` fails unexpectedly.
+/// * If TUI shutdown thread joining fails when the `tui` feature is enabled.
+/// * If elapsed wall-clock time cannot be measured because system time goes
+///   backwards during a run.
 ///
 /// # Errors
 ///
 /// * The contents of this function are wrapped in a `catch_unwind` call, so if
 ///   any panic happens, it will be wrapped into an error on the outer `Result`
 /// * If the `Sim` `step` returns an error, we return that in an Ok(Err(e))
+/// * If simulation worker threads report orchestration errors
+/// * If logger initialization fails when `pretty_env_logger` is enabled
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use simvar_harness::{Sim, SimBootstrap, SimConfig, run_simulation};
+///
+/// struct Bootstrap;
+///
+/// impl SimBootstrap for Bootstrap {
+///     fn build_sim(&self, config: SimConfig) -> SimConfig {
+///         config
+///     }
+///
+///     fn on_start(&self, sim: &mut impl Sim) {
+///         sim.client("client", async { Ok(()) });
+///     }
+/// }
+///
+/// let _results = run_simulation(Bootstrap)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[allow(clippy::let_and_return)]
 pub fn run_simulation<B: SimBootstrap>(
     bootstrap: B,

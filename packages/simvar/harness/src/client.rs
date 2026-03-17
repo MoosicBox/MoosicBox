@@ -40,8 +40,7 @@ scoped_thread_local! {
 ///
 /// This function is only meaningful when called from within a client's action
 /// future. Returns `None` if called from outside a client context.
-#[allow(unused)]
-#[must_use]
+#[allow(unused, clippy::must_use_candidate)]
 pub fn current_client() -> Option<String> {
     if HANDLE.is_set() {
         Some(HANDLE.with(|x| x.name.clone()))
