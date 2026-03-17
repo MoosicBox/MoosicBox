@@ -84,4 +84,8 @@
 #[cfg(feature = "utils")]
 pub use simvar_utils as utils;
 
+/// Core simulation harness APIs.
+///
+/// Re-exports all public types, traits, and functions from [`simvar_harness`],
+/// including [`run_simulation`], [`Sim`], [`SimBootstrap`], and [`SimConfig`].
 pub use simvar_harness::*;
