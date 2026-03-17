@@ -27,6 +27,17 @@ use crate::models::{ApiMusicApi, AuthValues, convert_to_api_music_api};
 ///
 /// Registers all music API-related endpoints including listing APIs,
 /// authentication, scanning, and search functionality.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use actix_web::web;
+/// use moosicbox_music_api_api::api::bind_services;
+///
+/// let scope = web::scope("/music-apis");
+/// let scope = bind_services(scope);
+/// # let _ = scope;
+/// ```
 #[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -104,6 +115,13 @@ pub struct GetMusicApis {
 /// # Panics
 ///
 /// * Panics if the number of music APIs exceeds `u32::MAX` (practically impossible)
+///
+/// # Examples
+///
+/// ```text
+/// GET /music-apis?offset=0&limit=30
+/// moosicbox-profile: default
+/// ```
 pub async fn music_apis_endpoint(
     query: web::Query<GetMusicApis>,
     profile_name: ProfileName,
@@ -178,6 +196,16 @@ pub struct AuthMusicApi {
 /// * Returns a 404 error if the specified music API is not found
 /// * Returns a 400 error if the authentication method is not supported
 /// * Returns a 500 error if the authentication process fails
+///
+/// # Examples
+///
+/// ```text
+/// POST /music-apis/auth?apiSource=QOBUZ
+/// moosicbox-profile: default
+/// Content-Type: application/x-www-form-urlencoded
+///
+/// type=username-password&username=alice&password=secret
+/// ```
 pub async fn auth_music_api_endpoint(
     query: web::Query<AuthMusicApi>,
     form: web::Form<AuthValues>,
@@ -276,6 +304,13 @@ pub struct ScanMusicApi {
 ///
 /// * Returns a 404 error if the specified music API is not found
 /// * Returns a 500 error if the scan operation fails
+///
+/// # Examples
+///
+/// ```text
+/// POST /music-apis/scan?apiSource=TIDAL
+/// moosicbox-profile: default
+/// ```
 pub async fn scan_music_api_endpoint(
     query: web::Query<ScanMusicApi>,
     music_apis: MusicApis,
@@ -331,6 +366,13 @@ pub struct EnableScanMusicApi {
 ///
 /// * Returns a 404 error if the specified music API is not found
 /// * Returns a 500 error if enabling the scan fails
+///
+/// # Examples
+///
+/// ```text
+/// POST /music-apis/scan-origins?apiSource=QOBUZ
+/// moosicbox-profile: default
+/// ```
 pub async fn enable_scan_origin_music_api_endpoint(
     query: web::Query<EnableScanMusicApi>,
     music_apis: MusicApis,
@@ -400,6 +442,13 @@ pub struct SearchMusicApis {
 /// * Returns a 404 error if the specified profile is not found
 /// * Returns a 400 error if invalid API sources are provided
 /// * Returns a 500 error if any search operation fails
+///
+/// # Examples
+///
+/// ```text
+/// GET /music-apis/search?query=radiohead&apiSource=QOBUZ,TIDAL&offset=0&limit=20
+/// moosicbox-profile: default
+/// ```
 pub async fn search_music_apis_endpoint(
     query: web::Query<SearchMusicApis>,
     profile_name: ProfileName,

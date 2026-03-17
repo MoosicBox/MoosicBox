@@ -38,6 +38,18 @@ pub struct ApiMusicApi {
 ///
 /// * Returns an error if checking the login status fails
 /// * Returns an error if checking the scan enabled status fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use moosicbox_music_api::MusicApi;
+/// use moosicbox_music_api_api::models::convert_to_api_music_api;
+///
+/// async fn map_api(api: &dyn MusicApi) {
+///     let mapped = convert_to_api_music_api(api).await;
+///     assert!(mapped.is_ok());
+/// }
+/// ```
 pub async fn convert_to_api_music_api(
     api: &dyn MusicApi,
 ) -> Result<ApiMusicApi, moosicbox_music_api::Error> {
