@@ -195,6 +195,10 @@ pub enum SaveBytesStreamToFileError {
 
 /// Saves a stream of bytes to a file, optionally starting at a byte offset.
 ///
+/// # Panics
+///
+/// * If `path` has no parent directory
+///
 /// # Errors
 ///
 /// * If there is an IO error reading from the stream or writing to the file
@@ -215,9 +219,36 @@ type OnProgress = Box<dyn (FnMut(usize, usize) -> OnProgressFut) + Send>;
 ///
 /// Tracks download speed in bytes per second and invokes callbacks for speed updates and progress.
 ///
+/// # Panics
+///
+/// * If `path` has no parent directory
+///
 /// # Errors
 ///
 /// * If there is an IO error reading from the stream or writing to the file
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use bytes::Bytes;
+/// # use futures::stream;
+/// # use moosicbox_files::save_bytes_stream_to_file_with_speed_listener;
+/// # use std::{path::Path, pin::Pin};
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let chunks = vec![Ok(Bytes::from_static(b"abc")), Ok(Bytes::from_static(b"123"))];
+/// let stream = stream::iter(chunks);
+///
+/// save_bytes_stream_to_file_with_speed_listener(
+///     stream,
+///     Path::new("/tmp/example.bin"),
+///     None,
+///     Box::new(|_speed| Box::pin(async {})),
+///     None,
+/// )
+/// .await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn save_bytes_stream_to_file_with_speed_listener<
     S: Stream<Item = Result<Bytes, std::io::Error>> + Send,
 >(

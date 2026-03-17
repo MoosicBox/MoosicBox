@@ -46,6 +46,7 @@ use crate::files::{
 /// Binds all file service endpoints to the provided Actix web scope.
 ///
 /// This includes endpoints for tracks, artist covers, album covers, and visualizations.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -151,6 +152,12 @@ pub struct GetTrackVisualizationQuery {
     )
 )]
 #[route("/track/visualization", method = "GET")]
+/// Returns waveform visualization data for a track.
+///
+/// # Errors
+///
+/// * If `trackId` or `source` cannot be resolved to a valid track source
+/// * If visualization generation fails while reading or decoding track audio
 pub async fn track_visualization_endpoint(
     query: web::Query<GetTrackVisualizationQuery>,
     music_apis: MusicApis,
@@ -209,6 +216,15 @@ pub struct GetSilenceQuery {
 )]
 #[route("/silence", method = "GET", method = "HEAD")]
 #[allow(clippy::future_not_send)]
+/// Returns generated silent audio bytes.
+///
+/// # Errors
+///
+/// * If silence generation fails for the selected output format
+///
+/// # Panics
+///
+/// * If no concrete audio format can be mapped to a content-type
 pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<HttpResponse> {
     #[cfg(feature = "format-aac")]
     let default = AudioFormat::Aac;
@@ -308,6 +324,18 @@ pub struct GetTrackQuery {
 )]
 #[route("/track", method = "GET", method = "HEAD")]
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
+/// Streams track audio with optional byte-range support.
+///
+/// # Errors
+///
+/// * If the `source` query parameter is invalid
+/// * If the HTTP `Range` header is malformed or contains out-of-bounds values
+/// * If the track cannot be found for the resolved source
+/// * If reading or fetching track bytes fails
+///
+/// # Panics
+///
+/// * If a fallback content-type cannot be resolved for a remote source
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<GetTrackQuery>,
@@ -507,6 +535,13 @@ pub struct GetTrackInfoQuery {
 )]
 #[route("/track/info", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Returns metadata for a single track.
+///
+/// # Errors
+///
+/// * If the `source` query parameter is invalid
+/// * If the track cannot be found
+/// * If metadata retrieval fails for the backing music API
 pub async fn track_info_endpoint(
     query: web::Query<GetTrackInfoQuery>,
     music_apis: MusicApis,
@@ -555,6 +590,13 @@ pub struct GetTracksInfoQuery {
 )]
 #[route("/tracks/info", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Returns metadata for multiple tracks.
+///
+/// # Errors
+///
+/// * If `trackIds` contains invalid IDs or malformed ranges
+/// * If the `source` query parameter is invalid
+/// * If metadata retrieval fails for the backing music API
 pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
     music_apis: MusicApis,
@@ -620,6 +662,14 @@ pub struct GetTrackUrlQuery {
     )
 )]
 #[route("/tracks/url", method = "GET")]
+/// Returns direct remote stream URLs for one or more tracks.
+///
+/// # Errors
+///
+/// * If `trackId` or `trackIds` cannot be parsed
+/// * If the `source` query parameter is invalid
+/// * If any requested track cannot be found
+/// * If a track resolves to a local path instead of a remote URL
 pub async fn track_urls_endpoint(
     query: web::Query<GetTrackUrlQuery>,
     music_apis: MusicApis,
@@ -712,6 +762,14 @@ pub struct ArtistCoverQuery {
 )]
 #[route("/artists/{artistId}/source", method = "GET", method = "HEAD")]
 #[allow(clippy::future_not_send)]
+/// Returns the original/source-quality artist artwork.
+///
+/// # Errors
+///
+/// * If `artistId` cannot be parsed for the selected source
+/// * If the `source` query parameter is invalid
+/// * If the artist or cover cannot be found
+/// * If opening the resolved file fails
 pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -775,6 +833,20 @@ pub async fn artist_source_artwork_endpoint(
     )
 )]
 #[route("/artists/{artistId}/{size}", method = "GET", method = "HEAD")]
+/// Returns resized artist artwork for a `{width}x{height}` size.
+///
+/// # Errors
+///
+/// * If `artistId` cannot be parsed for the selected source
+/// * If `size` does not contain valid numeric dimensions
+/// * If the `source` query parameter is invalid
+/// * If the artist or cover cannot be found
+/// * If image resize processing fails
+///
+/// # Panics
+///
+/// * If `size` does not include both width and height values
+/// * If the selected dimensions cannot be converted into the internal cover-size type
 pub async fn artist_cover_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<ArtistCoverQuery>,
@@ -868,6 +940,14 @@ pub struct AlbumCoverQuery {
 )]
 #[route("/albums/{albumId}/source", method = "GET", method = "HEAD")]
 #[allow(clippy::future_not_send)]
+/// Returns the original/source-quality album artwork.
+///
+/// # Errors
+///
+/// * If `albumId` cannot be parsed for the selected source
+/// * If the `source` query parameter is invalid
+/// * If the album or cover cannot be found
+/// * If opening the resolved file fails
 pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -931,6 +1011,20 @@ pub async fn album_source_artwork_endpoint(
     )
 )]
 #[route("/albums/{albumId}/{size}", method = "GET", method = "HEAD")]
+/// Returns resized album artwork for a `{width}x{height}` size.
+///
+/// # Errors
+///
+/// * If `albumId` cannot be parsed for the selected source
+/// * If `size` does not contain valid numeric dimensions
+/// * If the `source` query parameter is invalid
+/// * If the album or cover cannot be found
+/// * If image resize processing fails
+///
+/// # Panics
+///
+/// * If `size` does not include both width and height values
+/// * If the selected dimensions cannot be converted into the internal cover-size type
 pub async fn album_artwork_endpoint(
     path: web::Path<(String, String)>,
     query: web::Query<AlbumCoverQuery>,
