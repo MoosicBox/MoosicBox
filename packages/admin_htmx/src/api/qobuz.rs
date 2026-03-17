@@ -50,7 +50,8 @@ pub struct UserLoginForm {
 ///
 /// # Errors
 ///
-/// This endpoint does not return errors; failures are rendered as HTML with error messages.
+/// * If creating trigger payload JSON fails
+/// * Login failures are rendered as HTML with error messages
 #[route("auth/user-login", method = "POST")]
 pub async fn user_login_endpoint(
     htmx: Htmx,
@@ -69,7 +70,7 @@ pub async fn user_login_endpoint(
                     "message": "Successfully logged in to Qobuz",
                     "success": true
                 }))
-                .unwrap(),
+                .map_err(ErrorInternalServerError)?,
             ),
             Some(TriggerType::Standard),
         );
@@ -87,7 +88,7 @@ pub async fn user_login_endpoint(
                     "message": "Failed to login to Qobuz",
                     "success": false
                 }))
-                .unwrap(),
+                .map_err(ErrorInternalServerError)?,
             ),
             Some(TriggerType::Standard),
         );

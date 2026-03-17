@@ -5,7 +5,7 @@
 //!
 //! # Main Entry Point
 //!
-//! Use [`bind_services`] to register all admin endpoints on an Actix-web scope.
+//! Use `bind_services` to register all admin endpoints on an Actix-web scope.
 
 #![allow(clippy::future_not_send)]
 
@@ -24,14 +24,20 @@ use switchy_database::{
     profiles::{LibraryDatabase, PROFILES},
 };
 
+/// Server information endpoints and rendering.
 pub mod info;
+/// Profile management endpoints and UI components.
 pub mod profiles;
 #[cfg(feature = "qobuz")]
+/// Qobuz authentication, settings, and optional scanning endpoints.
 pub mod qobuz;
 #[cfg(feature = "scan")]
+/// Local library scan management endpoints.
 pub mod scan;
 #[cfg(feature = "tidal")]
+/// Tidal authentication, settings, and optional scanning endpoints.
 pub mod tidal;
+/// Shared HTMX utility helpers.
 pub mod util;
 
 /// Binds all admin HTMX endpoints to the provided Actix web scope.

@@ -81,7 +81,8 @@ pub struct CreateNewProfileQuery {
 ///
 /// # Errors
 ///
-/// This endpoint does not return errors; failures are rendered as HTML with error messages.
+/// * If creating trigger payload JSON fails
+/// * Profile creation failures are rendered as HTML with error messages
 #[route("new", method = "POST")]
 pub async fn create_new_profile_endpoint(
     htmx: Htmx,
@@ -102,7 +103,7 @@ pub async fn create_new_profile_endpoint(
                         "success": true,
                         "profile": &form.profile,
                     }))
-                    .unwrap(),
+                    .map_err(ErrorInternalServerError)?,
                 ),
                 Some(TriggerType::Standard),
             );
@@ -112,7 +113,7 @@ pub async fn create_new_profile_endpoint(
                     TriggerPayload::json(serde_json::json!({
                         "profile": &form.profile,
                     }))
-                    .unwrap(),
+                    .map_err(ErrorInternalServerError)?,
                 ),
                 Some(TriggerType::Standard),
             );
@@ -129,7 +130,7 @@ pub async fn create_new_profile_endpoint(
                         "success": false,
                         "profile": &form.profile,
                     }))
-                    .unwrap(),
+                    .map_err(ErrorInternalServerError)?,
                 ),
                 Some(TriggerType::Standard),
             );
@@ -139,7 +140,7 @@ pub async fn create_new_profile_endpoint(
                     TriggerPayload::json(serde_json::json!({
                         "profile": &form.profile,
                     }))
-                    .unwrap(),
+                    .map_err(ErrorInternalServerError)?,
                 ),
                 Some(TriggerType::Standard),
             );
@@ -188,7 +189,8 @@ pub struct DeleteProfileQuery {
 ///
 /// # Errors
 ///
-/// This endpoint does not return errors; failures are rendered as HTML.
+/// * If creating trigger payload JSON fails
+/// * Profile deletion failures are rendered as HTML
 #[route("", method = "DELETE")]
 pub async fn delete_profile_endpoint(
     htmx: Htmx,
@@ -218,7 +220,10 @@ pub async fn delete_profile_endpoint(
         Err(e) => {
             htmx.trigger_event(
                 "delete-moosicbox-profile-failure".to_string(),
-                Some(TriggerPayload::json(serde_json::json!({"error": e.to_string()})).unwrap()),
+                Some(
+                    TriggerPayload::json(serde_json::json!({"error": e.to_string()}))
+                        .map_err(ErrorInternalServerError)?,
+                ),
                 Some(TriggerType::Standard),
             );
 
@@ -252,7 +257,7 @@ pub struct SelectProfileForm {
 ///
 /// # Errors
 ///
-/// This endpoint does not return errors currently.
+/// * If creating trigger payload JSON fails
 #[route("select", method = "POST")]
 pub async fn post_select_endpoint(
     htmx: Htmx,
@@ -264,7 +269,7 @@ pub async fn post_select_endpoint(
             TriggerPayload::json(serde_json::json!({
                 "profile": &form.profile,
             }))
-            .unwrap(),
+            .map_err(ErrorInternalServerError)?,
         ),
         Some(TriggerType::Standard),
     );

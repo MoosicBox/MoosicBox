@@ -17,11 +17,12 @@
 //! # Main Entry Point
 //!
 //! The main entry point for integrating this crate into an Actix-web application is
-//! [`api::bind_services`], which registers all admin endpoints on a scope.
+//! `api::bind_services`, which registers all admin endpoints on a scope.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(feature = "api")]
+/// Actix-web admin endpoints and UI rendering helpers.
 pub mod api;
