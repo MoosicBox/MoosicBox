@@ -375,9 +375,10 @@ mod test {
     }
 }
 
-/// Actix-web integration for extracting `MusicApis` from HTTP requests.
 #[cfg(feature = "api")]
 pub mod api {
+    //! Actix-web request extraction for profile-scoped music APIs.
+
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
     use moosicbox_profiles::api::ProfileName;

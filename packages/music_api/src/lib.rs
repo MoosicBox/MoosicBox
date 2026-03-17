@@ -233,6 +233,7 @@ impl From<&Track> for TrackOrId {
 #[async_trait]
 pub trait MusicApi: Send + Sync {
     /// Returns the API source for this implementation.
+    #[must_use]
     fn source(&self) -> &ApiSource;
 
     /// Retrieves a paginated list of artists.
@@ -479,11 +480,13 @@ pub trait MusicApi: Send + Sync {
     }
 
     /// Returns whether this API supports scanning.
+    #[must_use]
     fn supports_scan(&self) -> bool {
         false
     }
 
     /// Returns whether this API supports search.
+    #[must_use]
     fn supports_search(&self) -> bool {
         false
     }
@@ -503,6 +506,7 @@ pub trait MusicApi: Send + Sync {
     }
 
     /// Wraps this API with caching for artists, albums, and tracks.
+    #[must_use]
     fn cached(self) -> impl MusicApi
     where
         Self: Sized,
