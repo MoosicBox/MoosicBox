@@ -4,9 +4,8 @@ import { Api } from '~/services/api';
 import { playbackQuality, setPlaybackQuality } from '~/services/player';
 
 export default function playbackQualityFunc() {
-    const [quality, setQuality] = createSignal<Api.PlaybackQuality>(
-        playbackQuality(),
-    );
+    const [quality, setQuality] =
+        createSignal<Api.PlaybackQuality>(playbackQuality());
 
     createComputed(() => {
         setQuality(playbackQuality());
