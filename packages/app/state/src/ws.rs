@@ -122,6 +122,18 @@ impl AppState {
     /// # Panics
     ///
     /// * If any of the required state properties are missing
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use moosicbox_app_state::AppState;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let state = AppState::new();
+    /// state.start_ws_connection().await?;
+    /// state.close_ws_connection().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::too_many_lines)]
     pub async fn start_ws_connection(&self) -> Result<(), AppStateError> {
         log::debug!("init_ws_connection: attempting to connect to ws");
@@ -402,6 +414,17 @@ impl AppState {
     /// * If fails to update audio zones
     /// * If fails to update connection outputs
     /// * If fails to update playlists
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use moosicbox_app_state::AppState;
+    /// # use moosicbox_ws::models::OutboundPayload;
+    /// # async fn example(state: AppState, message: OutboundPayload) -> Result<(), Box<dyn std::error::Error>> {
+    /// state.handle_ws_message(message).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::too_many_lines)]
     pub async fn handle_ws_message(&self, message: OutboundPayload) -> Result<(), AppStateError> {
         log::debug!("handle_ws_message: {message:?}");
@@ -676,6 +699,17 @@ impl AppState {
     /// # Errors
     ///
     /// * If fails to update playback
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use moosicbox_app_state::AppState;
+    /// # use moosicbox_session::models::ApiUpdateSession;
+    /// # async fn example(state: AppState, update: ApiUpdateSession) -> Result<(), Box<dyn std::error::Error>> {
+    /// state.handle_playback_update(&update, true).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::cognitive_complexity)]
     pub async fn handle_playback_update(
         &self,

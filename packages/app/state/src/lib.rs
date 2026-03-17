@@ -816,6 +816,27 @@ impl AppState {
     /// # Panics
     ///
     /// * If any of the required state properties are missing
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use moosicbox_app_state::{AppState, PlayerType};
+    /// # use moosicbox_session::models::ApiPlaybackTarget;
+    /// # use moosicbox_audio_output::AudioOutputFactory;
+    /// # async fn example(state: AppState, output: AudioOutputFactory) -> Result<(), Box<dyn std::error::Error>> {
+    /// let player = state
+    ///     .new_player(
+    ///         1,
+    ///         ApiPlaybackTarget::AudioZone { audio_zone_id: 7 },
+    ///         output,
+    ///         PlayerType::Local,
+    ///     )
+    ///     .await?;
+    ///
+    /// let _player_id = player.id;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::too_many_lines)]
     pub async fn new_player(
         &self,
@@ -980,6 +1001,7 @@ impl AppState {
     /// # Panics
     ///
     /// * If any of the required state properties are missing
+    #[must_use]
     pub async fn get_players(
         &self,
         session_id: u64,
@@ -1385,6 +1407,7 @@ impl AppState {
     /// # Panics
     ///
     /// * If any of the required state properties are missing
+    /// * If the server responds with an unexpected payload shape while deserializing
     pub async fn register_players(
         &self,
         players: &[RegisterPlayer],
@@ -1783,6 +1806,7 @@ impl AppState {
     /// # Panics
     ///
     /// * If the `Playback` `RwLock` is poisoned
+    #[must_use]
     pub async fn get_session_playback_for_player(
         &self,
         mut update: ApiUpdateSession,
@@ -1841,7 +1865,24 @@ impl AppState {
     ///
     /// # Errors
     ///
-    /// * If fails to `updated_connection_details`
+    /// * If updating connection state fails after connection fields change
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use moosicbox_app_state::{AppState, UpdateAppState};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let state = AppState::new();
+    /// state
+    ///     .set_state(UpdateAppState {
+    ///         api_url: Some(Some("https://api.moosicbox.test".to_string())),
+    ///         profile: Some(Some("default".to_string())),
+    ///         ..Default::default()
+    ///     })
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub async fn set_state(&self, state: UpdateAppState) -> Result<(), AppStateError> {
         log::debug!("set_state: state={state:?}");
