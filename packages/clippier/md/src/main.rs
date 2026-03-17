@@ -23,6 +23,7 @@ enum Commands {
 }
 
 #[derive(Debug, clap::Args)]
+#[allow(clippy::struct_excessive_bools)]
 struct FmtArgs {
     /// Validate formatting without writing files
     #[arg(long)]
@@ -30,6 +31,21 @@ struct FmtArgs {
     /// Alias for --check
     #[arg(long)]
     dry_run: bool,
+    /// Disable diff output in check mode
+    #[arg(long)]
+    no_diff: bool,
+    /// Disable diff caps in check mode
+    #[arg(long)]
+    no_diff_cap: bool,
+    /// Override diff context lines in check mode
+    #[arg(long)]
+    diff_context: Option<u32>,
+    /// Override max number of files with shown diffs
+    #[arg(long)]
+    diff_max_files: Option<usize>,
+    /// Override max diff lines per file
+    #[arg(long)]
+    diff_max_lines_per_file: Option<usize>,
     /// Output mode
     #[arg(long, value_enum, default_value_t = OutputArg::Text)]
     output: OutputArg,
@@ -65,7 +81,7 @@ fn run_fmt_command(args: &FmtArgs) -> Result<()> {
     apply_cli_overrides(&mut config, args);
 
     let check = args.check || args.dry_run;
-    let summary = run_fmt(&args.paths, check, &config)?;
+    let summary = run_fmt(&args.paths, check, !args.no_diff, &config)?;
     let output = summary_to_output(&summary, to_output_format(args.output), check);
     println!("{output}");
 
@@ -82,6 +98,18 @@ fn apply_cli_overrides(config: &mut Config, args: &FmtArgs) {
     }
     if let Some(indent) = args.list_indent_width {
         config.list_indent_width = indent.max(1);
+    }
+    if args.no_diff_cap {
+        config.check_diff.cap = false;
+    }
+    if let Some(context) = args.diff_context {
+        config.check_diff.context = context;
+    }
+    if let Some(max_files) = args.diff_max_files {
+        config.check_diff.max_files = max_files;
+    }
+    if let Some(max_lines_per_file) = args.diff_max_lines_per_file {
+        config.check_diff.max_lines_per_file = max_lines_per_file;
     }
 }
 

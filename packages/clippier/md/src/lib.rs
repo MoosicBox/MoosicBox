@@ -3,12 +3,14 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::collections::{BTreeSet, HashSet};
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{WalkBuilder, WalkState};
+use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -42,6 +44,26 @@ pub struct Config {
     pub respect_gitignore: bool,
     pub exclude: Vec<String>,
     pub skip_dirs: Vec<String>,
+    pub check_diff: CheckDiffConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckDiffConfig {
+    pub cap: bool,
+    pub context: u32,
+    pub max_files: usize,
+    pub max_lines_per_file: usize,
+}
+
+impl Default for CheckDiffConfig {
+    fn default() -> Self {
+        Self {
+            cap: true,
+            context: 3,
+            max_files: 50,
+            max_lines_per_file: 400,
+        }
+    }
 }
 
 impl Default for Config {
@@ -57,6 +79,7 @@ impl Default for Config {
             respect_gitignore: true,
             exclude: Vec::new(),
             skip_dirs: Vec::new(),
+            check_diff: CheckDiffConfig::default(),
         }
     }
 }
@@ -65,6 +88,16 @@ impl Default for Config {
 pub struct RunSummary {
     pub checked: usize,
     pub changed: Vec<PathBuf>,
+    pub diff_reports: Vec<DiffReport>,
+    pub diff_omitted_files: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiffReport {
+    pub path: PathBuf,
+    pub diff: String,
+    pub truncated: bool,
+    pub omitted_lines: usize,
 }
 
 /// Loads formatter configuration from repository config files.
@@ -192,10 +225,17 @@ pub fn collect_markdown_files(
 /// * Returns an error when a source file cannot be read.
 /// * Returns an error when a formatted file cannot be written.
 /// * Returns an error when directory traversal fails.
-pub fn run_fmt(paths: &[PathBuf], check: bool, config: &Config) -> Result<RunSummary> {
+pub fn run_fmt(
+    paths: &[PathBuf],
+    check: bool,
+    emit_diff: bool,
+    config: &Config,
+) -> Result<RunSummary> {
     let working_dir = std::env::current_dir().context("Failed to determine current directory")?;
     let files = collect_markdown_files(paths, config, &working_dir)?;
     let mut changed = Vec::new();
+    let mut diff_reports = Vec::new();
+    let mut diff_omitted_files = 0usize;
 
     for file in &files {
         let input = std::fs::read_to_string(file)
@@ -203,6 +243,25 @@ pub fn run_fmt(paths: &[PathBuf], check: bool, config: &Config) -> Result<RunSum
         let output = format_markdown(&input, config);
         if output != input {
             changed.push(file.clone());
+            if check && emit_diff {
+                if config.check_diff.cap && diff_reports.len() >= config.check_diff.max_files {
+                    diff_omitted_files += 1;
+                } else {
+                    let raw_diff =
+                        render_unified_diff(file, &input, &output, config.check_diff.context);
+                    let (diff, truncated, omitted_lines) = truncate_diff_lines(
+                        &raw_diff,
+                        config.check_diff.cap,
+                        config.check_diff.max_lines_per_file,
+                    );
+                    diff_reports.push(DiffReport {
+                        path: file.clone(),
+                        diff,
+                        truncated,
+                        omitted_lines,
+                    });
+                }
+            }
             if !check {
                 std::fs::write(file, output).with_context(|| {
                     format!("Failed to write markdown file '{}'", file.display())
@@ -214,7 +273,45 @@ pub fn run_fmt(paths: &[PathBuf], check: bool, config: &Config) -> Result<RunSum
     Ok(RunSummary {
         checked: files.len(),
         changed,
+        diff_reports,
+        diff_omitted_files,
     })
+}
+
+fn render_unified_diff(path: &Path, before: &str, after: &str, context: u32) -> String {
+    let input = InternedInput::new(before, after);
+    let mut diff = Diff::compute(Algorithm::Histogram, &input);
+    diff.postprocess_lines(&input);
+
+    let mut config = UnifiedDiffConfig::default();
+    config.context_len(context);
+
+    let mut rendered = format!("--- a/{}\n+++ b/{}\n", path.display(), path.display());
+    rendered.push_str(
+        &diff
+            .unified_diff(&BasicLineDiffPrinter(&input.interner), config, &input)
+            .to_string(),
+    );
+    rendered
+}
+
+fn truncate_diff_lines(diff: &str, cap_enabled: bool, max_lines: usize) -> (String, bool, usize) {
+    if !cap_enabled {
+        return (diff.to_string(), false, 0);
+    }
+
+    let lines = diff.lines().collect::<Vec<_>>();
+    if lines.len() <= max_lines {
+        return (diff.to_string(), false, 0);
+    }
+
+    let kept = lines[..max_lines].join("\n");
+    let omitted_lines = lines.len().saturating_sub(max_lines);
+    (
+        format!("{kept}\n... truncated {omitted_lines} diff line(s)\n"),
+        true,
+        omitted_lines,
+    )
 }
 
 #[must_use]
@@ -234,12 +331,33 @@ pub fn summary_to_output(summary: &RunSummary, format: OutputFormat, check: bool
                         .map(|path| format!("- {}", path.display()))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    format!(
+                    let mut output = format!(
                         "Checked {} markdown file(s): {} require formatting\n{}",
                         summary.checked,
                         summary.changed.len(),
                         files
-                    )
+                    );
+
+                    if !summary.diff_reports.is_empty() {
+                        let diffs = summary
+                            .diff_reports
+                            .iter()
+                            .map(|report| report.diff.trim_end().to_string())
+                            .collect::<Vec<_>>()
+                            .join("\n\n");
+                        output.push_str("\n\nDiffs:\n");
+                        output.push_str(&diffs);
+                    }
+
+                    if summary.diff_omitted_files > 0 {
+                        let _ = write!(
+                            output,
+                            "\n\n... omitted diffs for {} file(s) due to max-files cap",
+                            summary.diff_omitted_files
+                        );
+                    }
+
+                    output
                 }
             } else {
                 format!(
@@ -253,6 +371,17 @@ pub fn summary_to_output(summary: &RunSummary, format: OutputFormat, check: bool
             "checked": summary.checked,
             "changed": summary.changed,
             "changed_count": summary.changed.len(),
+            "diffs": summary
+                .diff_reports
+                .iter()
+                .map(|report| serde_json::json!({
+                    "path": report.path,
+                    "diff": report.diff,
+                    "truncated": report.truncated,
+                    "omitted_lines": report.omitted_lines,
+                }))
+                .collect::<Vec<_>>(),
+            "diff_omitted_files": summary.diff_omitted_files,
             "check": check,
         })
         .to_string(),
@@ -401,6 +530,7 @@ fn find_upward(start_dir: &Path, file_name: &str) -> Option<PathBuf> {
     None
 }
 
+#[allow(clippy::too_many_lines)]
 fn apply_root_config(config: &mut Config, value: &toml::Value) {
     if let Some(line_width) = value
         .get("line-width")
@@ -487,6 +617,41 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
             .filter_map(toml::Value::as_str)
             .map(ToString::to_string)
             .collect();
+    }
+    if let Some(cap) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("cap"))
+        .and_then(toml::Value::as_bool)
+    {
+        config.check_diff.cap = cap;
+    }
+    if let Some(context) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("context"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| u32::try_from(value).ok())
+    {
+        config.check_diff.context = context;
+    }
+    if let Some(max_files) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("max-files"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+    {
+        config.check_diff.max_files = max_files;
+    }
+    if let Some(max_lines_per_file) = value
+        .get("check")
+        .and_then(|section| section.get("diff"))
+        .and_then(|section| section.get("max-lines-per-file"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+    {
+        config.check_diff.max_lines_per_file = max_lines_per_file;
     }
 }
 
@@ -836,5 +1001,43 @@ mod tests {
         assert!(!files.iter().any(|path| path.ends_with("docs/drop.md")));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
+    }
+
+    #[test]
+    fn summary_output_includes_unified_diff_markers() {
+        let summary = RunSummary {
+            checked: 1,
+            changed: vec![PathBuf::from("README.md")],
+            diff_reports: vec![DiffReport {
+                path: PathBuf::from("README.md"),
+                diff: "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n".to_string(),
+                truncated: false,
+                omitted_lines: 0,
+            }],
+            diff_omitted_files: 0,
+        };
+
+        let output = summary_to_output(&summary, OutputFormat::Text, true);
+        assert!(output.contains("--- a/README.md"));
+        assert!(output.contains("+++ b/README.md"));
+        assert!(output.contains("@@ -1 +1 @@"));
+    }
+
+    #[test]
+    fn truncate_diff_lines_respects_cap() {
+        let diff = "a\nb\nc\nd\n";
+        let (truncated, is_truncated, omitted_lines) = truncate_diff_lines(diff, true, 2);
+        assert!(is_truncated);
+        assert_eq!(omitted_lines, 2);
+        assert!(truncated.contains("truncated 2 diff line(s)"));
+    }
+
+    #[test]
+    fn truncate_diff_lines_can_be_uncapped() {
+        let diff = "a\nb\nc\nd\n";
+        let (result, is_truncated, omitted_lines) = truncate_diff_lines(diff, false, 1);
+        assert!(!is_truncated);
+        assert_eq!(omitted_lines, 0);
+        assert_eq!(result, diff);
     }
 }

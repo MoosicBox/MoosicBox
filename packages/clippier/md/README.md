@@ -7,6 +7,8 @@
 ```bash
 clippier-md fmt .
 clippier-md fmt --check .
+clippier-md fmt --check --no-diff .
+clippier-md fmt --check --no-diff-cap .
 ```
 
 ## Config
@@ -35,4 +37,13 @@ mode = "preserve"
 respect-gitignore = true
 exclude = ["**/generated/**", "**/vendor/**"]
 skip-dirs = ["node_modules", "target", ".direnv"]
+
+[check.diff]
+cap = true
+context = 3
+max-files = 50
+max-lines-per-file = 400
 ```
+
+In `--check` mode, `clippier-md` prints unified diffs by default.
+Use `--no-diff` to disable diff output.
