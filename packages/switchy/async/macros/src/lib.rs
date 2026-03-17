@@ -213,6 +213,11 @@ fn build_test_tokens(
 ///
 /// Most users should use the public `select!` macro from `switchy_async` rather than
 /// calling this internal macro directly.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens are not valid
+///   `@path = ...;` prefixed `select!` syntax.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn select_internal(input: TokenStream) -> TokenStream {
@@ -237,6 +242,11 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
 ///
 /// Most users should use the public `join!` macro from `switchy_async` rather than
 /// calling this internal macro directly.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens are not valid
+///   `@path = ...;` prefixed `join!` syntax.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn join_internal(input: TokenStream) -> TokenStream {
@@ -264,6 +274,11 @@ pub fn join_internal(input: TokenStream) -> TokenStream {
 ///
 /// Most users should use the public `try_join!` macro from `switchy_async` rather than
 /// calling this internal macro directly.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens are not valid
+///   `@path = ...;` prefixed `try_join!` syntax.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn try_join_internal(input: TokenStream) -> TokenStream {
@@ -339,6 +354,10 @@ fn inject_item(item: &mut Item, injector: &mut YieldInjector) {
 ///     response
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated item is not valid Rust syntax.
 #[allow(clippy::missing_const_for_fn)]
 #[proc_macro_attribute]
 pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -378,6 +397,17 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Most users should use the public test attribute macros (`#[test]`, `#[unsync_test]`, etc.)
 /// rather than calling this internal macro directly.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when macro configuration or the annotated function syntax
+///   cannot be parsed.
+/// * Expands to `compile_error!` when unknown test flags are provided.
+///
+/// # Panics
+///
+/// * Generated test wrappers call `Builder::build().unwrap()` and panic if runtime
+///   construction fails.
 #[allow(clippy::too_many_lines)]
 #[cfg(feature = "simulator")]
 #[proc_macro]
@@ -563,6 +593,16 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
 ///     // Uses real time
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when attribute arguments contain unsupported flags
+///   or the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated test wrappers call `Builder::build().unwrap()` and panic if runtime
+///   construction fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -612,6 +652,16 @@ pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     // Uses real time and filesystem
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when attribute arguments contain unsupported flags
+///   or the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated test wrappers call `Builder::build().unwrap()` and panic if runtime
+///   construction fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -661,6 +711,16 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     // Uses real time for this test
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when attribute arguments contain unsupported flags
+///   or the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated test wrappers call `Builder::build().unwrap()` and panic if runtime
+///   construction fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -709,6 +769,15 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     // Still runs as a standard tokio test
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated test wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
 #[proc_macro_attribute]
 pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as syn::ItemFn);
@@ -830,6 +899,18 @@ fn build_main_tokens(crate_path: &str, item_tokens: &TokenStream2) -> TokenStrea
 ///
 /// Most users should use the public main attribute macros (`#[main]`, `#[unsync_main]`, etc.)
 /// rather than calling this internal macro directly.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when macro configuration or the annotated function syntax
+///   cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated runtime wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
+/// * Generated runtime wrappers call `rt.wait().expect(...)` and panic if waiting for
+///   runtime shutdown fails.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn main_internal(input: TokenStream) -> TokenStream {
@@ -877,6 +958,17 @@ pub fn main_internal(input: TokenStream) -> TokenStream {
 ///     // Main code here
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated runtime wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
+/// * Generated runtime wrappers call `rt.wait().expect(...)` and panic if waiting for
+///   runtime shutdown fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn internal_main(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -914,6 +1006,17 @@ pub fn internal_main(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     Ok(())
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated runtime wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
+/// * Generated runtime wrappers call `rt.wait().expect(...)` and panic if waiting for
+///   runtime shutdown fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -951,6 +1054,17 @@ pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     Ok(())
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated runtime wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
+/// * Generated runtime wrappers call `rt.wait().expect(...)` and panic if waiting for
+///   runtime shutdown fails.
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -988,6 +1102,17 @@ pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     Ok(())
 /// }
 /// ```
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the annotated function cannot be parsed.
+///
+/// # Panics
+///
+/// * Generated runtime wrappers call `Builder::build().expect(...)` and panic if runtime
+///   construction fails.
+/// * Generated runtime wrappers call `rt.wait().expect(...)` and panic if waiting for
+///   runtime shutdown fails.
 #[proc_macro_attribute]
 pub fn tokio_main_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as syn::ItemFn);
@@ -1027,6 +1152,10 @@ pub fn tokio_main_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
 /// * If `CARGO_MANIFEST_DIR` environment variable is not set
 /// * If the module source file path cannot be constructed or read
 /// * If the module source file cannot be parsed as valid Rust code
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the macro input is not a valid module declaration.
 #[allow(clippy::missing_const_for_fn)]
 #[proc_macro]
 pub fn inject_yields_mod(input: TokenStream) -> TokenStream {

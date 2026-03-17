@@ -28,6 +28,11 @@ use syn::{
 ///
 /// **Note:** This is an internal implementation detail of `switchy_async` and should not
 /// be called directly. Use the `select!` macro from `switchy_async` instead.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens do not match the expected
+///   `@path = ...;` prefixed `select!` branch syntax.
 pub fn select_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as SelectWithPathInput);
     let crate_path = input.crate_path;
@@ -200,6 +205,11 @@ impl Parse for SelectBranch {
 ///
 /// **Note:** This is an internal implementation detail of `switchy_async` and should not
 /// be called directly. Use the `join!` macro from `switchy_async` instead.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens do not match the expected
+///   `@path = ...;` prefixed `join!` argument syntax.
 pub fn join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
@@ -222,6 +232,11 @@ pub fn join_internal(input: TokenStream) -> TokenStream {
 ///
 /// **Note:** This is an internal implementation detail of `switchy_async` and should not
 /// be called directly. Use the `try_join!` macro from `switchy_async` instead.
+///
+/// # Errors
+///
+/// * Expands to `compile_error!` when the input tokens do not match the expected
+///   `@path = ...;` prefixed `try_join!` argument syntax.
 pub fn try_join_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as JoinWithPathInput);
     let crate_path = input.crate_path;
