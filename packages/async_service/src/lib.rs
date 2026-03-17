@@ -146,20 +146,37 @@ pub use thiserror::Error;
 macro_rules! async_service_body {
     ($command:path, $context:path, $sequential:expr $(,)?) => {
         #[$crate::async_trait]
+        /// Trait implemented by services to handle lifecycle and command processing.
         pub trait Processor {
+            /// Error type returned by service lifecycle and command handlers.
             type Error;
 
+            /// Processes a single command.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error when command handling fails for the given command.
             async fn process_command(
                 ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
                 command: $command,
             ) -> Result<(), Self::Error>;
 
             #[allow(unused_variables)]
+            /// Runs once when the service starts.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error when startup initialization fails.
             async fn on_start(&mut self) -> Result<(), Self::Error> {
                 Ok(())
             }
 
             #[allow(unused_variables)]
+            /// Runs once when the service is shutting down.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error when shutdown cleanup fails.
             async fn on_shutdown(
                 ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
             ) -> Result<(), Self::Error> {
@@ -167,9 +184,13 @@ macro_rules! async_service_body {
             }
         }
 
+        /// Async service runtime that owns context, channels, and cancellation state.
         pub struct Service {
+            /// Service name used for logging and spawned task naming.
             pub name: $crate::Arc<String>,
+            /// Shared mutable service context.
             pub ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
+            /// Cancellation token used to request service shutdown.
             pub token: $crate::CancellationToken,
             sender: $crate::Sender<Command>,
             receiver: $crate::Receiver<Command>,
@@ -177,6 +198,7 @@ macro_rules! async_service_body {
 
         impl Service {
             #[must_use]
+            /// Creates a new service instance with the provided context.
             pub fn new(ctx: $context) -> Self {
                 let (tx, rx) = $crate::unbounded();
                 Self {
@@ -189,15 +211,24 @@ macro_rules! async_service_body {
             }
 
             #[must_use]
+            /// Sets the service name used by logs and spawned tasks.
             pub fn with_name(mut self, name: &str) -> Self {
                 self.name = $crate::Arc::new(name.to_owned());
                 self
             }
 
+            #[must_use]
+            /// Starts the service on the current runtime handle.
+            ///
+            /// # Panics
+            ///
+            /// Panics if no async runtime handle is currently available.
             pub fn start(self) -> $crate::JoinHandle<Result<(), Error>> {
                 self.start_on(&$crate::runtime::Handle::current())
             }
 
+            #[must_use]
+            /// Starts the service on the provided runtime handle.
             pub fn start_on(mut self, handle: &$crate::runtime::Handle) -> $crate::JoinHandle<Result<(), Error>> {
                 let service_name = self.name.clone();
                 handle.spawn_with_name(
@@ -249,6 +280,7 @@ macro_rules! async_service_body {
             }
 
             #[must_use]
+            /// Returns a cloneable handle that can send commands to this service.
             pub fn handle(&self) -> Handle {
                 Handle {
                     name: self.name.clone(),
@@ -258,28 +290,59 @@ macro_rules! async_service_body {
             }
         }
 
+        /// Internal command wrapper that optionally carries a completion notifier.
         pub struct Command {
             cmd: $command,
             tx: Option<$crate::Sender<()>>,
         }
 
         #[$crate::async_trait]
+        /// Interface for sending commands and controlling service lifecycle.
         pub trait Commander {
+            /// Error type used by command sending operations.
             type Error;
 
             #[allow(unused)]
+            /// Sends a command synchronously.
+            ///
+            /// # Errors
+            ///
+            /// * Returns an error if the service command channel is closed.
             fn send_command(&self, command: $command) -> Result<(), Self::Error>;
             #[allow(unused)]
+            /// Sends a command asynchronously.
+            ///
+            /// # Errors
+            ///
+            /// * Returns an error if the service command channel is closed.
             async fn send_command_async(&self, command: $command) -> Result<(), Self::Error>;
             #[allow(unused)]
+            /// Sends a command and waits for processing completion.
+            ///
+            /// # Errors
+            ///
+            /// * Returns an error if command dispatch fails.
+            /// * Returns an error if waiting for completion notification fails.
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error>;
             #[allow(unused)]
+            /// Sends a command on a specific runtime and waits for completion.
+            ///
+            /// # Errors
+            ///
+            /// * Returns an error if command dispatch fails.
+            /// * Returns an error if waiting for completion notification fails.
             async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::runtime::Handle) -> Result<(), Self::Error>;
             #[allow(unused)]
+            /// Requests service shutdown.
+            ///
+            /// # Errors
+            ///
+            /// This method currently never returns an error.
             fn shutdown(&self) -> Result<(), Self::Error>;
         }
 
         #[derive(Clone)]
+        /// Cloneable client handle for interacting with a running service.
         pub struct Handle {
             name: $crate::Arc<String>,
             sender: $crate::Sender<Command>,
@@ -293,9 +356,12 @@ macro_rules! async_service_body {
         }
 
         #[derive(Debug, $crate::Error)]
+        /// Errors returned by [`Commander`] methods.
         pub enum CommanderError {
+            /// Failed to send a command to the service channel.
             #[error("Failed to send")]
             Send,
+            /// Failed to receive a completion notification.
             #[error(transparent)]
             Recv(#[from] $crate::RecvError),
         }
@@ -431,12 +497,16 @@ macro_rules! async_service_sequential {
         }
 
         #[derive(Debug, $crate::Error)]
+        /// Error type for sequential async service operations.
         pub enum Error {
+            /// Failed to join the spawned service task.
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
+            /// Failed to send a command or completion signal.
             #[error("Failed to send")]
             Send,
             #[allow(unused)]
+            /// I/O failure during service lifecycle handling.
             #[error(transparent)]
             IO(#[from] std::io::Error),
         }
@@ -452,14 +522,19 @@ macro_rules! async_service_sequential {
         }
 
         #[derive(Debug, $crate::Error)]
+        /// Error type for sequential async service operations.
         pub enum Error {
+            /// Failed to join the spawned service task.
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
+            /// Failed to send a command or completion signal.
             #[error("Failed to send")]
             Send,
             #[allow(unused)]
+            /// I/O failure during service lifecycle handling.
             #[error(transparent)]
             IO(#[from] std::io::Error),
+            /// Command processor-specific error.
             #[error(transparent)]
             Process(#[from] $error),
         }
@@ -554,12 +629,16 @@ macro_rules! async_service {
         }
 
         #[derive(Debug, $crate::Error)]
+        /// Error type for concurrent async service operations.
         pub enum Error {
+            /// Failed to join the spawned service task.
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
+            /// Failed to send a command or completion signal.
             #[error("Failed to send")]
             Send,
             #[allow(unused)]
+            /// I/O failure during service lifecycle handling.
             #[error(transparent)]
             IO(#[from] std::io::Error),
         }
@@ -575,14 +654,19 @@ macro_rules! async_service {
         }
 
         #[derive(Debug, $crate::Error)]
+        /// Error type for concurrent async service operations.
         pub enum Error {
+            /// Failed to join the spawned service task.
             #[error(transparent)]
             Join(#[from] $crate::JoinError),
+            /// Failed to send a command or completion signal.
             #[error("Failed to send")]
             Send,
             #[allow(unused)]
+            /// I/O failure during service lifecycle handling.
             #[error(transparent)]
             IO(#[from] std::io::Error),
+            /// Command processor-specific error.
             #[error(transparent)]
             Process(#[from] $error),
         }
