@@ -39,7 +39,22 @@ impl ToNested<Value> for &Value {
 ///
 /// # Errors
 ///
-/// * If the value failed to parse
+/// * Returns [`ParseError::Parse`] if any key in `path` is missing.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_json_utils::serde_json::get_nested_value;
+///
+/// let json = serde_json::json!({
+///     "outer": {
+///         "inner": "value"
+///     }
+/// });
+///
+/// let value = get_nested_value(&json, &["outer", "inner"]).unwrap();
+/// assert_eq!(value, &serde_json::json!("value"));
+/// ```
 pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a Value, ParseError> {
     for (i, x) in path.iter().enumerate() {
         if let Some(inner) = value.get(x) {
@@ -390,7 +405,26 @@ impl ToNestedValue for &Value {
 ///
 /// # Errors
 ///
-/// * If the value failed to parse
+/// * Returns [`ParseError::Parse`] if any key in `path` is missing and the destination type
+///   does not provide a custom `missing_value` handler.
+/// * Returns [`ParseError::ConvertType`] if the final value is `null` and the destination type
+///   does not provide a custom `missing_value` handler.
+/// * Returns [`ParseError::ConvertType`] if the final value cannot be converted to `T`.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_json_utils::serde_json::get_nested_value_type;
+///
+/// let json = serde_json::json!({
+///     "outer": {
+///         "count": 42
+///     }
+/// });
+///
+/// let count: u64 = get_nested_value_type(&json, &["outer", "count"]).unwrap();
+/// assert_eq!(count, 42);
+/// ```
 pub fn get_nested_value_type<'a, T>(value: &'a Value, path: &[&str]) -> Result<T, ParseError>
 where
     &'a Value: ToValueType<T>,

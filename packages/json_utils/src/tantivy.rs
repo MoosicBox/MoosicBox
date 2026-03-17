@@ -212,7 +212,27 @@ impl ToValue<Vec<OwnedValue>> for &NamedFieldDocument {
 ///
 /// # Errors
 ///
-/// * If the value failed to parse
+/// * Returns [`ParseError::Parse`] if `index` does not exist in the document.
+/// * Returns [`ParseError`] if the field values fail to convert to `T`.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::BTreeMap;
+///
+/// use moosicbox_json_utils::tantivy::get_doc_value_types;
+/// use tantivy::schema::{NamedFieldDocument, OwnedValue};
+///
+/// let mut fields = BTreeMap::new();
+/// fields.insert(
+///     "numbers".to_string(),
+///     vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)],
+/// );
+/// let document = NamedFieldDocument(fields);
+///
+/// let values: Vec<u64> = get_doc_value_types(&document, "numbers").unwrap();
+/// assert_eq!(values, vec![1, 2, 3]);
+/// ```
 pub fn get_doc_value_types<'a, T>(
     value: &'a NamedFieldDocument,
     index: &str,
@@ -231,7 +251,25 @@ where
 ///
 /// # Errors
 ///
-/// * If the value failed to parse
+/// * Returns [`ParseError::Parse`] if `index` does not exist in the document.
+/// * Returns [`ParseError::Parse`] if the field exists but has no values.
+/// * Returns [`ParseError`] if the first field value fails to convert to `T`.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::BTreeMap;
+///
+/// use moosicbox_json_utils::tantivy::get_value_type;
+/// use tantivy::schema::{NamedFieldDocument, OwnedValue};
+///
+/// let mut fields = BTreeMap::new();
+/// fields.insert("title".to_string(), vec![OwnedValue::Str("example".to_string())]);
+/// let document = NamedFieldDocument(fields);
+///
+/// let title: String = get_value_type(&document, "title").unwrap();
+/// assert_eq!(title, "example");
+/// ```
 pub fn get_value_type<'a, T>(value: &'a NamedFieldDocument, index: &str) -> Result<T, ParseError>
 where
     &'a OwnedValue: ToValueType<T>,

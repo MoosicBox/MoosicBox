@@ -872,6 +872,7 @@ impl ToValueType<chrono::DateTime<chrono::Utc>> for &DatabaseValue {
 /// Trait for converting database rows into model types.
 pub trait AsModel<T> {
     /// Converts this database row into a model of type `T`.
+    #[must_use]
     fn as_model(&self) -> T;
 }
 
