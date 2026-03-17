@@ -19,11 +19,16 @@ pub struct TransformContext {
 /// Package metadata
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PackageInfo {
+    /// Package name as defined in `Cargo.toml`.
     pub name: String,
+    /// Absolute package path inside the workspace.
     pub path: PathBuf,
+    /// Parsed `Cargo.toml` content for this package.
     #[serde(skip, default = "default_cargo_toml")]
     pub cargo_toml: Value,
+    /// Package feature definitions keyed by feature name.
     pub features: BTreeMap<String, Vec<String>>,
+    /// Dependencies declared across dependency sections.
     pub dependencies: Vec<DependencyInfo>,
 }
 
@@ -35,9 +40,13 @@ fn default_cargo_toml() -> Value {
 /// Dependency information
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DependencyInfo {
+    /// Dependency crate name.
     pub name: String,
+    /// Whether this dependency is marked as optional.
     pub optional: bool,
+    /// Whether this dependency points to another workspace member.
     pub workspace_member: bool,
+    /// Explicit dependency features enabled for this dependency.
     pub features: Vec<String>,
 }
 

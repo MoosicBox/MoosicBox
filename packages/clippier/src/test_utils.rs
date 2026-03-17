@@ -1,3 +1,5 @@
+//! Test helpers and fixture loaders for clippier integration tests.
+
 use std::path::Path;
 
 /// Test resources and utilities for creating test workspaces.
