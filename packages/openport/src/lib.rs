@@ -140,7 +140,6 @@ fn ask_free_tcp_port() -> Option<Port> {
 /// # }
 /// ```
 #[cfg(feature = "rand")]
-#[must_use]
 pub fn pick_random_unused_port() -> Option<Port> {
     // Try random port first
     for _ in 0..10 {
@@ -231,7 +230,6 @@ impl PortRange for RangeInclusive<u16> {
 /// use openport::pick_unused_port;
 /// let port: u16 = pick_unused_port(15000..16000).expect("No ports free");
 /// ```
-#[must_use]
 pub fn pick_unused_port(range: impl PortRange) -> Option<Port> {
     range.into_iter().find(|x| is_free(*x))
 }
