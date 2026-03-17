@@ -736,6 +736,22 @@ async fn validate_credentials(#[cfg(feature = "db")] db: &LibraryDatabase) -> Re
 /// * If failed to fetch the Qobuz app secrets
 /// * If failed to fetch the Qobuz app ID
 /// * If failed to parse the JSON response
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "db")]
+/// # {
+/// use moosicbox_qobuz::user_login;
+/// use switchy::database::profiles::LibraryDatabase;
+///
+/// # async fn example(db: LibraryDatabase) -> Result<(), moosicbox_qobuz::Error> {
+/// let credentials = user_login(&db, "user@example.com", "password", None, Some(false)).await?;
+/// assert!(credentials.get("accessToken").is_some());
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 pub async fn user_login(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     username: &str,
@@ -1755,6 +1771,31 @@ impl From<TrackAudioQuality> for QobuzAudioQuality {
 /// * If failed to fetch the Qobuz app secrets
 /// * If failed to fetch the Qobuz app ID
 /// * If failed to parse the JSON response
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "db")]
+/// # {
+/// use moosicbox_music_models::id::Id;
+/// use moosicbox_qobuz::{QobuzAudioQuality, track_file_url};
+/// use switchy::database::profiles::LibraryDatabase;
+///
+/// # async fn example(db: LibraryDatabase) -> Result<(), moosicbox_qobuz::Error> {
+/// let url = track_file_url(
+///     &db,
+///     &Id::from(123_u64),
+///     QobuzAudioQuality::FlacLossless,
+///     None,
+///     None,
+///     None,
+/// )
+/// .await?;
+/// assert!(url.starts_with("http"));
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,

@@ -162,6 +162,11 @@ pub struct QobuzUserLoginQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-app-id` header contains invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If Qobuz authentication fails or credentials are invalid
+/// * If a required request dependency fails (for example, database access when `db` is enabled)
 pub async fn user_login_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzUserLoginQuery>,
@@ -411,6 +416,11 @@ pub struct QobuzArtistQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If the Qobuz artist lookup fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistQuery>,
@@ -468,6 +478,11 @@ pub struct QobuzFavoriteArtistsQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If retrieving the favorite artists page from Qobuz fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteArtistsQuery>,
@@ -525,6 +540,11 @@ pub struct QobuzAlbumQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If the Qobuz album lookup fails
+/// * If album conversion into API response format fails
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumQuery>,
@@ -679,6 +699,11 @@ pub struct QobuzArtistAlbumsQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If retrieving the artist albums page from Qobuz fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzArtistAlbumsQuery>,
@@ -747,6 +772,11 @@ pub struct QobuzFavoriteAlbumsQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If retrieving the favorite albums page from Qobuz fails
+/// * If album conversion into API response format fails
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteAlbumsQuery>,
@@ -816,6 +846,11 @@ pub struct QobuzAlbumTracksQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If retrieving the album tracks page from Qobuz fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzAlbumTracksQuery>,
@@ -873,6 +908,11 @@ pub struct QobuzTrackQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If the Qobuz track lookup fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackQuery>,
@@ -930,6 +970,11 @@ pub struct QobuzFavoriteTracksQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If retrieving the favorite tracks page from Qobuz fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzFavoriteTracksQuery>,
@@ -990,6 +1035,11 @@ pub struct QobuzTrackFileUrlQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token`, `x-qobuz-app-id`, or `x-qobuz-app-secret` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If Qobuz fails to return a signed track URL
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzTrackFileUrlQuery>,
@@ -1055,6 +1105,11 @@ pub struct QobuzSearchQuery {
 /// # Panics
 ///
 /// * If the `x-qobuz-access-token` or `x-qobuz-app-id` headers contain invalid UTF-8 bytes
+///
+/// # Errors
+///
+/// * If the Qobuz search request fails
+/// * If authentication headers are missing or invalid for the upstream request
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<QobuzSearchQuery>,
