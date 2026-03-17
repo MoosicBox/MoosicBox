@@ -41,6 +41,7 @@ pub trait P2PSystem: Send + Sync + 'static {
     async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
 
     /// Get this node's ID
+    #[must_use]
     fn local_node_id(&self) -> &Self::NodeId;
 
     // TODO: Add in Phase 5/6 when SimulatorListener exists:
@@ -57,13 +58,15 @@ pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
     ///
     /// # Errors
     ///
-    /// Returns an error if the provided bytes cannot be converted to a valid node ID.
+    /// * Returns an error if the provided bytes cannot be converted to a valid node ID.
     fn from_bytes(bytes: &[u8; 32]) -> P2PResult<Self>;
 
     /// Get the raw bytes of this node ID
+    #[must_use]
     fn as_bytes(&self) -> &[u8; 32];
 
     /// Format as short hex string for display
+    #[must_use]
     fn fmt_short(&self) -> String;
 }
 
@@ -95,16 +98,18 @@ pub trait P2PConnection: Send + Sync + 'static {
     async fn recv(&mut self) -> P2PResult<Vec<u8>>;
 
     /// Get remote peer's node ID
+    #[must_use]
     fn remote_node_id(&self) -> &Self::NodeId;
 
     /// Check if connection is still active
+    #[must_use]
     fn is_connected(&self) -> bool;
 
     /// Close the connection
     ///
     /// # Errors
     ///
-    /// Returns an error if the connection cannot be closed properly.
+    /// * Returns an error if the connection cannot be closed properly.
     fn close(&mut self) -> P2PResult<()>;
 }
 

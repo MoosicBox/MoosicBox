@@ -147,6 +147,19 @@ impl NetworkGraph {
     ///
     /// * `Some(Vec<SimulatorNodeId>)` - The path from source to destination, including both endpoints
     /// * `None` - No active path exists between the nodes (network partition)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use switchy_p2p::simulator::{NetworkGraph, SimulatorNodeId};
+    ///
+    /// let mut graph = NetworkGraph::new();
+    /// let alice = SimulatorNodeId::from_seed("alice");
+    /// graph.add_node(alice.clone());
+    ///
+    /// let path = graph.find_path(alice.clone(), alice);
+    /// assert!(path.is_some());
+    /// ```
     #[must_use]
     pub fn find_path(
         &self,
@@ -375,6 +388,7 @@ impl SimulatorP2P {
     /// Returns an error if:
     /// * No route exists to the destination node (network partition)
     /// * Connection storage fails
+    ///
     pub async fn connect(&self, remote_id: SimulatorNodeId) -> Result<SimulatorConnection, String> {
         let mut graph = self.network_graph.write().await;
 
@@ -626,7 +640,7 @@ impl SimulatorConnection {
     ///
     /// # Errors
     ///
-    /// This method currently always succeeds but returns Result for future extensibility.
+    /// * This method currently always succeeds but returns `Result` for future extensibility.
     pub fn close(&mut self) -> Result<(), String> {
         self.is_connected.store(false, Ordering::Relaxed);
         Ok(())
