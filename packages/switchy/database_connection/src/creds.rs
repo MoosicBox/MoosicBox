@@ -66,8 +66,26 @@ pub enum GetDbCredsError {
 ///
 /// # Errors
 ///
-/// * If invalid connection options were given
-/// * If failed to retrieve the credentials from the SSM parameters
+/// * [`GetDbCredsError::CredentialsParseError`] when `DATABASE_URL` is present but malformed
+/// * [`GetDbCredsError::InvalidConnectionOptions`] when partial `DB_HOST`/`DB_NAME`/`DB_USER` values are provided
+/// * [`GetDbCredsError::FailedSsmParameters`] when the AWS SSM API call fails
+/// * [`GetDbCredsError::InvalidSsmParameters`] when the SSM response omits parameter names or values
+/// * [`GetDbCredsError::MissingSsmParameter`] when one of the required SSM parameters is absent
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "creds")]
+/// # {
+/// use switchy_database_connection::creds::get_db_creds;
+///
+/// # async fn example() -> Result<(), switchy_database_connection::creds::GetDbCredsError> {
+/// let creds = get_db_creds().await?;
+/// let _host = creds.host();
+/// # Ok(())
+/// # }
+/// # }
+/// ```
 #[allow(clippy::too_many_lines)]
 pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     log::trace!("get_db_creds");

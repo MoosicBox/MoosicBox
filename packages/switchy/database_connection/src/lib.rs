@@ -116,9 +116,26 @@ impl Credentials {
     ///
     /// # Errors
     ///
-    /// * If the URL format is invalid
-    /// * If required components are missing
-    /// * If the scheme is unsupported
+    /// * [`CredentialsParseError::InvalidUrl`] when `url` does not contain `://`
+    /// * [`CredentialsParseError::MissingDatabase`] when the database path segment is absent or empty
+    /// * [`CredentialsParseError::MissingUsername`] when the username segment is absent or empty
+    /// * [`CredentialsParseError::MissingHost`] when the host segment is absent or empty
+    /// * [`CredentialsParseError::UnsupportedScheme`] when the URL scheme is not one of `postgres`, `postgresql`, or `mysql`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use switchy_database_connection::Credentials;
+    ///
+    /// let creds = Credentials::from_url("postgres://user:secret@localhost:5432/moosicbox")
+    ///     .expect("URL should parse");
+    ///
+    /// assert_eq!(creds.host(), "localhost");
+    /// assert_eq!(creds.port(), Some(5432));
+    /// assert_eq!(creds.name(), "moosicbox");
+    /// assert_eq!(creds.user(), "user");
+    /// assert_eq!(creds.password(), Some("secret"));
+    /// ```
     pub fn from_url(url: &str) -> Result<Self, CredentialsParseError> {
         // Simple URL parsing without external dependencies
         let url = url.trim();
@@ -182,7 +199,6 @@ impl Credentials {
     }
 
     /// Returns the database port, if present
-    #[must_use]
     pub const fn port(&self) -> Option<u16> {
         self.port
     }
@@ -200,7 +216,6 @@ impl Credentials {
     }
 
     /// Returns the password, if present
-    #[must_use]
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }
@@ -261,7 +276,31 @@ pub enum InitDbError {
 ///
 /// # Errors
 ///
-/// * If fails to initialize the generic database connection
+/// * [`InitDbError::CredentialsRequired`] when a credentials-based backend is active and `creds` is `None`
+/// * `InitDbError::InitSqlite` when `sqlite-rusqlite` initialization fails (when enabled)
+/// * `InitDbError::InitPostgres` when `postgres` backend initialization fails (when enabled)
+/// * `InitDbError::InitDatabase` when sqlx/raw `PostgreSQL` initialization fails (when enabled)
+/// * `InitDbError::InitSqliteSqlxDatabase` when `sqlite-sqlx` initialization fails (when enabled)
+/// * `InitDbError::InitTurso` when `turso` initialization fails (when enabled)
+/// * `InitDbError::InitDuckDb` when `duckdb` initialization fails (when enabled)
+/// * [`InitDbError::Database`] when simulator or backend database wrapping fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use switchy_database_connection::{init, Credentials};
+///
+/// # async fn example() -> Result<(), switchy_database_connection::InitDbError> {
+/// let creds = Credentials::from_url("postgres://user:pass@localhost:5432/moosicbox")
+///     .expect("URL should parse");
+///
+/// # #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+/// let _db = init(None, Some(creds)).await?;
+/// # #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
+/// # let _db = init(Some(creds)).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init(
     #[cfg(any(feature = "sqlite", feature = "duckdb"))]
@@ -359,7 +398,23 @@ pub async fn init(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the generic database connection
+/// * [`InitDbError::CredentialsRequired`] when a credentials-based backend is active and `creds` is `None`
+/// * `InitDbError::InitPostgres` when `postgres` backend initialization fails (when enabled)
+/// * `InitDbError::InitDatabase` when sqlx/raw `PostgreSQL` initialization fails (when enabled)
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use switchy_database_connection::{init_default_non_sqlite, Credentials};
+///
+/// # async fn example() -> Result<(), switchy_database_connection::InitDbError> {
+/// let creds = Credentials::from_url("postgres://user:pass@localhost:5432/moosicbox")
+///     .expect("URL should parse");
+///
+/// let _db = init_default_non_sqlite(Some(creds)).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init_default_non_sqlite(
     #[allow(unused)] creds: Option<Credentials>,
@@ -463,7 +518,9 @@ fn duckdb_config_from_env() -> Result<switchy_database::duckdb::DuckDbConfig, In
 ///
 /// # Errors
 ///
-/// * If fails to initialize the `DuckDB` connection
+/// * Propagates [`InitDuckDbError::InvalidConfig`] when `SWITCHY_DUCKDB_MODE` or
+///   `SWITCHY_DUCKDB_CONSISTENCY` is set to an unsupported value
+/// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the `DuckDB` connections fails
 #[cfg(feature = "duckdb")]
 pub fn init_duckdb(
     db_location: Option<&std::path::Path>,
@@ -475,7 +532,7 @@ pub fn init_duckdb(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the `DuckDB` connection
+/// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the `DuckDB` connections fails
 #[cfg(feature = "duckdb")]
 pub fn init_duckdb_with_options(
     db_location: Option<&std::path::Path>,
@@ -527,7 +584,9 @@ pub fn init_duckdb_with_options(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the `DuckDB` connection
+/// * Propagates [`InitDuckDbError::InvalidConfig`] when `SWITCHY_DUCKDB_MODE` or
+///   `SWITCHY_DUCKDB_CONSISTENCY` is set to an unsupported value
+/// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the read-only `DuckDB` connections fails
 ///
 /// # Panics
 ///
@@ -543,7 +602,7 @@ pub fn init_duckdb_read_only(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the `DuckDB` connection
+/// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the read-only `DuckDB` connections fails
 ///
 /// # Panics
 ///
@@ -598,7 +657,7 @@ pub fn init_duckdb_read_only_with_options(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the Sqlite connection via rusqlite
+/// * Propagates [`InitSqliteRusqliteError::Sqlite`] when opening or configuring a `rusqlite` connection fails
 ///
 /// # Panics
 ///
@@ -688,7 +747,7 @@ pub enum InitSqliteSqlxDatabaseError {
 ///
 /// # Errors
 ///
-/// * If fails to initialize the Sqlite connection via Sqlx
+/// * Propagates [`InitSqliteSqlxDatabaseError::SqliteSqlx`] when creating the sqlx `SQLite` pool fails
 ///
 /// # Panics
 ///
@@ -762,7 +821,7 @@ pub enum InitTursoError {
 ///
 /// # Errors
 ///
-/// * If fails to initialize the Turso database connection
+/// * Propagates [`InitTursoError::Turso`] when opening the local Turso database fails
 #[cfg(feature = "turso")]
 pub async fn init_turso_local(
     path: Option<&std::path::Path>,
@@ -812,7 +871,7 @@ pub enum InitDatabaseError {
 ///
 /// # Errors
 ///
-/// * If fails to initialize the raw Postgres connection via Sqlx
+/// * Propagates [`InitDatabaseError::PostgresSqlx`] when creating the sqlx `PostgreSQL` pool fails
 #[cfg(feature = "postgres-sqlx")]
 #[allow(unused)]
 pub async fn init_postgres_sqlx(
@@ -862,7 +921,7 @@ pub enum InitMySqlSqlxError {
 ///
 /// # Errors
 ///
-/// * If fails to initialize the `MySQL` connection via Sqlx
+/// * Propagates [`InitMySqlSqlxError::MySqlSqlx`] when creating the sqlx `MySQL` pool fails
 #[cfg(feature = "mysql-sqlx")]
 #[allow(unused)]
 pub async fn init_mysql_sqlx(creds: Credentials) -> Result<Box<dyn Database>, InitMySqlSqlxError> {
@@ -905,7 +964,9 @@ pub async fn init_mysql_sqlx(creds: Credentials) -> Result<Box<dyn Database>, In
 ///
 /// # Errors
 ///
-/// * If fails to initialize the raw Postgres connection over native TLS
+/// * Propagates [`InitDatabaseError::NativeTls`] when building the native TLS connector fails
+/// * Propagates [`InitDatabaseError::Postgres`] when configuring the `PostgreSQL` manager fails
+/// * Propagates [`InitDatabaseError::DeadpoolBuildError`] when building the connection pool fails
 #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
 #[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_native_tls(
@@ -958,7 +1019,9 @@ pub async fn init_postgres_raw_native_tls(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the raw Postgres connection over OpenSSL
+/// * Propagates [`InitDatabaseError::OpenSsl`] when building the OpenSSL TLS connector fails
+/// * Propagates [`InitDatabaseError::Postgres`] when configuring the `PostgreSQL` manager fails
+/// * Propagates [`InitDatabaseError::DeadpoolBuildError`] when building the connection pool fails
 #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
 #[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_openssl(
@@ -1011,7 +1074,8 @@ pub async fn init_postgres_raw_openssl(
 ///
 /// # Errors
 ///
-/// * If fails to initialize the raw Postgres connection
+/// * Propagates [`InitDatabaseError::Postgres`] when configuring the `PostgreSQL` manager fails
+/// * Propagates [`InitDatabaseError::DeadpoolBuildError`] when building the connection pool fails
 #[cfg(feature = "postgres-raw")]
 #[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_no_tls(
