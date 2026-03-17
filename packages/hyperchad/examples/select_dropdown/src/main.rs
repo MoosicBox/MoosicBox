@@ -673,6 +673,11 @@ fn create_router() -> Router {
 /// * Static asset routes are invalid or fail to register
 /// * The web server fails to bind to the specified port
 /// * The server encounters a fatal error during execution
+///
+/// # Panics
+///
+/// Panics if static asset route registration fails in the `assets` feature path,
+/// because `static_asset_route_result` is unwrapped.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     info!("Starting HyperChad Select/Dropdown Example");
