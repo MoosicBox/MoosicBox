@@ -143,6 +143,7 @@ impl ApiSource {
     }
 
     /// Returns the library API source (same as [`library()`](Self::library)).
+    #[must_use]
     pub fn register_library() -> Self {
         LIBRARY_API_SOURCE.clone()
     }
@@ -294,6 +295,7 @@ impl ApiSource {
     /// # Panics
     ///
     /// * If the `API_SOURCES` `RwLock` is poisoned
+    #[must_use]
     pub fn all() -> impl Iterator<Item = Self> {
         API_SOURCES
             .read()
@@ -738,6 +740,7 @@ impl ApiSources {
 
 impl ApiSources {
     /// Returns an iterator over the API IDs in this collection.
+    #[must_use]
     pub fn iter(&self) -> std::collections::btree_set::Iter<'_, ApiId> {
         self.0.iter()
     }

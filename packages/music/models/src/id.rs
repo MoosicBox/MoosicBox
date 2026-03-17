@@ -602,6 +602,16 @@ mod db {
 /// # Errors
 ///
 /// * If a number fails to parse to an `Id`
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_music_models::id::{Id, parse_integer_ranges_to_ids};
+///
+/// let ids = parse_integer_ranges_to_ids("1,3-5").expect("range parsing should succeed");
+///
+/// assert_eq!(ids, vec![Id::Number(1), Id::Number(3), Id::Number(4), Id::Number(5)]);
+/// ```
 pub fn parse_integer_ranges_to_ids(
     integer_ranges: &str,
 ) -> std::result::Result<Vec<Id>, ParseIntegersError> {
@@ -647,6 +657,35 @@ pub fn parse_id_sequences(
 ///
 /// * If a value fails to parse to an `Id`
 /// * If a range is too large (> 100,000)
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_music_models::{
+///     ApiSource,
+///     id::{Id, parse_id_ranges},
+/// };
+///
+/// let library_ids = parse_id_ranges("1,3-5", &ApiSource::library())
+///     .expect("library range parsing should succeed");
+///
+/// assert_eq!(
+///     library_ids,
+///     vec![Id::Number(1), Id::Number(3), Id::Number(4), Id::Number(5)]
+/// );
+///
+/// let tidal = ApiSource::register("Tidal", "Tidal");
+/// let external_ids = parse_id_ranges("abc,def-ghi", &tidal)
+///     .expect("string id parsing should succeed");
+///
+/// assert_eq!(
+///     external_ids,
+///     vec![
+///         Id::String("abc".into()),
+///         Id::String("def-ghi".into()),
+///     ]
+/// );
+/// ```
 pub fn parse_id_ranges(
     id_ranges: &str,
     source: &ApiSource,
