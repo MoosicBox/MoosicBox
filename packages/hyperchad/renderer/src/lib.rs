@@ -459,7 +459,7 @@ impl From<Vec<Container>> for View {
 pub trait RenderRunner: Send + Sync {
     /// # Errors
     ///
-    /// Will error if fails to run
+    /// * If the renderer fails to run
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 }
 
@@ -481,7 +481,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation app fails to start
+    /// * If the `Renderer` implementation fails to start
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &mut self,
@@ -502,7 +502,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to emit the event.
+    /// * If the `Renderer` implementation fails to emit the event
     async fn emit_event(
         &self,
         event_name: String,
@@ -513,14 +513,18 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to render the view.
+    /// * If the `Renderer` implementation fails to render the view
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     /// Render a canvas update with drawing operations.
     ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to render the canvas update.
+    /// * If the `Renderer` implementation fails to render the canvas update
+    ///
+    /// # Panics
+    ///
+    /// * Always panics in the default implementation because canvas rendering is not implemented
     #[cfg(feature = "canvas")]
     async fn render_canvas(
         &self,

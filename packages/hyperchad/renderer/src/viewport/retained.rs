@@ -59,12 +59,16 @@ use std::sync::Arc;
 /// and size of widgets for visibility calculations.
 pub trait WidgetPosition: Send + Sync {
     /// Returns the X coordinate of the widget
+    #[must_use]
     fn widget_x(&self) -> i32;
     /// Returns the Y coordinate of the widget
+    #[must_use]
     fn widget_y(&self) -> i32;
     /// Returns the width of the widget
+    #[must_use]
     fn widget_w(&self) -> i32;
     /// Returns the height of the widget
+    #[must_use]
     fn widget_h(&self) -> i32;
 }
 
@@ -189,14 +193,19 @@ impl Viewport {
 /// area and perform visibility checks for widgets within that area.
 pub trait ViewportPosition {
     /// Returns the X coordinate of the viewport
+    #[must_use]
     fn viewport_x(&self) -> i32;
     /// Returns the Y coordinate of the viewport
+    #[must_use]
     fn viewport_y(&self) -> i32;
     /// Returns the width of the viewport
+    #[must_use]
     fn viewport_w(&self) -> i32;
     /// Returns the height of the viewport
+    #[must_use]
     fn viewport_h(&self) -> i32;
     /// Converts this viewport position to a widget position
+    #[must_use]
     fn as_widget_position(&self) -> Box<dyn WidgetPosition>;
 
     /// Checks if a widget is visible within this viewport.
@@ -291,6 +300,7 @@ impl ViewportListener {
     /// * `widget` - The widget to monitor for visibility
     /// * `viewport` - Optional viewport to check visibility against
     /// * `callback` - Function called with `(visible, distance)` when changes occur
+    #[must_use]
     pub fn new(
         widget: impl WidgetPosition + 'static,
         viewport: Option<Viewport>,
@@ -331,6 +341,43 @@ impl ViewportListener {
     ///
     /// Recalculates the widget's visibility within its viewport and calls
     /// the callback if either the visibility state or distance has changed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hyperchad_renderer::viewport::retained::{Viewport, ViewportListener, ViewportPosition, WidgetPosition};
+    ///
+    /// #[derive(Clone)]
+    /// struct Rect {
+    ///     x: i32,
+    ///     y: i32,
+    ///     w: i32,
+    ///     h: i32,
+    /// }
+    ///
+    /// impl WidgetPosition for Rect {
+    ///     fn widget_x(&self) -> i32 { self.x }
+    ///     fn widget_y(&self) -> i32 { self.y }
+    ///     fn widget_w(&self) -> i32 { self.w }
+    ///     fn widget_h(&self) -> i32 { self.h }
+    /// }
+    ///
+    /// impl ViewportPosition for Rect {
+    ///     fn viewport_x(&self) -> i32 { self.x }
+    ///     fn viewport_y(&self) -> i32 { self.y }
+    ///     fn viewport_w(&self) -> i32 { self.w }
+    ///     fn viewport_h(&self) -> i32 { self.h }
+    ///     fn as_widget_position(&self) -> Box<dyn WidgetPosition> {
+    ///         Box::new(self.clone())
+    ///     }
+    /// }
+    ///
+    /// let widget = Rect { x: 10, y: 10, w: 20, h: 20 };
+    /// let viewport = Viewport::new(None, Rect { x: 0, y: 0, w: 100, h: 100 });
+    /// let mut listener = ViewportListener::new(widget, Some(viewport), |_visible, _dist| {});
+    ///
+    /// listener.check();
+    /// ```
     pub fn check(&mut self) {
         let (visible, dist) = self.is_visible();
 

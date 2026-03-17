@@ -159,6 +159,20 @@ impl ViewportListener {
     ///   and the previous visibility state if it changed, otherwise `None`
     /// * Second tuple: `(current_distance, previous_distance_if_changed)` - Current distance
     ///   from viewport and the previous distance if it changed significantly, otherwise `None`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hyperchad_renderer::viewport::immediate::ViewportListener;
+    ///
+    /// let mut listener = ViewportListener::new(None, 10.0, 10.0, 20.0, 20.0);
+    /// let ((visible, previous_visible), (distance, previous_distance)) = listener.check();
+    ///
+    /// assert!(visible);
+    /// assert!(previous_visible.is_none());
+    /// assert!(distance < 0.001);
+    /// assert!(previous_distance.is_none());
+    /// ```
     pub fn check(&mut self) -> ((bool, Option<bool>), (f32, Option<f32>)) {
         let (visible, dist) = self.is_visible();
         log::trace!("check: pos={:?} visible={visible} dist={dist}", self.pos);

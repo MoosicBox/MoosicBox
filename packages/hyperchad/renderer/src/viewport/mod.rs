@@ -43,6 +43,16 @@ fn max_f32(a: f32, b: f32) -> f32 {
 /// A tuple containing:
 /// * `bool` - Whether the widget is visible (within the viewport)
 /// * `f32` - Distance from the viewport if not visible, 0.0 if visible
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_renderer::viewport::is_visible;
+///
+/// let (visible, distance) = is_visible(0.0, 0.0, 800.0, 600.0, 20.0, 20.0, 100.0, 100.0);
+/// assert!(visible);
+/// assert!(distance < 0.001);
+/// ```
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn is_visible(
