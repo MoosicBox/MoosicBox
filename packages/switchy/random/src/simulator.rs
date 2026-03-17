@@ -50,6 +50,10 @@ static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
 ///
 /// This seed is either read from the `SIMULATOR_SEED` environment variable
 /// or generated from entropy.
+///
+/// # Panics
+///
+/// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 #[must_use]
 pub fn initial_seed() -> u64 {
     *INITIAL_SEED
@@ -62,6 +66,10 @@ thread_local! {
 }
 
 /// Returns a clone of the thread-local random number generator for simulation.
+///
+/// # Panics
+///
+/// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 #[must_use]
 pub fn rng() -> crate::Rng {
     RNG.with_borrow(Clone::clone)
@@ -71,7 +79,7 @@ pub fn rng() -> crate::Rng {
 ///
 /// # Panics
 ///
-/// * If fails to get a random `u64`
+/// * If the initial RNG mutex is poisoned
 #[must_use]
 pub fn gen_seed() -> u64 {
     INITIAL_RNG.lock().unwrap().next_u64()
@@ -87,6 +95,7 @@ pub fn contains_fixed_seed() -> bool {
 ///
 /// # Panics
 ///
+/// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 /// * If the `SEED` `RwLock` fails to write to
 /// * If the `RNG` `Mutex` fails to lock
 pub fn reset_seed() {
@@ -100,6 +109,7 @@ pub fn reset_seed() {
 ///
 /// # Panics
 ///
+/// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 /// * If the `SEED` `RwLock` fails to read from
 #[must_use]
 pub fn seed() -> u64 {
@@ -110,6 +120,8 @@ pub fn seed() -> u64 {
 ///
 /// # Panics
 ///
+/// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
+/// * If the `SEED` `RwLock` fails to read from
 /// * If the `RNG` `Mutex` fails to lock
 pub fn reset_rng() {
     let seed = seed();
@@ -121,6 +133,10 @@ impl SimulatorRng {
     /// Creates a new simulator random number generator from an optional seed.
     ///
     /// If `None` is provided, the current thread-local seed is used.
+    ///
+    /// # Panics
+    ///
+    /// * If `seed` is `None` and the `SEED` `RwLock` fails to read from
     #[must_use]
     pub fn new<T: Into<u64>, S: Into<Option<T>>>(seed: S) -> Self {
         let seed = seed.into().map(Into::into);

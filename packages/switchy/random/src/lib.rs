@@ -257,6 +257,19 @@ macro_rules! impl_rng {
             ///
             /// The distribution is controlled by the `dist` parameter using a floating-point power.
             ///
+            /// # Examples
+            ///
+            /// ```rust
+            /// # #[cfg(feature = "rand")]
+            /// # {
+            /// use switchy_random::Rng;
+            ///
+            /// let rng = Rng::from_seed(42_u64);
+            /// let value: u32 = rng.gen_range_dist(1..=100, 2.0);
+            /// assert!(value <= 100);
+            /// # }
+            /// ```
+            ///
             /// # Panics
             ///
             /// * If the range is empty
@@ -277,6 +290,19 @@ macro_rules! impl_rng {
             /// Generates a random value within the specified range with a non-uniform distribution.
             ///
             /// The distribution is controlled by the `dist` parameter using an integer power.
+            ///
+            /// # Examples
+            ///
+            /// ```rust
+            /// # #[cfg(feature = "rand")]
+            /// # {
+            /// use switchy_random::Rng;
+            ///
+            /// let rng = Rng::from_seed(42_u64);
+            /// let value: i32 = rng.gen_range_disti(-100..=100, 2);
+            /// assert!(value <= 100);
+            /// # }
+            /// ```
             ///
             /// # Panics
             ///
@@ -360,9 +386,11 @@ macro_rules! impl_rng {
 /// This is used internally for non-uniform distribution functions.
 pub trait F64Convertible: Sized {
     /// Converts from `f64` to `Self`.
+    #[must_use]
     fn from_f64(f: f64) -> Self;
 
     /// Converts from `Self` to `f64`.
+    #[must_use]
     fn into_f64(self) -> f64;
 }
 
@@ -417,6 +445,23 @@ impl_f64_round_convertible!(i128);
 ///
 /// This function scales the input value by a random factor raised to the given power,
 /// creating a non-uniform distribution that can favor lower or higher values.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(feature = "rand")]
+/// # {
+/// use switchy_random::{Rng, non_uniform_distribute_f64};
+///
+/// let rng = Rng::from_seed(42_u64);
+/// let distributed = non_uniform_distribute_f64(100.0, 2.0, &rng);
+/// assert!(distributed > 0.0);
+/// # }
+/// ```
+///
+/// # Panics
+///
+/// * If the internal RNG mutex is poisoned
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
@@ -427,6 +472,23 @@ pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
 ///
 /// This function scales the input value by a random factor raised to the given integer power,
 /// creating a non-uniform distribution that can favor lower or higher values.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(feature = "rand")]
+/// # {
+/// use switchy_random::{Rng, non_uniform_distribute_i32};
+///
+/// let rng = Rng::from_seed(42_u64);
+/// let distributed = non_uniform_distribute_i32(100.0, 2, &rng);
+/// assert!(distributed > 0.0);
+/// # }
+/// ```
+///
+/// # Panics
+///
+/// * If the internal RNG mutex is poisoned
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_i32(value: f64, pow: i32, rng: &Rng) -> f64 {
