@@ -140,6 +140,8 @@ pub enum WebsocketConnectError {
 }
 
 /// Handles a websocket connection.
+///
+/// This returns a success [`Response`] after logging the connection event.
 #[must_use]
 pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Response {
     log::debug!("Connected {}", context.connection_id);
@@ -206,8 +208,32 @@ pub async fn disconnect(
 ///
 /// # Errors
 ///
-/// * If the message is an invalid type
-/// * If the message fails to process
+/// * If the incoming JSON cannot be deserialized into [`InboundPayload`]
+/// * If the payload contains an invalid message type
+/// * If message routing or handler execution fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use moosicbox_ws::{process_message, WebsocketContext, WebsocketSender};
+/// # use serde_json::json;
+/// # use switchy_database::config::ConfigDatabase;
+/// # async fn demo(
+/// #     db: &ConfigDatabase,
+/// #     sender: &impl WebsocketSender,
+/// # ) -> Result<(), moosicbox_ws::WebsocketMessageError> {
+/// let context = WebsocketContext {
+///     connection_id: "client-1".to_string(),
+///     profile: Some("default".to_string()),
+///     player_actions: vec![],
+/// };
+/// let body = json!({"type": "PING"});
+///
+/// let response = process_message(db, body, context, sender).await?;
+/// assert_eq!(response.status_code, 200);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn process_message(
     config_db: &ConfigDatabase,
     body: Value,
@@ -264,7 +290,10 @@ pub enum WebsocketMessageError {
 ///
 /// # Errors
 ///
-/// * If the message fails to process
+/// * If the message requires a profile and the context profile is missing
+/// * If websocket broadcasting fails
+/// * If session or audio-zone database operations fail
+/// * If outbound payload serialization fails
 pub async fn message(
     config_db: &ConfigDatabase,
     sender: &impl WebsocketSender,
@@ -369,9 +398,9 @@ pub async fn message(
 ///
 /// # Errors
 ///
-/// * If the db fails to return the zones with sessions
-/// * If the json fails to serialize
-/// * If the ws message fails to broadcast
+/// * If querying audio zones with sessions fails
+/// * If serializing [`OutboundPayload::AudioZoneWithSessions`] fails
+/// * If websocket delivery fails
 pub async fn broadcast_audio_zones(
     config_db: &ConfigDatabase,
     library_db: &LibraryDatabase,
@@ -405,9 +434,9 @@ pub async fn broadcast_audio_zones(
 ///
 /// # Errors
 ///
-/// * If the db fails to return the sessions
-/// * If the json fails to serialize
-/// * If the ws message fails to broadcast
+/// * If querying sessions fails
+/// * If serializing [`OutboundPayload::Sessions`] fails
+/// * If websocket delivery fails
 pub async fn broadcast_sessions(
     db: &LibraryDatabase,
     sender: &impl WebsocketSender,
@@ -475,7 +504,7 @@ async fn get_connections(db: &ConfigDatabase) -> Result<String, WebsocketSendErr
 ///
 /// # Errors
 ///
-/// * If the db fails to register the connection
+/// * If the connection cannot be persisted in the config database
 ///
 /// # Panics
 ///
@@ -499,7 +528,7 @@ pub async fn register_connection(
 ///
 /// # Errors
 ///
-/// * If the db fails to create the players
+/// * If creating any player for the connection fails
 pub async fn register_players(
     db: &ConfigDatabase,
     _sender: &impl WebsocketSender,
@@ -518,8 +547,9 @@ pub async fn register_players(
 ///
 /// # Errors
 ///
-/// * If the db fails to get the connections
-/// * If the ws message fails to broadcast
+/// * If querying connections fails
+/// * If serializing the connection payload fails
+/// * If websocket delivery fails
 pub async fn broadcast_connections(
     db: &ConfigDatabase,
     sender: &impl WebsocketSender,
@@ -547,6 +577,15 @@ async fn create_audio_zone(
 ///
 /// * If the `OutboundPayload::DownloadEvent` fails to serialize
 /// * If the ws message fails to broadcast
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use moosicbox_ws::{send_download_event, WebsocketSender};
+/// # async fn demo(sender: &impl WebsocketSender) -> Result<(), moosicbox_ws::WebsocketSendError> {
+/// send_download_event(sender, None, serde_json::json!({"progress": 42})).await
+/// # }
+/// ```
 pub async fn send_download_event<ProgressEvent: Serialize + Send>(
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
@@ -575,6 +614,15 @@ pub async fn send_download_event<ProgressEvent: Serialize + Send>(
 ///
 /// * If the `OutboundPayload::ScanEvent` fails to serialize
 /// * If the ws message fails to broadcast
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use moosicbox_ws::{send_scan_event, WebsocketSender};
+/// # async fn demo(sender: &impl WebsocketSender) -> Result<(), moosicbox_ws::WebsocketSendError> {
+/// send_scan_event(sender, None, serde_json::json!({"scanned": 100})).await
+/// # }
+/// ```
 pub async fn send_scan_event<ProgressEvent: Serialize + Send>(
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
@@ -617,9 +665,27 @@ pub enum UpdateSessionError {
 ///
 /// # Errors
 ///
-/// * If the db fails to update the session
-/// * If the db fails get the players that were updated
-/// * If the ws message fails to broadcast
+/// * If updating the session in the library database fails
+/// * If fetching the updated session or playlist fails
+/// * If fetching audio-zone players for playback updates fails
+/// * If serializing [`OutboundPayload::SessionUpdated`] fails
+/// * If websocket delivery fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// # use moosicbox_session::models::UpdateSession;
+/// # use moosicbox_ws::{update_session, WebsocketSender};
+/// # use switchy_database::{config::ConfigDatabase, profiles::LibraryDatabase};
+/// # async fn demo(
+/// #     config_db: &ConfigDatabase,
+/// #     library_db: &LibraryDatabase,
+/// #     sender: &impl WebsocketSender,
+/// #     payload: &UpdateSession,
+/// # ) -> Result<(), moosicbox_ws::UpdateSessionError> {
+/// update_session(config_db, library_db, sender, None, payload).await
+/// # }
+/// ```
 pub async fn update_session(
     config_db: &ConfigDatabase,
     db: &LibraryDatabase,
