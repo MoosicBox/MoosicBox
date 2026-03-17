@@ -102,6 +102,16 @@ where
     ///
     /// * If the `duration` cannot be converted to a `usize`
     /// * If failed to create the `FftFixedIn` resampler
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_resampler::Resampler;
+    /// use symphonia::core::audio::{Channels, SignalSpec};
+    ///
+    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+    /// let _resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    /// ```
     #[must_use]
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = usize::try_from(duration).unwrap();
@@ -141,6 +151,22 @@ where
     /// # Panics
     ///
     /// * If the internal resampler's `process_into_buffer` operation fails
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_resampler::Resampler;
+    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    ///
+    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    ///
+    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(1_024, spec);
+    /// input.render_reserved(Some(1_024));
+    ///
+    /// let output = resampler.resample(&input);
+    /// assert!(output.is_some());
+    /// ```
     pub fn resample(&mut self, input: &AudioBuffer<f32>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
         convert_samples(input, &mut self.input);
@@ -163,6 +189,22 @@ where
     ///
     /// * If the internal resampler's `process_into_buffer` operation fails
     /// * If the audio is not stereo (2-channel) - the `to_audio_buffer` conversion will panic
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_resampler::Resampler;
+    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    ///
+    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    ///
+    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(1_024, spec);
+    /// input.render_reserved(Some(1_024));
+    ///
+    /// let output = resampler.resample_to_audio_buffer(&input);
+    /// assert!(output.is_some());
+    /// ```
     pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
@@ -180,6 +222,23 @@ where
     /// # Panics
     ///
     /// * If the internal resampler's `process_into_buffer` operation fails
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use moosicbox_resampler::Resampler;
+    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    ///
+    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    ///
+    /// let mut partial: AudioBuffer<f32> = AudioBuffer::new(512, spec);
+    /// partial.render_reserved(Some(512));
+    /// assert!(resampler.resample(&partial).is_none());
+    ///
+    /// let flushed = resampler.flush();
+    /// assert!(flushed.is_some());
+    /// ```
     #[allow(unused)]
     pub fn flush(&mut self) -> Option<&[T]> {
         let len = self.input[0].len();
@@ -221,6 +280,19 @@ where
 /// # Panics
 ///
 /// * If the audio is not stereo (2-channel) - the `chan_pair_mut()` call will panic
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_resampler::to_audio_buffer;
+/// use symphonia::core::audio::{Channels, Signal, SignalSpec};
+///
+/// let spec = SignalSpec::new(48_000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+/// let samples = vec![0.1_f32, 0.2, 0.3, 0.4];
+/// let buffer = to_audio_buffer(&samples, spec);
+///
+/// assert_eq!(buffer.frames(), 2);
+/// ```
 #[must_use]
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
