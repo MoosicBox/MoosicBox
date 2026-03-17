@@ -3,6 +3,8 @@
 #![allow(clippy::multiple_crate_versions)]
 #![doc = include_str!("../README.md")]
 
+//! Data models for session lifecycle, playback control, and client connections.
+
 use std::sync::LazyLock;
 
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
@@ -76,6 +78,17 @@ impl PlaybackTarget {
     /// Returns a default playback target based on the type string.
     ///
     /// Returns `Some(PlaybackTarget)` for recognized type strings, or `None` if the type is unknown.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use moosicbox_session_models::PlaybackTarget;
+    ///
+    /// let target = PlaybackTarget::default_from_str("AUDIO_ZONE");
+    /// assert!(matches!(target, Some(PlaybackTarget::AudioZone { audio_zone_id: 0 })));
+    ///
+    /// assert!(PlaybackTarget::default_from_str("UNKNOWN").is_none());
+    /// ```
     pub fn default_from_str(r#type: &str) -> Option<Self> {
         if DEFAULT_AUDIO_ZONE.as_ref() == r#type {
             Some(DEFAULT_AUDIO_ZONE)
