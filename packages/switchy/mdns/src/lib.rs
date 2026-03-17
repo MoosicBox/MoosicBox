@@ -73,6 +73,15 @@ fn get_service_daemon() -> Result<Box<dyn MdnsServiceDaemon>, mdns_sd::Error> {
 /// This function creates and registers a `MoosicBox` server instance with the specified
 /// instance name, IP address, and port number.
 ///
+/// # Examples
+///
+/// ```rust,no_run
+/// # async fn example() -> Result<(), switchy_mdns::RegisterServiceError> {
+/// switchy_mdns::register_service("living-room", "192.168.1.42", 6600).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * [`RegisterServiceError::MdnsSd`] - If `mdns_sd` has an error initializing the mdns service
