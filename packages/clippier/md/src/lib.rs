@@ -12,7 +12,11 @@ use anyhow::{Context, Result};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{WalkBuilder, WalkState};
 use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
-use markdown::{Constructs, ParseOptions, mdast::Node, to_mdast};
+use markdown::{
+    Constructs, ParseOptions,
+    mdast::{AlignKind, Node},
+    to_mdast,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -704,11 +708,16 @@ pub fn format_markdown(input: &str, config: &Config) -> String {
     if config.frontmatter_mode == FrontmatterMode::Preserve
         && let Some((frontmatter, body)) = split_frontmatter(input)
     {
-        let formatted_body = if config.engine == FormatterEngine::Legacy {
+        let mut formatted_body = if config.engine == FormatterEngine::Legacy {
             format_markdown_legacy(body, config)
         } else {
             format_markdown_ast(body, config)
         };
+
+        if !formatted_body.is_empty() && !formatted_body.starts_with('\n') {
+            formatted_body.insert(0, '\n');
+        }
+
         return format!("{frontmatter}{formatted_body}");
     }
 
@@ -808,7 +817,7 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
 
 fn should_normalize_ast_node(node: &Node, config: &Config) -> bool {
     match node {
-        Node::Heading(_) => true,
+        Node::Heading(_) | Node::Table(_) => true,
         Node::Paragraph(_) => config.prose_wrap == ProseWrapMode::Always,
         Node::List(_) => {
             config.list_style != ListStyle::Preserve
@@ -856,6 +865,7 @@ fn render_normalized_ast_node(node: &Node, source: &str, config: &Config) -> Str
                 String::new()
             }
         }
+        Node::Table(table) => render_table_node(table),
         _ => {
             if let Some((start, end)) = node_offsets(node) {
                 source[start..end].to_string()
@@ -905,6 +915,105 @@ fn render_inline_text(node: &Node) -> String {
         Node::Break(_) => "  \n".to_string(),
         _ => String::new(),
     }
+}
+
+fn render_table_node(table: &markdown::mdast::Table) -> String {
+    let mut rows = Vec::<Vec<String>>::new();
+    for row_node in &table.children {
+        let Node::TableRow(row) = row_node else {
+            continue;
+        };
+        let mut cells = Vec::new();
+        for cell_node in &row.children {
+            let Node::TableCell(cell) = cell_node else {
+                continue;
+            };
+            let content = cell
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>();
+            cells.push(content.trim().to_string());
+        }
+        rows.push(cells);
+    }
+
+    if rows.is_empty() {
+        return String::new();
+    }
+
+    let col_count = rows.iter().map(Vec::len).max().unwrap_or(0);
+    if col_count == 0 {
+        return String::new();
+    }
+
+    for row in &mut rows {
+        while row.len() < col_count {
+            row.push(String::new());
+        }
+    }
+
+    let mut widths = vec![3usize; col_count];
+    for row in &rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+
+    let header = format_table_row(&rows[0], &widths, &table.align);
+    let divider = format_table_divider(&widths, &table.align);
+    let body = rows
+        .iter()
+        .skip(1)
+        .map(|row| format_table_row(row, &widths, &table.align))
+        .collect::<Vec<_>>();
+
+    std::iter::once(header)
+        .chain(std::iter::once(divider))
+        .chain(body)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_table_row(cells: &[String], widths: &[usize], align: &[AlignKind]) -> String {
+    let rendered = cells
+        .iter()
+        .enumerate()
+        .map(|(index, cell)| {
+            let width = widths[index];
+            let cell_len = cell.chars().count();
+            let pad = width.saturating_sub(cell_len);
+            match align.get(index).copied().unwrap_or(AlignKind::None) {
+                AlignKind::Right => format!("{}{}", " ".repeat(pad), cell),
+                AlignKind::Center => {
+                    let left = pad / 2;
+                    let right = pad.saturating_sub(left);
+                    format!("{}{}{}", " ".repeat(left), cell, " ".repeat(right))
+                }
+                AlignKind::Left | AlignKind::None => format!("{}{}", cell, " ".repeat(pad)),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ");
+    format!("| {rendered} |")
+}
+
+fn format_table_divider(widths: &[usize], align: &[AlignKind]) -> String {
+    let rendered = widths
+        .iter()
+        .enumerate()
+        .map(|(index, width)| {
+            let width = (*width).max(3);
+            match align.get(index).copied().unwrap_or(AlignKind::None) {
+                AlignKind::Left => format!(":{}", "-".repeat(width.saturating_sub(1))),
+                AlignKind::Right => format!("{}:", "-".repeat(width.saturating_sub(1))),
+                AlignKind::Center => format!(":{}:", "-".repeat(width.saturating_sub(2))),
+                AlignKind::None => "-".repeat(width),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ");
+    format!("| {rendered} |")
 }
 
 fn node_offsets(node: &Node) -> Option<(usize, usize)> {
@@ -1421,7 +1530,11 @@ fn normalize_heading_line(line: &str, config: &Config) -> Option<String> {
     if hashes == 0 || hashes > 6 {
         return None;
     }
-    let rest = trimmed[hashes..].trim_start();
+    let suffix = &trimmed[hashes..];
+    if !suffix.is_empty() && !suffix.starts_with(' ') && !suffix.starts_with('\t') {
+        return None;
+    }
+    let rest = suffix.trim_start();
     let mut normalized = format!("{} {}", "#".repeat(hashes), rest);
     if config.trim_trailing_whitespace {
         normalized = normalized.trim_end().to_string();
@@ -1586,27 +1699,34 @@ mod tests {
 
     #[test]
     fn preserves_frontmatter_and_formats_heading() {
-        let input = "---\ntitle: Test\n---\n#Heading\n";
+        let input = "---\ntitle: Test\n---\n# Heading\n";
         let output = format_markdown(input, &Config::default());
-        assert_eq!(output, "---\ntitle: Test\n---\n# Heading\n");
+        assert_eq!(output, "---\ntitle: Test\n---\n\n# Heading\n");
+    }
+
+    #[test]
+    fn preserves_non_commonmark_no_space_heading() {
+        let input = "#Heading\n";
+        let output = format_markdown(input, &Config::default());
+        assert_eq!(output, input);
     }
 
     #[test]
     fn preserves_heading_indentation_by_default() {
-        let input = "    ###Title\n";
+        let input = "    ### Heading\n";
         let output = format_markdown(input, &Config::default());
-        assert_eq!(output, "    ### Title\n");
+        assert_eq!(output, "    ### Heading\n");
     }
 
     #[test]
     fn can_normalize_heading_indentation() {
-        let input = "    ###Title\n";
+        let input = "    ### Heading\n";
         let config = Config {
             heading_indentation: HeadingIndentationMode::Normalize,
             ..Config::default()
         };
         let output = format_markdown(input, &config);
-        assert_eq!(output, "### Title\n");
+        assert_eq!(output, "### Heading\n");
     }
 
     #[test]
@@ -1637,7 +1757,7 @@ mod tests {
 
     #[test]
     fn ast_engine_runs_when_supported_profile_selected() {
-        let input = "#Title\n\nparagraph\n";
+        let input = "# Heading\n\nparagraph\n";
         let config = Config {
             engine: FormatterEngine::Ast,
             prose_wrap: ProseWrapMode::Preserve,
@@ -1646,7 +1766,7 @@ mod tests {
             ..Config::default()
         };
         let output = format_markdown(input, &config);
-        assert_eq!(output, "# Title\n\nparagraph\n");
+        assert_eq!(output, "# Heading\n\nparagraph\n");
     }
 
     #[test]
@@ -1773,6 +1893,21 @@ mod tests {
 
         assert!(files.iter().any(|path| path.ends_with("docs/keep.md")));
         assert!(!files.iter().any(|path| path.ends_with("docs/drop.md")));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
+    }
+
+    #[test]
+    fn collect_markdown_files_supports_md_and_markdown_extensions() {
+        let dir = temp_dir("clippier-md-extensions");
+        std::fs::write(dir.join("a.md"), "# a\n").expect("failed to write a.md");
+        std::fs::write(dir.join("b.markdown"), "# b\n").expect("failed to write b.markdown");
+
+        let files = collect_markdown_files(std::slice::from_ref(&dir), &Config::default(), &dir)
+            .expect("failed to collect markdown files");
+
+        assert!(files.iter().any(|path| path.ends_with("a.md")));
+        assert!(files.iter().any(|path| path.ends_with("b.markdown")));
 
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
     }

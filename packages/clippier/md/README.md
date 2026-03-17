@@ -78,6 +78,10 @@ formatting.
 `packages/clippier/md/tests/parity/fixtures/` contains parity source fixtures for
 CommonMark + GFM behavior. Tests run `prettier` (pinned to `3.8.1`) at runtime
 and compare output byte-for-byte with `clippier-md`.
+The runner fallback order is: `bunx`, then `pnpm dlx`, then `npx --yes`.
+
+Frontmatter fixtures are validated separately for byte-for-byte preservation and
+are intentionally excluded from live Prettier parity assertions.
 
 Frontmatter (`---` YAML and `+++` TOML) is treated as immutable in preserve
 mode and validated byte-for-byte in parity tests.
