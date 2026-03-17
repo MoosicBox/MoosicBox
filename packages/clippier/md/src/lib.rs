@@ -14,7 +14,7 @@ use ignore::{WalkBuilder, WalkState};
 use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
 use markdown::{
     Constructs, ParseOptions,
-    mdast::{AlignKind, Node},
+    mdast::{AlignKind, Node, ReferenceKind},
     to_mdast,
 };
 
@@ -839,11 +839,7 @@ fn render_normalized_ast_node(
 ) -> String {
     match node {
         Node::Heading(heading) => {
-            let text = heading
-                .children
-                .iter()
-                .map(render_inline_text)
-                .collect::<String>();
+            let text = render_inline_source(&heading.children, source);
             let heading_text =
                 format!("{} {}", "#".repeat(usize::from(heading.depth)), text.trim());
             if config.heading_indentation == HeadingIndentationMode::Preserve
@@ -858,12 +854,17 @@ fn render_normalized_ast_node(
             heading_text
         }
         Node::Paragraph(paragraph) => {
-            let text = paragraph
-                .children
-                .iter()
-                .map(render_inline_text)
-                .collect::<String>();
-            wrap_line(text.trim(), config.line_width).join("\n")
+            if let Some((start, end)) = node_offsets(node) {
+                let text = source[start..end]
+                    .lines()
+                    .map(str::trim)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                wrap_line(text.trim(), config.line_width).join("\n")
+            } else {
+                let text = render_inline_source(&paragraph.children, source);
+                wrap_line(text.trim(), config.line_width).join("\n")
+            }
         }
         Node::List(list) => render_list_node(list, source, config, base_indent),
         Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config),
@@ -913,6 +914,7 @@ fn render_list_node(
     base_indent: usize,
 ) -> String {
     let mut out = String::new();
+    let mut previous_item_spread = None;
 
     for (index, child) in list.children.iter().enumerate() {
         let Node::ListItem(item) = child else {
@@ -920,7 +922,7 @@ fn render_list_node(
         };
 
         if index > 0 {
-            if list.spread || item.spread {
+            if previous_item_spread.is_some_and(|spread| spread) || item.spread {
                 out.push_str("\n\n");
             } else {
                 out.push('\n');
@@ -935,6 +937,8 @@ fn render_list_node(
             config,
             base_indent,
         ));
+
+        previous_item_spread = Some(item.spread);
     }
 
     out
@@ -952,7 +956,17 @@ fn render_list_item_marker(
             .start
             .unwrap_or(1)
             .saturating_add(u32::try_from(index).unwrap_or(0));
-        return format!("{number}.  ");
+        let spacing = node_offsets(item_node).map_or(1, |(start, end)| {
+            let trimmed = source[start..end].trim_start();
+            let digits = trimmed.chars().take_while(char::is_ascii_digit).count();
+            let after = trimmed.get(digits + 1..).unwrap_or("");
+            let spaces = after
+                .chars()
+                .take_while(|value| *value == ' ' || *value == '\t')
+                .count();
+            if spaces >= 2 { 2 } else { 1 }
+        });
+        return format!("{number}.{}", " ".repeat(spacing));
     }
 
     let marker = match config.list_style {
@@ -983,10 +997,14 @@ fn render_list_item(
 ) -> String {
     let mut blocks = Vec::new();
     for child in &item.children {
-        if should_normalize_ast_node(child, config) {
-            blocks.push(render_normalized_ast_node(child, source, config, 0));
-        } else if let Some(extracted) = node_source_without_trailing_newlines(child, source) {
-            blocks.push(extracted);
+        let rendered = if should_normalize_ast_node(child, config) {
+            Some(render_normalized_ast_node(child, source, config, 0))
+        } else {
+            node_source_without_trailing_newlines(child, source)
+        };
+
+        if let Some(block) = rendered {
+            blocks.push((block, node_offsets(child)));
         }
     }
 
@@ -1003,9 +1021,22 @@ fn render_list_item(
         None => "",
     };
 
-    for (block_index, block) in blocks.iter().enumerate() {
+    for (block_index, (block, offsets)) in blocks.iter().enumerate() {
         if block_index > 0 {
-            if item.spread {
+            if blocks
+                .get(block_index.saturating_sub(1))
+                .and_then(|(_, prev_offsets)| {
+                    prev_offsets
+                        .and_then(|(_, prev_end)| offsets.map(|(start, _)| (prev_end, start)))
+                })
+                .is_some_and(|(prev_end, start)| {
+                    source[prev_end..start]
+                        .chars()
+                        .filter(|value| *value == '\n')
+                        .count()
+                        >= 2
+                })
+            {
                 out.push_str("\n\n");
             } else {
                 out.push('\n');
@@ -1041,6 +1072,18 @@ fn node_source_without_trailing_newlines(node: &Node, source: &str) -> Option<St
     )
 }
 
+fn render_inline_source(children: &[Node], source: &str) -> String {
+    let mut out = String::new();
+    for child in children {
+        if let Some((start, end)) = node_offsets(child) {
+            out.push_str(&source[start..end]);
+        } else {
+            out.push_str(&render_inline_text(child));
+        }
+    }
+    out
+}
+
 fn render_inline_text(node: &Node) -> String {
     match node {
         Node::Text(text) => text.value.clone(),
@@ -1070,13 +1113,45 @@ fn render_inline_text(node: &Node) -> String {
                 .collect::<String>()
         ),
         Node::Link(link) => format!(
-            "[{}]({})",
+            "[{}]({}{})",
             link.children
                 .iter()
                 .map(render_inline_text)
                 .collect::<String>(),
-            link.url
+            link.url,
+            link.title
+                .as_ref()
+                .map_or(String::new(), |title| format!(" \"{title}\""))
         ),
+        Node::LinkReference(link) => {
+            let text = link
+                .children
+                .iter()
+                .map(render_inline_text)
+                .collect::<String>();
+            match link.reference_kind {
+                ReferenceKind::Shortcut => format!("[{text}]"),
+                ReferenceKind::Collapsed => format!("[{text}][]"),
+                ReferenceKind::Full => format!("[{text}][{}]", link.identifier),
+            }
+        }
+        Node::Image(image) => format!(
+            "![{}]({}{})",
+            image.alt,
+            image.url,
+            image
+                .title
+                .as_ref()
+                .map_or(String::new(), |title| format!(" \"{title}\""))
+        ),
+        Node::ImageReference(image) => match image.reference_kind {
+            ReferenceKind::Shortcut => format!("![{}]", image.alt),
+            ReferenceKind::Collapsed => format!("![{}][]", image.alt),
+            ReferenceKind::Full => format!("![{}][{}]", image.alt, image.identifier),
+        },
+        Node::FootnoteReference(footnote) => format!("[^{}]", footnote.identifier),
+        Node::Html(html) => html.value.clone(),
+        Node::MdxTextExpression(expression) => format!("{{{}}}", expression.value),
         Node::Break(_) => "  \n".to_string(),
         _ => String::new(),
     }
