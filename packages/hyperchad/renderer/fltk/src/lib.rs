@@ -220,6 +220,17 @@ impl FltkRenderer {
     /// # Arguments
     ///
     /// * `request_action` - Channel sender for dispatching action requests from UI events
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flume::unbounded;
+    /// use hyperchad_renderer_fltk::FltkRenderer;
+    ///
+    /// let (request_action, _rx) = unbounded();
+    /// let renderer = FltkRenderer::new(request_action);
+    /// # let _ = renderer;
+    /// ```
     #[must_use]
     pub fn new(request_action: Sender<(String, Option<Value>)>) -> Self {
         let (tx, rx) = flume::unbounded();
@@ -1348,6 +1359,21 @@ impl FltkRenderer {
     ///
     /// This method blocks until a navigation event occurs in the UI, then returns the
     /// destination URL.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use flume::unbounded;
+    /// # use hyperchad_renderer_fltk::FltkRenderer;
+    /// # async fn example() {
+    /// let (request_action, _rx) = unbounded();
+    /// let renderer = FltkRenderer::new(request_action);
+    ///
+    /// if let Some(href) = renderer.wait_for_navigation().await {
+    ///     println!("Navigated to {href}");
+    /// }
+    /// # }
+    /// ```
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
@@ -1366,7 +1392,7 @@ impl RenderRunner for FltkRenderRunner {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK fails to run the event loop.
+    /// * Returns an error when FLTK fails to run the event loop.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         let app = self.app;
         log::debug!("run: starting");
@@ -1382,7 +1408,11 @@ impl ToRenderRunner for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will error if the renderer has not been initialized via `init()`.
+    /// * This implementation does not return an error.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if called before [`Renderer::init`] initializes the FLTK app.
     fn to_runner(
         self,
         _handle: Handle,
@@ -1413,7 +1443,7 @@ impl Renderer for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK app fails to start.
+    /// * This implementation does not return an error.
     async fn init(
         &mut self,
         width: f32,
@@ -1542,7 +1572,7 @@ impl Renderer for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will not error in the current implementation.
+    /// * This implementation does not return an error.
     async fn emit_event(
         &self,
         event_name: String,
@@ -1560,7 +1590,8 @@ impl Renderer for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK fails to render the elements.
+    /// * Returns an error if spawning the blocking render task fails.
+    /// * Returns an error if FLTK fails while rendering widgets.
     ///
     /// # Panics
     ///
@@ -1592,7 +1623,7 @@ impl Renderer for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will not error in the current implementation.
+    /// * This implementation does not return an error.
     ///
     /// # Panics
     ///
