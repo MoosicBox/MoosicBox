@@ -86,7 +86,7 @@ impl Profiles {
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub fn get(&self, profile: &str) -> Option<String> {
         self.profiles
             .read()
@@ -106,23 +106,23 @@ impl Profiles {
     }
 }
 
-/// actix-web integration for profile extraction from HTTP requests.
-///
-/// Provides extractors for retrieving profile names from HTTP request headers
-/// (`moosicbox-profile`) or query parameters (`moosicboxProfile`).
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use actix_web::{web, HttpResponse};
-/// use moosicbox_profiles::api::ProfileName;
-///
-/// async fn handler(profile: ProfileName) -> HttpResponse {
-///     HttpResponse::Ok().body(format!("Profile: {}", profile.as_ref()))
-/// }
-/// ```
 #[cfg(feature = "api")]
 pub mod api {
+    //! actix-web integration for profile extraction from HTTP requests.
+    //!
+    //! Provides extractors for retrieving profile names from HTTP request headers
+    //! (`moosicbox-profile`) or query parameters (`moosicboxProfile`).
+    //!
+    //! # Example
+    //!
+    //! ```rust,ignore
+    //! use actix_web::{web, HttpResponse};
+    //! use moosicbox_profiles::api::ProfileName;
+    //!
+    //! async fn handler(profile: ProfileName) -> HttpResponse {
+    //!     HttpResponse::Ok().body(format!("Profile: {}", profile.as_ref()))
+    //! }
+    //! ```
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
     use qstring::QString;
@@ -192,6 +192,20 @@ pub mod api {
         ///
         /// * Missing both `moosicbox-profile` header and `moosicboxProfile` query parameter
         /// * Invalid UTF-8 in `moosicbox-profile` header value
+        ///
+        /// # Examples
+        ///
+        /// ```rust,ignore
+        /// use actix_web::test::TestRequest;
+        /// use moosicbox_profiles::api::ProfileNameUnverified;
+        ///
+        /// let req = TestRequest::default()
+        ///     .uri("/?moosicboxProfile=default")
+        ///     .to_http_request();
+        /// let extracted = ProfileNameUnverified::from_request_inner(&req)?;
+        /// assert_eq!(extracted.0, "default");
+        /// # Ok::<(), actix_web::Error>(())
+        /// ```
         pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
             from_query(req)
                 .or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned))
@@ -243,6 +257,22 @@ pub mod api {
         /// * Missing both `moosicbox-profile` header and `moosicboxProfile` query parameter
         /// * Invalid UTF-8 in `moosicbox-profile` header value
         /// * Profile name not found in the global registry
+        ///
+        /// # Examples
+        ///
+        /// ```rust,ignore
+        /// use actix_web::test::TestRequest;
+        /// use moosicbox_profiles::{PROFILES, api::ProfileName};
+        ///
+        /// PROFILES.add("default".to_string());
+        /// let req = TestRequest::default()
+        ///     .uri("/?moosicboxProfile=default")
+        ///     .to_http_request();
+        /// let extracted = ProfileName::from_request_inner(&req)?;
+        /// assert_eq!(extracted.as_ref(), "default");
+        /// PROFILES.remove("default");
+        /// # Ok::<(), actix_web::Error>(())
+        /// ```
         pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
             let profile = match ProfileNameUnverified::from_request_inner(req) {
                 Ok(profile) => {
