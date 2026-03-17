@@ -235,7 +235,6 @@ impl TrackSource {
     }
 
     /// Returns the track ID if available.
-    #[must_use]
     pub const fn track_id(&self) -> Option<&Id> {
         match self {
             Self::LocalFilePath { track_id, .. } | Self::RemoteUrl { track_id, .. } => {
@@ -384,6 +383,7 @@ impl From<u16> for ImageCoverSize {
 /// and deserialization purposes.
 pub trait FromId {
     /// Converts the ID to its string representation.
+    #[must_use]
     fn as_string(&self) -> String;
 
     /// Parses a string into an ID.
@@ -391,6 +391,7 @@ pub trait FromId {
     /// # Panics
     ///
     /// Panics if the string cannot be parsed into the ID type (implementation-dependent).
+    #[must_use]
     fn into_id(str: &str) -> Self;
 }
 
