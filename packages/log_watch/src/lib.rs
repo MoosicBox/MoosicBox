@@ -1,8 +1,16 @@
+//! Shared filtering, profile, and time utilities for log watching.
+//!
+//! This crate exposes reusable logic used by the log watch command, including:
+//! * Regex-based include/exclude filtering
+//! * Relative `--since` parsing
+//! * Optional profile persistence helpers
+
 use anyhow::{Context, Result};
 use regex::{Regex, RegexBuilder};
 use std::path::{Path, PathBuf};
 use time::{Duration as TimeDuration, OffsetDateTime, format_description::well_known::Rfc3339};
 
+/// Include/exclude mode for a log filter rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     feature = "persistence-json",
@@ -10,10 +18,13 @@ use time::{Duration as TimeDuration, OffsetDateTime, format_description::well_kn
 )]
 #[cfg_attr(feature = "persistence-json", serde(rename_all = "snake_case"))]
 pub enum LogFilterKind {
+    /// Keep lines that match this rule.
     Include,
+    /// Remove lines that match this rule.
     Exclude,
 }
 
+/// Case sensitivity behavior for a log filter rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     feature = "persistence-json",
@@ -21,20 +32,28 @@ pub enum LogFilterKind {
 )]
 #[cfg_attr(feature = "persistence-json", serde(rename_all = "snake_case"))]
 pub enum LogFilterCaseMode {
+    /// Match using case-sensitive regex behavior.
     Sensitive,
+    /// Match using case-insensitive regex behavior.
     Insensitive,
 }
 
+/// A single include/exclude regex rule used by log watching.
 #[derive(Debug, Clone)]
 pub struct LogFilterRule {
+    /// Whether this is an include or exclude rule.
     pub kind: LogFilterKind,
+    /// The raw regex pattern entered by the user.
     pub pattern: String,
+    /// How case matching is applied to [`Self::pattern`].
     pub case_mode: LogFilterCaseMode,
+    /// Whether this rule currently participates in filtering.
     pub enabled: bool,
     regex: std::result::Result<Regex, String>,
 }
 
 impl LogFilterRule {
+    /// Creates a filter rule and precompiles its regex pattern.
     #[must_use]
     pub fn new(kind: LogFilterKind, pattern: String, case_mode: LogFilterCaseMode) -> Self {
         let regex = compile_filter_regex(&pattern, case_mode);
@@ -47,11 +66,13 @@ impl LogFilterRule {
         }
     }
 
+    /// Returns whether the rule currently contains a regex compilation error.
     #[must_use]
     pub fn has_error(&self) -> bool {
         self.regex.is_err()
     }
 
+    /// Toggles case sensitivity and recompiles the regex pattern.
     pub fn toggle_case_mode(&mut self) {
         self.case_mode = match self.case_mode {
             LogFilterCaseMode::Sensitive => LogFilterCaseMode::Insensitive,
@@ -60,6 +81,7 @@ impl LogFilterRule {
         self.regex = compile_filter_regex(&self.pattern, self.case_mode);
     }
 
+    /// Returns whether this enabled rule matches the provided log line.
     #[must_use]
     pub fn matches(&self, line: &str) -> bool {
         if !self.enabled {
@@ -69,51 +91,92 @@ impl LogFilterRule {
     }
 }
 
+/// Serializable representation of a filter rule used in persisted watch state.
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "persistence-json",
     derive(serde::Serialize, serde::Deserialize)
 )]
 pub struct WatchFilterState {
+    /// Whether this is an include or exclude rule.
     pub kind: LogFilterKind,
+    /// Raw regex pattern.
     pub pattern: String,
+    /// Case matching mode.
     pub case_mode: LogFilterCaseMode,
+    /// Whether this persisted rule is enabled.
     pub enabled: bool,
 }
 
+/// Runtime configuration for the interactive log watch UI.
 #[derive(Debug, Clone)]
 pub struct WatchRunConfig {
+    /// Panel title shown in the UI.
     pub title: String,
+    /// Directory containing rolling log files.
     pub log_dir: PathBuf,
+    /// Prefix used to select candidate log files.
     pub log_file_prefix: String,
+    /// Optional startup line limit for initial history.
     pub lines: Option<usize>,
+    /// Optional relative time filter (for example, `10m`).
     pub since: Option<String>,
+    /// Optional profile name used for persistence.
     pub profile: Option<String>,
+    /// Case-sensitive include regex seeds.
     pub include: Vec<String>,
+    /// Case-insensitive include regex seeds.
     pub include_i: Vec<String>,
+    /// Case-sensitive exclude regex seeds.
     pub exclude: Vec<String>,
+    /// Case-insensitive exclude regex seeds.
     pub exclude_i: Vec<String>,
+    /// Optional JSON state file path.
     pub state_file: Option<PathBuf>,
 }
 
+/// Lightweight profile information returned by profile listing.
 #[derive(Debug, Clone)]
 pub struct ProfileSummary {
+    /// Profile name.
     pub name: String,
+    /// Whether this is the active profile.
     pub active: bool,
+    /// Number of saved filters in this profile.
     pub filter_count: usize,
 }
 
+/// Full profile details returned by profile inspection.
 #[derive(Debug, Clone)]
 pub struct ProfileDetails {
+    /// Profile name.
     pub name: String,
+    /// Whether this is the active profile.
     pub active: bool,
+    /// Optional quick substring filter.
     pub quick_filter: Option<String>,
+    /// Optional `--since` value.
     pub since: Option<String>,
+    /// Optional startup line count.
     pub lines: Option<usize>,
+    /// Selected filter index in the UI.
     pub selected_filter_index: Option<usize>,
+    /// Persisted include/exclude filter rules.
     pub filters: Vec<WatchFilterState>,
 }
 
+/// Returns the newest file in `log_dir` whose file name starts with `file_prefix`.
+///
+/// If no matching file is found, this returns `log_dir.join(file_prefix)`.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+///
+/// let path = moosicbox_log_watch::active_log_file_path(Path::new("/var/log"), "app");
+/// assert!(path.starts_with("/var/log"));
+/// ```
 #[must_use]
 pub fn active_log_file_path(log_dir: &Path, file_prefix: &str) -> PathBuf {
     let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
@@ -145,12 +208,34 @@ pub fn active_log_file_path(log_dir: &Path, file_prefix: &str) -> PathBuf {
         .unwrap_or_else(|| log_dir.join(file_prefix))
 }
 
+/// Parses a relative `--since` value and returns an absolute UTC cutoff time.
+///
+/// # Errors
+///
+/// * Returns an error when `raw` is empty, malformed, negative, or uses an unsupported unit.
 pub fn parse_since_cutoff(raw: &str) -> Result<OffsetDateTime> {
     let duration = parse_since_duration(raw)?;
     let now = OffsetDateTime::now_utc();
     Ok(now - duration)
 }
 
+/// Parses a relative duration like `30s`, `10m`, `2h`, or `1d`.
+///
+/// # Errors
+///
+/// * Returns an error when `raw` is empty.
+/// * Returns an error when `raw` does not start with an integer value.
+/// * Returns an error when the parsed value is negative.
+/// * Returns an error when the unit is not one of `s`, `m`, `h`, `d`.
+///
+/// # Examples
+///
+/// ```
+/// use time::Duration;
+///
+/// let duration = moosicbox_log_watch::parse_since_duration("10m").unwrap();
+/// assert_eq!(duration, Duration::minutes(10));
+/// ```
 pub fn parse_since_duration(raw: &str) -> Result<TimeDuration> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -186,6 +271,9 @@ pub fn parse_since_duration(raw: &str) -> Result<TimeDuration> {
     Ok(duration)
 }
 
+/// Returns whether a log line is on or after the optional timestamp cutoff.
+///
+/// The function expects the line to start with an RFC 3339 timestamp.
 #[must_use]
 pub fn line_matches_since(line: &str, cutoff: Option<OffsetDateTime>) -> bool {
     let Some(cutoff) = cutoff else {
@@ -200,6 +288,11 @@ pub fn line_matches_since(line: &str, cutoff: Option<OffsetDateTime>) -> bool {
     parsed >= cutoff
 }
 
+/// Compiles a regex pattern for a filter rule.
+///
+/// # Errors
+///
+/// * Returns the regex parser error string when `pattern` is invalid.
 pub fn compile_filter_regex(
     pattern: &str,
     case_mode: LogFilterCaseMode,
@@ -212,6 +305,24 @@ pub fn compile_filter_regex(
     builder.build().map_err(|error| error.to_string())
 }
 
+/// Returns whether a line should be visible after quick filter and rule filtering.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_log_watch::{
+///     line_visible_in_watch, LogFilterCaseMode, LogFilterKind, LogFilterRule,
+/// };
+///
+/// let filters = [LogFilterRule::new(
+///     LogFilterKind::Include,
+///     "error".to_string(),
+///     LogFilterCaseMode::Insensitive,
+/// )];
+///
+/// assert!(line_visible_in_watch("ERROR: failed", &filters, None));
+/// assert!(!line_visible_in_watch("INFO: ok", &filters, None));
+/// ```
 #[must_use]
 pub fn line_visible_in_watch(
     line: &str,
@@ -238,6 +349,7 @@ pub fn line_visible_in_watch(
     })
 }
 
+/// Converts a runtime filter rule to a serializable persisted state value.
 #[must_use]
 pub fn watch_filter_rule_to_state(rule: &LogFilterRule) -> WatchFilterState {
     WatchFilterState {
@@ -248,6 +360,7 @@ pub fn watch_filter_rule_to_state(rule: &LogFilterRule) -> WatchFilterState {
     }
 }
 
+/// Converts a persisted filter state value to a runtime filter rule.
 #[must_use]
 pub fn watch_filter_state_to_rule(state: WatchFilterState) -> LogFilterRule {
     let mut rule = LogFilterRule::new(state.kind, state.pattern, state.case_mode);
@@ -255,6 +368,22 @@ pub fn watch_filter_state_to_rule(state: WatchFilterState) -> LogFilterRule {
     rule
 }
 
+/// Normalizes and validates an optional profile name.
+///
+/// Uses `default` when `profile` is `None`.
+///
+/// # Errors
+///
+/// * Returns an error when the resulting profile name is empty.
+/// * Returns an error when the resulting profile name is longer than 64 characters.
+/// * Returns an error when the resulting profile name contains non-ASCII alphanumeric characters other than `-` and `_`.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(moosicbox_log_watch::normalize_profile_name(None).unwrap(), "default");
+/// assert!(moosicbox_log_watch::normalize_profile_name(Some("bad name")).is_err());
+/// ```
 pub fn normalize_profile_name(profile: Option<&str>) -> Result<String> {
     let value = profile.unwrap_or("default").trim();
     if value.is_empty() {
@@ -330,6 +459,14 @@ fn write_state_file(state_file: &Path, state: &WatchStateFile) -> Result<()> {
 }
 
 #[cfg(feature = "persistence-json")]
+/// Lists saved profiles from the JSON state file.
+///
+/// The returned list always includes `default`.
+///
+/// # Errors
+///
+/// * Returns an error when the state file cannot be read.
+/// * Returns an error when the state file cannot be parsed as JSON.
 pub fn profiles_list(state_file: &Path) -> Result<Vec<ProfileSummary>> {
     let state = read_state_file(state_file)?;
     let active_profile = state.active_profile.as_deref().unwrap_or("default");
@@ -352,6 +489,15 @@ pub fn profiles_list(state_file: &Path) -> Result<Vec<ProfileSummary>> {
 }
 
 #[cfg(feature = "persistence-json")]
+/// Returns full details for a specific profile.
+///
+/// Missing profiles resolve to an empty default profile payload.
+///
+/// # Errors
+///
+/// * Returns an error when `profile` fails validation.
+/// * Returns an error when the state file cannot be read.
+/// * Returns an error when the state file cannot be parsed as JSON.
 pub fn profile_show(state_file: &Path, profile: Option<&str>) -> Result<ProfileDetails> {
     let profile_name = normalize_profile_name(profile)?;
     let state = read_state_file(state_file)?;
@@ -372,6 +518,14 @@ pub fn profile_show(state_file: &Path, profile: Option<&str>) -> Result<ProfileD
 }
 
 #[cfg(feature = "persistence-json")]
+/// Deletes a saved profile from the JSON state file.
+///
+/// # Errors
+///
+/// * Returns an error when `profile` fails validation.
+/// * Returns an error when attempting to delete the reserved `default` profile.
+/// * Returns an error when the profile is not found.
+/// * Returns an error when the state file cannot be read, parsed, or written.
 pub fn profile_delete(state_file: &Path, profile: &str) -> Result<()> {
     let profile_name = normalize_profile_name(Some(profile))?;
     if profile_name == "default" {
@@ -388,6 +542,15 @@ pub fn profile_delete(state_file: &Path, profile: &str) -> Result<()> {
 }
 
 #[cfg(feature = "persistence-json")]
+/// Renames a saved profile in the JSON state file.
+///
+/// # Errors
+///
+/// * Returns an error when either profile name fails validation.
+/// * Returns an error when source and destination names are identical.
+/// * Returns an error when destination profile already exists.
+/// * Returns an error when source profile is not found.
+/// * Returns an error when the state file cannot be read, parsed, or written.
 pub fn profile_rename(state_file: &Path, from: &str, to: &str) -> Result<()> {
     let from_name = normalize_profile_name(Some(from))?;
     let to_name = normalize_profile_name(Some(to))?;
@@ -411,6 +574,8 @@ pub fn profile_rename(state_file: &Path, from: &str, to: &str) -> Result<()> {
 
 #[cfg(feature = "tui")]
 mod tui {
+    //! Terminal user interface for live log watching.
+
     use super::*;
     use crossterm::cursor::{Hide, Show};
     use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -453,6 +618,15 @@ mod tui {
         }
     }
 
+    /// Runs the interactive terminal log watch UI.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error when profile configuration is invalid.
+    /// * Returns an error when log files cannot be opened, read, or tailed.
+    /// * Returns an error when terminal raw mode or alternate screen setup fails.
+    /// * Returns an error when rendering or keyboard event handling fails.
+    /// * Returns an error when persistence is enabled and state cannot be read or written.
     pub fn run_watch(config: WatchRunConfig) -> Result<()> {
         let profile_name = normalize_profile_name(config.profile.as_deref())?;
 
@@ -1096,4 +1270,5 @@ mod tui {
 }
 
 #[cfg(feature = "tui")]
+/// Re-export of the interactive watch entrypoint.
 pub use tui::run_watch;
