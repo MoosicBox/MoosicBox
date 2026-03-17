@@ -107,6 +107,10 @@ pub struct GetSessionPlaylistTracks {
 
 /// Retrieves paginated tracks from a session playlist.
 ///
+/// # Errors
+///
+/// * If reading session playlist tracks from the database fails
+///
 /// # Panics
 ///
 /// * If the number of tracks exceeds `u32::MAX`
@@ -165,6 +169,10 @@ pub struct GetSessionPlaylist {
 }
 
 /// Retrieves a session playlist by its ID.
+///
+/// # Errors
+///
+/// * If reading the session playlist from the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -206,6 +214,10 @@ pub struct GetSessionActivePlayers {
 }
 
 /// Retrieves the audio zone configuration for a session.
+///
+/// # Errors
+///
+/// * If reading the session audio zone from the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -247,6 +259,10 @@ pub struct GetSessionPlaying {
 }
 
 /// Checks if a session is currently playing.
+///
+/// # Errors
+///
+/// * If reading the session playing state from the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -287,6 +303,10 @@ pub struct GetSession {
 }
 
 /// Retrieves a session by its ID.
+///
+/// # Errors
+///
+/// * If reading the session from the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -330,6 +350,10 @@ pub struct GetSessions {
 }
 
 /// Retrieves all sessions with pagination support.
+///
+/// # Errors
+///
+/// * If reading sessions from the database fails
 ///
 /// # Panics
 ///
@@ -398,6 +422,11 @@ impl From<CreatePlayersError> for actix_web::Error {
 }
 
 /// Registers multiple players to a connection.
+///
+/// # Errors
+///
+/// * If the specified connection does not exist
+/// * If creating players in the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -435,6 +464,10 @@ pub async fn register_players_endpoint(
 }
 
 /// Registers a new connection with its associated players.
+///
+/// # Errors
+///
+/// * If registering the connection or players in the database fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
