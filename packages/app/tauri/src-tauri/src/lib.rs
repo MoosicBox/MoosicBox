@@ -904,6 +904,12 @@ async fn handle_http_request(
 /// * If the bundled app server fails to start (with `bundled` feature)
 /// * If the `UPNP_LISTENER_HANDLE` has already been set
 /// * If the Tauri application builder fails to build
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// moosicbox_lib::run();
+/// ```
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
@@ -1369,6 +1375,8 @@ pub fn run() {
 
 #[cfg(feature = "moosicbox-app-native")]
 mod native_app {
+    //! Native app renderer integration used by the `moosicbox-app-native` feature.
+
     use std::{
         collections::BTreeMap,
         sync::{Arc, LazyLock, Mutex},

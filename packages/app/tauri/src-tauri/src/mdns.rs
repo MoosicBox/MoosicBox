@@ -65,6 +65,13 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
 ///
 /// Returns a tuple containing the service handle for controlling the scanner
 /// and a join handle for the scanner task.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let runtime_handle = switchy::unsync::runtime::Handle::current();
+/// let (_service_handle, _join_handle) = spawn_mdns_scanner(&runtime_handle);
+/// ```
 #[must_use]
 pub fn spawn_mdns_scanner(
     runtime_handle: &switchy::unsync::runtime::Handle,
