@@ -141,12 +141,13 @@ unsafe extern "C" {
     pub fn opus_decoder_destroy(st: *mut OpusDecoder);
 }
 
-/// Safe Rust wrapper around the libopus FFI.
-///
-/// This module provides safe, idiomatic Rust APIs for Opus encoding and decoding.
-/// All FFI interactions are encapsulated, memory is managed automatically,
-/// and errors are returned as `Result` types.
 pub mod safe {
+    //! Safe Rust wrapper around the libopus FFI.
+    //!
+    //! This module provides safe, idiomatic Rust APIs for Opus encoding and decoding.
+    //! All FFI interactions are encapsulated, memory is managed automatically,
+    //! and errors are returned as `Result` types.
+
     use super::{
         OPUS_OK, OpusDecoder, OpusEncoder, opus_decode, opus_decoder_create, opus_decoder_destroy,
         opus_encode, opus_encoder_create, opus_encoder_destroy,
@@ -194,6 +195,17 @@ pub mod safe {
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
         /// * `InvalidChannels` - channels not 1 or 2
         /// * `EncoderCreateFailed` - libopus encoder creation failed
+        ///
+        /// # Examples
+        ///
+        /// ```rust
+        /// use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, safe::Encoder};
+        ///
+        /// # fn main() -> Result<(), moosicbox_opus_native_libopus::safe::OpusError> {
+        /// let _encoder = Encoder::new(48_000, 2, OPUS_APPLICATION_AUDIO)?;
+        /// # Ok(())
+        /// # }
+        /// ```
         pub fn new(sample_rate: u32, channels: u8, application: c_int) -> Result<Self, OpusError> {
             if ![8000, 12000, 16000, 24000, 48000].contains(&sample_rate) {
                 return Err(OpusError::InvalidSampleRate);
@@ -226,6 +238,21 @@ pub mod safe {
         /// # Errors
         ///
         /// * `EncodeFailed` - libopus encoding failed with error code
+        ///
+        /// # Examples
+        ///
+        /// ```rust
+        /// use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, safe::Encoder};
+        ///
+        /// # fn main() -> Result<(), moosicbox_opus_native_libopus::safe::OpusError> {
+        /// let mut encoder = Encoder::new(48_000, 1, OPUS_APPLICATION_AUDIO)?;
+        /// let pcm = vec![0_i16; 960];
+        /// let mut packet = vec![0_u8; 4000];
+        /// let packet_len = encoder.encode(&pcm, 960, &mut packet)?;
+        /// assert!(packet_len > 0);
+        /// # Ok(())
+        /// # }
+        /// ```
         pub fn encode(
             &mut self,
             pcm: &[i16],
@@ -275,6 +302,17 @@ pub mod safe {
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
         /// * `InvalidChannels` - channels not 1 or 2
         /// * `DecoderCreateFailed` - libopus decoder creation failed
+        ///
+        /// # Examples
+        ///
+        /// ```rust
+        /// use moosicbox_opus_native_libopus::safe::Decoder;
+        ///
+        /// # fn main() -> Result<(), moosicbox_opus_native_libopus::safe::OpusError> {
+        /// let _decoder = Decoder::new(48_000, 2)?;
+        /// # Ok(())
+        /// # }
+        /// ```
         pub fn new(sample_rate: u32, channels: u8) -> Result<Self, OpusError> {
             if ![8000, 12000, 16000, 24000, 48000].contains(&sample_rate) {
                 return Err(OpusError::InvalidSampleRate);
@@ -302,6 +340,26 @@ pub mod safe {
         /// # Errors
         ///
         /// * `DecodeFailed` - libopus decoding failed with error code
+        ///
+        /// # Examples
+        ///
+        /// ```rust
+        /// use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, safe::{Decoder, Encoder}};
+        ///
+        /// # fn main() -> Result<(), moosicbox_opus_native_libopus::safe::OpusError> {
+        /// let mut encoder = Encoder::new(48_000, 1, OPUS_APPLICATION_AUDIO)?;
+        /// let mut decoder = Decoder::new(48_000, 1)?;
+        ///
+        /// let pcm = vec![0_i16; 960];
+        /// let mut packet = vec![0_u8; 4000];
+        /// let packet_len = encoder.encode(&pcm, 960, &mut packet)?;
+        ///
+        /// let mut output = vec![0_i16; 960];
+        /// let decoded = decoder.decode(&packet[..packet_len], &mut output, 960, false)?;
+        /// assert_eq!(decoded, 960);
+        /// # Ok(())
+        /// # }
+        /// ```
         pub fn decode(
             &mut self,
             data: &[u8],
