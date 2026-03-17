@@ -100,6 +100,16 @@ pub(crate) const POW10: [u128; 20] = {
 ///
 /// * Returns [`ParseIntError::Empty`] if the string is empty
 /// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9)
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_env_utils::{ParseIntError, parse_usize};
+///
+/// assert_eq!(parse_usize("42"), Ok(42));
+/// assert_eq!(parse_usize(""), Err(ParseIntError::Empty));
+/// assert_eq!(parse_usize("4a"), Err(ParseIntError::InvalidDigit));
+/// ```
 pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
     let bytes = b.as_bytes();
 
@@ -143,6 +153,17 @@ pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
 ///
 /// * Returns [`ParseIntError::Empty`] if the string is empty or contains only a sign character
 /// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9) or if a sign character (+/-) appears in an invalid position
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_env_utils::{ParseIntError, parse_isize};
+///
+/// assert_eq!(parse_isize("+42"), Ok(42));
+/// assert_eq!(parse_isize("-42"), Ok(-42));
+/// assert_eq!(parse_isize("+"), Err(ParseIntError::Empty));
+/// assert_eq!(parse_isize("4-2"), Err(ParseIntError::InvalidDigit));
+/// ```
 pub const fn parse_isize(b: &str) -> Result<isize, ParseIntError> {
     let bytes = b.as_bytes();
 
