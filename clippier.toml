@@ -20,5 +20,8 @@ wrap = "preserve"
 [tools.clippier-md.list]
 indentation = "preserve"
 
+[tools.clippier-md.headings]
+indentation = "preserve"
+
 [tools.clippier-md.files]
 exclude = ["packages/opus_native/libopus/**"]

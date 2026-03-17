@@ -52,6 +52,12 @@ pub enum ProseWrapMode {
     Preserve,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadingIndentationMode {
+    Preserve,
+    Normalize,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub line_width: usize,
@@ -67,6 +73,7 @@ pub struct Config {
     pub skip_dirs: Vec<String>,
     pub check_diff: CheckDiffConfig,
     pub prose_wrap: ProseWrapMode,
+    pub heading_indentation: HeadingIndentationMode,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +117,7 @@ impl Default for Config {
             skip_dirs: Vec::new(),
             check_diff: CheckDiffConfig::default(),
             prose_wrap: ProseWrapMode::Always,
+            heading_indentation: HeadingIndentationMode::Preserve,
         }
     }
 }
@@ -931,6 +939,25 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
             .map(ToString::to_string)
             .collect();
     }
+    if let Some(mode) = value
+        .get("headings")
+        .and_then(|section| section.get("indentation"))
+        .and_then(toml::Value::as_str)
+    {
+        config.heading_indentation = match mode {
+            "normalize" => HeadingIndentationMode::Normalize,
+            _ => HeadingIndentationMode::Preserve,
+        };
+    }
+    if let Some(mode) = value
+        .get("heading-indentation")
+        .and_then(toml::Value::as_str)
+    {
+        config.heading_indentation = match mode {
+            "normalize" => HeadingIndentationMode::Normalize,
+            _ => HeadingIndentationMode::Preserve,
+        };
+    }
     if let Some(mode) = value.get("prose-wrap").and_then(toml::Value::as_str) {
         config.prose_wrap = match mode {
             "preserve" => ProseWrapMode::Preserve,
@@ -1103,6 +1130,7 @@ fn is_non_wrappable_block_line(line: &str) -> bool {
 }
 
 fn normalize_heading_line(line: &str, config: &Config) -> Option<String> {
+    let leading_count = line.chars().take_while(|c| c.is_whitespace()).count();
     let trimmed = line.trim_start();
     let hashes = trimmed.chars().take_while(|value| *value == '#').count();
     if hashes == 0 || hashes > 6 {
@@ -1112,6 +1140,9 @@ fn normalize_heading_line(line: &str, config: &Config) -> Option<String> {
     let mut normalized = format!("{} {}", "#".repeat(hashes), rest);
     if config.trim_trailing_whitespace {
         normalized = normalized.trim_end().to_string();
+    }
+    if config.heading_indentation == HeadingIndentationMode::Preserve && leading_count > 0 {
+        normalized = format!("{}{}", " ".repeat(leading_count), normalized);
     }
     Some(normalized)
 }
@@ -1273,6 +1304,24 @@ mod tests {
         let input = "---\ntitle: Test\n---\n#Heading\n";
         let output = format_markdown(input, &Config::default());
         assert_eq!(output, "---\ntitle: Test\n---\n# Heading\n");
+    }
+
+    #[test]
+    fn preserves_heading_indentation_by_default() {
+        let input = "    ###Title\n";
+        let output = format_markdown(input, &Config::default());
+        assert_eq!(output, "    ### Title\n");
+    }
+
+    #[test]
+    fn can_normalize_heading_indentation() {
+        let input = "    ###Title\n";
+        let config = Config {
+            heading_indentation: HeadingIndentationMode::Normalize,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
+        assert_eq!(output, "### Title\n");
     }
 
     #[test]

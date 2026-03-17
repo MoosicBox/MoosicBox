@@ -36,6 +36,9 @@ indentation = "preserve"
 [frontmatter]
 mode = "preserve"
 
+[headings]
+indentation = "preserve"
+
 [files]
 respect-gitignore = true
 exclude = ["**/generated/**", "**/vendor/**"]
