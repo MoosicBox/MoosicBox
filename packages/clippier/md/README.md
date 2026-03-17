@@ -27,6 +27,7 @@ Example:
 line-width = 80
 trim-trailing-whitespace = true
 prose-wrap = "always"
+engine = "ast"
 
 [list]
 indent-width = 4
@@ -68,3 +69,7 @@ Use `--no-diff` to disable diff output.
 Use `--color auto|always|never` to control ANSI diff colors.
 When `show-invisible-whitespace = true`, trailing spaces are shown as `␠`
 and tabs as `⇥` on changed lines.
+
+`engine = "ast"` uses markdown AST parsing/printing for robust structure-aware
+formatting. If AST parsing fails or unsupported normalization options are set,
+`clippier-md` falls back to the legacy formatter engine.

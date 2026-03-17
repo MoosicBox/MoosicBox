@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
+use comrak::{Options as ComrakOptions, markdown_to_commonmark};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{WalkBuilder, WalkState};
 use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
@@ -58,6 +59,12 @@ pub enum HeadingIndentationMode {
     Normalize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormatterEngine {
+    Legacy,
+    Ast,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub line_width: usize,
@@ -74,6 +81,7 @@ pub struct Config {
     pub check_diff: CheckDiffConfig,
     pub prose_wrap: ProseWrapMode,
     pub heading_indentation: HeadingIndentationMode,
+    pub engine: FormatterEngine,
 }
 
 #[derive(Debug, Clone)]
@@ -118,6 +126,7 @@ impl Default for Config {
             check_diff: CheckDiffConfig::default(),
             prose_wrap: ProseWrapMode::Always,
             heading_indentation: HeadingIndentationMode::Preserve,
+            engine: FormatterEngine::Ast,
         }
     }
 }
@@ -692,6 +701,36 @@ fn should_use_color(mode: ColorMode) -> bool {
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn format_markdown(input: &str, config: &Config) -> String {
+    if config.engine == FormatterEngine::Ast && supports_ast_engine(config) {
+        return format_markdown_ast(input, config);
+    }
+
+    format_markdown_legacy(input, config)
+}
+
+fn supports_ast_engine(config: &Config) -> bool {
+    config.list_style == ListStyle::Preserve
+        && config.list_indentation == ListIndentationMode::Preserve
+        && config.heading_indentation == HeadingIndentationMode::Normalize
+        && config.prose_wrap == ProseWrapMode::Preserve
+}
+
+fn format_markdown_ast(input: &str, config: &Config) -> String {
+    let mut options = ComrakOptions::default();
+    options.extension.strikethrough = true;
+    options.extension.tagfilter = false;
+    options.extension.table = true;
+    options.extension.autolink = true;
+    options.extension.tasklist = true;
+    options.extension.footnotes = true;
+    options.extension.front_matter_delimiter = Some("---".to_string());
+
+    let rendered = markdown_to_commonmark(input, &options);
+    finalize_markdown_output(&rendered, config)
+}
+
+#[allow(clippy::too_many_lines)]
+fn format_markdown_legacy(input: &str, config: &Config) -> String {
     let source_indent = if config.list_indentation == ListIndentationMode::Normalize {
         Some(detect_list_indent_unit(input))
     } else {
@@ -800,6 +839,40 @@ pub fn format_markdown(input: &str, config: &Config) -> String {
     let mut squeezed = Vec::new();
     let mut blanks = 0usize;
     for line in output {
+        if line.is_empty() {
+            blanks += 1;
+            if blanks <= config.blank_lines_max_consecutive {
+                squeezed.push(line);
+            }
+        } else {
+            blanks = 0;
+            squeezed.push(line);
+        }
+    }
+
+    while squeezed.last().is_some_and(String::is_empty) {
+        squeezed.pop();
+    }
+
+    finalize_markdown_output(&squeezed.join("\n"), config)
+}
+
+fn finalize_markdown_output(input: &str, config: &Config) -> String {
+    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = normalized
+        .lines()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+
+    if config.trim_trailing_whitespace {
+        for line in &mut lines {
+            *line = line.trim_end().to_string();
+        }
+    }
+
+    let mut squeezed = Vec::new();
+    let mut blanks = 0usize;
+    for line in lines {
         if line.is_empty() {
             blanks += 1;
             if blanks <= config.blank_lines_max_consecutive {
@@ -956,6 +1029,12 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
         config.heading_indentation = match mode {
             "normalize" => HeadingIndentationMode::Normalize,
             _ => HeadingIndentationMode::Preserve,
+        };
+    }
+    if let Some(engine) = value.get("engine").and_then(toml::Value::as_str) {
+        config.engine = match engine {
+            "legacy" => FormatterEngine::Legacy,
+            _ => FormatterEngine::Ast,
         };
     }
     if let Some(mode) = value.get("prose-wrap").and_then(toml::Value::as_str) {
@@ -1322,6 +1401,46 @@ mod tests {
         };
         let output = format_markdown(input, &config);
         assert_eq!(output, "### Title\n");
+    }
+
+    #[test]
+    fn ast_engine_falls_back_for_preserve_heading_indentation() {
+        let input = "- item\n\n    ### Heading\n";
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Preserve,
+            list_indentation: ListIndentationMode::Preserve,
+            heading_indentation: HeadingIndentationMode::Preserve,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn ast_engine_falls_back_when_normalize_modes_requested() {
+        let input = "- one\n  - two\n";
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            list_indentation: ListIndentationMode::Normalize,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
+        assert_eq!(output, "- one\n    - two\n");
+    }
+
+    #[test]
+    fn ast_engine_runs_when_supported_profile_selected() {
+        let input = "#Title\n\nparagraph\n";
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Preserve,
+            list_indentation: ListIndentationMode::Preserve,
+            heading_indentation: HeadingIndentationMode::Normalize,
+            ..Config::default()
+        };
+        let output = format_markdown(input, &config);
+        assert_eq!(output, "\\#Title\n\nparagraph\n");
     }
 
     #[test]

@@ -12,6 +12,7 @@ toolchain = "taplo"
 skip = ["gofmt"]
 
 [tools.clippier-md]
+engine     = "ast"
 line-width = 999999
 
 [tools.clippier-md.prose]

@@ -401,6 +401,7 @@ color-backtrace = { version = "0.7.2", default-features = false, features = [
 ] }
 color-hex = "0.2.0"
 colored = { version = "3.1.1" }
+comrak = { version = "0.51.0", default-features = false }
 console-subscriber = "0.5.0"
 const-hex = "1.18.1"
 const_format = "0.2.35"

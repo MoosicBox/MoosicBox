@@ -23,6 +23,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow     = { workspace = true }
 clap       = { workspace = true, features = ["derive"] }
+comrak     = { workspace = true }
 globset    = { workspace = true }
 ignore     = { workspace = true }
 imara-diff = { workspace = true }
