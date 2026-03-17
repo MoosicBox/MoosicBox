@@ -1,3 +1,8 @@
+//! `MySQL` backend implementation using `sqlx`.
+//!
+//! This module contains query execution, transaction handling, parameter binding,
+//! and schema/introspection support for the `MySQL` `sqlx` backend.
+
 use std::{
     ops::Deref,
     pin::Pin,

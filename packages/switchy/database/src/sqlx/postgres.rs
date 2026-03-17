@@ -1,3 +1,8 @@
+//! `PostgreSQL` backend implementation using `sqlx`.
+//!
+//! This module provides `PostgreSQL` query execution, transaction management,
+//! value conversion, and schema-introspection integration for `sqlx`.
+
 use std::{
     ops::Deref,
     pin::Pin,

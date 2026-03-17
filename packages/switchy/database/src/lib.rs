@@ -168,11 +168,15 @@ pub mod turso;
 
 /// SQL query builder types and builders
 pub mod query;
+/// Query transformation helpers for backend-specific parameter placeholders.
 pub mod query_transform;
+/// SQL interval value type used by time arithmetic expressions.
 pub mod sql_interval;
+/// Builder helpers for SQL values like `NOW()` and interval expressions.
 pub mod value_builders;
 
 #[cfg(feature = "schema")]
+/// Schema definition, DDL builders, and introspection model types.
 pub mod schema;
 
 use std::{num::TryFromIntError, sync::Arc};

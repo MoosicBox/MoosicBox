@@ -1,3 +1,8 @@
+//! `SQLite` backend implementation using `sqlx`.
+//!
+//! This module implements query execution, transaction handling, and value
+//! mapping for the `sqlx` `SQLite` backend.
+
 use std::{
     ops::Deref,
     pin::Pin,

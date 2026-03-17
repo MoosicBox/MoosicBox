@@ -122,6 +122,7 @@ pub enum DuckDbMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Visibility consistency model for pooled `DuckDB` operations.
 pub enum DuckDbConsistency {
     /// Serializes operations through a global gate.
     Strict,
@@ -130,8 +131,11 @@ pub enum DuckDbConsistency {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Runtime configuration for `DuckDbDatabase` routing and consistency behavior.
 pub struct DuckDbConfig {
+    /// Connection routing mode.
     pub mode: DuckDbMode,
+    /// Consistency model used when multiple pooled connections are active.
     pub consistency: DuckDbConsistency,
 }
 
@@ -146,6 +150,7 @@ impl Default for DuckDbConfig {
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
+/// `DuckDB` database implementation for the crate `Database` abstraction.
 pub struct DuckDbDatabase {
     connections: Vec<Arc<Mutex<Connection>>>,
     next_connection: AtomicUsize,
@@ -184,6 +189,7 @@ impl DuckDbDatabase {
         self.connections[index].clone()
     }
 
+    /// Returns the active runtime config for this database instance.
     #[must_use]
     pub const fn config(&self) -> DuckDbConfig {
         self.config
@@ -261,6 +267,7 @@ impl DuckDbTransaction {
         Self::new_with_guard(connection, None)
     }
 
+    /// Creates a transaction from a connection plus an optional operation gate guard.
     #[must_use]
     pub const fn new_with_guard(
         connection: Arc<Mutex<Connection>>,

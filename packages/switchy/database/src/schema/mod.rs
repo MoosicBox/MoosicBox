@@ -149,7 +149,7 @@
 //!
 //! # Working with Different Data Types
 //!
-//! The [`DataType`] enum provides a common representation across database backends:
+//! The [`DataType`](crate::schema::DataType) enum provides a common representation across database backends:
 //!
 //! ```rust,no_run
 //! use switchy_database::schema::{DataType, Column};
@@ -1638,6 +1638,7 @@ mod tests {
 
 // Dependency management for CASCADE and RESTRICT operations
 #[cfg(feature = "schema")]
+/// Dependency graph analysis for `CASCADE`/`RESTRICT` drop planning.
 pub mod dependencies;
 
 #[cfg(feature = "schema")]
@@ -1646,6 +1647,7 @@ pub use dependencies::{
 };
 
 #[cfg(feature = "auto-reverse")]
+/// Automatic reverse-operation generation for schema statements.
 pub mod auto_reversible;
 
 #[cfg(feature = "auto-reverse")]

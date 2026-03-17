@@ -2,6 +2,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+//! Turso transaction implementation.
+//!
+//! This module provides `DatabaseTransaction` support for Turso connections,
+//! including `BEGIN`, `COMMIT`, and `ROLLBACK` lifecycle management.
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;

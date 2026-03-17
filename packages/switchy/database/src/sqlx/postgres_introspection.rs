@@ -1,3 +1,8 @@
+//! `PostgreSQL` schema-introspection helpers for the `sqlx` backend.
+//!
+//! These functions query catalog and `information_schema` tables and convert the
+//! raw results into the crate's portable schema model types.
+
 use crate::schema::{ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, TableInfo};
 use crate::{DatabaseError, DatabaseValue};
 use sqlx::{PgConnection, Row};
