@@ -120,6 +120,18 @@ impl Color {
     /// * `ParseHexError::InvalidNonAsciiCharacter` - If a non-ASCII character is encountered.
     /// * `ParseHexError::StringTooLong` - If the hex string is longer than 8 characters (excluding '#' and whitespace).
     /// * `ParseHexError::InvalidLength` - If the hex string has an incomplete alpha channel (7 characters).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hyperchad_color::Color;
+    ///
+    /// let parsed = Color::try_from_hex("#0F8").expect("short RGB should parse");
+    /// assert_eq!(parsed.r, 0x00);
+    /// assert_eq!(parsed.g, 0xFF);
+    /// assert_eq!(parsed.b, 0x88);
+    /// assert_eq!(parsed.a, None);
+    /// ```
     #[allow(clippy::many_single_char_names)]
     pub fn try_from_hex(hex: &str) -> Result<Self, ParseHexError> {
         let mut short_r = 0;
@@ -214,7 +226,21 @@ impl Color {
     ///
     /// # Panics
     ///
-    /// * If a non-hex, non-whitespace character is encountered.
+    /// * If the input contains invalid hex characters.
+    /// * If the input is longer than 8 hex characters (excluding `#` and surrounding whitespace).
+    /// * If the input has an invalid length (for example, 7 hex characters).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hyperchad_color::Color;
+    ///
+    /// let color = Color::from_hex("#336699CC");
+    /// assert_eq!(color.r, 0x33);
+    /// assert_eq!(color.g, 0x66);
+    /// assert_eq!(color.b, 0x99);
+    /// assert_eq!(color.a, Some(0xCC));
+    /// ```
     #[must_use]
     pub fn from_hex(hex: &str) -> Self {
         Self::try_from_hex(hex).unwrap()
