@@ -170,7 +170,7 @@ scoped_thread_local! {
 /// Returns the current host address if one is set in the current scope.
 ///
 /// This is used by [`with_host`] to provide scoped hostname context for connections.
-#[must_use]
+#[allow(clippy::must_use_candidate)]
 pub fn current_host() -> Option<String> {
     if HOST.is_set() {
         Some(HOST.with(|x| x.addr.clone()))
@@ -183,6 +183,20 @@ pub fn current_host() -> Option<String> {
 ///
 /// This allows connections to localhost addresses within the closure to be resolved
 /// to the specified host address instead.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_tcp::simulator::{current_host, with_host};
+///
+/// let expected = "test.example.com:8080".to_string();
+/// with_host(expected.clone(), |host| {
+///     assert_eq!(host, expected);
+///     assert_eq!(current_host(), Some(expected.clone()));
+/// });
+///
+/// assert_eq!(current_host(), None);
+/// ```
 pub fn with_host<T>(addr: String, f: impl FnOnce(&str) -> T) -> T {
     let host = Host { addr };
     HOST.set(&host, || f(&host.addr))
@@ -265,6 +279,18 @@ impl TcpListener {
     /// # Panics
     ///
     /// * If fails to bind the new listener address to the `TCP_LISTENERS` `RwLock`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::simulator::TcpListener;
+    ///
+    /// let listener = TcpListener::bind("127.0.0.1:21000").await?;
+    /// listener.shutdown();
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn bind(addr: impl Into<String>) -> Result<Self, crate::Error> {
         async {
             let (tx, rx) = flume::bounded(64);
@@ -294,6 +320,18 @@ impl TcpListener {
     /// * If the `CancellationToken` is already cancelled
     /// * If the `CancellationToken` fails to cancel
     /// * If the `TCP_LISTENERS` `RwLock` fails to remove the listener
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::simulator::TcpListener;
+    ///
+    /// let listener = TcpListener::bind("127.0.0.1:22000").await?;
+    /// listener.shutdown();
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn shutdown(self) {
         self.shutdown_inner();
     }
@@ -331,6 +369,18 @@ impl crate::SimulatorTcpListener {
     /// # Errors
     ///
     /// * If the `TcpListener` fails to bind the address
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::SimulatorTcpListener;
+    ///
+    /// let listener = SimulatorTcpListener::bind("127.0.0.1:24000").await?;
+    /// drop(listener);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn bind(addr: impl Into<String>) -> Result<Self, Error> {
         Ok(Self(
             TcpListener::bind(addr).await?,
@@ -388,6 +438,18 @@ impl TcpStream {
     /// # Panics
     ///
     /// * If the `TCP_LISTENERS` `RwLock` fails to read
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::simulator::{TcpListener, TcpStream};
+    ///
+    /// let _listener = TcpListener::bind("127.0.0.1:23000").await?;
+    /// let _stream = TcpStream::connect("127.0.0.1:23000").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn connect(server_addr: impl Into<String>) -> io::Result<Self> {
         let server_addr = server_addr.into();
         log::debug!("Connecting to server at server_addr={server_addr}");

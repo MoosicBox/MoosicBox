@@ -38,6 +38,17 @@ impl TcpListener {
     /// # Errors
     ///
     /// * If the `tokio::net::TcpListener` fails to bind the address
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::tokio::TcpListener;
+    ///
+    /// let _listener = TcpListener::bind("127.0.0.1:8080").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn bind(addr: &str) -> Result<Self, crate::Error> {
         Ok(Self(tokio::net::TcpListener::bind(addr).await?))
     }
@@ -49,6 +60,17 @@ impl crate::TokioTcpListener {
     /// # Errors
     ///
     /// * If the `tokio::net::TcpListener` fails to bind the address
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::TokioTcpListener;
+    ///
+    /// let _listener = TokioTcpListener::bind("127.0.0.1:8080").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn bind(addr: impl Into<String>) -> Result<Self, Error> {
         Ok(Self(
             TcpListener(tokio::net::TcpListener::bind(addr.into()).await?),
@@ -92,6 +114,17 @@ impl TcpStream {
     /// # Errors
     ///
     /// * If the underlying `tokio::net::TcpStream` fails to connect
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use switchy_tcp::tokio::TcpStream;
+    ///
+    /// let _stream = TcpStream::connect("127.0.0.1:8080").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn connect(addr: &str) -> std::io::Result<Self> {
         Ok(Self(tokio::net::TcpStream::connect(addr).await?))
     }
