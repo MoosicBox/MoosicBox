@@ -42,6 +42,11 @@ static ENABLED_NPM_COMMANDS: LazyLock<Vec<String>> = LazyLock::new(|| {
 ///
 /// Tries package managers in this order based on enabled features: pnpm, bun, npm.
 ///
+/// # Errors
+///
+/// This function does not return errors directly. Command execution failures are
+/// surfaced as panics.
+///
 /// # Panics
 ///
 /// Panics if no enabled package manager binary is found or if the command fails.

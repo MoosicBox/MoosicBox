@@ -38,6 +38,17 @@ use swc_ecma_visit::VisitMutWith as _;
 /// * `Some(Syntax::Typescript(..))` for `.ts` files with decorators enabled
 /// * `Some(Syntax::Es(..))` for `.js`, `.mjs`, or `.cjs` files
 /// * `None` for unsupported file extensions
+///
+/// # Examples
+///
+/// ```
+/// use hyperchad_js_bundler::swc::syntax_for_extension;
+/// use swc_ecma_parser::Syntax;
+///
+/// assert!(matches!(syntax_for_extension(Some("ts")), Some(Syntax::Typescript(..))));
+/// assert!(matches!(syntax_for_extension(Some("js")), Some(Syntax::Es(..))));
+/// assert!(syntax_for_extension(Some("tsx")).is_none());
+/// ```
 #[must_use]
 pub fn syntax_for_extension(extension: Option<&str>) -> Option<Syntax> {
     match extension {
@@ -68,6 +79,11 @@ pub fn syntax_for_extension(extension: Option<&str>) -> Option<Syntax> {
 ///
 /// This function uses the SWC bundler to process the target file and its dependencies,
 /// producing a single bundled output file. Optionally minifies the output.
+///
+/// # Errors
+///
+/// This function does not return errors directly. Bundling failures are surfaced
+/// as panics during parsing, emitting, or output file operations.
 ///
 /// # Panics
 ///

@@ -16,6 +16,11 @@ use crate::{
 /// This function installs npm dependencies if needed, then runs esbuild
 /// with minification and bundling enabled.
 ///
+/// # Errors
+///
+/// This function does not return errors directly. Install and bundle failures
+/// are surfaced as panics.
+///
 /// # Panics
 ///
 /// * Panics if the npm install or esbuild command fails to execute.

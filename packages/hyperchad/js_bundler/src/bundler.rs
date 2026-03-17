@@ -24,6 +24,11 @@ pub static MANIFEST_DIR: LazyLock<PathBuf> =
 /// This function delegates to either the SWC or esbuild bundler based on which
 /// feature is enabled. SWC is preferred if both features are enabled.
 ///
+/// # Errors
+///
+/// This function does not return errors directly. Bundling failures are surfaced
+/// as panics from the selected bundler implementation.
+///
 /// # Panics
 ///
 /// * Panics if neither the `swc` nor `esbuild` feature is enabled.
