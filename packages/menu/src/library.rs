@@ -38,13 +38,13 @@ pub enum GetArtistError {
 /// Retrieves an artist by ID or by album association.
 ///
 /// Fetches an artist either directly by artist ID or indirectly by finding the
-/// artist associated with a given album ID. Exactly one of `artist_id` or `album_id`
-/// must be provided.
+/// artist associated with a given album ID. If both `artist_id` and `album_id`
+/// are provided, `artist_id` takes precedence.
 ///
 /// # Errors
 ///
 /// * `GetArtistError::MusicApi` if the music API fails to retrieve the artist
-/// * `GetArtistError::InvalidRequest` if neither or both IDs are provided
+/// * `GetArtistError::InvalidRequest` if neither `artist_id` nor `album_id` is provided
 #[allow(clippy::too_many_arguments)]
 pub async fn get_artist(
     api: &dyn MusicApi,
@@ -113,6 +113,22 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
 /// * `GetAlbumError::UnknownSource` if the specified API source is not recognized
 /// * `GetAlbumError::MusicApi` if the music API fails to retrieve the album
 /// * `GetAlbumError::DatabaseFetch` if converting the library album fails
+/// * `GetAlbumError::ChronoParse` if album date conversion fails
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::get_album_from_source;
+/// use moosicbox_music_models::{ApiSource, id::Id};
+///
+/// # async fn demo(db: &switchy_database::profiles::LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+/// let album = get_album_from_source(db, "default", &Id::Number(42), &ApiSource::library()).await?;
+/// if let Some(album) = album {
+///     println!("{}", album.title);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_album_from_source(
     db: &LibraryDatabase,
     profile: &str,
@@ -214,6 +230,18 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
 ///
 /// * `GetAlbumsError::DatabaseFetch` if fetching albums from the database fails
 /// * `GetAlbumsError::Poison` if a lock is poisoned
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::get_albums;
+///
+/// # async fn demo(db: &switchy_database::profiles::LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+/// let albums = get_albums(db).await?;
+/// println!("Loaded {} albums", albums.len());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums",
@@ -269,6 +297,19 @@ impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
 ///
 /// * `GetArtistAlbumsError::DatabaseFetch` if fetching albums from the database fails
 /// * `GetArtistAlbumsError::Poison` if a lock is poisoned
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::get_artist_albums;
+/// use moosicbox_music_models::id::Id;
+///
+/// # async fn demo(db: &switchy_database::profiles::LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+/// let albums = get_artist_albums(&Id::Number(7), db).await?;
+/// println!("Found {} artist albums", albums.len());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_artist_albums(
     artist_id: &Id,
     db: &LibraryDatabase,

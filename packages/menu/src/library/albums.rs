@@ -92,6 +92,22 @@ pub enum GetAlbumsError {
 ///
 /// * `GetAlbumsError::GetAlbums` if fetching the album list from the database fails
 /// * `GetAlbumsError::MusicApi` if the music API fails to retrieve albums
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::albums::get_albums_from_source;
+/// use moosicbox_music_api::models::AlbumsRequest;
+///
+/// # async fn demo(
+/// #     db: &switchy_database::profiles::LibraryDatabase,
+/// #     api: &dyn moosicbox_music_api::MusicApi,
+/// # ) -> Result<(), Box<dyn std::error::Error>> {
+/// let page = get_albums_from_source(db, api, AlbumsRequest::default()).await?;
+/// println!("Fetched {} albums", page.len());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_albums_from_source(
     db: &LibraryDatabase,
     api: &dyn MusicApi,
@@ -152,6 +168,29 @@ pub enum GetAlbumVersionsError {
 /// * `GetAlbumVersionsError::MusicApi` if the music API fails to retrieve album versions
 /// * `GetAlbumVersionsError::LibraryAlbumTracks` if fetching library album tracks fails
 /// * `GetAlbumVersionsError::UnknownSource` if the specified API source is not recognized
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::albums::get_album_versions_from_source;
+/// use moosicbox_music_models::{ApiSource, id::Id};
+///
+/// # async fn demo(
+/// #     db: &switchy_database::profiles::LibraryDatabase,
+/// #     library_api: &moosicbox_library_music_api::LibraryMusicApi,
+/// # ) -> Result<(), Box<dyn std::error::Error>> {
+/// let versions = get_album_versions_from_source(
+///     db,
+///     library_api,
+///     "default",
+///     &Id::Number(42),
+///     ApiSource::library(),
+/// )
+/// .await?;
+/// println!("Found {} versions", versions.len());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_album_versions_from_source(
     #[allow(unused)] db: &LibraryDatabase,
     library_api: &LibraryMusicApi,
@@ -235,6 +274,25 @@ pub enum AddAlbumError {
 /// * `AddAlbumError::UpdateDatabase` if updating the database with the album fails
 /// * `AddAlbumError::PopulateIndex` if populating the search index fails
 /// * `AddAlbumError::GetAlbum` if retrieving the added album from the library fails
+/// * `AddAlbumError::ChronoParse` if date parsing fails while converting scanned records
+/// * `AddAlbumError::InvalidAlbumIdType` if album IDs cannot be converted to expected types
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::albums::add_album;
+/// use moosicbox_music_models::id::Id;
+///
+/// # async fn demo(
+/// #     api: &dyn moosicbox_music_api::MusicApi,
+/// #     library_api: &moosicbox_library_music_api::LibraryMusicApi,
+/// #     db: &switchy_database::profiles::LibraryDatabase,
+/// # ) -> Result<(), Box<dyn std::error::Error>> {
+/// let album = add_album(api, library_api, db, &Id::String("external-album-id".to_string())).await?;
+/// println!("Added album {}", album.title);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn add_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
@@ -385,8 +443,28 @@ pub enum RemoveAlbumError {
 /// * `RemoveAlbumError::MusicApi` if the music API fails during album removal
 /// * `RemoveAlbumError::NoAlbum` if the album is not found in the library
 /// * `RemoveAlbumError::Database` if database operations fail
+/// * `RemoveAlbumError::DatabaseFetch` if reading existing records from the database fails
 /// * `RemoveAlbumError::DeleteFromIndex` if removing from the search index fails
 /// * `RemoveAlbumError::TryFromId` if ID type conversion fails
+/// * `RemoveAlbumError::ChronoParse` if date parsing fails while converting album data
+/// * `RemoveAlbumError::InvalidAlbumIdType` if album IDs cannot be converted to expected types
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::albums::remove_album;
+/// use moosicbox_music_models::id::Id;
+///
+/// # async fn demo(
+/// #     api: &dyn moosicbox_music_api::MusicApi,
+/// #     library_api: &moosicbox_library_music_api::LibraryMusicApi,
+/// #     db: &switchy_database::profiles::LibraryDatabase,
+/// # ) -> Result<(), Box<dyn std::error::Error>> {
+/// let album = remove_album(api, library_api, db, &Id::String("external-album-id".to_string())).await?;
+/// println!("Removed album {}", album.title);
+/// # Ok(())
+/// # }
+/// ```
 #[allow(clippy::too_many_lines)]
 pub async fn remove_album(
     api: &dyn MusicApi,
@@ -551,9 +629,29 @@ pub enum ReFavoriteAlbumError {
 /// * `ReFavoriteAlbumError::MusicApi` if the music API fails to retrieve album information
 /// * `ReFavoriteAlbumError::MissingAlbum` if the album is not found in the source's favorites
 /// * `ReFavoriteAlbumError::MissingArtist` if the artist information is not available
+/// * `ReFavoriteAlbumError::NoArtist` if the source does not return the expected artist
 /// * `ReFavoriteAlbumError::NoAlbum` if the updated album cannot be found at the source
 /// * `ReFavoriteAlbumError::RemoveAlbum` if removing the old album fails
 /// * `ReFavoriteAlbumError::AddAlbum` if adding the new album fails
+/// * `ReFavoriteAlbumError::ChronoParse` if date parsing fails while converting album data
+/// * `ReFavoriteAlbumError::InvalidAlbumIdType` if album IDs cannot be converted to expected types
+///
+/// # Examples
+///
+/// ```ignore
+/// use moosicbox_menu::library::albums::refavorite_album;
+/// use moosicbox_music_models::id::Id;
+///
+/// # async fn demo(
+/// #     api: &dyn moosicbox_music_api::MusicApi,
+/// #     library_api: &moosicbox_library_music_api::LibraryMusicApi,
+/// #     db: &switchy_database::profiles::LibraryDatabase,
+/// # ) -> Result<(), Box<dyn std::error::Error>> {
+/// let album = refavorite_album(api, library_api, db, &Id::String("external-album-id".to_string())).await?;
+/// println!("Re-favorited album {}", album.title);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn refavorite_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
