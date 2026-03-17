@@ -175,6 +175,15 @@ impl From<DownloadError> for actix_web::Error {
 )]
 #[route("/download", method = "POST")]
 #[allow(clippy::future_not_send)]
+/// Queues track, album, and cover download tasks from request query parameters.
+///
+/// # Errors
+///
+/// * If the download location cannot be resolved from the database
+/// * If any provided `trackId`, `trackIds`, `albumId`, or `albumIds` values cannot be parsed
+/// * If a `MOOSIC_BOX` source is selected without a `url` parameter
+/// * If the source cannot be resolved to a known API
+/// * If creating and enqueueing download tasks fails
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     db: LibraryDatabase,
@@ -282,6 +291,12 @@ pub struct RetryDownloadQuery {
     )
 )]
 #[route("/retry-download", method = "POST")]
+/// Re-queues an existing download task by its task ID.
+///
+/// # Errors
+///
+/// * If reading download tasks from the database fails
+/// * If no task exists for the provided task ID
 pub async fn retry_download_endpoint(
     query: web::Query<RetryDownloadQuery>,
     db: LibraryDatabase,
@@ -332,6 +347,12 @@ pub struct DeleteDownloadTaskQuery {
     )
 )]
 #[route("/delete-download", method = "POST")]
+/// Deletes a queued or historical download task by task ID.
+///
+/// # Errors
+///
+/// * If deleting the task from the database fails
+/// * If no task exists for the provided task ID
 pub async fn delete_download_endpoint(
     query: web::Query<DeleteDownloadTaskQuery>,
     db: LibraryDatabase,
@@ -379,6 +400,17 @@ pub struct GetDownloadTasks {
     )
 )]
 #[route("/download-tasks", method = "GET")]
+/// Returns current and historical download tasks with optional state filtering.
+///
+/// # Panics
+///
+/// * If the total task count does not fit in `u32`
+///
+/// # Errors
+///
+/// * If parsing `state` values into valid task states fails
+/// * If reading tasks from the database fails
+/// * If reading file metadata for the active task fails
 pub async fn download_tasks_endpoint(
     query: web::Query<GetDownloadTasks>,
     db: LibraryDatabase,
@@ -492,6 +524,15 @@ pub struct GetDownloadLocations {
     )
 )]
 #[route("/download-locations", method = "GET")]
+/// Returns configured download locations with pagination.
+///
+/// # Panics
+///
+/// * If the total location count does not fit in `u32`
+///
+/// # Errors
+///
+/// * If reading download locations from the database fails
 pub async fn get_download_locations_endpoint(
     query: web::Query<GetDownloadLocations>,
     db: LibraryDatabase,
@@ -546,6 +587,14 @@ pub struct AddDownloadLocation {
 )]
 #[route("/download-locations", method = "POST")]
 #[allow(clippy::future_not_send)]
+/// Creates or updates a download location from a filesystem path.
+///
+/// # Errors
+///
+/// * If the provided path is invalid for the current platform
+/// * If canonicalizing the path fails
+/// * If the canonicalized path cannot be represented as UTF-8
+/// * If creating the location in the database fails
 pub async fn add_download_location_endpoint(
     query: web::Query<AddDownloadLocation>,
     db: LibraryDatabase,
@@ -604,6 +653,14 @@ pub struct DeleteDownloadLocation {
 )]
 #[route("/download-locations", method = "DELETE")]
 #[allow(clippy::future_not_send)]
+/// Removes a configured download location by filesystem path.
+///
+/// # Errors
+///
+/// * If the provided path is invalid for the current platform
+/// * If canonicalizing the path fails
+/// * If the canonicalized path cannot be represented as UTF-8
+/// * If deleting the location from the database fails
 pub async fn remove_download_location_endpoint(
     query: web::Query<DeleteDownloadLocation>,
     db: LibraryDatabase,

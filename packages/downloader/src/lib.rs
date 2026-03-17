@@ -220,6 +220,31 @@ fn music_api_from_source(
 /// * If failed to get the content length of the audio data to download
 /// * If given an invalid `ApiSource`
 /// * If an item is not found
+///
+/// # Examples
+///
+/// ```no_run
+/// # use std::path::PathBuf;
+/// # use moosicbox_downloader::{download, DownloadApiSource, DownloadRequest};
+/// # use moosicbox_music_api::MusicApis;
+/// # use switchy_database::profiles::LibraryDatabase;
+/// # async fn run(db: LibraryDatabase, music_apis: MusicApis) -> Result<(), Box<dyn std::error::Error>> {
+/// let request = DownloadRequest {
+///     directory: PathBuf::from("/music/downloads"),
+///     track_id: None,
+///     track_ids: None,
+///     album_id: None,
+///     album_ids: None,
+///     download_album_cover: Some(true),
+///     download_artist_cover: Some(true),
+///     quality: None,
+///     source: DownloadApiSource::Api("Tidal".try_into()?),
+/// };
+///
+/// download(request, db, music_apis).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn download(
     request: DownloadRequest,
     db: LibraryDatabase,
@@ -1163,6 +1188,10 @@ pub enum DownloadAlbumError {
 /// * If failed to get the content length of the audio data to download
 /// * If given an invalid `ApiSource`
 /// * If an item is not found
+///
+/// # Panics
+///
+/// * If `source` is `DownloadApiSource::MoosicBox`, because this code path is not implemented
 #[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
     api: &dyn MusicApi,
