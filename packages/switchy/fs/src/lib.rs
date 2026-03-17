@@ -376,7 +376,7 @@ pub fn seed_from_real_fs_same_path<P: AsRef<std::path::Path>>(path: P) -> std::i
 /// * If reading from any real filesystem path fails
 /// * If writing to the simulator fails
 ///
-/// # Example
+/// # Examples
 ///
 /// ```ignore
 /// // Seeds tests/fixtures and tests/scripts into the simulator

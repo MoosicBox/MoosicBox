@@ -222,6 +222,7 @@ fn normalize_path(path: &str) -> String {
 ///
 /// * If the `DIRECTORIES` `RwLock` is poisoned
 /// * If the `FILES` `RwLock` is poisoned
+#[must_use]
 pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
     let Some(path) = path.as_ref().to_str() else {
         return false;
@@ -736,7 +737,7 @@ pub mod sync {
         ///
         /// # Errors
         ///
-        /// * If and IO error occurs
+        /// * If an I/O error occurs
         ///
         /// # Panics
         ///
@@ -1941,7 +1942,7 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If and IO error occurs
+        /// * If an I/O error occurs
         ///
         /// # Panics
         ///

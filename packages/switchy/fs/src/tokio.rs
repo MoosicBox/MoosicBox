@@ -450,7 +450,7 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If and IO error occurs
+        /// * If an I/O error occurs
         pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let options: tokio::fs::OpenOptions = self.into();
 

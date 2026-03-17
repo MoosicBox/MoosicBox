@@ -287,7 +287,7 @@ pub mod sync {
         ///
         /// # Errors
         ///
-        /// * If and IO error occurs
+        /// * If an I/O error occurs
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let options: std::fs::OpenOptions = self.into();
 
@@ -299,6 +299,7 @@ pub mod sync {
 /// Checks if a path exists on the filesystem
 ///
 /// Returns `true` if the path exists, `false` otherwise.
+#[must_use]
 pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
     path.as_ref().exists()
 }

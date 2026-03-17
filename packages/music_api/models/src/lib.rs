@@ -235,6 +235,7 @@ impl TrackSource {
     }
 
     /// Returns the track ID if available.
+    #[allow(clippy::must_use_candidate)]
     pub const fn track_id(&self) -> Option<&Id> {
         match self {
             Self::LocalFilePath { track_id, .. } | Self::RemoteUrl { track_id, .. } => {
