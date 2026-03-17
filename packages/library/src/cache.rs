@@ -81,6 +81,24 @@ pub fn clear_cache() {
 /// # Errors
 ///
 /// * If the `compute` `Fn` fails
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use std::time::Duration;
+/// use moosicbox_library::cache::{CacheItemType, CacheRequest, get_or_set_to_cache};
+///
+/// let request = CacheRequest {
+///     key: "albums",
+///     expiration: Duration::from_secs(30),
+/// };
+///
+/// let _value = get_or_set_to_cache(request, || async {
+///     // Compute and return a CacheItemType value.
+///     todo!()
+/// })
+/// .await;
+/// ```
 pub async fn get_or_set_to_cache<Fut, Err>(
     request: CacheRequest<'_>,
     compute: impl Fn() -> Fut + Send,

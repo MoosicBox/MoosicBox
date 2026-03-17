@@ -38,6 +38,8 @@ use crate::{
 };
 
 /// Binds all library API service endpoints to an Actix-web scope.
+///
+/// Returns the same scope with all library routes registered.
 #[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -262,6 +264,12 @@ pub struct LibraryTrackFileUrlQuery {
     )
 )]
 #[route("/track/url", method = "GET")]
+/// Returns streamable URLs for a track at the requested quality.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving the track URL fails
 pub async fn track_file_url_endpoint(
     query: web::Query<LibraryTrackFileUrlQuery>,
     db: LibraryDatabase,
@@ -321,6 +329,12 @@ pub struct LibraryFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "GET")]
+/// Returns favorite albums with optional pagination and sorting.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving favorite albums fails
 pub async fn favorite_albums_endpoint(
     query: web::Query<LibraryFavoriteAlbumsQuery>,
     db: LibraryDatabase,
@@ -408,6 +422,12 @@ pub struct LibraryFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "GET")]
+/// Returns favorite artists with optional pagination and sorting.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving favorite artists fails
 pub async fn favorite_artists_endpoint(
     query: web::Query<LibraryFavoriteArtistsQuery>,
     db: LibraryDatabase,
@@ -460,6 +480,12 @@ pub struct LibraryAddFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "POST")]
+/// Adds an artist to the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If adding the favorite artist fails
 pub async fn add_favorite_artist_endpoint(
     query: web::Query<LibraryAddFavoriteArtistsQuery>,
     db: LibraryDatabase,
@@ -506,6 +532,12 @@ pub struct LibraryRemoveFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "DELETE")]
+/// Removes an artist from the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If removing the favorite artist fails
 pub async fn remove_favorite_artist_endpoint(
     query: web::Query<LibraryRemoveFavoriteArtistsQuery>,
     db: LibraryDatabase,
@@ -552,6 +584,12 @@ pub struct LibraryAddFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "POST")]
+/// Adds an album to the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If adding the favorite album fails
 pub async fn add_favorite_album_endpoint(
     query: web::Query<LibraryAddFavoriteAlbumsQuery>,
     db: LibraryDatabase,
@@ -598,6 +636,12 @@ pub struct LibraryRemoveFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "DELETE")]
+/// Removes an album from the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If removing the favorite album fails
 pub async fn remove_favorite_album_endpoint(
     query: web::Query<LibraryRemoveFavoriteAlbumsQuery>,
     db: LibraryDatabase,
@@ -644,6 +688,12 @@ pub struct LibraryAddFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "POST")]
+/// Adds a track to the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If adding the favorite track fails
 pub async fn add_favorite_track_endpoint(
     query: web::Query<LibraryAddFavoriteTracksQuery>,
     db: LibraryDatabase,
@@ -690,6 +740,12 @@ pub struct LibraryRemoveFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "DELETE")]
+/// Removes a track from the favorites list.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If removing the favorite track fails
 pub async fn remove_favorite_track_endpoint(
     query: web::Query<LibraryRemoveFavoriteTracksQuery>,
     db: LibraryDatabase,
@@ -748,6 +804,13 @@ pub struct LibraryFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "GET")]
+/// Returns favorite tracks with optional filtering, pagination, and sorting.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If parsing `trackIds` fails
+/// * If retrieving favorite tracks fails
 pub async fn favorite_tracks_endpoint(
     query: web::Query<LibraryFavoriteTracksQuery>,
     db: LibraryDatabase,
@@ -841,6 +904,12 @@ impl From<AlbumType> for LibraryAlbumType {
     )
 )]
 #[route("/artists/albums", method = "GET")]
+/// Returns albums for an artist with optional pagination and album-type filtering.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving artist albums fails
 pub async fn artist_albums_endpoint(
     query: web::Query<LibraryArtistAlbumsQuery>,
     db: LibraryDatabase,
@@ -900,6 +969,12 @@ pub struct LibraryAlbumTracksQuery {
     )
 )]
 #[route("/albums/tracks", method = "GET")]
+/// Returns tracks for an album with optional pagination.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving album tracks fails
 pub async fn album_tracks_endpoint(
     query: web::Query<LibraryAlbumTracksQuery>,
     db: LibraryDatabase,
@@ -949,6 +1024,13 @@ pub struct LibraryAlbumQuery {
     )
 )]
 #[route("/albums", method = "GET")]
+/// Returns album metadata for a single album ID.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If the album is not found
+/// * If retrieving album metadata fails
 pub async fn album_endpoint(
     query: web::Query<LibraryAlbumQuery>,
     db: LibraryDatabase,
@@ -995,6 +1077,12 @@ pub struct LibraryArtistQuery {
     )
 )]
 #[route("/artists", method = "GET")]
+/// Returns artist metadata for a single artist ID.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If retrieving artist metadata fails
 pub async fn artist_endpoint(
     query: web::Query<LibraryArtistQuery>,
     db: LibraryDatabase,
@@ -1040,6 +1128,13 @@ pub struct LibraryTrackQuery {
     )
 )]
 #[route("/tracks", method = "GET")]
+/// Returns track metadata for a single track ID.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If the track is not found
+/// * If retrieving track metadata fails
 pub async fn track_endpoint(
     query: web::Query<LibraryTrackQuery>,
     db: LibraryDatabase,
@@ -1088,6 +1183,12 @@ pub struct LibrarySearchQuery {
     )
 )]
 #[route("/search", method = "GET")]
+/// Searches the library and returns matching content.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If executing the search fails
 pub async fn search_endpoint(
     query: web::Query<LibrarySearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {
@@ -1142,6 +1243,12 @@ pub struct ReindexQuery {}
     )
 )]
 #[route("/reindex", method = "POST")]
+/// Rebuilds the global search index for the current library.
+///
+/// # Errors
+///
+/// * If query deserialization fails
+/// * If reindexing fails
 pub async fn reindex_endpoint(
     _query: web::Query<ReindexQuery>,
     db: LibraryDatabase,

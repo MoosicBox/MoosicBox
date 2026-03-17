@@ -241,6 +241,18 @@ pub enum LibraryAlbumOrderDirection {
 ///
 /// Returns an iterator over albums that match the filters specified in the request,
 /// including artist ID, album type, name, and search terms.
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_library::{filter_albums, models::LibraryAlbum};
+/// use moosicbox_music_api_models::AlbumsRequest;
+///
+/// let albums: Vec<LibraryAlbum> = Vec::new();
+/// let request = AlbumsRequest::default();
+/// let filtered = filter_albums(&albums, &request).collect::<Vec<_>>();
+/// assert!(filtered.is_empty());
+/// ```
 pub fn filter_albums<'a>(
     albums: &'a [LibraryAlbum],
     request: &'a AlbumsRequest,
@@ -807,6 +819,19 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
 /// # Errors
 ///
 /// * If there was a database error
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use moosicbox_library::album_versions;
+/// # use moosicbox_music_models::id::Id;
+/// # use switchy_database::profiles::LibraryDatabase;
+/// # async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+/// let versions = album_versions(db, &Id::Number(42)).await?;
+/// assert!(!versions.is_empty());
+/// # Ok(())
+/// # }
+/// ```
 pub async fn album_versions(
     db: &LibraryDatabase,
     album_id: &Id,
