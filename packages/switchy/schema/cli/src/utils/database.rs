@@ -9,8 +9,14 @@ use switchy_database::Database;
 use switchy_database::duckdb::{DuckDbConfig, DuckDbConsistency, DuckDbMode};
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Optional `DuckDB` connection overrides supplied by the CLI.
+///
+/// These options are applied only when the URL scheme is `duckdb`.
+/// For all other backends, they are ignored.
 pub struct DuckDbConnectOptions {
+    /// Optional routing mode override.
     pub mode: Option<DuckDbMode>,
+    /// Optional consistency policy override.
     pub consistency: Option<DuckDbConsistency>,
 }
 
@@ -41,6 +47,29 @@ pub async fn connect(database_url: &str) -> Result<Box<dyn Database>, CliError> 
 ///
 /// For non-`DuckDB` backends, `duckdb_options` is ignored.
 /// For `DuckDB`, provided values override backend defaults.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The database URL format is invalid (missing scheme)
+/// * The database scheme is unsupported
+/// * `SQLite` connection fails (invalid path, permissions, etc.)
+/// * `PostgreSQL` URL parsing fails (malformed URL)
+/// * `PostgreSQL` connection fails (network, authentication, etc.)
+/// * `DuckDB` connection fails (invalid path, permissions, etc.)
+/// * `MySQL` URL parsing fails (malformed URL)
+/// * `MySQL` connection fails (network, authentication, etc.)
+/// * Local `Turso` connection fails (invalid path, permissions, etc.)
+///
+/// # Examples
+///
+/// ```text
+/// let options = DuckDbConnectOptions {
+///     mode: Some(DuckDbMode::Pooled),
+///     consistency: Some(DuckDbConsistency::Strict),
+/// };
+/// let db = connect_with_options("duckdb://:memory:", options).await?;
+/// ```
 pub async fn connect_with_options(
     database_url: &str,
     duckdb_options: DuckDbConnectOptions,
