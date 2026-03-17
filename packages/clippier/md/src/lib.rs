@@ -933,7 +933,7 @@ fn render_table_node(table: &markdown::mdast::Table) -> String {
                 .iter()
                 .map(render_inline_text)
                 .collect::<String>();
-            cells.push(content.trim().to_string());
+            cells.push(content.trim().replace('|', "\\|"));
         }
         rows.push(cells);
     }

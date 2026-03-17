@@ -12,11 +12,14 @@ use clippier_md::{
 fn prettier_parity_commonmark_gfm_fixtures() {
     assert_prettier_version();
 
-    let fixtures_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let fixtures_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("parity")
         .join("fixtures");
-    let fixture_dirs = collect_fixture_dirs(&fixtures_root);
+    let mut fixture_dirs = Vec::new();
+    fixture_dirs.extend(collect_fixture_dirs(&fixtures_base.join("commonmark")));
+    fixture_dirs.extend(collect_fixture_dirs(&fixtures_base.join("gfm")));
+    fixture_dirs.sort();
 
     assert!(!fixture_dirs.is_empty(), "No parity fixtures found");
 
@@ -29,20 +32,6 @@ fn prettier_parity_commonmark_gfm_fixtures() {
     };
 
     for dir in fixture_dirs {
-        if dir
-            .components()
-            .any(|part| part.as_os_str() == "frontmatter")
-        {
-            continue;
-        }
-        if dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name == "nested_checklist")
-        {
-            continue;
-        }
-
         let input = read_fixture_file(&dir, "input").expect("missing input fixture");
         let prettier = run_prettier(&input.0, &input.1);
         let output = format_markdown(&input.1, &config);
