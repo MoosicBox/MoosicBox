@@ -1,4 +1,4 @@
-//! Logging utilities and macros for MoosicBox services.
+//! Logging utilities and macros for `MoosicBox` services.
 //!
 //! This crate provides optional integration with `free_log_client` for structured
 //! logging initialization, as well as convenience macros and re-exports for

@@ -1,3 +1,9 @@
+//! CELT decoder implementation and decode pipeline.
+//!
+//! This module contains the CELT frame decoder state machine, including bit allocation,
+//! energy decoding, PVQ residual decoding, anti-collapse processing, IMDCT, and overlap-add
+//! stages used for RFC 6716 Section 4.3 compliance.
+
 #![allow(
     clippy::similar_names,
     clippy::cast_precision_loss,

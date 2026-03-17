@@ -1,3 +1,9 @@
+//! Range decoder implementation details for Opus entropy coding.
+//!
+//! This module implements the low-level arithmetic/range decoding primitives used by
+//! Opus packet parsing, including ICDF symbol decoding, raw bit extraction, and
+//! Laplace/uniform helpers as specified in RFC 6716 Section 4.1.
+
 use crate::error::{Error, Result};
 use crate::util::ilog;
 

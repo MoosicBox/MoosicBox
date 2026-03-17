@@ -118,7 +118,7 @@ impl SampleRate {
     /// Convert Hz value to `SampleRate` enum
     ///
     /// # Errors
-    /// Returns error if rate not supported (must be 8/12/16/24/48 kHz)
+    /// * Returns error if `hz` is not one of 8000, 12000, 16000, 24000, or 48000.
     pub fn from_hz(hz: u32) -> Result<Self> {
         match hz {
             8000 => Ok(Self::Hz8000),
@@ -422,7 +422,11 @@ impl Decoder {
     ///
     /// # Errors
     ///
-    /// Returns an error if decoding fails (not yet implemented - will be implemented in Phase 6).
+    /// * Returns an error if decoding fails (not yet implemented - will be implemented in Phase 6).
+    ///
+    /// # Panics
+    ///
+    /// * Panics unconditionally because this function is currently a placeholder.
     pub fn decode_float(
         &mut self,
         input: Option<&[u8]>,
@@ -502,7 +506,11 @@ impl Decoder {
     ///
     /// # Errors
     ///
-    /// Returns an error if reset fails (not yet implemented - will be implemented in Phase 6).
+    /// * Returns an error if reset fails (not yet implemented - will be implemented in Phase 6).
+    ///
+    /// # Panics
+    ///
+    /// * Panics unconditionally because this function is currently a placeholder.
     pub fn reset_state(&mut self) -> Result<()> {
         let _ = self;
         todo!("Implement in Phase 6")

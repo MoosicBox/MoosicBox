@@ -1,3 +1,9 @@
+//! Pyramid Vector Quantization (PVQ) helpers for CELT.
+//!
+//! This module implements CELT PVQ utilities from RFC 6716 Section 4.3.4,
+//! including codebook-size computation, pulse allocation, recursive split decoding,
+//! and spreading/rotation transforms.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 

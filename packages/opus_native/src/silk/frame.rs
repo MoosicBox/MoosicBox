@@ -1,3 +1,8 @@
+//! SILK frame metadata types.
+//!
+//! This module defines public data structures used to represent decoded SILK frame
+//! classification and subframe-related metadata.
+
 /// SILK frame metadata decoded from bitstream
 ///
 /// Contains frame-level parameters decoded from SILK header that control
