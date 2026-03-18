@@ -36,7 +36,8 @@ moosicbox_app_state = { workspace = true, features = ["upnp"] }
 moosicbox_assert       = { workspace = true }
 moosicbox_config       = { workspace = true }
 moosicbox_env_utils    = { workspace = true }
-moosicbox_logging      = { workspace = true, features = ["free_log"] }
+moosicbox_log_runtime  = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
+moosicbox_logging      = { workspace = true, default-features = false, features = ["macros"] }
 moosicbox_mdns         = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_player       = { workspace = true, features = ["local"] }
@@ -53,6 +54,7 @@ moosicbox_app_tauri_bundled = { workspace = true, optional = true }
 moosicbox_app_client = { workspace = true, optional = true }
 
 app-tauri-plugin-player = { workspace = true }
+free_log_client         = { workspace = true }
 
 console-subscriber        = { workspace = true }
 kanal                     = { workspace = true }
@@ -104,6 +106,7 @@ fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_config/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_log_runtime/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
     "moosicbox_mdns/fail-on-warnings",
     "moosicbox_music_models/fail-on-warnings",

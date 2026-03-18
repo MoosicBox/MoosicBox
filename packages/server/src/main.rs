@@ -9,7 +9,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_config::AppType;
-use moosicbox_logging::free_log_client::DynLayer;
+use moosicbox_log_runtime::DynLayer;
 use switchy_env::{var_or, var_parse_opt, var_parse_or};
 
 #[cfg_attr(feature = "profiling", profiling::function)]
@@ -53,8 +53,20 @@ fn main() -> std::io::Result<()> {
                 .map_err(std::io::Error::other)?,
         );
 
-        moosicbox_logging::init(Some("moosicbox_server.log"), Some(layers))
-            .expect("Failed to initialize FreeLog");
+        let paths =
+            moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+                app_name: "moosicbox",
+                state_dir_env: "MOOSICBOX_STATE_DIR",
+                log_dir_env: "MOOSICBOX_LOG_DIR",
+            });
+        let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+        log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+        log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+            mode: moosicbox_log_runtime::init::FileMode::Exact("moosicbox_server.log"),
+        });
+        log_config.extra_layers = layers;
+        let _log_handle =
+            moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
 
         #[cfg(feature = "telemetry")]
         let request_metrics = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());

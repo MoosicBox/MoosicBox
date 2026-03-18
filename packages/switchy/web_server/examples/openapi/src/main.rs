@@ -34,7 +34,15 @@ use utoipa::{OpenApi as _, openapi::OpenApi};
 /// * Panics if the global `OPENAPI` `RwLock` is poisoned (another thread panicked while holding the lock)
 #[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    moosicbox_logging::init(None, None)?;
+    let paths =
+        moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+            app_name: "moosicbox",
+            state_dir_env: "MOOSICBOX_STATE_DIR",
+            log_dir_env: "MOOSICBOX_LOG_DIR",
+        });
+    let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+    log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+    moosicbox_log_runtime::init::init(log_config)?;
 
     let cors = switchy_web_server::cors::Cors::default()
         .allow_any_origin()

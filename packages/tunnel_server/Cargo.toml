@@ -28,7 +28,7 @@ moosicbox_assert        = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_env_utils     = { workspace = true }
 moosicbox_json_utils    = { workspace = true, features = ["database"] }
-moosicbox_logging       = { workspace = true, features = ["free_log"] }
+moosicbox_log_runtime   = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
 moosicbox_middleware    = { workspace = true }
 moosicbox_profiles      = { workspace = true, features = ["api"] }
 switchy_time            = { workspace = true, features = ["std"] }
@@ -82,7 +82,7 @@ fail-on-warnings = [
     "moosicbox_async_service/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_json_utils/fail-on-warnings",
-    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_log_runtime/fail-on-warnings",
     "moosicbox_middleware/fail-on-warnings",
     "moosicbox_profiles/fail-on-warnings",
     "moosicbox_tunnel/fail-on-warnings",

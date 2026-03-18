@@ -60,7 +60,7 @@ use actix_web_opentelemetry::RequestMetrics;
 pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
 use futures_util::future::LocalBoxFuture;
-use moosicbox_logging::free_log_client::DynLayer;
+use moosicbox_log_runtime::DynLayer;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::ExporterBuildError;
 use opentelemetry_sdk::Resource;

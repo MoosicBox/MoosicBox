@@ -32,7 +32,16 @@ struct Args {
 /// * If logging initialization fails
 /// * If the output file cannot be opened or written to
 fn main() {
-    moosicbox_logging::init(None, None).expect("Failed to initialize FreeLog");
+    let paths =
+        moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+            app_name: "moosicbox",
+            state_dir_env: "MOOSICBOX_STATE_DIR",
+            log_dir_env: "MOOSICBOX_LOG_DIR",
+        });
+    let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+    log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+    let _log_handle =
+        moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
 
     let args = Args::parse();
 

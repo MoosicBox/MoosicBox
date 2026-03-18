@@ -23,7 +23,7 @@ required-features = []
 
 [dependencies]
 moosicbox_env_utils = { workspace = true }
-moosicbox_logging   = { workspace = true, features = ["free_log"] }
+moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
 switchy_env         = { workspace = true, features = ["std"] }
 
 async-trait            = { workspace = true }
@@ -44,6 +44,6 @@ default = []
 
 fail-on-warnings = [
     "moosicbox_env_utils/fail-on-warnings",
-    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_log_runtime/fail-on-warnings",
     "switchy_env/fail-on-warnings",
 ]

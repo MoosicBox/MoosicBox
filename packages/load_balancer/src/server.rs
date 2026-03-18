@@ -31,7 +31,19 @@ use pingora_proxy::{HttpProxy, http_proxy_service};
 /// * Invalid upstream IP addresses are provided in cluster configuration
 /// * TLS certificate or key files cannot be read (when TLS paths are explicitly configured)
 pub fn serve() {
-    moosicbox_logging::init(Some("moosicbox_lb.log"), None).expect("Failed to initialize FreeLog");
+    let paths =
+        moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+            app_name: "moosicbox",
+            state_dir_env: "MOOSICBOX_STATE_DIR",
+            log_dir_env: "MOOSICBOX_LOG_DIR",
+        });
+    let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+    log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+    log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+        mode: moosicbox_log_runtime::init::FileMode::Exact("moosicbox_lb.log"),
+    });
+    let _log_handle =
+        moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
 
     let mut pingora_server = Server::new(None).unwrap();
     pingora_server.bootstrap();

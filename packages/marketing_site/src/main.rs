@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             switchy_env::var("TOKIO_CONSOLE").as_deref(),
             Ok("1" | "true")
         ) {
-            use moosicbox_logging::free_log_client::DynLayer;
+            use moosicbox_log_runtime::DynLayer;
 
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
@@ -66,7 +66,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(not(target_os = "android"))]
         let filename = Some("moosicbox_app_native.log");
 
-        moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
+        let paths =
+            moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+                app_name: "moosicbox",
+                state_dir_env: "MOOSICBOX_STATE_DIR",
+                log_dir_env: "MOOSICBOX_LOG_DIR",
+            });
+        let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+        log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+        if let Some(filename) = filename {
+            log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+                mode: moosicbox_log_runtime::init::FileMode::Exact(filename),
+            });
+        }
+        log_config.extra_layers = layers;
+        let _log_handle =
+            moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
     }
 
     let threads = var_parse_or("MAX_THREADS", 64usize);

@@ -16,7 +16,7 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{App, http, middleware};
 use api::health_endpoint;
-use moosicbox_logging::free_log_client::DynLayer;
+use moosicbox_log_runtime::DynLayer;
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use std::{env, sync::LazyLock};
 use switchy_env::{var_or, var_parse_opt, var_parse_or};
@@ -65,8 +65,20 @@ fn main() -> Result<(), std::io::Error> {
                 .map_err(std::io::Error::other)?,
         );
 
-        moosicbox_logging::init(Some("moosicbox_tunnel_server.log"), Some(layers))
-            .expect("Failed to initialize FreeLog");
+        let paths =
+            moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+                app_name: "moosicbox",
+                state_dir_env: "MOOSICBOX_STATE_DIR",
+                log_dir_env: "MOOSICBOX_LOG_DIR",
+            });
+        let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+        log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+        log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+            mode: moosicbox_log_runtime::init::FileMode::Exact("moosicbox_tunnel_server.log"),
+        });
+        log_config.extra_layers = layers;
+        let _log_handle =
+            moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
 
         #[cfg(feature = "telemetry")]
         let metrics_handler = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());

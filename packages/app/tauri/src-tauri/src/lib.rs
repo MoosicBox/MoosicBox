@@ -96,7 +96,8 @@ pub enum AppError {
 }
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
-static LOG_LAYER: OnceLock<moosicbox_logging::free_log_client::FreeLogLayer> = OnceLock::new();
+static LOG_LAYER: OnceLock<free_log_client::FreeLogLayer> = OnceLock::new();
+static LOG_RUNTIME: OnceLock<moosicbox_log_runtime::init::LoggingHandle> = OnceLock::new();
 
 static STATE_LOCK: OnceLock<moosicbox_app_state::AppState> = OnceLock::new();
 static STATE: LazyLock<moosicbox_app_state::AppState> =
@@ -809,9 +810,15 @@ fn get_data_dir() -> Result<PathBuf, TauriPlayerError> {
 
 #[cfg(not(feature = "tauri-logger"))]
 fn init_log() {
-    use moosicbox_logging::free_log_client::DynLayer;
+    use moosicbox_log_runtime::DynLayer;
 
     let mut layers = vec![];
+    let free_log_layer = free_log_client::FreeLogLayer::new(
+        free_log_client::LogsConfig::builder()
+            .build()
+            .expect("Failed to create FreeLog config"),
+    );
+    layers.push(Box::new(free_log_layer.clone()) as DynLayer);
 
     if matches!(
         switchy_env::var("TOKIO_CONSOLE").as_deref(),
@@ -825,9 +832,27 @@ fn init_log() {
     #[cfg(not(target_os = "android"))]
     let filename = Some("moosicbox_app.log");
 
-    let layer =
-        moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
-    LOG_LAYER.set(layer).expect("Failed to set LOG_LAYER");
+    let paths =
+        moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+            app_name: "moosicbox",
+            state_dir_env: "MOOSICBOX_STATE_DIR",
+            log_dir_env: "MOOSICBOX_LOG_DIR",
+        });
+    let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+    log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+    if let Some(filename) = filename {
+        log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+            mode: moosicbox_log_runtime::init::FileMode::Exact(filename),
+        });
+    }
+    log_config.extra_layers = layers;
+
+    let handle =
+        moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
+    LOG_LAYER
+        .set(free_log_layer)
+        .expect("Failed to set LOG_LAYER");
+    LOG_RUNTIME.set(handle).expect("Failed to set LOG_RUNTIME");
 }
 
 #[cfg(feature = "moosicbox-app-native")]

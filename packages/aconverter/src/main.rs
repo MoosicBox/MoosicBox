@@ -97,8 +97,19 @@ struct Args {
 /// * If the file extension cannot be converted to a UTF-8 string
 #[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    moosicbox_logging::init(Some("moosicbox_aconverter.log"), None)
-        .expect("Failed to initialize FreeLog");
+    let paths =
+        moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
+            app_name: "moosicbox",
+            state_dir_env: "MOOSICBOX_STATE_DIR",
+            log_dir_env: "MOOSICBOX_LOG_DIR",
+        });
+    let mut log_config = moosicbox_log_runtime::init::InitConfig::new(&paths);
+    log_config.source_mode = moosicbox_log_runtime::init::SourceMode::Both;
+    log_config.sinks.file = Some(moosicbox_log_runtime::init::FileSinkConfig {
+        mode: moosicbox_log_runtime::init::FileMode::Exact("moosicbox_aconverter.log"),
+    });
+    let _log_handle =
+        moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
 
     let args = Args::parse();
 

@@ -26,7 +26,7 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
 switchy_async = { workspace = true, features = [
     "macros",
     "process",
@@ -80,7 +80,7 @@ default = [
 ]
 
 fail-on-warnings = [
-    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_log_runtime/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_fs/fail-on-warnings",
     "switchy_random/fail-on-warnings",

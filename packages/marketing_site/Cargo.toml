@@ -37,7 +37,7 @@ hyperchad = { workspace = true, features = [
 ] }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
 moosicbox_marketing_site_ui = { workspace = true }
 switchy_async = { workspace = true, features = [
     "net",
@@ -73,7 +73,7 @@ fail-on-warnings = [
     "hyperchad/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
-    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_log_runtime/fail-on-warnings",
     "moosicbox_marketing_site_ui/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_env/fail-on-warnings",

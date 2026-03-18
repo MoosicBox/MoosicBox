@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Runtime helpers for resolving and initializing logging paths.
 
 use std::path::PathBuf;
@@ -129,37 +133,80 @@ fn resolve_log_dir(config: &LogRuntimePathsConfig<'_>, _state_dir: &std::path::P
     }
 }
 
+#[cfg(feature = "layer-ext")]
+pub type DynLayer =
+    Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync + 'static>;
+
 #[cfg(feature = "init")]
 pub mod init {
     //! Logging initialization helpers.
 
     use super::{LogRuntimePaths, ensure_paths};
+    use tracing_subscriber::fmt::writer::BoxMakeWriter;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
 
-    /// Log verbosity level used by runtime initialization.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum LogLevel {
-        /// Error-level logging only.
-        Error,
-        /// Warning and error logging.
-        Warn,
-        /// Informational, warning, and error logging.
-        Info,
-        /// Debug and above logging.
-        Debug,
-        /// Trace and above logging.
-        Trace,
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum SourceMode {
+        LogOnly,
+        TracingOnly,
+        #[default]
+        Both,
     }
 
-    impl LogLevel {
-        /// Converts this level into the corresponding tracing level.
+    #[derive(Debug, Clone)]
+    pub enum FileMode<'a> {
+        Exact(&'a str),
+        RollingDaily(&'a str),
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct FileSinkConfig<'a> {
+        pub mode: FileMode<'a>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct SinkConfig<'a> {
+        pub stderr: bool,
+        pub file: Option<FileSinkConfig<'a>>,
+    }
+
+    impl Default for SinkConfig<'_> {
+        fn default() -> Self {
+            Self {
+                stderr: true,
+                file: None,
+            }
+        }
+    }
+
+    pub struct InitConfig<'a> {
+        pub paths: &'a LogRuntimePaths,
+        pub source_mode: SourceMode,
+        pub env_filter: Option<String>,
+        pub default_env_filter: Option<String>,
+        pub use_moosicbox_log_env: bool,
+        pub use_rust_log_env: bool,
+        pub with_target: bool,
+        pub sinks: SinkConfig<'a>,
+        #[cfg(feature = "layer-ext")]
+        pub extra_layers: Vec<crate::DynLayer>,
+    }
+
+    impl<'a> InitConfig<'a> {
         #[must_use]
-        pub const fn as_tracing_level(self) -> tracing::Level {
-            match self {
-                Self::Error => tracing::Level::ERROR,
-                Self::Warn => tracing::Level::WARN,
-                Self::Info => tracing::Level::INFO,
-                Self::Debug => tracing::Level::DEBUG,
-                Self::Trace => tracing::Level::TRACE,
+        pub fn new(paths: &'a LogRuntimePaths) -> Self {
+            Self {
+                paths,
+                source_mode: SourceMode::default(),
+                env_filter: None,
+                default_env_filter: None,
+                use_moosicbox_log_env: true,
+                use_rust_log_env: true,
+                with_target: false,
+                sinks: SinkConfig::default(),
+                #[cfg(feature = "layer-ext")]
+                extra_layers: Vec::new(),
             }
         }
     }
@@ -170,84 +217,125 @@ pub mod init {
         /// Creating one of the required runtime directories failed.
         #[error("failed ensuring log directories")]
         EnsurePaths(#[source] std::io::Error),
-        #[cfg(feature = "file")]
-        /// Creating the configured log output directory failed.
-        #[error("failed creating log directory")]
+        /// Creating the configured log file directory failed.
+        #[error("failed creating log file directory")]
         CreateLogDir(#[source] std::io::Error),
-    }
-
-    /// Configuration for setting up tracing subscribers.
-    #[derive(Debug, Clone)]
-    pub struct InitConfig<'a> {
-        /// Pre-resolved runtime paths.
-        pub paths: &'a LogRuntimePaths,
-        /// Maximum log level to emit.
-        pub level: LogLevel,
-        /// Whether the event target should be included in output.
-        pub with_target: bool,
-        #[cfg(feature = "file")]
-        /// File name prefix used for daily log file rotation.
-        pub file_prefix: &'a str,
+        /// Opening or creating the configured exact log file failed.
+        #[error("failed creating log file")]
+        CreateLogFile(#[source] std::io::Error),
+        /// Initializing the `log` compatibility bridge failed.
+        #[error("failed to initialize log compatibility bridge")]
+        LogBridge(#[source] tracing_log::log_tracer::SetLoggerError),
+        /// Initializing the global tracing subscriber failed.
+        #[error("failed to initialize global tracing subscriber")]
+        Subscriber(#[source] tracing_subscriber::util::TryInitError),
     }
 
     /// Handle that keeps logging resources alive for process lifetime.
     #[derive(Debug)]
     pub struct LoggingHandle {
-        #[cfg(feature = "file")]
-        _guard: tracing_appender::non_blocking::WorkerGuard,
+        _guards: Vec<tracing_appender::non_blocking::WorkerGuard>,
     }
 
-    /// Initializes tracing output for runtime logging.
+    /// Initializes the global tracing subscriber.
     ///
     /// # Errors
     ///
     /// Returns [`InitError`] when initialization cannot complete:
     /// * [`InitError::EnsurePaths`] if required runtime directories cannot be created.
-    /// * [`InitError::CreateLogDir`] if file logging is enabled and the log directory cannot be created.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use moosicbox_log_runtime::{LogRuntimePathsConfig, resolve_paths};
-    /// use moosicbox_log_runtime::init::{InitConfig, LogLevel, init};
-    ///
-    /// let paths = resolve_paths(&LogRuntimePathsConfig {
-    ///     app_name: "MoosicBox",
-    ///     state_dir_env: "MOOSICBOX_STATE_DIR",
-    ///     log_dir_env: "MOOSICBOX_LOG_DIR",
-    /// });
-    ///
-    /// let _handle = init(InitConfig {
-    ///     paths: &paths,
-    ///     level: LogLevel::Info,
-    ///     with_target: true,
-    ///     #[cfg(feature = "file")]
-    ///     file_prefix: "moosicbox",
-    /// })?;
-    /// # Ok::<(), moosicbox_log_runtime::init::InitError>(())
-    /// ```
+    /// * [`InitError::CreateLogDir`] if the configured file sink directory cannot be created.
+    /// * [`InitError::CreateLogFile`] if an exact file sink cannot open its output file.
+    /// * [`InitError::LogBridge`] if log compatibility mode is enabled and bridge setup fails.
+    /// * [`InitError::Subscriber`] if the global tracing subscriber has already been initialized or cannot be installed.
     pub fn init(config: InitConfig<'_>) -> Result<LoggingHandle, InitError> {
         ensure_paths(config.paths).map_err(InitError::EnsurePaths)?;
+        let filter = resolve_filter(&config);
 
-        let builder = tracing_subscriber::fmt()
-            .with_max_level(config.level.as_tracing_level())
-            .with_target(config.with_target)
-            .with_ansi(false);
-
-        #[cfg(feature = "file")]
-        {
-            std::fs::create_dir_all(&config.paths.log_dir).map_err(InitError::CreateLogDir)?;
-            let file_appender =
-                tracing_appender::rolling::daily(&config.paths.log_dir, config.file_prefix);
-            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-            let _ = builder.with_writer(non_blocking).try_init();
-            return Ok(LoggingHandle { _guard: guard });
+        if matches!(config.source_mode, SourceMode::LogOnly | SourceMode::Both) {
+            tracing_log::LogTracer::init().map_err(InitError::LogBridge)?;
         }
 
-        #[cfg(not(feature = "file"))]
+        let mut guards = Vec::new();
+        let mut layers: Vec<
+            Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,
+        > = Vec::new();
+
+        if config.sinks.stderr {
+            let layer = tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_target(config.with_target)
+                .with_writer(BoxMakeWriter::new(std::io::stderr));
+            layers.push(Box::new(layer));
+        }
+
+        if let Some(file_sink) = &config.sinks.file {
+            std::fs::create_dir_all(&config.paths.log_dir).map_err(InitError::CreateLogDir)?;
+            let (writer, guard) = match &file_sink.mode {
+                FileMode::Exact(name) => {
+                    let file_path = config.paths.log_dir.join(name);
+                    let file = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(file_path)
+                        .map_err(InitError::CreateLogFile)?;
+                    tracing_appender::non_blocking(file)
+                }
+                FileMode::RollingDaily(prefix) => {
+                    let file_appender =
+                        tracing_appender::rolling::daily(&config.paths.log_dir, prefix);
+                    tracing_appender::non_blocking(file_appender)
+                }
+            };
+            guards.push(guard);
+            let layer = tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_target(config.with_target)
+                .with_writer(BoxMakeWriter::new(writer));
+            layers.push(Box::new(layer));
+        }
+
+        #[cfg(feature = "layer-ext")]
         {
-            let _ = builder.try_init();
-            Ok(LoggingHandle {})
+            layers.extend(config.extra_layers);
+        }
+
+        let subscriber = tracing_subscriber::registry().with(layers).with(filter);
+        subscriber.try_init().map_err(InitError::Subscriber)?;
+        Ok(LoggingHandle { _guards: guards })
+    }
+
+    fn resolve_filter(config: &InitConfig<'_>) -> tracing_subscriber::EnvFilter {
+        let directive = config
+            .env_filter
+            .clone()
+            .or_else(|| {
+                if config.use_moosicbox_log_env {
+                    std::env::var("MOOSICBOX_LOG").ok()
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                if config.use_rust_log_env {
+                    std::env::var("RUST_LOG").ok()
+                } else {
+                    None
+                }
+            })
+            .or_else(|| config.default_env_filter.clone())
+            .unwrap_or_else(default_env_filter);
+
+        tracing_subscriber::EnvFilter::new(directive)
+    }
+
+    fn default_env_filter() -> String {
+        #[cfg(debug_assertions)]
+        {
+            "moosicbox=trace".to_string()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            "moosicbox=info".to_string()
         }
     }
 }
