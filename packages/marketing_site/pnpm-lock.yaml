@@ -94,8 +94,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@gar/promise-retry@1.0.2':
-    resolution: {integrity: sha512-Lm/ZLhDZcBECta3TmCQSngiQykFdfw+QtI1/GYMsZd4l3nG+P8WLB16XuS7WaBGLQ+9E+cOcWQsth9cayuGt8g==}
+  '@gar/promise-retry@1.0.3':
+    resolution: {integrity: sha512-GmzA9ckNokPypTg10pgpeHNQe7ph+iIKKmhKu3Ob9ANkswreCx7R3cKmY781K8QK3AqVL3xVh9A42JvIAbkkSA==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
   '@grpc/grpc-js@1.14.3':
@@ -145,8 +145,8 @@ packages:
     resolution: {integrity: sha512-kAQTcEN9E8ERLVg5AsGwLNoFb+oEG6engbqAU2P43gD4JEIkNGMHdVQ096FsOAAYpZPB0RSt0zgInKIAS1l5QA==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  '@npmcli/arborist@9.4.1':
-    resolution: {integrity: sha512-SaXiFtYcAbzPI+VmuI+O6hii9fEVe36vm6XRAu0QcvCR9YphHfNF8PIDeDapVkE+LJ0c7BN7uPGd3plbh9zbrw==}
+  '@npmcli/arborist@9.4.2':
+    resolution: {integrity: sha512-omJgPyzt11cEGrxzgrECoOyxAunmPMgBFTcAB/FbaB+9iOYhGmRdsQqySV8o0LWQ/l2kTeASUIMR4xJufVwmtw==}
     engines: {node: ^20.17.0 || >=22.9.0}
     hasBin: true
 
@@ -381,20 +381,20 @@ packages:
     resolution: {integrity: sha512-NwCl5Y0V6Di0NexvkTqdoVfmjTaQwoLM236r89KEojGmq/jMls8S+zb7yOwAPdXvbwfKDlP+lmXgAL4vKSQT+A==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  '@sigstore/core@3.1.0':
-    resolution: {integrity: sha512-o5cw1QYhNQ9IroioJxpzexmPjfCe7gzafd2RY3qnMpxr4ZEja+Jad/U8sgFpaue6bOaF+z7RVkyKVV44FN+N8A==}
+  '@sigstore/core@3.2.0':
+    resolution: {integrity: sha512-kxHrDQ9YgfrWUSXU0cjsQGv8JykOFZQ9ErNKbFPWzk3Hgpwu8x2hHrQ9IdA8yl+j9RTLTC3sAF3Tdq1IQCP4oA==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
   '@sigstore/protobuf-specs@0.5.0':
     resolution: {integrity: sha512-MM8XIwUjN2bwvCg1QvrMtbBmpcSHrkhFSCu1D11NyPvDQ25HEc4oG5/OcQfd/Tlf/OxmKWERDj0zGE23jQaMwA==}
     engines: {node: ^18.17.0 || >=20.5.0}
 
-  '@sigstore/sign@4.1.0':
-    resolution: {integrity: sha512-Vx1RmLxLGnSUqx/o5/VsCjkuN5L7y+vxEEwawvc7u+6WtX2W4GNa7b9HEjmcRWohw/d6BpATXmvOwc78m+Swdg==}
+  '@sigstore/sign@4.1.1':
+    resolution: {integrity: sha512-Hf4xglukg0XXQ2RiD5vSoLjdPe8OBUPA8XeVjUObheuDcWdYWrnH/BNmxZCzkAy68MzmNCxXLeurJvs6hcP2OQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  '@sigstore/tuf@4.0.1':
-    resolution: {integrity: sha512-OPZBg8y5Vc9yZjmWCHrlWPMBqW5yd8+wFNl+thMdtcWz3vjVSoJQutF8YkrzI0SLGnkuFof4HSsWUhXrf219Lw==}
+  '@sigstore/tuf@4.0.2':
+    resolution: {integrity: sha512-TCAzTy0xzdP79EnxSjq9KQ3eaR7+FmudLC6eRKknVKZbV7ZNlGLClAAQb/HMNJ5n2OBNk2GT1tEmU0xuPr+SLQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
   '@sigstore/verify@3.1.0':
@@ -637,8 +637,8 @@ packages:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
 
-  cacache@20.0.3:
-    resolution: {integrity: sha512-3pUp4e8hv07k1QlijZu6Kn7c9+ZpWWk4j3F8N3xPuCExULobqJydKYOTj1FTq58srkJsXvO7LbGAH4C0ZU3WGw==}
+  cacache@20.0.4:
+    resolution: {integrity: sha512-M3Lab8NPYlZU2exsL3bMVvMrMqgwCnMWfdZbK28bn3pK6APT/Te/I8hjRPNu1uwORY9a1eEQoifXbKPQMfMTOA==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
   cacheable-lookup@5.0.4:
@@ -806,9 +806,6 @@ packages:
   env-paths@2.2.1:
     resolution: {integrity: sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A==}
     engines: {node: '>=6'}
-
-  err-code@2.0.3:
-    resolution: {integrity: sha512-2bmlRpNKBxT/CRmPOlyISQpNj+qSeYvcym/uT0Jx2bMOlKLtSy1ZmLuVxSEKKyor/N5yhvp/ZiG1oE3DEYMSFA==}
 
   es-abstract@1.24.1:
     resolution: {integrity: sha512-zHXBLhP+QehSSbsS9Pt23Gg964240DPd6QCf8WpkqEXxQ7fhdZzYsocOr5u7apWonsS5EjZDmTF+/slGMyasvw==}
@@ -1753,10 +1750,6 @@ packages:
   promise-call-limit@3.0.2:
     resolution: {integrity: sha512-mRPQO2T1QQVw11E7+UdCJu7S61eJVWknzml9sC1heAdj1jxl0fWMBypIt9ZOcLFf8FkG995ZD7RnVk7HH72fZw==}
 
-  promise-retry@2.0.1:
-    resolution: {integrity: sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==}
-    engines: {node: '>=10'}
-
   protobufjs@7.5.4:
     resolution: {integrity: sha512-CvexbZtbov6jW2eXAvLukXjXUW1TzFaivC46BpWc/3BpcCysb5Vffu+B3XHMm8lVEuy2Mm4XGex8hBSg1yapPg==}
     engines: {node: '>=12.0.0'}
@@ -1838,14 +1831,6 @@ packages:
 
   responselike@2.0.1:
     resolution: {integrity: sha512-4gl03wn3hj1HP3yzgdI7d3lCkF95F21Pz4BPGvKHinyQzALR5CapwC8yIi0Rh58DEMQ/SguC03wFj2k0M/mHhw==}
-
-  retry@0.12.0:
-    resolution: {integrity: sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow==}
-    engines: {node: '>= 4'}
-
-  retry@0.13.1:
-    resolution: {integrity: sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg==}
-    engines: {node: '>= 4'}
 
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
@@ -2092,8 +2077,8 @@ packages:
     resolution: {integrity: sha512-gcANaAnd2QDZFmHFEOF4k7uc1J/6a6z3DJMd/QwEyxLoKGiptJRwid582r7QIsFlFMIZ3SnxfS52S4hm2DHkuQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  ts-api-utils@2.4.0:
-    resolution: {integrity: sha512-3TaVTaAv2gTiMB35i3FiGJaRfwb3Pyn/j3m/bfAvGe8FB7CF6u+LMYqYlDh7reQf7UNvoTvdfAqHGmPGOSsPmA==}
+  ts-api-utils@2.5.0:
+    resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
     engines: {node: '>=18.12'}
     peerDependencies:
       typescript: '>=4.8.4'
@@ -2140,14 +2125,6 @@ packages:
 
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
-
-  unique-filename@5.0.0:
-    resolution: {integrity: sha512-2RaJTAvAb4owyjllTfXzFClJ7WsGxlykkPvCr9pA//LD9goVq+m4PPAeBgNodGZ7nSrntT/auWpJ6Y5IFXcfjg==}
-    engines: {node: ^20.17.0 || >=22.9.0}
-
-  unique-slug@6.0.0:
-    resolution: {integrity: sha512-4Lup7Ezn8W3d52/xBhZBVdx323ckxa7DEvd9kPQHppTkLoJXw6ltrBCyj5pnrxj0qKDxYMJ56CoxNuFCscdTiw==}
-    engines: {node: ^20.17.0 || >=22.9.0}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -2316,9 +2293,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@gar/promise-retry@1.0.2':
-    dependencies:
-      retry: 0.13.1
+  '@gar/promise-retry@1.0.3': {}
 
   '@grpc/grpc-js@1.14.3':
     dependencies:
@@ -2377,9 +2352,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@npmcli/arborist@9.4.1':
+  '@npmcli/arborist@9.4.2':
     dependencies:
-      '@gar/promise-retry': 1.0.2
+      '@gar/promise-retry': 1.0.3
       '@isaacs/string-locale-compare': 1.1.0
       '@npmcli/fs': 5.0.0
       '@npmcli/installed-package-contents': 4.0.0
@@ -2392,7 +2367,7 @@ snapshots:
       '@npmcli/redact': 4.0.0
       '@npmcli/run-script': 10.0.4
       bin-links: 6.0.0
-      cacache: 20.0.3
+      cacache: 20.0.4
       common-ancestor-path: 2.0.0
       hosted-git-info: 9.0.2
       json-stringify-nice: 1.1.4
@@ -2422,7 +2397,7 @@ snapshots:
 
   '@npmcli/git@7.0.2':
     dependencies:
-      '@gar/promise-retry': 1.0.2
+      '@gar/promise-retry': 1.0.3
       '@npmcli/promise-spawn': 9.0.1
       ini: 6.0.0
       lru-cache: 11.2.7
@@ -2445,7 +2420,7 @@ snapshots:
 
   '@npmcli/metavuln-calculator@9.0.3':
     dependencies:
-      cacache: 20.0.3
+      cacache: 20.0.4
       json-parse-even-better-errors: 5.0.0
       pacote: 21.5.0
       proc-log: 6.1.0
@@ -2669,7 +2644,7 @@ snapshots:
     dependencies:
       '@grpc/grpc-js': 1.14.3
       '@logdna/tail-file': 2.2.0
-      '@npmcli/arborist': 9.4.1
+      '@npmcli/arborist': 9.4.2
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/exporter-trace-otlp-grpc': 0.55.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-zipkin': 1.30.1(@opentelemetry/api@1.9.0)
@@ -2707,22 +2682,22 @@ snapshots:
     dependencies:
       '@sigstore/protobuf-specs': 0.5.0
 
-  '@sigstore/core@3.1.0': {}
+  '@sigstore/core@3.2.0': {}
 
   '@sigstore/protobuf-specs@0.5.0': {}
 
-  '@sigstore/sign@4.1.0':
+  '@sigstore/sign@4.1.1':
     dependencies:
+      '@gar/promise-retry': 1.0.3
       '@sigstore/bundle': 4.0.0
-      '@sigstore/core': 3.1.0
+      '@sigstore/core': 3.2.0
       '@sigstore/protobuf-specs': 0.5.0
       make-fetch-happen: 15.0.5
       proc-log: 6.1.0
-      promise-retry: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
-  '@sigstore/tuf@4.0.1':
+  '@sigstore/tuf@4.0.2':
     dependencies:
       '@sigstore/protobuf-specs': 0.5.0
       tuf-js: 4.1.0
@@ -2732,7 +2707,7 @@ snapshots:
   '@sigstore/verify@3.1.0':
     dependencies:
       '@sigstore/bundle': 4.0.0
-      '@sigstore/core': 3.1.0
+      '@sigstore/core': 3.2.0
       '@sigstore/protobuf-specs': 0.5.0
 
   '@sindresorhus/is@4.6.0': {}
@@ -2798,7 +2773,7 @@ snapshots:
       eslint: 9.39.4
       ignore: 7.0.5
       natural-compare: 1.4.0
-      ts-api-utils: 2.4.0(typescript@5.9.3)
+      ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -2840,7 +2815,7 @@ snapshots:
       '@typescript-eslint/utils': 8.57.1(eslint@9.39.4)(typescript@5.9.3)
       debug: 4.4.3
       eslint: 9.39.4
-      ts-api-utils: 2.4.0(typescript@5.9.3)
+      ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -2857,7 +2832,7 @@ snapshots:
       minimatch: 10.2.4
       semver: 7.7.4
       tinyglobby: 0.2.15
-      ts-api-utils: 2.4.0(typescript@5.9.3)
+      ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -3034,7 +3009,7 @@ snapshots:
 
   bytes@3.1.2: {}
 
-  cacache@20.0.3:
+  cacache@20.0.4:
     dependencies:
       '@npmcli/fs': 5.0.0
       fs-minipass: 3.0.3
@@ -3046,7 +3021,6 @@ snapshots:
       minipass-pipeline: 1.2.4
       p-map: 7.0.4
       ssri: 13.0.1
-      unique-filename: 5.0.0
 
   cacheable-lookup@5.0.4: {}
 
@@ -3200,8 +3174,6 @@ snapshots:
       once: 1.4.0
 
   env-paths@2.2.1: {}
-
-  err-code@2.0.3: {}
 
   es-abstract@1.24.1:
     dependencies:
@@ -3934,10 +3906,10 @@ snapshots:
 
   make-fetch-happen@15.0.5:
     dependencies:
-      '@gar/promise-retry': 1.0.2
+      '@gar/promise-retry': 1.0.3
       '@npmcli/agent': 4.0.0
       '@npmcli/redact': 4.0.0
-      cacache: 20.0.3
+      cacache: 20.0.4
       http-cache-semantics: 4.2.0
       minipass: 7.1.3
       minipass-fetch: 5.0.2
@@ -4197,13 +4169,13 @@ snapshots:
 
   pacote@21.5.0:
     dependencies:
-      '@gar/promise-retry': 1.0.2
+      '@gar/promise-retry': 1.0.3
       '@npmcli/git': 7.0.2
       '@npmcli/installed-package-contents': 4.0.0
       '@npmcli/package-json': 7.0.5
       '@npmcli/promise-spawn': 9.0.1
       '@npmcli/run-script': 10.0.4
-      cacache: 20.0.3
+      cacache: 20.0.4
       fs-minipass: 3.0.3
       minipass: 7.1.3
       npm-package-arg: 13.0.2
@@ -4266,11 +4238,6 @@ snapshots:
   promise-all-reject-late@1.0.1: {}
 
   promise-call-limit@3.0.2: {}
-
-  promise-retry@2.0.1:
-    dependencies:
-      err-code: 2.0.3
-      retry: 0.12.0
 
   protobufjs@7.5.4:
     dependencies:
@@ -4367,10 +4334,6 @@ snapshots:
   responselike@2.0.1:
     dependencies:
       lowercase-keys: 2.0.0
-
-  retry@0.12.0: {}
-
-  retry@0.13.1: {}
 
   router@2.2.0:
     dependencies:
@@ -4501,10 +4464,10 @@ snapshots:
   sigstore@4.1.0:
     dependencies:
       '@sigstore/bundle': 4.0.0
-      '@sigstore/core': 3.1.0
+      '@sigstore/core': 3.2.0
       '@sigstore/protobuf-specs': 0.5.0
-      '@sigstore/sign': 4.1.0
-      '@sigstore/tuf': 4.0.1
+      '@sigstore/sign': 4.1.1
+      '@sigstore/tuf': 4.0.2
       '@sigstore/verify': 3.1.0
     transitivePeerDependencies:
       - supports-color
@@ -4670,7 +4633,7 @@ snapshots:
 
   treeverse@3.0.0: {}
 
-  ts-api-utils@2.4.0(typescript@5.9.3):
+  ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:
       typescript: 5.9.3
 
@@ -4742,14 +4705,6 @@ snapshots:
       which-boxed-primitive: 1.1.1
 
   undici-types@7.18.2: {}
-
-  unique-filename@5.0.0:
-    dependencies:
-      unique-slug: 6.0.0
-
-  unique-slug@6.0.0:
-    dependencies:
-      imurmurhash: 0.1.4
 
   unpipe@1.0.0: {}
 
