@@ -19,7 +19,8 @@ tracing-appender   = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 
 [features]
-default = []
+default          = []
+fail-on-warnings = []
 
 file = ["dep:tracing-appender", "init"]
 init = ["dep:tracing", "dep:tracing-subscriber"]

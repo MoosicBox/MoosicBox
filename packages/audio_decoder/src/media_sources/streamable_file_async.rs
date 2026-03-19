@@ -49,6 +49,7 @@ impl StreamableFileAsync {
     ///
     /// ```rust,no_run
     /// use moosicbox_audio_decoder::media_sources::streamable_file_async::StreamableFileAsync;
+    /// use symphonia::core::io::MediaSource;
     ///
     /// # async fn run() {
     /// let source = StreamableFileAsync::new("https://example.com/song.mp3".to_string()).await;

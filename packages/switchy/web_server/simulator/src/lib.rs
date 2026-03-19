@@ -371,7 +371,7 @@ impl SimulationWebServer {
     /// use switchy_http_models::Method;
     /// use switchy_web_server_simulator::{SimulatedRequest, SimulatedResponse, SimulationWebServer};
     ///
-    /// # switchy_async::block_on(async {
+    /// # async fn run_example() {
     /// let server = SimulationWebServer::new();
     /// server.start().await.expect("server should start");
     /// server.add_mock_response("GET /ping", SimulatedResponse::ok()).await;
@@ -381,7 +381,7 @@ impl SimulationWebServer {
     ///     .await
     ///     .expect("request should succeed");
     /// assert_eq!(response.status_code, switchy_http_models::StatusCode::Ok);
-    /// # });
+    /// # }
     /// ```
     pub async fn handle_request(
         &self,

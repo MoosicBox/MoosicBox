@@ -249,7 +249,7 @@ pub fn init() -> Router {
 pub async fn init_app_state(
     state: moosicbox_app_state::AppState,
 ) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {
-    ApiSource::register_library();
+    let _ = ApiSource::register_library();
 
     #[cfg(feature = "tidal")]
     ApiSource::register("Tidal", "Tidal");

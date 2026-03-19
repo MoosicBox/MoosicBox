@@ -371,8 +371,6 @@ mod fltk {
 /// This module provides HTML rendering capabilities with support for Actix web server,
 /// AWS Lambda serverless deployment, and vanilla JavaScript interactivity.
 pub mod html {
-    //! HTML renderer integrations and backend-specific builder helpers.
-
     use std::{path::PathBuf, sync::LazyLock};
 
     use async_trait::async_trait;
@@ -1013,8 +1011,6 @@ pub mod html {
 /// This module provides a `StubRenderer` that implements all renderer traits but performs
 /// no actual rendering. Useful for testing, documentation examples, or as a placeholder.
 pub mod stub {
-    //! Stub renderer and runner used for tests and no-op execution.
-
     use async_trait::async_trait;
     use hyperchad_renderer::{
         Color, Handle, RenderRunner, Renderer, ToRenderRunner, View, transformer::ResponsiveTrigger,

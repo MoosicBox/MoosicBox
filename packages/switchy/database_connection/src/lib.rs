@@ -199,6 +199,7 @@ impl Credentials {
     }
 
     /// Returns the database port, if present
+    #[allow(clippy::must_use_candidate)]
     pub const fn port(&self) -> Option<u16> {
         self.port
     }
@@ -216,6 +217,7 @@ impl Credentials {
     }
 
     /// Returns the password, if present
+    #[allow(clippy::must_use_candidate)]
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }

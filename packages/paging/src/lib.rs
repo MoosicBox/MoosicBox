@@ -750,7 +750,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     ///                     limit: 2,
     ///                     total: 4,
     ///                 },
-    ///                 |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+    ///                 |_, _| Box::pin(async { Ok(PagingResponse::<i32, String>::empty()) }),
     ///             ))
     ///         })
     ///     },

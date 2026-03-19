@@ -140,6 +140,7 @@ fn ask_free_tcp_port() -> Option<Port> {
 /// # }
 /// ```
 #[cfg(feature = "rand")]
+#[allow(clippy::must_use_candidate)]
 pub fn pick_random_unused_port() -> Option<Port> {
     // Try random port first
     for _ in 0..10 {

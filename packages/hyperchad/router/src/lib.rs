@@ -913,9 +913,8 @@ impl RouteRequest {
     /// );
     /// req.body = Some(Arc::new(Bytes::from("username=moosic")));
     ///
-    /// let form: LoginForm = req.parse_form()?;
+    /// let form: LoginForm = req.parse_form().expect("form should parse");
     /// assert_eq!(form, LoginForm { username: "moosic".to_string() });
-    /// # Ok::<(), hyperchad_router::ParseError>(())
     /// # }
     /// ```
     #[cfg(feature = "form")]
@@ -1053,9 +1052,8 @@ impl RouteRequest {
     /// let mut req = RouteRequest::from_path("/api", RequestInfo::default());
     /// req.body = Some(Arc::new(Bytes::from(r#"{"value":"ok"}"#)));
     ///
-    /// let payload: Payload = req.parse_body()?;
+    /// let payload: Payload = req.parse_body().expect("json body should parse");
     /// assert_eq!(payload, Payload { value: "ok".to_string() });
-    /// # Ok::<(), hyperchad_router::ParseError>(())
     /// # }
     /// ```
     #[cfg(feature = "serde")]

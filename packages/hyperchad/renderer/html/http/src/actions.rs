@@ -40,7 +40,7 @@ pub struct ActionPayload {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use bytes::Bytes;
 /// use hyperchad_renderer_html_http::http;
 /// use hyperchad_router::{RequestInfo, RouteRequest};

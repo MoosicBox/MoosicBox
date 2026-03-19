@@ -775,6 +775,14 @@ pub enum Error {
 }
 
 impl Error {
+    /// Returns the HTTP status code associated with this error.
+    #[must_use]
+    pub const fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Http { status_code, .. } => *status_code,
+        }
+    }
+
     /// Creates an HTTP error with the specified status code and source error.
     pub fn from_http_status_code(
         status_code: StatusCode,

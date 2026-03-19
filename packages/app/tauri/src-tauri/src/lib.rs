@@ -1067,7 +1067,7 @@ pub fn run() {
             let state = runtime_handle.block_on(async move { moosicbox_app_native::init_app_state(state).await }).unwrap();
             #[cfg(not(feature = "moosicbox-app-native"))]
             {
-                ApiSource::register_library();
+                let _ = ApiSource::register_library();
 
                 #[cfg(feature = "tidal")]
                 ApiSource::register("Tidal", "Tidal");

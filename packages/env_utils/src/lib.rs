@@ -32,7 +32,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 /// Error type for integer parsing operations.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseIntError {
     /// The input string was empty.
     ///

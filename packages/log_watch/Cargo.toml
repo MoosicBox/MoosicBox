@@ -21,7 +21,8 @@ serde      = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 
 [features]
-default = []
+default          = []
+fail-on-warnings = []
 
 persistence-json = ["dep:serde", "dep:serde_json"]
 tui              = ["dep:crossterm", "dep:ratatui"]

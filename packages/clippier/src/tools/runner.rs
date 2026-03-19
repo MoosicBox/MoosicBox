@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "tools-tui")]
 use std::io::Read;
+#[cfg(feature = "tools-tui")]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "tools-tui")]
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
