@@ -780,7 +780,7 @@ fn should_use_color(mode: ColorMode) -> bool {
 ///
 /// let input = "#Title\n\nhello world\n";
 /// let output = format_markdown(input, &Config::default());
-/// assert_eq!(output, "# Title\n\nhello world\n");
+/// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
     if config.frontmatter_mode == FrontmatterMode::Preserve

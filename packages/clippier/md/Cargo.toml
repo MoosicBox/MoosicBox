@@ -27,8 +27,6 @@ globset    = { workspace = true }
 ignore     = { workspace = true }
 imara-diff = { workspace = true }
 markdown   = { workspace = true }
-regex      = { workspace = true }
-serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml       = { workspace = true }
 

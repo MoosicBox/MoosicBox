@@ -234,13 +234,6 @@ impl TryFrom<&str> for TunnelResponse {
     /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
     /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
     ///
-    /// # Panics
-    ///
-    /// Panics if:
-    ///
-    /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
-    /// * JSON deserialization of headers fails
-    ///
     /// # Examples
     ///
     /// ```no_run
@@ -256,58 +249,78 @@ impl TryFrom<&str> for TunnelResponse {
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
         use base64::{Engine, engine::general_purpose};
 
-        let base64 = base64
+        let payload = base64
             .strip_prefix(BASE64_TUNNEL_RESPONSE_PREFIX)
             .ok_or_else(|| {
                 Base64DecodeError::InvalidContent("Invalid TunnelRequest base64 data string".into())
             })?;
 
-        let request_id_pos = base64.chars().position(|c| c == '|').ok_or_else(|| {
+        let (request_id_part, payload) = payload.split_once('|').ok_or_else(|| {
             Base64DecodeError::InvalidContent("Missing request_id. Expected '|' delimiter".into())
         })?;
-        let request_id = base64[..request_id_pos].parse::<u64>().unwrap();
+        let request_id = request_id_part.parse::<u64>().map_err(|error| {
+            Base64DecodeError::InvalidContent(format!(
+                "Invalid request_id '{request_id_part}': {error}"
+            ))
+        })?;
 
-        let packet_id_pos = base64
-            .chars()
-            .skip(request_id_pos + 2)
-            .position(|c| c == '|')
-            .ok_or_else(|| {
-                Base64DecodeError::InvalidContent(
-                    "Missing packet_id. Expected '|' delimiter".into(),
-                )
-            })?;
-        let packet_id = base64[request_id_pos + 1..packet_id_pos]
-            .parse::<u32>()
-            .unwrap();
+        let (packet_id_part, payload) = payload.split_once('|').ok_or_else(|| {
+            Base64DecodeError::InvalidContent("Missing packet_id. Expected '|' delimiter".into())
+        })?;
+        let packet_id = packet_id_part.parse::<u32>().map_err(|error| {
+            Base64DecodeError::InvalidContent(format!(
+                "Invalid packet_id '{packet_id_part}': {error}"
+            ))
+        })?;
 
-        let last_pos = packet_id_pos + 2; // 1 (delimiter) + 1 (u8 bool byte)
-        let last = base64[packet_id_pos + 1..last_pos].parse::<u8>().unwrap() == 1;
+        let mut chars = payload.chars();
+        let Some(last_char) = chars.next() else {
+            return Err(Base64DecodeError::InvalidContent(
+                "Missing last flag (expected 0 or 1)".into(),
+            ));
+        };
+        let last = match last_char {
+            '0' => false,
+            '1' => true,
+            _ => {
+                return Err(Base64DecodeError::InvalidContent(format!(
+                    "Invalid last flag '{last_char}' (expected 0 or 1)"
+                )));
+            }
+        };
+
+        let mut payload = chars.as_str();
 
         let (status, headers) = if packet_id == 1 {
-            let status_pos = last_pos + 3; // 3 digit status code
-            let status = base64[last_pos..status_pos].parse::<u16>().unwrap();
+            if payload.len() < 3 {
+                return Err(Base64DecodeError::InvalidContent(
+                    "Missing status code for packet_id=1".into(),
+                ));
+            }
 
-            let headers_pos = base64
-                .chars()
-                .skip(status_pos + 2)
-                .position(|c| c == '}')
-                .ok_or_else(|| {
-                    Base64DecodeError::InvalidContent(
-                        "Missing headers. Expected '}' delimiter".into(),
-                    )
-                })?;
+            let status = payload[..3].parse::<u16>().map_err(|error| {
+                Base64DecodeError::InvalidContent(format!(
+                    "Invalid status code '{}' for packet_id=1: {error}",
+                    &payload[..3]
+                ))
+            })?;
+            payload = &payload[3..];
+            payload = payload.strip_prefix('|').unwrap_or(payload);
 
-            let headers_str = &base64[status_pos + 1..headers_pos];
+            let (headers_json, remaining) = parse_json_object_prefix(payload)?;
+            payload = remaining.strip_prefix('|').unwrap_or(remaining);
 
-            (
-                Some(status),
-                Some(serde_json::from_str(headers_str).unwrap()),
-            )
+            let headers = serde_json::from_str(headers_json).map_err(|error| {
+                Base64DecodeError::InvalidContent(format!(
+                    "Invalid headers JSON for packet_id=1: {error}"
+                ))
+            })?;
+            (Some(status), Some(headers))
         } else {
             (None, None)
         };
 
-        let bytes = Bytes::from(general_purpose::STANDARD.decode(base64)?);
+        let bytes = Bytes::from(general_purpose::STANDARD.decode(payload)?);
 
         Ok(Self {
             request_id,
@@ -321,6 +334,55 @@ impl TryFrom<&str> for TunnelResponse {
 }
 
 #[cfg(feature = "base64")]
+fn parse_json_object_prefix(payload: &str) -> Result<(&str, &str), Base64DecodeError> {
+    let payload = payload.trim_start();
+    if !payload.starts_with('{') {
+        return Err(Base64DecodeError::InvalidContent(
+            "Missing headers JSON object for packet_id=1".into(),
+        ));
+    }
+
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (index, ch) in payload.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && in_string {
+            escaped = true;
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = !in_string;
+            continue;
+        }
+
+        if in_string {
+            continue;
+        }
+
+        if ch == '{' {
+            depth += 1;
+        } else if ch == '}' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                let end = index + ch.len_utf8();
+                return Ok((&payload[..end], &payload[end..]));
+            }
+        }
+    }
+
+    Err(Base64DecodeError::InvalidContent(
+        "Missing closing brace for headers JSON object".into(),
+    ))
+}
+
+#[cfg(feature = "base64")]
 impl TryFrom<String> for TunnelResponse {
     type Error = Base64DecodeError;
 
@@ -330,13 +392,6 @@ impl TryFrom<String> for TunnelResponse {
     ///
     /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
     /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
-    ///
-    /// # Panics
-    ///
-    /// Panics if:
-    ///
-    /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
-    /// * JSON deserialization of headers fails
     ///
     /// # Examples
     ///

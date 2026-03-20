@@ -3004,8 +3004,6 @@ dependencies = [
  "ignore",
  "imara-diff",
  "markdown",
- "regex",
- "serde",
  "serde_json",
  "toml 1.0.6+spec-1.1.0",
 ]
