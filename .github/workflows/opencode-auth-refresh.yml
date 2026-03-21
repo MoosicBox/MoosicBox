@@ -136,7 +136,7 @@ jobs:
                   fi
 
                   NEW_AUTH_B64="$(base64 < "$AUTH_FILE" | tr -d '\n')"
-                  printf '%s' "$NEW_AUTH_B64" | gh secret set OPENCODE_AUTH_JSON_B64 --repo "$GITHUB_REPOSITORY" --body -
+                  printf '%s' "$NEW_AUTH_B64" | gh secret set OPENCODE_AUTH_JSON_B64 --repo "$GITHUB_REPOSITORY"
                   echo "✅ Rotated OPENCODE_AUTH_JSON_B64 secret"
 
             - name: Fail if auth is still invalid
