@@ -149,6 +149,7 @@ pub mod init {
     //! Logging initialization helpers.
 
     use super::{LogRuntimePaths, ensure_paths};
+    use std::io::IsTerminal;
     use tracing_subscriber::fmt::writer::BoxMakeWriter;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -265,7 +266,7 @@ pub mod init {
 
         if config.sinks.stderr {
             let layer = tracing_subscriber::fmt::layer()
-                .with_ansi(false)
+                .with_ansi(std::io::stderr().is_terminal())
                 .with_target(config.with_target)
                 .with_writer(BoxMakeWriter::new(std::io::stderr));
             layers.push(Box::new(layer));
