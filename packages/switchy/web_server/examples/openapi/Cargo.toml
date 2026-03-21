@@ -15,7 +15,12 @@ tests = false
 group = "switchy"
 
 [dependencies]
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_web_server = { workspace = true, features = [
     "actix",

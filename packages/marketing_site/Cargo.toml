@@ -37,7 +37,12 @@ hyperchad = { workspace = true, features = [
 ] }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
 moosicbox_marketing_site_ui = { workspace = true }
 switchy_async = { workspace = true, features = [
     "net",

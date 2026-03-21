@@ -41,7 +41,12 @@ moosicbox_files = { workspace = true, features = [
     "track-range",
 ] }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
 moosicbox_middleware = { workspace = true }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }

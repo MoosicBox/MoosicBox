@@ -26,7 +26,12 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
 switchy_async = { workspace = true, features = [
     "macros",
     "process",

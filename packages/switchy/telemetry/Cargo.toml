@@ -17,10 +17,10 @@ examples = true
 group = "switchy"
 
 [dependencies]
-moosicbox_assert    = { workspace = true }
-moosicbox_env_utils = { workspace = true }
+moosicbox_assert      = { workspace = true }
+moosicbox_env_utils   = { workspace = true }
 moosicbox_log_runtime = { workspace = true, features = ["layer-ext"] }
-switchy_env         = { workspace = true, features = ["std"] }
+switchy_env           = { workspace = true, features = ["std"] }
 
 actix-web               = { workspace = true, optional = true }
 actix-web-opentelemetry = { workspace = true, optional = true }

@@ -20,10 +20,15 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_assert       = { workspace = true }
-moosicbox_files        = { workspace = true, features = ["files"] }
-moosicbox_log_runtime  = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
-moosicbox_music_api    = { workspace = true }
+moosicbox_assert = { workspace = true }
+moosicbox_files = { workspace = true, features = ["files"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
+moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 
 clap                = { workspace = true }

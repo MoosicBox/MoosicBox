@@ -24,14 +24,19 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_assert        = { workspace = true }
+moosicbox_assert = { workspace = true }
 moosicbox_async_service = { workspace = true }
-moosicbox_env_utils     = { workspace = true }
-moosicbox_json_utils    = { workspace = true, features = ["database"] }
-moosicbox_log_runtime   = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
-moosicbox_middleware    = { workspace = true }
-moosicbox_profiles      = { workspace = true, features = ["api"] }
-switchy_time            = { workspace = true, features = ["std"] }
+moosicbox_env_utils = { workspace = true }
+moosicbox_json_utils = { workspace = true, features = ["database"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
+moosicbox_middleware = { workspace = true }
+moosicbox_profiles = { workspace = true, features = ["api"] }
+switchy_time = { workspace = true, features = ["std"] }
 
 moosicbox_tunnel            = { workspace = true }
 switchy_async               = { workspace = true, features = ["sync", "tokio"] }

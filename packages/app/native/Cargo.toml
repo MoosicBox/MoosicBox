@@ -60,8 +60,15 @@ moosicbox_audio_zone_models = { workspace = true }
 moosicbox_config = { workspace = true }
 moosicbox_downloader = { workspace = true, features = ["api"] }
 moosicbox_env_utils = { workspace = true }
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
-moosicbox_logging = { workspace = true, default-features = false, features = ["macros"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
+moosicbox_logging = { workspace = true, default-features = false, features = [
+    "macros",
+] }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_api_api = { workspace = true }
 moosicbox_music_api_models = { workspace = true, features = ["api-search"] }

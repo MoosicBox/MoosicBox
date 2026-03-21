@@ -23,8 +23,13 @@ required-features = []
 
 [dependencies]
 moosicbox_env_utils = { workspace = true }
-moosicbox_log_runtime = { workspace = true, features = ["env-filter", "file", "layer-ext", "log-compat"] }
-switchy_env         = { workspace = true, features = ["std"] }
+moosicbox_log_runtime = { workspace = true, features = [
+    "env-filter",
+    "file",
+    "layer-ext",
+    "log-compat",
+] }
+switchy_env = { workspace = true, features = ["std"] }
 
 async-trait            = { workspace = true }
 log                    = { workspace = true }
