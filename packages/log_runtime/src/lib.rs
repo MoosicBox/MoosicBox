@@ -49,7 +49,11 @@ pub struct LogRuntimePathsConfig<'a> {
 #[must_use]
 pub fn resolve_paths(config: &LogRuntimePathsConfig<'_>) -> LogRuntimePaths {
     let state_dir = resolve_state_dir(config);
-    let log_dir = resolve_log_dir(config, &state_dir);
+    let log_dir = resolve_log_dir(
+        config,
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        &state_dir,
+    );
     LogRuntimePaths { state_dir, log_dir }
 }
 
@@ -106,7 +110,10 @@ fn resolve_state_dir(config: &LogRuntimePathsConfig<'_>) -> PathBuf {
     }
 }
 
-fn resolve_log_dir(config: &LogRuntimePathsConfig<'_>, _state_dir: &std::path::Path) -> PathBuf {
+fn resolve_log_dir(
+    config: &LogRuntimePathsConfig<'_>,
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))] state_dir: &std::path::Path,
+) -> PathBuf {
     if let Some(path) = std::env::var_os(config.log_dir_env) {
         return PathBuf::from(path);
     }
@@ -129,7 +136,7 @@ fn resolve_log_dir(config: &LogRuntimePathsConfig<'_>, _state_dir: &std::path::P
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        _state_dir.join("logs")
+        state_dir.join("logs")
     }
 }
 
