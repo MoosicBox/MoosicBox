@@ -586,7 +586,7 @@ mod tui {
     use ratatui::Terminal;
     use ratatui::backend::CrosstermBackend;
     use ratatui::layout::{Constraint, Direction, Layout};
-    use ratatui::style::{Color, Style};
+    use ratatui::style::{Color, Modifier, Style};
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
     use std::collections::VecDeque;
@@ -597,6 +597,194 @@ mod tui {
     const WATCH_STATUS_HEIGHT: u16 = 4;
     const WATCH_FILTER_HEIGHT: u16 = 5;
     const WATCH_INFO_HEIGHT: u16 = 3;
+
+    #[derive(Debug, Clone, Copy, Default)]
+    struct AnsiStyleState {
+        fg: Option<Color>,
+        bg: Option<Color>,
+        bold: bool,
+        underline: bool,
+    }
+
+    impl AnsiStyleState {
+        fn to_style(self) -> Style {
+            let mut style = Style::default();
+            if let Some(fg) = self.fg {
+                style = style.fg(fg);
+            }
+            if let Some(bg) = self.bg {
+                style = style.bg(bg);
+            }
+            if self.bold {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            if self.underline {
+                style = style.add_modifier(Modifier::UNDERLINED);
+            }
+            style
+        }
+
+        fn apply_sgr_codes(&mut self, codes: &[u16]) {
+            if codes.is_empty() {
+                *self = Self::default();
+                return;
+            }
+
+            let mut index = 0;
+            while index < codes.len() {
+                match codes[index] {
+                    0 => *self = Self::default(),
+                    1 => self.bold = true,
+                    4 => self.underline = true,
+                    22 => self.bold = false,
+                    24 => self.underline = false,
+                    30..=37 => self.fg = Some(basic_ansi_color(codes[index] - 30, false)),
+                    90..=97 => self.fg = Some(basic_ansi_color(codes[index] - 90, true)),
+                    39 => self.fg = None,
+                    40..=47 => self.bg = Some(basic_ansi_color(codes[index] - 40, false)),
+                    100..=107 => self.bg = Some(basic_ansi_color(codes[index] - 100, true)),
+                    49 => self.bg = None,
+                    38 => {
+                        if let Some((color, consumed)) =
+                            parse_extended_ansi_color(&codes[index + 1..])
+                        {
+                            self.fg = Some(color);
+                            index += consumed;
+                        }
+                    }
+                    48 => {
+                        if let Some((color, consumed)) =
+                            parse_extended_ansi_color(&codes[index + 1..])
+                        {
+                            self.bg = Some(color);
+                            index += consumed;
+                        }
+                    }
+                    _ => {}
+                }
+                index += 1;
+            }
+        }
+    }
+
+    fn basic_ansi_color(code: u16, bright: bool) -> Color {
+        match (code, bright) {
+            (0, false) => Color::Black,
+            (1, false) => Color::Red,
+            (2, false) => Color::Green,
+            (3, false) => Color::Yellow,
+            (4, false) => Color::Blue,
+            (5, false) => Color::Magenta,
+            (6, false) => Color::Cyan,
+            (7, false) => Color::Gray,
+            (0, true) => Color::DarkGray,
+            (1, true) => Color::LightRed,
+            (2, true) => Color::LightGreen,
+            (3, true) => Color::LightYellow,
+            (4, true) => Color::LightBlue,
+            (5, true) => Color::LightMagenta,
+            (6, true) => Color::LightCyan,
+            (7, true) => Color::White,
+            _ => Color::Reset,
+        }
+    }
+
+    fn parse_extended_ansi_color(codes: &[u16]) -> Option<(Color, usize)> {
+        if codes.len() >= 2 && codes[0] == 5 {
+            let index = u8::try_from(codes[1]).ok()?;
+            return Some((Color::Indexed(index), 2));
+        }
+        if codes.len() >= 4 && codes[0] == 2 {
+            let red = u8::try_from(codes[1]).ok()?;
+            let green = u8::try_from(codes[2]).ok()?;
+            let blue = u8::try_from(codes[3]).ok()?;
+            return Some((Color::Rgb(red, green, blue), 4));
+        }
+        None
+    }
+
+    fn parse_sgr_codes(param_block: &str) -> Vec<u16> {
+        if param_block.is_empty() {
+            return vec![0];
+        }
+
+        param_block
+            .split(';')
+            .filter_map(|entry| {
+                if entry.is_empty() {
+                    Some(0)
+                } else {
+                    entry.parse::<u16>().ok()
+                }
+            })
+            .collect()
+    }
+
+    fn decode_escaped_ansi(line: &str) -> String {
+        line.replace("\\x1b", "\u{001b}")
+            .replace("\\x1B", "\u{001b}")
+            .replace("\\u001b", "\u{001b}")
+            .replace("\\u001B", "\u{001b}")
+    }
+
+    fn ansi_to_line(line: &str) -> Line<'static> {
+        let decoded = decode_escaped_ansi(line);
+        let bytes = decoded.as_bytes();
+        let mut spans = Vec::new();
+        let mut style_state = AnsiStyleState::default();
+        let mut segment_start = 0usize;
+        let mut index = 0usize;
+
+        while index < bytes.len() {
+            if bytes[index] != 0x1b {
+                index += 1;
+                continue;
+            }
+
+            if segment_start < index {
+                spans.push(Span::styled(
+                    decoded[segment_start..index].to_string(),
+                    style_state.to_style(),
+                ));
+            }
+
+            if index + 1 >= bytes.len() || bytes[index + 1] != b'[' {
+                index += 1;
+                continue;
+            }
+
+            let mut final_index = index + 2;
+            while final_index < bytes.len() && !(0x40..=0x7e).contains(&bytes[final_index]) {
+                final_index += 1;
+            }
+
+            if final_index >= bytes.len() {
+                break;
+            }
+
+            if bytes[final_index] == b'm' {
+                let params = &decoded[index + 2..final_index];
+                let codes = parse_sgr_codes(params);
+                style_state.apply_sgr_codes(&codes);
+            }
+
+            index = final_index + 1;
+            segment_start = index;
+        }
+
+        if segment_start < decoded.len() {
+            spans.push(Span::styled(
+                decoded[segment_start..].to_string(),
+                style_state.to_style(),
+            ));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        Line::from(spans)
+    }
 
     struct UiGuard;
 
@@ -1185,7 +1373,7 @@ mod tui {
 
             let log_items = visible_slice
                 .iter()
-                .map(|line| ListItem::new(line.clone()))
+                .map(|line| ListItem::new(ansi_to_line(line)))
                 .collect::<Vec<_>>();
             let logs_block =
                 List::new(log_items).block(Block::default().borders(Borders::ALL).title("Logs"));
