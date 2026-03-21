@@ -28,6 +28,8 @@ tunnel-server                      = "tunnel-server:release"
 "tunnel-server:release:sqlx"       = "run --package moosicbox_tunnel_server --no-default-features --features=postgres-sqlx --release"
 "tunnel-server:sqlx"               = "tunnel-server:release:sqlx"
 
+"log:watch" = "run --package moosicbox_log_watch --features=cli,tui,persistence-json --bin moosicbox-log-watch"
+
 [env]
 RUST_LOG = "info"
 

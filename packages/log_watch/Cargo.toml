@@ -10,19 +10,27 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[[bin]]
+name              = "moosicbox-log-watch"
+path              = "src/main.rs"
+required-features = ["cli", "tui"]
+
 [dependencies]
 anyhow = { workspace = true }
 regex  = { workspace = true }
 time   = { workspace = true, features = ["formatting", "parsing"] }
 
-crossterm  = { workspace = true, optional = true }
-ratatui    = { workspace = true, optional = true }
-serde      = { workspace = true, features = ["derive"], optional = true }
-serde_json = { workspace = true, optional = true }
+clap                  = { workspace = true, features = ["derive", "env"], optional = true }
+crossterm             = { workspace = true, optional = true }
+moosicbox_log_runtime = { workspace = true, optional = true }
+ratatui               = { workspace = true, optional = true }
+serde                 = { workspace = true, features = ["derive"], optional = true }
+serde_json            = { workspace = true, optional = true }
 
 [features]
 default          = []
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_log_runtime?/fail-on-warnings"]
 
+cli              = ["dep:clap", "dep:moosicbox_log_runtime"]
 persistence-json = ["dep:serde", "dep:serde_json"]
 tui              = ["dep:crossterm", "dep:ratatui"]
