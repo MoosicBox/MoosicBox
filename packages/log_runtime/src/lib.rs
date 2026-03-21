@@ -251,10 +251,6 @@ pub mod init {
         ensure_paths(config.paths).map_err(InitError::EnsurePaths)?;
         let filter = resolve_filter(&config);
 
-        if matches!(config.source_mode, SourceMode::LogOnly | SourceMode::Both) {
-            tracing_log::LogTracer::init().map_err(InitError::LogBridge)?;
-        }
-
         let mut guards = Vec::new();
         let mut layers: Vec<
             Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,
