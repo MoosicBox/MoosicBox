@@ -464,7 +464,27 @@ runs:
               mkdir -p "$AUTH_DIR"
 
               if [ -n "${OPENCODE_AUTH_JSON_B64:-}" ]; then
-                printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_DIR/auth.json"
+                CLEAN_AUTH_JSON_B64="$(printf '%s' "$OPENCODE_AUTH_JSON_B64" | tr -d '[:space:]')"
+                if [ -z "$CLEAN_AUTH_JSON_B64" ]; then
+                  echo "❌ OPENCODE_AUTH_JSON_B64 is empty after whitespace normalization"
+                  exit 1
+                fi
+
+                CLEAN_AUTH_JSON_B64="$CLEAN_AUTH_JSON_B64" python3 - "$AUTH_DIR/auth.json" << 'PY'
+                import base64
+                import binascii
+                import os
+                import pathlib
+                import sys
+
+                value = os.environ["CLEAN_AUTH_JSON_B64"]
+                try:
+                    decoded = base64.b64decode(value, validate=True)
+                except binascii.Error as exc:
+                    raise SystemExit(f"❌ Invalid OPENCODE_AUTH_JSON_B64: {exc}")
+
+                pathlib.Path(sys.argv[1]).write_bytes(decoded)
+                PY
               elif [ -f "$AUTH_DIR/auth.json" ]; then
                 echo "ℹ️ Using pre-restored OpenCode auth file"
               else

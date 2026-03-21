@@ -46,7 +46,29 @@ jobs:
                   AUTH_DIR="$HOME/.local/share/opencode"
                   AUTH_FILE="$AUTH_DIR/auth.json"
                   mkdir -p "$AUTH_DIR"
-                  printf '%s' "$OPENCODE_AUTH_JSON_B64" | base64 --decode > "$AUTH_FILE"
+
+                  CLEAN_AUTH_JSON_B64="$(printf '%s' "$OPENCODE_AUTH_JSON_B64" | tr -d '[:space:]')"
+                  if [ -z "$CLEAN_AUTH_JSON_B64" ]; then
+                    echo "❌ OPENCODE_AUTH_JSON_B64 is empty after whitespace normalization"
+                    exit 1
+                  fi
+
+                  CLEAN_AUTH_JSON_B64="$CLEAN_AUTH_JSON_B64" python3 - "$AUTH_FILE" << 'PY'
+                  import base64
+                  import binascii
+                  import os
+                  import pathlib
+                  import sys
+
+                  value = os.environ["CLEAN_AUTH_JSON_B64"]
+                  try:
+                      decoded = base64.b64decode(value, validate=True)
+                  except binascii.Error as exc:
+                      raise SystemExit(f"❌ Invalid OPENCODE_AUTH_JSON_B64 secret: {exc}")
+
+                  pathlib.Path(sys.argv[1]).write_bytes(decoded)
+                  PY
+
                   chmod 600 "$AUTH_FILE"
 
                   echo "auth_file=$AUTH_FILE" >> "$GITHUB_OUTPUT"
