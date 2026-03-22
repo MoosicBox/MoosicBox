@@ -9451,7 +9451,6 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "thiserror 2.0.18",
- "tracing",
  "tracing-appender",
  "tracing-log",
  "tracing-subscriber",

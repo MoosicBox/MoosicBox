@@ -97,6 +97,7 @@ pub enum AppError {
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static LOG_LAYER: OnceLock<free_log_client::FreeLogLayer> = OnceLock::new();
+#[cfg(not(feature = "tauri-logger"))]
 static LOG_RUNTIME: OnceLock<moosicbox_log_runtime::init::LoggingHandle> = OnceLock::new();
 
 static STATE_LOCK: OnceLock<moosicbox_app_state::AppState> = OnceLock::new();

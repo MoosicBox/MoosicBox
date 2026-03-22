@@ -90,10 +90,10 @@ fn resolve_state_dir(config: &LogRuntimePathsConfig<'_>) -> PathBuf {
 
     #[cfg(target_os = "windows")]
     {
-        return dirs::data_local_dir().map_or_else(
+        dirs::data_local_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("state"),
             |base| base.join(config.app_name).join("State"),
-        );
+        )
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -128,10 +128,10 @@ fn resolve_log_dir(
 
     #[cfg(target_os = "windows")]
     {
-        return dirs::data_local_dir().map_or_else(
+        dirs::data_local_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("logs"),
             |base| base.join(config.app_name).join("Logs"),
-        );
+        )
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -255,6 +255,7 @@ pub mod init {
     /// * [`InitError::CreateLogFile`] if an exact file sink cannot open its output file.
     /// * [`InitError::LogBridge`] if log compatibility mode is enabled and bridge setup fails.
     /// * [`InitError::Subscriber`] if the global tracing subscriber has already been initialized or cannot be installed.
+    #[cfg_attr(not(feature = "layer-ext"), allow(clippy::needless_pass_by_value))]
     pub fn init(config: InitConfig<'_>) -> Result<LoggingHandle, InitError> {
         ensure_paths(config.paths).map_err(InitError::EnsurePaths)?;
         let filter = resolve_filter(&config);
