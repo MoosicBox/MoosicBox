@@ -86,13 +86,13 @@ PROFILES.remove("my_profile");
 - **`default`**: Enables `all-encoders` and `api`
 - **`api`**: Actix-web integration for profile extraction from requests
 - **`all-encoders`**: All audio encoders (AAC, FLAC, MP3, Opus)
-- **`all-os-encoders`**: OS-dependent encoders (AAC, FLAC, Opus)
+- **`all-os-encoders`**: Open-source encoders (AAC, FLAC, Opus)
 - **`encoder-aac`**: AAC encoding support
 - **`encoder-flac`**: FLAC encoding support
 - **`encoder-mp3`**: MP3 encoding support
 - **`encoder-opus`**: Opus encoding support
 - **`all-formats`**: All audio format support
-- **`all-os-formats`**: OS-dependent audio format support (AAC, FLAC, Opus)
+- **`all-os-formats`**: Open-source audio format support (AAC, FLAC, Opus)
 - **`format-aac`**: AAC format support
 - **`format-flac`**: FLAC format support
 - **`format-mp3`**: MP3 format support
