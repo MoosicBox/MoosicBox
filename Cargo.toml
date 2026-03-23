@@ -382,8 +382,8 @@ async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.15"
-aws-sdk-apigatewaymanagement = "1.96.0"
-aws-sdk-ssm = "1.107.0"
+aws-sdk-apigatewaymanagement = "1.97.0"
+aws-sdk-ssm = "1.108.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.20.2"
@@ -449,11 +449,11 @@ imara-diff = { version = "0.2.0", default-features = false, features = [
 include_dir = "0.7.4"
 insta = "1.46.3"
 itertools = "0.14.0"
-itoa = "1.0.17"
+itoa = "1.0.18"
 json5 = { version = "1.3.1", default-features = false }
 kanal = "0.1.1"
-lambda_http = "1.1.1"
-lambda_runtime = "1.1.1"
+lambda_http = "1.1.2"
+lambda_runtime = "1.1.2"
 libvips = { version = "1.7.3" }
 local-ip-address = "0.6.10"
 log = { version = "0.4.29", features = ["release_max_level_trace"] }
@@ -480,7 +480,7 @@ oneshot = "0.2.1"
 open = "5.3.3"
 openssl = { version = "0.10.76", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
-opentelemetry-otlp = { version = "0.31.0", features = ["tonic"] }
+opentelemetry-otlp = { version = "0.31.1", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 opus = "0.3.1"
 os_info = { version = "3.14.0", default-features = false }
@@ -505,7 +505,7 @@ profiling = "1.0.17"
 proptest = { version = "1.10.0", default-features = false, features = ["std"] }
 puffin = "0.19.1"
 puffin_http = "0.16.1"
-pulldown-cmark = { version = "0.13.1", default-features = false }
+pulldown-cmark = { version = "0.13.3", default-features = false }
 qstring = "0.7.2"
 test-strategy = { version = "0.4.5", default-features = false }
 time = "0.3.47"
@@ -595,9 +595,9 @@ tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-webpki-roots",
 ] }
 tokio-util = "0.7.18"
-toml = "1.0.6"
+toml = "1.0.7"
 tracing = "0.1.44"
-tracing-appender = "0.2.3"
+tracing-appender = "0.2.4"
 tracing-log = "0.2.0"
 tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
