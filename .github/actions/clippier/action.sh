@@ -1444,12 +1444,18 @@ setup_ci_environment() {
 
     if [[ -n "$env_vars" ]]; then
         echo "🌍 Exporting environment variables to GITHUB_ENV"
-        echo "$env_vars" | tr ' ' '\n' | while IFS='=' read -r key value; do
+        while IFS= read -r assignment; do
+            if [[ "$assignment" != *=* ]]; then
+                continue
+            fi
+
+            key=${assignment%%=*}
+            value=${assignment#*=}
             if [[ -n "$key" && -n "$value" ]]; then
                 echo "  $key=$value"
                 echo "$key=$value" >> "$GITHUB_ENV"
             fi
-        done
+        done < <(xargs -n1 <<<"$env_vars")
     fi
 
     if [[ -n "$ci_steps" ]]; then

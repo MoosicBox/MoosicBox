@@ -304,11 +304,11 @@ jobs:
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                              return 1
-                          fi
+                           else
+                               >&2 echo "FAILED \`$command\`";
+                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
+                               exit 1
+                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Run ${{ matrix.package.name }} tests
@@ -324,11 +324,11 @@ jobs:
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                              return 1
-                          fi
+                           else
+                               >&2 echo "FAILED \`$command\`";
+                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
+                               exit 1
+                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Format ${{ matrix.package.name }}
@@ -506,10 +506,10 @@ jobs:
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              return 1
-                          fi
+                           else
+                               >&2 echo "FAILED \`$command\`";
+                               exit 1
+                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Run ${{ matrix.package.name }} tests
@@ -523,10 +523,10 @@ jobs:
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              return 1
-                          fi
+                           else
+                               >&2 echo "FAILED \`$command\`";
+                               exit 1
+                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Format ${{ matrix.package.name }}
