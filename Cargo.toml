@@ -502,7 +502,7 @@ pretty_env_logger = "0.5.0"
 proc-macro2 = "1.0.106"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
-proptest = { version = "1.10.0", default-features = false, features = ["std"] }
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 puffin = "0.20.0"
 puffin_http = "0.17.0"
 pulldown-cmark = { version = "0.13.3", default-features = false }
