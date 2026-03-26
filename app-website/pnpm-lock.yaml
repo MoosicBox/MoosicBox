@@ -18,8 +18,8 @@ importers:
         specifier: ^5.1.3
         version: 5.1.3(@testing-library/jest-dom@5.17.0)(@types/node@25.5.0)(jiti@2.4.2)(solid-js@1.9.12)(yaml@2.8.3)
       '@aws-sdk/client-ssm':
-        specifier: ^3.1016.0
-        version: 3.1016.0(aws-crt@1.21.8)
+        specifier: ^3.1017.0
+        version: 3.1017.0(aws-crt@1.21.8)
       '@hotwired/turbo':
         specifier: ^8.0.23
         version: 8.0.23
@@ -233,8 +233,8 @@ packages:
   '@aws-crypto/util@5.2.0':
     resolution: {integrity: sha512-4RkU9EsI6ZpBve5fseQlGNUWKMa1RLPQ1dnjnQoe07ldfIzcsGb5hC5W0Dm7u423KWzawlrpbjXBrXCEv9zazQ==}
 
-  '@aws-sdk/client-ssm@3.1016.0':
-    resolution: {integrity: sha512-9qb58Utss0lJGAcQxftSQ1OY5Dm2aKtn/aBdV2ProFRkyQuxOWJsKMmAAqOpMYnQBEgs6k/ArvBZjQIESrsxfg==}
+  '@aws-sdk/client-ssm@3.1017.0':
+    resolution: {integrity: sha512-aKIhGfyRiGoSCIHPJQS18pF9xQLygkhA0alJCfy9b5+uy7ird37qW9S5vSVP5sMbW47J/WTf7DK9FGPu/i2LSA==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/core@3.973.24':
@@ -2403,8 +2403,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.322:
-    resolution: {integrity: sha512-vFU34OcrvMcH66T+dYC3G4nURmgfDVewMIu6Q2urXpumAPSMmzvcn04KVVV8Opikq8Vs5nUbO/8laNhNRqSzYw==}
+  electron-to-chromium@1.5.325:
+    resolution: {integrity: sha512-PwfIw7WQSt3xX7yOf5OE/unLzsK9CaN2f/FvV3WjPR1Knoc1T9vePRVV4W1EM301JzzysK51K7FNKcusCr0zYA==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -5203,7 +5203,7 @@ snapshots:
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
-  '@aws-sdk/client-ssm@3.1016.0(aws-crt@1.21.8)':
+  '@aws-sdk/client-ssm@3.1017.0(aws-crt@1.21.8)':
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
@@ -7297,7 +7297,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.10.10
       caniuse-lite: 1.0.30001781
-      electron-to-chromium: 1.5.322
+      electron-to-chromium: 1.5.325
       node-releases: 2.0.36
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
 
@@ -7645,7 +7645,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.322: {}
+  electron-to-chromium@1.5.325: {}
 
   emmet@2.4.11:
     dependencies:
