@@ -540,7 +540,7 @@ serde_urlencoded = "0.7.1"
 serde_with = { version = "3.18.0", default-features = false }
 serde_yaml = "0.9.34"
 serial_test = "3.4.0"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.1"
 sqlx = { version = "0.8.6", default-features = false, features = [
