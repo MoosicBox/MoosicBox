@@ -9,6 +9,7 @@ Markdown to HyperChad Container conversion with GitHub Flavored Markdown support
 - **XSS protection**: Sanitize dangerous HTML tags and URLs when the `xss-protection` feature is enabled
 - **Syntax highlighting**: Highlight code blocks with language-specific coloring when the `syntax-highlighting` feature is enabled
 - **Customizable parsing**: Configure which markdown features to enable via `MarkdownOptions`
+- **Heading anchor IDs**: Auto-generate deterministic heading IDs for same-document links with Unicode-preserving slugs
 
 ## Installation
 
@@ -48,6 +49,15 @@ let options = MarkdownOptions {
 };
 let container = markdown_to_container_with_options(markdown, options);
 ```
+
+### Heading Anchors
+
+Headings automatically receive deterministic `str_id` values so `[link](#fragment)` references work.
+
+- Slugs preserve Unicode letters and numbers
+- Separators and punctuation collapse to `-`
+- Duplicate headings use GitHub-style numeric suffixes (`-1`, `-2`, ...)
+- Explicit heading IDs (`{#my-id}`) take precedence when provided
 
 ## Cargo Features
 

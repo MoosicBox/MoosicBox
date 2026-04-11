@@ -10,6 +10,7 @@
 //! * **Emoji support**: Convert emoji shortcodes (`:rocket:`) when the `emoji` feature is enabled
 //! * **XSS protection**: Optional sanitization of dangerous HTML and URLs when the `xss-protection` feature is enabled
 //! * **Customizable parsing**: Configure which markdown features to enable via [`MarkdownOptions`]
+//! * **Heading anchor IDs**: Auto-generate deterministic heading IDs from heading text for same-document links
 //!
 //! # Examples
 //!
@@ -46,7 +47,7 @@ use hyperchad_transformer_models::{
     FontWeight, LayoutDirection, TextDecorationLine, TextDecorationStyle, UserSelect, WhiteSpace,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use thiserror::Error;
 
 #[cfg(feature = "syntax-highlighting")]
@@ -106,10 +107,17 @@ impl From<HeaderSize> for hyperchad_transformer::HeaderSize {
 
 struct MarkdownContext {
     stack: VecDeque<Container>,
+    heading_slug_counts: BTreeMap<String, usize>,
+    heading_state: Option<HeadingState>,
     options: MarkdownOptions,
     /// State for buffering code block content during syntax highlighting.
     #[cfg(feature = "syntax-highlighting")]
     code_block_state: Option<syntax::CodeBlockState>,
+}
+
+struct HeadingState {
+    explicit_id: Option<String>,
+    text: String,
 }
 
 /// Configuration options for markdown parsing and rendering.
@@ -202,6 +210,8 @@ impl MarkdownContext {
         stack.push_back(root);
         Self {
             stack,
+            heading_slug_counts: BTreeMap::new(),
+            heading_state: None,
             options,
             #[cfg(feature = "syntax-highlighting")]
             code_block_state: None,
@@ -233,6 +243,67 @@ impl MarkdownContext {
             return Err(MarkdownError::StackUnderflow);
         }
         self.stack.pop_back().ok_or(MarkdownError::StackUnderflow)
+    }
+
+    fn start_heading(&mut self, explicit_id: Option<String>) {
+        self.heading_state = Some(HeadingState {
+            explicit_id: explicit_id.filter(|id| !id.is_empty()),
+            text: String::new(),
+        });
+    }
+
+    fn append_heading_text(&mut self, text: &str) {
+        if let Some(state) = self.heading_state.as_mut() {
+            state.text.push_str(text);
+        }
+    }
+
+    fn finish_heading_id(&mut self) -> Option<String> {
+        let state = self.heading_state.take()?;
+        if let Some(explicit_id) = state.explicit_id {
+            return Some(explicit_id);
+        }
+
+        let base_slug = slugify_heading_text(&state.text);
+        Some(self.next_heading_id(&base_slug))
+    }
+
+    fn next_heading_id(&mut self, base_slug: &str) -> String {
+        let count = self
+            .heading_slug_counts
+            .entry(base_slug.to_string())
+            .or_insert(0);
+
+        let slug = if *count == 0 {
+            base_slug.to_string()
+        } else {
+            format!("{base_slug}-{count}")
+        };
+        *count += 1;
+
+        slug
+    }
+}
+
+fn slugify_heading_text(text: &str) -> String {
+    let mut slug = String::new();
+    let mut last_was_separator = false;
+
+    for ch in text.chars().flat_map(char::to_lowercase) {
+        if ch.is_alphanumeric() {
+            slug.push(ch);
+            last_was_separator = false;
+        } else if !last_was_separator {
+            slug.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    let slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() {
+        "section".to_string()
+    } else {
+        slug
     }
 }
 
@@ -332,6 +403,7 @@ pub fn markdown_to_container_with_options(markdown: &str, options: MarkdownOptio
     if options.enable_smart_punctuation {
         parser_options.insert(Options::ENABLE_SMART_PUNCTUATION);
     }
+    parser_options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
 
     let parser = Parser::new_ext(&markdown, parser_options);
     let mut ctx = MarkdownContext::new(options);
@@ -353,6 +425,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         Event::Start(tag) => process_start_tag(ctx, tag),
         Event::End(tag_end) => process_end_tag(ctx, tag_end),
         Event::Text(text) => {
+            ctx.append_heading_text(&text);
             // When syntax highlighting is enabled and we're inside a code block,
             // buffer the text for later highlighting instead of adding it directly.
             #[cfg(feature = "syntax-highlighting")]
@@ -370,23 +443,26 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 ..Default::default()
             })
         }
-        Event::Code(code) => ctx.add_child(Container {
-            element: Element::Text {
-                value: code.to_string(),
-            },
-            classes: vec!["inline-code".to_string()],
-            font_family: Some(vec!["monospace".to_string()]),
-            background: Some(Color::from_hex("#f6f8fa")),
-            padding_left: Some(Number::from(4)),
-            padding_right: Some(Number::from(4)),
-            padding_top: Some(Number::from(2)),
-            padding_bottom: Some(Number::from(2)),
-            border_top_left_radius: Some(Number::from(3)),
-            border_top_right_radius: Some(Number::from(3)),
-            border_bottom_left_radius: Some(Number::from(3)),
-            border_bottom_right_radius: Some(Number::from(3)),
-            ..Default::default()
-        }),
+        Event::Code(code) => {
+            ctx.append_heading_text(&code);
+            ctx.add_child(Container {
+                element: Element::Text {
+                    value: code.to_string(),
+                },
+                classes: vec!["inline-code".to_string()],
+                font_family: Some(vec!["monospace".to_string()]),
+                background: Some(Color::from_hex("#f6f8fa")),
+                padding_left: Some(Number::from(4)),
+                padding_right: Some(Number::from(4)),
+                padding_top: Some(Number::from(2)),
+                padding_bottom: Some(Number::from(2)),
+                border_top_left_radius: Some(Number::from(3)),
+                border_top_right_radius: Some(Number::from(3)),
+                border_bottom_left_radius: Some(Number::from(3)),
+                border_bottom_right_radius: Some(Number::from(3)),
+                ..Default::default()
+            })
+        }
         Event::Html(html) | Event::InlineHtml(html) => {
             if ctx.options.xss_protection && is_dangerous_html(&html) {
                 ctx.add_child(Container {
@@ -404,19 +480,25 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 })
             }
         }
-        Event::SoftBreak => ctx.add_child(Container {
-            element: Element::Text {
-                value: " ".to_string(),
-            },
-            ..Default::default()
-        }),
-        Event::HardBreak => ctx.add_child(Container {
-            element: Element::Text {
-                value: "\n".to_string(),
-            },
-            white_space: Some(WhiteSpace::PreserveWrap),
-            ..Default::default()
-        }),
+        Event::SoftBreak => {
+            ctx.append_heading_text(" ");
+            ctx.add_child(Container {
+                element: Element::Text {
+                    value: " ".to_string(),
+                },
+                ..Default::default()
+            })
+        }
+        Event::HardBreak => {
+            ctx.append_heading_text(" ");
+            ctx.add_child(Container {
+                element: Element::Text {
+                    value: "\n".to_string(),
+                },
+                white_space: Some(WhiteSpace::PreserveWrap),
+                ..Default::default()
+            })
+        }
         Event::Rule => ctx.add_child(Container {
             element: Element::Div,
             classes: vec!["markdown-hr".to_string()],
@@ -454,7 +536,8 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             });
             Ok(())
         }
-        Tag::Heading { level, .. } => {
+        Tag::Heading { level, id, .. } => {
+            ctx.start_heading(id.map(|value| value.to_string()));
             let size = HeaderSize::from(level);
             let (margin_top, margin_bottom, font_size) = match size {
                 HeaderSize::H1 => (32, 16, 32),
@@ -708,8 +791,13 @@ fn process_end_tag(ctx: &mut MarkdownContext, tag_end: TagEnd) -> Result<(), Mar
             ctx.add_child(container)?;
             Ok(())
         }
+        TagEnd::Heading(_) => {
+            let mut container = ctx.pop()?;
+            container.str_id = ctx.finish_heading_id();
+            ctx.add_child(container)?;
+            Ok(())
+        }
         TagEnd::Paragraph
-        | TagEnd::Heading(_)
         | TagEnd::BlockQuote(_)
         | TagEnd::List(_)
         | TagEnd::Item
@@ -815,6 +903,48 @@ mod tests {
         let md = "# H1\n## H2\n### H3";
         let container = markdown_to_container(md);
         assert_eq!(container.children.len(), 3);
+    }
+
+    #[test_log::test]
+    fn test_heading_slug_generation() {
+        let md = "## Interactive Mode Protocol";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 1);
+        assert_eq!(
+            container.children[0].str_id,
+            Some("interactive-mode-protocol".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_heading_slug_deduplication_uses_github_style_suffixes() {
+        let md = "# Repeat\n## Repeat\n### Repeat";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 3);
+        assert_eq!(container.children[0].str_id, Some("repeat".to_string()));
+        assert_eq!(container.children[1].str_id, Some("repeat-1".to_string()));
+        assert_eq!(container.children[2].str_id, Some("repeat-2".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_heading_slug_preserves_unicode_characters() {
+        let md = "## Café\n## Привет мир\n## 你好 世界";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 3);
+        assert_eq!(container.children[0].str_id, Some("café".to_string()));
+        assert_eq!(container.children[1].str_id, Some("привет-мир".to_string()));
+        assert_eq!(container.children[2].str_id, Some("你好-世界".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_heading_slug_uses_explicit_heading_id() {
+        let md = "## Original Title {#custom-heading-id}";
+        let container = markdown_to_container(md);
+        assert_eq!(container.children.len(), 1);
+        assert_eq!(
+            container.children[0].str_id,
+            Some("custom-heading-id".to_string())
+        );
     }
 
     #[test_log::test]
