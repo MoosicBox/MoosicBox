@@ -1,5 +1,3 @@
-Setext heading
-==============
+# Setext heading
 
-Subheading
-----------
+## Subheading

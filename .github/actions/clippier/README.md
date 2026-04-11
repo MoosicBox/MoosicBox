@@ -183,7 +183,7 @@ Combine conditions using `AND`, `OR`, `NOT`, and `()` for grouping:
       skip-if: 'description="Internal AND Testing"'
 ```
 
-**Operator Precedence**: `NOT` > `AND` > `OR`  
+**Operator Precedence**: `NOT` > `AND` > `OR`
 **Case Insensitive**: `AND`, `and`, `And` all work
 
 **Common Use Cases:**

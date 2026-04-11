@@ -187,9 +187,9 @@ MoosicBox supports multiple database backends with some behavior differences to 
 
 | Database   | Savepoint After Error | Recovery Method                                |
 | ---------- | --------------------- | ---------------------------------------------- |
-| SQLite     | ✅ Supported          | Create savepoint after error                   |
-| MySQL      | ✅ Supported          | Create savepoint after error                   |
-| PostgreSQL | ❌ Not Supported      | Must use savepoint BEFORE error, then rollback |
+| SQLite     | ✅ Supported           | Create savepoint after error                   |
+| MySQL      | ✅ Supported           | Create savepoint after error                   |
+| PostgreSQL | ❌ Not Supported       | Must use savepoint BEFORE error, then rollback |
 
 ### PostgreSQL Transaction Semantics
 

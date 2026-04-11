@@ -356,10 +356,10 @@ switchy_web_server = { workspace = true, features = ["actix", "cors", "openapi-a
 
 | Example       | Focus              | Documentation    | Interactive Testing |
 | ------------- | ------------------ | ---------------- | ------------------- |
-| **openapi**   | API documentation  | Full OpenAPI 3.0 | ✅ Swagger UI       |
-| simple_get    | Basic routing      | None             | ❌ Manual only      |
-| nested_get    | Route organization | None             | ❌ Manual only      |
-| basic_handler | Handler patterns   | None             | ❌ Manual only      |
+| **openapi**   | API documentation  | Full OpenAPI 3.0 | ✅ Swagger UI        |
+| simple_get    | Basic routing      | None             | ❌ Manual only       |
+| nested_get    | Route organization | None             | ❌ Manual only       |
+| basic_handler | Handler patterns   | None             | ❌ Manual only       |
 
 ## Real-World Applications
 

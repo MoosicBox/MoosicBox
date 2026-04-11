@@ -21,12 +21,12 @@ This test suite validates the dual-mode extractor system that allows the same ha
 
 | Extractor Type   | Actix Tests | Simulator Tests | Edge Cases | Performance |
 | ---------------- | ----------- | --------------- | ---------- | ----------- |
-| **Query**        | ✅          | ✅              | ✅         | ✅          |
-| **Json**         | ✅          | ✅              | ✅         | ✅          |
-| **Path**         | ✅          | ✅              | ✅         | -           |
-| **Header**       | ✅          | ✅              | ✅         | ✅          |
-| **State**        | ✅          | ✅              | -          | -           |
-| **Combinations** | ✅          | ✅              | -          | -           |
+| **Query**        | ✅           | ✅               | ✅          | ✅           |
+| **Json**         | ✅           | ✅               | ✅          | ✅           |
+| **Path**         | ✅           | ✅               | ✅          | -           |
+| **Header**       | ✅           | ✅               | ✅          | ✅           |
+| **State**        | ✅           | ✅               | -          | -           |
+| **Combinations** | ✅           | ✅               | -          | -           |
 
 ## Running Tests
 

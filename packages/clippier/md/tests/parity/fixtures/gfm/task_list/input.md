@@ -1,2 +1,2 @@
 - [x] done
-- [ ] pending  
+- [ ] pending

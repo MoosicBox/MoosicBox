@@ -1121,24 +1121,24 @@ TUI behavior for tool output:
 
 #### Supported Tools
 
-| Tool         | Language/Format         | Capabilities | Detection                                                                 |
-| ------------ | ----------------------- | ------------ | ------------------------------------------------------------------------- |
-| `rustfmt`    | Rust                    | Format       | `cargo` in PATH                                                           |
-| `clippy`     | Rust                    | Lint         | `cargo` in PATH                                                           |
-| `taplo`      | TOML                    | Format, Lint | `taplo` binary                                                            |
-| `prettier`   | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
-| `biome`      | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
-| `eslint`     | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `dprint`     | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `clippier_md`| Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                          |
-| `remark`     | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `mdformat`   | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
-| `yamlfmt`    | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
-| `ruff`       | Python                  | Format, Lint | `ruff` binary                                                             |
-| `black`      | Python                  | Format       | `black` binary                                                            |
-| `gofmt`      | Go                      | Format       | `gofmt` binary                                                            |
-| `shfmt`      | Shell                   | Format       | `shfmt` binary                                                            |
-| `shellcheck` | Shell                   | Lint         | `shellcheck` binary                                                       |
+| Tool          | Language/Format         | Capabilities | Detection                                                                 |
+| ------------- | ----------------------- | ------------ | ------------------------------------------------------------------------- |
+| `rustfmt`     | Rust                    | Format       | `cargo` in PATH                                                           |
+| `clippy`      | Rust                    | Lint         | `cargo` in PATH                                                           |
+| `taplo`       | TOML                    | Format, Lint | `taplo` binary                                                            |
+| `prettier`    | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
+| `biome`       | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
+| `eslint`      | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `dprint`      | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `clippier_md` | Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                         |
+| `remark`      | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `mdformat`    | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
+| `yamlfmt`     | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
+| `ruff`        | Python                  | Format, Lint | `ruff` binary                                                             |
+| `black`       | Python                  | Format       | `black` binary                                                            |
+| `gofmt`       | Go                      | Format       | `gofmt` binary                                                            |
+| `shfmt`       | Shell                   | Format       | `shfmt` binary                                                            |
+| `shellcheck`  | Shell                   | Lint         | `shellcheck` binary                                                       |
 
 #### Output Format (JSON)
 

@@ -13,13 +13,13 @@ This example demonstrates the complete HTTP request lifecycle event system in Hy
 
 ## Features Demonstrated
 
-✅ Loading states with spinner visibility toggle  
-✅ Success/error message display  
-✅ Network error handling  
-✅ Simulated slow/failing endpoints  
-✅ Form submission with validation feedback  
-✅ Multiple concurrent HTTP event handlers  
-✅ Real-world task management UI  
+✅ Loading states with spinner visibility toggle
+✅ Success/error message display
+✅ Network error handling
+✅ Simulated slow/failing endpoints
+✅ Form submission with validation feedback
+✅ Multiple concurrent HTTP event handlers
+✅ Real-world task management UI
 ✅ Clean HyperChad syntax with `fx` DSL
 
 ## Running the Example

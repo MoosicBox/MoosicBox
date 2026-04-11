@@ -219,8 +219,8 @@ switchy-migrate mark-all-completed --drop --include-failed --database-url <DATAB
 
 #### Behavior Matrix
 
-| Scope                     | Untracked           | Completed           | Failed                | InProgress            | Special                      |
-| ------------------------- | ------------------- | ------------------- | --------------------- | --------------------- | ---------------------------- |
+| Scope                     | Untracked          | Completed           | Failed                | InProgress            | Special                      |
+| ------------------------- | ------------------ | ------------------- | --------------------- | --------------------- | ---------------------------- |
 | **Default**               | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged)   | ⏭️ Skip (unchanged)   | -                            |
 | **--include-failed**      | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged)   | -                            |
 | **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged)   | ⚠️ Update → Completed | -                            |

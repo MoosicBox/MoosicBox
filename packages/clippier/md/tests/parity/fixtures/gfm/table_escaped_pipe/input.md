@@ -1,3 +1,3 @@
-| Key | Value |
-| --- | ----- |
+| Key             | Value |
+| --------------- | ----- |
 | escaped \| pipe | works |

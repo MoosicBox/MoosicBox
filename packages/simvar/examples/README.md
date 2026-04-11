@@ -16,7 +16,7 @@ These examples showcase different aspects of web server simulation and testing:
 
 ### 1. Basic Web Server (`basic_web_server/`)
 
-**Difficulty**: Beginner  
+**Difficulty**: Beginner
 **Focus**: Fundamentals of simvar + web server integration
 
 A simple HTTP server simulation that demonstrates:
@@ -30,7 +30,7 @@ A simple HTTP server simulation that demonstrates:
 
 ### 2. Load Testing (`load_testing/`)
 
-**Difficulty**: Intermediate  
+**Difficulty**: Intermediate
 **Focus**: Performance testing under various load patterns
 
 Advanced load testing simulation featuring:
@@ -44,7 +44,7 @@ Advanced load testing simulation featuring:
 
 ### 3. API Testing (`api_testing/`)
 
-**Difficulty**: Intermediate  
+**Difficulty**: Intermediate
 **Focus**: Comprehensive REST API validation
 
 Complete API testing framework with:
@@ -58,7 +58,7 @@ Complete API testing framework with:
 
 ### 4. Network Failure Simulation (`network_failure/`)
 
-**Difficulty**: Advanced  
+**Difficulty**: Advanced
 **Focus**: Resilience testing under network stress
 
 Network resilience testing environment with:
@@ -72,7 +72,7 @@ Network resilience testing environment with:
 
 ### 5. Performance Monitoring (`performance_monitor/`)
 
-**Difficulty**: Advanced  
+**Difficulty**: Advanced
 **Focus**: Real-time performance monitoring and alerting
 
 Comprehensive performance monitoring system featuring:

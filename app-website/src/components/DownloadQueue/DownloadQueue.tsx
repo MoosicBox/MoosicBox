@@ -24,9 +24,7 @@ function downloadTaskProgress(task: Api.DownloadTask): JSXElement {
                 {typeof task.bytes === 'number' &&
                 typeof task.totalBytes === 'number'
                     ? `${(task.bytes / 1024 / 1024).toFixed(2)}/${(
-                          task.totalBytes /
-                          1024 /
-                          1024
+                          task.totalBytes / 1024 / 1024
                       ).toFixed(2)} MiB - `
                     : ''}
                 {~~task.progress}%

@@ -75,7 +75,7 @@ The load balancer is configured through environment variables.
 | -------------- | ---------------------------------------- | -------------------------- |
 | `PORT`         | Port for HTTP traffic                    | `6188`                     |
 | `SSL_PORT`     | Port for HTTPS traffic                   | `6189`                     |
-| `CLUSTERS`     | Cluster configuration (see format below) | _Required_                 |
+| `CLUSTERS`     | Cluster configuration (see format below) | *Required*                 |
 | `SSL_CRT_PATH` | Path to SSL certificate file             | `/etc/pingora/ssl/tls.crt` |
 | `SSL_KEY_PATH` | Path to SSL private key file             | `/etc/pingora/ssl/tls.key` |
 

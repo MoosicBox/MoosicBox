@@ -1,9 +1,6 @@
 {
     "indentWidth": 4,
-    "includes": [
-        "**/*.yml",
-        "**/*.yaml"
-    ],
+    "includes": ["**/*.yml", "**/*.yaml"],
     "excludes": [
         "**/node_modules/**",
         "**/target/**",
@@ -15,7 +12,5 @@
         "packages/opus_native/libopus/**",
         "kubernetes/cert-manager.yaml"
     ],
-    "plugins": [
-        "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"
-    ]
+    "plugins": ["https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"]
 }

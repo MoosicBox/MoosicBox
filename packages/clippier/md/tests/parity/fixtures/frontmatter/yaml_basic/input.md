@@ -3,6 +3,7 @@ title: "Example"
 tags:
   - docs
 ---
+
 #Heading
 
-Paragraph with trailing spaces.  
+Paragraph with trailing spaces.

@@ -1,12 +1,12 @@
 plugins:
-  - remark-frontmatter
-  - remark-gfm
-  - remark-mdx
+    - remark-frontmatter
+    - remark-gfm
+    - remark-mdx
 
 settings:
-  bullet: "-"
-  bulletOrdered: "."
-  listItemIndent: "tab"
-  emphasis: "*"
-  strong: "*"
-  fences: true
+    bullet: "-"
+    bulletOrdered: "."
+    listItemIndent: "tab"
+    emphasis: "*"
+    strong: "*"
+    fences: true

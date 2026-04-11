@@ -21,12 +21,12 @@ The migration runner and CLI support multiple database backends with a mostly sh
 
 | Capability                                                   | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
 | ------------------------------------------------------------ | ------ | ---------- | ----- | ------ | ------------- |
-| CLI URL support (`switchy-migrate -d ...`)                   | ✅     | ✅         | ✅    | ✅     | ✅            |
-| Migration create/status/migrate/rollback/validate commands   | ✅     | ✅         | ✅    | ✅     | ✅            |
-| Runner core flows (apply/list/rollback/checksum/dirty-state) | ✅     | ✅         | ✅    | ✅     | ✅            |
-| Savepoint API support in backend                             | ✅     | ✅         | ✅    | ❌     | ✅            |
-| Full cascade/drop-column dependency behavior parity          | ✅     | ✅         | ✅    | ⚠️     | ✅            |
-| Built-in test coverage in this crate (default CI path)       | ✅     | ⚠️         | ⚠️    | ✅     | ✅            |
+| CLI URL support (`switchy-migrate -d ...`)                   | ✅      | ✅          | ✅     | ✅      | ✅             |
+| Migration create/status/migrate/rollback/validate commands   | ✅      | ✅          | ✅     | ✅      | ✅             |
+| Runner core flows (apply/list/rollback/checksum/dirty-state) | ✅      | ✅          | ✅     | ✅      | ✅             |
+| Savepoint API support in backend                             | ✅      | ✅          | ✅     | ❌      | ✅             |
+| Full cascade/drop-column dependency behavior parity          | ✅      | ✅          | ✅     | ⚠️     | ✅             |
+| Built-in test coverage in this crate (default CI path)       | ✅      | ⚠️         | ⚠️    | ✅      | ✅             |
 
 Notes:
 
@@ -255,7 +255,7 @@ Only marks untracked (pending) migrations as completed:
 
 | Current State | Action  | Result     |
 | ------------- | ------- | ---------- |
-| Not Tracked   | ✅ Mark | Completed  |
+| Not Tracked   | ✅ Mark  | Completed  |
 | Completed     | ⏭️ Skip | Completed  |
 | Failed        | ⏭️ Skip | Failed     |
 | InProgress    | ⏭️ Skip | InProgress |
@@ -272,7 +272,7 @@ Marks pending and failed migrations:
 
 | Current State | Action    | Result     |
 | ------------- | --------- | ---------- |
-| Not Tracked   | ✅ Mark   | Completed  |
+| Not Tracked   | ✅ Mark    | Completed  |
 | Completed     | ⏭️ Skip   | Completed  |
 | Failed        | ⚠️ Update | Completed  |
 | InProgress    | ⏭️ Skip   | InProgress |
@@ -289,7 +289,7 @@ Marks pending and in-progress migrations:
 
 | Current State | Action    | Result    |
 | ------------- | --------- | --------- |
-| Not Tracked   | ✅ Mark   | Completed |
+| Not Tracked   | ✅ Mark    | Completed |
 | Completed     | ⏭️ Skip   | Completed |
 | Failed        | ⏭️ Skip   | Failed    |
 | InProgress    | ⚠️ Update | Completed |
@@ -306,7 +306,7 @@ Marks all migrations regardless of state:
 
 | Current State | Action    | Result    |
 | ------------- | --------- | --------- |
-| Not Tracked   | ✅ Mark   | Completed |
+| Not Tracked   | ✅ Mark    | Completed |
 | Completed     | ⏭️ Skip   | Completed |
 | Failed        | ⚠️ Update | Completed |
 | InProgress    | ⚠️ Update | Completed |

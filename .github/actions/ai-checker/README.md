@@ -175,14 +175,14 @@ jobs:
 
 ### PR Creation (`create-pr` command)
 
-| Input                   | Description                          | Default                        |
-| ----------------------- | ------------------------------------ | ------------------------------ |
-| `branch_name`           | Branch name (required for create-pr) |                                |
-| `pr_base_branch`        | Base branch for PR                   | `master`                       |
+| Input                   | Description                          | Default                       |
+| ----------------------- | ------------------------------------ | ----------------------------- |
+| `branch_name`           | Branch name (required for create-pr) |                               |
+| `pr_base_branch`        | Base branch for PR                   | `master`                      |
 | `pr_title`              | PR title (supports ${variables})     | `📝 Automated updates from AI` |
-| `pr_body`               | PR body (supports ${variables})      | `""`                           |
-| `pr_labels`             | Comma-separated PR labels            | `automated`                    |
-| `pr_skip_if_no_changes` | Skip PR creation if no changes       | `true`                         |
+| `pr_body`               | PR body (supports ${variables})      | `""`                          |
+| `pr_labels`             | Comma-separated PR labels            | `automated`                   |
+| `pr_skip_if_no_changes` | Skip PR creation if no changes       | `true`                        |
 
 ### Optional (`check` command)
 
@@ -196,7 +196,7 @@ jobs:
 | `commit_message`                   | Commit message (supports template variables)                             |                               |
 | `auto_commit`                      | Automatically commit changes                                             | `true`                        |
 | `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                       |
-| `summary_title`                    | Title for workflow summary section                                       | `💭 AI Execution Details`     |
+| `summary_title`                    | Title for workflow summary section                                       | `💭 AI Execution Details`      |
 | `model`                            | Model                                                                    |                               |
 | `max_turns`                        | Max turns                                                                |                               |
 | `model_args`                       | Additional model arguments                                               |                               |

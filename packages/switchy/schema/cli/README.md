@@ -22,9 +22,9 @@ The binary is installed as `switchy-migrate`.
 
 | Capability                                                | SQLite | PostgreSQL | MySQL | DuckDB | Turso (local) |
 | --------------------------------------------------------- | ------ | ---------- | ----- | ------ | ------------- |
-| `create` / `status` / `migrate` / `rollback` / `validate` | ✅     | ✅         | ✅    | ✅     | ✅            |
-| `--database-url` scheme support                           | ✅     | ✅         | ✅    | ✅     | ✅            |
-| Default test coverage in this crate                       | ✅     | ⚠️         | ⚠️    | ✅     | ✅            |
+| `create` / `status` / `migrate` / `rollback` / `validate` | ✅      | ✅          | ✅     | ✅      | ✅             |
+| `--database-url` scheme support                           | ✅      | ✅          | ✅     | ✅      | ✅             |
+| Default test coverage in this crate                       | ✅      | ⚠️         | ⚠️    | ✅      | ✅             |
 
 Notes:
 

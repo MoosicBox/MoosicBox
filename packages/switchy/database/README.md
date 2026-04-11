@@ -196,10 +196,10 @@ async fn process_batch(tx: &dyn Database, batch: &[String]) -> Result<(), Databa
 
 | Database   | Savepoint Support | Notes                               |
 | ---------- | ----------------- | ----------------------------------- |
-| SQLite     | ✅ Full           | Can create savepoints after errors  |
-| PostgreSQL | ✅ Full           | Must create before potential errors |
-| MySQL      | ✅ Full (InnoDB)  | Requires InnoDB storage engine      |
-| DuckDB     | ❌ Not supported  | Returns `UnsupportedOperation`      |
+| SQLite     | ✅ Full            | Can create savepoints after errors  |
+| PostgreSQL | ✅ Full            | Must create before potential errors |
+| MySQL      | ✅ Full (InnoDB)   | Requires InnoDB storage engine      |
+| DuckDB     | ❌ Not supported   | Returns `UnsupportedOperation`      |
 
 #### Common Use Cases
 

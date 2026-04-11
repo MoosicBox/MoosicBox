@@ -33,7 +33,6 @@ jobs:
                     #   tag: release
                     #   bundled: true
                     #   features: desktop,bundled
-
                     - os: ubuntu-latest
                       profile: release-lto
                       target: desktop
