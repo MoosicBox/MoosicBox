@@ -2194,6 +2194,30 @@ impl Generator {
                 "margin_left".to_string(),
                 quote! { margin_left: Some(#value_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "MarginTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginRight",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginBottom",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginLeft",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-x") {
@@ -2206,6 +2230,18 @@ impl Generator {
                 "margin_right".to_string(),
                 quote! { margin_right: Some(#value_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "MarginLeft",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginRight",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-y") {
@@ -2217,6 +2253,18 @@ impl Generator {
             field_assignments.insert(
                 "margin_bottom".to_string(),
                 quote! { margin_bottom: Some(#value_tokens) },
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "MarginBottom",
+                responsive_overrides,
+                has_responsive,
             );
         }
 
@@ -2239,6 +2287,30 @@ impl Generator {
                 "border_left".to_string(),
                 quote! { border_left: Some(#border_tokens) },
             );
+            Self::push_border_override_statement(
+                value,
+                "BorderTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderRight",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderBottom",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderLeft",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-x") {
@@ -2251,6 +2323,18 @@ impl Generator {
                 "border_right".to_string(),
                 quote! { border_right: Some(#border_tokens) },
             );
+            Self::push_border_override_statement(
+                value,
+                "BorderLeft",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderRight",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-y") {
@@ -2262,6 +2346,18 @@ impl Generator {
             field_assignments.insert(
                 "border_bottom".to_string(),
                 quote! { border_bottom: Some(#border_tokens) },
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_border_override_statement(
+                value,
+                "BorderBottom",
+                responsive_overrides,
+                has_responsive,
             );
         }
 
@@ -2285,6 +2381,30 @@ impl Generator {
                 "border_bottom_right_radius".to_string(),
                 quote! { border_bottom_right_radius: Some(#radius_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopRightRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomRightRadius",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
@@ -2298,6 +2418,18 @@ impl Generator {
             field_assignments.insert(
                 "border_top_right_radius".to_string(),
                 quote! { border_top_right_radius: Some(#radius_tokens) },
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopRightRadius",
+                responsive_overrides,
+                has_responsive,
             );
         }
 
@@ -2313,6 +2445,18 @@ impl Generator {
                 "border_bottom_right_radius".to_string(),
                 quote! { border_bottom_right_radius: Some(#radius_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopRightRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomRightRadius",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
@@ -2326,6 +2470,18 @@ impl Generator {
             field_assignments.insert(
                 "border_bottom_right_radius".to_string(),
                 quote! { border_bottom_right_radius: Some(#radius_tokens) },
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomRightRadius",
+                responsive_overrides,
+                has_responsive,
             );
         }
 
@@ -2341,6 +2497,18 @@ impl Generator {
                 "border_bottom_left_radius".to_string(),
                 quote! { border_bottom_left_radius: Some(#radius_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "BorderTopLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "BorderBottomLeftRadius",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         // Handle gap shortcut
@@ -2351,6 +2519,18 @@ impl Generator {
                 quote! { column_gap: Some(#gap_tokens.clone()) },
             );
             field_assignments.insert("row_gap".to_string(), quote! { row_gap: Some(#gap_tokens) });
+            Self::push_number_override_statement(
+                value,
+                "ColumnGap",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "RowGap",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         // Handle flex shortcuts
@@ -2420,6 +2600,18 @@ impl Generator {
         has_responsive: &mut bool,
     ) {
         if let Some(statement) = Self::responsive_number_override_statement(value, override_item) {
+            *has_responsive = true;
+            responsive_overrides.push(statement);
+        }
+    }
+
+    fn push_border_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+        responsive_overrides: &mut Vec<TokenStream>,
+        has_responsive: &mut bool,
+    ) {
+        if let Some(statement) = Self::responsive_border_override_statement(value, override_item) {
             *has_responsive = true;
             responsive_overrides.push(statement);
         }
@@ -2630,6 +2822,69 @@ impl Generator {
                                             <hyperchad_transformer::Number as std::convert::From<_>>::from(
                                                 __default_value,
                                             ),
+                                        )
+                                    }),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    fn responsive_border_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+    ) -> Option<TokenStream> {
+        let responsive_expr = Self::responsive_expression_tokens(value)?;
+        let override_item_ident = format_ident!("{}", override_item);
+
+        Some(quote! {
+            {
+                let __if_expr = #responsive_expr;
+                if let Some(__responsive_value) = __if_expr.value {
+                    match __if_expr.condition {
+                        hyperchad_template::Responsive::Target(__target) => {
+                            __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                condition: hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                    name: __target,
+                                },
+                                overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                    {
+                                        use hyperchad_template::IntoBorder;
+                                        (__responsive_value).into_border()
+                                    },
+                                )],
+                                default: __if_expr.default.map(|__default_value| {
+                                    hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        {
+                                            use hyperchad_template::IntoBorder;
+                                            (__default_value).into_border()
+                                        },
+                                    )
+                                }),
+                            });
+                        }
+                        hyperchad_template::Responsive::Targets(__targets) => {
+                            for __target in __targets {
+                                __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                    condition:
+                                        hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                            name: __target,
+                                        },
+                                    overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        {
+                                            use hyperchad_template::IntoBorder;
+                                            (__responsive_value.clone()).into_border()
+                                        },
+                                    )],
+                                    default: __if_expr.default.clone().map(|__default_value| {
+                                        hyperchad_transformer::OverrideItem::#override_item_ident(
+                                            {
+                                                use hyperchad_template::IntoBorder;
+                                                (__default_value).into_border()
+                                            },
                                         )
                                     }),
                                 });
@@ -4481,11 +4736,27 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
-                // For expressions, use the IntoBorder trait for flexible conversion
-                quote! {
-                    {
-                        use hyperchad_template::IntoBorder;
-                        (#expr).into_border()
+                if Self::expr_contains_responsive_call(&expr) {
+                    quote! {
+                        {
+                            let __if_expr = #expr;
+                            use hyperchad_template::IntoBorder;
+                            if let Some(__default_value) = __if_expr.default {
+                                (__default_value).into_border()
+                            } else if let Some(__value) = __if_expr.value {
+                                (__value).into_border()
+                            } else {
+                                (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1))
+                            }
+                        }
+                    }
+                } else {
+                    // For expressions, use the IntoBorder trait for flexible conversion
+                    quote! {
+                        {
+                            use hyperchad_template::IntoBorder;
+                            (#expr).into_border()
+                        }
                     }
                 }
             }
@@ -4506,11 +4777,28 @@ impl Generator {
                 } else {
                     // Complex expression - let the IntoBorder trait handle it
                     let expr = Self::handle_brace_splice_expression(&items);
-                    quote! {
-                        {
-                            use hyperchad_template::IntoBorder;
-                            let result = { #expr };
-                            result.into_border()
+                    let expr_string = expr.to_string();
+                    if expr_string.contains("if_responsive") {
+                        quote! {
+                            {
+                                let __if_expr = { #expr };
+                                use hyperchad_template::IntoBorder;
+                                if let Some(__default_value) = __if_expr.default {
+                                    (__default_value).into_border()
+                                } else if let Some(__value) = __if_expr.value {
+                                    (__value).into_border()
+                                } else {
+                                    (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1))
+                                }
+                            }
+                        }
+                    } else {
+                        quote! {
+                            {
+                                use hyperchad_template::IntoBorder;
+                                let result = { #expr };
+                                result.into_border()
+                            }
                         }
                     }
                 }

@@ -187,6 +187,143 @@ fn test_mixed_responsive_and_static_attributes() {
 
 #[test]
 #[cfg(feature = "logic")]
+fn test_responsive_margin_shorthand_attributes() {
+    let containers = container! {
+        div #test-margin margin=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
+            "Margin test"
+        }
+    };
+
+    let container = &containers[0];
+
+    assert_eq!(container.margin_top, Some(Number::Integer(20)));
+    assert_eq!(container.margin_right, Some(Number::Integer(20)));
+    assert_eq!(container.margin_bottom, Some(Number::Integer(20)));
+    assert_eq!(container.margin_left, Some(Number::Integer(20)));
+    assert_eq!(container.overrides.len(), 4);
+}
+
+#[test]
+#[cfg(feature = "logic")]
+fn test_responsive_gap_shorthand_attributes() {
+    let containers = container! {
+        div #test-gap gap=(if_responsive("mobile").then::<i32>(8).or_else(16)) {
+            "Gap test"
+        }
+    };
+
+    let container = &containers[0];
+
+    assert_eq!(container.column_gap, Some(Number::Integer(16)));
+    assert_eq!(container.row_gap, Some(Number::Integer(16)));
+    assert_eq!(container.overrides.len(), 2);
+
+    let mut found_column_gap = false;
+    let mut found_row_gap = false;
+    for config in &container.overrides {
+        assert_eq!(
+            config.condition,
+            OverrideCondition::ResponsiveTarget {
+                name: "mobile".to_string()
+            }
+        );
+        match &config.overrides[0] {
+            OverrideItem::ColumnGap(value) => {
+                assert_eq!(value, &Number::Integer(8));
+                assert_eq!(
+                    config.default,
+                    Some(OverrideItem::ColumnGap(Number::Integer(16)))
+                );
+                found_column_gap = true;
+            }
+            OverrideItem::RowGap(value) => {
+                assert_eq!(value, &Number::Integer(8));
+                assert_eq!(
+                    config.default,
+                    Some(OverrideItem::RowGap(Number::Integer(16)))
+                );
+                found_row_gap = true;
+            }
+            item => panic!("unexpected override item: {item:?}"),
+        }
+    }
+
+    assert!(found_column_gap);
+    assert!(found_row_gap);
+}
+
+#[test]
+#[cfg(feature = "logic")]
+fn test_responsive_border_radius_shorthand_attributes() {
+    let containers = container! {
+        div #test-radius border-radius=(if_responsive("mobile").then::<i32>(6).or_else(12)) {
+            "Radius test"
+        }
+    };
+
+    let container = &containers[0];
+
+    assert_eq!(container.border_top_left_radius, Some(Number::Integer(12)));
+    assert_eq!(container.border_top_right_radius, Some(Number::Integer(12)));
+    assert_eq!(
+        container.border_bottom_left_radius,
+        Some(Number::Integer(12))
+    );
+    assert_eq!(
+        container.border_bottom_right_radius,
+        Some(Number::Integer(12))
+    );
+    assert_eq!(container.overrides.len(), 4);
+}
+
+#[test]
+#[cfg(feature = "logic")]
+fn test_responsive_border_shorthand_attributes() {
+    let containers = container! {
+        div #test-border
+            border=(
+                if_responsive("mobile")
+                    .then::<(i32, &str)>((2, "#111111"))
+                    .or_else((1, "#222222"))
+            )
+        {
+            "Border test"
+        }
+    };
+
+    let container = &containers[0];
+
+    assert!(container.border_top.is_some());
+    assert!(container.border_right.is_some());
+    assert!(container.border_bottom.is_some());
+    assert!(container.border_left.is_some());
+    assert_eq!(container.overrides.len(), 4);
+
+    let mut border_override_count = 0;
+    for config in &container.overrides {
+        assert_eq!(
+            config.condition,
+            OverrideCondition::ResponsiveTarget {
+                name: "mobile".to_string()
+            }
+        );
+        match &config.overrides[0] {
+            OverrideItem::BorderTop((_, width))
+            | OverrideItem::BorderRight((_, width))
+            | OverrideItem::BorderBottom((_, width))
+            | OverrideItem::BorderLeft((_, width)) => {
+                assert_eq!(width, &Number::Integer(2));
+                border_override_count += 1;
+            }
+            item => panic!("unexpected override item: {item:?}"),
+        }
+    }
+
+    assert_eq!(border_override_count, 4);
+}
+
+#[test]
+#[cfg(feature = "logic")]
 fn test_responsive_overrides_render_media_query_css() {
     let containers = container! {
         div #responsive-css-test
