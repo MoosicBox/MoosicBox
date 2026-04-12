@@ -41,7 +41,8 @@ use std::{collections::BTreeMap, io::Write};
 use async_trait::async_trait;
 use flume::Receiver;
 use html::{
-    element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
+    color_to_css_string, element_classes_to_html, element_style_to_html, number_to_html_string,
+    write_css_attr_important,
 };
 use hyperchad_renderer::{
     Color, Handle, HtmlTagRenderer, RenderRunner, Renderer, ToRenderRunner, View,
@@ -323,23 +324,179 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             number_to_html_string(x, true).as_bytes(),
                         )?;
                     }
-                    OverrideItem::StrId(..)
-                    | OverrideItem::Classes(..)
-                    | OverrideItem::OverflowX(..)
-                    | OverrideItem::OverflowY(..)
-                    | OverrideItem::JustifyContent(..)
-                    | OverrideItem::TextDecoration(..)
-                    | OverrideItem::FontFamily(..)
-                    | OverrideItem::FontWeight(..)
-                    | OverrideItem::Flex(..)
-                    | OverrideItem::Cursor(..)
-                    | OverrideItem::Position(..)
-                    | OverrideItem::Background(..)
-                    | OverrideItem::BorderTop(..)
-                    | OverrideItem::BorderRight(..)
-                    | OverrideItem::BorderBottom(..)
-                    | OverrideItem::BorderLeft(..)
-                    | OverrideItem::Color(..) => {}
+                    OverrideItem::JustifyContent(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            match x {
+                                hyperchad_transformer::models::JustifyContent::Start => b"start",
+                                hyperchad_transformer::models::JustifyContent::Center => b"center",
+                                hyperchad_transformer::models::JustifyContent::End => b"end",
+                                hyperchad_transformer::models::JustifyContent::SpaceBetween => {
+                                    b"space-between"
+                                }
+                                hyperchad_transformer::models::JustifyContent::SpaceEvenly => {
+                                    b"space-evenly"
+                                }
+                            },
+                        )?;
+                    }
+                    OverrideItem::OverflowX(x) | OverrideItem::OverflowY(x) => {
+                        let value = match x {
+                            hyperchad_transformer::models::LayoutOverflow::Auto => {
+                                Some(b"auto".as_slice())
+                            }
+                            hyperchad_transformer::models::LayoutOverflow::Scroll => {
+                                Some(b"scroll".as_slice())
+                            }
+                            hyperchad_transformer::models::LayoutOverflow::Hidden => {
+                                Some(b"hidden".as_slice())
+                            }
+                            hyperchad_transformer::models::LayoutOverflow::Expand
+                            | hyperchad_transformer::models::LayoutOverflow::Squash
+                            | hyperchad_transformer::models::LayoutOverflow::Wrap { .. } => None,
+                        };
+
+                        if let Some(value) = value {
+                            write_css_attr_important(f, override_item_to_css_name(o), value)?;
+                        }
+                    }
+                    OverrideItem::TextDecoration(x) => {
+                        if let Some(color) = x.color {
+                            write_css_attr_important(
+                                f,
+                                b"text-decoration-color",
+                                color_to_css_string(color).as_bytes(),
+                            )?;
+                        }
+                        if !x.line.is_empty() {
+                            let line = x
+                                .line
+                                .iter()
+                                .map(|line| match line {
+                                    hyperchad_transformer::models::TextDecorationLine::Inherit => {
+                                        "inherit"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationLine::None => {
+                                        "none"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationLine::Underline => {
+                                        "underline"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationLine::Overline => {
+                                        "overline"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationLine::LineThrough => {
+                                        "line-through"
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            write_css_attr_important(f, b"text-decoration-line", line.as_bytes())?;
+                        }
+                        if let Some(style) = x.style {
+                            write_css_attr_important(
+                                f,
+                                b"text-decoration-style",
+                                match style {
+                                    hyperchad_transformer::models::TextDecorationStyle::Inherit => {
+                                        b"inherit"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationStyle::Solid => {
+                                        b"solid"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationStyle::Double => {
+                                        b"double"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationStyle::Dotted => {
+                                        b"dotted"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationStyle::Dashed => {
+                                        b"dashed"
+                                    }
+                                    hyperchad_transformer::models::TextDecorationStyle::Wavy => {
+                                        b"wavy"
+                                    }
+                                },
+                            )?;
+                        }
+
+                        if let Some(thickness) = &x.thickness {
+                            write_css_attr_important(
+                                f,
+                                b"text-decoration-thickness",
+                                number_to_html_string(thickness, false).as_bytes(),
+                            )?;
+                        }
+                    }
+                    OverrideItem::FontFamily(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            x.join(",").as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::FontWeight(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            x.to_string().as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::Flex(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"flex-grow",
+                            number_to_html_string(&x.grow, false).as_bytes(),
+                        )?;
+                        write_css_attr_important(
+                            f,
+                            b"flex-shrink",
+                            number_to_html_string(&x.shrink, false).as_bytes(),
+                        )?;
+                        write_css_attr_important(
+                            f,
+                            b"flex-basis",
+                            number_to_html_string(&x.basis, false).as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::Cursor(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            x.to_string().as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::Position(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            x.to_string().as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::Background(x) | OverrideItem::Color(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            color_to_css_string(*x).as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::BorderTop((color, size))
+                    | OverrideItem::BorderRight((color, size))
+                    | OverrideItem::BorderBottom((color, size))
+                    | OverrideItem::BorderLeft((color, size)) => {
+                        let value = format!(
+                            "{} solid {}",
+                            number_to_html_string(size, true),
+                            color_to_css_string(*color)
+                        );
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            value.as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::StrId(..) | OverrideItem::Classes(..) => {}
                 }
             }
 
@@ -966,8 +1123,11 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
 mod tests {
     use super::*;
     use hyperchad_transformer::{
-        ConfigOverride, Number, OverrideCondition, OverrideItem,
-        models::{LayoutDirection, Visibility},
+        ConfigOverride, Flex, Number, OverrideCondition, OverrideItem, TextDecoration,
+        models::{
+            Cursor, FontWeight, JustifyContent, LayoutDirection, LayoutOverflow, Position,
+            TextDecorationLine, TextDecorationStyle, Visibility,
+        },
     };
     use std::collections::BTreeMap;
 
@@ -1688,6 +1848,104 @@ mod tests {
                 "Expected CSS to contain '{expected_css}', got: {css}"
             );
         }
+    }
+
+    #[test_log::test]
+    fn test_reactive_conditions_to_css_additional_override_variants() {
+        let mut responsive_triggers = BTreeMap::new();
+        responsive_triggers.insert(
+            "desktop".to_string(),
+            ResponsiveTrigger::MaxWidth(Number::Integer(1280)),
+        );
+
+        let tag_renderer = DefaultHtmlTagRenderer {
+            responsive_triggers,
+        };
+
+        let container = Container {
+            str_id: Some("variant-test".to_string()),
+            element: hyperchad_transformer::Element::Div,
+            overrides: vec![ConfigOverride {
+                condition: OverrideCondition::ResponsiveTarget {
+                    name: "desktop".to_string(),
+                },
+                overrides: vec![
+                    OverrideItem::JustifyContent(JustifyContent::SpaceBetween),
+                    OverrideItem::OverflowX(LayoutOverflow::Scroll),
+                    OverrideItem::OverflowY(LayoutOverflow::Hidden),
+                    OverrideItem::Cursor(Cursor::Pointer),
+                    OverrideItem::Position(Position::Fixed),
+                    OverrideItem::Background(Color {
+                        r: 10,
+                        g: 20,
+                        b: 30,
+                        a: None,
+                    }),
+                    OverrideItem::Color(Color {
+                        r: 200,
+                        g: 100,
+                        b: 50,
+                        a: None,
+                    }),
+                    OverrideItem::FontFamily(vec![
+                        "Fira Code".to_string(),
+                        "monospace".to_string(),
+                    ]),
+                    OverrideItem::FontWeight(FontWeight::Weight700),
+                    OverrideItem::Flex(Flex {
+                        grow: Number::Integer(2),
+                        shrink: Number::Integer(1),
+                        basis: Number::IntegerPercent(50),
+                    }),
+                    OverrideItem::BorderTop((
+                        Color {
+                            r: 255,
+                            g: 0,
+                            b: 0,
+                            a: None,
+                        },
+                        Number::Integer(2),
+                    )),
+                    OverrideItem::TextDecoration(TextDecoration {
+                        color: Some(Color {
+                            r: 0,
+                            g: 128,
+                            b: 255,
+                            a: None,
+                        }),
+                        line: vec![TextDecorationLine::Underline],
+                        style: Some(TextDecorationStyle::Dotted),
+                        thickness: Some(Number::Integer(2)),
+                    }),
+                ],
+                default: None,
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        tag_renderer
+            .reactive_conditions_to_css(&mut buffer, &container)
+            .unwrap();
+        let css = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(css.contains("justify-content:space-between !important;"));
+        assert!(css.contains("overflow-x:scroll !important;"));
+        assert!(css.contains("overflow-y:hidden !important;"));
+        assert!(css.contains("cursor:pointer !important;"));
+        assert!(css.contains("position:fixed !important;"));
+        assert!(css.contains("background:rgb(10,20,30) !important;"));
+        assert!(css.contains("color:rgb(200,100,50) !important;"));
+        assert!(css.contains("font-family:Fira Code,monospace !important;"));
+        assert!(css.contains("font-weight:700 !important;"));
+        assert!(css.contains("flex-grow:2 !important;"));
+        assert!(css.contains("flex-shrink:1 !important;"));
+        assert!(css.contains("flex-basis:50% !important;"));
+        assert!(css.contains("border-top:2px solid rgb(255,0,0) !important;"));
+        assert!(css.contains("text-decoration-color:rgb(0,128,255) !important;"));
+        assert!(css.contains("text-decoration-line:underline !important;"));
+        assert!(css.contains("text-decoration-style:dotted !important;"));
+        assert!(css.contains("text-decoration-thickness:2 !important;"));
     }
 
     #[test_log::test]
