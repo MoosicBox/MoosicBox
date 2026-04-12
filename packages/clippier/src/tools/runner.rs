@@ -1797,7 +1797,7 @@ mod tests {
         let formatter_script = dir.join("remark_formatter.py");
         std::fs::write(
             &formatter_script,
-            "import pathlib\nimport sys\nargs = sys.argv[1:]\nout = None\nfor i, arg in enumerate(args):\n    if arg in ('--output', '-o') and i + 1 < len(args):\n        out = args[i + 1]\n        break\nif out is None:\n    sys.exit(2)\nroot = pathlib.Path('.')\nfor path in root.rglob('*.md'):\n    rel = path.relative_to(root)\n    target = pathlib.Path(out) / rel\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_text(path.read_text().replace('bad', 'good'))\n",
+            "#!/bin/sh\nout=\"\"\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    --output|-o)\n      shift\n      out=\"$1\"\n      ;;\n  esac\n  shift\ndone\nif [ -z \"$out\" ]; then\n  exit 2\nfi\nmkdir -p \"$out\"\nsed 's/bad/good/g' README.md > \"$out/README.md\"\n",
         )
         .expect("failed to write remark formatter script");
 
@@ -1808,7 +1808,7 @@ mod tests {
         let tool = Tool::new(
             "remark",
             "remark",
-            "python3",
+            "sh",
             ToolKind::Binary,
             vec![ToolCapability::Format],
             vec![".".to_string()],
@@ -1837,7 +1837,7 @@ mod tests {
         let formatter_script = dir.join("remark_formatter.py");
         std::fs::write(
             &formatter_script,
-            "import pathlib\nimport sys\nargs = sys.argv[1:]\nout = None\nfor i, arg in enumerate(args):\n    if arg in ('--output', '-o') and i + 1 < len(args):\n        out = args[i + 1]\n        break\nif out is None:\n    sys.exit(2)\nroot = pathlib.Path('.')\nfor path in root.rglob('*.md'):\n    rel = path.relative_to(root)\n    target = pathlib.Path(out) / rel\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_text(path.read_text())\n",
+            "#!/bin/sh\nout=\"\"\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    --output|-o)\n      shift\n      out=\"$1\"\n      ;;\n  esac\n  shift\ndone\nif [ -z \"$out\" ]; then\n  exit 2\nfi\nmkdir -p \"$out\"\ncat README.md > \"$out/README.md\"\n",
         )
         .expect("failed to write remark formatter script");
 
@@ -1848,7 +1848,7 @@ mod tests {
         let tool = Tool::new(
             "remark",
             "remark",
-            "python3",
+            "sh",
             ToolKind::Binary,
             vec![ToolCapability::Format],
             vec![".".to_string()],
