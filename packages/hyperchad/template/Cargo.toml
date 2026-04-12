@@ -33,6 +33,7 @@ ryu  = { workspace = true }
 
 [dev-dependencies]
 hyperchad_actions       = { workspace = true, features = ["logic"] }
+hyperchad_renderer      = { workspace = true }
 hyperchad_renderer_html = { workspace = true }
 hyperchad_template      = { workspace = true, features = ["logic"] }
 hyperchad_transformer   = { workspace = true, features = ["canvas"] }

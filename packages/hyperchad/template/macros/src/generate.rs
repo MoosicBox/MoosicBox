@@ -199,6 +199,12 @@ struct Generator {
     output_ident: Ident,
 }
 
+struct ProcessedAttributes {
+    assignments: Vec<TokenStream>,
+    responsive_overrides: Vec<TokenStream>,
+    has_responsive: bool,
+}
+
 impl Generator {
     const fn new(output_ident: Ident) -> Self {
         Self { output_ident }
@@ -366,7 +372,9 @@ impl Generator {
         let (classes, id, named_attrs) = split_attrs(element.attrs);
 
         // Handle ID
+        let mut has_explicit_id = false;
         if let Some(id) = id {
+            has_explicit_id = true;
             match id {
                 ContainerNameOrMarkup::Name(name) => {
                     let id_str = name.to_string();
@@ -403,6 +411,7 @@ impl Generator {
         let mut filtered_named_attrs = Vec::new();
         for (name, attr_type) in named_attrs {
             if name.to_string() == "id" {
+                has_explicit_id = true;
                 if let AttributeType::Normal { value, .. } = attr_type {
                     let id_tokens = Self::markup_to_string_tokens(value);
                     attr_assignments.push(quote! { str_id: Some(#id_tokens) });
@@ -478,17 +487,29 @@ impl Generator {
 
         // Process container-level attributes
         let processed_attrs = Self::process_attributes(container_attrs)?;
-        for assignment in processed_attrs {
+        if processed_attrs.has_responsive && !has_explicit_id {
+            return Err(
+                "Responsive attributes created with if_responsive(...) require an explicit id=... on the container".to_string(),
+            );
+        }
+
+        for assignment in processed_attrs.assignments {
             attr_assignments.push(assignment);
         }
 
+        let responsive_overrides = processed_attrs.responsive_overrides;
+
         // Generate the complete container
         build.push_container(quote! {
-            hyperchad_transformer::Container {
-                element: #element_type,
-                #(#attr_assignments,)*
-                #children,
-                ..Default::default()
+            {
+                let mut __container = hyperchad_transformer::Container {
+                    element: #element_type,
+                    #(#attr_assignments,)*
+                    #children,
+                    ..Default::default()
+                };
+                #(#responsive_overrides)*
+                __container
             }
         });
         Ok(())
@@ -1975,9 +1996,11 @@ impl Generator {
 
     fn process_attributes(
         named_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> Result<Vec<TokenStream>, String> {
+    ) -> Result<ProcessedAttributes, String> {
         // Use BTreeMap to track field assignments with precedence
         let mut field_assignments = std::collections::BTreeMap::new();
+        let mut responsive_overrides = Vec::new();
+        let mut has_responsive = false;
 
         // Separate shorthand and individual properties
         let mut shorthand_attrs = std::collections::BTreeMap::new();
@@ -2016,10 +2039,21 @@ impl Generator {
         }
 
         // Handle shorthand properties first (lower precedence)
-        Self::handle_shorthand_properties(&shorthand_attrs, &mut field_assignments);
+        Self::handle_shorthand_properties(
+            &shorthand_attrs,
+            &mut field_assignments,
+            &mut responsive_overrides,
+            &mut has_responsive,
+        );
 
         // Handle individual properties (higher precedence - these override shorthand)
         for (name, attr_type) in individual_attrs {
+            let overrides = Self::responsive_overrides_for_attribute(&name, &attr_type);
+            if !overrides.is_empty() {
+                has_responsive = true;
+                responsive_overrides.extend(overrides);
+            }
+
             if let Some(assignment) = Self::attr_to_assignment(&name, attr_type) {
                 // Extract field name from the assignment and store it
                 let field_name = Self::extract_field_name_from_assignment(&assignment);
@@ -2034,13 +2068,19 @@ impl Generator {
         }
 
         // Convert the final field assignments to a Vec
-        Ok(field_assignments.into_values().collect())
+        Ok(ProcessedAttributes {
+            assignments: field_assignments.into_values().collect(),
+            responsive_overrides,
+            has_responsive,
+        })
     }
 
     #[allow(clippy::too_many_lines)]
     fn handle_shorthand_properties(
         shorthand_attrs: &std::collections::BTreeMap<String, (AttributeName, AttributeType)>,
         field_assignments: &mut std::collections::BTreeMap<String, TokenStream>,
+        responsive_overrides: &mut Vec<TokenStream>,
+        has_responsive: &mut bool,
     ) {
         // Handle padding shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding") {
@@ -2061,6 +2101,30 @@ impl Generator {
                 "padding_left".to_string(),
                 quote! { padding_left: Some(#value_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "PaddingTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingRight",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingBottom",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingLeft",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-x") {
@@ -2073,6 +2137,18 @@ impl Generator {
                 "padding_right".to_string(),
                 quote! { padding_right: Some(#value_tokens) },
             );
+            Self::push_number_override_statement(
+                value,
+                "PaddingLeft",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingRight",
+                responsive_overrides,
+                has_responsive,
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-y") {
@@ -2084,6 +2160,18 @@ impl Generator {
             field_assignments.insert(
                 "padding_bottom".to_string(),
                 quote! { padding_bottom: Some(#value_tokens) },
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingTop",
+                responsive_overrides,
+                has_responsive,
+            );
+            Self::push_number_override_statement(
+                value,
+                "PaddingBottom",
+                responsive_overrides,
+                has_responsive,
             );
         }
 
@@ -2322,6 +2410,417 @@ impl Generator {
                 "text_decoration".to_string(),
                 quote! { text_decoration: Some(#text_decoration_tokens) },
             );
+        }
+    }
+
+    fn push_number_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+        responsive_overrides: &mut Vec<TokenStream>,
+        has_responsive: &mut bool,
+    ) {
+        if let Some(statement) = Self::responsive_number_override_statement(value, override_item) {
+            *has_responsive = true;
+            responsive_overrides.push(statement);
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn responsive_overrides_for_attribute(
+        name: &AttributeName,
+        attr_type: &AttributeType,
+    ) -> Vec<TokenStream> {
+        let name_str = name.to_string();
+        let AttributeType::Normal { value, .. } = attr_type else {
+            return Vec::new();
+        };
+
+        match name_str.as_str() {
+            "width" => Self::responsive_number_override_statement(value, "Width")
+                .into_iter()
+                .collect(),
+            "height" => Self::responsive_number_override_statement(value, "Height")
+                .into_iter()
+                .collect(),
+            "min-width" => Self::responsive_number_override_statement(value, "MinWidth")
+                .into_iter()
+                .collect(),
+            "max-width" => Self::responsive_number_override_statement(value, "MaxWidth")
+                .into_iter()
+                .collect(),
+            "min-height" => Self::responsive_number_override_statement(value, "MinHeight")
+                .into_iter()
+                .collect(),
+            "max-height" => Self::responsive_number_override_statement(value, "MaxHeight")
+                .into_iter()
+                .collect(),
+            "padding-left" => Self::responsive_number_override_statement(value, "PaddingLeft")
+                .into_iter()
+                .collect(),
+            "padding-right" => Self::responsive_number_override_statement(value, "PaddingRight")
+                .into_iter()
+                .collect(),
+            "padding-top" => Self::responsive_number_override_statement(value, "PaddingTop")
+                .into_iter()
+                .collect(),
+            "padding-bottom" => Self::responsive_number_override_statement(value, "PaddingBottom")
+                .into_iter()
+                .collect(),
+            "margin-left" => Self::responsive_number_override_statement(value, "MarginLeft")
+                .into_iter()
+                .collect(),
+            "margin-right" => Self::responsive_number_override_statement(value, "MarginRight")
+                .into_iter()
+                .collect(),
+            "margin-top" => Self::responsive_number_override_statement(value, "MarginTop")
+                .into_iter()
+                .collect(),
+            "margin-bottom" => Self::responsive_number_override_statement(value, "MarginBottom")
+                .into_iter()
+                .collect(),
+            "font-size" => Self::responsive_number_override_statement(value, "FontSize")
+                .into_iter()
+                .collect(),
+            "opacity" => Self::responsive_number_override_statement(value, "Opacity")
+                .into_iter()
+                .collect(),
+            "left" => Self::responsive_number_override_statement(value, "Left")
+                .into_iter()
+                .collect(),
+            "right" => Self::responsive_number_override_statement(value, "Right")
+                .into_iter()
+                .collect(),
+            "top" => Self::responsive_number_override_statement(value, "Top")
+                .into_iter()
+                .collect(),
+            "bottom" => Self::responsive_number_override_statement(value, "Bottom")
+                .into_iter()
+                .collect(),
+            "translate-x" => Self::responsive_number_override_statement(value, "TranslateX")
+                .into_iter()
+                .collect(),
+            "translate-y" => Self::responsive_number_override_statement(value, "TranslateY")
+                .into_iter()
+                .collect(),
+            "column-gap" | "col-gap" => {
+                Self::responsive_number_override_statement(value, "ColumnGap")
+                    .into_iter()
+                    .collect()
+            }
+            "row-gap" => Self::responsive_number_override_statement(value, "RowGap")
+                .into_iter()
+                .collect(),
+            "grid-cell-size" => Self::responsive_number_override_statement(value, "GridCellSize")
+                .into_iter()
+                .collect(),
+            "border-top-left-radius" => {
+                Self::responsive_number_override_statement(value, "BorderTopLeftRadius")
+                    .into_iter()
+                    .collect()
+            }
+            "border-top-right-radius" => {
+                Self::responsive_number_override_statement(value, "BorderTopRightRadius")
+                    .into_iter()
+                    .collect()
+            }
+            "border-bottom-left-radius" => {
+                Self::responsive_number_override_statement(value, "BorderBottomLeftRadius")
+                    .into_iter()
+                    .collect()
+            }
+            "border-bottom-right-radius" => {
+                Self::responsive_number_override_statement(value, "BorderBottomRightRadius")
+                    .into_iter()
+                    .collect()
+            }
+            "direction" => Self::responsive_enum_override_statement(value, "Direction")
+                .into_iter()
+                .collect(),
+            "align-items" => Self::responsive_enum_override_statement(value, "AlignItems")
+                .into_iter()
+                .collect(),
+            "justify-content" => Self::responsive_enum_override_statement(value, "JustifyContent")
+                .into_iter()
+                .collect(),
+            "text-align" => Self::responsive_enum_override_statement(value, "TextAlign")
+                .into_iter()
+                .collect(),
+            "white-space" => Self::responsive_enum_override_statement(value, "WhiteSpace")
+                .into_iter()
+                .collect(),
+            "position" => Self::responsive_enum_override_statement(value, "Position")
+                .into_iter()
+                .collect(),
+            "cursor" => Self::responsive_enum_override_statement(value, "Cursor")
+                .into_iter()
+                .collect(),
+            "user-select" => Self::responsive_enum_override_statement(value, "UserSelect")
+                .into_iter()
+                .collect(),
+            "overflow-wrap" => Self::responsive_enum_override_statement(value, "OverflowWrap")
+                .into_iter()
+                .collect(),
+            "text-overflow" => Self::responsive_enum_override_statement(value, "TextOverflow")
+                .into_iter()
+                .collect(),
+            "visibility" => Self::responsive_enum_override_statement(value, "Visibility")
+                .into_iter()
+                .collect(),
+            "overflow-x" => Self::responsive_enum_override_statement(value, "OverflowX")
+                .into_iter()
+                .collect(),
+            "overflow-y" => Self::responsive_enum_override_statement(value, "OverflowY")
+                .into_iter()
+                .collect(),
+            "hidden" => Self::responsive_bool_override_statement(value, "Hidden")
+                .into_iter()
+                .collect(),
+            "debug" => Self::responsive_bool_override_statement(value, "Debug")
+                .into_iter()
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn responsive_number_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+    ) -> Option<TokenStream> {
+        let responsive_expr = Self::responsive_expression_tokens(value)?;
+        let override_item_ident = format_ident!("{}", override_item);
+
+        Some(quote! {
+            {
+                let __if_expr = #responsive_expr;
+                if let Some(__responsive_value) = __if_expr.value {
+                    match __if_expr.condition {
+                        hyperchad_template::Responsive::Target(__target) => {
+                            __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                condition: hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                    name: __target,
+                                },
+                                overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                    <hyperchad_transformer::Number as std::convert::From<_>>::from(
+                                        __responsive_value,
+                                    ),
+                                )],
+                                default: __if_expr.default.map(|__default_value| {
+                                    hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        <hyperchad_transformer::Number as std::convert::From<_>>::from(
+                                            __default_value,
+                                        ),
+                                    )
+                                }),
+                            });
+                        }
+                        hyperchad_template::Responsive::Targets(__targets) => {
+                            for __target in __targets {
+                                __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                    condition:
+                                        hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                            name: __target,
+                                        },
+                                    overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        <hyperchad_transformer::Number as std::convert::From<_>>::from(
+                                            __responsive_value.clone(),
+                                        ),
+                                    )],
+                                    default: __if_expr.default.clone().map(|__default_value| {
+                                        hyperchad_transformer::OverrideItem::#override_item_ident(
+                                            <hyperchad_transformer::Number as std::convert::From<_>>::from(
+                                                __default_value,
+                                            ),
+                                        )
+                                    }),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    fn responsive_bool_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+    ) -> Option<TokenStream> {
+        let responsive_expr = Self::responsive_expression_tokens(value)?;
+        let override_item_ident = format_ident!("{}", override_item);
+
+        Some(quote! {
+            {
+                let __if_expr = #responsive_expr;
+                if let Some(__responsive_value) = __if_expr.value {
+                    match __if_expr.condition {
+                        hyperchad_template::Responsive::Target(__target) => {
+                            __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                condition: hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                    name: __target,
+                                },
+                                overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                    __responsive_value,
+                                )],
+                                default: __if_expr.default.map(|__default_value| {
+                                    hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        __default_value,
+                                    )
+                                }),
+                            });
+                        }
+                        hyperchad_template::Responsive::Targets(__targets) => {
+                            for __target in __targets {
+                                __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                    condition:
+                                        hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                            name: __target,
+                                        },
+                                    overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        __responsive_value,
+                                    )],
+                                    default: __if_expr.default.clone().map(|__default_value| {
+                                        hyperchad_transformer::OverrideItem::#override_item_ident(
+                                            __default_value,
+                                        )
+                                    }),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    fn responsive_enum_override_statement(
+        value: &Markup<NoElement>,
+        override_item: &str,
+    ) -> Option<TokenStream> {
+        let responsive_expr = Self::responsive_expression_tokens(value)?;
+        let override_item_ident = format_ident!("{}", override_item);
+
+        Some(quote! {
+            {
+                let __if_expr = #responsive_expr;
+                if let Some(__responsive_value) = __if_expr.value {
+                    match __if_expr.condition {
+                        hyperchad_template::Responsive::Target(__target) => {
+                            __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                condition: hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                    name: __target,
+                                },
+                                overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                    __responsive_value,
+                                )],
+                                default: __if_expr.default.map(|__default_value| {
+                                    hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        __default_value,
+                                    )
+                                }),
+                            });
+                        }
+                        hyperchad_template::Responsive::Targets(__targets) => {
+                            for __target in __targets {
+                                __container.overrides.push(hyperchad_transformer::ConfigOverride {
+                                    condition:
+                                        hyperchad_transformer::OverrideCondition::ResponsiveTarget {
+                                            name: __target,
+                                        },
+                                    overrides: vec![hyperchad_transformer::OverrideItem::#override_item_ident(
+                                        __responsive_value.clone(),
+                                    )],
+                                    default: __if_expr.default.clone().map(|__default_value| {
+                                        hyperchad_transformer::OverrideItem::#override_item_ident(
+                                            __default_value,
+                                        )
+                                    }),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    fn responsive_expression_tokens(value: &Markup<NoElement>) -> Option<TokenStream> {
+        match value {
+            Markup::Splice { expr, .. } => {
+                if Self::expr_contains_responsive_call(expr) {
+                    Some(quote! { #expr })
+                } else {
+                    None
+                }
+            }
+            Markup::BraceSplice { items, .. } => {
+                if items.len() == 1 {
+                    Self::responsive_expression_tokens(&items[0])
+                } else {
+                    let expr = Self::handle_brace_splice_expression(items);
+                    let expr_string = expr.to_string();
+                    if expr_string.contains("if_responsive") {
+                        Some(quote! { { #expr } })
+                    } else {
+                        None
+                    }
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn expr_contains_responsive_call(expr: &syn::Expr) -> bool {
+        match expr {
+            syn::Expr::Call(call_expr) => {
+                if let syn::Expr::Path(path_expr) = &*call_expr.func
+                    && let Some(segment) = path_expr.path.segments.last()
+                {
+                    let fn_name = segment.ident.to_string();
+                    if fn_name == "if_responsive" || fn_name == "if_responsive_any" {
+                        return true;
+                    }
+                }
+
+                Self::expr_contains_responsive_call(&call_expr.func)
+                    || call_expr
+                        .args
+                        .iter()
+                        .any(Self::expr_contains_responsive_call)
+            }
+            syn::Expr::MethodCall(method_call) => {
+                Self::expr_contains_responsive_call(&method_call.receiver)
+                    || method_call
+                        .args
+                        .iter()
+                        .any(Self::expr_contains_responsive_call)
+            }
+            syn::Expr::Paren(paren_expr) => Self::expr_contains_responsive_call(&paren_expr.expr),
+            syn::Expr::Group(group_expr) => Self::expr_contains_responsive_call(&group_expr.expr),
+            syn::Expr::Reference(reference_expr) => {
+                Self::expr_contains_responsive_call(&reference_expr.expr)
+            }
+            syn::Expr::Cast(cast_expr) => Self::expr_contains_responsive_call(&cast_expr.expr),
+            syn::Expr::Try(try_expr) => Self::expr_contains_responsive_call(&try_expr.expr),
+            syn::Expr::Await(await_expr) => Self::expr_contains_responsive_call(&await_expr.base),
+            syn::Expr::Field(field_expr) => Self::expr_contains_responsive_call(&field_expr.base),
+            syn::Expr::Index(index_expr) => {
+                Self::expr_contains_responsive_call(&index_expr.expr)
+                    || Self::expr_contains_responsive_call(&index_expr.index)
+            }
+            syn::Expr::Binary(binary_expr) => {
+                Self::expr_contains_responsive_call(&binary_expr.left)
+                    || Self::expr_contains_responsive_call(&binary_expr.right)
+            }
+            syn::Expr::Unary(unary_expr) => Self::expr_contains_responsive_call(&unary_expr.expr),
+            syn::Expr::Tuple(tuple_expr) => tuple_expr
+                .elems
+                .iter()
+                .any(Self::expr_contains_responsive_call),
+            syn::Expr::Array(array_expr) => array_expr
+                .elems
+                .iter()
+                .any(Self::expr_contains_responsive_call),
+            _ => false,
         }
     }
 
