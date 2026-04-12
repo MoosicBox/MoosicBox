@@ -12,9 +12,8 @@ describe('actions-immediate', () => {
     });
 
     it('executes v-onload immediately when element is processed', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-immediate');
 
@@ -35,9 +34,8 @@ describe('actions-immediate', () => {
     });
 
     it('provides element in context', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-immediate');
 
@@ -56,9 +54,8 @@ describe('actions-immediate', () => {
     });
 
     it('executes for nested elements', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-immediate');
 
@@ -86,9 +83,8 @@ describe('actions-immediate', () => {
     });
 
     it('handles errors gracefully', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-immediate');
 

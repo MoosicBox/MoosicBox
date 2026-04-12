@@ -12,9 +12,8 @@ describe('actions-click-outside', () => {
     });
 
     it('triggers when clicking outside element with v-onclickoutside', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-click-outside');
 
@@ -49,9 +48,8 @@ describe('actions-click-outside', () => {
     });
 
     it('does NOT trigger when clicking inside element', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-click-outside');
 
@@ -82,9 +80,8 @@ describe('actions-click-outside', () => {
     });
 
     it('does NOT trigger when clicking on child of element', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-click-outside');
 
@@ -119,9 +116,8 @@ describe('actions-click-outside', () => {
     });
 
     it('provides element in context', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-click-outside');
 
@@ -151,9 +147,8 @@ describe('actions-click-outside', () => {
     });
 
     it('provides event in context', async () => {
-        const { processElement, clearProcessedElements } = await import(
-            '../../src/core'
-        );
+        const { processElement, clearProcessedElements } =
+            await import('../../src/core');
         await import('../../src/actions');
         await import('../../src/actions-click-outside');
 
