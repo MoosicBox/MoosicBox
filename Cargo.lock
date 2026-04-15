@@ -6697,6 +6697,7 @@ dependencies = [
  "futures-util",
  "hyperchad_renderer",
  "hyperchad_router",
+ "hyperchad_shared_state",
  "hyperchad_shared_state_bridge",
  "hyperchad_shared_state_models",
  "log 0.4.29",

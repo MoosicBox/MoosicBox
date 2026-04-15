@@ -20,6 +20,7 @@ group = "hyperchad"
 actix-ws                      = { workspace = true, optional = true }
 hyperchad_renderer            = { workspace = true, features = ["canvas"] }
 hyperchad_router              = { workspace = true, optional = true }
+hyperchad_shared_state        = { workspace = true, optional = true }
 hyperchad_shared_state_bridge = { workspace = true, optional = true }
 hyperchad_shared_state_models = { workspace = true, optional = true }
 moosicbox_assert              = { workspace = true }
@@ -73,7 +74,9 @@ shared-state-bridge = [
 ]
 shared-state-transport = [
     "dep:actix-ws",
+    "dep:hyperchad_shared_state",
     "dep:hyperchad_shared_state_models",
+    "dep:qstring",
     "dep:serde_json",
 ]
 sse = ["dep:serde_json", "hyperchad_renderer/serde"]

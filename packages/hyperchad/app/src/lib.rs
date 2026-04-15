@@ -40,6 +40,8 @@ use hyperchad_router::{Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 use switchy_env::var_parse_or;
 
+#[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+use hyperchad_renderer_html::actix::SharedStateTransportDispatcher;
 #[cfg(all(
     feature = "logic",
     feature = "shared-state-bridge",
@@ -190,9 +192,14 @@ type SharedStateInboundReceiverFactory =
 
 #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
 #[derive(Clone)]
-struct ActixSharedStateTransportConfig {
-    outbound_tx: flume::Sender<TransportOutbound>,
-    inbound_receiver_factory: Arc<SharedStateInboundReceiverFactory>,
+enum ActixSharedStateTransportConfig {
+    Channel {
+        outbound_tx: flume::Sender<TransportOutbound>,
+        inbound_receiver_factory: Arc<SharedStateInboundReceiverFactory>,
+    },
+    Dispatcher {
+        dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    },
 }
 
 /// Type alias for resize listener functions that handle window resize events.
@@ -580,10 +587,23 @@ impl AppBuilder {
         outbound_tx: flume::Sender<TransportOutbound>,
         inbound_receiver_factory: impl Fn() -> flume::Receiver<TransportInbound> + Send + Sync + 'static,
     ) -> Self {
-        self.actix_shared_state_transport = Some(ActixSharedStateTransportConfig {
+        self.actix_shared_state_transport = Some(ActixSharedStateTransportConfig::Channel {
             outbound_tx,
             inbound_receiver_factory: Arc::new(Box::new(inbound_receiver_factory)),
         });
+
+        self
+    }
+
+    /// Adds Actix shared-state transport dispatcher wiring.
+    #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+    #[must_use]
+    pub fn with_shared_state_transport_dispatcher(
+        mut self,
+        dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    ) -> Self {
+        self.actix_shared_state_transport =
+            Some(ActixSharedStateTransportConfig::Dispatcher { dispatcher });
 
         self
     }
@@ -1738,6 +1758,67 @@ mod tests {
                 .expect("inbound receiver should have queued event"),
             TransportInbound::Pong(TransportPing { sent_at_ms: 9 })
         );
+    }
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    #[test_log::test]
+    fn test_build_default_html_vanilla_js_actix_applies_shared_state_transport_dispatcher() {
+        use std::sync::Arc;
+
+        use async_trait::async_trait;
+        use hyperchad_renderer_html::actix::SharedStateTransportDispatcher;
+        use hyperchad_shared_state_models::{
+            ChannelId, EventEnvelope, TransportInbound, TransportOutbound,
+        };
+
+        #[derive(Debug)]
+        struct TestDispatcher;
+
+        #[async_trait]
+        impl SharedStateTransportDispatcher for TestDispatcher {
+            async fn ingest_outbound(
+                &self,
+                _outbound: TransportOutbound,
+            ) -> Result<Vec<TransportInbound>, Box<dyn std::error::Error + Send + Sync + 'static>>
+            {
+                Ok(Vec::new())
+            }
+
+            async fn subscribe_channel(
+                &self,
+                _channel_id: &ChannelId,
+            ) -> Result<
+                flume::Receiver<EventEnvelope>,
+                Box<dyn std::error::Error + Send + Sync + 'static>,
+            > {
+                let (_tx, rx) = flume::unbounded();
+                Ok(rx)
+            }
+        }
+
+        let runtime = switchy::unsync::runtime::Builder::new()
+            .max_blocking_threads(1)
+            .build()
+            .expect("test runtime should initialize");
+
+        let app = AppBuilder::new()
+            .with_router(Router::new())
+            .with_runtime_handle(runtime.handle())
+            .with_shared_state_transport_dispatcher(Arc::new(TestDispatcher))
+            .build_default_html_vanilla_js_actix()
+            .expect("default actix renderer should build");
+
+        let shared_state_transport = app
+            .renderer
+            .app
+            .shared_state_transport
+            .expect("shared-state transport should be attached to actix app");
+        let _ = shared_state_transport;
     }
 
     #[test_log::test(switchy_async::test)]

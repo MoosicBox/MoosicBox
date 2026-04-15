@@ -89,6 +89,10 @@ mod sse;
 
 #[cfg(feature = "shared-state-transport")]
 mod shared_state_transport;
+#[cfg(feature = "shared-state-transport")]
+pub use shared_state_transport::RuntimeFanoutTransportDispatcher;
+#[cfg(feature = "shared-state-transport")]
+pub use shared_state_transport::SharedStateTransportDispatcher;
 
 #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
 type SharedStateCommandInputResolver = Arc<
@@ -318,6 +322,30 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
                 outbound_tx,
                 Arc::new(inbound_receiver_factory),
             ));
+    }
+
+    /// Sets a shared-state transport dispatcher and returns the modified app.
+    #[cfg(feature = "shared-state-transport")]
+    #[must_use]
+    pub fn with_shared_state_transport_dispatcher(
+        mut self,
+        dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    ) -> Self {
+        self.shared_state_transport = Some(
+            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(dispatcher),
+        );
+        self
+    }
+
+    /// Sets a shared-state transport dispatcher in place.
+    #[cfg(feature = "shared-state-transport")]
+    pub fn set_shared_state_transport_dispatcher(
+        &mut self,
+        dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    ) {
+        self.shared_state_transport = Some(
+            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(dispatcher),
+        );
     }
 
     /// Sets the default behavior when a requested asset file is not found.

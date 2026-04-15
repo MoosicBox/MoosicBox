@@ -747,11 +747,23 @@ pub mod html {
 
                 #[cfg(feature = "shared-state-transport")]
                 if let Some(shared_state_transport) = self.actix_shared_state_transport.clone() {
-                    let inbound_receiver_factory = shared_state_transport.inbound_receiver_factory;
-                    renderer.app.set_shared_state_transport(
-                        shared_state_transport.outbound_tx,
-                        move || inbound_receiver_factory(),
-                    );
+                    match shared_state_transport {
+                        crate::ActixSharedStateTransportConfig::Channel {
+                            outbound_tx,
+                            inbound_receiver_factory,
+                        } => {
+                            renderer
+                                .app
+                                .set_shared_state_transport(outbound_tx, move || {
+                                    inbound_receiver_factory()
+                                });
+                        }
+                        crate::ActixSharedStateTransportConfig::Dispatcher { dispatcher } => {
+                            renderer
+                                .app
+                                .set_shared_state_transport_dispatcher(dispatcher);
+                        }
+                    }
                 }
 
                 self.build(renderer)
@@ -847,12 +859,23 @@ pub mod html {
                     #[cfg(feature = "shared-state-transport")]
                     if let Some(shared_state_transport) = self.actix_shared_state_transport.clone()
                     {
-                        let inbound_receiver_factory =
-                            shared_state_transport.inbound_receiver_factory;
-                        renderer.app.set_shared_state_transport(
-                            shared_state_transport.outbound_tx,
-                            move || inbound_receiver_factory(),
-                        );
+                        match shared_state_transport {
+                            crate::ActixSharedStateTransportConfig::Channel {
+                                outbound_tx,
+                                inbound_receiver_factory,
+                            } => {
+                                renderer
+                                    .app
+                                    .set_shared_state_transport(outbound_tx, move || {
+                                        inbound_receiver_factory()
+                                    });
+                            }
+                            crate::ActixSharedStateTransportConfig::Dispatcher { dispatcher } => {
+                                renderer
+                                    .app
+                                    .set_shared_state_transport_dispatcher(dispatcher);
+                            }
+                        }
                     }
 
                     self.build(renderer)
