@@ -17,23 +17,28 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-hyperchad_renderer   = { workspace = true, features = ["canvas"] }
-moosicbox_assert     = { workspace = true }
-moosicbox_env_utils  = { workspace = true }
-moosicbox_logging    = { workspace = true }
-moosicbox_middleware = { workspace = true }
+hyperchad_renderer            = { workspace = true, features = ["canvas"] }
+hyperchad_router              = { workspace = true, optional = true }
+hyperchad_shared_state_bridge = { workspace = true, optional = true }
+hyperchad_shared_state_models = { workspace = true, optional = true }
+moosicbox_assert              = { workspace = true }
+moosicbox_env_utils           = { workspace = true }
+moosicbox_logging             = { workspace = true }
+moosicbox_middleware          = { workspace = true }
 
-actix-cors   = { workspace = true }
-actix-files  = { workspace = true, optional = true }
-actix-web    = { workspace = true }
-async-trait  = { workspace = true }
-bytes        = { workspace = true }
-flate2       = { workspace = true }
-flume        = { workspace = true }
-futures-util = { workspace = true }
-log          = { workspace = true }
-serde        = { workspace = true, optional = true }
-serde_json   = { workspace = true, optional = true }
+actix-cors          = { workspace = true }
+actix-files         = { workspace = true, optional = true }
+actix-web           = { workspace = true }
+async-trait         = { workspace = true }
+bytes               = { workspace = true }
+flate2              = { workspace = true }
+flume               = { workspace = true }
+futures-util        = { workspace = true }
+log                 = { workspace = true }
+qstring             = { workspace = true, optional = true }
+serde               = { workspace = true, optional = true }
+serde_json          = { workspace = true, optional = true }
+switchy_http_models = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
@@ -43,6 +48,9 @@ default = ["actions", "assets", "debug", "sse"]
 
 fail-on-warnings = [
     "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_router?/fail-on-warnings",
+    "hyperchad_shared_state_bridge?/fail-on-warnings",
+    "hyperchad_shared_state_models?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
@@ -54,4 +62,12 @@ debug = []
 assets = ["dep:actix-files", "hyperchad_renderer/assets"]
 
 actions = ["dep:serde", "dep:serde_json", "hyperchad_renderer/logic"]
-sse     = ["dep:serde_json", "hyperchad_renderer/serde"]
+shared-state-bridge = [
+    "actions",
+    "dep:hyperchad_router",
+    "dep:hyperchad_shared_state_bridge",
+    "dep:hyperchad_shared_state_models",
+    "dep:qstring",
+    "dep:switchy_http_models",
+]
+sse = ["dep:serde_json", "hyperchad_renderer/serde"]

@@ -67,6 +67,11 @@ use flume::Receiver;
 use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
 use moosicbox_env_utils::default_env_u16;
 
+#[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+use hyperchad_shared_state_bridge::{RouteCommandInput, SharedStateRouteResolver};
+#[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+use hyperchad_shared_state_models::CommandEnvelope;
+
 /// Re-export of the Actix Web framework.
 ///
 /// This re-export provides access to the underlying Actix Web types and utilities,
@@ -79,6 +84,16 @@ mod actions;
 
 #[cfg(feature = "sse")]
 mod sse;
+
+#[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+type SharedStateCommandInputResolver = Arc<
+    dyn Fn(
+            &str,
+            Option<&hyperchad_renderer::transformer::actions::logic::Value>,
+        ) -> Option<RouteCommandInput>
+        + Send
+        + Sync,
+>;
 
 /// Generates the route pattern for a directory asset route.
 /// Handles the special case where route="/" or "" to avoid producing "//" and
@@ -170,6 +185,9 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
             Option<hyperchad_renderer::transformer::actions::logic::Value>,
         )>,
     >,
+    /// Optional shared state bridge for turning action requests into shared-state commands.
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    pub shared_state_bridge: Option<actions::SharedStateActionBridge>,
     /// Static asset routes for serving files and directories (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -188,6 +206,8 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             renderer_event_rx,
             #[cfg(feature = "actions")]
             action_tx: None,
+            #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+            shared_state_bridge: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
             #[cfg(feature = "assets")]
@@ -220,6 +240,44 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         )>,
     ) {
         self.action_tx = Some(tx);
+    }
+
+    /// Sets the shared state bridge configuration and returns the modified app.
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    #[must_use]
+    pub fn with_shared_state_bridge(
+        mut self,
+        command_tx: flume::Sender<CommandEnvelope>,
+        route_resolver: Arc<dyn SharedStateRouteResolver>,
+        command_input_resolver: impl Fn(
+            &str,
+            Option<&hyperchad_renderer::transformer::actions::logic::Value>,
+        ) -> Option<RouteCommandInput>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.shared_state_bridge = Some(actions::SharedStateActionBridge::new(
+            command_tx,
+            route_resolver,
+            Arc::new(command_input_resolver),
+        ));
+        self
+    }
+
+    /// Sets the shared state bridge configuration in place.
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    pub fn set_shared_state_bridge(
+        &mut self,
+        command_tx: flume::Sender<CommandEnvelope>,
+        route_resolver: Arc<dyn SharedStateRouteResolver>,
+        command_input_resolver: SharedStateCommandInputResolver,
+    ) {
+        self.shared_state_bridge = Some(actions::SharedStateActionBridge::new(
+            command_tx,
+            route_resolver,
+            command_input_resolver,
+        ));
     }
 
     /// Sets the default behavior when a requested asset file is not found.
@@ -593,6 +651,9 @@ mod tests {
         #[cfg(feature = "actions")]
         assert!(app.action_tx.is_none());
 
+        #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+        assert!(app.shared_state_bridge.is_none());
+
         #[cfg(feature = "assets")]
         assert!(app.static_asset_routes.is_empty());
     }
@@ -646,6 +707,67 @@ mod tests {
         if let Some(tx) = app.action_tx {
             // Should have the last set action_tx (action_tx2)
             assert!(tx.same_channel(&action_tx2));
+        }
+    }
+
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    #[test_log::test]
+    fn test_actix_app_with_shared_state_bridge() {
+        use hyperchad_renderer::transformer::actions::logic::Value;
+        use hyperchad_router::RouteRequest;
+        use hyperchad_shared_state_bridge::{
+            BridgeError, RouteCommandInput, SharedStateRouteResolver,
+        };
+        use hyperchad_shared_state_models::{
+            ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
+        };
+
+        #[derive(Debug)]
+        struct TestRouteResolver;
+
+        impl SharedStateRouteResolver for TestRouteResolver {
+            fn resolve_channel_id(
+                &self,
+                _request: &RouteRequest,
+            ) -> Result<ChannelId, BridgeError> {
+                Ok(ChannelId::new("test-channel"))
+            }
+
+            fn resolve_participant_id(
+                &self,
+                _request: &RouteRequest,
+            ) -> Result<ParticipantId, BridgeError> {
+                Ok(ParticipantId::new("test-participant"))
+            }
+        }
+
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let (command_tx, _command_rx) = flume::unbounded();
+        let processor = TestProcessor;
+
+        let app = ActixApp::new(processor, rx).with_shared_state_bridge(
+            command_tx.clone(),
+            Arc::new(TestRouteResolver),
+            |_action: &str, _value: Option<&Value>| {
+                let payload = match PayloadBlob::from_serializable(&1_u32) {
+                    Ok(payload) => payload,
+                    Err(error) => panic!("Failed to build payload: {error}"),
+                };
+
+                Some(RouteCommandInput {
+                    command_id: CommandId::new("command-1"),
+                    idempotency_key: IdempotencyKey::new("idem-1"),
+                    expected_revision: Revision::new(0),
+                    command_name: "APPLY".to_string(),
+                    payload,
+                    metadata: std::collections::BTreeMap::new(),
+                })
+            },
+        );
+
+        assert!(app.shared_state_bridge.is_some());
+        if let Some(bridge) = app.shared_state_bridge {
+            assert!(bridge.command_tx.same_channel(&command_tx));
         }
     }
 

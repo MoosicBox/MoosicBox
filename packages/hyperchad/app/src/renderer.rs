@@ -815,6 +815,23 @@ pub mod html {
                         renderer.app.set_action_tx(action_tx);
                     }
 
+                    #[cfg(all(
+                        feature = "logic",
+                        feature = "actions",
+                        feature = "shared-state-bridge"
+                    ))]
+                    if let Some(shared_state_bridge) = self.actix_shared_state_bridge.clone() {
+                        let command_input_resolver = shared_state_bridge.command_input_resolver;
+
+                        renderer.app.set_shared_state_bridge(
+                            shared_state_bridge.command_tx,
+                            shared_state_bridge.route_resolver,
+                            std::sync::Arc::new(move |action, value| {
+                                command_input_resolver((action, value))
+                            }),
+                        );
+                    }
+
                     self.build(renderer)
                 }
             }

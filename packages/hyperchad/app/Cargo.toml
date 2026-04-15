@@ -109,6 +109,7 @@ logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
 shared-state-bridge = [
     "dep:hyperchad_shared_state_bridge",
     "dep:hyperchad_shared_state_models",
+    "hyperchad_renderer_html?/shared-state-bridge",
     "logic",
 ]
 

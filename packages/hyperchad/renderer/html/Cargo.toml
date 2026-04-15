@@ -103,8 +103,9 @@ assets = [
     "hyperchad_renderer_html_web_server?/assets",
 ]
 
-actions = ["hyperchad_renderer_html_actix?/actions"]
-sse     = ["hyperchad_renderer_html_actix?/sse"]
+actions             = ["hyperchad_renderer_html_actix?/actions"]
+shared-state-bridge = ["hyperchad_renderer_html_actix?/shared-state-bridge"]
+sse                 = ["hyperchad_renderer_html_actix?/sse"]
 
 extend = ["dep:thiserror"]
 

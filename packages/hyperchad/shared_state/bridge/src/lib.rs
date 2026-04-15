@@ -59,7 +59,7 @@ impl RouteCommandInput {
 ///
 /// * [`BridgeError::ChannelResolution`] - If channel ID cannot be resolved
 /// * [`BridgeError::ParticipantResolution`] - If participant ID cannot be resolved
-pub fn resolve_route_context<R: SharedStateRouteResolver>(
+pub fn resolve_route_context<R: SharedStateRouteResolver + ?Sized>(
     resolver: &R,
     request: &RouteRequest,
 ) -> Result<SharedStateRouteContext, BridgeError> {

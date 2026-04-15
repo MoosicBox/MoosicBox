@@ -40,6 +40,12 @@ use hyperchad_router::{Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 use switchy_env::var_parse_or;
 
+#[cfg(all(
+    feature = "logic",
+    feature = "shared-state-bridge",
+    feature = "actions"
+))]
+use hyperchad_shared_state_bridge::SharedStateRouteResolver;
 #[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
 use hyperchad_shared_state_bridge::{BridgeError, RouteCommandInput, SharedStateRouteContext};
 #[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
@@ -164,6 +170,18 @@ type SharedStateCommandInputResolver = Box<
         + Sync,
 >;
 
+#[cfg(all(
+    feature = "logic",
+    feature = "shared-state-bridge",
+    feature = "actions"
+))]
+#[derive(Clone)]
+struct ActixSharedStateBridgeConfig {
+    command_tx: flume::Sender<CommandEnvelope>,
+    route_resolver: Arc<dyn SharedStateRouteResolver>,
+    command_input_resolver: Arc<SharedStateCommandInputResolver>,
+}
+
 /// Type alias for resize listener functions that handle window resize events.
 ///
 /// The listener receives the new width and height in pixels.
@@ -185,6 +203,12 @@ pub struct AppBuilder {
     runtime_handle: Option<switchy::unsync::runtime::Handle>,
     #[cfg(feature = "logic")]
     action_handlers: Vec<Arc<ActionHandler>>,
+    #[cfg(all(
+        feature = "logic",
+        feature = "shared-state-bridge",
+        feature = "actions"
+    ))]
+    actix_shared_state_bridge: Option<ActixSharedStateBridgeConfig>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -257,6 +281,12 @@ impl AppBuilder {
             runtime_handle: None,
             #[cfg(feature = "logic")]
             action_handlers: vec![],
+            #[cfg(all(
+                feature = "logic",
+                feature = "shared-state-bridge",
+                feature = "actions"
+            ))]
+            actix_shared_state_bridge: None,
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
@@ -482,6 +512,42 @@ impl AppBuilder {
 
                 Ok(true)
             })));
+
+        self
+    }
+
+    /// Adds an Actix route-aware shared-state bridge configuration.
+    ///
+    /// This configuration is used by Actix action routes to build `RouteRequest`
+    /// context automatically and resolve shared-state command envelopes.
+    #[cfg(all(
+        feature = "logic",
+        feature = "shared-state-bridge",
+        feature = "actions"
+    ))]
+    #[must_use]
+    pub fn with_shared_state_route_bridge(
+        mut self,
+        command_tx: flume::Sender<CommandEnvelope>,
+        route_resolver: Arc<dyn SharedStateRouteResolver>,
+        command_input_resolver: impl Fn(
+            &str,
+            Option<&hyperchad_actions::logic::Value>,
+        ) -> Option<RouteCommandInput>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        let command_input_resolver: Arc<SharedStateCommandInputResolver> =
+            Arc::new(Box::new(move |(action, value)| {
+                command_input_resolver(action, value)
+            }));
+
+        self.actix_shared_state_bridge = Some(ActixSharedStateBridgeConfig {
+            command_tx,
+            route_resolver,
+            command_input_resolver,
+        });
 
         self
     }

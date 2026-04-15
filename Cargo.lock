@@ -6695,13 +6695,18 @@ dependencies = [
  "flume 0.12.0",
  "futures-util",
  "hyperchad_renderer",
+ "hyperchad_router",
+ "hyperchad_shared_state_bridge",
+ "hyperchad_shared_state_models",
  "log 0.4.29",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_middleware",
+ "qstring",
  "serde",
  "serde_json",
+ "switchy_http_models",
  "test-log",
 ]
 
