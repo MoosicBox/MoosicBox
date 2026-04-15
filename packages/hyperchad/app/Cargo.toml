@@ -112,6 +112,10 @@ shared-state-bridge = [
     "hyperchad_renderer_html?/shared-state-bridge",
     "logic",
 ]
+shared-state-transport = [
+    "dep:hyperchad_shared_state_models",
+    "hyperchad_renderer_html?/shared-state-transport",
+]
 
 actix      = ["hyperchad_renderer_html?/actix"]
 lambda     = ["hyperchad_renderer_html?/lambda"]

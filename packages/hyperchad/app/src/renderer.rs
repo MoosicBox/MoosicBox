@@ -726,21 +726,33 @@ pub mod html {
 
                 let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
-                let renderer = hyperchad_renderer_html::router_to_actix(
+                #[allow(unused_mut)]
+                let mut renderer = hyperchad_renderer_html::router_to_actix(
                     hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
                     router,
                 );
 
                 #[cfg(feature = "assets")]
-                let renderer = renderer
+                #[allow(unused_mut)]
+                let mut renderer = renderer
                     .with_static_asset_routes(self.static_asset_routes.clone())
                     .with_asset_not_found_behavior(self.asset_not_found_behavior);
 
                 #[cfg(feature = "html")]
-                let renderer = renderer
+                #[allow(unused_mut)]
+                let mut renderer = renderer
                     .with_css_urls(&self.css_urls)
                     .with_css_paths(&self.css_paths)
                     .with_inline_css_blocks(&self.inline_css);
+
+                #[cfg(feature = "shared-state-transport")]
+                if let Some(shared_state_transport) = self.actix_shared_state_transport.clone() {
+                    let inbound_receiver_factory = shared_state_transport.inbound_receiver_factory;
+                    renderer.app.set_shared_state_transport(
+                        shared_state_transport.outbound_tx,
+                        move || inbound_receiver_factory(),
+                    );
+                }
 
                 self.build(renderer)
             }
@@ -829,6 +841,17 @@ pub mod html {
                             std::sync::Arc::new(move |action, value| {
                                 command_input_resolver((action, value))
                             }),
+                        );
+                    }
+
+                    #[cfg(feature = "shared-state-transport")]
+                    if let Some(shared_state_transport) = self.actix_shared_state_transport.clone()
+                    {
+                        let inbound_receiver_factory =
+                            shared_state_transport.inbound_receiver_factory;
+                        renderer.app.set_shared_state_transport(
+                            shared_state_transport.outbound_tx,
+                            move || inbound_receiver_factory(),
                         );
                     }
 

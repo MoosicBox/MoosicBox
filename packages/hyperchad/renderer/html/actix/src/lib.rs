@@ -71,6 +71,8 @@ use moosicbox_env_utils::default_env_u16;
 use hyperchad_shared_state_bridge::{RouteCommandInput, SharedStateRouteResolver};
 #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
 use hyperchad_shared_state_models::CommandEnvelope;
+#[cfg(feature = "shared-state-transport")]
+use hyperchad_shared_state_models::{TransportInbound, TransportOutbound};
 
 /// Re-export of the Actix Web framework.
 ///
@@ -84,6 +86,9 @@ mod actions;
 
 #[cfg(feature = "sse")]
 mod sse;
+
+#[cfg(feature = "shared-state-transport")]
+mod shared_state_transport;
 
 #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
 type SharedStateCommandInputResolver = Arc<
@@ -188,6 +193,9 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     /// Optional shared state bridge for turning action requests into shared-state commands.
     #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
     pub shared_state_bridge: Option<actions::SharedStateActionBridge>,
+    /// Optional shared-state transport server bridge for WS/SSE+POST endpoints.
+    #[cfg(feature = "shared-state-transport")]
+    pub shared_state_transport: Option<shared_state_transport::SharedStateTransportBridge>,
     /// Static asset routes for serving files and directories (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -208,6 +216,8 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             action_tx: None,
             #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
             shared_state_bridge: None,
+            #[cfg(feature = "shared-state-transport")]
+            shared_state_transport: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
             #[cfg(feature = "assets")]
@@ -278,6 +288,36 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             route_resolver,
             command_input_resolver,
         ));
+    }
+
+    /// Sets shared-state transport bridge wiring and returns the modified app.
+    #[cfg(feature = "shared-state-transport")]
+    #[must_use]
+    pub fn with_shared_state_transport(
+        mut self,
+        outbound_tx: flume::Sender<TransportOutbound>,
+        inbound_receiver_factory: impl Fn() -> Receiver<TransportInbound> + Send + Sync + 'static,
+    ) -> Self {
+        self.shared_state_transport =
+            Some(shared_state_transport::SharedStateTransportBridge::new(
+                outbound_tx,
+                Arc::new(inbound_receiver_factory),
+            ));
+        self
+    }
+
+    /// Sets shared-state transport bridge wiring in place.
+    #[cfg(feature = "shared-state-transport")]
+    pub fn set_shared_state_transport(
+        &mut self,
+        outbound_tx: flume::Sender<TransportOutbound>,
+        inbound_receiver_factory: impl Fn() -> Receiver<TransportInbound> + Send + Sync + 'static,
+    ) {
+        self.shared_state_transport =
+            Some(shared_state_transport::SharedStateTransportBridge::new(
+                outbound_tx,
+                Arc::new(inbound_receiver_factory),
+            ));
     }
 
     /// Sets the default behavior when a requested asset file is not found.
@@ -568,6 +608,27 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                     web::resource("/$action").route(web::post().to(actions::handle_action::<T, R>)),
                 );
 
+                #[cfg(feature = "shared-state-transport")]
+                let app = app
+                    .service(
+                        web::resource("/$shared-state/transport")
+                            .route(web::post().to(
+                                shared_state_transport::handle_shared_state_transport_post::<T, R>,
+                            )),
+                    )
+                    .service(
+                        web::resource("/$shared-state/transport/sse")
+                            .route(web::get().to(
+                                shared_state_transport::handle_shared_state_transport_sse::<T, R>,
+                            )),
+                    )
+                    .service(
+                        web::resource("/$shared-state/transport/ws")
+                            .route(web::get().to(
+                                shared_state_transport::handle_shared_state_transport_ws::<T, R>,
+                            )),
+                    );
+
                 let catchall = move |req: HttpRequest,
                                      app: web::Data<ActixApp<T, R>>,
                                      body: Option<web::Bytes>| async move {
@@ -611,7 +672,11 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
     }
 }
 
-#[cfg(any(feature = "actions", feature = "assets"))]
+#[cfg(any(
+    feature = "actions",
+    feature = "assets",
+    feature = "shared-state-transport"
+))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,6 +718,9 @@ mod tests {
 
         #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
         assert!(app.shared_state_bridge.is_none());
+
+        #[cfg(feature = "shared-state-transport")]
+        assert!(app.shared_state_transport.is_none());
 
         #[cfg(feature = "assets")]
         assert!(app.static_asset_routes.is_empty());
@@ -768,6 +836,30 @@ mod tests {
         assert!(app.shared_state_bridge.is_some());
         if let Some(bridge) = app.shared_state_bridge {
             assert!(bridge.command_tx.same_channel(&command_tx));
+        }
+    }
+
+    #[cfg(feature = "shared-state-transport")]
+    #[test_log::test]
+    fn test_actix_app_with_shared_state_transport() {
+        use hyperchad_shared_state_models::{TransportInbound, TransportOutbound, TransportPing};
+
+        let (_tx, rx) = flume::unbounded::<RendererEvent>();
+        let (outbound_tx, _outbound_rx) = flume::unbounded::<TransportOutbound>();
+        let (inbound_tx, inbound_rx) = flume::unbounded::<TransportInbound>();
+        let processor = TestProcessor;
+
+        let app = ActixApp::new(processor, rx).with_shared_state_transport(
+            outbound_tx.clone(),
+            move || {
+                let _ = inbound_tx.send(TransportInbound::Pong(TransportPing { sent_at_ms: 1 }));
+                inbound_rx.clone()
+            },
+        );
+
+        assert!(app.shared_state_transport.is_some());
+        if let Some(bridge) = app.shared_state_transport {
+            assert!(bridge.outbound_tx.same_channel(&outbound_tx));
         }
     }
 

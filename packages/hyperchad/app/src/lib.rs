@@ -50,6 +50,8 @@ use hyperchad_shared_state_bridge::SharedStateRouteResolver;
 use hyperchad_shared_state_bridge::{BridgeError, RouteCommandInput, SharedStateRouteContext};
 #[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
 use hyperchad_shared_state_models::CommandEnvelope;
+#[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+use hyperchad_shared_state_models::{TransportInbound, TransportOutbound};
 
 /// Renderer implementations and type aliases for different backends.
 pub mod renderer;
@@ -182,6 +184,17 @@ struct ActixSharedStateBridgeConfig {
     command_input_resolver: Arc<SharedStateCommandInputResolver>,
 }
 
+#[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+type SharedStateInboundReceiverFactory =
+    Box<dyn Fn() -> flume::Receiver<TransportInbound> + Send + Sync>;
+
+#[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+#[derive(Clone)]
+struct ActixSharedStateTransportConfig {
+    outbound_tx: flume::Sender<TransportOutbound>,
+    inbound_receiver_factory: Arc<SharedStateInboundReceiverFactory>,
+}
+
 /// Type alias for resize listener functions that handle window resize events.
 ///
 /// The listener receives the new width and height in pixels.
@@ -209,6 +222,8 @@ pub struct AppBuilder {
         feature = "actions"
     ))]
     actix_shared_state_bridge: Option<ActixSharedStateBridgeConfig>,
+    #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+    actix_shared_state_transport: Option<ActixSharedStateTransportConfig>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -287,6 +302,8 @@ impl AppBuilder {
                 feature = "actions"
             ))]
             actix_shared_state_bridge: None,
+            #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+            actix_shared_state_transport: None,
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
@@ -547,6 +564,25 @@ impl AppBuilder {
             command_tx,
             route_resolver,
             command_input_resolver,
+        });
+
+        self
+    }
+
+    /// Adds Actix shared-state transport endpoint wiring.
+    ///
+    /// This config enables the built-in `/$shared-state/transport/*` endpoints
+    /// to ingest outbound transport messages and stream inbound transport messages.
+    #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
+    #[must_use]
+    pub fn with_shared_state_transport(
+        mut self,
+        outbound_tx: flume::Sender<TransportOutbound>,
+        inbound_receiver_factory: impl Fn() -> flume::Receiver<TransportInbound> + Send + Sync + 'static,
+    ) -> Self {
+        self.actix_shared_state_transport = Some(ActixSharedStateTransportConfig {
+            outbound_tx,
+            inbound_receiver_factory: Arc::new(Box::new(inbound_receiver_factory)),
         });
 
         self
@@ -1557,6 +1593,151 @@ mod tests {
             .with_runtime_handle(handle);
 
         assert!(builder.runtime_handle.is_some());
+    }
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "logic",
+        feature = "actions",
+        feature = "shared-state-bridge"
+    ))]
+    #[test_log::test]
+    fn test_build_default_html_vanilla_js_actix_applies_shared_state_route_bridge() {
+        use std::sync::Arc;
+
+        use hyperchad_shared_state_bridge::{
+            BridgeError, RouteCommandInput, SharedStateRouteResolver, resolve_route_context,
+        };
+        use hyperchad_shared_state_models::{
+            ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
+        };
+
+        #[derive(Debug)]
+        struct TestRouteResolver;
+
+        impl SharedStateRouteResolver for TestRouteResolver {
+            fn resolve_channel_id(
+                &self,
+                _request: &hyperchad_router::RouteRequest,
+            ) -> Result<ChannelId, BridgeError> {
+                Ok(ChannelId::new("channel-1"))
+            }
+
+            fn resolve_participant_id(
+                &self,
+                _request: &hyperchad_router::RouteRequest,
+            ) -> Result<ParticipantId, BridgeError> {
+                Ok(ParticipantId::new("participant-1"))
+            }
+        }
+
+        let payload =
+            PayloadBlob::from_serializable(&11_u32).expect("shared-state payload should serialize");
+        let (command_tx, _command_rx) = flume::unbounded();
+        let runtime = switchy::unsync::runtime::Builder::new()
+            .max_blocking_threads(1)
+            .build()
+            .expect("test runtime should initialize");
+
+        let app = AppBuilder::new()
+            .with_router(Router::new())
+            .with_runtime_handle(runtime.handle())
+            .with_shared_state_route_bridge(
+                command_tx.clone(),
+                Arc::new(TestRouteResolver),
+                move |action, _value| {
+                    if action != "set-counter" {
+                        return None;
+                    }
+
+                    Some(RouteCommandInput {
+                        command_id: CommandId::new("command-1"),
+                        idempotency_key: IdempotencyKey::new("idem-1"),
+                        expected_revision: Revision::new(8),
+                        command_name: "SET_COUNTER".to_string(),
+                        payload: payload.clone(),
+                        metadata: std::collections::BTreeMap::new(),
+                    })
+                },
+            )
+            .build_default_html_vanilla_js_actix()
+            .expect("default actix renderer should build");
+
+        let shared_state_bridge = app
+            .renderer
+            .app
+            .shared_state_bridge
+            .expect("shared-state bridge should be attached to actix app");
+        assert!(shared_state_bridge.command_tx.same_channel(&command_tx));
+
+        let route_command_input = (shared_state_bridge.command_input_resolver)("set-counter", None)
+            .expect("command input resolver should map set-counter action");
+        assert_eq!(route_command_input.command_name, "SET_COUNTER");
+        assert_eq!(route_command_input.expected_revision, Revision::new(8));
+
+        let route_request = hyperchad_router::RouteRequest::from_path(
+            "/channel-1",
+            hyperchad_router::RequestInfo::default(),
+        );
+        let route_context =
+            resolve_route_context(shared_state_bridge.route_resolver.as_ref(), &route_request)
+                .expect("route resolver should produce shared-state context");
+        assert_eq!(route_context.channel_id, ChannelId::new("channel-1"));
+        assert_eq!(
+            route_context.participant_id,
+            ParticipantId::new("participant-1")
+        );
+    }
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    #[test_log::test]
+    fn test_build_default_html_vanilla_js_actix_applies_shared_state_transport() {
+        use hyperchad_shared_state_models::{TransportInbound, TransportOutbound, TransportPing};
+
+        let (outbound_tx, _outbound_rx) = flume::unbounded::<TransportOutbound>();
+        let runtime = switchy::unsync::runtime::Builder::new()
+            .max_blocking_threads(1)
+            .build()
+            .expect("test runtime should initialize");
+
+        let app = AppBuilder::new()
+            .with_router(Router::new())
+            .with_runtime_handle(runtime.handle())
+            .with_shared_state_transport(outbound_tx.clone(), || {
+                let (inbound_tx, inbound_rx) = flume::unbounded::<TransportInbound>();
+                inbound_tx
+                    .send(TransportInbound::Pong(TransportPing { sent_at_ms: 9 }))
+                    .expect("inbound event should enqueue");
+                inbound_rx
+            })
+            .build_default_html_vanilla_js_actix()
+            .expect("default actix renderer should build");
+
+        let shared_state_transport = app
+            .renderer
+            .app
+            .shared_state_transport
+            .expect("shared-state transport should be attached to actix app");
+        assert!(
+            shared_state_transport
+                .outbound_tx
+                .same_channel(&outbound_tx)
+        );
+
+        let inbound_rx = (shared_state_transport.inbound_receiver_factory)();
+        assert_eq!(
+            inbound_rx
+                .try_recv()
+                .expect("inbound receiver should have queued event"),
+            TransportInbound::Pong(TransportPing { sent_at_ms: 9 })
+        );
     }
 
     #[test_log::test(switchy_async::test)]

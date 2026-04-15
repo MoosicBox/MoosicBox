@@ -6689,6 +6689,7 @@ dependencies = [
  "actix-cors",
  "actix-files",
  "actix-web",
+ "actix-ws",
  "async-trait",
  "bytes",
  "flate2",
