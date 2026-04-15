@@ -47,7 +47,7 @@
         "jsdom": "^27.4.0",
         "msw": "^2.13.3",
         "playwright": "~1.56.1",
-        "prettier": "^3.8.2",
+        "prettier": "^3.8.3",
         "typescript": "^5.9.3",
         "vitest": "^4.1.4"
     }
