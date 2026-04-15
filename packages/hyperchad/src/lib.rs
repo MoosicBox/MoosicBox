@@ -54,6 +54,10 @@
 //! * `app` - Application builder and runtime (requires `app` feature)
 //! * `color` - Color management and theming (requires `color` feature)
 //! * `router` - Routing functionality for navigation (requires `router` feature)
+//! * `shared_state` - Shared state runtime APIs (requires `shared-state` feature)
+//! * `shared_state_bridge` - `HyperChad` routing bridge APIs (requires `shared-state-bridge` feature)
+//! * `shared_state_models` - Shared state protocol model APIs (requires `shared-state-models` feature)
+//! * `shared_state_transport` - Shared state transport APIs (requires `shared-state-transport` feature)
 //! * `state` - State persistence system with optional `SQLite` backend (requires `state` feature)
 //! * `template` - Template macro system for building UI components (requires `template` feature)
 //! * `transformer` - Container and element types for UI transformations (requires `transformer` feature)
@@ -134,6 +138,18 @@ pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
 /// Routing APIs for application navigation.
 #[cfg(feature = "router")]
 pub use hyperchad_router as router;
+/// Shared state runtime APIs.
+#[cfg(feature = "shared-state")]
+pub use hyperchad_shared_state as shared_state;
+/// Shared state bridge APIs for `HyperChad` route integration.
+#[cfg(feature = "shared-state-bridge")]
+pub use hyperchad_shared_state_bridge as shared_state_bridge;
+/// Shared state protocol model APIs.
+#[cfg(feature = "shared-state-models")]
+pub use hyperchad_shared_state_models as shared_state_models;
+/// Shared state transport APIs.
+#[cfg(feature = "shared-state-transport")]
+pub use hyperchad_shared_state_transport as shared_state_transport;
 /// State persistence APIs.
 #[cfg(feature = "state")]
 pub use hyperchad_state as state;

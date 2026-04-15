@@ -1,0 +1,33 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "network-programming", "web-programming"]
+description = "HyperChad shared state transport abstractions"
+edition     = { workspace = true }
+keywords    = ["hyperchad", "realtime", "state", "transport"]
+license     = { workspace = true }
+name        = "hyperchad_shared_state_transport"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_shared_state_models = { workspace = true }
+moosicbox_assert              = { workspace = true }
+
+async-trait = { workspace = true }
+flume       = { workspace = true }
+thiserror   = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "hyperchad_shared_state_models/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+]

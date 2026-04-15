@@ -1,0 +1,35 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "gui", "web-programming"]
+description = "HyperChad shared state bridge package"
+edition     = { workspace = true }
+keywords    = ["bridge", "hyperchad", "state", "sync"]
+license     = { workspace = true }
+name        = "hyperchad_shared_state_bridge"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_router              = { workspace = true }
+hyperchad_shared_state        = { workspace = true }
+hyperchad_shared_state_models = { workspace = true }
+moosicbox_assert              = { workspace = true }
+
+thiserror = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "hyperchad_router/fail-on-warnings",
+    "hyperchad_shared_state/fail-on-warnings",
+    "hyperchad_shared_state_models/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+]

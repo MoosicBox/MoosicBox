@@ -1,0 +1,45 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "network-programming", "web-programming"]
+description = "HyperChad shared state runtime and storage"
+edition     = { workspace = true }
+keywords    = ["hyperchad", "realtime", "state", "sync"]
+license     = { workspace = true }
+name        = "hyperchad_shared_state"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_shared_state_models = { workspace = true }
+moosicbox_assert              = { workspace = true }
+
+async-trait      = { workspace = true }
+flume            = { workspace = true }
+log              = { workspace = true }
+switchy_database = { workspace = true, features = ["schema"] }
+switchy_schema   = { workspace = true, features = ["code"] }
+thiserror        = { workspace = true }
+
+[dev-dependencies]
+bincode                     = { workspace = true, features = ["serde", "std"] }
+pretty_assertions           = { workspace = true }
+switchy_async               = { workspace = true, features = ["macros", "tokio"] }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+test-log                    = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "hyperchad_shared_state_models/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_schema/fail-on-warnings",
+]

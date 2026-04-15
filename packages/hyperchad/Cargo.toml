@@ -33,6 +33,10 @@ hyperchad_renderer_html_lambda     = { workspace = true, optional = true }
 hyperchad_renderer_html_web_server = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js      = { workspace = true, optional = true }
 hyperchad_router                   = { workspace = true, optional = true }
+hyperchad_shared_state             = { workspace = true, optional = true }
+hyperchad_shared_state_bridge      = { workspace = true, optional = true }
+hyperchad_shared_state_models      = { workspace = true, optional = true }
+hyperchad_shared_state_transport   = { workspace = true, optional = true }
 hyperchad_simulator                = { workspace = true, optional = true }
 hyperchad_state                    = { workspace = true, optional = true }
 hyperchad_template                 = { workspace = true, optional = true }
@@ -60,6 +64,10 @@ fail-on-warnings = [
     "hyperchad_renderer_html_web_server?/fail-on-warnings",
     "hyperchad_renderer_vanilla_js?/fail-on-warnings",
     "hyperchad_router?/fail-on-warnings",
+    "hyperchad_shared_state?/fail-on-warnings",
+    "hyperchad_shared_state_bridge?/fail-on-warnings",
+    "hyperchad_shared_state_models?/fail-on-warnings",
+    "hyperchad_shared_state_transport?/fail-on-warnings",
     "hyperchad_simulator?/fail-on-warnings",
     "hyperchad_state?/fail-on-warnings",
     "hyperchad_template?/fail-on-warnings",
@@ -86,6 +94,10 @@ all = [
     "renderer-html-web-server",
     "renderer-vanilla-js",
     "router",
+    "shared-state",
+    "shared-state-bridge",
+    "shared-state-models",
+    "shared-state-transport",
     "state",
     "template",
     "transformer",
@@ -104,6 +116,19 @@ serde = [
 ]
 
 app = ["dep:hyperchad_app"]
+
+shared-state = ["dep:hyperchad_shared_state", "shared-state-models"]
+shared-state-bridge = [
+    "dep:hyperchad_shared_state_bridge",
+    "router",
+    "shared-state",
+    "shared-state-models",
+]
+shared-state-models = ["dep:hyperchad_shared_state_models"]
+shared-state-transport = [
+    "dep:hyperchad_shared_state_transport",
+    "shared-state-models",
+]
 
 state        = ["dep:hyperchad_state"]
 state-sqlite = ["hyperchad_state?/persistence-sqlite", "state"]
