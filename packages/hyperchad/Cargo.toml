@@ -120,6 +120,7 @@ app = ["dep:hyperchad_app"]
 shared-state = ["dep:hyperchad_shared_state", "shared-state-models"]
 shared-state-bridge = [
     "dep:hyperchad_shared_state_bridge",
+    "hyperchad_app?/shared-state-bridge",
     "router",
     "shared-state",
     "shared-state-models",
@@ -128,6 +129,14 @@ shared-state-models = ["dep:hyperchad_shared_state_models"]
 shared-state-transport = [
     "dep:hyperchad_shared_state_transport",
     "shared-state-models",
+]
+shared-state-transport-adapter-sse-post-json = [
+    "hyperchad_shared_state_transport?/adapter-sse-post-json",
+    "shared-state-transport",
+]
+shared-state-transport-adapter-ws-json = [
+    "hyperchad_shared_state_transport?/adapter-ws-json",
+    "shared-state-transport",
 ]
 
 state        = ["dep:hyperchad_state"]

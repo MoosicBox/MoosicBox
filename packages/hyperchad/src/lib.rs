@@ -58,6 +58,9 @@
 //! * `shared_state_bridge` - `HyperChad` routing bridge APIs (requires `shared-state-bridge` feature)
 //! * `shared_state_models` - Shared state protocol model APIs (requires `shared-state-models` feature)
 //! * `shared_state_transport` - Shared state transport APIs (requires `shared-state-transport` feature)
+//! * `shared_state_transport` adapter features:
+//!   - `shared-state-transport-adapter-ws-json`
+//!   - `shared-state-transport-adapter-sse-post-json`
 //! * `state` - State persistence system with optional `SQLite` backend (requires `state` feature)
 //! * `template` - Template macro system for building UI components (requires `template` feature)
 //! * `transformer` - Container and element types for UI transformations (requires `transformer` feature)

@@ -27,6 +27,8 @@ hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = 
     "script",
 ] }
 hyperchad_router = { workspace = true }
+hyperchad_shared_state_bridge = { workspace = true, optional = true }
+hyperchad_shared_state_models = { workspace = true, optional = true }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 switchy = { workspace = true, features = [
@@ -73,6 +75,8 @@ fail-on-warnings = [
     "hyperchad_renderer_html?/fail-on-warnings",
     "hyperchad_renderer_vanilla_js?/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
+    "hyperchad_shared_state_bridge?/fail-on-warnings",
+    "hyperchad_shared_state_models?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "switchy/fail-on-warnings",
@@ -102,6 +106,11 @@ json = [
 ]
 
 logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
+shared-state-bridge = [
+    "dep:hyperchad_shared_state_bridge",
+    "dep:hyperchad_shared_state_models",
+    "logic",
+]
 
 actix      = ["hyperchad_renderer_html?/actix"]
 lambda     = ["hyperchad_renderer_html?/lambda"]

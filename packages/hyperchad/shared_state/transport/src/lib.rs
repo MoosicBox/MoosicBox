@@ -3,12 +3,20 @@
 #![allow(clippy::multiple_crate_versions)]
 
 mod in_memory;
+#[cfg(feature = "adapter-sse-post-json")]
+mod sse_post;
+#[cfg(feature = "adapter-ws-json")]
+mod websocket;
 
 use async_trait::async_trait;
 use flume::Receiver;
 use hyperchad_shared_state_models::{TransportInbound, TransportOutbound};
 
 pub use in_memory::{InMemoryTransportClient, InMemoryTransportPair};
+#[cfg(feature = "adapter-sse-post-json")]
+pub use sse_post::SsePostJsonTransportClient;
+#[cfg(feature = "adapter-ws-json")]
+pub use websocket::WebSocketJsonTransportClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKind {

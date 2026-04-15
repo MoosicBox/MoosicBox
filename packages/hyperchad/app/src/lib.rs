@@ -40,6 +40,11 @@ use hyperchad_router::{Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 use switchy_env::var_parse_or;
 
+#[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
+use hyperchad_shared_state_bridge::{BridgeError, RouteCommandInput, SharedStateRouteContext};
+#[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
+use hyperchad_shared_state_models::CommandEnvelope;
+
 /// Renderer implementations and type aliases for different backends.
 pub mod renderer;
 
@@ -137,6 +142,24 @@ type ActionHandler = Box<
     dyn Fn(
             (&str, Option<&hyperchad_actions::logic::Value>),
         ) -> Result<bool, Box<dyn std::error::Error>>
+        + Send
+        + Sync,
+>;
+
+#[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
+/// Type alias for resolving shared state context from actions.
+type SharedStateContextResolver = Box<
+    dyn Fn(
+            (&str, Option<&hyperchad_actions::logic::Value>),
+        ) -> Result<SharedStateRouteContext, BridgeError>
+        + Send
+        + Sync,
+>;
+
+#[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
+/// Type alias for resolving shared state command input from actions.
+type SharedStateCommandInputResolver = Box<
+    dyn Fn((&str, Option<&hyperchad_actions::logic::Value>)) -> Option<RouteCommandInput>
         + Send
         + Sync,
 >;
@@ -393,6 +416,73 @@ impl AppBuilder {
         self.action_handlers.push(Arc::new(Box::new(move |(a, b)| {
             func(a, b).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
         })));
+        self
+    }
+
+    /// Adds a shared-state bridge handler that translates actions into `CommandEnvelope`s.
+    ///
+    /// The bridge runs inside the existing action handling path so it works across
+    /// renderers that emit `logic` actions.
+    #[cfg(all(feature = "logic", feature = "shared-state-bridge"))]
+    #[must_use]
+    pub fn with_shared_state_bridge(
+        mut self,
+        command_tx: flume::Sender<CommandEnvelope>,
+        context_resolver: impl Fn(
+            &str,
+            Option<&hyperchad_actions::logic::Value>,
+        ) -> Result<SharedStateRouteContext, BridgeError>
+        + Send
+        + Sync
+        + 'static,
+        command_input_resolver: impl Fn(
+            &str,
+            Option<&hyperchad_actions::logic::Value>,
+        ) -> Option<RouteCommandInput>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        let context_resolver: Arc<SharedStateContextResolver> =
+            Arc::new(Box::new(move |(action, value)| {
+                context_resolver(action, value)
+            }));
+        let command_input_resolver: Arc<SharedStateCommandInputResolver> =
+            Arc::new(Box::new(move |(action, value)| {
+                command_input_resolver(action, value)
+            }));
+
+        self.action_handlers
+            .push(Arc::new(Box::new(move |(action, value)| {
+                let Some(command_input) = command_input_resolver((action, value)) else {
+                    return Ok(false);
+                };
+
+                let context = context_resolver((action, value)).map_err(|e| {
+                    Box::new(std::io::Error::other(format!(
+                        "Shared state context resolution failed for action '{action}': {e}"
+                    ))) as Box<dyn std::error::Error>
+                })?;
+
+                let command = hyperchad_shared_state_bridge::command_from_route(
+                    context,
+                    command_input,
+                )
+                .map_err(|e| {
+                    Box::new(std::io::Error::other(format!(
+                        "Shared state command construction failed for action '{action}': {e}"
+                    ))) as Box<dyn std::error::Error>
+                })?;
+
+                command_tx.send(command).map_err(|e| {
+                    Box::new(std::io::Error::other(format!(
+                        "Shared state command send failed for action '{action}': {e}"
+                    ))) as Box<dyn std::error::Error>
+                })?;
+
+                Ok(true)
+            })));
+
         self
     }
 

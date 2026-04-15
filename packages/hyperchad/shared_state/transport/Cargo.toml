@@ -21,11 +21,36 @@ hyperchad_shared_state_models = { workspace = true }
 moosicbox_assert              = { workspace = true }
 
 async-trait = { workspace = true }
-flume       = { workspace = true }
-thiserror   = { workspace = true }
+flume = { workspace = true }
+futures-util = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+log = { workspace = true }
+reqwest = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = [
+    "macros",
+    "rt",
+    "sync",
+] }
+tokio-tungstenite = { workspace = true, optional = true }
 
 [features]
 default = []
+
+adapter-sse-post-json = [
+    "dep:futures-util",
+    "dep:reqwest",
+    "dep:serde_json",
+    "dep:tokio",
+]
+adapter-ws-json = [
+    "dep:futures-util",
+    "dep:http",
+    "dep:serde_json",
+    "dep:tokio",
+    "dep:tokio-tungstenite",
+]
 
 fail-on-warnings = [
     "hyperchad_shared_state_models/fail-on-warnings",
