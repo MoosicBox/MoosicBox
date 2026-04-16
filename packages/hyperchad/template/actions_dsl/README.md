@@ -33,8 +33,8 @@ button fx-click=fx { navigate("/dashboard") } { "Go to Dashboard" }
 // Log a message
 button fx-click=fx { log("Button clicked") } { "Click Me" }
 
-// Custom action
-button fx-click=fx { custom("my-action") } { "Custom Action" }
+// Custom action (string literal payload)
+button fx-click=fx { custom("'my-action'") } { "Custom Action" }
 ```
 
 ### Element Reference API
@@ -133,7 +133,10 @@ button fx-click=fx {
 ### Logging Actions
 
 - `log(message)` - Log an info message
-- `custom(action_name)` - Execute a custom action
+- `custom(action_expr)` - Execute a custom action expression
+
+`custom(...)` accepts a JavaScript expression. For a literal string action name,
+wrap the value in JS quotes, for example `custom("'my-action'")`.
 
 ### Element Reference Functions
 

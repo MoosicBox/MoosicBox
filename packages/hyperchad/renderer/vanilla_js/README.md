@@ -361,8 +361,10 @@ The renderer supports various action types through the `ActionType` enum. Here a
 ### Utility Actions
 
 - `ActionType::Log { message, level }` - Log message to console
-- `ActionType::Custom { action }` - Custom action string
+- `ActionType::Custom { action }` - Custom action JavaScript expression
 - `ActionType::NoOp` - No operation
+
+For literal string action names, include JS quotes in `action` (for example `"'increment'"`).
 
 ### Combining Actions
 
@@ -418,6 +420,15 @@ Server-Sent Events support for real-time updates:
 - **Event Handling**: Process server-sent data streams
 - **UUID Generation**: Requires `plugin-uuid` for event tracking
 
+### Shared State Plugin (`plugin-shared-state`)
+
+Shared state transport support built on the SSE transport primitives:
+
+- **Auto-subscribe channels**: Tracks `data-shared-state-channel` declarations in DOM
+- **Session-aware transport**: Streams from `/$shared-state/transport/sse` and posts outbound messages to `/$shared-state/transport`
+- **Event dispatching**: Emits `v-shared-state-*` events (`message`, `snapshot`, `event`, `command-accepted`, `command-rejected`, `pong`, `connected`)
+- **No custom JS required**: Pair with `fx-shared-state-*` action triggers for declarative behavior
+
 ### Form Plugin (`plugin-form`)
 
 Enhanced form handling capabilities:
@@ -459,6 +470,7 @@ The renderer automatically includes the appropriate JavaScript:
 - **`plugin-nav`**: Navigation and routing
 - **`plugin-idiomorph`**: DOM morphing
 - **`plugin-sse`**: Server-Sent Events
+- **`plugin-shared-state`**: Shared state transport events and channel subscriptions
 - **`plugin-tauri-event`**: Tauri integration
 - **`plugin-uuid`**: UUID generation
 - **`plugin-uuid-insecure`**: Insecure UUID (development only)

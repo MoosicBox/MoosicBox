@@ -1,0 +1,69 @@
+[package]
+description = "Example demonstrating shared-state multiplayer transport with no custom JS"
+edition     = { workspace = true }
+keywords    = ["example", "hyperchad", "multiplayer", "shared-state", "web-server"]
+license     = { workspace = true }
+name        = "hyperchad_shared_state_transport_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+tests = false
+
+[[bin]]
+name = "shared_state_transport_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad = { workspace = true, features = [
+    "actions",
+    "app",
+    "color",
+    "logic",
+    "renderer",
+    "renderer-assets",
+    "renderer-html",
+    "renderer-html-sse",
+    "renderer-vanilla-js",
+    "router",
+    "router-form",
+    "shared-state",
+    "shared-state-bridge",
+    "shared-state-models",
+    "shared-state-transport",
+    "template",
+    "transformer",
+    "transformer-models",
+] }
+
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-time",
+    "async-tokio",
+] }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+
+env_logger = { workspace = true }
+flume      = { workspace = true }
+log        = { workspace = true }
+
+[features]
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_database_connection/fail-on-warnings",
+]
+
+actix = ["hyperchad/renderer-html-actix"]
+assets = ["hyperchad/renderer-assets"]
+default = ["actix", "assets", "vanilla-js"]
+insecure = ["hyperchad/renderer-vanilla-js-plugin-uuid-insecure"]
+vanilla-js = [
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-plugin-actions",
+    "hyperchad/renderer-vanilla-js-plugin-idiomorph",
+    "hyperchad/renderer-vanilla-js-plugin-nav",
+    "hyperchad/renderer-vanilla-js-plugin-routing",
+    "hyperchad/renderer-vanilla-js-plugin-shared-state",
+]

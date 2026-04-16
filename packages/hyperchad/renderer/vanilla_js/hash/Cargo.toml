@@ -39,6 +39,7 @@ all-plugins = [
     "plugin-idiomorph",
     "plugin-nav",
     "plugin-routing",
+    "plugin-shared-state",
     "plugin-sse",
     "plugin-tauri-event",
     "plugin-uuid",
@@ -79,6 +80,7 @@ plugin-http-events   = ["_any-plugins"]
 plugin-idiomorph     = ["_any-plugins"]
 plugin-nav           = ["_any-plugins"]
 plugin-routing       = ["_any-plugins"]
+plugin-shared-state  = ["plugin-sse"]
 plugin-sse           = ["_any-plugins"]
 plugin-tauri-event   = ["_any-plugins"]
 plugin-uuid          = ["_any-plugins"]

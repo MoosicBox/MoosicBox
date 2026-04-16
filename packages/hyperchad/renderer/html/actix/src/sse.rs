@@ -178,18 +178,78 @@ pub async fn handle_sse<
             let data = data.clone();
             async move {
                 log::debug!("handle_sse: received renderer_event_rx event");
-                Ok::<_, actix_web::Error>(match event {
+                let events = match event {
                     RendererEvent::View(view) => {
                         moosicbox_logging::debug_or_trace!(
                             ("handle_sse: SSE sending view"),
                             ("handle_sse: SSE sending view={view:?}")
                         );
-                        let (body, _content_type) =
-                            app.processor.to_body(Content::View(view), data).await?;
 
-                        let body = str::from_utf8(&body).map_err(ErrorInternalServerError)?;
+                        let view = *view;
 
-                        crate::sse::EventData::new(body).event("view")
+                        if view.primary.is_none() && !view.fragments.is_empty() {
+                            let mut partial_events = Vec::new();
+
+                            for fragment in &view.fragments {
+                                let target_id = fragment.container.str_id.clone().or_else(|| {
+                                    match &fragment.selector {
+                                        hyperchad_renderer::transformer::models::Selector::Id(
+                                            id,
+                                        ) => Some(id.clone()),
+                                        _ => None,
+                                    }
+                                });
+
+                                let Some(target_id) = target_id else {
+                                    log::warn!(
+                                        "handle_sse: skipping fragment without stable id selector={:?}",
+                                        fragment.selector
+                                    );
+                                    continue;
+                                };
+
+                                let fragment_view = hyperchad_renderer::View::builder()
+                                    .with_primary(fragment.container.clone())
+                                    .build();
+                                let (body, _content_type) = app
+                                    .processor
+                                    .to_body(Content::View(Box::new(fragment_view)), data.clone())
+                                    .await?;
+
+                                let body =
+                                    str::from_utf8(&body).map_err(ErrorInternalServerError)?;
+
+                                partial_events.push(
+                                    crate::sse::EventData::new(body)
+                                        .id(target_id)
+                                        .event("partial_view"),
+                                );
+                            }
+
+                            if partial_events.is_empty() {
+                                let (body, _content_type) = app
+                                    .processor
+                                    .to_body(Content::View(Box::new(view)), data)
+                                    .await?;
+
+                                let body =
+                                    str::from_utf8(&body).map_err(ErrorInternalServerError)?;
+
+                                vec![crate::sse::EventData::new(body).event("view")]
+                            } else {
+                                partial_events
+                            }
+                        } else {
+                            let (body, _content_type) = app
+                                .processor
+                                .to_body(Content::View(Box::new(view)), data)
+                                .await?;
+
+                            let body =
+                                str::from_utf8(&body).map_err(ErrorInternalServerError)?;
+
+                            vec![crate::sse::EventData::new(body).event("view")]
+                        }
                     }
                     // Note: RendererEvent::Partial was removed
                     // Partial views are now just View with fragments
@@ -200,26 +260,44 @@ pub async fn handle_sse<
                             ("handle_sse: SSE sending canvas_update={canvas_update:?}")
                         );
                         let id = canvas_update.target.clone();
-                        crate::sse::EventData::new(serde_json::to_string(&canvas_update).unwrap())
+                        vec![
+                            crate::sse::EventData::new(
+                                serde_json::to_string(&canvas_update).unwrap(),
+                            )
                             .id(id)
-                            .event("canvas_update")
+                            .event("canvas_update"),
+                        ]
                     }
                     RendererEvent::Event { name, value } => {
                         moosicbox_logging::debug_or_trace!(
                             ("handle_sse: SSE sending event name={name}"),
                             ("handle_sse: SSE sending event name={name} value={value:?}")
                         );
-                        crate::sse::EventData::new(format!("{name}:{}", value.unwrap_or_default()))
-                            .event("event")
+                        vec![
+                            crate::sse::EventData::new(format!(
+                                "{name}:{}",
+                                value.unwrap_or_default()
+                            ))
+                            .event("event"),
+                        ]
                     }
-                })
+                };
+
+                let mut bytes = BytesMut::new();
+                for event in events {
+                    let event_bytes = crate::sse::Event::Data(event).into_bytes();
+                    bytes.extend_from_slice(&event_bytes);
+                }
+
+                Ok::<_, actix_web::Error>(bytes.freeze())
             }
         })
         .map(move |x| {
-            x.map(crate::sse::Event::Data)
-                .map(crate::sse::Event::into_bytes)
+            x.inspect(|x| {
+                assert!(x.len() > 2);
+                assert!(x.ends_with(b"\n\n"));
+            })
                 .inspect(|x| {
-                    assert!(x.len() > 2);
                     assert!(x.ends_with(b"\n\n"));
                 })
                 .map(|x| match encoding {

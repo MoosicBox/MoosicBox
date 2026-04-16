@@ -2357,6 +2357,16 @@ mod tests {
         }
 
         #[test_log::test]
+        fn test_action_custom_string_literal() {
+            let action = ActionType::Custom {
+                action: "'increment'".to_string(),
+            };
+            let (result, reset) = action_to_js(&action, true);
+            assert_eq!(result, "triggerAction({action:'increment'});");
+            assert_eq!(reset, None);
+        }
+
+        #[test_log::test]
         fn test_action_event_wraps_inner_action() {
             let inner_action = ActionType::Log {
                 message: "event triggered".to_string(),

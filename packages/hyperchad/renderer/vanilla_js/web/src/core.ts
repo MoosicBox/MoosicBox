@@ -164,7 +164,7 @@ export function triggerMessage(
     id?: string | undefined,
 ): void {
     messageHandlers[type]?.forEach((handler) => {
-        handler(data, id);
+        handleError(`message:${type}`, () => handler(data, id));
     });
 }
 
@@ -173,7 +173,7 @@ export function triggerHandlers<T extends EventType>(
     payload: EventPayloads[T],
 ): void {
     handlers[event]?.forEach((handler) => {
-        handler(payload);
+        handleError(`event:${event}`, () => handler(payload));
     });
 }
 
@@ -240,20 +240,28 @@ onElement(({ element }) => {
 
         if (!attr) continue;
 
-        attrHandlers[key].forEach((handler) =>
-            handler({ element, attr: decodeHtml(attr) }),
-        );
+        attrHandlers[key].forEach((handler) => {
+            handleError(`attr:${key}`, () =>
+                handler({ element, attr: decodeHtml(attr) }),
+            );
+        });
     }
 });
 
 export function processElement(element: HTMLElement, force: boolean = false) {
+    if (!(element instanceof HTMLElement)) {
+        return;
+    }
+
     if (!force && processedElements.has(element)) {
         return;
     }
 
     processedElements.add(element);
 
-    elementHandlers.forEach((handler) => handler({ element }));
+    elementHandlers.forEach((handler) => {
+        handleError('element', () => handler({ element }));
+    });
 
     for (const child of element.children) {
         processElement(child as HTMLElement, force);
@@ -294,9 +302,11 @@ export function createEventDelegator(
             while (currentElement && currentElement !== document.body) {
                 const attr = currentElement.getAttribute(attrName);
                 if (attr) {
-                    listeners.forEach((handler) =>
-                        handler(currentElement, attr, event),
-                    );
+                    listeners.forEach((handler) => {
+                        handleError(`delegate:${eventType}:${attrName}`, () =>
+                            handler(currentElement, attr, event),
+                        );
+                    });
                     return;
                 }
                 currentElement = currentElement.parentElement as HTMLElement;
@@ -307,7 +317,13 @@ export function createEventDelegator(
 }
 
 on('domLoad', ({ elements }) =>
-    elements.forEach((element) => processElement(element)),
+    elements.forEach((element) => {
+        if (!(element instanceof HTMLElement)) {
+            return;
+        }
+
+        processElement(element);
+    }),
 );
 on('swapStyle', ({ id, style }) => {
     removeElementStyles(id);

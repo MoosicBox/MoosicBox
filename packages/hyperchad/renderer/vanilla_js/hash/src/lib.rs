@@ -59,6 +59,11 @@ const PLUGIN_ROUTING_HASH: &str = "-routing";
 #[cfg(not(feature = "plugin-routing"))]
 const PLUGIN_ROUTING_HASH: &str = "";
 
+#[cfg(feature = "plugin-shared-state")]
+const PLUGIN_SHARED_STATE_HASH: &str = "-shared-state";
+#[cfg(not(feature = "plugin-shared-state"))]
+const PLUGIN_SHARED_STATE_HASH: &str = "";
+
 #[cfg(feature = "plugin-event")]
 const PLUGIN_EVENT_HASH: &str = "-event";
 #[cfg(not(feature = "plugin-event"))]
@@ -153,6 +158,7 @@ pub const PLUGIN_HASH: &str = const_format::concatcp!(
     PLUGIN_UUID_HASH,
     PLUGIN_UUID_INSECURE_HASH,
     PLUGIN_ROUTING_HASH,
+    PLUGIN_SHARED_STATE_HASH,
     PLUGIN_EVENT_HASH,
     PLUGIN_ACTIONS_CHANGE_HASH,
     PLUGIN_ACTIONS_CLICK_HASH,

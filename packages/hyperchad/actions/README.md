@@ -182,6 +182,10 @@ let custom = ActionType::Custom {
     action: "my-custom-action".to_string(),
 };
 
+// `action` is evaluated as a JavaScript expression in the vanilla-js renderer.
+// For a literal string payload there, include JS quotes in the value, e.g.
+// "'my-custom-action'".
+
 // Event-based actions
 let event_action = ActionType::on_event("user-login",
     ActionType::show_by_id("dashboard")

@@ -1,41 +1,30 @@
-import { triggerMessage, v } from './core';
-import { fetchEventSource } from './vendored/fetch-event-source';
+import { triggerMessage } from './core';
+import { startEventSourceStream, stopEventSourceStream } from './sse-base';
 
-function getClientStreamId() {
-    let id = localStorage.getItem('streamId');
-    if (!id) {
-        id = v.genUuid();
-        localStorage.setItem('streamId', id);
-    }
-    return id;
-}
+const DEFAULT_SSE_STREAM_KEY = '/$sse';
+
+export {
+    createEventSourcePath,
+    DEFAULT_SSE_STREAM_ID_COOKIE_NAME,
+    DEFAULT_SSE_STREAM_ID_STORAGE_KEY,
+    getOrCreateClientStreamId,
+    hasActiveEventSourceStream,
+    setStreamIdCookie,
+    stopAllEventSourceStreams,
+    stopEventSourceStream,
+    startEventSourceStream,
+    type EventSourceStreamOptions,
+} from './sse-base';
 
 export function initSSE() {
-    const streamId = getClientStreamId();
-
-    document.cookie = `v-sse-stream-id=${streamId}; path=/; SameSite=Strict`;
-
-    fetchEventSource('/$sse', {
-        method: 'GET',
-        onopen: async (response: Response) => {
-            if (response.status >= 400) {
-                const status = response.status.toString();
-                console.error('Failed to open SSE', { status });
-            }
-        },
+    startEventSourceStream('/$sse', {
+        streamKey: DEFAULT_SSE_STREAM_KEY,
         onmessage: (e) => triggerMessage(e.event, e.data, e.id),
-        onerror: (error) => {
-            if (error) {
-                if (typeof error === 'object' && 'message' in error) {
-                    console.error('SSE error', error.message);
-                } else {
-                    console.error('SSE error', error);
-                }
-            } else {
-                console.error('SSE error', error);
-            }
-        },
     });
+}
+
+export function stopSSE() {
+    stopEventSourceStream(DEFAULT_SSE_STREAM_KEY);
 }
 
 if (document.readyState === 'loading') {

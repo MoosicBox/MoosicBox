@@ -26,26 +26,35 @@ export function swapOuterHtml(
         if (!target) return;
         element = target as HTMLElement;
     }
-    const children = element.parentNode?.children;
-    if (!children) return;
+    const parent = element.parentElement;
+    if (!parent) return;
 
-    const newElement = typeof html === 'string' ? htmlToElement(html) : html;
+    const newChildren: HTMLElement[] = [];
 
-    const parent = element.parentNode!;
-    const child = newElement.lastChild;
-    const newChildren = [];
-    if (child) {
-        const newChild = newElement.removeChild(child) as HTMLElement;
-        element.replaceWith(newChild);
-        newChildren.push(newChild);
-    }
+    if (typeof html === 'string') {
+        const wrapper = htmlToElement(html);
+        const replacements = Array.from(wrapper.children).filter(
+            (child): child is HTMLElement => child instanceof HTMLElement,
+        );
 
-    while (newElement.children.length > 0) {
-        const newChild = newElement.removeChild(
-            newElement.lastChild!,
-        ) as HTMLElement;
-        parent.insertBefore(newChild, child);
-        newChildren.push(newChild);
+        if (replacements.length === 0) {
+            element.remove();
+            return;
+        }
+
+        const [first, ...rest] = replacements;
+        element.replaceWith(first);
+        newChildren.push(first);
+
+        let previous = first;
+        for (const replacement of rest) {
+            previous.insertAdjacentElement('afterend', replacement);
+            newChildren.push(replacement);
+            previous = replacement;
+        }
+    } else {
+        element.replaceWith(html);
+        newChildren.push(html);
     }
 
     triggerHandlers('domLoad', {

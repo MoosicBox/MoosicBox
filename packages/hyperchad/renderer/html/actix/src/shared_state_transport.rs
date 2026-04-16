@@ -230,6 +230,16 @@ fn session_id_from_request(req: &HttpRequest) -> Option<String> {
         .or_else(|| query.get("session"))
         .map(ToOwned::to_owned)
         .filter(|value| !value.is_empty())
+        .or_else(|| {
+            req.cookie("v-shared-state-session-id")
+                .map(|cookie| cookie.value().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .or_else(|| {
+            req.cookie("v-sse-stream-id")
+                .map(|cookie| cookie.value().to_string())
+                .filter(|value| !value.is_empty())
+        })
 }
 
 fn sse_session_sender(
@@ -490,8 +500,9 @@ pub async fn handle_shared_state_transport_post<
     };
 
     if let Some(dispatcher) = shared_state_transport.dispatcher.clone() {
-        let session_id = session_id_from_request(&req)
-            .ok_or_else(|| ErrorBadRequest("Missing required query parameter 'session_id'"))?;
+        let session_id = session_id_from_request(&req).ok_or_else(|| {
+            ErrorBadRequest("Missing shared-state session id (query 'session_id' or cookie)")
+        })?;
         let Some(session) = lookup_sse_session(shared_state_transport, &session_id)? else {
             return Ok(HttpResponse::Conflict().finish());
         };
@@ -548,8 +559,9 @@ pub async fn handle_shared_state_transport_sse<
     };
 
     let inbound_rx = if shared_state_transport.dispatcher.is_some() {
-        let session_id = session_id_from_request(&req)
-            .ok_or_else(|| ErrorBadRequest("Missing required query parameter 'session_id'"))?;
+        let session_id = session_id_from_request(&req).ok_or_else(|| {
+            ErrorBadRequest("Missing shared-state session id (query 'session_id' or cookie)")
+        })?;
         upsert_sse_session_stream(&shared_state_transport, &session_id)?
     } else {
         (shared_state_transport.inbound_receiver_factory)()
@@ -1294,6 +1306,60 @@ mod tests {
         .await;
 
         assert!(response.is_err());
+    }
+
+    #[actix_web::test]
+    async fn dispatcher_post_accepts_session_cookie() {
+        #[derive(Debug)]
+        struct TestDispatcher;
+
+        #[async_trait]
+        impl SharedStateTransportDispatcher for TestDispatcher {
+            async fn ingest_outbound(
+                &self,
+                _outbound: TransportOutbound,
+            ) -> super::SharedStateTransportDispatchResult<Vec<TransportInbound>> {
+                Ok(Vec::new())
+            }
+
+            async fn subscribe_channel(
+                &self,
+                _channel_id: &ChannelId,
+            ) -> super::SharedStateTransportDispatchResult<flume::Receiver<EventEnvelope>>
+            {
+                let (_tx, rx) = flume::unbounded();
+                Ok(rx)
+            }
+        }
+
+        let (_renderer_event_tx, renderer_event_rx) = flume::unbounded::<RendererEvent>();
+        let app = ActixApp::new(TestProcessor, renderer_event_rx)
+            .with_shared_state_transport_dispatcher(Arc::new(TestDispatcher));
+
+        let session_cookie =
+            actix_web::cookie::Cookie::new("v-shared-state-session-id", "session-cookie-1");
+
+        let sse_request = test::TestRequest::get()
+            .cookie(session_cookie.clone())
+            .to_http_request();
+        let sse_response =
+            handle_shared_state_transport_sse(sse_request, web::Data::new(app.clone()))
+                .await
+                .expect("sse handler should succeed with cookie session");
+        assert_eq!(sse_response.status(), StatusCode::OK);
+
+        let post_request = test::TestRequest::post()
+            .cookie(session_cookie)
+            .to_http_request();
+        let post_response = handle_shared_state_transport_post(
+            post_request,
+            web::Data::new(app),
+            web::Json(TransportOutbound::Ping(TransportPing { sent_at_ms: 1 })),
+        )
+        .await
+        .expect("post handler should succeed with cookie session");
+
+        assert_eq!(post_response.status(), StatusCode::NO_CONTENT);
     }
 
     #[actix_web::test]

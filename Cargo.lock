@@ -6909,6 +6909,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_shared_state_transport_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.10",
+ "flume 0.12.0",
+ "hyperchad",
+ "log 0.4.29",
+ "switchy",
+ "switchy_database_connection",
+]
+
+[[package]]
 name = "hyperchad_simulator"
 version = "0.1.0"
 dependencies = [

@@ -6,14 +6,25 @@ interface TestFixtures {
     worker: SetupWorker;
 }
 
+let workerStarted = false;
+
 export const test = testBase.extend<TestFixtures>({
     worker: [
         // eslint-disable-next-line no-empty-pattern
         async ({}, use) => {
-            await worker.start({ onUnhandledRequest: 'bypass' });
+            if (!workerStarted) {
+                await worker.start({ onUnhandledRequest: 'bypass' });
+                workerStarted = true;
+            }
+
             await use(worker);
+
+            const { stopAllEventSourceStreams } = await import(
+                '../../src/sse-base'
+            );
+
+            stopAllEventSourceStreams();
             worker.resetHandlers();
-            worker.stop();
         },
         { auto: true },
     ],

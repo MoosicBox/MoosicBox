@@ -67,6 +67,7 @@ all-plugins = [
     "plugin-idiomorph",
     "plugin-nav",
     "plugin-routing",
+    "plugin-shared-state",
     "plugin-sse",
     "plugin-tauri-event",
     "plugin-uuid",
@@ -144,6 +145,11 @@ plugin-http-events = ["hyperchad_renderer_vanilla_js_hash/plugin-http-events"]
 plugin-idiomorph = ["hyperchad_renderer_vanilla_js_hash/plugin-idiomorph"]
 plugin-nav = ["hyperchad_renderer_vanilla_js_hash/plugin-nav"]
 plugin-routing = ["hyperchad_renderer_vanilla_js_hash/plugin-routing"]
+plugin-shared-state = [
+    "hyperchad_renderer_vanilla_js_hash/plugin-shared-state",
+    "plugin-actions-event",
+    "plugin-sse",
+]
 plugin-sse = ["hyperchad_renderer_vanilla_js_hash/plugin-sse", "plugin-uuid"]
 plugin-tauri-event = ["hyperchad_renderer_vanilla_js_hash/plugin-tauri-event"]
 plugin-uuid = ["hyperchad_renderer_vanilla_js_hash/plugin-uuid"]

@@ -44,5 +44,13 @@ export function navigate(url: string) {
     console.debug('no document for anchor');
 }
 
+declare global {
+    interface Window {
+        navigate: typeof navigate;
+    }
+}
+
+window['navigate'] = navigate;
+
 // Setup link handlers using onAttr
 setupLinkHandlers(initiateFetchDocument, navigate);

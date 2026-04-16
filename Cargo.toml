@@ -42,6 +42,7 @@ members = [
     "packages/hyperchad/examples/http_events",
     "packages/hyperchad/examples/markdown",
     "packages/hyperchad/examples/select_dropdown",
+    "packages/hyperchad/examples/shared_state_transport",
     "packages/hyperchad/js_bundler",
     "packages/hyperchad/markdown",
     "packages/hyperchad/renderer",

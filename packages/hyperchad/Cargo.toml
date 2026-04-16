@@ -128,6 +128,8 @@ shared-state-bridge = [
 shared-state-models = ["dep:hyperchad_shared_state_models"]
 shared-state-transport = [
     "dep:hyperchad_shared_state_transport",
+    "hyperchad_app?/shared-state-transport",
+    "hyperchad_renderer_html?/shared-state-transport",
     "shared-state-models",
 ]
 shared-state-transport-adapter-sse-post-json = [
@@ -361,6 +363,10 @@ renderer-vanilla-js-plugin-nav = [
 renderer-vanilla-js-plugin-routing = [
     "hyperchad_app?/plugin-routing",
     "hyperchad_renderer_vanilla_js?/plugin-routing",
+]
+renderer-vanilla-js-plugin-shared-state = [
+    "hyperchad_app?/plugin-shared-state",
+    "hyperchad_renderer_vanilla_js?/plugin-shared-state",
 ]
 renderer-vanilla-js-plugin-sse = [
     "hyperchad_app?/plugin-sse",
