@@ -37,7 +37,7 @@ use std::{collections::BTreeMap, sync::LazyLock};
 use http::Response;
 use hyperchad_color::Color;
 use hyperchad_renderer::{Content, HtmlTagRenderer};
-use hyperchad_renderer_html::html::container_element_to_html;
+use hyperchad_renderer_html::html::{container_element_to_html, container_to_html};
 use hyperchad_router::{RouteRequest, Router};
 
 /// Re-export of the `http` crate for constructing HTTP requests and responses.
@@ -408,15 +408,15 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         #[allow(unreachable_patterns)]
         let html = match content {
             Content::View(boxed_view) => {
-                let view = boxed_view.primary.as_ref();
+                let mut parts = Vec::new();
 
-                if let Some(view) = view {
-                    let content = container_element_to_html(view, &self.renderer)?;
+                if let Some(primary) = &boxed_view.primary {
+                    let content = container_element_to_html(primary, &self.renderer)?;
 
-                    if req.headers.contains_key("hx-request") {
+                    let html = if req.headers.contains_key("hx-request") {
                         self.renderer.partial_html(
                             &HEADERS,
-                            view,
+                            primary,
                             content,
                             self.viewport.as_deref(),
                             self.background,
@@ -424,7 +424,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     } else {
                         self.renderer.root_html(
                             &HEADERS,
-                            view,
+                            primary,
                             content,
                             self.viewport.as_deref(),
                             self.background,
@@ -434,11 +434,31 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                             &self.css_paths,
                             &self.inline_css,
                         )
-                    }
-                } else {
-                    // Fragments-only response
-                    String::new()
+                    };
+
+                    parts.push(html);
                 }
+
+                for fragment in &boxed_view.fragments {
+                    parts.push(format!(
+                        "\n<!--hyperchad-fragment-->\n{}\n",
+                        fragment.selector
+                    ));
+
+                    let html = container_to_html(&fragment.container, &self.renderer)?;
+                    let html = self.renderer.partial_html(
+                        &HEADERS,
+                        &fragment.container,
+                        html,
+                        self.viewport.as_deref(),
+                        self.background,
+                    );
+
+                    parts.push(html);
+                    parts.push("\n".to_string());
+                }
+
+                parts.join("")
             }
             Content::Raw { data, content_type } => {
                 return Ok(Response::builder()
@@ -994,6 +1014,51 @@ mod tests {
                 response.headers().get("X-HyperChad-Fragments").unwrap(),
                 "true"
             );
+
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("<!--hyperchad-fragment-->"));
+            assert!(body_str.contains("#target"));
+            assert!(body_str.contains("<span"));
+            assert!(body_str.contains("id=\"target\""));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_process_view_with_primary_and_fragments_returns_both() {
+            use hyperchad_renderer::View;
+            use hyperchad_router::{Container, Element};
+
+            let renderer = DefaultHtmlTagRenderer::default();
+            let router = Router::new().with_route("/primary-and-fragments", |_req| async {
+                let view = View::builder()
+                    .with_primary(Container {
+                        element: Element::Div,
+                        children: vec![Container {
+                            element: Element::Raw {
+                                value: "primary-content".to_string(),
+                            },
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    })
+                    .with_fragment(Container {
+                        element: Element::Span,
+                        str_id: Some("target".to_string()),
+                        ..Default::default()
+                    })
+                    .build();
+                Content::View(Box::new(view))
+            });
+            let app = HttpApp::new(renderer, router).with_title("Test Page");
+
+            let req = create_route_request("/primary-and-fragments");
+            let response = app.process(&req).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body_str = std::str::from_utf8(response.body()).unwrap();
+            assert!(body_str.contains("primary-content"));
+            assert!(body_str.contains("<!--hyperchad-fragment-->"));
+            assert!(body_str.contains("#target"));
+            assert!(body_str.contains("id=\"target\""));
         }
 
         #[test_log::test(switchy_async::test)]
