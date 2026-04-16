@@ -32,6 +32,9 @@
 //! #     async fn to_body(&self, _content: Content, _data: ()) -> Result<(Bytes, String), actix_web::Error> {
 //! #         Ok((Bytes::new(), "text/html".to_string()))
 //! #     }
+//! #     async fn to_fragment_body(&self, _fragment: &hyperchad_renderer::ReplaceContainer, _data: ()) -> Result<(Bytes, String), actix_web::Error> {
+//! #         Ok((Bytes::new(), "text/html".to_string()))
+//! #     }
 //! # }
 //! #
 //! # fn main() {
@@ -64,7 +67,9 @@ use actix_web::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use flume::Receiver;
-use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
+use hyperchad_renderer::{
+    Content, Handle, RenderRunner, RendererEvent, ReplaceContainer, ToRenderRunner,
+};
 use moosicbox_env_utils::default_env_u16;
 
 #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
@@ -177,6 +182,17 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
     /// * If content conversion fails
     async fn to_body(&self, content: Content, data: T)
     -> Result<(Bytes, String), actix_web::Error>;
+
+    /// Converts a fragment container into response body bytes and content type.
+    ///
+    /// # Errors
+    ///
+    /// * If fragment conversion fails
+    async fn to_fragment_body(
+        &self,
+        fragment: &ReplaceContainer,
+        data: T,
+    ) -> Result<(Bytes, String), actix_web::Error>;
 }
 
 /// Actix web application for hyperchad rendering with configurable response processing.
@@ -729,6 +745,14 @@ mod tests {
         async fn to_body(
             &self,
             _content: Content,
+            _data: (),
+        ) -> Result<(Bytes, String), actix_web::Error> {
+            Ok((Bytes::new(), "text/html".to_string()))
+        }
+
+        async fn to_fragment_body(
+            &self,
+            _fragment: &hyperchad_renderer::ReplaceContainer,
             _data: (),
         ) -> Result<(Bytes, String), actix_web::Error> {
             Ok((Bytes::new(), "text/html".to_string()))

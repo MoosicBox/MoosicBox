@@ -27,7 +27,10 @@ use lambda_http::{Request, RequestExt as _, http::header::USER_AGENT};
 use switchy::http::models::Method;
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
+use crate::{
+    HtmlApp, HtmlRenderer,
+    html::{container_element_to_html, container_to_html},
+};
 
 pub use hyperchad_renderer_html_lambda::*;
 
@@ -414,7 +417,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         fragment.selector
                     ));
 
-                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
+                    let html = container_to_html(&fragment.container, &self.tag_renderer)
                         .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
                     let html = self.tag_renderer.partial_html(

@@ -30,7 +30,10 @@ use hyperchad_transformer::ResponsiveTrigger;
 use switchy::http::models::Method;
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
+use crate::{
+    HtmlApp, HtmlRenderer,
+    html::{container_element_to_html, container_to_html},
+};
 
 pub use hyperchad_renderer_html_actix::*;
 
@@ -410,18 +413,11 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         fragment.selector
                     ));
 
-                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
-                        .map_err(ErrorInternalServerError)?;
+                    let (body, _content_type) =
+                        self.to_fragment_body(fragment, req.clone()).await?;
+                    let html = std::str::from_utf8(&body).map_err(ErrorInternalServerError)?;
 
-                    let html = self.tag_renderer.partial_html(
-                        &HEADERS,
-                        &fragment.container,
-                        html,
-                        self.viewport.as_deref(),
-                        self.background,
-                    );
-
-                    parts.push(html);
+                    parts.push(html.to_owned());
                     parts.push("\n".to_string());
                 }
 
@@ -444,5 +440,117 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             }
             hyperchad_renderer::Content::Raw { data, content_type } => (data, content_type),
         })
+    }
+
+    async fn to_fragment_body(
+        &self,
+        fragment: &hyperchad_renderer::ReplaceContainer,
+        _req: PreparedRequest,
+    ) -> Result<(Bytes, String), actix_web::Error> {
+        static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
+
+        let html = container_to_html(&fragment.container, &self.tag_renderer)
+            .map_err(ErrorInternalServerError)?;
+
+        let html = self.tag_renderer.partial_html(
+            &HEADERS,
+            &fragment.container,
+            html,
+            self.viewport.as_deref(),
+            self.background,
+        );
+
+        Ok((Bytes::from(html), "text/html; charset=utf-8".to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DefaultHtmlTagRenderer;
+    use hyperchad_renderer::View;
+    use hyperchad_router::{RequestInfo, RouteRequest};
+    use hyperchad_transformer::{Element, HeaderSize};
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_to_fragment_body_renders_outer_element() {
+        let processor =
+            HtmlActixResponseProcessor::new(DefaultHtmlTagRenderer::default(), Router::new());
+        let fragment = hyperchad_renderer::ReplaceContainer {
+            selector: hyperchad_renderer::transformer::models::Selector::Id(
+                "counter-value".to_string(),
+            ),
+            container: hyperchad_router::Container {
+                element: Element::Heading {
+                    size: HeaderSize::H2,
+                },
+                str_id: Some("counter-value".to_string()),
+                children: vec![hyperchad_router::Container {
+                    element: Element::Raw {
+                        value: "2".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        };
+
+        let prepared = PreparedRequest {
+            full: false,
+            req: RouteRequest::from_path("/", RequestInfo::default()),
+        };
+
+        let (body, _content_type) =
+            hyperchad_renderer_html_actix::ActixResponseProcessor::to_fragment_body(
+                &processor, &fragment, prepared,
+            )
+            .await
+            .expect("fragment body should render");
+        let body = std::str::from_utf8(&body).expect("body should be utf8");
+
+        assert!(body.contains("<h2"));
+        assert!(body.contains("id=\"counter-value\""));
+        assert!(body.contains(">2</h2>"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_to_body_fragments_include_outer_element() {
+        let processor =
+            HtmlActixResponseProcessor::new(DefaultHtmlTagRenderer::default(), Router::new());
+        let view = View::builder()
+            .with_fragment(hyperchad_router::Container {
+                element: Element::Heading {
+                    size: HeaderSize::H2,
+                },
+                str_id: Some("counter-value".to_string()),
+                children: vec![hyperchad_router::Container {
+                    element: Element::Raw {
+                        value: "3".to_string(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            })
+            .build();
+
+        let prepared = PreparedRequest {
+            full: false,
+            req: RouteRequest::from_path("/", RequestInfo::default()),
+        };
+
+        let (body, _content_type) = hyperchad_renderer_html_actix::ActixResponseProcessor::to_body(
+            &processor,
+            Content::View(Box::new(view)),
+            prepared,
+        )
+        .await
+        .expect("body should render");
+        let body = std::str::from_utf8(&body).expect("body should be utf8");
+
+        assert!(body.contains("<!--hyperchad-fragment-->"));
+        assert!(body.contains("#counter-value"));
+        assert!(body.contains("<h2"));
+        assert!(body.contains("id=\"counter-value\""));
+        assert!(body.contains(">3</h2>"));
     }
 }

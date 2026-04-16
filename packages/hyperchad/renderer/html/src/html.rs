@@ -1445,6 +1445,27 @@ pub fn container_element_to_html(
         .to_string())
 }
 
+/// Converts a container to HTML including the container element itself.
+///
+/// Unlike [`container_element_to_html`], this renders the full element wrapper
+/// and all child content.
+///
+/// # Errors
+///
+/// * If there were any IO errors writing the `Container` as HTML
+pub fn container_to_html(
+    container: &Container,
+    tag_renderer: &dyn HtmlTagRenderer,
+) -> Result<String, std::io::Error> {
+    let mut buffer = vec![];
+
+    element_to_html(&mut buffer, container, tag_renderer, false)?;
+
+    Ok(std::str::from_utf8(&buffer)
+        .map_err(std::io::Error::other)?
+        .to_string())
+}
+
 /// Converts a container to a complete HTML document response.
 ///
 /// Generates a full HTML page with doctype, head section (including CSS and metadata),
@@ -2593,6 +2614,34 @@ mod tests {
         // container_element_to_html renders children, not the container itself
         assert!(html.contains("<span"));
         assert!(html.contains("text"));
+    }
+
+    #[test_log::test]
+    fn test_container_to_html_renders_outer_element() {
+        use crate::DefaultHtmlTagRenderer;
+        use hyperchad_router::Container;
+        use hyperchad_transformer::Element;
+
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: Element::Heading {
+                size: hyperchad_transformer::HeaderSize::H2,
+            },
+            str_id: Some("counter-value".to_string()),
+            children: vec![Container {
+                element: Element::Raw {
+                    value: "2".to_string(),
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let html = container_to_html(&container, &tag_renderer).unwrap();
+
+        assert!(html.contains("<h2"));
+        assert!(html.contains("id=\"counter-value\""));
+        assert!(html.contains(">2</h2>"));
     }
 
     // Tests for elements_to_html

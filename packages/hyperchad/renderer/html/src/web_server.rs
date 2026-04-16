@@ -25,7 +25,10 @@ use hyperchad_transformer::ResponsiveTrigger;
 use switchy::http::models::Method;
 use switchy_http_models::StatusCode;
 
-use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
+use crate::{
+    HtmlApp, HtmlRenderer,
+    html::{container_element_to_html, container_to_html},
+};
 
 pub use hyperchad_renderer_html_web_server::*;
 
@@ -406,13 +409,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
                         fragment.selector
                     ));
 
-                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
-                        .map_err(|e| {
-                        hyperchad_renderer_html_web_server::WebServerError::Http {
+                    let html = container_to_html(&fragment.container, &self.tag_renderer).map_err(
+                        |e| hyperchad_renderer_html_web_server::WebServerError::Http {
                             status_code: StatusCode::InternalServerError,
                             source: Box::new(e),
-                        }
-                    })?;
+                        },
+                    )?;
 
                     let html = self.tag_renderer.partial_html(
                         &HEADERS,

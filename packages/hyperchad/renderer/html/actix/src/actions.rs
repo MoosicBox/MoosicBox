@@ -229,6 +229,14 @@ mod tests {
         ) -> Result<(Bytes, String), actix_web::Error> {
             Ok((Bytes::from_static(b""), "text/plain".to_string()))
         }
+
+        async fn to_fragment_body(
+            &self,
+            _fragment: &hyperchad_renderer::ReplaceContainer,
+            _data: (),
+        ) -> Result<(Bytes, String), actix_web::Error> {
+            Ok((Bytes::from_static(b""), "text/plain".to_string()))
+        }
     }
 
     #[derive(Debug)]

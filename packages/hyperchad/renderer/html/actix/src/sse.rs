@@ -208,12 +208,9 @@ pub async fn handle_sse<
                                     continue;
                                 };
 
-                                let fragment_view = hyperchad_renderer::View::builder()
-                                    .with_primary(fragment.container.clone())
-                                    .build();
                                 let (body, _content_type) = app
                                     .processor
-                                    .to_body(Content::View(Box::new(fragment_view)), data.clone())
+                                    .to_fragment_body(fragment, data.clone())
                                     .await?;
 
                                 let body =
