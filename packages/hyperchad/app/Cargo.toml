@@ -22,6 +22,7 @@ hyperchad_renderer = { workspace = true }
 hyperchad_renderer_egui = { workspace = true, optional = true }
 hyperchad_renderer_fltk = { workspace = true, optional = true }
 hyperchad_renderer_html = { workspace = true, optional = true }
+hyperchad_renderer_testing = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = [
     "hash",
     "script",
@@ -73,6 +74,7 @@ fail-on-warnings = [
     "hyperchad_renderer_egui?/fail-on-warnings",
     "hyperchad_renderer_fltk?/fail-on-warnings",
     "hyperchad_renderer_html?/fail-on-warnings",
+    "hyperchad_renderer_testing?/fail-on-warnings",
     "hyperchad_renderer_vanilla_js?/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
     "hyperchad_shared_state_bridge?/fail-on-warnings",
@@ -90,6 +92,7 @@ egui-v2 = ["egui", "hyperchad_renderer_egui/v2"]
 egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
 fltk = ["dep:hyperchad_renderer_fltk", "logic"]
 html = ["dep:hyperchad_renderer_html", "hyperchad_renderer/html"]
+testing = ["dep:hyperchad_renderer_testing"]
 vanilla-js = [
     "dep:hyperchad_renderer_vanilla_js",
     "html",

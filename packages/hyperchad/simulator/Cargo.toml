@@ -17,9 +17,12 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-hyperchad_test_utils         = { workspace = true, optional = true }
-moosicbox_assert             = { workspace = true }
-simvar                       = { workspace = true }
+hyperchad_renderer_testing = { workspace = true, optional = true, features = [
+    "test-utils",
+] }
+hyperchad_test_utils = { workspace = true, optional = true }
+moosicbox_assert = { workspace = true }
+simvar = { workspace = true }
 switchy_web_server_simulator = { workspace = true }
 
 log        = { workspace = true }
@@ -36,6 +39,7 @@ test-log      = { workspace = true }
 default = []
 
 fail-on-warnings = [
+    "hyperchad_renderer_testing?/fail-on-warnings",
     "hyperchad_test_utils?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "simvar/fail-on-warnings",
@@ -49,4 +53,4 @@ renderer-html       = []
 renderer-vanilla-js = []
 
 # Test utilities
-test-utils = ["dep:hyperchad_test_utils"]
+test-utils = ["dep:hyperchad_renderer_testing", "dep:hyperchad_test_utils"]

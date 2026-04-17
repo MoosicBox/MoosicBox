@@ -1,0 +1,6 @@
+---
+source: packages/hyperchad/renderer/testing/tests/acceptance.rs
+expression: harness.dom_snapshot()
+---
+- id=1 str_id=Some("root") classes=[] hidden=None visibility=None background=None element=Div
+  - id=2 str_id=Some("child") classes=[] hidden=None visibility=None background=None element=Div

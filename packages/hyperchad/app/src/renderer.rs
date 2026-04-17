@@ -121,6 +121,18 @@ pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
 pub type DefaultRenderer = html::HtmlStubRenderer;
 
 /// The default renderer type based on enabled features.
+#[cfg(all(
+    feature = "testing",
+    not(any(
+        feature = "html",
+        feature = "egui",
+        feature = "fltk",
+        feature = "vanilla-js"
+    ))
+))]
+pub type DefaultRenderer = testing::TestingRenderer;
+
+/// The default renderer type based on enabled features.
 ///
 /// This type alias resolves to the appropriate renderer implementation depending on which
 /// features are enabled (see module documentation for priority order).
@@ -128,7 +140,8 @@ pub type DefaultRenderer = html::HtmlStubRenderer;
     feature = "html",
     feature = "egui",
     feature = "fltk",
-    feature = "vanilla-js"
+    feature = "vanilla-js",
+    feature = "testing"
 )))]
 pub type DefaultRenderer = stub::StubRenderer;
 
@@ -1069,6 +1082,58 @@ pub mod html {
     }
 }
 
+/// In-process testing renderer integration.
+#[cfg(feature = "testing")]
+pub mod testing {
+    use async_trait::async_trait;
+
+    use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
+
+    /// Type alias for the in-process testing renderer.
+    pub type TestingRenderer = hyperchad_renderer_testing::TestingRenderer;
+
+    #[async_trait]
+    impl Generator for TestingRenderer {
+        async fn generate(
+            &self,
+            _router: &hyperchad_router::Router,
+            _output: Option<String>,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Cleaner for TestingRenderer {
+        async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    impl AppBuilder {
+        /// Builds an `App` with the testing renderer.
+        ///
+        /// # Errors
+        ///
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+        pub fn build_testing(
+            self,
+            renderer: TestingRenderer,
+        ) -> Result<App<TestingRenderer>, BuilderError> {
+            self.build(renderer)
+        }
+
+        /// Builds an `App` with a default testing renderer.
+        ///
+        /// # Errors
+        ///
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+        pub fn build_default_testing(self) -> Result<App<TestingRenderer>, BuilderError> {
+            self.build(TestingRenderer::new())
+        }
+    }
+}
+
 /// Stub renderer for testing and no-op scenarios.
 ///
 /// This module provides a `StubRenderer` that implements all renderer traits but performs
@@ -1344,11 +1409,30 @@ impl AppBuilder {
     /// # Errors
     ///
     /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    #[cfg(all(
+        feature = "testing",
+        not(any(
+            feature = "html",
+            feature = "egui",
+            feature = "fltk",
+            feature = "vanilla-js"
+        ))
+    ))]
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
+        self.build_default_testing()
+    }
+
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
+    /// # Errors
+    ///
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(not(any(
         feature = "html",
         feature = "egui",
         feature = "fltk",
-        feature = "vanilla-js"
+        feature = "vanilla-js",
+        feature = "testing"
     )))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_stub()

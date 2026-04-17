@@ -31,6 +31,7 @@ hyperchad_renderer_html_cdn        = { workspace = true, optional = true }
 hyperchad_renderer_html_http       = { workspace = true, optional = true }
 hyperchad_renderer_html_lambda     = { workspace = true, optional = true }
 hyperchad_renderer_html_web_server = { workspace = true, optional = true }
+hyperchad_renderer_testing         = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js      = { workspace = true, optional = true }
 hyperchad_router                   = { workspace = true, optional = true }
 hyperchad_shared_state             = { workspace = true, optional = true }
@@ -62,6 +63,7 @@ fail-on-warnings = [
     "hyperchad_renderer_html_http?/fail-on-warnings",
     "hyperchad_renderer_html_lambda?/fail-on-warnings",
     "hyperchad_renderer_html_web_server?/fail-on-warnings",
+    "hyperchad_renderer_testing?/fail-on-warnings",
     "hyperchad_renderer_vanilla_js?/fail-on-warnings",
     "hyperchad_router?/fail-on-warnings",
     "hyperchad_shared_state?/fail-on-warnings",
@@ -195,6 +197,7 @@ renderer-profiling-tracy = [
     "hyperchad_renderer?/profiling-tracy",
 ]
 renderer-serde = ["hyperchad_renderer?/serde"]
+renderer-testing = ["dep:hyperchad_renderer_testing", "hyperchad_app?/testing"]
 
 renderer-egui = [
     "dep:hyperchad_renderer_egui",

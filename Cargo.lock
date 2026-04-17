@@ -6441,6 +6441,7 @@ dependencies = [
  "hyperchad_renderer_html_http",
  "hyperchad_renderer_html_lambda",
  "hyperchad_renderer_html_web_server",
+ "hyperchad_renderer_testing",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_shared_state",
@@ -6484,6 +6485,7 @@ dependencies = [
  "hyperchad_renderer_egui",
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
+ "hyperchad_renderer_testing",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_shared_state_bridge",
@@ -6783,6 +6785,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_renderer_testing"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hyperchad_actions",
+ "hyperchad_renderer",
+ "hyperchad_test_utils",
+ "insta",
+ "log 0.4.29",
+ "pretty_assertions",
+ "serde_json",
+ "test-log",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "hyperchad_renderer_vanilla_js"
 version = "0.1.4"
 dependencies = [
@@ -6925,6 +6943,7 @@ name = "hyperchad_simulator"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.11.10",
+ "hyperchad_renderer_testing",
  "hyperchad_test_utils",
  "log 0.4.29",
  "moosicbox_assert",

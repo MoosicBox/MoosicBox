@@ -36,6 +36,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(feature = "test-utils")]
+use hyperchad_renderer_testing::plan::execute_test_plan;
+#[cfg(feature = "test-utils")]
 use hyperchad_test_utils::{TestPlan, TestResult};
 #[cfg(feature = "test-utils")]
 use simvar::{Sim, SimBootstrap};
@@ -281,37 +283,27 @@ impl HyperChadSimulator {
 
     /// Simulate a specific renderer
     #[cfg(feature = "test-utils")]
-    fn simulate_renderer(renderer: RendererType, plan: &TestPlan) -> TestResult {
+    fn simulate_renderer(renderer: RendererType, plan: &TestPlan, routes: &[String]) -> TestResult {
         log::info!("Simulating renderer: {renderer}");
 
         match renderer {
-            RendererType::Html => Self::simulate_html_renderer(plan),
-            RendererType::VanillaJs => Self::simulate_vanilla_js_renderer(plan),
+            RendererType::Html => Self::simulate_html_renderer(plan, routes),
+            RendererType::VanillaJs => Self::simulate_vanilla_js_renderer(plan, routes),
             RendererType::Egui => Self::simulate_egui_renderer(plan),
             RendererType::Fltk => Self::simulate_fltk_renderer(plan),
         }
     }
 
     #[cfg(feature = "test-utils")]
-    fn simulate_html_renderer(_plan: &TestPlan) -> TestResult {
-        // TODO: Implement HTML renderer simulation
-        // This would involve:
-        // - Setting up a headless browser environment
-        // - Loading the HyperChad HTML output
-        // - Executing the test plan steps
-        log::info!("HTML renderer simulation - placeholder implementation");
-        TestResult::success()
+    fn simulate_html_renderer(plan: &TestPlan, routes: &[String]) -> TestResult {
+        log::info!("HTML renderer simulation - in-process testing backend");
+        execute_test_plan(plan, routes)
     }
 
     #[cfg(feature = "test-utils")]
-    fn simulate_vanilla_js_renderer(_plan: &TestPlan) -> TestResult {
-        // TODO: Implement Vanilla JS renderer simulation
-        // This would involve:
-        // - Setting up a JavaScript runtime environment
-        // - Loading the HyperChad Vanilla JS output
-        // - Executing the test plan steps
-        log::info!("Vanilla JS renderer simulation - placeholder implementation");
-        TestResult::success()
+    fn simulate_vanilla_js_renderer(plan: &TestPlan, routes: &[String]) -> TestResult {
+        log::info!("Vanilla JS simulation - in-process testing backend");
+        execute_test_plan(plan, routes)
     }
 
     #[cfg(feature = "test-utils")]
@@ -395,9 +387,10 @@ impl SimBootstrap for HyperChadSimulationBootstrap {
         for renderer in &self.simulator.enabled_renderers {
             let renderer = *renderer;
             let test_plan = self.test_plan.clone();
+            let routes = self.simulator.app_config.routes.clone();
 
             sim.client(format!("{renderer}-client"), async move {
-                let result = HyperChadSimulator::simulate_renderer(renderer, &test_plan);
+                let result = HyperChadSimulator::simulate_renderer(renderer, &test_plan, &routes);
                 log::info!("Renderer {renderer} simulation completed: {result:?}");
                 Ok(())
             });

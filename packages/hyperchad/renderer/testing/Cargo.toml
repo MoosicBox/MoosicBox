@@ -1,0 +1,45 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "gui", "testing"]
+description = "In-process testing renderer and harness for HyperChad"
+edition     = { workspace = true }
+keywords    = ["hyperchad", "renderer", "testing"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_testing"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata]
+examples = false
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_actions    = { workspace = true, features = ["handler", "logic"] }
+hyperchad_renderer   = { workspace = true, features = ["logic"] }
+hyperchad_test_utils = { workspace = true, optional = true }
+
+async-trait = { workspace = true }
+log         = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+
+[dev-dependencies]
+hyperchad_test_utils = { workspace = true }
+insta                = { workspace = true }
+pretty_assertions    = { workspace = true }
+test-log             = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_test_utils?/fail-on-warnings",
+]
+
+canvas     = ["hyperchad_renderer/canvas"]
+test-utils = ["dep:hyperchad_test_utils"]

@@ -1,0 +1,6 @@
+---
+source: packages/hyperchad/renderer/testing/tests/acceptance.rs
+expression: harness.stream_snapshot()
+---
+1: view primary=id=1 fragments=[] delete_selectors=[]
+2: event name="loaded" value=None
