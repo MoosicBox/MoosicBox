@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.3
         version: 6.83.3(typescript@5.9.3)
       '@pulumi/pulumi':
-        specifier: ^3.231.0
-        version: 3.231.0(typescript@5.9.3)
+        specifier: ^3.232.0
+        version: 3.232.0(typescript@5.9.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -149,8 +149,8 @@ packages:
     resolution: {integrity: sha512-kAQTcEN9E8ERLVg5AsGwLNoFb+oEG6engbqAU2P43gD4JEIkNGMHdVQ096FsOAAYpZPB0RSt0zgInKIAS1l5QA==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  '@npmcli/arborist@9.4.2':
-    resolution: {integrity: sha512-omJgPyzt11cEGrxzgrECoOyxAunmPMgBFTcAB/FbaB+9iOYhGmRdsQqySV8o0LWQ/l2kTeASUIMR4xJufVwmtw==}
+  '@npmcli/arborist@9.4.3':
+    resolution: {integrity: sha512-YhkR7XFdO7OBr8U1qs7DA7PmhSJXg59rLqd53jmeJ4pYe8WTCAsUZsKqxX7KKPEgAO5K7D/SjbyPUrBes9aP6Q==}
     engines: {node: ^20.17.0 || >=22.9.0}
     hasBin: true
 
@@ -344,8 +344,8 @@ packages:
   '@pulumi/aws@6.83.3':
     resolution: {integrity: sha512-tq6xvgUoBDcg4hVR/DC7YvpZVgvq45NiYyfJrwRYrUeZloiyA9j3/2+fTWiODxE61KbwQkZzk5S/5bZ/3sC2hg==}
 
-  '@pulumi/pulumi@3.231.0':
-    resolution: {integrity: sha512-aAIMkMkbxjGRZ8ldvvm2BPd5JwmJ23QM/vS8iMNpxf8wSDJcIUqx6AtAw2TKTeXlRL4iUMh1xvrXf7APRUwnMg==}
+  '@pulumi/pulumi@3.232.0':
+    resolution: {integrity: sha512-5Pl48cCwOOZEvG7b6w6sErrD1D/QiEwiPqEtHCIzF/alU0yzFjo95uxNteKFlt0LsnzWsZ58DJHgBe9gurjIFg==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2257,7 +2257,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@npmcli/arborist@9.4.2':
+  '@npmcli/arborist@9.4.3':
     dependencies:
       '@gar/promise-retry': 1.0.3
       '@isaacs/string-locale-compare': 1.1.0
@@ -2517,18 +2517,18 @@ snapshots:
 
   '@pulumi/aws@6.83.3(typescript@5.9.3)':
     dependencies:
-      '@pulumi/pulumi': 3.231.0(typescript@5.9.3)
+      '@pulumi/pulumi': 3.232.0(typescript@5.9.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - supports-color
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.231.0(typescript@5.9.3)':
+  '@pulumi/pulumi@3.232.0(typescript@5.9.3)':
     dependencies:
       '@grpc/grpc-js': 1.14.3
       '@logdna/tail-file': 2.2.0
-      '@npmcli/arborist': 9.4.2
+      '@npmcli/arborist': 9.4.3
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/exporter-trace-otlp-grpc': 0.57.2(@opentelemetry/api@1.9.1)
       '@opentelemetry/exporter-zipkin': 1.30.1(@opentelemetry/api@1.9.1)
