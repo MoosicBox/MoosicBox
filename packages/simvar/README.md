@@ -79,6 +79,7 @@ By default, the `all` feature is enabled. Individual features can be selected:
 - **`async`**: Async runtime support
 - **`database`**: Database simulation
 - **`fs`**: Filesystem simulation
+- **`fs-simulator-real-fs`**: Enable real filesystem seeding helpers for simulator filesystem setup
 - **`http`**: HTTP client/server simulation
 - **`mdns`**: mDNS simulation
 - **`random`**: Random number generation simulation

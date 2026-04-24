@@ -60,6 +60,7 @@ fail-on-warnings = [
 async = ["switchy/async"]
 database = ["switchy/database", "switchy/database-connection"]
 fs = ["switchy/fs", "switchy/fs-tokio"]
+fs-simulator-real-fs = ["switchy/fs-simulator-real-fs"]
 http = ["switchy/http"]
 mdns = ["switchy/mdns"]
 random = ["switchy/random"]

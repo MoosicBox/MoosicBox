@@ -227,6 +227,7 @@ Disable by excluding default features, or by setting `NO_TUI` at compile time.
 - **async**: Async simulation support (via switchy)
 - **database**: Database connection simulation (via switchy)
 - **fs**: File system simulation (via switchy)
+- **fs-simulator-real-fs**: Enable real filesystem seeding helpers for simulator setup (via switchy)
 - **http**: HTTP simulation (via switchy)
 - **mdns**: mDNS simulation (via switchy)
 - **random**: Randomness simulation controls (via switchy)
