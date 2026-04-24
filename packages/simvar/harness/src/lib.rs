@@ -51,6 +51,10 @@
 //!
 //! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1)
 //! * `SIMULATOR_MAX_PARALLEL` - Maximum parallel runs (default: number of CPUs)
+//! * `SIMULATOR_SEED` - Fixed random seed for deterministic runs
+//! * `SIMULATOR_EPOCH_OFFSET` - Fixed epoch offset override (when `time` feature is enabled)
+//! * `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX` - Bounded random epoch offset (inclusive)
+//! * `SIMULATOR_EPOCH_RANGE_PROFILE` - Epoch profile (`low`, `wide`, `full`)
 //! * `NO_TUI` - Disable terminal UI when set
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]

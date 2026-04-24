@@ -54,12 +54,67 @@ thread_local! {
     static EPOCH_OFFSET: RefCell<RwLock<Option<u64>>> = const { RefCell::new(RwLock::new(None)) };
 }
 
-fn gen_epoch_offset() -> u64 {
-    let value = switchy_random::rng().gen_range(1..100_000_000_000_000u64);
+const EPOCH_PROFILE_LOW_MIN: u64 = 946_684_800_000;
+const EPOCH_PROFILE_LOW_MAX: u64 = 2_524_608_000_000;
+const EPOCH_PROFILE_WIDE_MIN: u64 = 315_532_800_000;
+const EPOCH_PROFILE_WIDE_MAX: u64 = 4_102_444_800_000;
+const EPOCH_PROFILE_FULL_MIN: u64 = 1;
+const EPOCH_PROFILE_FULL_MAX: u64 = 99_999_999_999_999;
 
-    std::env::var("SIMULATOR_EPOCH_OFFSET")
-        .ok()
-        .map_or(value, |x| x.parse::<u64>().unwrap())
+fn parse_u64_env(var_name: &str, value: &str) -> u64 {
+    value.parse::<u64>().unwrap_or_else(|e| {
+        panic!("{var_name} must be a valid u64 unix millis value: '{value}' ({e})")
+    })
+}
+
+fn profile_bounds(profile: &str) -> (u64, u64) {
+    match profile.trim().to_ascii_lowercase().as_str() {
+        "low" => (EPOCH_PROFILE_LOW_MIN, EPOCH_PROFILE_LOW_MAX),
+        "wide" => (EPOCH_PROFILE_WIDE_MIN, EPOCH_PROFILE_WIDE_MAX),
+        "full" => (EPOCH_PROFILE_FULL_MIN, EPOCH_PROFILE_FULL_MAX),
+        other => {
+            panic!("SIMULATOR_EPOCH_RANGE_PROFILE must be one of low|wide|full, got '{other}'")
+        }
+    }
+}
+
+fn epoch_bounds() -> (u64, u64) {
+    let min = std::env::var("SIMULATOR_EPOCH_MIN").ok();
+    let max = std::env::var("SIMULATOR_EPOCH_MAX").ok();
+
+    if min.is_some() || max.is_some() {
+        let min_str = min.unwrap_or_else(|| {
+            panic!("SIMULATOR_EPOCH_MIN and SIMULATOR_EPOCH_MAX must both be set")
+        });
+        let max_str = max.unwrap_or_else(|| {
+            panic!("SIMULATOR_EPOCH_MIN and SIMULATOR_EPOCH_MAX must both be set")
+        });
+
+        let min_value = parse_u64_env("SIMULATOR_EPOCH_MIN", &min_str);
+        let max_value = parse_u64_env("SIMULATOR_EPOCH_MAX", &max_str);
+
+        assert!(
+            min_value <= max_value,
+            "SIMULATOR_EPOCH_MIN ({min_value}) must be <= SIMULATOR_EPOCH_MAX ({max_value})"
+        );
+
+        return (min_value, max_value);
+    }
+
+    std::env::var("SIMULATOR_EPOCH_RANGE_PROFILE").ok().map_or(
+        (EPOCH_PROFILE_FULL_MIN, EPOCH_PROFILE_FULL_MAX),
+        |profile| profile_bounds(&profile),
+    )
+}
+
+fn gen_epoch_offset() -> u64 {
+    if let Ok(value) = std::env::var("SIMULATOR_EPOCH_OFFSET") {
+        return parse_u64_env("SIMULATOR_EPOCH_OFFSET", &value);
+    }
+
+    let (min, max) = epoch_bounds();
+
+    switchy_random::rng().gen_range(min..=max)
 }
 
 /// Resets the epoch offset to a new random value.
@@ -69,7 +124,11 @@ fn gen_epoch_offset() -> u64 {
 /// # Panics
 ///
 /// * If the `EPOCH_OFFSET` `RwLock` fails to write to
-/// * If the `SIMULATOR_EPOCH_OFFSET` environment variable is set but cannot be parsed as a `u64`
+/// * If `SIMULATOR_EPOCH_OFFSET` is set but cannot be parsed as a `u64`
+/// * If `SIMULATOR_EPOCH_MIN` and `SIMULATOR_EPOCH_MAX` are not both set when either is provided
+/// * If `SIMULATOR_EPOCH_MIN` or `SIMULATOR_EPOCH_MAX` cannot be parsed as `u64`
+/// * If `SIMULATOR_EPOCH_MIN` is greater than `SIMULATOR_EPOCH_MAX`
+/// * If `SIMULATOR_EPOCH_RANGE_PROFILE` is set to an unsupported value
 pub fn reset_epoch_offset() {
     let value = gen_epoch_offset();
     log::trace!("reset_epoch_offset to seed={value}");
@@ -84,7 +143,11 @@ pub fn reset_epoch_offset() {
 /// # Panics
 ///
 /// * If the `EPOCH_OFFSET` `RwLock` fails to read from or write to
-/// * If the `SIMULATOR_EPOCH_OFFSET` environment variable is set but cannot be parsed as a `u64`
+/// * If `SIMULATOR_EPOCH_OFFSET` is set but cannot be parsed as a `u64`
+/// * If `SIMULATOR_EPOCH_MIN` and `SIMULATOR_EPOCH_MAX` are not both set when either is provided
+/// * If `SIMULATOR_EPOCH_MIN` or `SIMULATOR_EPOCH_MAX` cannot be parsed as `u64`
+/// * If `SIMULATOR_EPOCH_MIN` is greater than `SIMULATOR_EPOCH_MAX`
+/// * If `SIMULATOR_EPOCH_RANGE_PROFILE` is set to an unsupported value
 #[must_use]
 pub fn epoch_offset() -> u64 {
     let value = EPOCH_OFFSET.with_borrow(|x| *x.read().unwrap());
@@ -315,7 +378,7 @@ pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
 mod tests {
     use super::*;
     use serial_test::serial;
-    use std::time::Duration;
+    use std::{collections::BTreeMap, time::Duration};
 
     // Note: All tests in this module use #[serial] because they interact with:
     // 1. Thread-local state (EPOCH_OFFSET, STEP_MULTIPLIER, STEP) that can be reused
@@ -325,6 +388,47 @@ mod tests {
     //
     // Running these tests in parallel causes race conditions where one test's state changes
     // affect another test's expectations. The serial_test crate ensures tests run one at a time.
+
+    struct EnvGuard {
+        originals: BTreeMap<String, Option<String>>,
+    }
+
+    impl EnvGuard {
+        fn new(names: &[&str]) -> Self {
+            let originals = names
+                .iter()
+                .map(|name| (name.to_string(), std::env::var(name).ok()))
+                .collect::<BTreeMap<_, _>>();
+            Self { originals }
+        }
+
+        fn set(name: &str, value: &str) {
+            unsafe {
+                std::env::set_var(name, value);
+            }
+        }
+
+        fn remove(name: &str) {
+            unsafe {
+                std::env::remove_var(name);
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in &self.originals {
+                match value {
+                    Some(value) => unsafe {
+                        std::env::set_var(name, value);
+                    },
+                    None => unsafe {
+                        std::env::remove_var(name);
+                    },
+                }
+            }
+        }
+    }
 
     #[test_log::test]
     #[serial]
@@ -358,37 +462,233 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_reset_epoch_offset_with_env_var() {
-        // Save original value
-        let original = std::env::var("SIMULATOR_EPOCH_OFFSET").ok();
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
 
         // Set a known value and reset to it
-        unsafe {
-            std::env::set_var("SIMULATOR_EPOCH_OFFSET", "5000000000");
-        }
+        EnvGuard::set("SIMULATOR_EPOCH_OFFSET", "5000000000");
         reset_epoch_offset();
         let first = epoch_offset();
         assert_eq!(first, 5_000_000_000, "Should use env var value");
 
         // Change to a different value and reset again
-        unsafe {
-            std::env::set_var("SIMULATOR_EPOCH_OFFSET", "9000000000");
-        }
+        EnvGuard::set("SIMULATOR_EPOCH_OFFSET", "9000000000");
         reset_epoch_offset();
         let second = epoch_offset();
         assert_eq!(second, 9_000_000_000, "Should use new env var value");
 
         // Verify they're different
         assert_ne!(first, second);
+    }
 
-        // Restore original value
-        match original {
-            Some(val) => unsafe {
-                std::env::set_var("SIMULATOR_EPOCH_OFFSET", val);
-            },
-            None => unsafe {
-                std::env::remove_var("SIMULATOR_EPOCH_OFFSET");
-            },
+    #[test_log::test]
+    #[serial]
+    fn test_epoch_offset_range_precedence_uses_fixed_offset() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+
+        EnvGuard::set("SIMULATOR_EPOCH_OFFSET", "42");
+        EnvGuard::set("SIMULATOR_EPOCH_MIN", "100");
+        EnvGuard::set("SIMULATOR_EPOCH_MAX", "200");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "low");
+
+        reset_epoch_offset();
+
+        assert_eq!(epoch_offset(), 42);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_epoch_offset_uses_min_max_bounds() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::set("SIMULATOR_EPOCH_MIN", "100");
+        EnvGuard::set("SIMULATOR_EPOCH_MAX", "200");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "full");
+
+        for _ in 0..50 {
+            reset_epoch_offset();
+            let offset = epoch_offset();
+            assert!((100..=200).contains(&offset));
         }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_epoch_offset_uses_profile_low() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::remove("SIMULATOR_EPOCH_MIN");
+        EnvGuard::remove("SIMULATOR_EPOCH_MAX");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "low");
+
+        for _ in 0..20 {
+            reset_epoch_offset();
+            let offset = epoch_offset();
+            assert!((EPOCH_PROFILE_LOW_MIN..=EPOCH_PROFILE_LOW_MAX).contains(&offset));
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_epoch_offset_uses_profile_full() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::remove("SIMULATOR_EPOCH_MIN");
+        EnvGuard::remove("SIMULATOR_EPOCH_MAX");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "full");
+
+        reset_epoch_offset();
+        let offset = epoch_offset();
+
+        assert!((EPOCH_PROFILE_FULL_MIN..=EPOCH_PROFILE_FULL_MAX).contains(&offset));
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_seeded_epoch_offsets_follow_deterministic_sequence() {
+        use switchy_random::rand::rand::Rng as _;
+
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_SEED",
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::set("SIMULATOR_SEED", "424242");
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::remove("SIMULATOR_EPOCH_MIN");
+        EnvGuard::remove("SIMULATOR_EPOCH_MAX");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "wide");
+
+        switchy_random::simulator::reset_rng();
+
+        let mut expected_rng =
+            switchy_random::simulator::SimulatorRng::new(switchy_random::simulator::seed());
+        let expected_a = expected_rng.gen_range(EPOCH_PROFILE_WIDE_MIN..=EPOCH_PROFILE_WIDE_MAX);
+        let expected_b = expected_rng.gen_range(EPOCH_PROFILE_WIDE_MIN..=EPOCH_PROFILE_WIDE_MAX);
+
+        reset_epoch_offset();
+        let actual_a = epoch_offset();
+        reset_epoch_offset();
+        let actual_b = epoch_offset();
+
+        assert_eq!(actual_a, expected_a);
+        assert_eq!(actual_b, expected_b);
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "SIMULATOR_EPOCH_MIN and SIMULATOR_EPOCH_MAX must both be set")]
+    fn test_epoch_offset_min_requires_max() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::set("SIMULATOR_EPOCH_MIN", "100");
+        EnvGuard::remove("SIMULATOR_EPOCH_MAX");
+        EnvGuard::remove("SIMULATOR_EPOCH_RANGE_PROFILE");
+
+        reset_epoch_offset();
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "SIMULATOR_EPOCH_MIN and SIMULATOR_EPOCH_MAX must both be set")]
+    fn test_epoch_offset_max_requires_min() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::remove("SIMULATOR_EPOCH_MIN");
+        EnvGuard::set("SIMULATOR_EPOCH_MAX", "100");
+        EnvGuard::remove("SIMULATOR_EPOCH_RANGE_PROFILE");
+
+        reset_epoch_offset();
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "SIMULATOR_EPOCH_MIN (200) must be <= SIMULATOR_EPOCH_MAX (100)")]
+    fn test_epoch_offset_rejects_invalid_bounds() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::set("SIMULATOR_EPOCH_MIN", "200");
+        EnvGuard::set("SIMULATOR_EPOCH_MAX", "100");
+        EnvGuard::remove("SIMULATOR_EPOCH_RANGE_PROFILE");
+
+        reset_epoch_offset();
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "SIMULATOR_EPOCH_RANGE_PROFILE must be one of low|wide|full")]
+    fn test_epoch_offset_rejects_invalid_profile() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::remove("SIMULATOR_EPOCH_MIN");
+        EnvGuard::remove("SIMULATOR_EPOCH_MAX");
+        EnvGuard::set("SIMULATOR_EPOCH_RANGE_PROFILE", "unknown");
+
+        reset_epoch_offset();
+    }
+
+    #[test_log::test]
+    #[serial]
+    #[should_panic(expected = "SIMULATOR_EPOCH_MIN must be a valid u64 unix millis value")]
+    fn test_epoch_offset_rejects_invalid_min_parse() {
+        let _guard = EnvGuard::new(&[
+            "SIMULATOR_EPOCH_OFFSET",
+            "SIMULATOR_EPOCH_MIN",
+            "SIMULATOR_EPOCH_MAX",
+            "SIMULATOR_EPOCH_RANGE_PROFILE",
+        ]);
+        EnvGuard::remove("SIMULATOR_EPOCH_OFFSET");
+        EnvGuard::set("SIMULATOR_EPOCH_MIN", "abc");
+        EnvGuard::set("SIMULATOR_EPOCH_MAX", "100");
+        EnvGuard::remove("SIMULATOR_EPOCH_RANGE_PROFILE");
+
+        reset_epoch_offset();
     }
 
     #[test_log::test]

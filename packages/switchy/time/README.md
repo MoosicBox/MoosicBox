@@ -111,7 +111,9 @@ fn configure_simulation() {
     println!("Step multiplier: {}", step_multiplier());
 
     // Environment variables can control these values:
-    // SIMULATOR_EPOCH_OFFSET - sets the epoch offset (milliseconds)
+    // SIMULATOR_EPOCH_OFFSET - fixed epoch offset (milliseconds)
+    // SIMULATOR_EPOCH_MIN / SIMULATOR_EPOCH_MAX - bounded random epoch offset (inclusive)
+    // SIMULATOR_EPOCH_RANGE_PROFILE - preset random epoch range: low | wide | full
     // SIMULATOR_STEP_MULTIPLIER - sets the step multiplier (milliseconds)
 }
 ```
@@ -213,8 +215,18 @@ fn test_time_dependent_logic() {
 The simulator can be configured via environment variables:
 
 ```bash
-# Set a specific epoch offset (milliseconds since Unix epoch)
+# 1) Fixed epoch offset override (highest precedence)
 export SIMULATOR_EPOCH_OFFSET=1640995200000
+
+# 2) Or bounded random epoch offset (inclusive)
+export SIMULATOR_EPOCH_MIN=946684800000
+export SIMULATOR_EPOCH_MAX=2524608000000
+
+# 3) Or preset epoch range profile
+# low  = practical range
+# wide = broader range
+# full = broad/default range
+export SIMULATOR_EPOCH_RANGE_PROFILE=wide
 
 # Set step multiplier (milliseconds per step)
 export SIMULATOR_STEP_MULTIPLIER=1000
@@ -222,6 +234,18 @@ export SIMULATOR_STEP_MULTIPLIER=1000
 # Run your application
 cargo run --features simulator
 ```
+
+Epoch offset precedence order:
+
+1. `SIMULATOR_EPOCH_OFFSET`
+2. `SIMULATOR_EPOCH_MIN` + `SIMULATOR_EPOCH_MAX`
+3. `SIMULATOR_EPOCH_RANGE_PROFILE`
+4. Default profile (`full`)
+
+Notes:
+
+- `SIMULATOR_EPOCH_MIN` and `SIMULATOR_EPOCH_MAX` must both be set together.
+- Bounds are inclusive and must satisfy `MIN <= MAX`.
 
 ## API Reference
 
@@ -264,7 +288,7 @@ In simulator mode, time is calculated as:
 time = UNIX_EPOCH + Duration::from_millis(epoch_offset + (step * step_multiplier))
 ```
 
-- **epoch_offset**: Base time offset (randomized or from environment)
+- **epoch_offset**: Base time offset (fixed override, bounded random, profile random, or default profile random)
 - **step**: Current step counter (controlled by your code)
 - **step_multiplier**: Milliseconds per step (randomized or from environment)
 

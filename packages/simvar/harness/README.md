@@ -180,8 +180,14 @@ sim.client("load_client", async {
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
 - `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
 - `SIMULATOR_SEED`: Fixed seed for deterministic runs
+- `SIMULATOR_EPOCH_OFFSET`: Fixed simulated epoch offset override (time feature)
+- `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX`: Inclusive bounded random epoch offset (time feature)
+- `SIMULATOR_EPOCH_RANGE_PROFILE`: Epoch profile `low` | `wide` | `full` (time feature)
 - `NO_TUI`: Disable TUI interface when set at compile time
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
+
+When a run fails, the harness prints a copy/paste rerun command that includes both
+`SIMULATOR_SEED` and the failed run's concrete `SIMULATOR_EPOCH_OFFSET` so replay is exact.
 
 ### Example Configuration
 

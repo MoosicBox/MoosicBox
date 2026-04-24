@@ -302,6 +302,11 @@ impl std::fmt::Display for SimResult {
         let run_from_seed = if *RUNS == 1 && switchy::random::simulator::contains_fixed_seed() {
             String::new()
         } else {
+            #[cfg(feature = "time")]
+            let failed_epoch_offset = Some(config.epoch_offset);
+            #[cfg(not(feature = "time"))]
+            let failed_epoch_offset = None;
+
             let cmd = get_run_command(
                 &[
                     "SIMULATOR_SEED",
@@ -310,6 +315,7 @@ impl std::fmt::Display for SimResult {
                     "SIMULATOR_MAX_PARALLEL",
                 ],
                 config.seed,
+                failed_epoch_offset,
             );
             format!("\n\nTo run again with this seed: `{cmd}`")
         };
@@ -317,6 +323,7 @@ impl std::fmt::Display for SimResult {
             let cmd = get_run_command(
                 &["SIMULATOR_SEED"],
                 switchy::random::simulator::initial_seed(),
+                None,
             );
             format!("\nTo run entire simulation again from the first run: `{cmd}`")
         } else {
@@ -459,7 +466,7 @@ fn get_cargoified_args() -> Vec<String> {
     args
 }
 
-fn get_run_command(skip_env: &[&str], seed: u64) -> String {
+fn get_run_command(skip_env: &[&str], seed: u64, epoch_offset: Option<u64>) -> String {
     let args = get_cargoified_args();
     let quoted_args = args
         .iter()
@@ -482,12 +489,54 @@ fn get_run_command(skip_env: &[&str], seed: u64) -> String {
         write!(env_vars, "{name}={} ", shell_words::quote(value.as_str())).unwrap();
     }
 
-    format!("SIMULATOR_SEED={seed} {env_vars}{cmd}")
+    let mut prefix = format!("SIMULATOR_SEED={seed} ");
+    if let Some(epoch_offset) = epoch_offset {
+        use std::fmt::Write as _;
+        write!(prefix, "SIMULATOR_EPOCH_OFFSET={epoch_offset} ").unwrap();
+    }
+
+    format!("{prefix}{env_vars}{cmd}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "time")]
+    struct EnvGuard {
+        name: &'static str,
+        value: Option<String>,
+    }
+
+    #[cfg(feature = "time")]
+    impl EnvGuard {
+        fn new(name: &'static str) -> Self {
+            Self {
+                name,
+                value: std::env::var(name).ok(),
+            }
+        }
+
+        fn remove(&self) {
+            unsafe {
+                std::env::remove_var(self.name);
+            }
+        }
+    }
+
+    #[cfg(feature = "time")]
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.value {
+                Some(value) => unsafe {
+                    std::env::set_var(self.name, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.name);
+                },
+            }
+        }
+    }
 
     #[test_log::test]
     #[allow(clippy::float_cmp)]
@@ -845,5 +894,43 @@ mod tests {
 
         // 120 seconds = 120000 milliseconds
         assert!(info.contains("duration=120000"));
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn test_fail_output_includes_seed_and_epoch_offset_rerun_command() {
+        let seed_guard = EnvGuard::new("SIMULATOR_SEED");
+        let epoch_guard = EnvGuard::new("SIMULATOR_EPOCH_OFFSET");
+        seed_guard.remove();
+        epoch_guard.remove();
+
+        let mut config = SimConfig::new();
+        config.seed = 4242;
+        config.epoch_offset = 1_700_000_000_000;
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 10,
+            real_time_millis: 100,
+            sim_time_millis: 200,
+        };
+
+        let result = SimResult::Fail {
+            props,
+            run,
+            error: Some("failure".to_string()),
+            panic: None,
+        };
+
+        let output = result.to_string();
+        assert!(output.contains("To run again with this seed:"));
+        assert!(output.contains("SIMULATOR_SEED=4242"));
+        assert!(output.contains("SIMULATOR_EPOCH_OFFSET=1700000000000"));
     }
 }
