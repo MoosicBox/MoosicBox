@@ -187,7 +187,7 @@ async fn connect_std_tcp_addr(addr: &str) -> Result<std::net::TcpStream, std::io
                     return Err(e);
                 }
 
-                tokio::time::sleep(Duration::from_millis(20000)).await;
+                tokio::time::sleep(Duration::from_secs(20)).await;
             }
         }
     })

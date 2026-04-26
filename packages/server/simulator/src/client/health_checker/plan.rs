@@ -97,7 +97,7 @@ impl InteractionPlan<Interaction> for HealthCheckInteractionPlan {
             match interaction_type {
                 InteractionType::Sleep => {
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    self.add_interaction(Interaction::Sleep(Duration::from_millis(1000)));
+                    self.add_interaction(Interaction::Sleep(Duration::from_secs(1)));
                 }
                 InteractionType::HealthCheck => {
                     self.add_interaction(Interaction::HealthCheck(format!("{HOST}:{PORT}")));
@@ -220,7 +220,7 @@ mod tests {
 
             // Second interaction should be Sleep
             if let Interaction::Sleep(duration) = &plan.plan[1] {
-                assert_eq!(*duration, Duration::from_millis(1000));
+                assert_eq!(*duration, Duration::from_secs(1));
             } else {
                 panic!("Expected Sleep interaction");
             }

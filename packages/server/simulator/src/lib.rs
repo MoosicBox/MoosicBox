@@ -140,11 +140,11 @@ pub async fn try_connect(addr: &str, max_attempts: usize) -> Result<TcpStream, s
                             return Err(e);
                         }
 
-                        tokio::time::sleep(Duration::from_millis(5000)).await;
+                        tokio::time::sleep(Duration::from_secs(5)).await;
                     }
                 }
             }
-            () = tokio::time::sleep(Duration::from_millis(5000)) => {
+            () = tokio::time::sleep(Duration::from_secs(5)) => {
                 return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out after 5000ms"));
             }
         }
