@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_from_trait() {
-        let duration = Duration::from_secs(3600);
+        let duration = Duration::from_hours(1);
         let interval: SqlInterval = duration.into();
         assert_eq!(interval.hours, 1);
         assert_eq!(interval.minutes, 0);

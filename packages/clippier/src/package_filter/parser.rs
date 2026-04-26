@@ -75,13 +75,10 @@ fn split_on_operator(filter: &str, op: &str) -> Option<(String, String)> {
             '"' => {
                 in_quotes = !in_quotes;
             }
-            _ if !in_quotes => {
-                // Check if operator starts here
-                if filter[i..].starts_with(op) {
-                    let property = filter[..i].to_string();
-                    let value = filter[i + op.len()..].to_string();
-                    return Some((property, value));
-                }
+            _ if !in_quotes && filter[i..].starts_with(op) => {
+                let property = filter[..i].to_string();
+                let value = filter[i + op.len()..].to_string();
+                return Some((property, value));
             }
             _ => {}
         }

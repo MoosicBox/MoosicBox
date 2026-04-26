@@ -121,7 +121,7 @@ fn main() -> Result<(), Error> {
         println!("block on");
         // This sleeps longer than any of the spawned functions, but we poll
         // this to completion first even if we await here.
-        time::sleep(Duration::from_millis(11000)).await;
+        time::sleep(Duration::from_secs(11)).await;
         println!("Blocking Function Polled To Completion");
     });
 

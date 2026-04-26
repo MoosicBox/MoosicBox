@@ -348,7 +348,7 @@ impl service::Processor for service::Service {
                         log::error!("Failed to send WsResponse to {ws_id}: {error:?}");
                     }
                 } else {
-                    log::error!("unexpected ws response {}", response.request_id,);
+                    log::error!("unexpected ws response {}", response.request_id);
                 }
             }
 

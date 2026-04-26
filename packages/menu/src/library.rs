@@ -245,7 +245,7 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
 pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums",
-        expiration: Duration::from_secs(5 * 60),
+        expiration: Duration::from_mins(5),
     };
 
     let start = switchy_time::now();
@@ -316,7 +316,7 @@ pub async fn get_artist_albums(
 ) -> Result<Arc<Vec<LibraryAlbum>>, GetArtistAlbumsError> {
     let request = CacheRequest {
         key: &format!("sqlite|local_artist_albums|{artist_id}"),
-        expiration: Duration::from_secs(5 * 60),
+        expiration: Duration::from_mins(5),
     };
 
     Ok(get_or_set_to_cache(request, || async {

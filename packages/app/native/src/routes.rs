@@ -359,7 +359,7 @@ pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
     };
     let host = &connection.api_url;
 
-    let url = format!("{host}/audio-zone/with-session?moosicboxProfile={PROFILE}",);
+    let url = format!("{host}/audio-zone/with-session?moosicboxProfile={PROFILE}");
     let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
@@ -392,7 +392,7 @@ pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteErr
     };
     let host = &connection.api_url;
 
-    let url = format!("{host}/session/sessions?moosicboxProfile={PROFILE}",);
+    let url = format!("{host}/session/sessions?moosicboxProfile={PROFILE}");
     let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {

@@ -61,7 +61,7 @@ impl Config {
     pub fn to_json(&self) -> String {
         let json = serde_json::to_string(self).unwrap();
 
-        format!("export const config = {json} as const;",)
+        format!("export const config = {json} as const;")
     }
 }
 

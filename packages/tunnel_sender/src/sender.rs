@@ -388,7 +388,7 @@ impl TunnelSender {
                 }
 
                 select!(
-                    () = sleep(Duration::from_millis(5000)) => {}
+                    () = sleep(Duration::from_secs(5)) => {}
                     () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling retry");
                         return;
@@ -549,7 +549,7 @@ impl TunnelSender {
                                     select!(
                                         () = close_token.cancelled() => { break; }
                                         () = cancellation_token.cancelled() => { break; }
-                                        () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                        () = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
                                             log::trace!("Sending ping to tunnel");
                                             if let Err(e) = txf.send(TunnelResponseMessage::Ping) {
                                                 log::error!("Pinger Send Loop error: {e:?}");
@@ -594,7 +594,7 @@ impl TunnelSender {
 
                 if just_retried {
                     select!(
-                        () = sleep(Duration::from_millis(5000)) => {}
+                        () = sleep(Duration::from_secs(5)) => {}
                         () = cancellation_token.cancelled() => {
                             log::debug!("Cancelling retry");
                             break;

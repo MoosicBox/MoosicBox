@@ -64,7 +64,7 @@ impl SimConfig {
             udp_capacity: 64,
             enable_random_order: false,
             min_message_latency: Duration::from_millis(0),
-            max_message_latency: Duration::from_millis(1000),
+            max_message_latency: Duration::from_secs(1),
             duration: Duration::MAX,
             tick_duration: Duration::from_millis(1),
             #[cfg(feature = "time")]
@@ -549,7 +549,7 @@ mod tests {
         assert_eq!(config.udp_capacity, 64);
         assert!(!config.enable_random_order);
         assert_eq!(config.min_message_latency, Duration::from_millis(0));
-        assert_eq!(config.max_message_latency, Duration::from_millis(1000));
+        assert_eq!(config.max_message_latency, Duration::from_secs(1));
         assert_eq!(config.duration, Duration::MAX);
         assert_eq!(config.tick_duration, Duration::from_millis(1));
     }
@@ -575,8 +575,8 @@ mod tests {
             .udp_capacity(256)
             .enable_random_order(true)
             .min_message_latency(Duration::from_millis(10))
-            .max_message_latency(Duration::from_millis(2000))
-            .duration(Duration::from_secs(60))
+            .max_message_latency(Duration::from_secs(2))
+            .duration(Duration::from_mins(1))
             .tick_duration(Duration::from_millis(5));
 
         assert_eq!(config.fail_rate, 0.5);
@@ -585,8 +585,8 @@ mod tests {
         assert_eq!(config.udp_capacity, 256);
         assert!(config.enable_random_order);
         assert_eq!(config.min_message_latency, Duration::from_millis(10));
-        assert_eq!(config.max_message_latency, Duration::from_millis(2000));
-        assert_eq!(config.duration, Duration::from_secs(60));
+        assert_eq!(config.max_message_latency, Duration::from_secs(2));
+        assert_eq!(config.duration, Duration::from_mins(1));
         assert_eq!(config.tick_duration, Duration::from_millis(5));
     }
 
@@ -881,7 +881,7 @@ mod tests {
     #[test_log::test]
     fn test_run_info_duration_value_when_finite() {
         let mut config = SimConfig::new();
-        let _ = config.duration(Duration::from_secs(120));
+        let _ = config.duration(Duration::from_mins(2));
 
         let props = SimProperties {
             config,

@@ -95,7 +95,7 @@ pub async fn auth_get_magic_token_endpoint(
         )
         .await
     } else {
-        log::warn!("Unauthorized get magic-token request",);
+        log::warn!("Unauthorized get magic-token request");
         Err(ErrorUnauthorized("Unauthorized"))
     }
 }

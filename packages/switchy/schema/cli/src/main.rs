@@ -848,8 +848,7 @@ async fn run_migrations(
     // Check environment variable with CLI priority
     let require_validation = require_checksum_validation
         || std::env::var("MIGRATION_REQUIRE_CHECKSUM_VALIDATION")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
+            .is_ok_and(|v| v == "true" || v == "1");
 
     // Warn if CLI overrides env var
     if require_checksum_validation && std::env::var("MIGRATION_REQUIRE_CHECKSUM_VALIDATION").is_ok()

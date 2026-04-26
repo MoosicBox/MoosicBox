@@ -217,7 +217,7 @@ impl Player for UpnpPlayer {
                         }
                     }
                 }
-                () = switchy_async::time::sleep(std::time::Duration::from_millis(5000)) => {
+                () = switchy_async::time::sleep(std::time::Duration::from_secs(5)) => {
                     log::error!("Playback timed out waiting for abort completion");
                 }
             }
@@ -492,7 +492,7 @@ impl UpnpPlayer {
                 .await
                 .expect("failed to get transport info");
 
-            log::debug!("Waiting for state={desired_state} (current info={info:?})",);
+            log::debug!("Waiting for state={desired_state} (current info={info:?})");
 
             info.current_transport_state.clone_into(&mut state);
 
@@ -521,7 +521,7 @@ impl UpnpPlayer {
         let position_sub = self
             .handle
             .subscribe_position_info(
-                Duration::from_millis(1000),
+                Duration::from_secs(1),
                 self.instance_id,
                 self.device.udn().to_owned(),
                 self.service.service_id().to_owned(),

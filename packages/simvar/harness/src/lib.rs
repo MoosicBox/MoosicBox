@@ -243,12 +243,8 @@ pub fn run_simulation<B: SimBootstrap>(
     static MAX_PARALLEL: LazyLock<u64> = LazyLock::new(|| {
         std::env::var("SIMULATOR_MAX_PARALLEL").ok().map_or_else(
             || {
-                u64::try_from(
-                    std::thread::available_parallelism()
-                        .map(Into::into)
-                        .unwrap_or(1usize),
-                )
-                .unwrap()
+                u64::try_from(std::thread::available_parallelism().map_or(1usize, Into::into))
+                    .unwrap()
             },
             |x| x.parse::<u64>().unwrap(),
         )

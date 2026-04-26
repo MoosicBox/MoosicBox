@@ -656,12 +656,12 @@ mod tests {
     fn test_update_sim_state_preserves_config_values() {
         let state = DisplayState::new();
         let mut config = SimConfig::new();
-        let _ = config.tcp_capacity(128).duration(Duration::from_secs(60));
+        let _ = config.tcp_capacity(128).duration(Duration::from_mins(1));
 
         state.update_sim_state(1, 1, config, 0.0, false);
 
         let simulations = state.simulations.read().unwrap();
         assert_eq!(simulations[0].config.tcp_capacity, 128);
-        assert_eq!(simulations[0].config.duration, Duration::from_secs(60));
+        assert_eq!(simulations[0].config.duration, Duration::from_mins(1));
     }
 }

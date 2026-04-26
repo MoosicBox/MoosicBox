@@ -409,7 +409,7 @@ mod tests {
 
     #[test_log::test]
     fn test_duration_subtraction() {
-        let duration = Duration::from_secs(3600); // 1 hour
+        let duration = Duration::from_hours(1);
         let result = DatabaseValue::now()
             .plus_hours(2)
             .minus_duration(duration)
