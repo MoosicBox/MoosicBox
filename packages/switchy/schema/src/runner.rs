@@ -950,7 +950,7 @@ impl<'a> MigrationRunner<'a> {
             .collect();
 
         // Sort by run_on timestamp for chronological order
-        failed_migrations.sort_by(|a, b| a.run_on.cmp(&b.run_on));
+        failed_migrations.sort_by_key(|migration| migration.run_on);
 
         Ok(failed_migrations)
     }

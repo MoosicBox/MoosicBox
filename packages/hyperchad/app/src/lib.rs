@@ -179,6 +179,7 @@ type SharedStateCommandInputResolver = Box<
     feature = "shared-state-bridge",
     feature = "actions"
 ))]
+#[allow(dead_code)]
 #[derive(Clone)]
 struct ActixSharedStateBridgeConfig {
     command_tx: flume::Sender<CommandEnvelope>,

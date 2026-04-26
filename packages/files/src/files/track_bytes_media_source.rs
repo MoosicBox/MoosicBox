@@ -62,7 +62,7 @@ impl TrackBytesMediaSource {
                     log::trace!("Acquired lock for inner bytes for writer id={id}");
 
                     switchy_async::select!(
-                        () = switchy_async::time::sleep(Duration::from_millis(15000)) => {
+                        () = switchy_async::time::sleep(Duration::from_secs(15)) => {
                             moosicbox_assert::die_or_error!(
                                 "Timed out waiting for bytes from stream for writer id={id}"
                             );
@@ -125,7 +125,7 @@ impl Read for TrackBytesMediaSource {
 
         let bytes = self
             .receiver
-            .recv_timeout(Duration::from_millis(15 * 1000))
+            .recv_timeout(Duration::from_secs(15))
             .map_err(|e| {
                 moosicbox_assert::die_or_error!(
                     "Timed out waiting for bytes buf.len={} self.buf.len={} writer id={}: {e:?}",

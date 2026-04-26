@@ -13,7 +13,6 @@ use std::{
 use hyperchad::{
     app::AppBuilder,
     renderer::{Content, Renderer, View},
-    renderer_html_actix::RuntimeFanoutTransportDispatcher,
     router::{RouteRequest, Router},
     shared_state::{
         fanout::InProcessFanoutBus,
@@ -28,6 +27,9 @@ use hyperchad::{
     template::{Containers, container},
 };
 use log::info;
+
+#[cfg(feature = "actix")]
+use hyperchad::renderer_html_actix::RuntimeFanoutTransportDispatcher;
 
 #[allow(unused_imports)]
 use hyperchad::actions as hyperchad_actions;
@@ -326,6 +328,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let runtime = switchy::unsync::runtime::Builder::new().build()?;
 
+    #[cfg_attr(not(feature = "actix"), allow(unused_variables))]
     let (store, engine, fanout_bus) = runtime.block_on(async {
         let database = switchy_database_connection::init_sqlite_sqlx(None).await?;
         let database = Arc::new(database);
@@ -346,6 +349,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok::<_, Box<dyn std::error::Error>>((store, engine, fanout_bus))
     })?;
 
+    #[cfg(feature = "actix")]
     let dispatcher = Arc::new(RuntimeFanoutTransportDispatcher::new(
         engine.clone(),
         fanout_bus,
@@ -358,7 +362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router = create_router(store.clone());
 
-    let mut app_builder = AppBuilder::new()
+    let app_builder = AppBuilder::new()
         .with_router(router)
         .with_runtime_handle(runtime_handle)
         .with_title("HyperChad Shared State Counter".to_string())
@@ -392,8 +396,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     metadata: BTreeMap::new(),
                 })
             }
-        })
-        .with_shared_state_transport_dispatcher(dispatcher);
+        });
+
+    #[cfg(feature = "actix")]
+    let app_builder = app_builder.with_shared_state_transport_dispatcher(dispatcher);
+
+    #[cfg_attr(not(feature = "assets"), allow(unused_mut))]
+    let mut app_builder = app_builder;
 
     #[cfg(feature = "assets")]
     for asset in ASSETS.iter().cloned() {
@@ -403,7 +412,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Server running on http://localhost:8343");
     info!("Open two tabs and click +/- to see synchronized updates");
 
-    let app = app_builder.build_default_html_vanilla_js_actix()?;
+    let app = app_builder.build_default()?;
     let renderer = app.renderer.clone();
 
     spawn_command_processor(renderer, &command_runtime_handle, command_rx, engine, store);

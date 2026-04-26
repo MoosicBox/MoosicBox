@@ -178,6 +178,7 @@ impl RequestBody {
     /// # Errors
     /// * This version never returns errors since JSON is not supported
     #[cfg(not(feature = "serde"))]
+    #[allow(clippy::must_use_candidate)]
     pub fn to_bytes_and_content_type(&self) -> Result<(Vec<u8>, String), std::convert::Infallible> {
         match self {
             Self::Bytes(bytes) => Ok((bytes.clone(), "application/octet-stream".to_string())),

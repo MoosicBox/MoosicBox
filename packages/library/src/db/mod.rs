@@ -114,7 +114,7 @@ pub async fn get_library_config(
         return Err(LibraryConfigError::NoConfigsAvailable);
     }
 
-    configs.sort_by(|a: &LibraryConfig, b: &LibraryConfig| a.issued_at.cmp(&b.issued_at));
+    configs.sort_by_key(|a: &LibraryConfig| a.issued_at);
 
     Ok(configs.first().cloned())
 }

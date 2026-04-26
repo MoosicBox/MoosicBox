@@ -335,16 +335,16 @@ pub fn sort_albums<'a>(
     }
     match request.sort {
         Some(AlbumSort::ArtistAsc) => {
-            albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()));
+            albums.sort_by_key(|a| a.artist.to_lowercase());
         }
         Some(AlbumSort::NameAsc) => {
-            albums.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+            albums.sort_by_key(|a| a.title.to_lowercase());
         }
         Some(AlbumSort::ArtistDesc) => {
-            albums.sort_by(|a, b| b.artist.to_lowercase().cmp(&a.artist.to_lowercase()));
+            albums.sort_by_key(|b| std::cmp::Reverse(b.artist.to_lowercase()));
         }
         Some(AlbumSort::NameDesc) => {
-            albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()));
+            albums.sort_by_key(|b| std::cmp::Reverse(b.title.to_lowercase()));
         }
         Some(AlbumSort::ReleaseDateAsc) => albums.sort_by(|a, b| {
             if a.date_released.is_none() {

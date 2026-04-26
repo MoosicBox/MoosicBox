@@ -51,12 +51,14 @@ default = ["actions", "assets", "debug", "sse"]
 fail-on-warnings = [
     "hyperchad_renderer/fail-on-warnings",
     "hyperchad_router?/fail-on-warnings",
+    "hyperchad_shared_state?/fail-on-warnings",
     "hyperchad_shared_state_bridge?/fail-on-warnings",
     "hyperchad_shared_state_models?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
     "moosicbox_middleware/fail-on-warnings",
+    "switchy_http_models?/fail-on-warnings",
 ]
 
 debug = []

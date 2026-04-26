@@ -165,7 +165,7 @@ impl Context {
                 return Ok(track_bytes);
             }
 
-            log::trace!("No existing track in pool for key={key}",);
+            log::trace!("No existing track in pool for key={key}");
         }
 
         let filename = match source {

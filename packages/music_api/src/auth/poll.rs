@@ -34,7 +34,7 @@ impl PollAuth {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            timeout: Duration::from_secs(60),
+            timeout: Duration::from_mins(1),
         }
     }
 

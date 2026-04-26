@@ -510,7 +510,7 @@ pub async fn set_av_transport_uri(
             " duration=\"{}\"",
             duration_to_string(x)
         )),
-        size = size.map_or_else(String::new, |x| format!(" size=\"{x}\"",)),
+        size = size.map_or_else(String::new, |x| format!(" size=\"{x}\"")),
     );
 
     let metadata = escape_xml(&compress_xml(&metadata));
