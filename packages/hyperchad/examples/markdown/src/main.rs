@@ -306,6 +306,7 @@ let options = MarkdownOptions {
     emoji_enabled: true,
     xss_protection: true,
     syntax_highlighting: true, // Requires `syntax-highlighting` feature
+    link_resolver: None,
 };
 
 let container = markdown_to_container_with_options(markdown, options);

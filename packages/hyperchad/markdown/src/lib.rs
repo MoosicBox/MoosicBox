@@ -47,7 +47,11 @@ use hyperchad_transformer_models::{
     FontWeight, LayoutDirection, TextDecorationLine, TextDecorationStyle, UserSelect, WhiteSpace,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use std::collections::{BTreeMap, VecDeque};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fmt,
+    sync::Arc,
+};
 use thiserror::Error;
 
 #[cfg(feature = "syntax-highlighting")]
@@ -78,6 +82,9 @@ enum HeaderSize {
     H5,
     H6,
 }
+
+/// Resolves a rendered markdown link URL to an optional replacement URL.
+pub type LinkResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 impl From<HeadingLevel> for HeaderSize {
     fn from(level: HeadingLevel) -> Self {
@@ -140,10 +147,11 @@ struct HeadingState {
 ///     emoji_enabled: false,
 ///     xss_protection: true,
 ///     syntax_highlighting: false,
+///     link_resolver: None,
 /// };
 /// ```
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MarkdownOptions {
     /// Enable GitHub Flavored Markdown table support.
     pub enable_tables: bool,
@@ -170,6 +178,29 @@ pub struct MarkdownOptions {
     /// When enabled, code blocks with language tags (e.g., ` ```rust `) will have
     /// their content syntax highlighted with colored spans.
     pub syntax_highlighting: bool,
+    /// Optional closure invoked for every link URL during rendering.
+    ///
+    /// When provided, the resolver receives the URL after built-in XSS filtering.
+    /// Returning `Some(new_url)` replaces the rendered anchor href, while returning
+    /// `None` keeps the original URL unchanged. When XSS protection is enabled,
+    /// resolved URLs are filtered before being rendered.
+    pub link_resolver: Option<LinkResolver>,
+}
+
+impl fmt::Debug for MarkdownOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MarkdownOptions")
+            .field("enable_tables", &self.enable_tables)
+            .field("enable_strikethrough", &self.enable_strikethrough)
+            .field("enable_tasklists", &self.enable_tasklists)
+            .field("enable_footnotes", &self.enable_footnotes)
+            .field("enable_smart_punctuation", &self.enable_smart_punctuation)
+            .field("emoji_enabled", &self.emoji_enabled)
+            .field("xss_protection", &self.xss_protection)
+            .field("syntax_highlighting", &self.syntax_highlighting)
+            .field("link_resolver", &self.link_resolver.is_some())
+            .finish()
+    }
 }
 
 impl Default for MarkdownOptions {
@@ -184,6 +215,7 @@ impl Default for MarkdownOptions {
     /// * `emoji_enabled`: `true` if the `emoji` feature is enabled, otherwise `false`
     /// * `xss_protection`: `true` if the `xss-protection` feature is enabled, otherwise `false`
     /// * `syntax_highlighting`: `true` if the `syntax-highlighting` feature is enabled, otherwise `false`
+    /// * `link_resolver`: `None`
     fn default() -> Self {
         Self {
             enable_tables: true,
@@ -194,6 +226,7 @@ impl Default for MarkdownOptions {
             emoji_enabled: cfg!(feature = "emoji"),
             xss_protection: cfg!(feature = "xss-protection"),
             syntax_highlighting: cfg!(feature = "syntax-highlighting"),
+            link_resolver: None,
         }
     }
 }
@@ -349,6 +382,7 @@ pub fn markdown_to_container(markdown: &str) -> Container {
 ///     emoji_enabled: false,
 ///     xss_protection: true,
 ///     syntax_highlighting: false,
+///     link_resolver: None,
 /// };
 ///
 /// let markdown = "~~strikethrough~~ text";
@@ -682,6 +716,18 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             } else {
                 href
             };
+            let href = ctx
+                .options
+                .link_resolver
+                .as_ref()
+                .and_then(|resolver| resolver(&href))
+                .map_or(href, |href| {
+                    if ctx.options.xss_protection {
+                        filter_dangerous_url(&href)
+                    } else {
+                        href
+                    }
+                });
             ctx.push(Container {
                 element: Element::Anchor {
                     target: None,
@@ -1189,6 +1235,7 @@ mod tests {
             emoji_enabled: false,
             xss_protection: false,
             syntax_highlighting: false,
+            link_resolver: None,
         };
         let md = "**bold** text";
         let container = markdown_to_container_with_options(md, options);
@@ -1975,6 +2022,91 @@ mod tests {
         true
     }
 
+    fn first_anchor_href(container: &Container) -> Option<&str> {
+        for child in &container.children {
+            if let Element::Anchor { href, .. } = &child.element {
+                return href.as_deref();
+            }
+
+            if let Some(href) = first_anchor_href(child) {
+                return Some(href);
+            }
+        }
+
+        None
+    }
+
+    fn parent_dir(source: &str) -> &str {
+        source.rfind('/').map_or("", |idx| &source[..idx])
+    }
+
+    fn normalize_join(base: &str, rel: &str) -> Option<String> {
+        let mut segments: Vec<&str> = if base.is_empty() {
+            Vec::new()
+        } else {
+            base.split('/').collect()
+        };
+
+        for segment in rel.split('/') {
+            match segment {
+                "" | "." => {}
+                ".." => {
+                    segments.pop()?;
+                }
+                other => segments.push(other),
+            }
+        }
+
+        Some(segments.join("/"))
+    }
+
+    fn source_to_route(source: &str) -> Option<&'static str> {
+        match source {
+            "docs/bpdl-spec.md" => Some("/docs/bpdl-spec"),
+            "packages/plugin-sdk/README.md" => Some("/docs/plugin-sdk"),
+            "docs/guide.md" => Some("/docs/guide"),
+            _ => None,
+        }
+    }
+
+    fn resolve_docs_href(href: &str, source_path: &str) -> Option<String> {
+        if href.is_empty()
+            || href.starts_with("http://")
+            || href.starts_with("https://")
+            || href.starts_with("mailto:")
+            || href.starts_with("ftp://")
+            || href.starts_with("//")
+            || href.starts_with('#')
+            || href.starts_with('/')
+        {
+            return None;
+        }
+
+        let (path_part, fragment) = match href.split_once('#') {
+            Some((path, fragment)) => (path, Some(fragment)),
+            None => (href, None),
+        };
+
+        let normalized = normalize_join(parent_dir(source_path), path_part)?;
+        let route = source_to_route(&normalized)?;
+
+        Some(match fragment {
+            Some(fragment) if !fragment.is_empty() => format!("{route}#{fragment}"),
+            _ => route.to_string(),
+        })
+    }
+
+    fn render_link_href(href: &str, source_path: &'static str) -> Option<String> {
+        let md = format!("[Link]({href})");
+        let options = MarkdownOptions {
+            link_resolver: Some(Arc::new(move |href| resolve_docs_href(href, source_path))),
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options(&md, options);
+
+        first_anchor_href(&container).map(ToOwned::to_owned)
+    }
+
     #[cfg(feature = "xss-protection")]
     #[test_log::test]
     fn test_xss_inline_html_escaped() {
@@ -2017,6 +2149,89 @@ mod tests {
                 panic!("Expected Anchor element");
             }
         }
+    }
+
+    #[test_log::test]
+    fn test_link_resolver_rewrites_href() {
+        let options = MarkdownOptions {
+            link_resolver: Some(Arc::new(|href| {
+                (href == "./guide.md").then(|| "/docs/guide".to_string())
+            })),
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options("[Guide](./guide.md)", options);
+
+        assert_eq!(first_anchor_href(&container), Some("/docs/guide"));
+    }
+
+    #[test_log::test]
+    fn test_link_resolver_none_preserves_href() {
+        let options = MarkdownOptions {
+            link_resolver: Some(Arc::new(|_| None)),
+            ..Default::default()
+        };
+        let container = markdown_to_container_with_options("[Guide](./guide.md)", options);
+
+        assert_eq!(first_anchor_href(&container), Some("./guide.md"));
+    }
+
+    #[test_log::test]
+    fn test_link_resolver_replaces_bmux_style_relative_links() {
+        let cases = [
+            ("./bpdl-spec.md", "/docs/bpdl-spec"),
+            ("bpdl-spec.md", "/docs/bpdl-spec"),
+            (
+                "./bpdl-spec.md#code-generation",
+                "/docs/bpdl-spec#code-generation",
+            ),
+            ("./bpdl-spec.md#", "/docs/bpdl-spec"),
+            ("../packages/plugin-sdk/README.md", "/docs/plugin-sdk"),
+        ];
+
+        for (href, expected) in cases {
+            assert_eq!(
+                render_link_href(href, "docs/plugins.md"),
+                Some(expected.to_string())
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn test_link_resolver_preserves_bmux_pass_through_links() {
+        let hrefs = [
+            "https://example.com",
+            "http://example.com/foo",
+            "mailto:foo@example.com",
+            "ftp://example.com/x",
+            "//example.com/x",
+            "#heading",
+            "/docs/kiosk",
+            "./unknown.md",
+        ];
+
+        for href in hrefs {
+            assert_eq!(
+                render_link_href(href, "docs/plugins.md"),
+                Some(href.to_string())
+            );
+        }
+    }
+
+    #[cfg(feature = "xss-protection")]
+    #[test_log::test]
+    fn test_link_resolver_runs_after_xss_filter_and_refilters_output() {
+        let options = MarkdownOptions {
+            xss_protection: true,
+            link_resolver: Some(Arc::new(|href| {
+                assert_eq!(href, "#");
+                Some("javascript:alert('again')".to_string())
+            })),
+            ..Default::default()
+        };
+        let container =
+            markdown_to_container_with_options("[Click](javascript:alert('xss'))", options);
+
+        assert_eq!(first_anchor_href(&container), Some("#"));
     }
 
     #[test_log::test]
