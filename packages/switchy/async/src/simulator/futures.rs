@@ -165,7 +165,7 @@ impl Future for Instant {
 
         if polled {
             let now = system_time_to_instant(switchy_time::now()).unwrap();
-            log::trace!("Instant polled: now={:?} instant={:?}", now, this.instant,);
+            log::trace!("Instant polled: now={:?} instant={:?}", now, this.instant);
             if now > *this.instant {
                 *this.completed.as_mut() = true;
                 return Poll::Ready(now);

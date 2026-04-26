@@ -52,21 +52,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     *switchy_web_server::openapi::OPENAPI.write().unwrap() = Some(init());
 
-    let server = switchy_web_server::WebServerBuilder::new()
-        .with_cors(cors)
-        .with_scope(switchy_web_server::openapi::bind_services(Scope::new(
-            "/openapi",
-        )))
-        // The order matters here. Make sure to add the root scope last
-        .with_scope(Scope::new("").get("/example", |req| {
-            let path = req.path().to_string();
-            let query = req.query_string().to_string();
-            Box::pin(async move {
-                Ok(HttpResponse::ok()
-                    .with_body(format!("hello, world! path={path} query={query}",)))
-            })
-        }))
-        .build();
+    let server =
+        switchy_web_server::WebServerBuilder::new()
+            .with_cors(cors)
+            .with_scope(switchy_web_server::openapi::bind_services(Scope::new(
+                "/openapi",
+            )))
+            // The order matters here. Make sure to add the root scope last
+            .with_scope(Scope::new("").get("/example", |req| {
+                let path = req.path().to_string();
+                let query = req.query_string().to_string();
+                Box::pin(async move {
+                    Ok(HttpResponse::ok()
+                        .with_body(format!("hello, world! path={path} query={query}")))
+                })
+            }))
+            .build();
 
     server.start().await;
 

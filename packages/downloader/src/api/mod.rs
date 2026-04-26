@@ -446,8 +446,8 @@ pub async fn download_tasks_endpoint(
         }
     });
 
-    current.sort_by(|a, b| a.id.cmp(&b.id));
-    history.sort_by(|a, b| b.id.cmp(&a.id));
+    current.sort_by_key(|x| x.id);
+    history.sort_by_key(|x| std::cmp::Reverse(x.id));
 
     #[allow(clippy::tuple_array_conversions)]
     let tasks = [current, history].concat();

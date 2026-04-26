@@ -102,7 +102,7 @@ pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, Get
         return Err(GetYtConfigError::NoConfigsAvailable);
     }
 
-    configs.sort_by(|a: &YtConfig, b: &YtConfig| a.issued_at.cmp(&b.issued_at));
+    configs.sort_by_key(|x: &YtConfig| x.issued_at);
 
     Ok(configs.first().cloned())
 }

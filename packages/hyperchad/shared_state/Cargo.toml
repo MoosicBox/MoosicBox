@@ -28,8 +28,6 @@ switchy_schema   = { workspace = true, features = ["code"] }
 thiserror        = { workspace = true }
 
 [dev-dependencies]
-bincode                     = { workspace = true, features = ["serde", "std"] }
-pretty_assertions           = { workspace = true }
 switchy_async               = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
 test-log                    = { workspace = true }

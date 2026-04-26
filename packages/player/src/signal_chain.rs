@@ -339,7 +339,7 @@ impl std::io::Read for SignalChainStepProcessor {
             log::debug!("Waiting for samples from receiver...");
             let audio = self
                 .receiver
-                .recv_timeout(std::time::Duration::from_millis(1000))
+                .recv_timeout(std::time::Duration::from_secs(1))
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::TimedOut, e))?;
             log::debug!("Received {} frames from receiver", audio.frames());
 

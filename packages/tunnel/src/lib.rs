@@ -569,7 +569,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
             }
 
             if stream.abort_token.is_cancelled() {
-                log::debug!("poll_next: Stream is cancelled for request_id={request_id}",);
+                log::debug!("poll_next: Stream is cancelled for request_id={request_id}");
                 return Poll::Ready(Some(Err(TunnelStreamError::Aborted)));
             }
 

@@ -18,7 +18,6 @@ group = "hyperchad"
 
 [dependencies]
 hyperchad_router              = { workspace = true }
-hyperchad_shared_state        = { workspace = true }
 hyperchad_shared_state_models = { workspace = true }
 moosicbox_assert              = { workspace = true }
 
@@ -29,7 +28,6 @@ default = []
 
 fail-on-warnings = [
     "hyperchad_router/fail-on-warnings",
-    "hyperchad_shared_state/fail-on-warnings",
     "hyperchad_shared_state_models/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
 ]

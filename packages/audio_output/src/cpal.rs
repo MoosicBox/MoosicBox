@@ -167,13 +167,13 @@ impl TryFrom<Device> for AudioOutputFactory {
             .supported_output_configs()
             .map_err(|_e| AudioOutputError::NoOutputs)?
         {
-            log::trace!("\toutput: {output:?}",);
+            log::trace!("\toutput: {output:?}");
         }
         for input in device
             .supported_input_configs()
             .map_err(|_e| AudioOutputError::NoOutputs)?
         {
-            log::trace!("\tinput: {input:?}",);
+            log::trace!("\tinput: {input:?}");
         }
 
         let name = device
@@ -532,7 +532,7 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         loop {
             match self
                 .ring_buf_producer
-                .write_blocking_timeout(samples, std::time::Duration::from_millis(30000)) // Increased timeout for end-of-track
+                .write_blocking_timeout(samples, std::time::Duration::from_secs(30)) // Increased timeout for end-of-track
             {
                 Ok(Some(written)) => {
                     // Track total samples written to ring buffer
@@ -889,10 +889,10 @@ fn list_devices(host: &Host) {
                 .map_or_else(|_| "(Unknown)".into(), |d| d.to_string())
         );
         for output in dv.supported_output_configs().unwrap() {
-            log::trace!("\toutput: {output:?}",);
+            log::trace!("\toutput: {output:?}");
         }
         for input in dv.supported_input_configs().unwrap() {
-            log::trace!("\tinput: {input:?}",);
+            log::trace!("\tinput: {input:?}");
         }
     }
 }

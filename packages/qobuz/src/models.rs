@@ -775,8 +775,7 @@ impl From<QobuzRelease> for QobuzAlbum {
             title: value.title,
             version: value.version,
             released_at: chrono::DateTime::from_str(&value.release_date_original)
-                .map(|x: DateTime<Utc>| x.timestamp_millis())
-                .unwrap_or(0),
+                .map_or(0, |x: DateTime<Utc>| x.timestamp_millis()),
             release_date_original: value.release_date_original,
             duration: value.duration,
             parental_warning: value.parental_warning,

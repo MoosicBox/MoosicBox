@@ -152,7 +152,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_key",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
@@ -181,7 +181,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_error",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Err::<CacheItemType, TestError>(TestError::TestError("Test error".to_string()))
@@ -240,7 +240,7 @@ mod tests {
         let result1 = get_or_set_to_cache(
             CacheRequest {
                 key: "test_cache_hit",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || {
                 let count = Arc::clone(&call_count_clone);
@@ -267,7 +267,7 @@ mod tests {
         let result2 = get_or_set_to_cache(
             CacheRequest {
                 key: "test_cache_hit",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || {
                 let count = Arc::clone(&call_count_clone);
@@ -338,7 +338,7 @@ mod tests {
         let result2 = get_or_set_to_cache(
             CacheRequest {
                 key: "test_expiration",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || {
                 let count = Arc::clone(&call_count_clone);
@@ -375,7 +375,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_albums",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::Albums(Arc::new(vec![
@@ -411,7 +411,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_album_tracks",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::AlbumTracks(Arc::new(vec![
@@ -453,7 +453,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_artist_albums",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::ArtistAlbums(Arc::new(vec![
@@ -484,7 +484,7 @@ mod tests {
         let result = get_or_set_to_cache(
             CacheRequest {
                 key: "test_single_album",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::Album(Arc::new(
@@ -516,7 +516,7 @@ mod tests {
         let artist_result = get_or_set_to_cache(
             CacheRequest {
                 key: "distinct_key_artist",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
@@ -534,7 +534,7 @@ mod tests {
         let album_result = get_or_set_to_cache(
             CacheRequest {
                 key: "distinct_key_album",
-                expiration: Duration::from_secs(60),
+                expiration: Duration::from_mins(1),
             },
             || async {
                 Ok::<CacheItemType, TestError>(CacheItemType::Album(Arc::new(

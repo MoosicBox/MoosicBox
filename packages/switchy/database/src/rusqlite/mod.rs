@@ -3369,7 +3369,7 @@ fn delete(
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let where_clause = build_where_clause(filters);
 
-    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}",));
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
 
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING *",

@@ -370,7 +370,7 @@ impl WsClient {
                                 Ok(Message::Text(message.into()))
                             }
                             WsMessage::Message(bytes) => {
-                                log::debug!("Sending packet from request",);
+                                log::debug!("Sending packet from request");
                                 Ok(Message::Binary(bytes.to_vec().into()))
                             }
                             WsMessage::Ping => {
@@ -416,7 +416,7 @@ impl WsClient {
                                 select!(
                                     () = close_token.cancelled() => { break; }
                                     () = cancellation_token.cancelled() => { break; }
-                                    () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                    () = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
                                         log::trace!("Sending ping to server");
                                         if let Err(e) = txf.unbounded_send(WsMessage::Ping) {
                                             log::error!("Pinger Send Loop error: {e:?}");
@@ -468,7 +468,7 @@ impl WsClient {
             #[allow(clippy::redundant_pub_crate)]
             if just_retried {
                 select!(
-                    () = sleep(Duration::from_millis(5000)) => {}
+                    () = sleep(Duration::from_secs(5)) => {}
                     () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling retry");
                         break;

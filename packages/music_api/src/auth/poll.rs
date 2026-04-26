@@ -117,13 +117,13 @@ mod test {
     #[test_log::test]
     fn poll_auth_new_has_default_timeout() {
         let auth = PollAuth::new();
-        assert_eq!(auth.timeout, Duration::from_secs(60));
+        assert_eq!(auth.timeout, Duration::from_mins(1));
     }
 
     #[test_log::test]
     fn poll_auth_with_timeout_sets_timeout() {
-        let auth = PollAuth::new().with_timeout(Duration::from_secs(120));
-        assert_eq!(auth.timeout, Duration::from_secs(120));
+        let auth = PollAuth::new().with_timeout(Duration::from_mins(2));
+        assert_eq!(auth.timeout, Duration::from_mins(2));
     }
 
     #[test_log::test]
@@ -135,7 +135,7 @@ mod test {
     #[test_log::test]
     fn poll_auth_with_timeout_millis_sets_timeout() {
         let auth = PollAuth::new().with_timeout_millis(5000);
-        assert_eq!(auth.timeout, Duration::from_millis(5000));
+        assert_eq!(auth.timeout, Duration::from_secs(5));
     }
 
     #[test_log::test]
@@ -156,7 +156,7 @@ mod test {
     fn poll_auth_timeout_millis_mutable_sets_timeout() {
         let mut auth = PollAuth::new();
         let _ = auth.timeout_millis(3000);
-        assert_eq!(auth.timeout, Duration::from_millis(3000));
+        assert_eq!(auth.timeout, Duration::from_secs(3));
     }
 
     #[test_log::test(switchy_async::test)]

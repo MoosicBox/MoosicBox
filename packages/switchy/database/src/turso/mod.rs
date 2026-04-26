@@ -1077,7 +1077,7 @@ async fn delete(
             .join(", ");
         format!("DELETE FROM {table_name} WHERE rowid IN ({placeholders})")
     } else {
-        format!("DELETE FROM {table_name} {}", build_where_clause(filters),)
+        format!("DELETE FROM {table_name} {}", build_where_clause(filters))
     };
 
     let delete_params = if limit.is_some() {

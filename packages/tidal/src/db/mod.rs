@@ -89,7 +89,7 @@ pub async fn get_tidal_config(
         .await?
         .to_value_type()?;
 
-    configs.sort_by(|a: &TidalConfig, b: &TidalConfig| a.issued_at.cmp(&b.issued_at));
+    configs.sort_by_key(|x: &TidalConfig| x.issued_at);
 
     Ok(configs.first().cloned())
 }

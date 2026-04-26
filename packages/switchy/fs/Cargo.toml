@@ -44,7 +44,9 @@ simulator = ["dep:bytes", "switchy_async?/simulator", "sync"]
 simulator-real-fs = [
     "dep:scoped-tls",
     "dep:switchy_async",
+    "std",
     "switchy_async/rt-multi-thread",
+    "tokio",
 ]
 std = ["dep:tempfile", "sync"]
 tokio = ["async", "dep:tokio", "switchy_async?/fs", "switchy_async?/tokio"]
