@@ -555,19 +555,15 @@ impl SilkDecoder {
 
         // Store current LSF for next frame
         match bandwidth {
-            Bandwidth::Narrowband | Bandwidth::Mediumband => {
-                if nlsf_q15.len() == 10 {
-                    let mut arr = [0_i16; 10];
-                    arr.copy_from_slice(&nlsf_q15);
-                    self.previous_lsf_nb = Some(arr);
-                }
+            Bandwidth::Narrowband | Bandwidth::Mediumband if nlsf_q15.len() == 10 => {
+                let mut arr = [0_i16; 10];
+                arr.copy_from_slice(&nlsf_q15);
+                self.previous_lsf_nb = Some(arr);
             }
-            Bandwidth::Wideband => {
-                if nlsf_q15.len() == 16 {
-                    let mut arr = [0_i16; 16];
-                    arr.copy_from_slice(&nlsf_q15);
-                    self.previous_lsf_wb = Some(arr);
-                }
+            Bandwidth::Wideband if nlsf_q15.len() == 16 => {
+                let mut arr = [0_i16; 16];
+                arr.copy_from_slice(&nlsf_q15);
+                self.previous_lsf_wb = Some(arr);
             }
             _ => {}
         }
@@ -1688,19 +1684,15 @@ impl SilkDecoder {
     #[allow(dead_code)]
     fn store_previous_lsf(&mut self, nlsf_q15: &[i16], bandwidth: Bandwidth) {
         match bandwidth {
-            Bandwidth::Narrowband | Bandwidth::Mediumband => {
-                if nlsf_q15.len() >= 10 {
-                    let mut arr = [0_i16; 10];
-                    arr.copy_from_slice(&nlsf_q15[..10]);
-                    self.previous_lsf_nb = Some(arr);
-                }
+            Bandwidth::Narrowband | Bandwidth::Mediumband if nlsf_q15.len() >= 10 => {
+                let mut arr = [0_i16; 10];
+                arr.copy_from_slice(&nlsf_q15[..10]);
+                self.previous_lsf_nb = Some(arr);
             }
-            Bandwidth::Wideband => {
-                if nlsf_q15.len() >= 16 {
-                    let mut arr = [0_i16; 16];
-                    arr.copy_from_slice(&nlsf_q15[..16]);
-                    self.previous_lsf_wb = Some(arr);
-                }
+            Bandwidth::Wideband if nlsf_q15.len() >= 16 => {
+                let mut arr = [0_i16; 16];
+                arr.copy_from_slice(&nlsf_q15[..16]);
+                self.previous_lsf_wb = Some(arr);
             }
             _ => {}
         }

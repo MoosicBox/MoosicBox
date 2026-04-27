@@ -911,7 +911,7 @@ mod tests {
 
         // Simulated time should be at least 1 day different from real time
         // (given the random epoch offset range)
-        assert!(sim_diff > Duration::from_secs(86400));
+        assert!(sim_diff > Duration::from_hours(24));
     }
 
     #[test_log::test]

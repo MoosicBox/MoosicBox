@@ -1063,7 +1063,7 @@ fn decode_split_gain(
         } else {
             let fs_adj = fs - fm_sq;
             let qn_fm = (qn >> 1).saturating_sub(fm);
-            itheta = fm + 1 + if qn_fm > 0 { fs_adj / qn_fm } else { 0 };
+            itheta = fm + 1 + fs_adj.checked_div(qn_fm).unwrap_or(0);
         }
 
         range_decoder.ec_dec_update(fs, fs + 1, ft)?;
@@ -1096,7 +1096,7 @@ fn decode_split_gain(
     }
 
     // Normalize to 14-bit (Q14 format, range 0-16384)
-    itheta = if qn > 0 { (itheta * 16384) / qn } else { 0 };
+    itheta = (itheta * 16384).checked_div(qn).unwrap_or(0);
 
     Ok(itheta.min(16384))
 }
