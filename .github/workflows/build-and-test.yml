@@ -223,19 +223,19 @@ jobs:
                   make-executable: true
                   verify-command: --version
 
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin/cargo-machete
 
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin/cargo-machete
 
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
@@ -319,7 +319,7 @@ jobs:
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Download cargo-machete
-              uses: actions/download-artifact@master
+              uses: actions/download-artifact@v8
               with:
                   name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
                   path: ~/.cargo/bin
@@ -413,7 +413,7 @@ jobs:
 
             - name: Upload coverage reports to Codecov
               if: steps.create_coverage_report.outputs.has_coverage == 'true'
-              uses: codecov/codecov-action@v5
+              uses: codecov/codecov-action@v6
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: MoosicBox/MoosicBox

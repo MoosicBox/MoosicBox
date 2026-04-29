@@ -31,17 +31,17 @@ jobs:
                   cache-key-prefix: cargo-upgrade
                   make-executable: true
                   verify-command: --help
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'macos-latest' }}
               with:
                   name: cargo-upgrade-macos
                   path: ~/.cargo/bin/cargo-upgrade
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'ubuntu-latest' }}
               with:
                   name: cargo-upgrade-ubuntu
                   path: ~/.cargo/bin/cargo-upgrade
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'windows-latest' }}
               with:
                   name: cargo-upgrade.exe
@@ -69,17 +69,17 @@ jobs:
                   cache-key-prefix: cargo-machete
                   make-executable: true
                   verify-command: --version
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin/cargo-machete
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin/cargo-machete
-            - uses: actions/upload-artifact@master
+            - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
@@ -126,19 +126,19 @@ jobs:
               with:
                   components: rustfmt, clippy
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ runner.os == 'macOS' }}
               with:
                   name: cargo-upgrade-macos
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ runner.os == 'Linux' }}
               with:
                   name: cargo-upgrade-ubuntu
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ runner.os == 'Windows' }}
               with:
                   name: cargo-upgrade.exe
@@ -336,19 +336,19 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
@@ -534,19 +534,19 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - uses: actions/download-artifact@v8
               if: ${{ matrix.package.os == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
