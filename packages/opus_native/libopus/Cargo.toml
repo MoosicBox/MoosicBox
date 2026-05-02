@@ -5,7 +5,7 @@ license     = { workspace = true }
 name        = "moosicbox_opus_native_libopus"
 publish     = false
 readme      = "README.md"
-version     = "0.1.0"
+version     = { workspace = true }
 
 [package.metadata]
 examples = false

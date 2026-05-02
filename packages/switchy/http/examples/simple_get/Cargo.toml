@@ -6,7 +6,7 @@ license     = { workspace = true }
 name        = "http_simple_get"
 publish     = false
 repository  = { workspace = true }
-version     = "0.1.0"
+version     = { workspace = true }
 
 [package.metadata]
 tests = false

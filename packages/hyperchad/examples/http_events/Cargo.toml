@@ -6,7 +6,7 @@ license     = { workspace = true }
 name        = "hyperchad_http_events_example"
 publish     = false
 repository  = { workspace = true }
-version     = "0.1.0"
+version     = { workspace = true }
 
 [package.metadata]
 tests = false

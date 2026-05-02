@@ -9,7 +9,7 @@ name        = "switchy_web_server_example_query_extractor_standalone"
 publish     = false
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.0"
+version     = { workspace = true }
 
 [package.metadata]
 tests = false

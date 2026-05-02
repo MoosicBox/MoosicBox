@@ -6,7 +6,7 @@ license     = { workspace = true }
 name        = "switchy_web_server_example_nested_get"
 publish     = false
 repository  = { workspace = true }
-version     = "0.1.0"
+version     = { workspace = true }
 
 [package.metadata]
 tests = false

@@ -9,7 +9,7 @@ name        = "moosicbox_app"
 publish     = []
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.16.1"
+version     = { workspace = true }
 
 [package.metadata]
 examples = false
