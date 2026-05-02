@@ -6,7 +6,7 @@ This crate contains:
 
 * Identifier types (`ChannelId`, `ParticipantId`, `CommandId`, `EventId`)
 * Revision and idempotency model types
-* Binary payload envelope using `bincode` + `base64` text storage
+* Binary payload envelope using `bmux_codec` + `base64` text storage
 * Command, event, and snapshot envelopes
 * Transport message models
 

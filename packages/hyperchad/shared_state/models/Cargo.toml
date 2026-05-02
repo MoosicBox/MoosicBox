@@ -19,12 +19,15 @@ group = "hyperchad"
 [dependencies]
 moosicbox_assert = { workspace = true }
 
-base64    = { workspace = true }
-bincode   = { workspace = true, features = ["serde", "std"] }
-serde     = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true }
+base64     = { workspace = true }
+bmux_codec = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+thiserror  = { workspace = true }
 
 [features]
 default = []
 
-fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
+fail-on-warnings = [
+    "bmux_codec/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+]

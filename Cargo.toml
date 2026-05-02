@@ -394,7 +394,7 @@ aws-config = "1.8.15"
 aws-sdk-apigatewaymanagement = "1.97.0"
 aws-sdk-ssm = "1.108.0"
 base64 = "0.22.1"
-bincode = { version = "2.0.1", default-features = false }
+bmux_codec = { git = "https://github.com/BSteffaniak/bmux", package = "bmux_codec", branch = "master", default-features = false }
 btparse = "0.2.0"
 bumpalo = "3.20.2"
 bytes = "1.11.1"
