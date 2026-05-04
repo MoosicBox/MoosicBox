@@ -423,9 +423,9 @@ debounce = "0.2.2"
 dialoguer = "0.12.0"
 dirs = "6.0.0"
 duckdb = { version = "1.10502.0", default-features = false }
-eframe = { version = "0.33.3", default-features = false }
-egui = { version = "0.33.3", default-features = false }
-egui_extras = { version = "0.33.3", default-features = false }
+eframe = { version = "0.34.1", default-features = false }
+egui = { version = "0.34.1", default-features = false }
+egui_extras = { version = "0.34.1", default-features = false }
 enum-as-inner = "0.7.0"
 env_logger = "0.11.10"
 fdk-aac = "0.8.0"
@@ -470,7 +470,7 @@ log = { version = "0.4.29", features = ["release_max_level_trace"] }
 markdown = "1.0.0"
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.18.2"
+mdns-sd = "0.19.1"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
 mlua = { version = "0.11.6", default-features = false }
@@ -482,7 +482,7 @@ mysql = { version = "28.0.0", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-nanoid = "0.4.0"
+nanoid = "0.5.0"
 native-tls = "0.2.18"
 net2 = "0.2.39"
 ogg = "0.9.2"
@@ -567,20 +567,20 @@ static_init = "1.0.4"
 strum = "0.28.0"
 strum_macros = "0.28.0"
 subtle = "2.6.1"
-swc_bundler = "45.0.0"
-swc_common = { version = "19.0.0", features = ["tty-emitter"] }
-swc_ecma_ast = "21.0.0"
-swc_ecma_codegen = "24.0.0"
-swc_ecma_loader = { version = "19.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "47.0.0"
-swc_ecma_parser = "36.0.0"
-swc_ecma_transforms_base = "39.0.0"
-swc_ecma_transforms_typescript = "43.0.0"
-swc_ecma_visit = "21.0.0"
+swc_bundler = "48.0.0"
+swc_common = { version = "21.0.1", features = ["tty-emitter"] }
+swc_ecma_ast = "23.0.0"
+swc_ecma_codegen = "26.0.1"
+swc_ecma_loader = { version = "21.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "52.0.4"
+swc_ecma_parser = "39.0.2"
+swc_ecma_transforms_base = "42.0.0"
+swc_ecma_transforms_typescript = "46.0.1"
+swc_ecma_visit = "23.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
 syn = "2.0.117"
 syntect = "5.3.0"
-tantivy = "0.25.0"
+tantivy = "0.26.1"
 tauri = { version = "2.11.0", features = ["protocol-asset"] }
 tauri-build = { version = "2.6.0", features = [] }
 tauri-plugin = { version = "2.6.0", features = ["build"] }
