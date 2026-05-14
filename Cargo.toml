@@ -495,7 +495,7 @@ opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 opus = "0.3.1"
 os_info = { version = "3.14.0", default-features = false }
 paste = "1.0.15"
-pin-project = "1.1.12"
+pin-project = "1.1.13"
 pin-project-lite = "0.2.17"
 pin-utils = "0.1.0"
 pingora = "0.8.0"
