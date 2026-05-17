@@ -407,6 +407,8 @@ pub struct ClippierConf {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkspaceClippierConf {
+    /// Default platform-specific configurations for packages without local configs
+    pub config: Option<Vec<ClippierConfiguration>>,
     /// Default environment variables
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     /// Default CI steps
@@ -1456,16 +1458,18 @@ pub async fn process_configs(
         node: None,
     }];
 
-    let configs = conf
-        .as_ref()
-        .and_then(|x| x.config.clone())
-        .unwrap_or(default_config);
-
-    let mut packages = vec![];
-
     let workspace_root =
         find_workspace_root_from_package(path).unwrap_or_else(|_| path.to_path_buf());
     let workspace_context = WorkspaceContext::new(&workspace_root)?;
+    let workspace_conf = workspace_context.workspace_config().ok().flatten();
+
+    let configs = conf
+        .as_ref()
+        .and_then(|x| x.config.clone())
+        .or_else(|| workspace_conf.as_ref().and_then(|x| x.config.clone()))
+        .unwrap_or(default_config);
+
+    let mut packages = vec![];
 
     if let Some(name) = value
         .get("package")
@@ -5238,6 +5242,52 @@ pub fn handle_workspace_toolchains_command(
                 }
             }
 
+            // Process workspace-level OS-specific configs
+            if let Some(configs) = &conf.config {
+                for config in configs {
+                    if config.os != os {
+                        continue;
+                    }
+
+                    if let Some(deps) = &config.dependencies {
+                        for dep in deps {
+                            if let Some(cmd) = &dep.command {
+                                all_dependencies.insert(cmd.clone());
+                            }
+                            if let Some(toolchain) = &dep.toolchain {
+                                all_toolchains.insert(toolchain.clone());
+                            }
+                        }
+                    }
+
+                    if let Some(ci_steps) = &config.ci_steps {
+                        let steps: Vec<Step> = ci_steps.clone().into();
+                        for step in steps {
+                            if let Some(cmd) = &step.command {
+                                all_ci_steps.insert(cmd.clone());
+                            }
+                            if let Some(toolchain) = &step.toolchain {
+                                all_toolchains.insert(toolchain.clone());
+                            }
+                        }
+                    }
+
+                    if let Some(env) = &config.env {
+                        for (key, value) in env {
+                            let resolved_value = match value {
+                                ClippierEnv::Value(v) => v.clone(),
+                                ClippierEnv::FilteredValue { value, .. } => value.clone(),
+                            };
+                            all_env.insert(key.clone(), resolved_value);
+                        }
+                    }
+
+                    if config.git_submodules == Some(true) {
+                        needs_git_submodules = true;
+                    }
+                }
+            }
+
             // Note: workspace-level nightly is ignored since it doesn't have a package name
             // nightly_packages only tracks specific packages that need nightly
             if conf.git_submodules == Some(true) {
@@ -5694,6 +5744,150 @@ args = ["--frozen-lockfile"]
         );
         let args: Vec<String> = node.args.unwrap().into();
         assert_eq!(args, vec!["--frozen-lockfile".to_string()]);
+    }
+
+    #[test]
+    fn test_workspace_config_parses_os_configs() {
+        let toml_str = r#"
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"
+"#;
+        let parsed: Result<WorkspaceClippierConf, _> = toml::from_str(toml_str);
+        assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed.err());
+
+        let conf = parsed.unwrap();
+        let configs = conf.config.expect("config section should be present");
+        let oses = configs
+            .iter()
+            .map(|config| config.os.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(oses, vec!["ubuntu", "macos", "windows"]);
+    }
+
+    #[switchy_async::test]
+    async fn test_workspace_config_provides_default_os_configs() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        let package_path = temp_path.join("packages").join("package-a");
+        switchy_fs::sync::create_dir_all(&package_path).unwrap();
+
+        switchy_fs::sync::write(
+            temp_path.join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["packages/*"]
+"#,
+        )
+        .unwrap();
+        switchy_fs::sync::write(
+            temp_path.join("clippier.toml"),
+            r#"
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"
+"#,
+        )
+        .unwrap();
+        switchy_fs::sync::write(
+            package_path.join("Cargo.toml"),
+            r#"
+[package]
+name = "package-a"
+version = "0.1.0"
+
+[features]
+default = []
+feature-a = []
+"#,
+        )
+        .unwrap();
+
+        let result = process_workspace_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .await
+        .unwrap();
+        let oses = result
+            .iter()
+            .map(|package| package.get("os").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(oses, vec!["ubuntu", "macos", "windows"]);
+    }
+
+    #[switchy_async::test]
+    async fn test_package_config_overrides_workspace_os_configs() {
+        let temp_dir = switchy_fs::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        let package_path = temp_path.join("packages").join("package-a");
+        switchy_fs::sync::create_dir_all(&package_path).unwrap();
+
+        switchy_fs::sync::write(
+            temp_path.join("Cargo.toml"),
+            r#"
+[workspace]
+members = ["packages/*"]
+"#,
+        )
+        .unwrap();
+        switchy_fs::sync::write(
+            temp_path.join("clippier.toml"),
+            r#"
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"
+"#,
+        )
+        .unwrap();
+        switchy_fs::sync::write(
+            package_path.join("Cargo.toml"),
+            r#"
+[package]
+name = "package-a"
+version = "0.1.0"
+
+[features]
+default = []
+feature-a = []
+"#,
+        )
+        .unwrap();
+        switchy_fs::sync::write(
+            package_path.join("clippier.toml"),
+            r#"
+[[config]]
+os = "ubuntu"
+"#,
+        )
+        .unwrap();
+
+        let result = process_workspace_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .await
+        .unwrap();
+        let oses = result
+            .iter()
+            .map(|package| package.get("os").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(oses, vec!["ubuntu"]);
     }
 
     #[test]

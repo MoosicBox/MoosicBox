@@ -1440,6 +1440,16 @@ cargo = ["--locked"]
 RUST_BACKTRACE = "1"
 CARGO_TERM_COLOR = "always"
 
+# Default OS matrix for packages that do not define local [[config]] entries
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"
+
 [[ci-steps]]
 command = "cargo fmt --check"
 
@@ -1456,7 +1466,8 @@ Place a `clippier.toml` in individual package directories to override or extend 
 
 ```toml
 # packages/{package}/clippier.toml
-# Package-level config merges with workspace defaults
+# Package-level config merges with workspace defaults.
+# Local [[config]] entries replace the workspace default OS matrix for this package.
 
 [env]
 PACKAGE_SPECIFIC_VAR = "custom_value"
@@ -1567,6 +1578,8 @@ Configuration values are resolved in the following order (highest to lowest prio
 2. **Package-level** - Top-level values in package's `clippier.toml`
 3. **Workspace defaults** - Values in workspace root `clippier.toml`
 4. **Built-in defaults** - Hardcoded fallback values
+
+For matrix generation, package-local `[[config]]` entries are an override for workspace `[[config]]` entries. If a package has no local `[[config]]`, Clippier uses the workspace root `[[config]]` entries. If neither exists, Clippier falls back to a single Ubuntu config.
 
 ### Configuration Features
 
