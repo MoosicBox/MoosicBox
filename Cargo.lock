@@ -2314,7 +2314,7 @@ dependencies = [
 [[package]]
 name = "bmux_codec"
 version = "0.0.1-alpha.0"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#b593192d51e2fa76edb4b29108b934fd2b680a96"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#2fce76c5d90b988cd7b64618a038d001b668fc41"
 dependencies = [
  "serde",
 ]
