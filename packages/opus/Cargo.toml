@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["codec", "encoding", "multimedia"]
+categories  = ["encoding", "multimedia"]
 description = "MoosicBox Opus codec decoder implementation for Symphonia"
 edition     = { workspace = true }
 keywords    = ["audio", "codec", "decoder", "opus", "symphonia"]

@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["development-tools", "testing"]
+categories  = ["development-tools", "development-tools::testing"]
 description = "Switchy Schema Test Utils package"
 edition     = { workspace = true }
 keywords    = ["database", "migration", "schema", "testing"]

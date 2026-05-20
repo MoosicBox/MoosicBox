@@ -230,6 +230,8 @@ pub struct PublishPackageInfo {
     pub publish_dependencies: BTreeSet<String>,
     /// Package directory containing `Cargo.toml`.
     pub package_path: Option<PathBuf>,
+    /// crates.io category slugs declared by the package.
+    pub categories: Vec<String>,
 }
 
 impl PublishPackageInfo {
@@ -247,12 +249,19 @@ impl PublishPackageInfo {
             publishable,
             publish_dependencies,
             package_path: None,
+            categories: Vec::new(),
         }
     }
 
     #[must_use]
     fn with_package_path(mut self, package_path: PathBuf) -> Self {
         self.package_path = Some(package_path);
+        self
+    }
+
+    #[must_use]
+    fn with_categories(mut self, categories: Vec<String>) -> Self {
+        self.categories = categories;
         self
     }
 }
@@ -500,6 +509,10 @@ pub async fn handle_publish_command(
     validate_publish_dependencies_available(&client, &packages, &needs_publish, &already_published)
         .await?;
 
+    if !needs_publish.is_empty() {
+        validate_package_categories_available(&client, &packages, &needs_publish).await?;
+    }
+
     let packages_to_publish = filter_packages_to_publish(&packages, &needs_publish);
     let final_plan = build_publish_plan(&packages_to_publish, None)?;
 
@@ -736,7 +749,8 @@ fn load_publish_packages(
                 publishable,
                 publish_dependencies,
             )
-            .with_package_path(package_path),
+            .with_package_path(package_path)
+            .with_categories(package.categories.clone()),
         );
     }
 
@@ -831,6 +845,118 @@ async fn crate_version_exists(
             response.status()
         )
         .into())
+    }
+}
+
+async fn validate_package_categories_available(
+    client: &reqwest::Client,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package_names: &BTreeSet<String>,
+) -> Result<(), BoxError> {
+    let mut categories = BTreeSet::new();
+    for name in package_names {
+        let package = packages
+            .get(name)
+            .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
+        categories.extend(package.categories.iter().cloned());
+    }
+
+    let mut supported_categories = BTreeSet::new();
+    for category in categories {
+        if crates_io_category_exists(client, &category).await? {
+            supported_categories.insert(category);
+        }
+    }
+
+    validate_package_categories(packages, package_names, &supported_categories)
+}
+
+async fn crates_io_category_exists(
+    client: &reqwest::Client,
+    category: &str,
+) -> Result<bool, BoxError> {
+    let response = client
+        .get(format!("{CRATES_IO_API}/categories/{category}"))
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        Ok(true)
+    } else if response.status() == reqwest::StatusCode::NOT_FOUND {
+        Ok(false)
+    } else {
+        Err(format!(
+            "Failed to query crates.io category '{category}': HTTP {}",
+            response.status()
+        )
+        .into())
+    }
+}
+
+fn validate_package_categories(
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package_names: &BTreeSet<String>,
+    supported_categories: &BTreeSet<String>,
+) -> Result<(), BoxError> {
+    let mut errors = Vec::new();
+
+    for name in package_names {
+        let package = packages
+            .get(name)
+            .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
+        let unsupported = package
+            .categories
+            .iter()
+            .filter(|category| !supported_categories.contains(category.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if unsupported.is_empty() {
+            continue;
+        }
+
+        let manifest_path = package
+            .package_path
+            .as_ref()
+            .map(|path| path.join("Cargo.toml"));
+        let manifest = manifest_path.as_ref().map_or_else(
+            || "<unknown manifest>".to_string(),
+            |path| path.display().to_string(),
+        );
+        let suggestions = unsupported
+            .iter()
+            .filter_map(|category| unsupported_category_suggestion(category))
+            .collect::<Vec<_>>();
+        let suggestion = if suggestions.is_empty() {
+            String::new()
+        } else {
+            format!("; {}", suggestions.join(", "))
+        };
+
+        errors.push(format!(
+            "  {}: unsupported categor{} {} ({manifest}){suggestion}",
+            format_package_name(ColorMode::Never, &package.name, &package.version),
+            if unsupported.len() == 1 { "y" } else { "ies" },
+            unsupported.join(", "),
+        ));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unsupported crates.io category slugs:\n{}\nSee https://crates.io/category_slugs for supported slugs.",
+            errors.join("\n")
+        )
+        .into())
+    }
+}
+
+fn unsupported_category_suggestion(category: &str) -> Option<String> {
+    match category {
+        "testing" => Some("use development-tools::testing instead of testing".to_string()),
+        "codec" => Some("use encoding or multimedia instead of codec".to_string()),
+        _ => None,
     }
 }
 
@@ -1469,6 +1595,18 @@ mod tests {
         )
     }
 
+    fn package_with_categories(
+        name: &str,
+        categories: impl IntoIterator<Item = &'static str>,
+    ) -> PublishPackageInfo {
+        package(name, true, []).with_categories(
+            categories
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     #[test]
     fn publish_plan_orders_dependencies_before_dependents() {
         let packages = BTreeMap::from([
@@ -1532,6 +1670,32 @@ mod tests {
 
         assert_eq!(plan.publish_disabled, ["private"]);
         assert_eq!(plan.publish_order, ["app"]);
+    }
+
+    #[test]
+    fn validate_package_categories_reports_all_unsupported_categories() {
+        let packages = BTreeMap::from([
+            (
+                "ok".to_string(),
+                package_with_categories("ok", ["development-tools"]),
+            ),
+            (
+                "bad".to_string(),
+                package_with_categories("bad", ["development-tools", "testing", "codec"]),
+            ),
+        ]);
+        let package_names = BTreeSet::from(["ok".to_string(), "bad".to_string()]);
+        let supported_categories = BTreeSet::from(["development-tools".to_string()]);
+
+        let error = validate_package_categories(&packages, &package_names, &supported_categories)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("bad@0.1.0"));
+        assert!(error.contains("testing, codec"));
+        assert!(error.contains("development-tools::testing"));
+        assert!(error.contains("encoding or multimedia"));
+        assert!(!error.contains("ok@0.1.0"));
     }
 
     #[test]

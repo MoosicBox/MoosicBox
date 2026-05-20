@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["development-tools", "testing"]
+categories  = ["development-tools", "development-tools::testing"]
 description = "MoosicBox HyperChad Test Utils package"
 edition     = { workspace = true }
 keywords    = ["automation", "hyperchad", "testing", "workflow"]

@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["codec", "testing"]
+categories  = ["development-tools::testing", "encoding"]
 description = "Test vectors for moosicbox_opus_native decoder validation"
 edition     = { workspace = true }
 keywords    = ["audio", "codec", "opus", "testing", "vectors"]

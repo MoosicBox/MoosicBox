@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["codec", "encoding", "multimedia"]
+categories  = ["encoding", "multimedia"]
 description = "Pure Rust Opus audio decoder implementation"
 edition     = { workspace = true }
 keywords    = ["audio", "codec", "decoder", "opus", "rust"]
