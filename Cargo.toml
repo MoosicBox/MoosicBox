@@ -465,7 +465,7 @@ kanal = "0.1.1"
 lambda_http = "1.2.0"
 lambda_runtime = "1.2.0"
 libvips = { version = "1.7.6" }
-local-ip-address = "0.6.12"
+local-ip-address = "0.6.13"
 log = { version = "0.4.29", features = ["release_max_level_trace"] }
 markdown = "1.0.0"
 maud = "0.27.0"
@@ -493,7 +493,7 @@ opentelemetry = { version = "0.31.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.31.1", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 opus = "0.3.1"
-os_info = { version = "3.14.0", default-features = false }
+os_info = { version = "3.15.0", default-features = false }
 paste = "1.0.15"
 pin-project = "1.1.13"
 pin-project-lite = "0.2.17"
