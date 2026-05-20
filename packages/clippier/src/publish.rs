@@ -15,6 +15,7 @@ use std::{
 };
 
 use cargo_metadata::{DependencyKind as CargoDependencyKind, MetadataCommand, PackageId};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{ColorMode, OutputType};
@@ -42,6 +43,8 @@ pub struct PublishConfig {
     pub publish_timeout: Duration,
     /// Delay between crates.io availability checks.
     pub publish_poll_interval: Duration,
+    /// Number of times to retry a package after crates.io rate limiting.
+    pub rate_limit_retries: u16,
 }
 
 impl Default for PublishConfig {
@@ -55,6 +58,7 @@ impl Default for PublishConfig {
             color: ColorMode::Auto,
             publish_timeout: Duration::from_mins(5),
             publish_poll_interval: Duration::from_secs(10),
+            rate_limit_retries: 3,
         }
     }
 }
@@ -836,6 +840,12 @@ enum PublishAttempt {
     Published,
 }
 
+#[derive(Debug, Clone)]
+struct RateLimit {
+    retry_at: Option<DateTime<Utc>>,
+    wait: Duration,
+}
+
 fn publish_package(
     workspace_root: &Path,
     packages: &BTreeMap<String, PublishPackageInfo>,
@@ -844,15 +854,60 @@ fn publish_package(
 ) -> Result<PublishAttempt, BoxError> {
     let sanitized = SanitizedPackage::prepare(workspace_root, packages, package)?;
 
+    let mut attempts = 0;
+    loop {
+        let output = run_streaming_command(build_publish_command(
+            sanitized.manifest_path(),
+            sanitized.root(),
+            sanitized.target_dir(),
+            config,
+        ))?;
+        if output.status.success() {
+            return Ok(PublishAttempt::Published);
+        }
+
+        if output.stderr.contains("already exists") {
+            return Ok(PublishAttempt::AlreadyPublished);
+        }
+
+        if let Some(rate_limit) = parse_rate_limit(&output.stderr)
+            && attempts < config.rate_limit_retries
+        {
+            attempts += 1;
+            log_rate_limit_wait(
+                config.color,
+                package,
+                &rate_limit,
+                attempts,
+                config.rate_limit_retries,
+            );
+            thread::sleep(rate_limit.wait);
+            continue;
+        }
+
+        return Err(format!(
+            "cargo publish failed for {}@{} with status {} (cargo output was streamed above)",
+            package.name, package.version, output.status
+        )
+        .into());
+    }
+}
+
+fn build_publish_command(
+    manifest_path: PathBuf,
+    root: &Path,
+    target_dir: PathBuf,
+    config: &PublishConfig,
+) -> Command {
     let mut command = Command::new("cargo");
     command
         .arg("publish")
         .arg("--manifest-path")
-        .arg(sanitized.manifest_path())
+        .arg(manifest_path)
         .arg("--color")
         .arg(cargo_color_arg(config.color))
-        .current_dir(sanitized.root())
-        .env("CARGO_TARGET_DIR", sanitized.target_dir());
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", target_dir);
 
     if !config.verify {
         command.arg("--no-verify");
@@ -861,20 +916,7 @@ fn publish_package(
         command.arg("--allow-dirty");
     }
 
-    let output = run_streaming_command(command)?;
-    if output.status.success() {
-        return Ok(PublishAttempt::Published);
-    }
-
-    if output.stderr.contains("already exists") {
-        return Ok(PublishAttempt::AlreadyPublished);
-    }
-
-    Err(format!(
-        "cargo publish failed for {}@{} with status {} (cargo output was streamed above)",
-        package.name, package.version, output.status
-    )
-    .into())
+    command
 }
 
 const fn cargo_color_arg(color: ColorMode) -> &'static str {
@@ -882,6 +924,74 @@ const fn cargo_color_arg(color: ColorMode) -> &'static str {
         ColorMode::Auto | ColorMode::Always => "always",
         ColorMode::Never => "never",
     }
+}
+
+fn log_rate_limit_wait(
+    color: ColorMode,
+    package: &PublishPackageInfo,
+    rate_limit: &RateLimit,
+    attempt: u16,
+    max_attempts: u16,
+) {
+    let wait = format_duration(rate_limit.wait);
+    let retry_at = rate_limit.retry_at.map_or_else(
+        || "unknown retry time".to_string(),
+        |retry_at| retry_at.to_rfc2822(),
+    );
+
+    eprintln!(
+        "{} {} {} {} ({attempt}/{max_attempts})",
+        paint(color, "33;1", "Rate limited"),
+        format_package_name(color, &package.name, &package.version),
+        paint(color, "33", &format!("waiting {wait}")),
+        paint(color, "90", &format!("until {retry_at}")),
+    );
+}
+
+#[must_use]
+fn format_duration(duration: Duration) -> String {
+    let seconds = duration.as_secs();
+    let minutes = seconds / 60;
+    let remaining_seconds = seconds % 60;
+
+    if minutes == 0 {
+        format!("{remaining_seconds}s")
+    } else {
+        format!("{minutes}m {remaining_seconds}s")
+    }
+}
+
+fn parse_rate_limit(stderr: &str) -> Option<RateLimit> {
+    if !stderr.contains("429 Too Many Requests") {
+        return None;
+    }
+
+    let retry_at = parse_retry_after(stderr);
+    let wait = retry_at.map_or(Duration::from_mins(1), |retry_at| {
+        retry_at
+            .signed_duration_since(Utc::now())
+            .to_std()
+            .unwrap_or(Duration::ZERO)
+            + Duration::from_secs(5)
+    });
+
+    Some(RateLimit { retry_at, wait })
+}
+
+fn parse_retry_after(stderr: &str) -> Option<DateTime<Utc>> {
+    let retry_text = stderr.split("try again after ").nth(1)?;
+    let date = retry_text
+        .split(" and see ")
+        .next()
+        .unwrap_or(retry_text)
+        .lines()
+        .next()?
+        .trim()
+        .trim_end_matches('.');
+
+    DateTime::parse_from_rfc2822(date)
+        .ok()
+        .map(|date| date.with_timezone(&Utc))
 }
 
 #[derive(Debug)]
@@ -1351,6 +1461,28 @@ mod tests {
 
         assert_eq!(plan.publish_disabled, ["private"]);
         assert_eq!(plan.publish_order, ["app"]);
+    }
+
+    #[test]
+    fn parse_rate_limit_uses_utc_retry_after_timestamp() {
+        let stderr = "error: failed\nCaused by:\n  the remote server responded with an error (status 429 Too Many Requests): You have published too many new crates in a short period of time. Please try again after Wed, 20 May 2026 03:27:27 GMT and see https://crates.io/docs/rate-limits for more details.";
+
+        let rate_limit = parse_rate_limit(stderr).unwrap();
+
+        assert_eq!(
+            rate_limit.retry_at.unwrap().to_rfc3339(),
+            "2026-05-20T03:27:27+00:00"
+        );
+    }
+
+    #[test]
+    fn parse_rate_limit_without_timestamp_uses_fallback_wait() {
+        let stderr = "status 429 Too Many Requests";
+
+        let rate_limit = parse_rate_limit(stderr).unwrap();
+
+        assert!(rate_limit.retry_at.is_none());
+        assert_eq!(rate_limit.wait, Duration::from_mins(1));
     }
 
     #[test]

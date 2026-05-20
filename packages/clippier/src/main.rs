@@ -457,6 +457,10 @@ enum Commands {
         #[arg(long, default_value_t = 10)]
         publish_poll_secs: u64,
 
+        /// Number of times to retry a package after crates.io rate limiting
+        #[arg(long, default_value_t = 3)]
+        rate_limit_retries: u16,
+
         /// Output format
         #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
         output: OutputType,
@@ -913,6 +917,7 @@ async fn run() -> Result<(), BoxError> {
             allow_dirty,
             publish_timeout_secs,
             publish_poll_secs,
+            rate_limit_retries,
             output,
             color,
         } => {
@@ -925,6 +930,7 @@ async fn run() -> Result<(), BoxError> {
                 color,
                 publish_timeout: std::time::Duration::from_secs(publish_timeout_secs),
                 publish_poll_interval: std::time::Duration::from_secs(publish_poll_secs),
+                rate_limit_retries,
             };
             handle_publish_command(config, output).await?
         }
