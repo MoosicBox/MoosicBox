@@ -6,9 +6,12 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
+    io::Write as _,
     path::{Path, PathBuf},
-    process::Command,
-    time::{Duration, Instant},
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use cargo_metadata::{DependencyKind as CargoDependencyKind, MetadataCommand, PackageId};
@@ -167,6 +170,8 @@ pub struct PublishPackageInfo {
     pub publishable: bool,
     /// Workspace dependencies that must exist before this package can be published.
     pub publish_dependencies: BTreeSet<String>,
+    /// Package directory containing `Cargo.toml`.
+    pub package_path: Option<PathBuf>,
 }
 
 impl PublishPackageInfo {
@@ -183,7 +188,14 @@ impl PublishPackageInfo {
             version: version.into(),
             publishable,
             publish_dependencies,
+            package_path: None,
         }
+    }
+
+    #[must_use]
+    fn with_package_path(mut self, package_path: PathBuf) -> Self {
+        self.package_path = Some(package_path);
+        self
     }
 }
 
@@ -343,21 +355,35 @@ fn visit_publish_package(
 /// * If a publishable package has an unpublished non-publishable workspace dependency
 /// * If crates.io cannot be queried
 /// * If `cargo publish` fails
+#[allow(clippy::too_many_lines)]
 pub async fn handle_publish_command(
     config: PublishConfig,
     output: OutputType,
 ) -> Result<String, BoxError> {
     let workspace_root = normalize_workspace_root(&config.workspace_root);
+    eprintln!(
+        "Loading workspace metadata from {}",
+        workspace_root.display()
+    );
     let packages = load_publish_packages(&workspace_root)?;
     let client = crates_io_client()?;
 
     let initial_plan = build_publish_plan(&packages, config.packages.as_deref())?;
+    eprintln!(
+        "Planned {} publishable package(s), {} publish-disabled package(s)",
+        initial_plan.publish_order.len(),
+        initial_plan.publish_disabled.len()
+    );
     let mut reports = Vec::new();
     let mut already_published = BTreeSet::new();
     let mut needs_publish = BTreeSet::new();
 
     for name in &initial_plan.publish_disabled {
         if let Some(package) = packages.get(name) {
+            eprintln!(
+                "Skipping {}@{} (publish disabled)",
+                package.name, package.version
+            );
             reports.push(PublishPackageReport::new(
                 &package.name,
                 &package.version,
@@ -371,7 +397,12 @@ pub async fn handle_publish_command(
             .get(name)
             .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
 
+        eprintln!("Checking {}@{} on crates.io", package.name, package.version);
         if crate_version_exists(&client, &package.name, &package.version).await? {
+            eprintln!(
+                "Skipping {}@{} (already published)",
+                package.name, package.version
+            );
             already_published.insert(name.clone());
             reports.push(PublishPackageReport::new(
                 &package.name,
@@ -395,6 +426,7 @@ pub async fn handle_publish_command(
             .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
 
         if config.dry_run {
+            eprintln!("Would publish {}@{}", package.name, package.version);
             reports.push(PublishPackageReport::new(
                 &package.name,
                 &package.version,
@@ -403,8 +435,13 @@ pub async fn handle_publish_command(
             continue;
         }
 
-        match publish_package(&workspace_root, package, &config)? {
+        eprintln!("Publishing {}@{}", package.name, package.version);
+        match publish_package(&workspace_root, &packages, package, &config)? {
             PublishAttempt::AlreadyPublished => {
+                eprintln!(
+                    "Skipping {}@{} (already published)",
+                    package.name, package.version
+                );
                 reports.push(PublishPackageReport::new(
                     &package.name,
                     &package.version,
@@ -421,6 +458,7 @@ pub async fn handle_publish_command(
                 )
                 .await?;
 
+                eprintln!("Published {}@{}", package.name, package.version);
                 reports.push(PublishPackageReport::new(
                     &package.name,
                     &package.version,
@@ -490,6 +528,11 @@ fn load_publish_packages(
             .as_ref()
             .is_none_or(|registries| registries.iter().any(|registry| registry == "crates-io"));
 
+        let manifest_path = package.manifest_path.clone().into_std_path_buf();
+        let package_path = manifest_path
+            .parent()
+            .map_or_else(|| workspace_root.to_path_buf(), Path::to_path_buf);
+
         packages.insert(
             package.name.to_string(),
             PublishPackageInfo::new(
@@ -497,7 +540,8 @@ fn load_publish_packages(
                 package.version.to_string(),
                 publishable,
                 publish_dependencies,
-            ),
+            )
+            .with_package_path(package_path),
         );
     }
 
@@ -603,15 +647,18 @@ enum PublishAttempt {
 
 fn publish_package(
     workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
     package: &PublishPackageInfo,
     config: &PublishConfig,
 ) -> Result<PublishAttempt, BoxError> {
+    let sanitized = SanitizedPackage::prepare(workspace_root, packages, package)?;
+
     let mut command = Command::new("cargo");
     command
         .arg("publish")
-        .arg("-p")
-        .arg(&package.name)
-        .current_dir(workspace_root);
+        .arg("--manifest-path")
+        .arg(sanitized.manifest_path())
+        .current_dir(sanitized.path());
 
     if !config.verify {
         command.arg("--no-verify");
@@ -620,23 +667,356 @@ fn publish_package(
         command.arg("--allow-dirty");
     }
 
-    let output = command.output()?;
+    let output = run_streaming_command(command)?;
     if output.status.success() {
         return Ok(PublishAttempt::Published);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if stderr.contains("already exists") {
+    if output.stderr.contains("already exists") {
         return Ok(PublishAttempt::AlreadyPublished);
     }
 
     Err(format!(
-        "cargo publish failed for {}@{}\nstdout:\n{}\nstderr:\n{}",
-        package.name, package.version, stdout, stderr
+        "cargo publish failed for {}@{} with status {} (cargo output was streamed above)",
+        package.name, package.version, output.status
     )
     .into())
+}
+
+#[derive(Debug)]
+struct CommandOutput {
+    status: std::process::ExitStatus,
+    stderr: String,
+}
+
+fn run_streaming_command(mut command: Command) -> Result<CommandOutput, BoxError> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn()?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("Failed to capture cargo publish stdout")?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or("Failed to capture cargo publish stderr")?;
+
+    let stdout_handle = thread::spawn(move || stream_output(stdout, false));
+    let stderr_handle = thread::spawn(move || stream_output(stderr, true));
+
+    let status = child.wait()?;
+    stdout_handle
+        .join()
+        .map_err(|_| "Failed to join stdout streaming thread")??;
+    let stderr = stderr_handle
+        .join()
+        .map_err(|_| "Failed to join stderr streaming thread")??;
+
+    Ok(CommandOutput { status, stderr })
+}
+
+fn stream_output(mut reader: impl std::io::Read, stderr: bool) -> Result<String, std::io::Error> {
+    let mut bytes = Vec::new();
+    let mut buffer = [0; 8192];
+
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..read]);
+        if stderr {
+            std::io::stderr().write_all(&buffer[..read])?;
+            std::io::stderr().flush()?;
+        } else {
+            std::io::stdout().write_all(&buffer[..read])?;
+            std::io::stdout().flush()?;
+        }
+    }
+
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+#[derive(Debug)]
+struct SanitizedPackage {
+    path: PathBuf,
+}
+
+impl SanitizedPackage {
+    fn prepare(
+        workspace_root: &Path,
+        packages: &BTreeMap<String, PublishPackageInfo>,
+        package: &PublishPackageInfo,
+    ) -> Result<Self, BoxError> {
+        let package_path = package
+            .package_path
+            .as_ref()
+            .ok_or_else(|| format!("Missing package path for {}", package.name))?;
+        let path = std::env::temp_dir().join(format!(
+            "clippier-publish-{}-{}-{}",
+            package.name,
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        ));
+
+        copy_dir(package_path, &path)?;
+        sanitize_manifest(workspace_root, packages, &path.join("Cargo.toml"))?;
+
+        Ok(Self { path })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn manifest_path(&self) -> PathBuf {
+        self.path.join("Cargo.toml")
+    }
+}
+
+impl Drop for SanitizedPackage {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir_all(&self.path) {
+            log::warn!(
+                "Failed to remove sanitized publish directory {}: {error}",
+                self.path.display()
+            );
+        }
+    }
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<(), BoxError> {
+    fs::create_dir_all(to)?;
+
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let source = entry.path();
+        let destination = to.join(entry.file_name());
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            copy_dir(&source, &destination)?;
+        } else if file_type.is_file() {
+            fs::copy(&source, &destination)?;
+        } else if file_type.is_symlink() {
+            let target = fs::read_link(&source)?;
+            create_symlink(&target, &destination)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn create_symlink(target: &Path, destination: &Path) -> Result<(), BoxError> {
+    std::os::unix::fs::symlink(target, destination)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn create_symlink(target: &Path, destination: &Path) -> Result<(), BoxError> {
+    if target.is_dir() {
+        std::os::windows::fs::symlink_dir(target, destination)?;
+    } else {
+        std::os::windows::fs::symlink_file(target, destination)?;
+    }
+    Ok(())
+}
+
+fn sanitize_manifest(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    manifest_path: &Path,
+) -> Result<(), BoxError> {
+    let workspace_toml = read_toml(&workspace_root.join("Cargo.toml"))?;
+    let mut manifest = read_toml(manifest_path)?;
+    let package_versions = packages
+        .iter()
+        .map(|(name, package)| (name.clone(), package.version.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    resolve_workspace_package_fields(&mut manifest, &workspace_toml)?;
+    sanitize_dependency_sections(&mut manifest, &workspace_toml, &package_versions)?;
+    if let Some(table) = manifest.as_table_mut() {
+        table.remove("workspace");
+    }
+
+    fs::write(manifest_path, toml::to_string_pretty(&manifest)?)?;
+    Ok(())
+}
+
+fn read_toml(path: &Path) -> Result<toml::Value, BoxError> {
+    Ok(toml::from_str(&fs::read_to_string(path)?)?)
+}
+
+fn resolve_workspace_package_fields(
+    manifest: &mut toml::Value,
+    workspace_toml: &toml::Value,
+) -> Result<(), BoxError> {
+    let Some(package_table) = manifest
+        .get_mut("package")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+    let workspace_package = workspace_toml
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(toml::Value::as_table);
+
+    let keys = package_table.keys().cloned().collect::<Vec<_>>();
+    for key in keys {
+        if !is_workspace_inherited(package_table.get(&key)) {
+            continue;
+        }
+
+        let value = workspace_package
+            .and_then(|workspace_package| workspace_package.get(&key))
+            .ok_or_else(|| format!("Missing workspace.package.{key}"))?
+            .clone();
+        package_table.insert(key, value);
+    }
+
+    Ok(())
+}
+
+fn sanitize_dependency_sections(
+    manifest: &mut toml::Value,
+    workspace_toml: &toml::Value,
+    package_versions: &BTreeMap<String, String>,
+) -> Result<(), BoxError> {
+    sanitize_dependency_table(manifest, "dependencies", workspace_toml, package_versions)?;
+    sanitize_dependency_table(
+        manifest,
+        "build-dependencies",
+        workspace_toml,
+        package_versions,
+    )?;
+    remove_table_key(manifest, "dev-dependencies");
+
+    if let Some(targets) = manifest
+        .get_mut("target")
+        .and_then(toml::Value::as_table_mut)
+    {
+        for (_target_name, target) in targets.iter_mut() {
+            sanitize_dependency_table(target, "dependencies", workspace_toml, package_versions)?;
+            sanitize_dependency_table(
+                target,
+                "build-dependencies",
+                workspace_toml,
+                package_versions,
+            )?;
+            remove_table_key(target, "dev-dependencies");
+        }
+    }
+
+    Ok(())
+}
+
+fn sanitize_dependency_table(
+    manifest: &mut toml::Value,
+    section: &str,
+    workspace_toml: &toml::Value,
+    package_versions: &BTreeMap<String, String>,
+) -> Result<(), BoxError> {
+    let Some(dependencies) = manifest
+        .get_mut(section)
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+
+    let keys = dependencies.keys().cloned().collect::<Vec<_>>();
+    for key in keys {
+        let Some(value) = dependencies.get_mut(&key) else {
+            continue;
+        };
+
+        if is_workspace_inherited(Some(value)) {
+            *value = resolve_workspace_dependency(&key, value, workspace_toml)?;
+        }
+
+        strip_workspace_path_dependency(&key, value, package_versions);
+    }
+
+    Ok(())
+}
+
+fn resolve_workspace_dependency(
+    key: &str,
+    value: &toml::Value,
+    workspace_toml: &toml::Value,
+) -> Result<toml::Value, BoxError> {
+    let workspace_dependencies = workspace_toml
+        .get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml::Value::as_table)
+        .ok_or("Missing workspace.dependencies")?;
+    let workspace_dependency = workspace_dependencies
+        .get(key)
+        .ok_or_else(|| format!("Missing workspace dependency '{key}'"))?;
+
+    let Some(local_table) = value.as_table() else {
+        return Ok(workspace_dependency.clone());
+    };
+
+    let mut resolved = match workspace_dependency {
+        toml::Value::Table(table) => table.clone(),
+        toml::Value::String(version) => {
+            let mut table = toml::map::Map::new();
+            table.insert("version".to_string(), toml::Value::String(version.clone()));
+            table
+        }
+        other => return Ok(other.clone()),
+    };
+
+    for (local_key, local_value) in local_table {
+        if local_key != "workspace" {
+            resolved.insert(local_key.clone(), local_value.clone());
+        }
+    }
+
+    Ok(toml::Value::Table(resolved))
+}
+
+fn strip_workspace_path_dependency(
+    key: &str,
+    value: &mut toml::Value,
+    package_versions: &BTreeMap<String, String>,
+) {
+    let toml::Value::Table(table) = value else {
+        return;
+    };
+
+    let package_name = table
+        .get("package")
+        .and_then(toml::Value::as_str)
+        .unwrap_or(key);
+
+    let Some(version) = package_versions.get(package_name) else {
+        return;
+    };
+
+    table.remove("path");
+    table.remove("workspace");
+    table
+        .entry("version".to_string())
+        .or_insert_with(|| toml::Value::String(version.clone()));
+}
+
+fn remove_table_key(value: &mut toml::Value, key: &str) {
+    if let Some(table) = value.as_table_mut() {
+        table.remove(key);
+    }
+}
+
+fn is_workspace_inherited(value: Option<&toml::Value>) -> bool {
+    value
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("workspace"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false)
 }
 
 async fn wait_for_crate_version(
@@ -745,5 +1125,94 @@ mod tests {
 
         assert_eq!(plan.publish_disabled, ["private"]);
         assert_eq!(plan.publish_order, ["app"]);
+    }
+
+    #[test]
+    fn sanitize_manifest_strips_dev_dependencies_and_resolves_workspace_values() {
+        let root = std::env::temp_dir().join(format!(
+            "clippier-publish-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let package_dir = root.join("packages/app");
+        fs::create_dir_all(&package_dir).unwrap();
+
+        fs::write(
+            root.join("Cargo.toml"),
+            r#"
+                [workspace]
+                members = ["packages/app", "packages/models", "packages/test-utils"]
+
+                [workspace.package]
+                edition = "2024"
+                license = "MPL-2.0"
+                repository = "https://example.com/repo"
+                version = "1.2.3"
+
+                [workspace.dependencies]
+                models = { version = "1.2.3", path = "packages/models", default-features = false }
+                test-utils = { version = "1.2.3", path = "packages/test-utils" }
+                serde = "1.0.228"
+            "#,
+        )
+        .unwrap();
+
+        fs::write(
+            package_dir.join("Cargo.toml"),
+            r#"
+                [package]
+                edition = { workspace = true }
+                license = { workspace = true }
+                name = "app"
+                repository = { workspace = true }
+                version = { workspace = true }
+
+                [dependencies]
+                models = { workspace = true, features = ["api"] }
+                serde = { workspace = true, features = ["derive"] }
+
+                [dev-dependencies]
+                test-utils = { workspace = true }
+
+                [target.'cfg(unix)'.dev-dependencies]
+                test-utils = { workspace = true }
+            "#,
+        )
+        .unwrap();
+
+        let packages = BTreeMap::from([
+            ("app".to_string(), package("app", true, ["models"])),
+            ("models".to_string(), package("models", true, [])),
+            ("test-utils".to_string(), package("test-utils", true, [])),
+        ]);
+
+        sanitize_manifest(&root, &packages, &package_dir.join("Cargo.toml")).unwrap();
+        let sanitized = fs::read_to_string(package_dir.join("Cargo.toml")).unwrap();
+        let sanitized_toml: toml::Value = toml::from_str(&sanitized).unwrap();
+        let package = sanitized_toml.get("package").unwrap();
+        let dependencies = sanitized_toml.get("dependencies").unwrap();
+        let models = dependencies.get("models").unwrap();
+        let serde = dependencies.get("serde").unwrap();
+
+        assert_eq!(package.get("edition").unwrap().as_str(), Some("2024"));
+        assert_eq!(package.get("version").unwrap().as_str(), Some("1.2.3"));
+        assert!(sanitized_toml.get("dev-dependencies").is_none());
+        assert!(
+            sanitized_toml
+                .get("target")
+                .unwrap()
+                .get("cfg(unix)")
+                .unwrap()
+                .get("dev-dependencies")
+                .is_none()
+        );
+        assert!(models.get("path").is_none());
+        assert_eq!(models.get("version").unwrap().as_str(), Some("1.2.3"));
+        assert_eq!(serde.get("version").unwrap().as_str(), Some("1.0.228"));
+
+        fs::remove_dir_all(root).unwrap();
     }
 }

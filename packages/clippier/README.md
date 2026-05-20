@@ -484,7 +484,7 @@ clippier publish --package moosicbox_audio_output
 clippier publish /path/to/workspace
 ```
 
-`clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It defaults to `cargo publish -p <package> --no-verify`; pass `--verify` to run Cargo's local verification step.
+`clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized manifest with workspace dev-dependencies removed and workspace dependency inheritance resolved. It defaults to `cargo publish --no-verify`; pass `--verify` to run Cargo's local verification step.
 
 ### Workspace Dependencies
 

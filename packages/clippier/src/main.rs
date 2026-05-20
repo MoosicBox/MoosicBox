@@ -599,9 +599,16 @@ enum Commands {
     },
 }
 
-#[allow(clippy::too_many_lines)]
 #[switchy_async::main]
-async fn main() -> Result<(), BoxError> {
+async fn main() {
+    if let Err(error) = run().await {
+        eprintln!("Error: {error}");
+        std::process::exit(1);
+    }
+}
+
+#[allow(clippy::too_many_lines, clippy::future_not_send)]
+async fn run() -> Result<(), BoxError> {
     let paths =
         moosicbox_log_runtime::resolve_paths(&moosicbox_log_runtime::LogRuntimePathsConfig {
             app_name: "moosicbox",
