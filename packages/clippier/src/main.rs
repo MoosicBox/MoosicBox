@@ -14,12 +14,14 @@ use clap::{Parser, Subcommand};
 #[cfg(any(feature = "check", feature = "format"))]
 use clippier::ColorMode;
 use clippier::{
-    OutputType, PublishConfig, handle_affected_packages_command, handle_ci_steps_command,
+    OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
-    handle_generate_dockerfile_command, handle_packages_command, handle_publish_command,
+    handle_generate_dockerfile_command, handle_packages_command,
     handle_validate_feature_propagation_command, handle_workspace_deps_command,
     handle_workspace_toolchains_command, print_human_output,
 };
+#[cfg(feature = "publish")]
+use clippier::{PublishConfig, handle_publish_command};
 
 #[cfg(feature = "check")]
 use clippier::handle_check_command;
@@ -425,6 +427,7 @@ enum Commands {
         output: OutputType,
     },
     /// Publish Cargo workspace crates to crates.io in dependency order
+    #[cfg(feature = "publish")]
     Publish {
         /// Path to workspace root or Cargo.toml. Defaults to current directory.
         #[arg(index = 1, default_value = ".")]
@@ -890,6 +893,7 @@ async fn main() -> Result<(), BoxError> {
             )
             .await?
         }
+        #[cfg(feature = "publish")]
         Commands::Publish {
             workspace_root,
             packages,

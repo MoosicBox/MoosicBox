@@ -74,6 +74,7 @@ Clippier supports optional features:
 - **`check`** (default): Enable the `check` command for running linters
 - **`format`** (default): Enable the `fmt` command for running formatters
 - **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
+- **`publish`** (default): Enable the `publish` command for Cargo workspace crate publishing
 - **`transforms-vendored`** (default): Enable Lua transform scripts with vendored Lua runtime
 - **`transforms-system`**: Enable Lua transform scripts using system Lua installation
 - **`fail-on-warnings`**: Fail build on warnings

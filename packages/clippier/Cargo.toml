@@ -34,10 +34,8 @@ moosicbox_log_runtime = { workspace = true, features = [
 ] }
 switchy_async = { workspace = true, features = [
     "macros",
-    "net",
     "process",
     "sync",
-    "time",
     "tokio",
 ] }
 switchy_fs = { workspace = true, features = [
@@ -51,7 +49,7 @@ switchy_random = { workspace = true, features = ["rand"] }
 
 anyhow         = { workspace = true }
 async-trait    = { workspace = true }
-cargo_metadata = { workspace = true }
+cargo_metadata = { workspace = true, optional = true }
 chrono         = { workspace = true }
 clap           = { workspace = true }
 ctrlc          = { workspace = true, optional = true }
@@ -61,7 +59,7 @@ log            = { workspace = true }
 ratatui        = { workspace = true, optional = true }
 rayon          = { workspace = true, optional = true }
 regex          = { workspace = true }
-reqwest        = { workspace = true }
+reqwest        = { workspace = true, optional = true }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
 serde_yaml     = { workspace = true, optional = true }
@@ -84,6 +82,7 @@ default = [
     "format",
     "git-diff",
     "node-workspace",
+    "publish",
     "tools-tui",
     "transforms-vendored",
 ]
@@ -96,9 +95,15 @@ fail-on-warnings = [
 ]
 
 # Workspace type support
-_workspace      = []
+_workspace = []
 cargo-workspace = ["_workspace"]
-node-workspace  = ["_workspace", "dep:serde_yaml"]
+node-workspace = ["_workspace", "dep:serde_yaml"]
+publish = [
+    "dep:cargo_metadata",
+    "dep:reqwest",
+    "switchy_async/net",
+    "switchy_async/time",
+]
 
 _tools              = ["dep:rayon", "dep:which"]
 _transforms         = []

@@ -57,6 +57,7 @@
 pub mod package_filter;
 
 /// Cargo workspace publishing support.
+#[cfg(feature = "publish")]
 pub mod publish;
 
 /// Tool detection and execution infrastructure for linting and formatting.
@@ -182,6 +183,7 @@ pub use test_utils::*;
 pub use feature_validator::{
     FeatureValidator, ValidationResult, ValidatorConfig, print_github_output, print_human_output,
 };
+#[cfg(feature = "publish")]
 pub use publish::{PublishConfig, handle_publish_command};
 
 /// Output format for CLI commands
