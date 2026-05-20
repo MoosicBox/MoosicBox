@@ -14,9 +14,9 @@ use clap::{Parser, Subcommand};
 #[cfg(any(feature = "check", feature = "format"))]
 use clippier::ColorMode;
 use clippier::{
-    OutputType, handle_affected_packages_command, handle_ci_steps_command,
+    OutputType, PublishConfig, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
-    handle_generate_dockerfile_command, handle_packages_command,
+    handle_generate_dockerfile_command, handle_packages_command, handle_publish_command,
     handle_validate_feature_propagation_command, handle_workspace_deps_command,
     handle_workspace_toolchains_command, print_human_output,
 };
@@ -422,6 +422,40 @@ enum Commands {
         workspace_type: Option<Vec<clippier::workspace::WorkspaceType>>,
 
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
+        output: OutputType,
+    },
+    /// Publish Cargo workspace crates to crates.io in dependency order
+    Publish {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Only publish the selected package(s), plus their normal/build workspace dependencies
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Print the publish plan without running `cargo publish`
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Run Cargo's local package verification before upload
+        #[arg(long)]
+        verify: bool,
+
+        /// Pass `--allow-dirty` to `cargo publish`
+        #[arg(long)]
+        allow_dirty: bool,
+
+        /// Seconds to wait for each newly-published crate to appear on crates.io
+        #[arg(long, default_value_t = 300)]
+        publish_timeout_secs: u64,
+
+        /// Seconds between crates.io availability checks
+        #[arg(long, default_value_t = 10)]
+        publish_poll_secs: u64,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
         output: OutputType,
     },
     /// Aggregate toolchains and dependencies from all workspace packages for CI setup
@@ -855,6 +889,27 @@ async fn main() -> Result<(), BoxError> {
                 output,
             )
             .await?
+        }
+        Commands::Publish {
+            workspace_root,
+            packages,
+            dry_run,
+            verify,
+            allow_dirty,
+            publish_timeout_secs,
+            publish_poll_secs,
+            output,
+        } => {
+            let config = PublishConfig {
+                workspace_root,
+                packages,
+                dry_run,
+                verify,
+                allow_dirty,
+                publish_timeout: std::time::Duration::from_secs(publish_timeout_secs),
+                publish_poll_interval: std::time::Duration::from_secs(publish_poll_secs),
+            };
+            handle_publish_command(config, output).await?
         }
         Commands::WorkspaceToolchains {
             workspace_root,

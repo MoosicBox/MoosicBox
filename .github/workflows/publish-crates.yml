@@ -25,10 +25,6 @@ jobs:
             - name: Install Dependencies
               run: ${{ steps.get-deps.outputs.deps }}
 
-            - name: Install cargo-workspaces
-              shell: bash
-              run: cargo install cargo-workspaces
-
             - name: Publish
               shell: bash
               env:
@@ -36,4 +32,4 @@ jobs:
                   TUNNEL_ACCESS_TOKEN: 123
                   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
               run: |
-                  cargo workspaces publish --publish-as-is
+                  cargo run -p clippier -- publish

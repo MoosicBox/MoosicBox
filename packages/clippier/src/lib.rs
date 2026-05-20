@@ -56,6 +56,9 @@
 /// and Unicode support.
 pub mod package_filter;
 
+/// Cargo workspace publishing support.
+pub mod publish;
+
 /// Tool detection and execution infrastructure for linting and formatting.
 ///
 /// This module provides the common infrastructure for detecting installed tools,
@@ -179,6 +182,7 @@ pub use test_utils::*;
 pub use feature_validator::{
     FeatureValidator, ValidationResult, ValidatorConfig, print_github_output, print_human_output,
 };
+pub use publish::{PublishConfig, handle_publish_command};
 
 /// Output format for CLI commands
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

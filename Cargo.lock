@@ -3012,6 +3012,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cargo_metadata 0.23.1",
  "chrono",
  "clap",
  "clippier_test_utilities",
@@ -3026,6 +3027,7 @@ dependencies = [
  "ratatui",
  "rayon",
  "regex",
+ "reqwest 0.13.3",
  "serde",
  "serde_json",
  "serde_yaml",

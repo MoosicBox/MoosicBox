@@ -465,6 +465,26 @@ The packages command provides:
 - **Monorepo management**: List subsets of packages for targeted operations
 - **Documentation**: Generate package inventories for workspace documentation
 
+### Publish Cargo Workspace Crates
+
+Publish all crates in a Cargo workspace, skipping versions that already exist on crates.io and ordering unpublished crates by normal/build workspace dependencies:
+
+```bash
+# Publish from the current directory
+clippier publish
+
+# Preview what would be published
+clippier publish --dry-run
+
+# Publish one package plus its normal/build workspace dependencies
+clippier publish --package moosicbox_audio_output
+
+# Use an explicit workspace path
+clippier publish /path/to/workspace
+```
+
+`clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It defaults to `cargo publish -p <package> --no-verify`; pass `--verify` to run Cargo's local verification step.
+
 ### Workspace Dependencies
 
 Find all workspace dependencies for a package:

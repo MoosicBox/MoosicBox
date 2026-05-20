@@ -613,9 +613,7 @@ tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.116"
-turso = { version = "0.6.0", default-features = false, features = [
-    "mimalloc",
-] }
+turso = { version = "0.6.0", default-features = false, features = ["mimalloc"] }
 uaparser = "0.6.4"
 url = "2.5.8"
 urlencoding = "2.1.3"
