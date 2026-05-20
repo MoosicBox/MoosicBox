@@ -17,7 +17,7 @@ use std::{
 use cargo_metadata::{DependencyKind as CargoDependencyKind, MetadataCommand, PackageId};
 use serde::{Deserialize, Serialize};
 
-use crate::OutputType;
+use crate::{ColorMode, OutputType};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -36,6 +36,8 @@ pub struct PublishConfig {
     pub verify: bool,
     /// Pass `--allow-dirty` to `cargo publish`.
     pub allow_dirty: bool,
+    /// Color mode for cargo publish output.
+    pub color: ColorMode,
     /// Maximum time to wait for each newly published crate version to appear on crates.io.
     pub publish_timeout: Duration,
     /// Delay between crates.io availability checks.
@@ -50,6 +52,7 @@ impl Default for PublishConfig {
             dry_run: false,
             verify: false,
             allow_dirty: false,
+            color: ColorMode::Auto,
             publish_timeout: Duration::from_mins(5),
             publish_poll_interval: Duration::from_secs(10),
         }
@@ -658,6 +661,8 @@ fn publish_package(
         .arg("publish")
         .arg("--manifest-path")
         .arg(sanitized.manifest_path())
+        .arg("--color")
+        .arg(cargo_color_arg(config.color))
         .current_dir(sanitized.root())
         .env("CARGO_TARGET_DIR", sanitized.target_dir());
 
@@ -682,6 +687,13 @@ fn publish_package(
         package.name, package.version, output.status
     )
     .into())
+}
+
+const fn cargo_color_arg(color: ColorMode) -> &'static str {
+    match color {
+        ColorMode::Auto | ColorMode::Always => "always",
+        ColorMode::Never => "never",
+    }
 }
 
 #[derive(Debug)]

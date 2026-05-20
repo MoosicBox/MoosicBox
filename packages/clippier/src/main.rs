@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-#[cfg(any(feature = "check", feature = "format"))]
+#[cfg(any(feature = "check", feature = "format", feature = "publish"))]
 use clippier::ColorMode;
 use clippier::{
     OutputType, handle_affected_packages_command, handle_ci_steps_command,
@@ -460,6 +460,10 @@ enum Commands {
         /// Output format
         #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
         output: OutputType,
+
+        /// Color mode for cargo publish output
+        #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
+        color: ColorMode,
     },
     /// Aggregate toolchains and dependencies from all workspace packages for CI setup
     WorkspaceToolchains {
@@ -910,6 +914,7 @@ async fn run() -> Result<(), BoxError> {
             publish_timeout_secs,
             publish_poll_secs,
             output,
+            color,
         } => {
             let config = PublishConfig {
                 workspace_root,
@@ -917,6 +922,7 @@ async fn run() -> Result<(), BoxError> {
                 dry_run,
                 verify,
                 allow_dirty,
+                color,
                 publish_timeout: std::time::Duration::from_secs(publish_timeout_secs),
                 publish_poll_interval: std::time::Duration::from_secs(publish_poll_secs),
             };
