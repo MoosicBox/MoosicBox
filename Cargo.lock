@@ -2328,7 +2328,8 @@ dependencies = [
 [[package]]
 name = "bmux_codec"
 version = "0.0.1-alpha.0"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#927859aeb89631512b9409d28f995d1f093db905"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aad33f186aa2c830494000c371cc2e70b0c070afe08c43ee5fb394fa8bc0f7f"
 dependencies = [
  "serde",
 ]
