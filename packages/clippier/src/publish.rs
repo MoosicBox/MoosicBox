@@ -658,7 +658,8 @@ fn publish_package(
         .arg("publish")
         .arg("--manifest-path")
         .arg(sanitized.manifest_path())
-        .current_dir(sanitized.path());
+        .current_dir(sanitized.root())
+        .env("CARGO_TARGET_DIR", sanitized.target_dir());
 
     if !config.verify {
         command.arg("--no-verify");
@@ -740,7 +741,8 @@ fn stream_output(mut reader: impl std::io::Read, stderr: bool) -> Result<String,
 
 #[derive(Debug)]
 struct SanitizedPackage {
-    path: PathBuf,
+    root: PathBuf,
+    package_path: PathBuf,
 }
 
 impl SanitizedPackage {
@@ -753,34 +755,58 @@ impl SanitizedPackage {
             .package_path
             .as_ref()
             .ok_or_else(|| format!("Missing package path for {}", package.name))?;
-        let path = std::env::temp_dir().join(format!(
-            "clippier-publish-{}-{}-{}",
+        let workspace_root = fs::canonicalize(workspace_root)?;
+        let package_path = fs::canonicalize(package_path)?;
+        let relative_package_path = package_path.strip_prefix(&workspace_root).map_err(|_| {
+            format!(
+                "Package path {} is not inside workspace root {}",
+                package_path.display(),
+                workspace_root.display()
+            )
+        })?;
+        let root = std::env::temp_dir().join(format!(
+            "clippier-publish-root-{}-{}-{}",
             package.name,
             std::process::id(),
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
+        let sanitized_package_path = root.join(relative_package_path);
 
-        copy_dir(package_path, &path)?;
-        sanitize_manifest(workspace_root, packages, &path.join("Cargo.toml"))?;
+        if workspace_root.join(".cargo").exists() {
+            copy_dir(&workspace_root.join(".cargo"), &root.join(".cargo"))?;
+        }
+        copy_dir(&package_path, &sanitized_package_path)?;
+        sanitize_manifest(
+            &workspace_root,
+            packages,
+            &sanitized_package_path.join("Cargo.toml"),
+        )?;
 
-        Ok(Self { path })
+        Ok(Self {
+            root,
+            package_path: sanitized_package_path,
+        })
     }
 
-    fn path(&self) -> &Path {
-        &self.path
+    fn root(&self) -> &Path {
+        &self.root
     }
 
     fn manifest_path(&self) -> PathBuf {
-        self.path.join("Cargo.toml")
+        self.package_path.join("Cargo.toml")
+    }
+
+    fn target_dir(&self) -> PathBuf {
+        self.root.join("target")
     }
 }
 
 impl Drop for SanitizedPackage {
     fn drop(&mut self) {
-        if let Err(error) = fs::remove_dir_all(&self.path) {
+        if let Err(error) = fs::remove_dir_all(&self.root) {
             log::warn!(
                 "Failed to remove sanitized publish directory {}: {error}",
-                self.path.display()
+                self.root.display()
             );
         }
     }
