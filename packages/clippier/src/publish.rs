@@ -1222,6 +1222,8 @@ fn sanitize_dependency_sections(
     workspace_toml: &toml::Value,
     package_versions: &BTreeMap<String, String>,
 ) -> Result<(), BoxError> {
+    let removed_dev_dependencies = collect_dev_dependency_keys(manifest);
+
     sanitize_dependency_table(manifest, "dependencies", workspace_toml, package_versions)?;
     sanitize_dependency_table(
         manifest,
@@ -1246,6 +1248,8 @@ fn sanitize_dependency_sections(
             remove_table_key(target, "dev-dependencies");
         }
     }
+
+    sanitize_features(manifest, &removed_dev_dependencies);
 
     Ok(())
 }
@@ -1339,6 +1343,73 @@ fn strip_workspace_path_dependency(
     table
         .entry("version".to_string())
         .or_insert_with(|| toml::Value::String(version.clone()));
+}
+
+fn collect_dev_dependency_keys(manifest: &toml::Value) -> BTreeSet<String> {
+    let mut dependencies = dependency_table_keys(manifest, "dev-dependencies");
+
+    if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+        for target in targets.values() {
+            dependencies.extend(dependency_table_keys(target, "dev-dependencies"));
+        }
+    }
+
+    dependencies
+}
+
+fn dependency_table_keys(value: &toml::Value, key: &str) -> BTreeSet<String> {
+    value
+        .get(key)
+        .and_then(toml::Value::as_table)
+        .map(|table| table.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn sanitize_features(manifest: &mut toml::Value, removed_dev_dependencies: &BTreeSet<String>) {
+    if removed_dev_dependencies.is_empty() {
+        return;
+    }
+
+    let Some(features) = manifest
+        .get_mut("features")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+
+    let feature_names = features.keys().cloned().collect::<BTreeSet<_>>();
+
+    for (_feature_name, feature_values) in features.iter_mut() {
+        let Some(feature_values) = feature_values.as_array_mut() else {
+            continue;
+        };
+
+        feature_values.retain(|feature_value| {
+            feature_value.as_str().is_none_or(|feature| {
+                !removed_dev_dependencies.iter().any(|dependency| {
+                    feature_references_removed_dependency(feature, dependency, &feature_names)
+                })
+            })
+        });
+    }
+}
+
+fn feature_references_removed_dependency(
+    feature: &str,
+    dependency: &str,
+    feature_names: &BTreeSet<String>,
+) -> bool {
+    if feature == format!("dep:{dependency}") {
+        return true;
+    }
+
+    if feature == dependency {
+        return !feature_names.contains(feature);
+    }
+
+    feature
+        .strip_prefix(dependency)
+        .is_some_and(|suffix| suffix.starts_with('/') || suffix.starts_with("?/"))
 }
 
 fn remove_table_key(value: &mut toml::Value, key: &str) {
@@ -1572,5 +1643,55 @@ mod tests {
         assert_eq!(serde.get("version").unwrap().as_str(), Some("1.0.228"));
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sanitize_features_prunes_removed_dev_dependency_references() {
+        let mut manifest = toml::from_str(
+            r#"
+                [dev-dependencies]
+                test-utils = { path = "../test-utils" }
+
+                [target.'cfg(unix)'.dev-dependencies]
+                target-test-utils = { path = "../target-test-utils" }
+
+                [features]
+                default = ["decimal", "test-utils"]
+                decimal = [
+                    "models/api",
+                    "test-utils/decimal",
+                    "test-utils?/uuid",
+                    "dep:test-utils",
+                    "serde/derive",
+                ]
+                target-only = ["target-test-utils/helpers"]
+                test-utils = []
+            "#,
+        )
+        .unwrap();
+
+        let removed_dev_dependencies = collect_dev_dependency_keys(&manifest);
+        sanitize_features(&mut manifest, &removed_dev_dependencies);
+
+        let features = manifest.get("features").unwrap();
+        let decimal = feature_values(features, "decimal");
+        let target_only = feature_values(features, "target-only");
+        let default = feature_values(features, "default");
+
+        assert_eq!(decimal, ["models/api", "serde/derive"]);
+        assert!(target_only.is_empty());
+        assert_eq!(default, ["decimal", "test-utils"]);
+    }
+
+    fn feature_values<'a>(features: &'a toml::Value, name: &str) -> Vec<&'a str> {
+        features
+            .get(name)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(toml::Value::as_str)
+            .collect::<Option<Vec<_>>>()
+            .unwrap()
     }
 }
