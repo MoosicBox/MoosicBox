@@ -121,45 +121,96 @@ impl PublishReport {
     }
 
     #[must_use]
-    fn to_raw_string(&self) -> String {
+    fn to_raw_string(&self, color: ColorMode) -> String {
         let mut lines = Vec::new();
 
         if self.packages.is_empty() {
             lines.push("No workspace packages matched the publish request".to_string());
         } else {
-            lines.push("Publish results:".to_string());
+            lines.push(paint(color, "1", "Publish results:"));
             for package in &self.packages {
-                let label = match package.status {
-                    PublishPackageStatus::PublishDisabled => "skip publish=false",
-                    PublishPackageStatus::AlreadyPublished => "skip already published",
-                    PublishPackageStatus::DryRun => "dry-run publish",
-                    PublishPackageStatus::Published => "published",
+                let (code, label) = match package.status {
+                    PublishPackageStatus::PublishDisabled => ("90", "skip publish=false"),
+                    PublishPackageStatus::AlreadyPublished => ("33", "skip already published"),
+                    PublishPackageStatus::DryRun => ("35", "dry-run publish"),
+                    PublishPackageStatus::Published => ("32", "published"),
                 };
-                lines.push(format!("  {label}: {}@{}", package.name, package.version));
+                lines.push(format!(
+                    "  {}: {}",
+                    paint(color, code, label),
+                    format_package_name(color, &package.name, &package.version)
+                ));
             }
         }
 
         lines.push(String::new());
-        lines.push("Summary:".to_string());
+        lines.push(paint(color, "1", "Summary:"));
         lines.push(format!(
-            "  publish disabled: {}",
+            "  {}: {}",
+            paint(color, "90", "publish disabled"),
             self.count(PublishPackageStatus::PublishDisabled)
         ));
         lines.push(format!(
-            "  already published: {}",
+            "  {}: {}",
+            paint(color, "33", "already published"),
             self.count(PublishPackageStatus::AlreadyPublished)
         ));
         lines.push(format!(
-            "  dry-run: {}",
+            "  {}: {}",
+            paint(color, "35", "dry-run"),
             self.count(PublishPackageStatus::DryRun)
         ));
         lines.push(format!(
-            "  published: {}",
+            "  {}: {}",
+            paint(color, "32", "published"),
             self.count(PublishPackageStatus::Published)
         ));
 
         lines.join("\n")
     }
+}
+
+#[must_use]
+const fn color_enabled(color: ColorMode) -> bool {
+    !matches!(color, ColorMode::Never)
+}
+
+#[must_use]
+fn paint(color: ColorMode, code: &str, text: &str) -> String {
+    if color_enabled(color) {
+        format!("\x1b[{code}m{text}\x1b[0m")
+    } else {
+        text.to_string()
+    }
+}
+
+#[must_use]
+fn format_package_name(color: ColorMode, name: &str, version: &str) -> String {
+    paint(color, "36;1", &format!("{name}@{version}"))
+}
+
+fn log_publish_event(color: ColorMode, code: &str, label: &str, name: &str, version: &str) {
+    eprintln!(
+        "{} {}",
+        paint(color, code, label),
+        format_package_name(color, name, version)
+    );
+}
+
+fn log_publish_event_with_detail(
+    color: ColorMode,
+    code: &str,
+    label: &str,
+    name: &str,
+    version: &str,
+    detail: &str,
+) {
+    eprintln!(
+        "{} {} {}",
+        paint(color, code, label),
+        format_package_name(color, name, version),
+        paint(color, "90", detail)
+    );
 }
 
 /// Internal package data needed for publish planning.
@@ -365,17 +416,27 @@ pub async fn handle_publish_command(
 ) -> Result<String, BoxError> {
     let workspace_root = normalize_workspace_root(&config.workspace_root);
     eprintln!(
-        "Loading workspace metadata from {}",
-        workspace_root.display()
+        "{} {}",
+        paint(config.color, "34", "Loading workspace metadata from"),
+        paint(config.color, "36;1", &workspace_root.display().to_string())
     );
     let packages = load_publish_packages(&workspace_root)?;
     let client = crates_io_client()?;
 
     let initial_plan = build_publish_plan(&packages, config.packages.as_deref())?;
     eprintln!(
-        "Planned {} publishable package(s), {} publish-disabled package(s)",
-        initial_plan.publish_order.len(),
-        initial_plan.publish_disabled.len()
+        "{} {} publishable package(s), {} publish-disabled package(s)",
+        paint(config.color, "34", "Planned"),
+        paint(
+            config.color,
+            "36;1",
+            &initial_plan.publish_order.len().to_string()
+        ),
+        paint(
+            config.color,
+            "90;1",
+            &initial_plan.publish_disabled.len().to_string()
+        )
     );
     let mut reports = Vec::new();
     let mut already_published = BTreeSet::new();
@@ -383,9 +444,13 @@ pub async fn handle_publish_command(
 
     for name in &initial_plan.publish_disabled {
         if let Some(package) = packages.get(name) {
-            eprintln!(
-                "Skipping {}@{} (publish disabled)",
-                package.name, package.version
+            log_publish_event_with_detail(
+                config.color,
+                "90",
+                "Skipping",
+                &package.name,
+                &package.version,
+                "(publish disabled)",
             );
             reports.push(PublishPackageReport::new(
                 &package.name,
@@ -400,11 +465,22 @@ pub async fn handle_publish_command(
             .get(name)
             .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
 
-        eprintln!("Checking {}@{} on crates.io", package.name, package.version);
+        log_publish_event_with_detail(
+            config.color,
+            "34",
+            "Checking",
+            &package.name,
+            &package.version,
+            "on crates.io",
+        );
         if crate_version_exists(&client, &package.name, &package.version).await? {
-            eprintln!(
-                "Skipping {}@{} (already published)",
-                package.name, package.version
+            log_publish_event_with_detail(
+                config.color,
+                "33",
+                "Skipping",
+                &package.name,
+                &package.version,
+                "(already published)",
             );
             already_published.insert(name.clone());
             reports.push(PublishPackageReport::new(
@@ -423,13 +499,20 @@ pub async fn handle_publish_command(
     let packages_to_publish = filter_packages_to_publish(&packages, &needs_publish);
     let final_plan = build_publish_plan(&packages_to_publish, None)?;
 
-    for name in final_plan.publish_order {
+    let publish_order = final_plan.publish_order;
+    for (index, name) in publish_order.iter().enumerate() {
         let package = packages
-            .get(&name)
+            .get(name)
             .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
 
         if config.dry_run {
-            eprintln!("Would publish {}@{}", package.name, package.version);
+            log_publish_event(
+                config.color,
+                "35",
+                "Would publish",
+                &package.name,
+                &package.version,
+            );
             reports.push(PublishPackageReport::new(
                 &package.name,
                 &package.version,
@@ -438,12 +521,36 @@ pub async fn handle_publish_command(
             continue;
         }
 
-        eprintln!("Publishing {}@{}", package.name, package.version);
-        match publish_package(&workspace_root, &packages, package, &config)? {
+        log_publish_event(
+            config.color,
+            "35;1",
+            "Publishing",
+            &package.name,
+            &package.version,
+        );
+        let publish_attempt = match publish_package(&workspace_root, &packages, package, &config) {
+            Ok(attempt) => attempt,
+            Err(error) => {
+                print_failure_summary(
+                    config.color,
+                    package,
+                    &publish_order[index + 1..],
+                    &packages,
+                    &reports,
+                );
+                return Err(error);
+            }
+        };
+
+        match publish_attempt {
             PublishAttempt::AlreadyPublished => {
-                eprintln!(
-                    "Skipping {}@{} (already published)",
-                    package.name, package.version
+                log_publish_event_with_detail(
+                    config.color,
+                    "33",
+                    "Skipping",
+                    &package.name,
+                    &package.version,
+                    "(already published)",
                 );
                 reports.push(PublishPackageReport::new(
                     &package.name,
@@ -452,16 +559,32 @@ pub async fn handle_publish_command(
                 ));
             }
             PublishAttempt::Published => {
-                wait_for_crate_version(
+                if let Err(error) = wait_for_crate_version(
                     &client,
                     &package.name,
                     &package.version,
                     config.publish_timeout,
                     config.publish_poll_interval,
                 )
-                .await?;
+                .await
+                {
+                    print_failure_summary(
+                        config.color,
+                        package,
+                        &publish_order[index + 1..],
+                        &packages,
+                        &reports,
+                    );
+                    return Err(error);
+                }
 
-                eprintln!("Published {}@{}", package.name, package.version);
+                log_publish_event(
+                    config.color,
+                    "32;1",
+                    "Published",
+                    &package.name,
+                    &package.version,
+                );
                 reports.push(PublishPackageReport::new(
                     &package.name,
                     &package.version,
@@ -473,9 +596,74 @@ pub async fn handle_publish_command(
 
     let report = PublishReport::new(reports);
     match output {
-        OutputType::Raw => Ok(report.to_raw_string()),
+        OutputType::Raw => Ok(report.to_raw_string(config.color)),
         OutputType::Json => Ok(serde_json::to_string_pretty(&report)?),
     }
+}
+
+fn print_failure_summary(
+    color: ColorMode,
+    failed_package: &PublishPackageInfo,
+    remaining_queue: &[String],
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    reports: &[PublishPackageReport],
+) {
+    eprintln!();
+    eprintln!("{}", paint(color, "31;1", "Publish failed"));
+    eprintln!(
+        "  {} {}",
+        paint(color, "31", "failed:"),
+        format_package_name(color, &failed_package.name, &failed_package.version)
+    );
+    eprintln!(
+        "  {} {}",
+        paint(color, "32", "published this run:"),
+        reports
+            .iter()
+            .filter(|report| report.status == PublishPackageStatus::Published)
+            .count()
+    );
+    eprintln!(
+        "  {} {}",
+        paint(color, "33", "already published/skipped:"),
+        reports
+            .iter()
+            .filter(|report| report.status == PublishPackageStatus::AlreadyPublished)
+            .count()
+    );
+    eprintln!(
+        "  {} {}",
+        paint(color, "90", "publish disabled:"),
+        reports
+            .iter()
+            .filter(|report| report.status == PublishPackageStatus::PublishDisabled)
+            .count()
+    );
+    eprintln!(
+        "  {} {}",
+        paint(color, "31;1", "not published in remaining queue:"),
+        remaining_queue.len() + 1
+    );
+
+    eprintln!();
+    eprintln!("{}", paint(color, "1", "Not published:"));
+    eprintln!(
+        "  {} {}",
+        paint(color, "31", "failed"),
+        format_package_name(color, &failed_package.name, &failed_package.version)
+    );
+    for name in remaining_queue {
+        if let Some(package) = packages.get(name) {
+            eprintln!(
+                "  {} {}",
+                paint(color, "35", "pending"),
+                format_package_name(color, &package.name, &package.version)
+            );
+        } else {
+            eprintln!("  {} {name}", paint(color, "35", "pending"));
+        }
+    }
+    eprintln!();
 }
 
 fn normalize_workspace_root(path: &Path) -> PathBuf {
