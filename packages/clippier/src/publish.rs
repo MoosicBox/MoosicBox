@@ -1348,7 +1348,7 @@ fn sanitize_dependency_sections(
     workspace_toml: &toml::Value,
     package_versions: &BTreeMap<String, String>,
 ) -> Result<(), BoxError> {
-    let removed_dev_dependencies = collect_dev_dependency_keys(manifest);
+    let removed_dev_dependencies = collect_removed_dev_dependency_keys(manifest);
 
     sanitize_dependency_table(manifest, "dependencies", workspace_toml, package_versions)?;
     sanitize_dependency_table(
@@ -1471,16 +1471,19 @@ fn strip_workspace_path_dependency(
         .or_insert_with(|| toml::Value::String(version.clone()));
 }
 
-fn collect_dev_dependency_keys(manifest: &toml::Value) -> BTreeSet<String> {
-    let mut dependencies = dependency_table_keys(manifest, "dev-dependencies");
+fn collect_removed_dev_dependency_keys(manifest: &toml::Value) -> BTreeSet<String> {
+    let mut removed = dependency_table_keys(manifest, "dev-dependencies");
 
     if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
         for target in targets.values() {
-            dependencies.extend(dependency_table_keys(target, "dev-dependencies"));
+            removed.extend(dependency_table_keys(target, "dev-dependencies"));
         }
     }
 
-    dependencies
+    removed.retain(|dependency| {
+        !dependency_exists_as_normal_or_build_dependency(manifest, dependency)
+    });
+    removed
 }
 
 fn dependency_table_keys(value: &toml::Value, key: &str) -> BTreeSet<String> {
@@ -1489,6 +1492,30 @@ fn dependency_table_keys(value: &toml::Value, key: &str) -> BTreeSet<String> {
         .and_then(toml::Value::as_table)
         .map(|table| table.keys().cloned().collect())
         .unwrap_or_default()
+}
+
+fn dependency_exists_as_normal_or_build_dependency(
+    manifest: &toml::Value,
+    dependency: &str,
+) -> bool {
+    dependency_table_contains(manifest, "dependencies", dependency)
+        || dependency_table_contains(manifest, "build-dependencies", dependency)
+        || manifest
+            .get("target")
+            .and_then(toml::Value::as_table)
+            .is_some_and(|targets| {
+                targets.values().any(|target| {
+                    dependency_table_contains(target, "dependencies", dependency)
+                        || dependency_table_contains(target, "build-dependencies", dependency)
+                })
+            })
+}
+
+fn dependency_table_contains(value: &toml::Value, key: &str, dependency: &str) -> bool {
+    value
+        .get(key)
+        .and_then(toml::Value::as_table)
+        .is_some_and(|table| table.contains_key(dependency))
 }
 
 fn sanitize_features(manifest: &mut toml::Value, removed_dev_dependencies: &BTreeSet<String>) {
@@ -1748,6 +1775,7 @@ mod tests {
                 [workspace.dependencies]
                 models = { version = "1.2.3", path = "packages/models", default-features = false }
                 test-utils = { version = "1.2.3", path = "packages/test-utils" }
+                optional-runtime = { version = "1.2.3", path = "packages/optional-runtime" }
                 serde = "1.0.228"
             "#,
         )
@@ -1765,13 +1793,18 @@ mod tests {
 
                 [dependencies]
                 models = { workspace = true, features = ["api"] }
+                optional-runtime = { workspace = true, optional = true }
                 serde = { workspace = true, features = ["derive"] }
 
                 [dev-dependencies]
+                optional-runtime = { workspace = true, features = ["macros"] }
                 test-utils = { workspace = true }
 
                 [target.'cfg(unix)'.dev-dependencies]
                 test-utils = { workspace = true }
+
+                [features]
+                runtime = ["dep:optional-runtime", "optional-runtime?/tokio"]
             "#,
         )
         .unwrap();
@@ -1788,7 +1821,19 @@ mod tests {
         let package = sanitized_toml.get("package").unwrap();
         let dependencies = sanitized_toml.get("dependencies").unwrap();
         let models = dependencies.get("models").unwrap();
+        let optional_runtime = dependencies.get("optional-runtime").unwrap();
         let serde = dependencies.get("serde").unwrap();
+        let runtime_feature = sanitized_toml
+            .get("features")
+            .unwrap()
+            .get("runtime")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(toml::Value::as_str)
+            .collect::<Option<Vec<_>>>()
+            .unwrap();
 
         assert_eq!(package.get("edition").unwrap().as_str(), Some("2024"));
         assert_eq!(package.get("version").unwrap().as_str(), Some("1.2.3"));
@@ -1804,6 +1849,14 @@ mod tests {
         );
         assert!(models.get("path").is_none());
         assert_eq!(models.get("version").unwrap().as_str(), Some("1.2.3"));
+        assert_eq!(
+            optional_runtime.get("version").unwrap().as_str(),
+            Some("1.2.3")
+        );
+        assert_eq!(
+            runtime_feature,
+            ["dep:optional-runtime", "optional-runtime?/tokio"]
+        );
         assert_eq!(serde.get("version").unwrap().as_str(), Some("1.0.228"));
 
         fs::remove_dir_all(root).unwrap();
@@ -1834,7 +1887,7 @@ mod tests {
         )
         .unwrap();
 
-        let removed_dev_dependencies = collect_dev_dependency_keys(&manifest);
+        let removed_dev_dependencies = collect_removed_dev_dependency_keys(&manifest);
         sanitize_features(&mut manifest, &removed_dev_dependencies);
 
         let features = manifest.get("features").unwrap();
