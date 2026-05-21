@@ -75,6 +75,7 @@ Clippier supports optional features:
 - **`format`** (default): Enable the `fmt` command for running formatters
 - **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
 - **`publish`** (default): Enable the `publish` command for Cargo workspace crate publishing
+- **`versioning`** (default): Enable the `version` command for Cargo workspace version bumps
 - **`transforms-vendored`** (default): Enable Lua transform scripts with vendored Lua runtime
 - **`transforms-system`**: Enable Lua transform scripts using system Lua installation
 - **`fail-on-warnings`**: Fail build on warnings
@@ -485,6 +486,26 @@ clippier publish /path/to/workspace
 ```
 
 `clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized workspace copy that preserves package-relative paths, removes workspace dev-dependencies, resolves workspace dependency inheritance, and uses a temp-local Cargo target dir. It defaults to `cargo publish --no-verify`; pass `--verify` to run Cargo's local verification step.
+
+### Bump Cargo Workspace Versions
+
+Bump or set workspace package versions and internal path dependency requirements together:
+
+```bash
+# Preview a patch bump from the current directory
+clippier version bump patch --dry-run
+
+# Bump all workspace packages from 0.2.0 to 0.3.0
+clippier version bump minor
+
+# Set an exact version
+clippier version set 0.3.0
+
+# Create or increment a prerelease suffix
+clippier version bump prerelease --pre alpha
+```
+
+For workspaces that use `[workspace.package].version`, whole-workspace bumps update the workspace version and matching internal `[workspace.dependencies]` path dependency versions. Partial package bumps are rejected when selected packages inherit the shared workspace version, preventing accidental split-version workspaces.
 
 ### Workspace Dependencies
 

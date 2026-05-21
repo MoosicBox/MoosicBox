@@ -60,6 +60,10 @@ pub mod package_filter;
 #[cfg(feature = "publish")]
 pub mod publish;
 
+/// Cargo workspace version bumping support.
+#[cfg(feature = "versioning")]
+pub mod versioning;
+
 /// Tool detection and execution infrastructure for linting and formatting.
 ///
 /// This module provides the common infrastructure for detecting installed tools,

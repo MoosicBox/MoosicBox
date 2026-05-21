@@ -13,6 +13,8 @@ use clap::{Parser, Subcommand};
 
 #[cfg(any(feature = "check", feature = "format", feature = "publish"))]
 use clippier::ColorMode;
+#[cfg(feature = "versioning")]
+use clippier::versioning::{VersionBump, VersionConfig, VersionOperation, handle_version_command};
 use clippier::{
     OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
@@ -37,6 +39,66 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 struct Args {
     #[command(subcommand)]
     cmd: Commands,
+}
+
+#[cfg(feature = "versioning")]
+#[derive(Subcommand)]
+enum VersionCommands {
+    /// Bump workspace package versions by a semantic version component
+    Bump {
+        /// Version component to bump
+        #[arg(value_enum)]
+        kind: VersionBump,
+
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 2, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Only bump the selected package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Only include publishable packages
+        #[arg(long)]
+        publishable_only: bool,
+
+        /// Prerelease identifier for prerelease bumps
+        #[arg(long)]
+        pre: Option<String>,
+
+        /// Print the bump plan without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+    /// Set workspace package versions to an exact version
+    Set {
+        /// Exact version to set
+        version: String,
+
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 2, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Only set the selected package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Only include publishable packages
+        #[arg(long)]
+        publishable_only: bool,
+
+        /// Print the bump plan without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
 }
 
 #[derive(Subcommand)]
@@ -425,6 +487,12 @@ enum Commands {
 
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
+    },
+    /// Bump Cargo workspace package versions
+    #[cfg(feature = "versioning")]
+    Version {
+        #[command(subcommand)]
+        command: VersionCommands,
     },
     /// Publish Cargo workspace crates to crates.io in dependency order
     #[cfg(feature = "publish")]
@@ -908,6 +976,44 @@ async fn run() -> Result<(), BoxError> {
             )
             .await?
         }
+        #[cfg(feature = "versioning")]
+        Commands::Version { command } => match command {
+            VersionCommands::Bump {
+                kind,
+                workspace_root,
+                packages,
+                publishable_only,
+                pre,
+                dry_run,
+                output,
+            } => {
+                let config = VersionConfig {
+                    workspace_root,
+                    packages,
+                    publishable_only,
+                    dry_run,
+                    operation: VersionOperation::Bump { kind, pre },
+                };
+                handle_version_command(&config, output)?
+            }
+            VersionCommands::Set {
+                version,
+                workspace_root,
+                packages,
+                publishable_only,
+                dry_run,
+                output,
+            } => {
+                let config = VersionConfig {
+                    workspace_root,
+                    packages,
+                    publishable_only,
+                    dry_run,
+                    operation: VersionOperation::Set(version),
+                };
+                handle_version_command(&config, output)?
+            }
+        },
         #[cfg(feature = "publish")]
         Commands::Publish {
             workspace_root,
