@@ -394,7 +394,7 @@ aws-config = "1.8.17"
 aws-sdk-apigatewaymanagement = "1.99.0"
 aws-sdk-ssm = "1.110.0"
 base64 = "0.22.1"
-bmux_codec = { version = "0.0.1-alpha.0", default-features = false }
+bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
 btparse = "0.2.0"
 bumpalo = "3.20.2"
 bytes = "1.11.1"
@@ -422,7 +422,7 @@ deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
 dirs = "6.0.0"
-duckdb = { version = "1.10502.0", default-features = false }
+duckdb = { version = "1.10503.0", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
@@ -545,7 +545,7 @@ scoped-tls = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.20.0", default-features = false }
 serde_yaml = "0.9.34"

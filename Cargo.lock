@@ -2329,9 +2329,9 @@ dependencies = [
 
 [[package]]
 name = "bmux_codec"
-version = "0.0.1-alpha.0"
+version = "0.0.1-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aad33f186aa2c830494000c371cc2e70b0c070afe08c43ee5fb394fa8bc0f7f"
+checksum = "459b2ad08cc15428db36330fb4ee7a8b840e356eaf4bfd265851e62cd7ea1d41"
 dependencies = [
  "serde",
 ]
@@ -2486,9 +2486,9 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 
 [[package]]
 name = "built"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ad8f11f288f48ca24471bbd51ac257aaeaaa07adae295591266b792902ae64"
+checksum = "5c0e531d93d39c34eef561e929e8a7f86d77a5af08aac4f6d6e39976c51858e9"
 
 [[package]]
 name = "bumpalo"
@@ -4341,9 +4341,9 @@ checksum = "f678cf4a922c215c63e0de95eb1ff08a958a81d47e485cf9da1e27bf6305cfa5"
 
 [[package]]
 name = "duckdb"
-version = "1.10502.0"
+version = "1.10503.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fdc796383b176dd5a45353fbb5e64583c0ee4da12cb62c9e510b785324b2488"
+checksum = "3b7f81a3dcbd677458ff30b1047b02951282f1e189260db07e60e0890b3b64bc"
 dependencies = [
  "arrow",
  "cast",
@@ -8102,9 +8102,9 @@ dependencies = [
 
 [[package]]
 name = "libduckdb-sys"
-version = "1.10502.0"
+version = "1.10503.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d7401630ae2abcff642f7156294289e50f2d222e061c026ad797b01bf20c215"
+checksum = "f3a3cc4e8aa9cc1943ab2a5154e47564ba6e7598001cc148d2bb5fc63f078b58"
 dependencies = [
  "cc",
  "flate2",
@@ -13459,7 +13459,7 @@ dependencies = [
  "av-scenechange",
  "av1-grain",
  "bitstream-io",
- "built 0.8.0",
+ "built 0.8.1",
  "cfg-if 1.0.4",
  "interpolate_name",
  "itertools 0.14.0",
@@ -14515,9 +14515,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
  "itoa",
  "memchr",
