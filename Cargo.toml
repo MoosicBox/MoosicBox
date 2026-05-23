@@ -396,7 +396,7 @@ aws-sdk-ssm = "1.110.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
 btparse = "0.2.0"
-bumpalo = "3.20.2"
+bumpalo = "3.20.3"
 bytes = "1.11.1"
 bytesize = "2.3.1"
 cargo_metadata = "0.23.1"
@@ -422,7 +422,7 @@ deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
 dirs = "6.0.0"
-duckdb = { version = "1.10503.0", default-features = false }
+duckdb = { version = "1.10503.1", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
@@ -613,7 +613,7 @@ tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.116"
-turso = { version = "0.6.0", default-features = false, features = ["mimalloc"] }
+turso = { version = "0.6.1", default-features = false, features = ["mimalloc"] }
 uaparser = "0.6.4"
 url = "2.5.8"
 urlencoding = "2.1.3"
