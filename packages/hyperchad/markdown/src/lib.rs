@@ -83,6 +83,16 @@ enum HeaderSize {
     H6,
 }
 
+/// Controls how much visual styling is attached to generated containers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MarkdownStylePolicy {
+    /// Preserve the existing GitHub-inspired web presentation styles.
+    #[default]
+    GithubWeb,
+    /// Emit semantic elements, classes, and data without default web presentation styles.
+    SemanticOnly,
+}
+
 /// Resolves a rendered markdown link URL to an optional replacement URL.
 pub type LinkResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
@@ -178,6 +188,8 @@ pub struct MarkdownOptions {
     /// When enabled, code blocks with language tags (e.g., ` ```rust `) will have
     /// their content syntax highlighted with colored spans.
     pub syntax_highlighting: bool,
+    /// Controls whether generated containers include default web presentation styles.
+    pub style_policy: MarkdownStylePolicy,
     /// Optional closure invoked for every link URL during rendering.
     ///
     /// When provided, the resolver receives the URL after built-in XSS filtering.
@@ -198,6 +210,7 @@ impl fmt::Debug for MarkdownOptions {
             .field("emoji_enabled", &self.emoji_enabled)
             .field("xss_protection", &self.xss_protection)
             .field("syntax_highlighting", &self.syntax_highlighting)
+            .field("style_policy", &self.style_policy)
             .field("link_resolver", &self.link_resolver.is_some())
             .finish()
     }
@@ -215,6 +228,7 @@ impl Default for MarkdownOptions {
     /// * `emoji_enabled`: `true` if the `emoji` feature is enabled, otherwise `false`
     /// * `xss_protection`: `true` if the `xss-protection` feature is enabled, otherwise `false`
     /// * `syntax_highlighting`: `true` if the `syntax-highlighting` feature is enabled, otherwise `false`
+    /// * `style_policy`: [`MarkdownStylePolicy::GithubWeb`]
     /// * `link_resolver`: `None`
     fn default() -> Self {
         Self {
@@ -226,8 +240,66 @@ impl Default for MarkdownOptions {
             emoji_enabled: cfg!(feature = "emoji"),
             xss_protection: cfg!(feature = "xss-protection"),
             syntax_highlighting: cfg!(feature = "syntax-highlighting"),
+            style_policy: MarkdownStylePolicy::default(),
             link_resolver: None,
         }
+    }
+}
+
+impl MarkdownStylePolicy {
+    fn web_value<T>(self, value: T) -> T
+    where
+        T: Default,
+    {
+        match self {
+            Self::GithubWeb => value,
+            Self::SemanticOnly => T::default(),
+        }
+    }
+
+    fn apply_to_container(self, container: &mut Container) {
+        if matches!(self, Self::GithubWeb) {
+            return;
+        }
+
+        container.direction = LayoutDirection::default();
+        container.text_align = None;
+        container.white_space = None;
+        container.text_decoration = None;
+        container.font_family = None;
+        container.font_weight = None;
+        container.width = None;
+        container.min_width = None;
+        container.max_width = None;
+        container.height = None;
+        container.min_height = None;
+        container.max_height = None;
+        container.flex = None;
+        container.column_gap = None;
+        container.row_gap = None;
+        container.opacity = None;
+        container.user_select = None;
+        container.overflow_wrap = None;
+        container.text_overflow = None;
+        container.background = None;
+        container.border_top = None;
+        container.border_right = None;
+        container.border_bottom = None;
+        container.border_left = None;
+        container.border_top_left_radius = None;
+        container.border_top_right_radius = None;
+        container.border_bottom_left_radius = None;
+        container.border_bottom_right_radius = None;
+        container.margin_left = None;
+        container.margin_right = None;
+        container.margin_top = None;
+        container.margin_bottom = None;
+        container.padding_left = None;
+        container.padding_right = None;
+        container.padding_top = None;
+        container.padding_bottom = None;
+        container.font_size = None;
+        container.color = None;
     }
 }
 
@@ -236,7 +308,7 @@ impl MarkdownContext {
         let root = Container {
             element: Element::Div,
             classes: vec!["markdown".to_string()],
-            direction: LayoutDirection::Column,
+            direction: options.style_policy.web_value(LayoutDirection::Column),
             ..Default::default()
         };
         let mut stack = VecDeque::new();
@@ -269,6 +341,19 @@ impl MarkdownContext {
     fn add_child(&mut self, container: Container) -> Result<(), MarkdownError> {
         self.current_mut()?.children.push(container);
         Ok(())
+    }
+
+    fn styled_container(&self, mut container: Container) -> Container {
+        self.options.style_policy.apply_to_container(&mut container);
+        container
+    }
+
+    fn push_styled(&mut self, container: Container) {
+        self.push(self.styled_container(container));
+    }
+
+    fn add_styled_child(&mut self, container: Container) -> Result<(), MarkdownError> {
+        self.add_child(self.styled_container(container))
     }
 
     fn finish(mut self) -> Result<Container, MarkdownError> {
@@ -470,7 +555,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 return Ok(());
             }
 
-            ctx.add_child(Container {
+            ctx.add_styled_child(Container {
                 element: Element::Text {
                     value: text.to_string(),
                 },
@@ -479,7 +564,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::Code(code) => {
             ctx.append_heading_text(&code);
-            ctx.add_child(Container {
+            ctx.add_styled_child(Container {
                 element: Element::Text {
                     value: code.to_string(),
                 },
@@ -499,14 +584,14 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::Html(html) | Event::InlineHtml(html) => {
             if ctx.options.xss_protection && is_dangerous_html(&html) {
-                ctx.add_child(Container {
+                ctx.add_styled_child(Container {
                     element: Element::Raw {
                         value: html_escape(&html),
                     },
                     ..Default::default()
                 })
             } else {
-                ctx.add_child(Container {
+                ctx.add_styled_child(Container {
                     element: Element::Raw {
                         value: html.to_string(),
                     },
@@ -516,7 +601,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::SoftBreak => {
             ctx.append_heading_text(" ");
-            ctx.add_child(Container {
+            ctx.add_styled_child(Container {
                 element: Element::Text {
                     value: " ".to_string(),
                 },
@@ -525,7 +610,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::HardBreak => {
             ctx.append_heading_text(" ");
-            ctx.add_child(Container {
+            ctx.add_styled_child(Container {
                 element: Element::Text {
                     value: "\n".to_string(),
                 },
@@ -533,7 +618,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 ..Default::default()
             })
         }
-        Event::Rule => ctx.add_child(Container {
+        Event::Rule => ctx.add_styled_child(Container {
             element: Element::Div,
             classes: vec!["markdown-hr".to_string()],
             height: Some(Number::from(1)),
@@ -542,7 +627,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
             margin_bottom: Some(Number::from(24)),
             ..Default::default()
         }),
-        Event::TaskListMarker(checked) => ctx.add_child(Container {
+        Event::TaskListMarker(checked) => ctx.add_styled_child(Container {
             element: Element::Input {
                 input: hyperchad_transformer::Input::Checkbox {
                     checked: Some(checked),
@@ -562,7 +647,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
 fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), MarkdownError> {
     match tag {
         Tag::Paragraph => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Div,
                 classes: vec!["markdown-p".to_string()],
                 margin_bottom: Some(Number::from(16)),
@@ -581,7 +666,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 HeaderSize::H5 => (16, 8, 14),
                 HeaderSize::H6 => (16, 8, 13),
             };
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Heading { size: size.into() },
                 classes: vec![format!("markdown-h{}", level as u8)],
                 font_weight: Some(FontWeight::Bold),
@@ -593,7 +678,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::BlockQuote(_) => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Div,
                 classes: vec!["markdown-blockquote".to_string()],
                 border_left: Some((Color::from_hex("#d0d7de"), Number::from(4))),
@@ -626,7 +711,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 });
             }
 
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Div,
                 classes: vec!["markdown-code-block".to_string()],
                 data: language
@@ -653,7 +738,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
         }
         Tag::List(start) => {
             let element = start.map_or(Element::UnorderedList, |_start_num| Element::OrderedList);
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element,
                 classes: vec!["markdown-list".to_string()],
                 margin_top: Some(Number::from(16)),
@@ -665,7 +750,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::Item => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::ListItem,
                 classes: vec!["markdown-list-item".to_string()],
                 margin_bottom: Some(Number::from(4)),
@@ -674,7 +759,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::Emphasis => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Span,
                 classes: vec!["markdown-em".to_string()],
                 ..Default::default()
@@ -682,7 +767,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::Strong => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Span,
                 classes: vec!["markdown-strong".to_string()],
                 font_weight: Some(FontWeight::Bold),
@@ -691,7 +776,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::Strikethrough => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Span,
                 classes: vec!["markdown-strikethrough".to_string()],
                 text_decoration: Some(hyperchad_transformer::TextDecoration {
@@ -728,7 +813,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                         href
                     }
                 });
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Anchor {
                     target: None,
                     href: Some(href),
@@ -750,7 +835,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             dest_url,
             title,
             id: _,
-        } => ctx.add_child(Container {
+        } => ctx.add_styled_child(Container {
             element: Element::Image {
                 source: Some(dest_url.to_string()),
                 alt: Some(title.to_string()),
@@ -764,7 +849,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             ..Default::default()
         }),
         Tag::Table(_) => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::Table,
                 classes: vec!["markdown-table".to_string()],
                 margin_top: Some(Number::from(16)),
@@ -776,7 +861,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::TableHead => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::THead,
                 classes: vec!["markdown-thead".to_string()],
                 background: Some(Color::from_hex("#f6f8fa")),
@@ -785,7 +870,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::TableRow => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::TR,
                 classes: vec!["markdown-tr".to_string()],
                 ..Default::default()
@@ -793,7 +878,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::TableCell => {
-            ctx.push(Container {
+            ctx.push_styled(Container {
                 element: Element::TD {
                     rows: None,
                     columns: None,
@@ -1235,6 +1320,7 @@ mod tests {
             emoji_enabled: false,
             xss_protection: false,
             syntax_highlighting: false,
+            style_policy: MarkdownStylePolicy::GithubWeb,
             link_resolver: None,
         };
         let md = "**bold** text";
