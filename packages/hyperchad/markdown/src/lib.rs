@@ -574,13 +574,11 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
         Tag::CodeBlock(kind) => {
             let language = match kind {
                 pulldown_cmark::CodeBlockKind::Indented => None,
-                pulldown_cmark::CodeBlockKind::Fenced(lang) => {
-                    if lang.is_empty() {
-                        None
-                    } else {
-                        Some(lang.to_string())
-                    }
-                }
+                pulldown_cmark::CodeBlockKind::Fenced(lang) => lang
+                    .split(|ch: char| ch.is_whitespace() || ch == ',' || ch == ';' || ch == '{')
+                    .next()
+                    .filter(|token| !token.is_empty())
+                    .map(ToString::to_string),
             };
 
             // Initialize code block state for syntax highlighting
