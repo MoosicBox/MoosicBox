@@ -41,10 +41,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use hyperchad_color::Color;
-use hyperchad_transformer::{Container, Element, Number};
+use hyperchad_transformer::{Container, Element};
 use hyperchad_transformer_models::{
-    FontWeight, LayoutDirection, TextDecorationLine, TextDecorationStyle, UserSelect, WhiteSpace,
+    LayoutDirection, TextDecorationLine, TextDecorationStyle, UserSelect, WhiteSpace,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::{
@@ -81,16 +80,6 @@ enum HeaderSize {
     H4,
     H5,
     H6,
-}
-
-/// Controls how much visual styling is attached to generated containers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MarkdownStylePolicy {
-    /// Preserve the existing GitHub-inspired web presentation styles.
-    #[default]
-    GithubWeb,
-    /// Emit semantic elements, classes, and data without default web presentation styles.
-    SemanticOnly,
 }
 
 /// Resolves a rendered markdown link URL to an optional replacement URL.
@@ -188,8 +177,6 @@ pub struct MarkdownOptions {
     /// When enabled, code blocks with language tags (e.g., ` ```rust `) will have
     /// their content syntax highlighted with colored spans.
     pub syntax_highlighting: bool,
-    /// Controls whether generated containers include default web presentation styles.
-    pub style_policy: MarkdownStylePolicy,
     /// Optional closure invoked for every link URL during rendering.
     ///
     /// When provided, the resolver receives the URL after built-in XSS filtering.
@@ -210,7 +197,6 @@ impl fmt::Debug for MarkdownOptions {
             .field("emoji_enabled", &self.emoji_enabled)
             .field("xss_protection", &self.xss_protection)
             .field("syntax_highlighting", &self.syntax_highlighting)
-            .field("style_policy", &self.style_policy)
             .field("link_resolver", &self.link_resolver.is_some())
             .finish()
     }
@@ -228,7 +214,6 @@ impl Default for MarkdownOptions {
     /// * `emoji_enabled`: `true` if the `emoji` feature is enabled, otherwise `false`
     /// * `xss_protection`: `true` if the `xss-protection` feature is enabled, otherwise `false`
     /// * `syntax_highlighting`: `true` if the `syntax-highlighting` feature is enabled, otherwise `false`
-    /// * `style_policy`: [`MarkdownStylePolicy::GithubWeb`]
     /// * `link_resolver`: `None`
     fn default() -> Self {
         Self {
@@ -240,66 +225,8 @@ impl Default for MarkdownOptions {
             emoji_enabled: cfg!(feature = "emoji"),
             xss_protection: cfg!(feature = "xss-protection"),
             syntax_highlighting: cfg!(feature = "syntax-highlighting"),
-            style_policy: MarkdownStylePolicy::default(),
             link_resolver: None,
         }
-    }
-}
-
-impl MarkdownStylePolicy {
-    fn web_value<T>(self, value: T) -> T
-    where
-        T: Default,
-    {
-        match self {
-            Self::GithubWeb => value,
-            Self::SemanticOnly => T::default(),
-        }
-    }
-
-    fn apply_to_container(self, container: &mut Container) {
-        if matches!(self, Self::GithubWeb) {
-            return;
-        }
-
-        container.direction = LayoutDirection::default();
-        container.text_align = None;
-        container.white_space = None;
-        container.text_decoration = None;
-        container.font_family = None;
-        container.font_weight = None;
-        container.width = None;
-        container.min_width = None;
-        container.max_width = None;
-        container.height = None;
-        container.min_height = None;
-        container.max_height = None;
-        container.flex = None;
-        container.column_gap = None;
-        container.row_gap = None;
-        container.opacity = None;
-        container.user_select = None;
-        container.overflow_wrap = None;
-        container.text_overflow = None;
-        container.background = None;
-        container.border_top = None;
-        container.border_right = None;
-        container.border_bottom = None;
-        container.border_left = None;
-        container.border_top_left_radius = None;
-        container.border_top_right_radius = None;
-        container.border_bottom_left_radius = None;
-        container.border_bottom_right_radius = None;
-        container.margin_left = None;
-        container.margin_right = None;
-        container.margin_top = None;
-        container.margin_bottom = None;
-        container.padding_left = None;
-        container.padding_right = None;
-        container.padding_top = None;
-        container.padding_bottom = None;
-        container.font_size = None;
-        container.color = None;
     }
 }
 
@@ -308,7 +235,7 @@ impl MarkdownContext {
         let root = Container {
             element: Element::Div,
             classes: vec!["markdown".to_string()],
-            direction: options.style_policy.web_value(LayoutDirection::Column),
+            direction: LayoutDirection::Column,
             ..Default::default()
         };
         let mut stack = VecDeque::new();
@@ -341,19 +268,6 @@ impl MarkdownContext {
     fn add_child(&mut self, container: Container) -> Result<(), MarkdownError> {
         self.current_mut()?.children.push(container);
         Ok(())
-    }
-
-    fn styled_container(&self, mut container: Container) -> Container {
-        self.options.style_policy.apply_to_container(&mut container);
-        container
-    }
-
-    fn push_styled(&mut self, container: Container) {
-        self.push(self.styled_container(container));
-    }
-
-    fn add_styled_child(&mut self, container: Container) -> Result<(), MarkdownError> {
-        self.add_child(self.styled_container(container))
     }
 
     fn finish(mut self) -> Result<Container, MarkdownError> {
@@ -555,7 +469,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 return Ok(());
             }
 
-            ctx.add_styled_child(Container {
+            ctx.add_child(Container {
                 element: Element::Text {
                     value: text.to_string(),
                 },
@@ -564,34 +478,24 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::Code(code) => {
             ctx.append_heading_text(&code);
-            ctx.add_styled_child(Container {
+            ctx.add_child(Container {
                 element: Element::Text {
                     value: code.to_string(),
                 },
                 classes: vec!["inline-code".to_string()],
-                font_family: Some(vec!["monospace".to_string()]),
-                background: Some(Color::from_hex("#f6f8fa")),
-                padding_left: Some(Number::from(4)),
-                padding_right: Some(Number::from(4)),
-                padding_top: Some(Number::from(2)),
-                padding_bottom: Some(Number::from(2)),
-                border_top_left_radius: Some(Number::from(3)),
-                border_top_right_radius: Some(Number::from(3)),
-                border_bottom_left_radius: Some(Number::from(3)),
-                border_bottom_right_radius: Some(Number::from(3)),
                 ..Default::default()
             })
         }
         Event::Html(html) | Event::InlineHtml(html) => {
             if ctx.options.xss_protection && is_dangerous_html(&html) {
-                ctx.add_styled_child(Container {
+                ctx.add_child(Container {
                     element: Element::Raw {
                         value: html_escape(&html),
                     },
                     ..Default::default()
                 })
             } else {
-                ctx.add_styled_child(Container {
+                ctx.add_child(Container {
                     element: Element::Raw {
                         value: html.to_string(),
                     },
@@ -601,7 +505,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::SoftBreak => {
             ctx.append_heading_text(" ");
-            ctx.add_styled_child(Container {
+            ctx.add_child(Container {
                 element: Element::Text {
                     value: " ".to_string(),
                 },
@@ -610,7 +514,7 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
         }
         Event::HardBreak => {
             ctx.append_heading_text(" ");
-            ctx.add_styled_child(Container {
+            ctx.add_child(Container {
                 element: Element::Text {
                     value: "\n".to_string(),
                 },
@@ -618,16 +522,12 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 ..Default::default()
             })
         }
-        Event::Rule => ctx.add_styled_child(Container {
+        Event::Rule => ctx.add_child(Container {
             element: Element::Div,
             classes: vec!["markdown-hr".to_string()],
-            height: Some(Number::from(1)),
-            background: Some(Color::from_hex("#d0d7de")),
-            margin_top: Some(Number::from(24)),
-            margin_bottom: Some(Number::from(24)),
             ..Default::default()
         }),
-        Event::TaskListMarker(checked) => ctx.add_styled_child(Container {
+        Event::TaskListMarker(checked) => ctx.add_child(Container {
             element: Element::Input {
                 input: hyperchad_transformer::Input::Checkbox {
                     checked: Some(checked),
@@ -635,7 +535,6 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
                 name: None,
                 autofocus: None,
             },
-            margin_right: Some(Number::from(8)),
             user_select: Some(UserSelect::None),
             ..Default::default()
         }),
@@ -647,10 +546,9 @@ fn process_event(ctx: &mut MarkdownContext, event: Event) -> Result<(), Markdown
 fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), MarkdownError> {
     match tag {
         Tag::Paragraph => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Div,
                 classes: vec!["markdown-p".to_string()],
-                margin_bottom: Some(Number::from(16)),
                 ..Default::default()
             });
             Ok(())
@@ -658,34 +556,17 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
         Tag::Heading { level, id, .. } => {
             ctx.start_heading(id.map(|value| value.to_string()));
             let size = HeaderSize::from(level);
-            let (margin_top, margin_bottom, font_size) = match size {
-                HeaderSize::H1 => (32, 16, 32),
-                HeaderSize::H2 => (24, 16, 24),
-                HeaderSize::H3 => (24, 16, 20),
-                HeaderSize::H4 => (16, 8, 16),
-                HeaderSize::H5 => (16, 8, 14),
-                HeaderSize::H6 => (16, 8, 13),
-            };
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Heading { size: size.into() },
                 classes: vec![format!("markdown-h{}", level as u8)],
-                font_weight: Some(FontWeight::Bold),
-                margin_top: Some(Number::from(margin_top)),
-                margin_bottom: Some(Number::from(margin_bottom)),
-                font_size: Some(Number::from(font_size)),
                 ..Default::default()
             });
             Ok(())
         }
         Tag::BlockQuote(_) => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Div,
                 classes: vec!["markdown-blockquote".to_string()],
-                border_left: Some((Color::from_hex("#d0d7de"), Number::from(4))),
-                padding_left: Some(Number::from(16)),
-                margin_top: Some(Number::from(16)),
-                margin_bottom: Some(Number::from(16)),
-                color: Some(Color::from_hex("#656d76")),
                 ..Default::default()
             });
             Ok(())
@@ -711,7 +592,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 });
             }
 
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Div,
                 classes: vec!["markdown-code-block".to_string()],
                 data: language
@@ -719,18 +600,6 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
-                font_family: Some(vec!["monospace".to_string()]),
-                background: Some(Color::from_hex("#f6f8fa")),
-                padding_left: Some(Number::from(16)),
-                padding_right: Some(Number::from(16)),
-                padding_top: Some(Number::from(16)),
-                padding_bottom: Some(Number::from(16)),
-                margin_top: Some(Number::from(16)),
-                margin_bottom: Some(Number::from(16)),
-                border_top_left_radius: Some(Number::from(6)),
-                border_top_right_radius: Some(Number::from(6)),
-                border_bottom_left_radius: Some(Number::from(6)),
-                border_bottom_right_radius: Some(Number::from(6)),
                 white_space: Some(WhiteSpace::PreserveWrap),
                 ..Default::default()
             });
@@ -738,28 +607,24 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
         }
         Tag::List(start) => {
             let element = start.map_or(Element::UnorderedList, |_start_num| Element::OrderedList);
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element,
                 classes: vec!["markdown-list".to_string()],
-                margin_top: Some(Number::from(16)),
-                margin_bottom: Some(Number::from(16)),
-                padding_left: Some(Number::from(32)),
                 direction: LayoutDirection::Column,
                 ..Default::default()
             });
             Ok(())
         }
         Tag::Item => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::ListItem,
                 classes: vec!["markdown-list-item".to_string()],
-                margin_bottom: Some(Number::from(4)),
                 ..Default::default()
             });
             Ok(())
         }
         Tag::Emphasis => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Span,
                 classes: vec!["markdown-em".to_string()],
                 ..Default::default()
@@ -767,16 +632,15 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::Strong => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Span,
                 classes: vec!["markdown-strong".to_string()],
-                font_weight: Some(FontWeight::Bold),
                 ..Default::default()
             });
             Ok(())
         }
         Tag::Strikethrough => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Span,
                 classes: vec!["markdown-strikethrough".to_string()],
                 text_decoration: Some(hyperchad_transformer::TextDecoration {
@@ -813,19 +677,12 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                         href
                     }
                 });
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Anchor {
                     target: None,
                     href: Some(href),
                 },
                 classes: vec!["markdown-link".to_string()],
-                color: Some(Color::from_hex("#0969da")),
-                text_decoration: Some(hyperchad_transformer::TextDecoration {
-                    color: None,
-                    line: vec![TextDecorationLine::Underline],
-                    style: Some(TextDecorationStyle::Solid),
-                    thickness: None,
-                }),
                 ..Default::default()
             });
             Ok(())
@@ -835,7 +692,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             dest_url,
             title,
             id: _,
-        } => ctx.add_styled_child(Container {
+        } => ctx.add_child(Container {
             element: Element::Image {
                 source: Some(dest_url.to_string()),
                 alt: Some(title.to_string()),
@@ -845,32 +702,26 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 loading: None,
             },
             classes: vec!["markdown-image".to_string()],
-            max_width: Some(Number::IntegerPercent(100)),
             ..Default::default()
         }),
         Tag::Table(_) => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::Table,
                 classes: vec!["markdown-table".to_string()],
-                margin_top: Some(Number::from(16)),
-                margin_bottom: Some(Number::from(16)),
-                border_top: Some((Color::from_hex("#d0d7de"), Number::from(1))),
-                border_left: Some((Color::from_hex("#d0d7de"), Number::from(1))),
                 ..Default::default()
             });
             Ok(())
         }
         Tag::TableHead => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::THead,
                 classes: vec!["markdown-thead".to_string()],
-                background: Some(Color::from_hex("#f6f8fa")),
                 ..Default::default()
             });
             Ok(())
         }
         Tag::TableRow => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::TR,
                 classes: vec!["markdown-tr".to_string()],
                 ..Default::default()
@@ -878,18 +729,12 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
             Ok(())
         }
         Tag::TableCell => {
-            ctx.push_styled(Container {
+            ctx.push(Container {
                 element: Element::TD {
                     rows: None,
                     columns: None,
                 },
                 classes: vec!["markdown-td".to_string()],
-                padding_left: Some(Number::from(8)),
-                padding_right: Some(Number::from(8)),
-                padding_top: Some(Number::from(8)),
-                padding_bottom: Some(Number::from(8)),
-                border_right: Some((Color::from_hex("#d0d7de"), Number::from(1))),
-                border_bottom: Some((Color::from_hex("#d0d7de"), Number::from(1))),
                 ..Default::default()
             });
             Ok(())
@@ -1147,7 +992,7 @@ mod tests {
                     .classes
                     .contains(&"markdown-blockquote".to_string())
             );
-            assert_eq!(blockquote.color, Some(Color::from_hex("#656d76")));
+            assert_eq!(blockquote.color, None);
         }
     }
 
@@ -1192,8 +1037,8 @@ mod tests {
         assert_eq!(container.children.len(), 1);
         if let Some(rule) = container.children.first() {
             assert!(rule.classes.contains(&"markdown-hr".to_string()));
-            assert_eq!(rule.height, Some(Number::from(1)));
-            assert_eq!(rule.background, Some(Color::from_hex("#d0d7de")));
+            assert_eq!(rule.height, None);
+            assert_eq!(rule.background, None);
         }
     }
 
@@ -1212,8 +1057,7 @@ mod tests {
         // Verify inline code styling is applied
         if let Some(paragraph) = container.children.first() {
             let has_inline_code = paragraph.children.iter().any(|child| {
-                child.classes.contains(&"inline-code".to_string())
-                    && child.font_family == Some(vec!["monospace".to_string()])
+                child.classes.contains(&"inline-code".to_string()) && child.font_family.is_none()
             });
             assert!(has_inline_code);
         }
@@ -1291,7 +1135,7 @@ mod tests {
                     .classes
                     .contains(&"markdown-code-block".to_string())
             );
-            assert_eq!(code_block.font_family, Some(vec!["monospace".to_string()]));
+            assert_eq!(code_block.font_family, None);
         }
     }
 
@@ -1320,7 +1164,6 @@ mod tests {
             emoji_enabled: false,
             xss_protection: false,
             syntax_highlighting: false,
-            style_policy: MarkdownStylePolicy::GithubWeb,
             link_resolver: None,
         };
         let md = "**bold** text";
@@ -1572,8 +1415,7 @@ mod tests {
         let container = markdown_to_container(md);
         if let Some(paragraph) = container.children.first() {
             let has_styled_link = paragraph.children.iter().any(|child| {
-                child.color == Some(Color::from_hex("#0969da"))
-                    && child.classes.contains(&"markdown-link".to_string())
+                child.color.is_none() && child.classes.contains(&"markdown-link".to_string())
             });
             assert!(has_styled_link);
         }
@@ -1727,8 +1569,8 @@ mod tests {
             assert_eq!(table.element, Element::Table);
             assert!(table.classes.contains(&"markdown-table".to_string()));
             // Table should have styling
-            assert_eq!(table.margin_top, Some(Number::from(16)));
-            assert_eq!(table.margin_bottom, Some(Number::from(16)));
+            assert_eq!(table.margin_top, None);
+            assert_eq!(table.margin_bottom, None);
             // Table should have THead child
             let has_thead = table
                 .children
@@ -1745,7 +1587,7 @@ mod tests {
         if let Some(paragraph) = container.children.first() {
             let has_bold = paragraph.children.iter().any(|child| {
                 child.classes.contains(&"markdown-strong".to_string())
-                    && child.font_weight == Some(FontWeight::Bold)
+                    && child.font_weight.is_none()
             });
             assert!(has_bold);
         }
@@ -1823,14 +1665,11 @@ mod tests {
         let md = "[Link text](https://example.com)";
         let container = markdown_to_container(md);
         if let Some(paragraph) = container.children.first() {
-            let has_underlined_link = paragraph.children.iter().any(|child| {
+            let has_semantic_link = paragraph.children.iter().any(|child| {
                 child.classes.contains(&"markdown-link".to_string())
-                    && child.text_decoration.as_ref().is_some_and(|td| {
-                        td.line.contains(&TextDecorationLine::Underline)
-                            && td.style == Some(TextDecorationStyle::Solid)
-                    })
+                    && child.text_decoration.is_none()
             });
-            assert!(has_underlined_link);
+            assert!(has_semantic_link);
         }
     }
 
@@ -1858,12 +1697,12 @@ mod tests {
         let h4 = &container.children[1];
 
         // H1 should have font_size 32, H4 should have font_size 16
-        assert_eq!(h1.font_size, Some(Number::from(32)));
-        assert_eq!(h4.font_size, Some(Number::from(16)));
+        assert_eq!(h1.font_size, None);
+        assert_eq!(h4.font_size, None);
 
         // Check margin differences
-        assert_eq!(h1.margin_top, Some(Number::from(32)));
-        assert_eq!(h4.margin_top, Some(Number::from(16)));
+        assert_eq!(h1.margin_top, None);
+        assert_eq!(h4.margin_top, None);
     }
 
     #[cfg(feature = "xss-protection")]
@@ -1906,13 +1745,10 @@ mod tests {
         let container = markdown_to_container(md);
         if let Some(blockquote) = container.children.first() {
             // Verify specific blockquote styling
-            assert_eq!(blockquote.padding_left, Some(Number::from(16)));
-            assert_eq!(
-                blockquote.border_left,
-                Some((Color::from_hex("#d0d7de"), Number::from(4)))
-            );
-            assert_eq!(blockquote.margin_top, Some(Number::from(16)));
-            assert_eq!(blockquote.margin_bottom, Some(Number::from(16)));
+            assert_eq!(blockquote.padding_left, None);
+            assert_eq!(blockquote.border_left, None);
+            assert_eq!(blockquote.margin_top, None);
+            assert_eq!(blockquote.margin_bottom, None);
         }
     }
 
@@ -1928,10 +1764,10 @@ mod tests {
             assert!(code.is_some());
             let code = code.unwrap();
             // Verify inline code has expected styling
-            assert_eq!(code.background, Some(Color::from_hex("#f6f8fa")));
-            assert_eq!(code.padding_left, Some(Number::from(4)));
-            assert_eq!(code.padding_right, Some(Number::from(4)));
-            assert_eq!(code.border_top_left_radius, Some(Number::from(3)));
+            assert_eq!(code.background, None);
+            assert_eq!(code.padding_left, None);
+            assert_eq!(code.padding_right, None);
+            assert_eq!(code.border_top_left_radius, None);
         }
     }
 
@@ -1955,7 +1791,7 @@ mod tests {
                 panic!("Expected Image element");
             }
             // Verify max-width styling
-            assert_eq!(image.max_width, Some(Number::IntegerPercent(100)));
+            assert_eq!(image.max_width, None);
         }
     }
 
@@ -1965,17 +1801,17 @@ mod tests {
         let container = markdown_to_container(md);
         if let Some(code_block) = container.children.first() {
             // Verify all code block styling attributes
-            assert_eq!(code_block.background, Some(Color::from_hex("#f6f8fa")));
-            assert_eq!(code_block.padding_left, Some(Number::from(16)));
-            assert_eq!(code_block.padding_right, Some(Number::from(16)));
-            assert_eq!(code_block.padding_top, Some(Number::from(16)));
-            assert_eq!(code_block.padding_bottom, Some(Number::from(16)));
-            assert_eq!(code_block.margin_top, Some(Number::from(16)));
-            assert_eq!(code_block.margin_bottom, Some(Number::from(16)));
-            assert_eq!(code_block.border_top_left_radius, Some(Number::from(6)));
-            assert_eq!(code_block.border_top_right_radius, Some(Number::from(6)));
-            assert_eq!(code_block.border_bottom_left_radius, Some(Number::from(6)));
-            assert_eq!(code_block.border_bottom_right_radius, Some(Number::from(6)));
+            assert_eq!(code_block.background, None);
+            assert_eq!(code_block.padding_left, None);
+            assert_eq!(code_block.padding_right, None);
+            assert_eq!(code_block.padding_top, None);
+            assert_eq!(code_block.padding_bottom, None);
+            assert_eq!(code_block.margin_top, None);
+            assert_eq!(code_block.margin_bottom, None);
+            assert_eq!(code_block.border_top_left_radius, None);
+            assert_eq!(code_block.border_top_right_radius, None);
+            assert_eq!(code_block.border_bottom_left_radius, None);
+            assert_eq!(code_block.border_bottom_right_radius, None);
             assert_eq!(code_block.white_space, Some(WhiteSpace::PreserveWrap));
         }
     }
@@ -1989,7 +1825,7 @@ mod tests {
             for item in &list.children {
                 assert_eq!(item.element, Element::ListItem);
                 assert!(item.classes.contains(&"markdown-list-item".to_string()));
-                assert_eq!(item.margin_bottom, Some(Number::from(4)));
+                assert_eq!(item.margin_bottom, None);
             }
         }
     }
@@ -2017,18 +1853,12 @@ mod tests {
             let td = td.unwrap();
             // Verify table cell styling
             assert!(td.classes.contains(&"markdown-td".to_string()));
-            assert_eq!(td.padding_left, Some(Number::from(8)));
-            assert_eq!(td.padding_right, Some(Number::from(8)));
-            assert_eq!(td.padding_top, Some(Number::from(8)));
-            assert_eq!(td.padding_bottom, Some(Number::from(8)));
-            assert_eq!(
-                td.border_right,
-                Some((Color::from_hex("#d0d7de"), Number::from(1)))
-            );
-            assert_eq!(
-                td.border_bottom,
-                Some((Color::from_hex("#d0d7de"), Number::from(1)))
-            );
+            assert_eq!(td.padding_left, None);
+            assert_eq!(td.padding_right, None);
+            assert_eq!(td.padding_top, None);
+            assert_eq!(td.padding_bottom, None);
+            assert_eq!(td.border_right, None);
+            assert_eq!(td.border_bottom, None);
         }
     }
 
@@ -2063,7 +1893,7 @@ mod tests {
             assert!(thead.is_some());
             let thead = thead.unwrap();
             assert!(thead.classes.contains(&"markdown-thead".to_string()));
-            assert_eq!(thead.background, Some(Color::from_hex("#f6f8fa")));
+            assert_eq!(thead.background, None);
         }
     }
 
@@ -2213,7 +2043,7 @@ mod tests {
         let container = markdown_to_container(md);
         if let Some(paragraph) = container.children.first() {
             assert!(paragraph.classes.contains(&"markdown-p".to_string()));
-            assert_eq!(paragraph.margin_bottom, Some(Number::from(16)));
+            assert_eq!(paragraph.margin_bottom, None);
         }
     }
 
@@ -2410,7 +2240,7 @@ mod tests {
         assert!(checkbox.is_some());
         let checkbox = checkbox.unwrap();
         // Verify checkbox styling
-        assert_eq!(checkbox.margin_right, Some(Number::from(8)));
+        assert_eq!(checkbox.margin_right, None);
         assert_eq!(checkbox.user_select, Some(UserSelect::None));
     }
 
@@ -2636,9 +2466,9 @@ mod tests {
 
             if let Some(code_block) = container.children.first() {
                 // Code block should still have its styling
-                assert_eq!(code_block.background, Some(Color::from_hex("#f6f8fa")));
-                assert_eq!(code_block.font_family, Some(vec!["monospace".to_string()]));
-                assert_eq!(code_block.padding_left, Some(Number::from(16)));
+                assert_eq!(code_block.background, None);
+                assert_eq!(code_block.font_family, None);
+                assert_eq!(code_block.padding_left, None);
             }
         }
 
