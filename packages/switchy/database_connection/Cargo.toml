@@ -79,6 +79,7 @@ duckdb-bundled = ["duckdb", "duckdb/bundled", "switchy_database/duckdb-bundled"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 
+_sqlite = ["dep:switchy_async"]
 mysql = ["dep:switchy_async", "switchy_database/mysql"]
 mysql-sqlx = ["mysql", "sqlx", "sqlx/mysql", "switchy_database/mysql-sqlx"]
 postgres = ["dep:switchy_async", "switchy_database/postgres"]
@@ -97,9 +98,13 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
     "switchy_database/postgres-sqlx",
 ]
-sqlite = ["dep:switchy_async", "switchy_database/sqlite"]
-sqlite-rusqlite = ["dep:rusqlite", "sqlite", "switchy_database/sqlite-rusqlite"]
-sqlite-sqlx = ["sqlite", "sqlx", "sqlx/sqlite", "switchy_database/sqlite-sqlx"]
-turso = ["sqlite", "switchy_database/turso"]
+sqlite = ["_sqlite", "switchy_database/sqlite"]
+sqlite-rusqlite = [
+    "_sqlite",
+    "dep:rusqlite",
+    "switchy_database/sqlite-rusqlite",
+]
+sqlite-sqlx = ["_sqlite", "sqlx", "sqlx/sqlite", "switchy_database/sqlite-sqlx"]
+turso = ["_sqlite", "switchy_database/turso"]
 
 database-connection-turso = ["turso"]

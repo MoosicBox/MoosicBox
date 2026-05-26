@@ -121,6 +121,7 @@ api = ["dep:actix-web", "dep:futures", "moosicbox_profiles/api"]
 
 _any_backend = []
 
+_sqlite = []
 duckdb = [
     "_any_backend",
     "dep:duckdb",
@@ -166,6 +167,7 @@ postgres-sqlx = [
 sqlite = ["_any_backend", "sqlite-sqlx"]
 sqlite-rusqlite = [
     "_any_backend",
+    "_sqlite",
     "dep:regex",
     "dep:rusqlite",
     "placeholder-question-mark",
@@ -173,6 +175,7 @@ sqlite-rusqlite = [
 ]
 sqlite-sqlx = [
     "_any_backend",
+    "_sqlite",
     "dep:futures",
     "dep:regex",
     "dep:sqlx",
@@ -181,7 +184,13 @@ sqlite-sqlx = [
     "sqlx/sqlite",
 ]
 sqlx = ["_any_backend"]
-turso = ["_any_backend", "dep:regex", "dep:turso", "placeholder-question-mark"]
+turso = [
+    "_any_backend",
+    "_sqlite",
+    "dep:regex",
+    "dep:turso",
+    "placeholder-question-mark",
+]
 
 simulator = [
     "sqlite-rusqlite",

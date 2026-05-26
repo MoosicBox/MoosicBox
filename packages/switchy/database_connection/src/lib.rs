@@ -23,9 +23,9 @@
 //! let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
 //!
 //! // Initialize a database connection (parameters vary by feature)
-//! # #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+//! # #[cfg(any(feature = "_sqlite", feature = "duckdb"))]
 //! let db = init(None, Some(creds)).await?;
-//! # #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
+//! # #[cfg(not(any(feature = "_sqlite", feature = "duckdb")))]
 //! # let db = init(Some(creds)).await?;
 //! # Ok(())
 //! # }
@@ -296,16 +296,16 @@ pub enum InitDbError {
 /// let creds = Credentials::from_url("postgres://user:pass@localhost:5432/moosicbox")
 ///     .expect("URL should parse");
 ///
-/// # #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+/// # #[cfg(any(feature = "_sqlite", feature = "duckdb"))]
 /// let _db = init(None, Some(creds)).await?;
-/// # #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
+/// # #[cfg(not(any(feature = "_sqlite", feature = "duckdb")))]
 /// # let _db = init(Some(creds)).await?;
 /// # Ok(())
 /// # }
 /// ```
 #[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init(
-    #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+    #[cfg(any(feature = "_sqlite", feature = "duckdb"))]
     #[allow(unused)]
     path: Option<&std::path::Path>,
     #[allow(unused)] creds: Option<Credentials>,
@@ -313,13 +313,13 @@ pub async fn init(
     #[cfg(feature = "simulator")]
     {
         // Convert Path to string for the simulator
-        #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+        #[cfg(any(feature = "_sqlite", feature = "duckdb"))]
         let path_str = path.as_ref().map(|p| p.to_string_lossy().to_string());
         Ok(Box::new(
             switchy_database::simulator::SimulationDatabase::new_for_path(
-                #[cfg(any(feature = "sqlite", feature = "duckdb"))]
+                #[cfg(any(feature = "_sqlite", feature = "duckdb"))]
                 path_str.as_deref(),
-                #[cfg(not(any(feature = "sqlite", feature = "duckdb")))]
+                #[cfg(not(any(feature = "_sqlite", feature = "duckdb")))]
                 None,
             )
             .unwrap(),
@@ -374,11 +374,15 @@ pub async fn init(
             #[cfg(not(feature = "sqlite-rusqlite"))]
             panic!("Invalid database features")
         } else if cfg!(feature = "sqlite-sqlx") {
-            #[cfg(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx"))]
+            #[cfg(all(
+                not(feature = "postgres"),
+                feature = "_sqlite",
+                feature = "sqlite-sqlx"
+            ))]
             return Ok(init_sqlite_sqlx(path).await?);
             #[cfg(not(all(
                 not(feature = "postgres"),
-                feature = "sqlite",
+                feature = "_sqlite",
                 feature = "sqlite-sqlx"
             )))]
             panic!("Invalid database features")
