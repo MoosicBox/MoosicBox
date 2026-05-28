@@ -450,7 +450,7 @@ home = "0.5.12"
 hostname = "0.4.2"
 html-escape = "0.2.13"
 http = "1.4.1"
-id3 = "1.16.4"
+id3 = "1.17.0"
 ignore = { version = "0.4.25", default-features = false }
 image = "0.25.10"
 imara-diff = { version = "0.2.0", default-features = false, features = [
