@@ -1299,6 +1299,7 @@ fn sanitize_manifest(
         .collect::<BTreeMap<_, _>>();
 
     resolve_workspace_package_fields(&mut manifest, &workspace_toml)?;
+    resolve_workspace_lints(&mut manifest, &workspace_toml)?;
     sanitize_dependency_sections(&mut manifest, &workspace_toml, &package_versions)?;
     if let Some(table) = manifest.as_table_mut() {
         table.remove("workspace");
@@ -1338,6 +1339,27 @@ fn resolve_workspace_package_fields(
             .ok_or_else(|| format!("Missing workspace.package.{key}"))?
             .clone();
         package_table.insert(key, value);
+    }
+
+    Ok(())
+}
+
+fn resolve_workspace_lints(
+    manifest: &mut toml::Value,
+    workspace_toml: &toml::Value,
+) -> Result<(), BoxError> {
+    if !is_workspace_inherited(manifest.get("lints")) {
+        return Ok(());
+    }
+
+    let workspace_lints = workspace_toml
+        .get("workspace")
+        .and_then(|workspace| workspace.get("lints"))
+        .ok_or("Missing workspace.lints")?
+        .clone();
+
+    if let Some(table) = manifest.as_table_mut() {
+        table.insert("lints".to_string(), workspace_lints);
     }
 
     Ok(())
@@ -1748,6 +1770,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn sanitize_manifest_strips_dev_dependencies_and_resolves_workspace_values() {
         let root = std::env::temp_dir().join(format!(
             "clippier-publish-test-{}-{}",
@@ -1777,6 +1800,10 @@ mod tests {
                 test-utils = { version = "1.2.3", path = "packages/test-utils" }
                 optional-runtime = { version = "1.2.3", path = "packages/optional-runtime" }
                 serde = "1.0.228"
+
+                [workspace.lints.clippy]
+                all = "warn"
+                pedantic = "warn"
             "#,
         )
         .unwrap();
@@ -1803,6 +1830,9 @@ mod tests {
                 [target.'cfg(unix)'.dev-dependencies]
                 test-utils = { workspace = true }
 
+                [lints]
+                workspace = true
+
                 [features]
                 runtime = ["dep:optional-runtime", "optional-runtime?/tokio"]
             "#,
@@ -1823,6 +1853,8 @@ mod tests {
         let models = dependencies.get("models").unwrap();
         let optional_runtime = dependencies.get("optional-runtime").unwrap();
         let serde = dependencies.get("serde").unwrap();
+        let lints = sanitized_toml.get("lints").unwrap();
+        let clippy_lints = lints.get("clippy").unwrap();
         let runtime_feature = sanitized_toml
             .get("features")
             .unwrap()
@@ -1858,6 +1890,9 @@ mod tests {
             ["dep:optional-runtime", "optional-runtime?/tokio"]
         );
         assert_eq!(serde.get("version").unwrap().as_str(), Some("1.0.228"));
+        assert!(lints.get("workspace").is_none());
+        assert_eq!(clippy_lints.get("all").unwrap().as_str(), Some("warn"));
+        assert_eq!(clippy_lints.get("pedantic").unwrap().as_str(), Some("warn"));
 
         fs::remove_dir_all(root).unwrap();
     }
