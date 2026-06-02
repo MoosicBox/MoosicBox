@@ -354,6 +354,13 @@ pub mod unsync_macros {
 #[cfg(feature = "database")]
 pub use switchy_database as database;
 
+/// Schema migration management.
+///
+/// Provides backend-agnostic schema migration runners and migration sources for
+/// database operations. Enable the `schema` feature to use this module.
+#[cfg(feature = "schema")]
+pub use switchy_schema as schema;
+
 /// Database connection management.
 ///
 /// Provides connection pooling and management utilities for database operations.

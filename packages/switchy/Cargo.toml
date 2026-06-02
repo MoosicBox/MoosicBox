@@ -29,6 +29,7 @@ switchy_http                = { workspace = true, optional = true }
 switchy_http_models         = { workspace = true, optional = true }
 switchy_mdns                = { workspace = true, optional = true }
 switchy_random              = { workspace = true, optional = true }
+switchy_schema              = { workspace = true, optional = true, default-features = false }
 switchy_tcp                 = { workspace = true, optional = true }
 switchy_telemetry           = { workspace = true, optional = true }
 switchy_time                = { workspace = true, optional = true }
@@ -56,6 +57,7 @@ fail-on-warnings = [
     "switchy_http_models?/fail-on-warnings",
     "switchy_mdns?/fail-on-warnings",
     "switchy_random?/fail-on-warnings",
+    "switchy_schema?/fail-on-warnings",
     "switchy_tcp?/fail-on-warnings",
     "switchy_telemetry?/fail-on-warnings",
     "switchy_time?/fail-on-warnings",
@@ -81,6 +83,7 @@ all = [
     "all-upnp",
     "all-uuid",
     "all-web-server",
+    "schema",
 ]
 
 simulator = [
@@ -167,6 +170,7 @@ database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
 database-sqlx            = ["database", "switchy_database?/sqlx"]
 database-tls             = ["database", "switchy_database?/tls"]
 database-turso           = ["database", "switchy_database?/turso"]
+schema                   = ["database-schema", "dep:switchy_schema", "switchy_schema?/code"]
 
 all-database-connection = [
     "database-connection",

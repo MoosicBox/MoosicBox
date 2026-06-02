@@ -16157,6 +16157,7 @@ dependencies = [
  "switchy_http_models",
  "switchy_mdns",
  "switchy_random",
+ "switchy_schema",
  "switchy_tcp",
  "switchy_telemetry",
  "switchy_time",
