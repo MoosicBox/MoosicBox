@@ -173,6 +173,85 @@ impl From<turso::Error> for crate::DatabaseError {
     }
 }
 
+/// Options for constructing a local Turso database.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TursoDatabaseConfig {
+    /// Maximum accumulated time a connection waits while an operation is busy.
+    pub busy_timeout: Option<std::time::Duration>,
+    /// Enable Turso's experimental multi-process WAL support.
+    pub multiprocess_wal: bool,
+}
+
+/// Builder for constructing a local Turso database.
+#[derive(Debug, Clone, Default)]
+pub struct TursoDatabaseBuilder {
+    path: Option<String>,
+    config: TursoDatabaseConfig,
+}
+
+impl TursoDatabaseBuilder {
+    /// Create a new Turso database builder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            path: None,
+            config: TursoDatabaseConfig {
+                busy_timeout: None,
+                multiprocess_wal: false,
+            },
+        }
+    }
+
+    /// Set the local database path.
+    #[must_use]
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    /// Set the local database path.
+    pub fn path(&mut self, path: impl Into<String>) -> &mut Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    /// Set the maximum accumulated busy wait timeout.
+    #[must_use]
+    pub const fn with_busy_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.config.busy_timeout = Some(timeout);
+        self
+    }
+
+    /// Set the maximum accumulated busy wait timeout.
+    pub const fn busy_timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.config.busy_timeout = Some(timeout);
+        self
+    }
+
+    /// Enable or disable experimental multi-process WAL support.
+    #[must_use]
+    pub const fn with_multiprocess_wal(mut self, enabled: bool) -> Self {
+        self.config.multiprocess_wal = enabled;
+        self
+    }
+
+    /// Enable or disable experimental multi-process WAL support.
+    pub const fn multiprocess_wal(&mut self, enabled: bool) -> &mut Self {
+        self.config.multiprocess_wal = enabled;
+        self
+    }
+
+    /// Build the configured Turso database.
+    ///
+    /// # Errors
+    ///
+    /// * If the database cannot be opened or the initial connection cannot be established
+    pub async fn build(self) -> Result<TursoDatabase, TursoDatabaseError> {
+        TursoDatabase::new_with_config(self.path.as_deref().unwrap_or(":memory:"), self.config)
+            .await
+    }
+}
+
 /// Turso Database implementation providing `SQLite`-compatible API
 #[derive(Debug)]
 pub struct TursoDatabase {
@@ -181,7 +260,13 @@ pub struct TursoDatabase {
 }
 
 impl TursoDatabase {
-    /// Create a new Turso database instance
+    /// Create a new Turso database builder.
+    #[must_use]
+    pub const fn builder() -> TursoDatabaseBuilder {
+        TursoDatabaseBuilder::new()
+    }
+
+    /// Create a new Turso database instance.
     ///
     /// Creates a single shared connection for regular database operations. Transactions
     /// will create separate connections as needed.
@@ -191,8 +276,26 @@ impl TursoDatabase {
     /// * Returns `TursoDatabaseError::Connection` if the database cannot be opened or
     ///   the initial connection cannot be established
     pub async fn new(path: &str) -> Result<Self, TursoDatabaseError> {
-        log::debug!("Creating Turso database: path={path}");
-        let builder = Builder::new_local(path);
+        Self::builder().with_path(path).build().await
+    }
+
+    /// Create a new Turso database instance with explicit connection options.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `TursoDatabaseError::Connection` if the database cannot be opened
+    /// * Returns `TursoDatabaseError::Turso` if the initial connection cannot be established or
+    ///   configured
+    pub async fn new_with_config(
+        path: &str,
+        config: TursoDatabaseConfig,
+    ) -> Result<Self, TursoDatabaseError> {
+        log::debug!(
+            "Creating Turso database: path={path}, multiprocess_wal={}",
+            config.multiprocess_wal
+        );
+        let builder =
+            Builder::new_local(path).experimental_multiprocess_wal(config.multiprocess_wal);
         let database = builder
             .build()
             .await
@@ -200,6 +303,9 @@ impl TursoDatabase {
 
         log::debug!("Opening Turso connection: path={path}");
         let connection = database.connect().map_err(TursoDatabaseError::Turso)?;
+        if let Some(timeout) = config.busy_timeout {
+            connection.busy_timeout(timeout)?;
+        }
 
         log::debug!("Turso database initialized: path={path}");
         Ok(Self {

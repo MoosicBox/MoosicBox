@@ -55,6 +55,127 @@ use thiserror::Error;
 #[cfg(feature = "creds")]
 pub mod creds;
 
+/// Create a database connection builder.
+#[must_use]
+pub const fn builder() -> DatabaseConnectionBuilder {
+    DatabaseConnectionBuilder::new()
+}
+
+/// Entry point for backend-specific database connection builders.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DatabaseConnectionBuilder;
+
+impl DatabaseConnectionBuilder {
+    /// Create a new database connection builder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    /// Build a Turso database connection.
+    #[cfg(feature = "turso")]
+    #[must_use]
+    pub const fn turso(self) -> TursoConnectionBuilder {
+        TursoConnectionBuilder::new()
+    }
+}
+
+/// Builder for Turso database connections.
+#[cfg(feature = "turso")]
+#[derive(Debug, Clone, Default)]
+pub struct TursoConnectionBuilder {
+    path: Option<std::path::PathBuf>,
+    busy_timeout: Option<std::time::Duration>,
+    multiprocess_wal: bool,
+}
+
+#[cfg(feature = "turso")]
+impl TursoConnectionBuilder {
+    /// Create a new Turso connection builder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            path: None,
+            busy_timeout: None,
+            multiprocess_wal: false,
+        }
+    }
+
+    /// Use a file-backed local database at `path`.
+    #[must_use]
+    pub fn with_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    /// Use a file-backed local database at `path`.
+    pub fn path(&mut self, path: impl Into<std::path::PathBuf>) -> &mut Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    /// Use an in-memory database.
+    #[must_use]
+    pub fn with_in_memory(mut self) -> Self {
+        self.path = None;
+        self
+    }
+
+    /// Use an in-memory database.
+    pub fn in_memory(&mut self) -> &mut Self {
+        self.path = None;
+        self
+    }
+
+    /// Set the maximum accumulated busy wait timeout.
+    #[must_use]
+    pub const fn with_busy_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.busy_timeout = Some(timeout);
+        self
+    }
+
+    /// Set the maximum accumulated busy wait timeout.
+    pub const fn busy_timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.busy_timeout = Some(timeout);
+        self
+    }
+
+    /// Enable or disable experimental multi-process WAL support.
+    #[must_use]
+    pub const fn with_multiprocess_wal(mut self, enabled: bool) -> Self {
+        self.multiprocess_wal = enabled;
+        self
+    }
+
+    /// Enable or disable experimental multi-process WAL support.
+    pub const fn multiprocess_wal(&mut self, enabled: bool) -> &mut Self {
+        self.multiprocess_wal = enabled;
+        self
+    }
+
+    /// Build the configured database connection.
+    ///
+    /// # Errors
+    ///
+    /// * Propagates [`InitTursoError::Turso`] when opening or configuring the local Turso
+    ///   database fails
+    pub async fn build(self) -> Result<Box<dyn Database>, InitTursoError> {
+        let db_path = self.path.map_or_else(
+            || ":memory:".to_string(),
+            |path| path.to_string_lossy().to_string(),
+        );
+        let db = switchy_database::turso::TursoDatabase::new_with_config(
+            &db_path,
+            switchy_database::turso::TursoDatabaseConfig {
+                busy_timeout: self.busy_timeout,
+                multiprocess_wal: self.multiprocess_wal,
+            },
+        )
+        .await?;
+        Ok(Box::new(db))
+    }
+}
+
 /// Database connection credentials
 ///
 /// Contains host, database name, username, and optional password
@@ -832,14 +953,13 @@ pub enum InitTursoError {
 pub async fn init_turso_local(
     path: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitTursoError> {
-    let db_path = path.map_or_else(
-        || ":memory:".to_string(),
-        |p| p.to_string_lossy().to_string(),
-    );
-
-    let db = switchy_database::turso::TursoDatabase::new(&db_path).await?;
-
-    Ok(Box::new(db))
+    let mut builder = builder().turso();
+    if let Some(path) = path {
+        builder.path(path);
+    } else {
+        builder.in_memory();
+    }
+    builder.build().await
 }
 
 /// Errors that can occur during database initialization
