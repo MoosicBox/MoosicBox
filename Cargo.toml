@@ -390,9 +390,9 @@ async-recursion = "1.1.1"
 async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
-aws-config = "1.8.17"
-aws-sdk-apigatewaymanagement = "1.99.0"
-aws-sdk-ssm = "1.110.0"
+aws-config = "1.8.18"
+aws-sdk-apigatewaymanagement = "1.102.0"
+aws-sdk-ssm = "1.112.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
 btparse = "0.2.0"
@@ -466,7 +466,7 @@ lambda_http = "1.2.1"
 lambda_runtime = "1.2.1"
 libvips = { version = "1.7.6" }
 local-ip-address = "0.6.13"
-log = { version = "0.4.30", features = ["release_max_level_trace"] }
+log = { version = "0.4.32", features = ["release_max_level_trace"] }
 markdown = "1.0.0"
 maud = "0.27.0"
 md5 = "0.8.0"
@@ -549,7 +549,7 @@ serde_json = "1.0.150"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.20.0", default-features = false }
 serde_yaml = "0.9.34"
-serial_test = "3.4.0"
+serial_test = "3.5.0"
 sha2 = "0.11.0"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.1"
@@ -590,7 +590,7 @@ tauri-plugin-log = "2.8.0"
 tauri-plugin-notification = "2.3.3"
 tempfile = "3.27.0"
 test-case = "3.3.1"
-test-log = "0.2.20"
+test-log = "0.2.21"
 thiserror = "2.0.18"
 throttle = "0.1.0"
 tl = "0.7.8"
@@ -622,7 +622,7 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid = { version = "1.23.1", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 which = { version = "8.0.2", default-features = false }
