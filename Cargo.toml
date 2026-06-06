@@ -390,9 +390,9 @@ async-recursion = "1.1.1"
 async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
-aws-config = "1.8.17"
-aws-sdk-apigatewaymanagement = "1.99.0"
-aws-sdk-ssm = "1.110.0"
+aws-config = "1.8.18"
+aws-sdk-apigatewaymanagement = "1.102.0"
+aws-sdk-ssm = "1.112.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
 btparse = "0.2.0"
@@ -400,7 +400,7 @@ bumpalo = "3.20.3"
 bytes = "1.11.1"
 bytesize = "2.3.1"
 cargo_metadata = "0.23.1"
-chrono = { version = "0.4.44", default-features = false, features = [
+chrono = { version = "0.4.45", default-features = false, features = [
     "clock",
     "serde",
 ] }
@@ -451,7 +451,7 @@ hostname = "0.4.2"
 html-escape = "0.2.13"
 http = "1.4.1"
 id3 = "1.17.0"
-ignore = { version = "0.4.25", default-features = false }
+ignore = { version = "0.4.26", default-features = false }
 image = "0.25.10"
 imara-diff = { version = "0.2.0", default-features = false, features = [
     "unified_diff",
@@ -466,7 +466,7 @@ lambda_http = "1.2.1"
 lambda_runtime = "1.2.1"
 libvips = { version = "1.7.6" }
 local-ip-address = "0.6.13"
-log = { version = "0.4.30", features = ["release_max_level_trace"] }
+log = { version = "0.4.32", features = ["release_max_level_trace"] }
 markdown = "1.0.0"
 maud = "0.27.0"
 md5 = "0.8.0"
@@ -498,11 +498,11 @@ paste = "1.0.15"
 pin-project = "1.1.13"
 pin-project-lite = "0.2.17"
 pin-utils = "0.1.0"
-pingora = "0.8.0"
-pingora-core = "0.8.0"
-pingora-http = "0.8.0"
-pingora-load-balancing = "0.8.0"
-pingora-proxy = "0.8.0"
+pingora = "0.8.1"
+pingora-core = "0.8.1"
+pingora-http = "0.8.1"
+pingora-load-balancing = "0.8.1"
+pingora-proxy = "0.8.1"
 postgres-native-tls = "0.5.3"
 postgres-openssl = "0.5.3"
 postgres-protocol = "0.6.11"
@@ -523,7 +523,7 @@ time = "0.3.47"
 quote = "1.0.45"
 rand = "0.10.1"
 rangemap = "1.7.1"
-ratatui = "0.30.0"
+ratatui = "0.30.1"
 rayon = { version = "1.12.0", default-features = false }
 rb = "0.4.1"
 rcgen = "0.14.8"
@@ -547,9 +547,9 @@ serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
 serde_json = "1.0.150"
 serde_urlencoded = "0.7.1"
-serde_with = { version = "3.20.0", default-features = false }
+serde_with = { version = "3.21.0", default-features = false }
 serde_yaml = "0.9.34"
-serial_test = "3.4.0"
+serial_test = "3.5.0"
 sha2 = "0.11.0"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.1"
@@ -590,7 +590,7 @@ tauri-plugin-log = "2.8.0"
 tauri-plugin-notification = "2.3.3"
 tempfile = "3.27.0"
 test-case = "3.3.1"
-test-log = "0.2.20"
+test-log = "0.2.21"
 thiserror = "2.0.18"
 throttle = "0.1.0"
 tl = "0.7.8"
@@ -622,7 +622,7 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid = { version = "1.23.1", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 which = { version = "8.0.2", default-features = false }
