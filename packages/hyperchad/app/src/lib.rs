@@ -1140,7 +1140,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyperchad_renderer::Color;
+    use crate::renderer::stub::{StubRenderer, StubRunner};
+    use hyperchad_renderer::transformer::{Number, ResponsiveTrigger};
     use hyperchad_router::Router;
     use pretty_assertions::assert_eq;
 
@@ -1325,8 +1326,6 @@ mod tests {
 
     #[test_log::test]
     fn test_app_builder_build_missing_router() {
-        use crate::renderer::stub::StubRenderer;
-
         let builder = AppBuilder::new();
         let result = builder.build(StubRenderer);
 
@@ -1340,8 +1339,6 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_app_builder_build_success() {
-        use crate::renderer::stub::StubRenderer;
-
         let router = Router::new();
         let builder = AppBuilder::new()
             .with_router(router)
@@ -1361,8 +1358,6 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_app_builder_build_default_dimensions() {
-        use crate::renderer::stub::StubRenderer;
-
         let router = Router::new();
         let builder = AppBuilder::new().with_router(router);
 
@@ -1569,8 +1564,6 @@ mod tests {
 
     #[test_log::test]
     fn test_app_builder_build_default_stub() {
-        use crate::renderer::stub::StubRenderer;
-
         let router = Router::new();
         let result = AppBuilder::new().with_router(router).build_default_stub();
         assert!(result.is_ok());
@@ -1581,8 +1574,6 @@ mod tests {
 
     #[test_log::test]
     fn test_app_builder_build_stub() {
-        use crate::renderer::stub::StubRenderer;
-
         let router = Router::new();
         let result = AppBuilder::new()
             .with_router(router)
@@ -1592,9 +1583,6 @@ mod tests {
 
     #[test_log::test]
     fn test_stub_runner_run() {
-        use crate::renderer::stub::StubRunner;
-        use hyperchad_renderer::RenderRunner;
-
         let mut runner = StubRunner;
         let result = runner.run();
         assert!(result.is_ok());
@@ -1626,14 +1614,13 @@ mod tests {
     ))]
     #[test_log::test]
     fn test_build_default_html_vanilla_js_actix_applies_shared_state_route_bridge() {
-        use std::sync::Arc;
-
         use hyperchad_shared_state_bridge::{
             BridgeError, RouteCommandInput, SharedStateRouteResolver, resolve_route_context,
         };
         use hyperchad_shared_state_models::{
             ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
         };
+        use std::sync::Arc;
 
         #[derive(Debug)]
         struct TestRouteResolver;
@@ -1769,13 +1756,12 @@ mod tests {
     ))]
     #[test_log::test]
     fn test_build_default_html_vanilla_js_actix_applies_shared_state_transport_dispatcher() {
-        use std::sync::Arc;
-
         use async_trait::async_trait;
         use hyperchad_renderer_html::actix::SharedStateTransportDispatcher;
         use hyperchad_shared_state_models::{
             ChannelId, EventEnvelope, TransportInbound, TransportOutbound,
         };
+        use std::sync::Arc;
 
         #[derive(Debug)]
         struct TestDispatcher;
@@ -1824,9 +1810,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_stub_renderer_init() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::Renderer;
-
         let mut renderer = StubRenderer;
         let result = renderer
             .init(800.0, 600.0, None, None, None, None, None, None)
@@ -1836,169 +1819,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_stub_renderer_init_with_all_options() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::{Color, Renderer};
-
-        let mut renderer = StubRenderer;
-        let background = Color::from_hex("#ffffff");
-        let result = renderer
-            .init(
-                1920.0,
-                1080.0,
-                Some(100),
-                Some(200),
-                Some(background),
-                Some("Test Title"),
-                Some("Test Description"),
-                Some("width=device-width"),
-            )
-            .await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_render() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::{Renderer, View};
-
-        let renderer = StubRenderer;
-        let view = View::default();
-        let result = renderer.render(view).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_emit_event() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::Renderer;
-
-        let renderer = StubRenderer;
-        let result = renderer
-            .emit_event("test_event".to_string(), Some("test_value".to_string()))
-            .await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_emit_event_without_value() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::Renderer;
-
-        let renderer = StubRenderer;
-        let result = renderer.emit_event("test_event".to_string(), None).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_generator_generate() {
-        use crate::Generator;
-        use crate::renderer::stub::StubRenderer;
-
-        let renderer = StubRenderer;
-        let router = Router::new();
-        let result = renderer.generate(&router, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_generator_generate_with_output() {
-        use crate::Generator;
-        use crate::renderer::stub::StubRenderer;
-
-        let renderer = StubRenderer;
-        let router = Router::new();
-        let result = renderer
-            .generate(&router, Some("/tmp/test_output".to_string()))
-            .await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_cleaner_clean() {
-        use crate::Cleaner;
-        use crate::renderer::stub::StubRenderer;
-
-        let renderer = StubRenderer;
-        let result = renderer.clean(None).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_stub_renderer_cleaner_clean_with_output() {
-        use crate::Cleaner;
-        use crate::renderer::stub::StubRenderer;
-
-        let renderer = StubRenderer;
-        let result = renderer.clean(Some("/tmp/test_output".to_string())).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test]
-    fn test_stub_renderer_to_runner() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::ToRenderRunner;
-
-        let renderer = StubRenderer;
-        let runtime = switchy::unsync::runtime::Builder::new()
-            .max_blocking_threads(1)
-            .build()
-            .expect("Failed to build runtime");
-        let handle = runtime.handle();
-
-        let result = renderer.to_runner(handle);
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_app_generate_with_stub_renderer() {
-        use crate::renderer::stub::StubRenderer;
-
-        let router = Router::new();
-        let app = AppBuilder::new()
-            .with_router(router)
-            .build(StubRenderer)
-            .expect("Failed to build app");
-
-        let result = app.generate(None).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test(switchy_async::test)]
-    async fn test_app_clean_with_stub_renderer() {
-        use crate::renderer::stub::StubRenderer;
-
-        let router = Router::new();
-        let app = AppBuilder::new()
-            .with_router(router)
-            .build(StubRenderer)
-            .expect("Failed to build app");
-
-        let result = app.clean(None).await;
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test]
-    fn test_app_dynamic_routes_empty_router() {
-        use crate::renderer::stub::StubRenderer;
-
-        let router = Router::new();
-        let app = AppBuilder::new()
-            .with_router(router)
-            .build(StubRenderer)
-            .expect("Failed to build app");
-
-        let result = app.dynamic_routes();
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test]
-    fn test_stub_renderer_add_responsive_trigger() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::{
-            Renderer,
-            transformer::{Number, ResponsiveTrigger},
-        };
-
         let mut renderer = StubRenderer;
         // This is a no-op, but we verify it doesn't panic
         let trigger = ResponsiveTrigger::MaxWidth(Number::Real(768.0));
@@ -2008,9 +1828,6 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_app_build_transfers_all_properties() {
-        use crate::renderer::stub::StubRenderer;
-        use hyperchad_renderer::Color;
-
         let router = Router::new();
         let background = Color::from_hex("#123456");
         let app = AppBuilder::new()

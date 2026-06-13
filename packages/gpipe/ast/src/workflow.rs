@@ -821,14 +821,14 @@ jobs: {}
         assert_eq!(action.config.name, Some("My Custom Action".to_string()));
 
         let inputs = action.config.inputs.as_ref().unwrap();
-        let input1 = inputs.get("input1").unwrap();
-        assert!(input1.required);
-        assert_eq!(input1.default, None);
+        let required_input = inputs.get("input1").unwrap();
+        assert!(required_input.required);
+        assert_eq!(required_input.default, None);
 
-        let input2 = inputs.get("input2").unwrap();
+        let optional_input = inputs.get("input2").unwrap();
         // Verify that required defaults to false when not specified
-        assert!(!input2.required);
-        assert_eq!(input2.default, Some("default-value".to_string()));
+        assert!(!optional_input.required);
+        assert_eq!(optional_input.default, Some("default-value".to_string()));
     }
 
     #[test_log::test]
