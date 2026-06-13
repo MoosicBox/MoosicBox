@@ -195,6 +195,10 @@ impl<T: HtmlTagRenderer> ToRenderRunner for StubApp<T> {
 mod tests {
     use super::*;
     use crate::DefaultHtmlTagRenderer;
+    #[cfg(feature = "assets")]
+    use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+    #[cfg(feature = "assets")]
+    use std::path::PathBuf;
 
     #[test_log::test]
     fn test_stub_app_new() {
@@ -298,9 +302,6 @@ mod tests {
     #[cfg(feature = "assets")]
     #[test_log::test]
     fn test_stub_app_with_static_asset_routes() {
-        use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
-        use std::path::PathBuf;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let routes = vec![StaticAssetRoute {
             route: "/static".to_string(),

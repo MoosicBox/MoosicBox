@@ -1534,8 +1534,9 @@ pub fn container_element_to_html_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::override_item_to_css_name;
-    use hyperchad_transformer::{Calculation, OverrideItem};
+    use crate::{DefaultHtmlTagRenderer, override_item_to_css_name};
+    use hyperchad_router::Container;
+    use hyperchad_transformer::{Flex, Input, OverrideItem, TextDecoration, models::*};
 
     #[test_log::test]
     fn test_number_to_html_string_real() {
@@ -1916,9 +1917,6 @@ mod tests {
     // Tests for element_to_html with various element types
     #[test_log::test]
     fn test_element_to_html_div() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Div,
@@ -1935,9 +1933,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_raw() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Raw {
@@ -1955,10 +1950,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_image_with_source_and_alt() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::ImageFit;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Image {
@@ -1983,10 +1974,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_anchor_with_href_and_target() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LinkTarget;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Anchor {
@@ -2008,9 +1995,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_button_with_custom_type() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Button {
@@ -2030,9 +2014,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_button_default_type() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Button { r#type: None },
@@ -2049,10 +2030,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_input_text_with_placeholder() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Input;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Input {
@@ -2080,10 +2057,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_input_checkbox_checked() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Input;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Input {
@@ -2106,10 +2079,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_heading_sizes() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::HeaderSize;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         for (size, expected_tag) in [
@@ -2142,9 +2111,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_table_with_rowspan_colspan() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         // Test TH with rows/columns
@@ -2165,7 +2131,7 @@ mod tests {
         assert!(html.contains("colspan=\"3\""));
 
         // Test TD with rows/columns
-        let td_container = Container {
+        let table_data_container = Container {
             element: hyperchad_transformer::Element::TD {
                 rows: Some(Number::Integer(4)),
                 columns: None,
@@ -2174,7 +2140,7 @@ mod tests {
         };
 
         let mut buffer = Vec::new();
-        element_to_html(&mut buffer, &td_container, &tag_renderer, false).unwrap();
+        element_to_html(&mut buffer, &table_data_container, &tag_renderer, false).unwrap();
         let html = std::str::from_utf8(&buffer).unwrap();
 
         assert!(html.starts_with("<td"));
@@ -2184,9 +2150,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_details_open() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         // Test open details
@@ -2218,9 +2181,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_textarea() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Textarea {
@@ -2249,9 +2209,6 @@ mod tests {
     // Tests for element_style_to_html
     #[test_log::test]
     fn test_element_style_to_html_flex_container() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutDirection;
-
         let container = Container {
             direction: LayoutDirection::Column,
             justify_content: Some(hyperchad_transformer::models::JustifyContent::Center),
@@ -2269,9 +2226,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_position_absolute() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Position;
-
         let container = Container {
             position: Some(Position::Absolute),
             ..Default::default()
@@ -2289,9 +2243,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_position_with_explicit_values() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Position;
-
         let container = Container {
             position: Some(Position::Absolute),
             top: Some(Number::Integer(10)),
@@ -2312,8 +2263,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_margins_and_padding() {
-        use hyperchad_router::Container;
-
         let container = Container {
             margin_left: Some(Number::Integer(5)),
             margin_right: Some(Number::RealPercent(10.0)),
@@ -2334,8 +2283,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_transforms() {
-        use hyperchad_router::Container;
-
         let container = Container {
             translate_x: Some(Number::Integer(50)),
             translate_y: Some(Number::RealPercent(-25.0)),
@@ -2351,8 +2298,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_hidden() {
-        use hyperchad_router::Container;
-
         let container = Container {
             hidden: Some(true),
             ..Default::default()
@@ -2367,9 +2312,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_overflow() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutOverflow;
-
         let container = Container {
             overflow_x: LayoutOverflow::Auto,
             overflow_y: LayoutOverflow::Hidden,
@@ -2386,9 +2328,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_flex_properties() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Flex;
-
         let container = Container {
             flex: Some(Flex {
                 grow: Number::Integer(1),
@@ -2409,8 +2348,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_borders() {
-        use hyperchad_router::Container;
-
         let color = hyperchad_renderer::Color {
             r: 255,
             g: 0,
@@ -2436,10 +2373,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_text_decoration() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::TextDecoration;
-        use hyperchad_transformer::models::{TextDecorationLine, TextDecorationStyle};
-
         let color = hyperchad_renderer::Color {
             r: 0,
             g: 0,
@@ -2469,9 +2402,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_style_to_html_cursor_types() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Cursor;
-
         for (cursor, expected) in [
             (Cursor::Pointer, "pointer"),
             (Cursor::Text, "text"),
@@ -2498,8 +2428,6 @@ mod tests {
     // Tests for element_classes_to_html
     #[test_log::test]
     fn test_element_classes_to_html_button() {
-        use hyperchad_router::Container;
-
         let container = Container {
             element: hyperchad_transformer::Element::Button { r#type: None },
             ..Default::default()
@@ -2515,8 +2443,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_classes_to_html_table() {
-        use hyperchad_router::Container;
-
         let container = Container {
             element: hyperchad_transformer::Element::Table,
             ..Default::default()
@@ -2532,8 +2458,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_classes_to_html_custom_classes() {
-        use hyperchad_router::Container;
-
         let container = Container {
             element: hyperchad_transformer::Element::Div,
             classes: vec!["my-class".to_string(), "another-class".to_string()],
@@ -2551,8 +2475,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_classes_to_html_button_with_custom_classes() {
-        use hyperchad_router::Container;
-
         let container = Container {
             element: hyperchad_transformer::Element::Button { r#type: None },
             classes: vec!["custom-btn".to_string()],
@@ -2569,8 +2491,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_classes_to_html_no_classes() {
-        use hyperchad_router::Container;
-
         let container = Container {
             element: hyperchad_transformer::Element::Div,
             classes: vec![],
@@ -2588,9 +2508,6 @@ mod tests {
     // Tests for container_element_to_html
     #[test_log::test]
     fn test_container_element_to_html_with_children() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Div,
@@ -2618,10 +2535,6 @@ mod tests {
 
     #[test_log::test]
     fn test_container_to_html_renders_outer_element() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Element;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: Element::Heading {
@@ -2647,9 +2560,6 @@ mod tests {
     // Tests for elements_to_html
     #[test_log::test]
     fn test_elements_to_html_multiple() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let containers = vec![
             Container {
@@ -2675,10 +2585,6 @@ mod tests {
     // Tests for data attributes
     #[test_log::test]
     fn test_element_to_html_with_data_attributes() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use std::collections::BTreeMap;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let mut data = BTreeMap::new();
         data.insert("test-id".to_string(), "123".to_string());
@@ -2701,10 +2607,6 @@ mod tests {
     // Test for image with srcset and loading
     #[test_log::test]
     fn test_element_to_html_image_with_srcset_and_loading() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::ImageLoading;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Image {
@@ -2730,10 +2632,6 @@ mod tests {
     // Test for input types
     #[test_log::test]
     fn test_element_to_html_input_password() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Input;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Input {
@@ -2758,10 +2656,6 @@ mod tests {
 
     #[test_log::test]
     fn test_element_to_html_input_hidden() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Input;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Input {
@@ -2786,10 +2680,6 @@ mod tests {
     // Test anchor with custom target
     #[test_log::test]
     fn test_element_to_html_anchor_with_custom_target() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LinkTarget;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Anchor {
@@ -2809,9 +2699,6 @@ mod tests {
     // Test grid layout
     #[test_log::test]
     fn test_element_style_to_html_grid_layout() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutOverflow;
-
         let container = Container {
             overflow_x: LayoutOverflow::Wrap { grid: true },
             grid_cell_size: Some(Number::Integer(200)),
@@ -2833,9 +2720,6 @@ mod tests {
     // Test visibility
     #[test_log::test]
     fn test_element_style_to_html_visibility_hidden() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Visibility;
-
         let container = Container {
             visibility: Some(Visibility::Hidden),
             ..Default::default()
@@ -2851,9 +2735,6 @@ mod tests {
     // Test all position types
     #[test_log::test]
     fn test_element_style_to_html_all_position_types() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Position;
-
         for (position, expected) in [
             (Position::Relative, "relative"),
             (Position::Static, "static"),
@@ -2881,9 +2762,6 @@ mod tests {
     // Test semantic HTML elements
     #[test_log::test]
     fn test_element_to_html_semantic_elements() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         for (element, expected_tag) in [
@@ -2927,10 +2805,6 @@ mod tests {
     // Tests for anchor with all target types
     #[test_log::test]
     fn test_element_to_html_anchor_all_target_types() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LinkTarget;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         for (target, expected) in [
@@ -2961,10 +2835,6 @@ mod tests {
     // Test image with eager loading
     #[test_log::test]
     fn test_element_to_html_image_with_eager_loading() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::ImageLoading;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Image {
@@ -2988,9 +2858,6 @@ mod tests {
     // Test image fit modes
     #[test_log::test]
     fn test_element_style_to_html_image_fit_modes() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::ImageFit;
-
         for (fit, expected_css) in [
             (ImageFit::Default, "object-fit:unset"),
             (ImageFit::Contain, "object-fit:contain"),
@@ -3024,9 +2891,6 @@ mod tests {
     // Test element_style_to_html with user_select
     #[test_log::test]
     fn test_element_style_to_html_user_select() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::UserSelect;
-
         for (user_select, expected_css) in [
             (UserSelect::Auto, "user-select:auto"),
             (UserSelect::None, "user-select:none"),
@@ -3052,9 +2916,6 @@ mod tests {
     // Test element_style_to_html with overflow_wrap
     #[test_log::test]
     fn test_element_style_to_html_overflow_wrap() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::OverflowWrap;
-
         for (overflow_wrap, expected_css) in [
             (OverflowWrap::Normal, "overflow-wrap:normal"),
             (OverflowWrap::BreakWord, "overflow-wrap:break-word"),
@@ -3079,9 +2940,6 @@ mod tests {
     // Test element_style_to_html with text_overflow
     #[test_log::test]
     fn test_element_style_to_html_text_overflow() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::TextOverflow;
-
         for (text_overflow, expected_css) in [
             (TextOverflow::Clip, "text-overflow:clip"),
             (TextOverflow::Ellipsis, "text-overflow:ellipsis"),
@@ -3105,8 +2963,6 @@ mod tests {
     // Test element_style_to_html with font_family
     #[test_log::test]
     fn test_element_style_to_html_font_family() {
-        use hyperchad_router::Container;
-
         let container = Container {
             font_family: Some(vec![
                 "Arial".to_string(),
@@ -3126,9 +2982,6 @@ mod tests {
     // Test element_style_to_html with font_weight
     #[test_log::test]
     fn test_element_style_to_html_font_weight() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::FontWeight;
-
         for (weight, expected) in [
             (FontWeight::Thin, "font-weight:thin"),
             (FontWeight::Normal, "font-weight:normal"),
@@ -3158,9 +3011,6 @@ mod tests {
     // Test element_style_to_html with all text_align values
     #[test_log::test]
     fn test_element_style_to_html_text_align_all() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::TextAlign;
-
         for (text_align, expected_css) in [
             (TextAlign::Start, "text-align:start"),
             (TextAlign::Center, "text-align:center"),
@@ -3186,9 +3036,6 @@ mod tests {
     // Test element_style_to_html with all white_space values
     #[test_log::test]
     fn test_element_style_to_html_white_space_all() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::WhiteSpace;
-
         for (white_space, expected_css) in [
             (WhiteSpace::Normal, "white-space:normal"),
             (WhiteSpace::Preserve, "white-space:pre"),
@@ -3213,9 +3060,6 @@ mod tests {
     // Test element_style_to_html with scroll overflow
     #[test_log::test]
     fn test_element_style_to_html_overflow_scroll() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutOverflow;
-
         let container = Container {
             overflow_x: LayoutOverflow::Scroll,
             overflow_y: LayoutOverflow::Scroll,
@@ -3233,9 +3077,6 @@ mod tests {
     // Test element_style_to_html with flex wrap (non-grid)
     #[test_log::test]
     fn test_element_style_to_html_flex_wrap() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutOverflow;
-
         let container = Container {
             overflow_x: LayoutOverflow::Wrap { grid: false },
             ..Default::default()
@@ -3251,9 +3092,6 @@ mod tests {
     // Test element_style_to_html with justify_content all values
     #[test_log::test]
     fn test_element_style_to_html_justify_content_all() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::JustifyContent;
-
         for (justify_content, expected_css) in [
             (JustifyContent::Start, "justify-content:start"),
             (JustifyContent::Center, "justify-content:center"),
@@ -3283,9 +3121,6 @@ mod tests {
     // Test element_style_to_html with align_items all values
     #[test_log::test]
     fn test_element_style_to_html_align_items_all() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::AlignItems;
-
         for (align_items, expected_css) in [
             (AlignItems::Start, "align-items:start"),
             (AlignItems::Center, "align-items:center"),
@@ -3310,11 +3145,6 @@ mod tests {
     // Test container_element_to_html_response
     #[test_log::test]
     fn test_container_element_to_html_response() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_renderer::Color;
-        use hyperchad_router::Container;
-        use std::collections::BTreeMap;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let headers = BTreeMap::new();
 
@@ -3362,10 +3192,6 @@ mod tests {
     // Test text_decoration with single line style
     #[test_log::test]
     fn test_element_style_to_html_text_decoration_single_line() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::TextDecoration;
-        use hyperchad_transformer::models::TextDecorationLine;
-
         let container = Container {
             text_decoration: Some(TextDecoration {
                 color: None,
@@ -3386,10 +3212,6 @@ mod tests {
     // Test text_decoration with all line styles
     #[test_log::test]
     fn test_element_style_to_html_text_decoration_line_inherit_none() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::TextDecoration;
-        use hyperchad_transformer::models::TextDecorationLine;
-
         for (line, expected) in [
             (TextDecorationLine::Inherit, "inherit"),
             (TextDecorationLine::None, "none"),
@@ -3418,10 +3240,6 @@ mod tests {
     // Test text_decoration_style all values
     #[test_log::test]
     fn test_element_style_to_html_text_decoration_style_all() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::TextDecoration;
-        use hyperchad_transformer::models::{TextDecorationLine, TextDecorationStyle};
-
         for (style, expected) in [
             (TextDecorationStyle::Inherit, "inherit"),
             (TextDecorationStyle::Solid, "solid"),
@@ -3453,9 +3271,6 @@ mod tests {
     // Test all cursor types
     #[test_log::test]
     fn test_element_style_to_html_cursor_all_types() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Cursor;
-
         for (cursor, expected_css) in [
             (Cursor::Auto, "auto"),
             (Cursor::Crosshair, "crosshair"),
@@ -3497,8 +3312,6 @@ mod tests {
     // Test borders for all sides
     #[test_log::test]
     fn test_element_style_to_html_borders_all_sides() {
-        use hyperchad_router::Container;
-
         let color = hyperchad_renderer::Color {
             r: 128,
             g: 128,
@@ -3529,9 +3342,6 @@ mod tests {
     // Test canvas element
     #[test_log::test]
     fn test_element_to_html_canvas() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Canvas,
@@ -3551,9 +3361,6 @@ mod tests {
     // Test table elements (THead, TBody, TR)
     #[test_log::test]
     fn test_element_to_html_table_elements() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
         for (element, expected_tag) in [
@@ -3585,9 +3392,6 @@ mod tests {
     // Test flex container detection with row direction
     #[test_log::test]
     fn test_element_style_to_html_flex_row_direction() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::LayoutDirection;
-
         let container = Container {
             direction: LayoutDirection::Row,
             justify_content: Some(hyperchad_transformer::models::JustifyContent::Start),
@@ -3606,9 +3410,6 @@ mod tests {
     // Test position fixed default top/left
     #[test_log::test]
     fn test_element_style_to_html_position_fixed_defaults() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Position;
-
         let container = Container {
             position: Some(Position::Fixed),
             ..Default::default()
@@ -3626,9 +3427,6 @@ mod tests {
     // Test position fixed with bottom/right (should not add top/left defaults)
     #[test_log::test]
     fn test_element_style_to_html_position_fixed_with_bottom_right() {
-        use hyperchad_router::Container;
-        use hyperchad_transformer::models::Position;
-
         let container = Container {
             position: Some(Position::Fixed),
             bottom: Some(Number::Integer(20)),
@@ -3651,10 +3449,6 @@ mod tests {
     // Test input checkbox unchecked
     #[test_log::test]
     fn test_element_to_html_input_checkbox_unchecked() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-        use hyperchad_transformer::Input;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Input {
@@ -3679,9 +3473,6 @@ mod tests {
     // Test details element without open attribute
     #[test_log::test]
     fn test_element_to_html_details_none_open() {
-        use crate::DefaultHtmlTagRenderer;
-        use hyperchad_router::Container;
-
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let container = Container {
             element: hyperchad_transformer::Element::Details { open: None },

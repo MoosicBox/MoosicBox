@@ -1940,8 +1940,12 @@ mod test {
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
-    use crate::Container;
-    use hyperchad_transformer_models::FontWeight;
+    use crate::{Container, Flex, Input, Number, TextDecoration};
+    use hyperchad_color::Color;
+    use hyperchad_transformer_models::{
+        FontWeight, ImageFit, ImageLoading, LayoutDirection, LinkTarget, Route, Selector,
+        SwapStrategy, TextDecorationLine, TextDecorationStyle,
+    };
 
     /// Module for diff generation between Container values.
     ///
@@ -2344,10 +2348,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_text_decoration_parses_full_shorthand_with_multiple_lines_style_color_and_thickness() {
-        use crate::TextDecoration;
-        use hyperchad_color::Color;
-        use hyperchad_transformer_models::{TextDecorationLine, TextDecorationStyle};
-
         let html = r#"<div sx-text-decoration="underline overline solid #ff0000 2">text</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2365,9 +2365,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_text_decoration_parses_line_only() {
-        use crate::TextDecoration;
-        use hyperchad_transformer_models::TextDecorationLine;
-
         let html = r#"<div sx-text-decoration="line-through">text</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2385,8 +2382,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_flex_with_single_value_sets_grow_only() {
-        use crate::{Flex, Number};
-
         let html = r#"<div sx-flex="2">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2403,8 +2398,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_flex_with_two_values_sets_grow_and_shrink() {
-        use crate::{Flex, Number};
-
         let html = r#"<div sx-flex="2 3">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2421,8 +2414,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_flex_with_three_values_sets_all_properties() {
-        use crate::{Flex, Number};
-
         let html = r#"<div sx-flex="1 2 100">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2439,8 +2430,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_border_parses_size_and_color() {
-        use hyperchad_color::Color;
-
         let html = r#"<div sx-border="2, #ff0000">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2465,8 +2454,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_border_x_sets_only_horizontal_borders() {
-        use hyperchad_color::Color;
-
         let html = r#"<div sx-border-x="1, #00ff00">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2485,8 +2472,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_border_y_sets_only_vertical_borders() {
-        use hyperchad_color::Color;
-
         let html = r#"<div sx-border-y="3, #0000ff">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2505,8 +2490,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_individual_border_overrides_shorthand() {
-        use hyperchad_color::Color;
-
         let html = r#"<div sx-border="1, #000000" sx-border-top="5, #ffffff">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2525,8 +2508,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_target_selector_parses_various_formats() {
-        use hyperchad_transformer_models::{Route, Selector};
-
         let html = r##"<div hx-get="/api" hx-target="#my-id">content</div>"##;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2570,8 +2551,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_hx_swap_strategies() {
-        use hyperchad_transformer_models::{Route, SwapStrategy};
-
         let strategies = [
             ("children", SwapStrategy::Children),
             ("this", SwapStrategy::This),
@@ -2598,8 +2577,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_various_http_methods() {
-        use hyperchad_transformer_models::Route;
-
         let html = r#"<div hx-post="/api/submit">content</div>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2623,8 +2600,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_input_checkbox_checked_states() {
-        use crate::Input;
-
         // Test checked="checked" style
         let html = r#"<input type="checkbox" checked="checked">"#;
         let container: Container = html.try_into().unwrap();
@@ -2709,8 +2684,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_image_with_loading_and_fit_attributes() {
-        use hyperchad_transformer_models::{ImageFit, ImageLoading};
-
         let html = r#"<img src="/test.jpg" loading="lazy" sx-fit="cover">"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
@@ -2732,8 +2705,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_table_row_sets_row_direction() {
-        use hyperchad_transformer_models::LayoutDirection;
-
         let html = r"<table><tr><td>Cell</td></tr></table>";
         let container: Container = html.try_into().unwrap();
         let table = &container.children[0];
@@ -2745,8 +2716,6 @@ Line 3</textarea>"#;
 
     #[test_log::test]
     fn parse_anchor_with_target_attribute() {
-        use hyperchad_transformer_models::LinkTarget;
-
         let html = r#"<a href="/page" target="_blank">Link</a>"#;
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
