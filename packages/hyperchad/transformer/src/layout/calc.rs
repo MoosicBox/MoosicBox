@@ -635,7 +635,8 @@ macro_rules! flex_on_axis {
                                                 remaining_size = 0.0;
                                                 true
                                             } else {
-                                                remaining_size -= (target - smallest) * smallest_countf;
+                                                remaining_size = (target - smallest)
+                                                    .mul_add(-smallest_countf, remaining_size);
                                                 float_eq!(remaining_size, 0.0)
                                             };
 
