@@ -176,6 +176,8 @@ fn headers_to_btree(value: &reqwest::header::HeaderMap) -> BTreeMap<String, Stri
 
 #[cfg(test)]
 mod tests {
+    use reqwest::header::HeaderValue;
+
     use super::*;
 
     #[test_log::test]
@@ -227,8 +229,6 @@ mod tests {
 
     #[test_log::test]
     fn test_headers_to_btree_skips_non_utf8_values() {
-        use reqwest::header::HeaderValue;
-
         let mut header_map = reqwest::header::HeaderMap::new();
         // Add a valid UTF-8 header
         header_map.insert("valid", "utf8-value".parse().unwrap());

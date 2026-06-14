@@ -250,7 +250,7 @@ pub enum LibraryAlbumOrderDirection {
 ///
 /// let albums: Vec<LibraryAlbum> = Vec::new();
 /// let request = AlbumsRequest::default();
-/// let filtered = filter_albums(&album_list, &request).collect::<Vec<_>>();
+/// let filtered = filter_albums(&albums, &request).collect::<Vec<_>>();
 /// assert!(filtered.is_empty());
 /// ```
 pub fn filter_albums<'a>(

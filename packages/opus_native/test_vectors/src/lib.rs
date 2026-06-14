@@ -190,8 +190,8 @@ pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
         let dec_f = f64::from(*dec_sample);
         let error = ref_f - dec_f;
 
-        signal_power += ref_f * ref_f;
-        noise_power += error * error;
+        signal_power = ref_f.mul_add(ref_f, signal_power);
+        noise_power = error.mul_add(error, noise_power);
     }
 
     if noise_power < 1e-10 {
