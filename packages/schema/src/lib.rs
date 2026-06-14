@@ -979,6 +979,20 @@ mod sqlite_tests {
     use pretty_assertions::assert_eq;
     use switchy_database::DatabaseValue;
 
+    const API_SOURCES_COLUMN: &str = "
+            (
+                SELECT json_group_array(
+                    json_object(
+                       'id', api_sources.source_id,
+                       'source', api_sources.source
+                    )
+                )
+                FROM api_sources
+                WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
+
+            ) AS api_sources
+            ";
+
     use super::*;
 
     #[test_log::test(switchy_async::test)]
@@ -1015,19 +1029,6 @@ mod sqlite_tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_api_sources_table_migration() {
-        const API_SOURCES_COLUMN: &str = "
-            (
-                SELECT json_group_array(
-                    json_object(
-                       'id', api_sources.source_id,
-                       'source', api_sources.source
-                    )
-                )
-                FROM api_sources
-                WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
-            ) AS api_sources
-            ";
-
         let tidal = ApiSource::register("Tidal", "Tidal");
         let qobuz = ApiSource::register("Qobuz", "Qobuz");
 

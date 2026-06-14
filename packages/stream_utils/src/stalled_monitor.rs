@@ -157,7 +157,7 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
 mod tests {
     use super::*;
     use futures::stream::{self, StreamExt};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     #[test_log::test(switchy_async::test)]
     async fn test_stalled_monitor_no_timeout_or_throttle() {
@@ -207,8 +207,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test(real_time))]
     async fn test_stalled_monitor_with_throttle() {
-        use std::time::Instant;
-
         // Test that throttle limits data consumption rate
         let data = vec![1, 2, 3];
         let stream = stream::iter(data.clone());
