@@ -584,7 +584,6 @@ mod tests {
     async fn test_priority_function_with_complex_type() {
         use std::pin::Pin;
         use std::task::{Context, Poll};
-
         #[derive(Debug, Clone)]
         struct Message {
             priority: usize,

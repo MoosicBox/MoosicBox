@@ -885,6 +885,7 @@ mod test {
     #[serial]
     fn tcp_stream_should_recycle_ephemeral_ports() {
         static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
@@ -915,6 +916,7 @@ mod test {
     #[serial]
     fn tcp_stream_should_error_if_connection_queue_is_full() {
         static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {

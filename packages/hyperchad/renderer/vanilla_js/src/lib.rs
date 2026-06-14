@@ -2576,6 +2576,7 @@ mod tests {
     #[cfg(test)]
     mod integration_tests {
         use super::*;
+        use hyperchad_transformer::{Number, ResponsiveTrigger};
         use pretty_assertions::assert_eq;
 
         #[test_log::test]
@@ -2598,8 +2599,6 @@ mod tests {
 
         #[test_log::test]
         fn test_add_responsive_trigger() {
-            use hyperchad_transformer::{Number, ResponsiveTrigger};
-
             let mut renderer = VanillaJsTagRenderer::default();
             let trigger = ResponsiveTrigger::MaxWidth(Number::from(768));
             renderer.add_responsive_trigger("mobile".to_string(), trigger);

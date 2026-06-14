@@ -572,6 +572,7 @@ mod tests {
     #[test_log::test]
     fn test_update_session_playback_updated_false_when_only_quality_changed() {
         use moosicbox_music_models::PlaybackQuality;
+
         // quality is not checked by playback_updated, so should return false
         let session = models::UpdateSession {
             quality: Some(PlaybackQuality::default()),

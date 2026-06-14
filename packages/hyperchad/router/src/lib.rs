@@ -919,12 +919,11 @@ impl RouteRequest {
     /// ```
     #[cfg(feature = "form")]
     pub fn parse_form<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
-        use std::io::{Cursor, Read as _};
-
         use base64::engine::{Engine as _, general_purpose};
         use hyper_old::header::{ContentDisposition, ContentType, DispositionParam, Headers};
         use mime_multipart::{Node, read_multipart_body};
         use mime_old::Mime;
+        use std::io::{Cursor, Read as _};
 
         fn parse_multipart_form_data(
             body: &[u8],
@@ -2057,7 +2056,6 @@ mod tests {
         #[test_log::test]
         fn test_parse_body_missing() {
             use serde::Deserialize;
-
             #[derive(Deserialize)]
             struct Data {
                 #[allow(dead_code)]
@@ -2073,7 +2071,6 @@ mod tests {
         #[test_log::test]
         fn test_parse_body_valid_json() {
             use serde::Deserialize;
-
             #[derive(Deserialize, PartialEq, Debug)]
             struct Data {
                 value: String,
@@ -2095,7 +2092,6 @@ mod tests {
         #[test_log::test]
         fn test_parse_body_invalid_json() {
             use serde::Deserialize;
-
             #[allow(dead_code)]
             #[derive(Deserialize)]
             struct Data {
@@ -2701,7 +2697,6 @@ mod tests {
                 General,
                 Reply { in_reply_to: u64 },
             }
-
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             struct CreateComment {
                 body: String,
@@ -2736,7 +2731,6 @@ mod tests {
                 General,
                 Reply { in_reply_to: u64 },
             }
-
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             struct CreateComment {
                 body: String,
@@ -2764,7 +2758,6 @@ mod tests {
             enum Action {
                 Transfer { from: u64, to: u64, amount: u64 },
             }
-
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             struct Request {
                 user_id: u64,
@@ -2832,7 +2825,6 @@ mod tests {
                 Numeric { count: u64, ratio: f64 },
                 Text { description: String },
             }
-
             #[derive(Debug, Clone, Deserialize, PartialEq)]
             struct Item {
                 name: String,
@@ -2873,7 +2865,6 @@ mod tests {
         #[test_log::test]
         fn test_deserialize_bytes_with_visitor() {
             use serde::de::Deserializer;
-
             struct ByteBufVisitor;
             impl serde::de::Visitor<'_> for ByteBufVisitor {
                 type Value = Vec<u8>;
@@ -2905,7 +2896,6 @@ mod tests {
         #[test_log::test]
         fn test_deserialize_null_value_as_unit() {
             use serde::de::Deserializer;
-
             struct UnitVisitor;
             impl serde::de::Visitor<'_> for UnitVisitor {
                 type Value = ();
@@ -2926,10 +2916,7 @@ mod tests {
 
         #[test_log::test]
         fn test_deserialize_any_case_insensitive_booleans() {
-            // The `deserialize_any` method supports case-insensitive booleans
-            // This is used when struct fields use serde's untagged or default deserialization
             use serde::de::Deserializer;
-
             struct BoolVisitor;
             impl serde::de::Visitor<'_> for BoolVisitor {
                 type Value = bool;
@@ -2943,6 +2930,8 @@ mod tests {
                 }
             }
 
+            // The `deserialize_any` method supports case-insensitive booleans
+            // This is used when struct fields use serde's untagged or default deserialization
             let true_upper = form_deserializer::StringValueDeserializer::new("TRUE".to_string());
             let result = true_upper.deserialize_any(BoolVisitor);
             assert!(result.is_ok());
@@ -2982,7 +2971,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_error_on_primitive_types() {
             use serde::de::Deserializer;
-
             struct BoolVisitor;
             impl serde::de::Visitor<'_> for BoolVisitor {
                 type Value = bool;
@@ -3000,7 +2988,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_error_on_seq() {
             use serde::de::Deserializer;
-
             struct SeqVisitor;
             impl serde::de::Visitor<'_> for SeqVisitor {
                 type Value = Vec<String>;
@@ -3018,7 +3005,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_error_on_tuple() {
             use serde::de::Deserializer;
-
             struct TupleVisitor;
             impl serde::de::Visitor<'_> for TupleVisitor {
                 type Value = (String, i32);
@@ -3036,7 +3022,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_error_on_enum() {
             use serde::de::Deserializer;
-
             struct EnumVisitor;
             impl serde::de::Visitor<'_> for EnumVisitor {
                 type Value = String;
@@ -3055,7 +3040,6 @@ mod tests {
         fn test_deserialize_newtype_struct() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct UserId(u64);
-
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
                 user_id: UserId,
@@ -3076,7 +3060,6 @@ mod tests {
         fn test_deserialize_newtype_string_wrapper() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct Email(String);
-
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
                 email: Email,
@@ -3096,7 +3079,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_unit_struct() {
             use serde::de::Deserializer;
-
             struct UnitVisitor;
             impl serde::de::Visitor<'_> for UnitVisitor {
                 type Value = ();
@@ -3117,7 +3099,6 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_ignored_any() {
             use serde::de::Deserializer;
-
             struct IgnoredVisitor;
             impl serde::de::Visitor<'_> for IgnoredVisitor {
                 type Value = ();
@@ -3141,8 +3122,8 @@ mod tests {
         #[test_log::test]
         fn test_form_data_deserializer_option_visits_some() {
             use serde::de::Deserializer;
-
             struct OptionVisitor;
+
             impl<'de> serde::de::Visitor<'de> for OptionVisitor {
                 type Value = Option<BTreeMap<String, String>>;
                 fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
