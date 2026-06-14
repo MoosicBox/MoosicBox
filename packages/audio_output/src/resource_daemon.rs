@@ -175,6 +175,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
     /// Wait for a daemon state to satisfy a predicate condition with timeout.
     ///
     /// This helper function polls the daemon state until either:
@@ -498,9 +501,6 @@ mod tests {
 
     #[test_log::test]
     fn test_resource_daemon_send_sync() {
-        fn assert_send<T: Send>() {}
-        fn assert_sync<T: Sync>() {}
-
         assert_send::<ResourceDaemon<i32, String>>();
         assert_sync::<ResourceDaemon<i32, String>>();
     }
