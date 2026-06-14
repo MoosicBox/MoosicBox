@@ -49,6 +49,8 @@ use moosicbox_resampler::{Resampler, to_audio_buffer};
 use switchy_async::sync::Mutex;
 use switchy_async::task::JoinError;
 use symphonia::core::audio::{AudioBuffer, Signal as _};
+#[cfg(test)]
+use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
 use symphonia::core::conv::FromSample;
 use symphonia::core::formats::{Packet, Track};
 use thiserror::Error;
@@ -710,6 +712,7 @@ impl Default for AudioOutputScanner {
 mod tests {
     use super::*;
     use std::io;
+    use symphonia::core::audio::Signal;
 
     #[test_log::test]
     fn test_audio_output_error_debug() {
@@ -990,8 +993,6 @@ mod tests {
 
     #[test_log::test]
     fn test_to_samples_stereo_interleaving() {
-        use symphonia::core::audio::Signal;
-
         // Create a stereo audio buffer with 4 frames
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
@@ -1031,8 +1032,6 @@ mod tests {
 
     #[test_log::test]
     fn test_to_samples_mono() {
-        use symphonia::core::audio::Signal;
-
         // Create a mono audio buffer with 4 frames
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
         let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
@@ -1060,8 +1059,6 @@ mod tests {
 
     #[test_log::test]
     fn test_to_samples_type_conversion_to_i16() {
-        use symphonia::core::audio::Signal;
-
         // Test that type conversion works correctly
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut buffer: AudioBuffer<f32> = AudioBuffer::new(2, spec);
@@ -1130,10 +1127,132 @@ mod tests {
         }
     }
 
+    struct MockAudioWriteWithPosition {
+        handle: AudioHandle,
+        position: f64,
+    }
+
+    impl MockAudioWriteWithPosition {
+        fn new(position: f64) -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+                position,
+            }
+        }
+    }
+
+    impl AudioWrite for MockAudioWriteWithPosition {
+        fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            Ok(decoded.frames())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            Ok(())
+        }
+
+        fn get_playback_position(&self) -> Option<f64> {
+            Some(self.position)
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
+    struct MockAudioWriteWithSpec {
+        handle: AudioHandle,
+        output_spec: SignalSpec,
+    }
+
+    impl MockAudioWriteWithSpec {
+        fn new(output_spec: SignalSpec) -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+                output_spec,
+            }
+        }
+    }
+
+    impl AudioWrite for MockAudioWriteWithSpec {
+        fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            Ok(decoded.frames())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            Ok(())
+        }
+
+        fn get_output_spec(&self) -> Option<SignalSpec> {
+            Some(self.output_spec)
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
+    struct FailingWriter {
+        handle: AudioHandle,
+        error: fn() -> AudioOutputError,
+    }
+
+    impl FailingWriter {
+        fn new(error: fn() -> AudioOutputError) -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+                error,
+            }
+        }
+    }
+
+    impl AudioWrite for FailingWriter {
+        fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            Err((self.error)())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            Ok(())
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
+    struct FailingFlushWriter {
+        handle: AudioHandle,
+        error: fn() -> AudioOutputError,
+    }
+
+    impl FailingFlushWriter {
+        fn new(error: fn() -> AudioOutputError) -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+                error,
+            }
+        }
+    }
+
+    impl AudioWrite for FailingFlushWriter {
+        fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            Ok(decoded.frames())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            Err((self.error)())
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
     #[test_log::test]
     fn test_audio_output_write_same_sample_rate() {
-        use symphonia::core::audio::Signal;
-
         // Test that when sample rates match, samples pass through without resampling
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
@@ -1219,34 +1338,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_get_playback_position() {
-        struct MockAudioWriteWithPosition {
-            handle: AudioHandle,
-            position: f64,
-        }
-        impl AudioWrite for MockAudioWriteWithPosition {
-            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Ok(decoded.frames())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Ok(())
-            }
-
-            fn get_playback_position(&self) -> Option<f64> {
-                Some(self.position)
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = MockAudioWriteWithPosition {
-            handle: AudioHandle::new(tx),
-            position: 42.5,
-        };
+        let mock_writer = MockAudioWriteWithPosition::new(42.5);
 
         let output = AudioOutput::new(
             "test-id".to_string(),
@@ -1261,35 +1354,9 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_get_output_spec() {
-        struct MockAudioWriteWithSpec {
-            handle: AudioHandle,
-            output_spec: SignalSpec,
-        }
-        impl AudioWrite for MockAudioWriteWithSpec {
-            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Ok(decoded.frames())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Ok(())
-            }
-
-            fn get_output_spec(&self) -> Option<SignalSpec> {
-                Some(self.output_spec)
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = MockAudioWriteWithSpec {
-            handle: AudioHandle::new(tx),
-            output_spec,
-        };
+        let mock_writer = MockAudioWriteWithSpec::new(output_spec);
 
         let output = AudioOutput::new(
             "test-id".to_string(),
@@ -1306,11 +1373,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_decoded_success() {
-        use moosicbox_audio_decoder::AudioDecode;
-        use symphonia::core::audio::Signal;
-        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-        use symphonia::core::formats::{Packet, Track};
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
@@ -1347,8 +1409,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_flush_success() {
-        use moosicbox_audio_decoder::AudioDecode;
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
@@ -1370,29 +1430,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_flush_error() {
-        use moosicbox_audio_decoder::AudioDecode;
-        struct FailingFlushWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingFlushWriter {
-            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Ok(decoded.frames())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Err(AudioOutputError::StreamClosed)
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingFlushWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingFlushWriter::new(|| AudioOutputError::Interrupt);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
@@ -1408,11 +1447,6 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_decoded() {
-        use moosicbox_audio_decoder::AudioDecode;
-        use symphonia::core::audio::Signal;
-        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-        use symphonia::core::formats::{Packet, Track};
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
@@ -1442,8 +1476,6 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_flush() {
-        use moosicbox_audio_decoder::AudioDecode;
-
         let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
@@ -1460,11 +1492,6 @@ mod tests {
 
     #[test_log::test]
     fn test_ref_mut_dyn_audio_write_audio_decode_decoded() {
-        use moosicbox_audio_decoder::AudioDecode;
-        use symphonia::core::audio::Signal;
-        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-        use symphonia::core::formats::{Packet, Track};
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
@@ -1495,8 +1522,6 @@ mod tests {
 
     #[test_log::test]
     fn test_ref_mut_dyn_audio_write_audio_decode_flush() {
-        use moosicbox_audio_decoder::AudioDecode;
-
         let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
@@ -1514,32 +1539,8 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_write_error() {
-        use moosicbox_audio_decoder::AudioDecode;
-        use symphonia::core::audio::Signal;
-        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-        use symphonia::core::formats::{Packet, Track};
-        struct FailingWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingWriter {
-            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Err(AudioOutputError::StreamClosed)
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Ok(())
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingWriter::new(|| AudioOutputError::StreamClosed);
 
         let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
 
@@ -1556,28 +1557,7 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_flush_error() {
-        use moosicbox_audio_decoder::AudioDecode;
-        struct FailingFlushWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingFlushWriter {
-            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Ok(decoded.frames())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Err(AudioOutputError::Interrupt)
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingFlushWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingFlushWriter::new(|| AudioOutputError::Interrupt);
 
         let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
 
@@ -1645,29 +1625,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_write_underlying_writer_error() {
-        use symphonia::core::audio::Signal;
-        struct FailingWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingWriter {
-            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Err(AudioOutputError::StreamClosed)
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Ok(())
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingWriter::new(|| AudioOutputError::StreamClosed);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
@@ -1691,28 +1650,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_flush_underlying_writer_error() {
-        struct FailingFlushWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingFlushWriter {
-            fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Ok(decoded.frames())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Err(AudioOutputError::Interrupt)
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingFlushWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingFlushWriter::new(|| AudioOutputError::Interrupt);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
@@ -1729,32 +1668,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_decoded_writer_error() {
-        use moosicbox_audio_decoder::AudioDecode;
-        use symphonia::core::audio::Signal;
-        use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-        use symphonia::core::formats::{Packet, Track};
-        struct FailingWriter {
-            handle: AudioHandle,
-        }
-        impl AudioWrite for FailingWriter {
-            fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-                Err(AudioOutputError::OpenStream)
-            }
-
-            fn flush(&mut self) -> Result<(), AudioOutputError> {
-                Ok(())
-            }
-
-            fn handle(&self) -> AudioHandle {
-                self.handle.clone()
-            }
-        }
-
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let (tx, _rx) = flume::bounded(1);
-        let mock_writer = FailingWriter {
-            handle: AudioHandle::new(tx),
-        };
+        let mock_writer = FailingWriter::new(|| AudioOutputError::OpenStream);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
