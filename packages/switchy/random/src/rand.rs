@@ -236,29 +236,31 @@ mod tests {
 
     #[test_log::test]
     fn test_rand_rng_mutable_rng_core_interface() {
-        use rand::RngCore;
+        {
+            use rand::RngCore;
 
-        let mut rng = RandRng::new(42_u64);
+            let mut rng = RandRng::new(42_u64);
 
-        // Test the mutable RngCore trait interface (lines 95-111 in rand.rs)
-        let val1 = RngCore::next_u32(&mut rng);
-        let val2 = RngCore::next_u64(&mut rng);
-        assert!(val1 > 0 || val2 > 0, "Should produce values");
+            // Test the mutable RngCore trait interface (lines 95-111 in rand.rs)
+            let val1 = RngCore::next_u32(&mut rng);
+            let val2 = RngCore::next_u64(&mut rng);
+            assert!(val1 > 0 || val2 > 0, "Should produce values");
 
-        let mut buffer = [0_u8; 16];
-        RngCore::fill_bytes(&mut rng, &mut buffer);
-        assert!(
-            buffer.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer = [0_u8; 16];
+            RngCore::fill_bytes(&mut rng, &mut buffer);
+            assert!(
+                buffer.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
 
-        let mut buffer2 = [0_u8; 16];
-        let result = RngCore::try_fill_bytes(&mut rng, &mut buffer2);
-        assert!(result.is_ok(), "try_fill_bytes should succeed");
-        assert!(
-            buffer2.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer2 = [0_u8; 16];
+            let result = RngCore::try_fill_bytes(&mut rng, &mut buffer2);
+            assert!(result.is_ok(), "try_fill_bytes should succeed");
+            assert!(
+                buffer2.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
+        }
     }
 
     #[test_log::test]

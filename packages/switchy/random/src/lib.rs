@@ -875,8 +875,8 @@ mod tests {
         let as_u32 = u32::from_f64(value);
         assert_eq!(as_u32, 0, "Should handle zero");
 
-        let as_i32 = i32::from_f64(value);
-        assert_eq!(as_i32, 0, "Should handle zero for signed");
+        let signed_zero = i32::from_f64(value);
+        assert_eq!(signed_zero, 0, "Should handle zero for signed");
     }
 
     #[test_log::test]
@@ -945,45 +945,49 @@ mod tests {
 
     #[test_log::test]
     fn test_rng_wrapper_mutable_rng_core_interface() {
-        use external_rand::RngCore;
+        {
+            use external_rand::RngCore;
 
-        let mut rng = Rng::from_seed(42_u64);
+            let mut rng = Rng::from_seed(42_u64);
 
-        // Test the mutable RngCore trait interface (lines 108-124 in lib.rs)
-        // These delegate to GenericRng but through &mut self
-        let val1 = RngCore::next_u32(&mut rng);
-        let val2 = RngCore::next_u64(&mut rng);
-        assert!(val1 > 0 || val2 > 0, "Should produce values");
+            // Test the mutable RngCore trait interface (lines 108-124 in lib.rs)
+            // These delegate to GenericRng but through &mut self
+            let val1 = RngCore::next_u32(&mut rng);
+            let val2 = RngCore::next_u64(&mut rng);
+            assert!(val1 > 0 || val2 > 0, "Should produce values");
 
-        let mut buffer = [0_u8; 16];
-        RngCore::fill_bytes(&mut rng, &mut buffer);
-        assert!(
-            buffer.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer = [0_u8; 16];
+            RngCore::fill_bytes(&mut rng, &mut buffer);
+            assert!(
+                buffer.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
 
-        let mut buffer2 = [0_u8; 16];
-        let result = RngCore::try_fill_bytes(&mut rng, &mut buffer2);
-        assert!(result.is_ok(), "try_fill_bytes should succeed");
-        assert!(
-            buffer2.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer2 = [0_u8; 16];
+            let result = RngCore::try_fill_bytes(&mut rng, &mut buffer2);
+            assert!(result.is_ok(), "try_fill_bytes should succeed");
+            assert!(
+                buffer2.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
+        }
     }
 
     #[test_log::test]
     fn test_sample_with_uniform_distribution() {
-        use external_rand::distributions::Uniform;
+        {
+            use external_rand::distributions::Uniform;
 
-        let rng = Rng::from_seed(42_u64);
-        let dist = Uniform::new(0, 100);
+            let rng = Rng::from_seed(42_u64);
+            let dist = Uniform::new(0, 100);
 
-        for _ in 0..100 {
-            let value: i32 = rng.sample(dist);
-            assert!(
-                (0..100).contains(&value),
-                "Sampled value {value} should be in range [0, 100)"
-            );
+            for _ in 0..100 {
+                let value: i32 = rng.sample(dist);
+                assert!(
+                    (0..100).contains(&value),
+                    "Sampled value {value} should be in range [0, 100)"
+                );
+            }
         }
     }
 

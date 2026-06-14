@@ -400,98 +400,104 @@ mod tests {
 
     #[test_log::test]
     fn test_concurrent_reads() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let profiles = Arc::new(Profiles::default());
-        profiles.add("concurrent_test".to_string());
+            let profiles = Arc::new(Profiles::default());
+            profiles.add("concurrent_test".to_string());
 
-        let mut handles = vec![];
-        for _ in 0..10 {
-            let profiles_clone = Arc::clone(&profiles);
-            let handle = thread::spawn(move || {
-                for _ in 0..100 {
-                    let result = profiles_clone.get("concurrent_test");
-                    assert_eq!(result, Some("concurrent_test".to_string()));
-                }
-            });
-            handles.push(handle);
-        }
+            let mut handles = vec![];
+            for _ in 0..10 {
+                let profiles_clone = Arc::clone(&profiles);
+                let handle = thread::spawn(move || {
+                    for _ in 0..100 {
+                        let result = profiles_clone.get("concurrent_test");
+                        assert_eq!(result, Some("concurrent_test".to_string()));
+                    }
+                });
+                handles.push(handle);
+            }
 
-        for handle in handles {
-            handle.join().unwrap();
+            for handle in handles {
+                handle.join().unwrap();
+            }
         }
     }
 
     #[test_log::test]
     fn test_concurrent_adds() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let profiles = Arc::new(Profiles::default());
-        let mut handles = vec![];
+            let profiles = Arc::new(Profiles::default());
+            let mut handles = vec![];
 
-        for i in 0..10 {
-            let profiles_clone = Arc::clone(&profiles);
-            let handle = thread::spawn(move || {
-                for j in 0..10 {
-                    profiles_clone.add(format!("profile_{i}_{j}"));
-                }
-            });
-            handles.push(handle);
+            for i in 0..10 {
+                let profiles_clone = Arc::clone(&profiles);
+                let handle = thread::spawn(move || {
+                    for j in 0..10 {
+                        profiles_clone.add(format!("profile_{i}_{j}"));
+                    }
+                });
+                handles.push(handle);
+            }
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
+
+            // Should have 100 unique profiles
+            let names = profiles.names();
+            assert_eq!(names.len(), 100);
         }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        // Should have 100 unique profiles
-        let names = profiles.names();
-        assert_eq!(names.len(), 100);
     }
 
     #[test_log::test]
     fn test_concurrent_mixed_operations() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let profiles = Arc::new(Profiles::default());
-        // Pre-populate some profiles
-        for i in 0..10 {
-            profiles.add(format!("initial_{i}"));
+            let profiles = Arc::new(Profiles::default());
+            // Pre-populate some profiles
+            for i in 0..10 {
+                profiles.add(format!("initial_{i}"));
+            }
+
+            let mut handles = vec![];
+
+            // Readers
+            for _ in 0..5 {
+                let profiles_clone = Arc::clone(&profiles);
+                let handle = thread::spawn(move || {
+                    for i in 0..10 {
+                        let _ = profiles_clone.get(&format!("initial_{i}"));
+                    }
+                });
+                handles.push(handle);
+            }
+
+            // Writers
+            for i in 0..5 {
+                let profiles_clone = Arc::clone(&profiles);
+                let handle = thread::spawn(move || {
+                    for j in 0..10 {
+                        profiles_clone.add(format!("new_{i}_{j}"));
+                    }
+                });
+                handles.push(handle);
+            }
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
+
+            let names = profiles.names();
+            // Should have 10 initial + 50 new = 60 profiles
+            assert_eq!(names.len(), 60);
         }
-
-        let mut handles = vec![];
-
-        // Readers
-        for _ in 0..5 {
-            let profiles_clone = Arc::clone(&profiles);
-            let handle = thread::spawn(move || {
-                for i in 0..10 {
-                    let _ = profiles_clone.get(&format!("initial_{i}"));
-                }
-            });
-            handles.push(handle);
-        }
-
-        // Writers
-        for i in 0..5 {
-            let profiles_clone = Arc::clone(&profiles);
-            let handle = thread::spawn(move || {
-                for j in 0..10 {
-                    profiles_clone.add(format!("new_{i}_{j}"));
-                }
-            });
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        let names = profiles.names();
-        // Should have 10 initial + 50 new = 60 profiles
-        assert_eq!(names.len(), 60);
     }
 
     #[cfg(feature = "api")]
@@ -619,17 +625,19 @@ mod tests {
 
         #[test_log::test]
         fn test_profile_name_unverified_invalid_utf8_header() {
-            use actix_web::http::header::HeaderValue;
+            {
+                use actix_web::http::header::HeaderValue;
 
-            // Create a header value with non-UTF8 bytes
-            let non_utf8_value = HeaderValue::from_bytes(&[0x80, 0x81, 0x82]).unwrap();
+                // Create a header value with non-UTF8 bytes
+                let non_utf8_value = HeaderValue::from_bytes(&[0x80, 0x81, 0x82]).unwrap();
 
-            let req = TestRequest::default()
-                .insert_header(("moosicbox-profile", non_utf8_value))
-                .to_http_request();
+                let req = TestRequest::default()
+                    .insert_header(("moosicbox-profile", non_utf8_value))
+                    .to_http_request();
 
-            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
-            assert!(result.is_err());
+                let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+                assert!(result.is_err());
+            }
         }
     }
 }

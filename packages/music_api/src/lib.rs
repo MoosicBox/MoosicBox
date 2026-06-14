@@ -2188,90 +2188,98 @@ mod test {
 
         #[test_log::test(switchy_async::test)]
         async fn artist_cover_source_returns_remote_url_when_artist_has_cover() {
-            use crate::models::ImageCoverSize;
+            {
+                use crate::models::ImageCoverSize;
 
-            let artist = Artist {
-                id: 1.into(),
-                title: "Test Artist".into(),
-                cover: Some("https://example.com/cover.jpg".to_owned()),
-                ..Default::default()
-            };
+                let artist = Artist {
+                    id: 1.into(),
+                    title: "Test Artist".into(),
+                    cover: Some("https://example.com/cover.jpg".to_owned()),
+                    ..Default::default()
+                };
 
-            let api = TestMusicApiWithData::default();
-            let result = api
-                .artist_cover_source(&artist, ImageCoverSize::Max)
-                .await
-                .unwrap();
+                let api = TestMusicApiWithData::default();
+                let result = api
+                    .artist_cover_source(&artist, ImageCoverSize::Max)
+                    .await
+                    .unwrap();
 
-            assert!(matches!(
-                result,
-                Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
-                if url == "https://example.com/cover.jpg" && headers.is_none()
-            ));
+                assert!(matches!(
+                    result,
+                    Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
+                    if url == "https://example.com/cover.jpg" && headers.is_none()
+                ));
+            }
         }
 
         #[test_log::test(switchy_async::test)]
         async fn artist_cover_source_returns_none_when_artist_has_no_cover() {
-            use crate::models::ImageCoverSize;
+            {
+                use crate::models::ImageCoverSize;
 
-            let artist = Artist {
-                id: 1.into(),
-                title: "Test Artist".into(),
-                cover: None,
-                ..Default::default()
-            };
+                let artist = Artist {
+                    id: 1.into(),
+                    title: "Test Artist".into(),
+                    cover: None,
+                    ..Default::default()
+                };
 
-            let api = TestMusicApiWithData::default();
-            let result = api
-                .artist_cover_source(&artist, ImageCoverSize::Max)
-                .await
-                .unwrap();
+                let api = TestMusicApiWithData::default();
+                let result = api
+                    .artist_cover_source(&artist, ImageCoverSize::Max)
+                    .await
+                    .unwrap();
 
-            assert!(result.is_none());
+                assert!(result.is_none());
+            }
         }
 
         #[test_log::test(switchy_async::test)]
         async fn album_cover_source_returns_remote_url_when_album_has_artwork() {
-            use crate::models::ImageCoverSize;
+            {
+                use crate::models::ImageCoverSize;
 
-            let album = Album {
-                id: 1.into(),
-                title: "Test Album".into(),
-                artwork: Some("https://example.com/artwork.jpg".to_owned()),
-                ..Default::default()
-            };
+                let album = Album {
+                    id: 1.into(),
+                    title: "Test Album".into(),
+                    artwork: Some("https://example.com/artwork.jpg".to_owned()),
+                    ..Default::default()
+                };
 
-            let api = TestMusicApiWithData::default();
-            let result = api
-                .album_cover_source(&album, ImageCoverSize::Max)
-                .await
-                .unwrap();
+                let api = TestMusicApiWithData::default();
+                let result = api
+                    .album_cover_source(&album, ImageCoverSize::Max)
+                    .await
+                    .unwrap();
 
-            assert!(matches!(
-                result,
-                Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
-                if url == "https://example.com/artwork.jpg" && headers.is_none()
-            ));
+                assert!(matches!(
+                    result,
+                    Some(crate::models::ImageCoverSource::RemoteUrl { url, headers })
+                    if url == "https://example.com/artwork.jpg" && headers.is_none()
+                ));
+            }
         }
 
         #[test_log::test(switchy_async::test)]
         async fn album_cover_source_returns_none_when_album_has_no_artwork() {
-            use crate::models::ImageCoverSize;
+            {
+                use crate::models::ImageCoverSize;
 
-            let album = Album {
-                id: 1.into(),
-                title: "Test Album".into(),
-                artwork: None,
-                ..Default::default()
-            };
+                let album = Album {
+                    id: 1.into(),
+                    title: "Test Album".into(),
+                    artwork: None,
+                    ..Default::default()
+                };
 
-            let api = TestMusicApiWithData::default();
-            let result = api
-                .album_cover_source(&album, ImageCoverSize::Max)
-                .await
-                .unwrap();
+                let api = TestMusicApiWithData::default();
+                let result = api
+                    .album_cover_source(&album, ImageCoverSize::Max)
+                    .await
+                    .unwrap();
 
-            assert!(result.is_none());
+                assert!(result.is_none());
+            }
         }
     }
 

@@ -224,13 +224,15 @@ mod tests {
 
     #[test_log::test]
     fn test_plugin_hash_is_not_empty() {
-        const PLUGIN_MIN_LEN: usize = "plugins".len();
+        {
+            const PLUGIN_MIN_LEN: usize = "plugins".len();
 
-        // PLUGIN_HASH should never be empty - at minimum it contains "plugins"
-        assert!(
-            PLUGIN_HASH.len() >= PLUGIN_MIN_LEN,
-            "PLUGIN_HASH should be at least as long as 'plugins'"
-        );
+            // PLUGIN_HASH should never be empty - at minimum it contains "plugins"
+            assert!(
+                PLUGIN_HASH.len() >= PLUGIN_MIN_LEN,
+                "PLUGIN_HASH should be at least as long as 'plugins'"
+            );
+        }
     }
 
     #[test_log::test]
@@ -267,55 +269,63 @@ mod tests {
 
     #[test_log::test]
     fn test_hash_computation_is_deterministic() {
-        use sha2_const_stable::Sha256;
+        {
+            use sha2_const_stable::Sha256;
 
-        // The hash should be consistent - recomputing should give same result
-        let recomputed_hash = Sha256::new().update(PLUGIN_HASH.as_bytes()).finalize();
+            // The hash should be consistent - recomputing should give same result
+            let recomputed_hash = Sha256::new().update(PLUGIN_HASH.as_bytes()).finalize();
 
-        assert_eq!(
-            RAW_HASH, recomputed_hash,
-            "Hash computation should be deterministic"
-        );
+            assert_eq!(
+                RAW_HASH, recomputed_hash,
+                "Hash computation should be deterministic"
+            );
+        }
     }
 
     #[test_log::test]
     fn test_hex_encoding_matches_raw_hash() {
-        use const_hex::{Buffer, const_encode};
+        {
+            use const_hex::{Buffer, const_encode};
 
-        // Verify that PLUGIN_HASH_HEX is the correct hex encoding of RAW_HASH
-        let recomputed_hex: Buffer<{ Sha256::DIGEST_SIZE }> = const_encode(&RAW_HASH);
+            // Verify that PLUGIN_HASH_HEX is the correct hex encoding of RAW_HASH
+            let recomputed_hex: Buffer<{ Sha256::DIGEST_SIZE }> = const_encode(&RAW_HASH);
 
-        assert_eq!(
-            PLUGIN_HASH_HEX,
-            recomputed_hex.as_str(),
-            "PLUGIN_HASH_HEX should match the hex encoding of RAW_HASH"
-        );
+            assert_eq!(
+                PLUGIN_HASH_HEX,
+                recomputed_hex.as_str(),
+                "PLUGIN_HASH_HEX should match the hex encoding of RAW_HASH"
+            );
+        }
     }
 
     #[test_log::test]
     fn test_hash_differs_from_empty_string() {
-        use sha2_const_stable::Sha256;
+        {
+            use sha2_const_stable::Sha256;
 
-        // The hash should not be the hash of an empty string
-        let empty_hash = Sha256::new().update(b"").finalize();
+            // The hash should not be the hash of an empty string
+            let empty_hash = Sha256::new().update(b"").finalize();
 
-        assert_ne!(
-            RAW_HASH, empty_hash,
-            "Hash should not be the hash of an empty string since PLUGIN_HASH is not empty"
-        );
+            assert_ne!(
+                RAW_HASH, empty_hash,
+                "Hash should not be the hash of an empty string since PLUGIN_HASH is not empty"
+            );
+        }
     }
 
     #[cfg(feature = "all-plugins")]
     #[test_log::test]
     fn test_hash_differs_from_just_plugins_string() {
-        use sha2_const_stable::Sha256;
+        {
+            use sha2_const_stable::Sha256;
 
-        // The hash should differ from just "plugins" if any features are enabled
-        let plugins_only_hash = Sha256::new().update(b"plugins").finalize();
-        assert_ne!(
-            RAW_HASH, plugins_only_hash,
-            "With all-plugins feature enabled, hash should differ from just 'plugins'"
-        );
+            // The hash should differ from just "plugins" if any features are enabled
+            let plugins_only_hash = Sha256::new().update(b"plugins").finalize();
+            assert_ne!(
+                RAW_HASH, plugins_only_hash,
+                "With all-plugins feature enabled, hash should differ from just 'plugins'"
+            );
+        }
     }
 
     #[test_log::test]

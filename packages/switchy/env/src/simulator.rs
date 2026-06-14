@@ -718,47 +718,49 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_concurrent_read_write() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let env = SimulatorEnv::new();
-        let vars = Arc::clone(&env.vars);
+            let env = SimulatorEnv::new();
+            let vars = Arc::clone(&env.vars);
 
-        // Spawn multiple reader threads
-        let mut handles = vec![];
-        for i in 0..4 {
-            let vars_clone = vars.clone();
-            let handle = thread::spawn(move || {
-                let env = SimulatorEnv { vars: vars_clone };
-                for _ in 0..100 {
-                    // Read operations
-                    let _ = env.var("PORT");
-                    let _ = env.vars();
-                    let _ = env.var_exists("SIMULATOR_SEED");
-                }
-                i
-            });
-            handles.push(handle);
-        }
-
-        // Spawn a writer thread
-        let vars_clone = vars.clone();
-        let writer = thread::spawn(move || {
-            let env = SimulatorEnv { vars: vars_clone };
-            for j in 0..100 {
-                env.set_var("CONCURRENT_VAR", &format!("value_{j}"));
+            // Spawn multiple reader threads
+            let mut handles = vec![];
+            for i in 0..4 {
+                let vars_clone = vars.clone();
+                let handle = thread::spawn(move || {
+                    let env = SimulatorEnv { vars: vars_clone };
+                    for _ in 0..100 {
+                        // Read operations
+                        let _ = env.var("PORT");
+                        let _ = env.vars();
+                        let _ = env.var_exists("SIMULATOR_SEED");
+                    }
+                    i
+                });
+                handles.push(handle);
             }
-        });
 
-        // All threads should complete without panicking (no deadlock, no data race)
-        for handle in handles {
-            handle.join().expect("Reader thread panicked");
+            // Spawn a writer thread
+            let vars_clone = vars.clone();
+            let writer = thread::spawn(move || {
+                let env = SimulatorEnv { vars: vars_clone };
+                for j in 0..100 {
+                    env.set_var("CONCURRENT_VAR", &format!("value_{j}"));
+                }
+            });
+
+            // All threads should complete without panicking (no deadlock, no data race)
+            for handle in handles {
+                handle.join().expect("Reader thread panicked");
+            }
+            writer.join().expect("Writer thread panicked");
+
+            // Final state should be consistent
+            let env = SimulatorEnv { vars };
+            assert!(env.var("CONCURRENT_VAR").is_ok());
         }
-        writer.join().expect("Writer thread panicked");
-
-        // Final state should be consistent
-        let env = SimulatorEnv { vars };
-        assert!(env.var("CONCURRENT_VAR").is_ok());
     }
 
     #[test_log::test]

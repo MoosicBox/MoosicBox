@@ -336,6 +336,7 @@ pub trait MigrationSource<'a>: Send + Sync {
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use std::str::FromStr;
     use switchy_database::Database;
 
     // Mock migration for testing
@@ -429,8 +430,6 @@ mod tests {
 
     #[test_log::test]
     fn test_migration_status_from_str_valid() {
-        use std::str::FromStr;
-
         assert_eq!(
             MigrationStatus::from_str("in_progress").unwrap(),
             MigrationStatus::InProgress
@@ -447,8 +446,6 @@ mod tests {
 
     #[test_log::test]
     fn test_migration_status_from_str_invalid() {
-        use std::str::FromStr;
-
         let result = MigrationStatus::from_str("invalid_status");
         assert!(result.is_err());
 
@@ -463,8 +460,6 @@ mod tests {
 
     #[test_log::test]
     fn test_migration_status_from_str_case_sensitive() {
-        use std::str::FromStr;
-
         // Should be case-sensitive
         assert!(MigrationStatus::from_str("COMPLETED").is_err());
         assert!(MigrationStatus::from_str("Completed").is_err());

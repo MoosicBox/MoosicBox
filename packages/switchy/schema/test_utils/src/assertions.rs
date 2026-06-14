@@ -712,6 +712,8 @@ pub async fn assert_schema_matches(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use switchy_database::schema::{Column, DataType};
 
@@ -1029,8 +1031,6 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_schema_comparison() {
-        use std::collections::BTreeMap;
-
         let db = create_empty_in_memory().await.unwrap();
 
         // Create test schema using schema query builder

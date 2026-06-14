@@ -50,6 +50,8 @@ impl crate::HttpMetricsHandler for SimulatorHttpMetricsHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "actix")]
+    use crate::HttpMetricsHandler;
     use tracing_subscriber::layer::SubscriberExt;
 
     #[test_log::test]
@@ -65,8 +67,6 @@ mod tests {
     #[cfg(feature = "actix")]
     #[test_log::test]
     fn test_simulator_http_metrics_handler_request_middleware() {
-        use crate::HttpMetricsHandler;
-
         let handler = SimulatorHttpMetricsHandler;
         let _middleware = handler.request_middleware();
         // If we can create the middleware without panicking, the test passes

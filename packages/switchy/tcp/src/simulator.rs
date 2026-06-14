@@ -884,66 +884,70 @@ mod test {
     #[test_log::test]
     #[serial]
     fn tcp_stream_should_recycle_ephemeral_ports() {
-        static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+        {
+            static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
-        let runtime = runtime::Runtime::new();
+            let runtime = runtime::Runtime::new();
 
-        runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
-            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+            runtime.block_on(async move {
+                let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+                let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
-            task::spawn(TOKEN.run_until_cancelled(async move {
-                while let Ok((_, addr)) = listener.accept().await {
-                    log::debug!("client connected at addr={addr}");
-                }
-            }));
+                task::spawn(TOKEN.run_until_cancelled(async move {
+                    while let Ok((_, addr)) = listener.accept().await {
+                        log::debug!("client connected at addr={addr}");
+                    }
+                }));
 
-            task::spawn(async move {
-                for i in 0..=(u32::from(u16::MAX) + 1) {
-                    log::debug!("client {i} connecting");
-                    TcpStream::connect(server_addr.to_string()).await.unwrap();
-                }
+                task::spawn(async move {
+                    for i in 0..=(u32::from(u16::MAX) + 1) {
+                        log::debug!("client {i} connecting");
+                        TcpStream::connect(server_addr.to_string()).await.unwrap();
+                    }
 
-                TOKEN.cancel();
+                    TOKEN.cancel();
+                });
             });
-        });
 
-        log::debug!("Finished block_on. waiting for Runtime to finish");
-        runtime.wait().unwrap();
+            log::debug!("Finished block_on. waiting for Runtime to finish");
+            runtime.wait().unwrap();
+        }
     }
 
     #[test_log::test]
     #[serial]
     fn tcp_stream_should_error_if_connection_queue_is_full() {
-        static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+        {
+            static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
-        let runtime = runtime::Runtime::new();
+            let runtime = runtime::Runtime::new();
 
-        runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
-            let _listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+            runtime.block_on(async move {
+                let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+                let _listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
-            #[allow(clippy::collection_is_never_read)]
-            let mut connections = vec![];
+                #[allow(clippy::collection_is_never_read)]
+                let mut connections = vec![];
 
-            for i in 0..64 {
-                log::debug!("client {i} connecting");
-                connections.push(TcpStream::connect(server_addr.to_string()).await.unwrap());
-            }
+                for i in 0..64 {
+                    log::debug!("client {i} connecting");
+                    connections.push(TcpStream::connect(server_addr.to_string()).await.unwrap());
+                }
 
-            assert_eq!(
-                TcpStream::connect(server_addr.to_string())
-                    .await
-                    .map_err(|e| e.kind())
-                    .err(),
-                Some(io::ErrorKind::ConnectionRefused)
-            );
+                assert_eq!(
+                    TcpStream::connect(server_addr.to_string())
+                        .await
+                        .map_err(|e| e.kind())
+                        .err(),
+                    Some(io::ErrorKind::ConnectionRefused)
+                );
 
-            TOKEN.cancel();
-        });
+                TOKEN.cancel();
+            });
 
-        log::debug!("Finished block_on. waiting for Runtime to finish");
-        runtime.wait().unwrap();
+            log::debug!("Finished block_on. waiting for Runtime to finish");
+            runtime.wait().unwrap();
+        }
     }
 
     #[test_log::test]
