@@ -61,6 +61,7 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
         Application, Bitrate, Channels, Error as OpusError, ErrorCode as OpusErrorCode, SampleRate,
         coder::Encoder,
     };
+
     let sample_rate = SampleRate::Hz48000;
     let mut encoder = Encoder::new(sample_rate, Channels::Stereo, Application::Audio)?;
     encoder.set_bitrate(Bitrate::Max)?; //BitsPerSecond(24000))?;

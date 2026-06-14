@@ -422,13 +422,13 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_complex_nested_data() -> Result<(), Error> {
-        // Test serialization and deserialization of complex nested structures
         #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
         struct ComplexData {
             items: Vec<TestData>,
             metadata: BTreeMap<String, String>,
         }
 
+        // Test serialization and deserialization of complex nested structures
         let persistence = SqlitePersistence::new_in_memory().await?;
         let store = StateStore::new(persistence);
 

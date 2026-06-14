@@ -1223,7 +1223,6 @@ mod tests {
             handle: AudioHandle,
             position: f64,
         }
-
         impl AudioWrite for MockAudioWriteWithPosition {
             fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Ok(decoded.frames())
@@ -1266,7 +1265,6 @@ mod tests {
             handle: AudioHandle,
             output_spec: SignalSpec,
         }
-
         impl AudioWrite for MockAudioWriteWithSpec {
             fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Ok(decoded.frames())
@@ -1373,11 +1371,9 @@ mod tests {
     #[test_log::test]
     fn test_audio_output_audio_decode_flush_error() {
         use moosicbox_audio_decoder::AudioDecode;
-
         struct FailingFlushWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingFlushWriter {
             fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Ok(decoded.frames())
@@ -1522,11 +1518,9 @@ mod tests {
         use symphonia::core::audio::Signal;
         use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
         use symphonia::core::formats::{Packet, Track};
-
         struct FailingWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingWriter {
             fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Err(AudioOutputError::StreamClosed)
@@ -1563,11 +1557,9 @@ mod tests {
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_flush_error() {
         use moosicbox_audio_decoder::AudioDecode;
-
         struct FailingFlushWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingFlushWriter {
             fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Ok(decoded.frames())
@@ -1654,11 +1646,9 @@ mod tests {
     #[test_log::test]
     fn test_audio_output_write_underlying_writer_error() {
         use symphonia::core::audio::Signal;
-
         struct FailingWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingWriter {
             fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Err(AudioOutputError::StreamClosed)
@@ -1704,7 +1694,6 @@ mod tests {
         struct FailingFlushWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingFlushWriter {
             fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Ok(decoded.frames())
@@ -1744,11 +1733,9 @@ mod tests {
         use symphonia::core::audio::Signal;
         use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
         use symphonia::core::formats::{Packet, Track};
-
         struct FailingWriter {
             handle: AudioHandle,
         }
-
         impl AudioWrite for FailingWriter {
             fn write(&mut self, _decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
                 Err(AudioOutputError::OpenStream)

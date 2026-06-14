@@ -683,13 +683,13 @@ mod tests {
 
     #[test_log::test]
     fn test_json_error_deserialization_error_with_field_path() {
-        // Test creating DeserializationError that extracts field path
         #[derive(Debug, serde::Deserialize)]
         struct TestStruct {
             #[allow(dead_code)]
             required_field: String,
         }
 
+        // Test creating DeserializationError that extracts field path
         let json_missing_field = r"{}";
         let err = serde_json::from_str::<TestStruct>(json_missing_field).unwrap_err();
 

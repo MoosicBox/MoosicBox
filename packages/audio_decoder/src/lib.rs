@@ -1140,11 +1140,13 @@ mod tests {
 
     fn create_test_track() -> Track {
         use symphonia::core::codecs::CODEC_TYPE_FLAC;
+
         Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone())
     }
 
     fn create_test_audio_buffer() -> AudioBuffer<f32> {
         use symphonia::core::audio::Channels;
+
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         AudioBuffer::new(1024, spec)
     }
@@ -1153,7 +1155,6 @@ mod tests {
     fn test_audio_decode_handler_filter_is_applied() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
-
         struct TrackingOutput {
             received_buffer: Arc<AtomicBool>,
         }
@@ -1243,7 +1244,6 @@ mod tests {
     fn test_audio_decode_handler_multiple_outputs_all_receive_data() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
-
         struct CountingOutput {
             count: Arc<AtomicUsize>,
         }
@@ -1330,7 +1330,6 @@ mod tests {
     fn test_audio_decode_handler_flush_propagates_to_all_outputs() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
-
         struct FlushCountingOutput {
             flush_count: Arc<AtomicUsize>,
         }
@@ -1407,7 +1406,6 @@ mod tests {
     #[test_log::test]
     fn test_audio_decode_handler_multiple_filters_applied_in_order() {
         use std::sync::{Arc, Mutex};
-
         struct DummyOutput;
         impl AudioDecode for DummyOutput {
             fn decoded(
@@ -1469,7 +1467,6 @@ mod tests {
                 Ok(())
             }
         }
-
         struct Output2;
         impl AudioDecode for Output2 {
             fn decoded(
@@ -1550,7 +1547,6 @@ mod tests {
     fn test_audio_decode_handler_multiple_filters_early_error_stops_subsequent() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
-
         struct DummyOutput;
         impl AudioDecode for DummyOutput {
             fn decoded(
@@ -1603,7 +1599,6 @@ mod tests {
     fn test_audio_decode_handler_try_open_error_on_second_output() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
-
         struct DummyOutput;
         impl AudioDecode for DummyOutput {
             fn decoded(
@@ -1673,7 +1668,6 @@ mod tests {
     fn test_audio_decode_handler_multiple_outputs_first_error_stops_subsequent() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
-
         struct FailingOutput;
         impl AudioDecode for FailingOutput {
             fn decoded(
@@ -1685,7 +1679,6 @@ mod tests {
                 Err(AudioDecodeError::StreamClosed)
             }
         }
-
         struct TrackingOutput {
             called: Arc<AtomicBool>,
         }

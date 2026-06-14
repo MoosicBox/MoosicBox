@@ -224,8 +224,9 @@ mod tests {
 
     #[test_log::test]
     fn test_plugin_hash_is_not_empty() {
-        // PLUGIN_HASH should never be empty - at minimum it contains "plugins"
         const PLUGIN_MIN_LEN: usize = "plugins".len();
+
+        // PLUGIN_HASH should never be empty - at minimum it contains "plugins"
         assert!(
             PLUGIN_HASH.len() >= PLUGIN_MIN_LEN,
             "PLUGIN_HASH should be at least as long as 'plugins'"
@@ -266,9 +267,9 @@ mod tests {
 
     #[test_log::test]
     fn test_hash_computation_is_deterministic() {
-        // The hash should be consistent - recomputing should give same result
         use sha2_const_stable::Sha256;
 
+        // The hash should be consistent - recomputing should give same result
         let recomputed_hash = Sha256::new().update(PLUGIN_HASH.as_bytes()).finalize();
 
         assert_eq!(
@@ -279,9 +280,9 @@ mod tests {
 
     #[test_log::test]
     fn test_hex_encoding_matches_raw_hash() {
-        // Verify that PLUGIN_HASH_HEX is the correct hex encoding of RAW_HASH
         use const_hex::{Buffer, const_encode};
 
+        // Verify that PLUGIN_HASH_HEX is the correct hex encoding of RAW_HASH
         let recomputed_hex: Buffer<{ Sha256::DIGEST_SIZE }> = const_encode(&RAW_HASH);
 
         assert_eq!(
@@ -293,9 +294,9 @@ mod tests {
 
     #[test_log::test]
     fn test_hash_differs_from_empty_string() {
-        // The hash should not be the hash of an empty string
         use sha2_const_stable::Sha256;
 
+        // The hash should not be the hash of an empty string
         let empty_hash = Sha256::new().update(b"").finalize();
 
         assert_ne!(
@@ -307,9 +308,9 @@ mod tests {
     #[cfg(feature = "all-plugins")]
     #[test_log::test]
     fn test_hash_differs_from_just_plugins_string() {
-        // The hash should differ from just "plugins" if any features are enabled
         use sha2_const_stable::Sha256;
 
+        // The hash should differ from just "plugins" if any features are enabled
         let plugins_only_hash = Sha256::new().update(b"plugins").finalize();
         assert_ne!(
             RAW_HASH, plugins_only_hash,
