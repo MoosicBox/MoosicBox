@@ -1849,7 +1849,6 @@ mod tests {
     fn test_http_request_parse_query() {
         use serde::Deserialize;
         use simulator::{SimulationRequest, SimulationStub};
-
         #[derive(Debug, Deserialize, PartialEq)]
         struct QueryParams {
             page: u32,
@@ -1873,7 +1872,6 @@ mod tests {
     fn test_http_request_parse_query_optional_fields() {
         use serde::Deserialize;
         use simulator::{SimulationRequest, SimulationStub};
-
         #[derive(Debug, Deserialize, PartialEq)]
         struct QueryParams {
             page: Option<u32>,

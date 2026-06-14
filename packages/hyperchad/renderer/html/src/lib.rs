@@ -1125,8 +1125,9 @@ mod tests {
     use hyperchad_transformer::{
         ConfigOverride, Flex, Number, OverrideCondition, OverrideItem, TextDecoration,
         models::{
-            Cursor, FontWeight, JustifyContent, LayoutDirection, LayoutOverflow, Position,
-            TextDecorationLine, TextDecorationStyle, Visibility,
+            Cursor, FontWeight, JustifyContent, LayoutDirection, LayoutOverflow, OverflowWrap,
+            Position, TextAlign, TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect,
+            Visibility, WhiteSpace,
         },
     };
     use std::collections::BTreeMap;
@@ -1578,8 +1579,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_user_select_overrides() {
-        use hyperchad_transformer::models::UserSelect;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "mobile".to_string(),
@@ -1624,8 +1623,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_overflow_wrap_overrides() {
-        use hyperchad_transformer::models::OverflowWrap;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "mobile".to_string(),
@@ -1672,8 +1669,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_text_overflow_overrides() {
-        use hyperchad_transformer::models::TextOverflow;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "narrow".to_string(),
@@ -1716,8 +1711,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_align_items_overrides() {
-        use hyperchad_transformer::models::AlignItems;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "tablet".to_string(),
@@ -1761,8 +1754,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_text_align_overrides() {
-        use hyperchad_transformer::models::TextAlign;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "mobile".to_string(),
@@ -1807,8 +1798,6 @@ mod tests {
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_white_space_overrides() {
-        use hyperchad_transformer::models::WhiteSpace;
-
         let mut responsive_triggers = BTreeMap::new();
         responsive_triggers.insert(
             "narrow".to_string(),

@@ -2416,6 +2416,7 @@ mod tests {
         #[test_log::test]
         fn test_as_datetime() {
             use chrono::NaiveDate;
+
             let dt = NaiveDate::from_ymd_opt(2024, 1, 15)
                 .unwrap()
                 .and_hms_opt(10, 30, 0)

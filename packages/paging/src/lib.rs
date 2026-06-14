@@ -1338,7 +1338,6 @@ mod tests {
         struct From(i32);
         #[derive(Debug, PartialEq)]
         struct To(i32);
-
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
                 Self(f.0 * 10)
@@ -1361,7 +1360,6 @@ mod tests {
     fn test_page_try_into_success() {
         #[derive(Debug, Clone)]
         struct Value(i32);
-
         impl TryInto<i32> for Value {
             type Error = String;
 
@@ -1391,7 +1389,6 @@ mod tests {
     fn test_page_try_into_failure() {
         #[derive(Debug, Clone)]
         struct Value(i32);
-
         impl TryInto<i32> for Value {
             type Error = String;
 
@@ -1945,7 +1942,6 @@ mod tests {
         struct From(i32);
         #[derive(Debug, PartialEq)]
         struct To(i32);
-
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
                 Self(f.0 * 10)
@@ -1974,7 +1970,6 @@ mod tests {
         struct ErrorA(String);
         #[derive(Debug, PartialEq)]
         struct ErrorB(String);
-
         impl std::convert::From<ErrorA> for ErrorB {
             fn from(e: ErrorA) -> Self {
                 Self(format!("converted: {}", e.0))
@@ -2146,7 +2141,6 @@ mod tests {
     fn test_page_try_into_with_has_more_success() {
         #[derive(Debug, Clone)]
         struct Value(i32);
-
         impl TryInto<i32> for Value {
             type Error = String;
 
@@ -2179,7 +2173,6 @@ mod tests {
     fn test_page_try_into_with_has_more_failure() {
         #[derive(Debug, Clone)]
         struct Value(i32);
-
         impl TryInto<i32> for Value {
             type Error = String;
 
@@ -2210,7 +2203,6 @@ mod tests {
         struct From(i32);
         #[derive(Debug, PartialEq)]
         struct To(i32);
-
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
                 Self(f.0 * 10)
@@ -2354,13 +2346,11 @@ mod tests {
         struct ErrorFrom(String);
         #[derive(Debug, PartialEq)]
         struct ErrorTo(String);
-
         impl From<ItemFrom> for ItemTo {
             fn from(f: ItemFrom) -> Self {
                 Self(f.0 * 10)
             }
         }
-
         impl From<ErrorFrom> for ErrorTo {
             fn from(e: ErrorFrom) -> Self {
                 Self(format!("converted: {}", e.0))
@@ -2406,7 +2396,6 @@ mod tests {
         struct ErrorFrom(String);
         #[derive(Debug, PartialEq)]
         struct ErrorTo(String);
-
         impl From<ErrorFrom> for ErrorTo {
             fn from(e: ErrorFrom) -> Self {
                 Self(format!("converted: {}", e.0))
@@ -2445,7 +2434,6 @@ mod tests {
         struct ErrorFrom(String);
         #[derive(Debug, PartialEq)]
         struct ErrorTo(String);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2457,13 +2445,11 @@ mod tests {
                 }
             }
         }
-
         impl From<String> for ErrorTo {
             fn from(s: String) -> Self {
                 Self(s)
             }
         }
-
         impl From<ErrorFrom> for ErrorTo {
             fn from(e: ErrorFrom) -> Self {
                 Self(e.0)
@@ -2510,7 +2496,6 @@ mod tests {
         struct ItemFrom(i32);
         #[derive(Debug, PartialEq)]
         struct ItemTo(i32);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2548,7 +2533,6 @@ mod tests {
         struct ErrorFrom(String);
         #[derive(Debug, PartialEq)]
         struct ErrorTo(String);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2560,7 +2544,6 @@ mod tests {
                 }
             }
         }
-
         impl From<ErrorFrom> for ErrorTo {
             fn from(e: ErrorFrom) -> Self {
                 Self(e.0)
@@ -2595,7 +2578,6 @@ mod tests {
         struct ErrorFrom(String);
         #[derive(Debug, PartialEq)]
         struct ErrorTo(String);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2607,7 +2589,6 @@ mod tests {
                 }
             }
         }
-
         impl From<ErrorFrom> for ErrorTo {
             fn from(e: ErrorFrom) -> Self {
                 Self(e.0)
@@ -2640,7 +2621,6 @@ mod tests {
         struct ItemFrom(i32);
         #[derive(Debug, PartialEq)]
         struct ItemTo(i32);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2693,7 +2673,6 @@ mod tests {
         struct ItemFrom(i32);
         #[derive(Debug, PartialEq)]
         struct ItemTo(i32);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = String;
 
@@ -2727,7 +2706,6 @@ mod tests {
         struct ItemFrom(i32);
         #[derive(Debug, PartialEq)]
         struct ItemTo(i32);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = &'static str;
 
@@ -2782,7 +2760,6 @@ mod tests {
         struct ItemFrom(i32);
         #[derive(Debug, PartialEq)]
         struct ItemTo(i32);
-
         impl TryInto<ItemTo> for ItemFrom {
             type Error = &'static str;
 
@@ -3200,13 +3177,13 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_paging_response_map_err_transforms_subsequent_page_inner_errors() {
-        // Test that map_err correctly transforms errors that come from
-        // the INNER response (after fetching), not just fetch errors
         #[derive(Debug, PartialEq, Clone)]
         struct OriginalError(String);
         #[derive(Debug, PartialEq)]
         struct MappedError(String);
 
+        // Test that map_err correctly transforms errors that come from
+        // the INNER response (after fetching), not just fetch errors
         let page = Page::WithTotal {
             items: vec![1, 2],
             offset: 0,
@@ -3501,7 +3478,6 @@ mod tests {
         struct From(i32);
         #[derive(Debug, PartialEq)]
         struct To(i32);
-
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
                 Self(f.0 * 100)

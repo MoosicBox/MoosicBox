@@ -660,6 +660,8 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "assets")]
+    use super::directory_route_prefix;
     use super::*;
 
     #[test_log::test]
@@ -711,8 +713,6 @@ mod tests {
     #[cfg(feature = "assets")]
     #[test_log::test]
     fn test_directory_route_prefix() {
-        use super::directory_route_prefix;
-
         assert_eq!(directory_route_prefix("/"), "/");
         assert_eq!(directory_route_prefix(""), "/");
         assert_eq!(directory_route_prefix("/assets"), "/assets/");
@@ -834,9 +834,11 @@ mod tests {
     mod process_tests {
         use super::*;
         use bytes::Bytes;
-        use hyperchad_renderer::Content;
+        #[cfg(feature = "assets")]
+        use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+        use hyperchad_renderer::{Content, View, transformer::models::Selector};
         use hyperchad_renderer_html::DefaultHtmlTagRenderer;
-        use hyperchad_router::{RequestInfo, RouteRequest, Router};
+        use hyperchad_router::{Container, Element, RequestInfo, RouteRequest, Router};
         use switchy::http::models::Method;
 
         fn create_route_request(path: &str) -> RouteRequest {
@@ -941,8 +943,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_content_returns_html() {
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/page", |_req| async {
                 Container {
@@ -967,8 +967,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_htmx_request_returns_partial_html() {
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/partial", |_req| async {
                 Container {
@@ -991,9 +989,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_with_fragments_sets_header() {
-            use hyperchad_renderer::View;
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/fragments", |_req| async {
                 let fragment = Container {
@@ -1024,9 +1019,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_with_primary_and_fragments_returns_both() {
-            use hyperchad_renderer::View;
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/primary-and-fragments", |_req| async {
                 let view = View::builder()
@@ -1063,9 +1055,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_with_delete_selectors_sets_header() {
-            use hyperchad_renderer::{View, transformer::models::Selector};
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/delete", |_req| async {
                 let view = View::builder()
@@ -1095,8 +1084,6 @@ mod tests {
         #[cfg(feature = "assets")]
         #[test_log::test(switchy_async::test)]
         async fn test_process_static_asset_file_contents() {
-            use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new();
             let mut app = HttpApp::new(renderer, router);
@@ -1117,8 +1104,6 @@ mod tests {
         #[cfg(feature = "assets")]
         #[test_log::test(switchy_async::test)]
         async fn test_process_static_asset_handler() {
-            use hyperchad_renderer::assets::AssetPathTarget;
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new();
             let app = HttpApp::new(renderer, router).with_static_asset_route_handler(
@@ -1147,8 +1132,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_view_without_primary_returns_empty_html() {
-            use hyperchad_renderer::View;
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/empty", |_req| async {
                 let view = View::builder().build();
@@ -1188,8 +1171,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_includes_css_urls_in_response() {
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/styled", |_req| async {
                 Container {
@@ -1212,8 +1193,6 @@ mod tests {
 
         #[test_log::test(switchy_async::test)]
         async fn test_process_with_viewport_meta() {
-            use hyperchad_router::{Container, Element};
-
             let renderer = DefaultHtmlTagRenderer::default();
             let router = Router::new().with_route("/mobile", |_req| async {
                 Container {

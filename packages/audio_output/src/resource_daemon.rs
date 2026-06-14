@@ -341,18 +341,17 @@ mod tests {
     #[allow(clippy::redundant_clone)]
     #[allow(clippy::items_after_statements)]
     fn test_resource_daemon_drop() {
-        let dropped = Arc::new(Mutex::new(false));
-        let dropped_clone = dropped.clone();
-
         struct DropTracker {
             dropped: Arc<Mutex<bool>>,
         }
-
         impl Drop for DropTracker {
             fn drop(&mut self) {
                 *self.dropped.lock().unwrap() = true;
             }
         }
+
+        let dropped = Arc::new(Mutex::new(false));
+        let dropped_clone = dropped.clone();
 
         {
             let _daemon = ResourceDaemon::<DropTracker, String>::new(move |_signal| {

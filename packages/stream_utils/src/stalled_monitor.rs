@@ -207,9 +207,9 @@ mod tests {
 
     #[test_log::test(switchy_async::test(real_time))]
     async fn test_stalled_monitor_with_throttle() {
-        // Test that throttle limits data consumption rate
         use std::time::Instant;
 
+        // Test that throttle limits data consumption rate
         let data = vec![1, 2, 3];
         let stream = stream::iter(data.clone());
         let mut monitor = StalledReadMonitor::new(stream).with_throttle(Duration::from_millis(50));

@@ -1149,6 +1149,7 @@ pub use utils::{ContainerElementFinder, DefaultActionHandler};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use utils::matches_trigger;
 
     // ============================================
     // BTreeMapStyleManager tests
@@ -1372,8 +1373,6 @@ mod tests {
 
     #[test_log::test]
     fn test_matches_trigger_with_custom_event() {
-        use utils::matches_trigger;
-
         // Custom event trigger should match when event name matches
         assert!(matches_trigger(
             &ActionTrigger::Event("my-event".to_string()),
@@ -1398,8 +1397,6 @@ mod tests {
 
     #[test_log::test]
     fn test_matches_trigger_fallback_to_should_trigger() {
-        use utils::matches_trigger;
-
         // Non-event triggers should fall back to should_trigger_action
         assert!(matches_trigger(&ActionTrigger::Click, "click", None));
         assert!(!matches_trigger(&ActionTrigger::Click, "hover", None));

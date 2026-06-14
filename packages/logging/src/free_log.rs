@@ -157,9 +157,9 @@ mod tests {
 
     #[test_log::test]
     fn test_init_error_is_error() {
-        // Test that InitError implements the Error trait properly
         use std::error::Error;
 
+        // Test that InitError implements the Error trait properly
         // The type should implement Error and Debug
         fn assert_error<T: Error + std::fmt::Debug>() {}
         assert_error::<InitError>();
@@ -167,9 +167,9 @@ mod tests {
 
     #[test_log::test]
     fn test_init_error_from_conversions() {
-        // Test that From trait implementations work correctly for InitError
         use std::error::Error;
 
+        // Test that From trait implementations work correctly for InitError
         // We can't construct the actual error types from free_log_client,
         // but we can verify the type relationships exist
         fn assert_from<T, E: Error>()

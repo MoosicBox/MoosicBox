@@ -61,6 +61,7 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
         Application, Bitrate, Channels, Error as OpusError, ErrorCode as OpusErrorCode, SampleRate,
         coder::Encoder,
     };
+
     let sample_rate = SampleRate::Hz48000;
     let mut encoder = Encoder::new(sample_rate, Channels::Stereo, Application::Audio)?;
     encoder.set_bitrate(Bitrate::Max)?; //BitsPerSecond(24000))?;
@@ -429,6 +430,8 @@ impl std::io::Write for OpusWrite<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
 
     #[test_log::test]
@@ -623,8 +626,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test(real_fs))]
     async fn test_opus_write_buffering_behavior() {
-        use std::io::Write;
-
         let temp_dir = switchy_fs::tempdir().expect("Failed to create temp directory");
         let temp_file = temp_dir.path().join("test_opus_buffering.ogg");
         let temp_file_str = temp_file.to_string_lossy();

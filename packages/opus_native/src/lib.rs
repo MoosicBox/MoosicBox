@@ -1015,7 +1015,6 @@ impl Decoder {
         output: &mut [i16],
     ) -> Result<usize> {
         use crate::{celt::CELT_NUM_BANDS, celt::fixed_point::sig_to_int16, range::RangeDecoder};
-
         const HYBRID_SILK_INTERNAL_RATE: u32 = 16000;
         const HYBRID_START_BAND: usize = 17;
 
@@ -1309,6 +1308,7 @@ mod lbrr_tests {
     #[test_log::test]
     fn test_lbrr_40ms_icdf_values() {
         const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+
         assert_eq!(LBRR_40MS_ICDF[0], 203);
         assert_eq!(LBRR_40MS_ICDF[1], 150);
         assert_eq!(LBRR_40MS_ICDF[2], 0);
@@ -1317,6 +1317,7 @@ mod lbrr_tests {
     #[test_log::test]
     fn test_lbrr_60ms_icdf_values() {
         const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+
         assert_eq!(LBRR_60MS_ICDF[0], 215);
         assert_eq!(LBRR_60MS_ICDF[1], 195);
         assert_eq!(LBRR_60MS_ICDF[2], 166);

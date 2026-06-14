@@ -561,6 +561,7 @@ pub async fn get_sqlite_library_migrations() -> Result<
     MigrateError,
 > {
     use switchy_schema::migration::MigrationSource;
+
     let source = sqlite_library_migrations();
     Ok(source.migrations().await?)
 }
@@ -599,6 +600,7 @@ pub async fn get_sqlite_config_migrations() -> Result<
     MigrateError,
 > {
     use switchy_schema::migration::MigrationSource;
+
     let source = sqlite_config_migrations();
     Ok(source.migrations().await?)
 }
@@ -639,6 +641,7 @@ pub async fn get_postgres_library_migrations() -> Result<
     MigrateError,
 > {
     use switchy_schema::migration::MigrationSource;
+
     let source = postgres_library_migrations();
     Ok(source.migrations().await?)
 }
@@ -679,6 +682,7 @@ pub async fn get_postgres_config_migrations() -> Result<
     MigrateError,
 > {
     use switchy_schema::migration::MigrationSource;
+
     let source = postgres_config_migrations();
     Ok(source.migrations().await?)
 }

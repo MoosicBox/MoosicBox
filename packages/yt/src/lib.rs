@@ -2895,6 +2895,7 @@ mod tests {
     #[test_log::test]
     fn test_yt_album_type_to_album_type() {
         use moosicbox_music_models::AlbumType as MusicAlbumType;
+
         assert_eq!(MusicAlbumType::from(YtAlbumType::Lp), MusicAlbumType::Lp);
         assert_eq!(
             MusicAlbumType::from(YtAlbumType::EpsAndSingles),
@@ -3102,6 +3103,7 @@ mod tests {
     #[test_log::test]
     fn test_yt_album_type_to_value_type_valid() {
         use moosicbox_json_utils::ToValueType;
+
         let value = serde_json::json!("LP");
         let result: YtAlbumType = (&value).to_value_type().unwrap();
         assert_eq!(result, YtAlbumType::Lp);
@@ -3118,6 +3120,7 @@ mod tests {
     #[test_log::test]
     fn test_yt_album_type_to_value_type_invalid_string() {
         use moosicbox_json_utils::ToValueType;
+
         let value = serde_json::json!("INVALID_TYPE");
         let result: Result<YtAlbumType, _> = (&value).to_value_type();
         assert!(result.is_err());
@@ -3128,6 +3131,7 @@ mod tests {
     #[test_log::test]
     fn test_yt_album_type_to_value_type_not_string() {
         use moosicbox_json_utils::ToValueType;
+
         let value = serde_json::json!(123);
         let result: Result<YtAlbumType, _> = (&value).to_value_type();
         assert!(result.is_err());
@@ -3138,6 +3142,7 @@ mod tests {
     #[test_log::test]
     fn test_try_from_album_type_for_yt_album_type_success() {
         use moosicbox_music_models::AlbumType as MusicAlbumType;
+
         assert_eq!(
             YtAlbumType::try_from(MusicAlbumType::Lp).unwrap(),
             YtAlbumType::Lp
@@ -3155,6 +3160,7 @@ mod tests {
     #[test_log::test]
     fn test_try_from_album_type_for_yt_album_type_unsupported() {
         use moosicbox_music_models::AlbumType as MusicAlbumType;
+
         // Test unsupported variants (Live, Other, Download)
         let result = YtAlbumType::try_from(MusicAlbumType::Live);
         assert!(result.is_err());
