@@ -520,12 +520,14 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn auth_as_poll_returns_some_for_poll_variant() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let poll = PollAuth::new();
-        let auth = Auth::Poll(poll);
+            let poll = PollAuth::new();
+            let auth = Auth::Poll(poll);
 
-        assert!(auth.as_poll().is_some());
+            assert!(auth.as_poll().is_some());
+        }
     }
 
     #[cfg(feature = "auth-poll")]
@@ -538,15 +540,17 @@ mod test {
     #[cfg(feature = "auth-username-password")]
     #[test_log::test]
     fn auth_as_username_password_returns_some_for_username_password_variant() {
-        use super::username_password::UsernamePasswordAuth;
+        {
+            use super::username_password::UsernamePasswordAuth;
 
-        let up_auth = UsernamePasswordAuth::builder()
-            .with_handler(|_u, _p| async { Ok(true) })
-            .build()
-            .unwrap();
-        let auth = Auth::UsernamePassword(up_auth);
+            let up_auth = UsernamePasswordAuth::builder()
+                .with_handler(|_u, _p| async { Ok(true) })
+                .build()
+                .unwrap();
+            let auth = Auth::UsernamePassword(up_auth);
 
-        assert!(auth.as_username_password().is_some());
+            assert!(auth.as_username_password().is_some());
+        }
     }
 
     #[cfg(feature = "auth-username-password")]
@@ -559,12 +563,14 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn auth_into_poll_returns_some_for_poll_variant() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let poll = PollAuth::new();
-        let auth = Auth::Poll(poll);
+            let poll = PollAuth::new();
+            let auth = Auth::Poll(poll);
 
-        assert!(auth.into_poll().is_some());
+            assert!(auth.into_poll().is_some());
+        }
     }
 
     #[cfg(feature = "auth-poll")]
@@ -577,15 +583,17 @@ mod test {
     #[cfg(feature = "auth-username-password")]
     #[test_log::test]
     fn auth_into_username_password_returns_some_for_username_password_variant() {
-        use super::username_password::UsernamePasswordAuth;
+        {
+            use super::username_password::UsernamePasswordAuth;
 
-        let up_auth = UsernamePasswordAuth::builder()
-            .with_handler(|_u, _p| async { Ok(true) })
-            .build()
-            .unwrap();
-        let auth = Auth::UsernamePassword(up_auth);
+            let up_auth = UsernamePasswordAuth::builder()
+                .with_handler(|_u, _p| async { Ok(true) })
+                .build()
+                .unwrap();
+            let auth = Auth::UsernamePassword(up_auth);
 
-        assert!(auth.into_username_password().is_some());
+            assert!(auth.into_username_password().is_some());
+        }
     }
 
     #[cfg(feature = "auth-username-password")]
@@ -598,12 +606,14 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn api_auth_into_poll_returns_some_for_poll_variant() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let poll = PollAuth::new();
-        let api_auth = ApiAuth::builder().with_auth(poll).build();
+            let poll = PollAuth::new();
+            let api_auth = ApiAuth::builder().with_auth(poll).build();
 
-        assert!(api_auth.into_poll().is_some());
+            assert!(api_auth.into_poll().is_some());
+        }
     }
 
     #[cfg(feature = "auth-poll")]
@@ -616,15 +626,17 @@ mod test {
     #[cfg(feature = "auth-username-password")]
     #[test_log::test]
     fn api_auth_into_username_password_returns_some_for_username_password_variant() {
-        use super::username_password::UsernamePasswordAuth;
+        {
+            use super::username_password::UsernamePasswordAuth;
 
-        let up_auth = UsernamePasswordAuth::builder()
-            .with_handler(|_u, _p| async { Ok(true) })
-            .build()
-            .unwrap();
-        let api_auth = ApiAuth::builder().with_auth(up_auth).build();
+            let up_auth = UsernamePasswordAuth::builder()
+                .with_handler(|_u, _p| async { Ok(true) })
+                .build()
+                .unwrap();
+            let api_auth = ApiAuth::builder().with_auth(up_auth).build();
 
-        assert!(api_auth.into_username_password().is_some());
+            assert!(api_auth.into_username_password().is_some());
+        }
     }
 
     #[cfg(feature = "auth-username-password")]
@@ -637,12 +649,14 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn api_auth_as_poll_returns_some_for_poll_variant() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let poll = PollAuth::new();
-        let api_auth = ApiAuth::builder().with_auth(poll).build();
+            let poll = PollAuth::new();
+            let api_auth = ApiAuth::builder().with_auth(poll).build();
 
-        assert!(api_auth.as_poll().is_some());
+            assert!(api_auth.as_poll().is_some());
+        }
     }
 
     #[cfg(feature = "auth-poll")]
@@ -655,15 +669,17 @@ mod test {
     #[cfg(feature = "auth-username-password")]
     #[test_log::test]
     fn api_auth_as_username_password_returns_some_for_username_password_variant() {
-        use super::username_password::UsernamePasswordAuth;
+        {
+            use super::username_password::UsernamePasswordAuth;
 
-        let up_auth = UsernamePasswordAuth::builder()
-            .with_handler(|_u, _p| async { Ok(true) })
-            .build()
-            .unwrap();
-        let api_auth = ApiAuth::builder().with_auth(up_auth).build();
+            let up_auth = UsernamePasswordAuth::builder()
+                .with_handler(|_u, _p| async { Ok(true) })
+                .build()
+                .unwrap();
+            let api_auth = ApiAuth::builder().with_auth(up_auth).build();
 
-        assert!(api_auth.as_username_password().is_some());
+            assert!(api_auth.as_username_password().is_some());
+        }
     }
 
     #[cfg(feature = "auth-username-password")]
@@ -676,12 +692,14 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn auth_from_option_some_converts_to_wrapped_auth() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let poll = PollAuth::new();
-        let auth: Auth = Some(Auth::Poll(poll)).into();
+            let poll = PollAuth::new();
+            let auth: Auth = Some(Auth::Poll(poll)).into();
 
-        assert!(matches!(auth, Auth::Poll(_)));
+            assert!(matches!(auth, Auth::Poll(_)));
+        }
     }
 
     #[test_log::test]
@@ -695,18 +713,20 @@ mod test {
     #[cfg(feature = "auth-poll")]
     #[test_log::test]
     fn api_auth_deref_mut_allows_modifying_inner_auth() {
-        use super::poll::PollAuth;
+        {
+            use super::poll::PollAuth;
 
-        let mut api_auth = ApiAuth::builder().without_auth().build();
+            let mut api_auth = ApiAuth::builder().without_auth().build();
 
-        // Verify starts as None
-        assert!(matches!(*api_auth, Auth::None));
+            // Verify starts as None
+            assert!(matches!(*api_auth, Auth::None));
 
-        // Modify through DerefMut
-        *api_auth = Auth::Poll(PollAuth::new());
+            // Modify through DerefMut
+            *api_auth = Auth::Poll(PollAuth::new());
 
-        // Verify changed to Poll
-        assert!(matches!(*api_auth, Auth::Poll(_)));
+            // Verify changed to Poll
+            assert!(matches!(*api_auth, Auth::Poll(_)));
+        }
     }
 
     #[test_log::test(switchy_async::test)]

@@ -704,82 +704,90 @@ mod tests {
 
     #[test_log::test]
     fn test_download_item_to_value_type_from_json_invalid_type_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let json = serde_json::json!({
-            "type": "INVALID_DOWNLOAD_TYPE",
-            "source": {"source": "API", "url": "test"},
-            "trackId": 1,
-            "quality": "FLAC_HIGHEST_RES",
-            "artistId": 2,
-            "artist": "Artist",
-            "albumId": 3,
-            "album": "Album",
-            "track": "Title",
-            "containsCover": false
-        });
+            let json = serde_json::json!({
+                "type": "INVALID_DOWNLOAD_TYPE",
+                "source": {"source": "API", "url": "test"},
+                "trackId": 1,
+                "quality": "FLAC_HIGHEST_RES",
+                "artistId": 2,
+                "artist": "Artist",
+                "albumId": 3,
+                "album": "Album",
+                "track": "Title",
+                "containsCover": false
+            });
 
-        let result: Result<DownloadItem, ParseError> = (&json).to_value_type();
+            let result: Result<DownloadItem, ParseError> = (&json).to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("Invalid DownloadItem type"));
-                assert!(msg.contains("INVALID_DOWNLOAD_TYPE"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("Invalid DownloadItem type"));
+                    assert!(msg.contains("INVALID_DOWNLOAD_TYPE"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_task_state_to_value_type_from_json_non_string_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let json = serde_json::json!(42);
+            let json = serde_json::json!(42);
 
-        let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
+            let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadTaskState"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadTaskState"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_task_state_to_value_type_from_json_invalid_string_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let json = serde_json::json!("NOT_A_STATE");
+            let json = serde_json::json!("NOT_A_STATE");
 
-        let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
+            let result: Result<DownloadTaskState, ParseError> = (&json).to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadTaskState"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadTaskState"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_api_source_to_value_type_from_json_invalid_json_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        // Use a JSON value that is not valid for DownloadApiSource
-        let json = serde_json::json!({"invalid": "json_structure"});
+            // Use a JSON value that is not valid for DownloadApiSource
+            let json = serde_json::json!({"invalid": "json_structure"});
 
-        let result: Result<crate::DownloadApiSource, ParseError> = (&json).to_value_type();
+            let result: Result<crate::DownloadApiSource, ParseError> = (&json).to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadApiSource"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadApiSource"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
@@ -841,33 +849,37 @@ mod tests {
 
     #[test_log::test]
     fn test_download_task_state_to_value_type_from_database_value_non_string_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let db_value = DatabaseValue::Int64(42);
-        let result: Result<DownloadTaskState, ParseError> = db_value.to_value_type();
+            let db_value = DatabaseValue::Int64(42);
+            let result: Result<DownloadTaskState, ParseError> = db_value.to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadTaskState"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadTaskState"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_task_state_to_value_type_from_database_value_invalid_string_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let db_value = DatabaseValue::String("INVALID_STATE".to_string());
-        let result: Result<DownloadTaskState, ParseError> = db_value.to_value_type();
+            let db_value = DatabaseValue::String("INVALID_STATE".to_string());
+            let result: Result<DownloadTaskState, ParseError> = db_value.to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadTaskState"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadTaskState"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
@@ -885,65 +897,71 @@ mod tests {
 
     #[test_log::test]
     fn test_download_api_source_to_value_type_from_database_value_non_string_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let db_value = DatabaseValue::Int64(42);
-        let result: Result<crate::DownloadApiSource, ParseError> = db_value.to_value_type();
+            let db_value = DatabaseValue::Int64(42);
+            let result: Result<crate::DownloadApiSource, ParseError> = db_value.to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadApiSource"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadApiSource"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_api_source_to_value_type_from_database_value_invalid_json_returns_error() {
-        use moosicbox_json_utils::ParseError;
+        {
+            use moosicbox_json_utils::ParseError;
 
-        let db_value = DatabaseValue::String("not valid json".to_string());
-        let result: Result<crate::DownloadApiSource, ParseError> = db_value.to_value_type();
+            let db_value = DatabaseValue::String("not valid json".to_string());
+            let result: Result<crate::DownloadApiSource, ParseError> = db_value.to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("DownloadApiSource"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("DownloadApiSource"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_location_to_value_type_from_row() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let row = Row {
-            columns: vec![
-                ("id".to_string(), DatabaseValue::UInt64(42)),
-                (
-                    "path".to_string(),
-                    DatabaseValue::String("/music/downloads".to_string()),
-                ),
-                (
-                    "created".to_string(),
-                    DatabaseValue::String("2024-01-15T10:30:00Z".to_string()),
-                ),
-                (
-                    "updated".to_string(),
-                    DatabaseValue::String("2024-01-16T14:45:00Z".to_string()),
-                ),
-            ],
-        };
+            let row = Row {
+                columns: vec![
+                    ("id".to_string(), DatabaseValue::UInt64(42)),
+                    (
+                        "path".to_string(),
+                        DatabaseValue::String("/music/downloads".to_string()),
+                    ),
+                    (
+                        "created".to_string(),
+                        DatabaseValue::String("2024-01-15T10:30:00Z".to_string()),
+                    ),
+                    (
+                        "updated".to_string(),
+                        DatabaseValue::String("2024-01-16T14:45:00Z".to_string()),
+                    ),
+                ],
+            };
 
-        let result: Result<DownloadLocation, _> = (&row).to_value_type();
-        let location = result.unwrap();
+            let result: Result<DownloadLocation, _> = (&row).to_value_type();
+            let location = result.unwrap();
 
-        assert_eq!(location.id, 42);
-        assert_eq!(location.path, "/music/downloads");
-        assert_eq!(location.created, "2024-01-15T10:30:00Z");
-        assert_eq!(location.updated, "2024-01-16T14:45:00Z");
+            assert_eq!(location.id, 42);
+            assert_eq!(location.path, "/music/downloads");
+            assert_eq!(location.created, "2024-01-15T10:30:00Z");
+            assert_eq!(location.updated, "2024-01-16T14:45:00Z");
+        }
     }
 
     #[test_log::test]
@@ -966,310 +984,327 @@ mod tests {
 
     #[test_log::test]
     fn test_download_item_to_value_type_from_row_track() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let source_json =
-            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
-        let row = Row {
-            columns: vec![
-                (
-                    "type".to_string(),
-                    DatabaseValue::String("TRACK".to_string()),
-                ),
-                ("source".to_string(), DatabaseValue::String(source_json)),
-                ("track_id".to_string(), DatabaseValue::UInt64(123)),
-                (
-                    "quality".to_string(),
-                    DatabaseValue::String("FLAC_HIGHEST_RES".to_string()),
-                ),
-                ("artist_id".to_string(), DatabaseValue::UInt64(456)),
-                (
-                    "artist".to_string(),
-                    DatabaseValue::String("Test Artist".to_string()),
-                ),
-                ("album_id".to_string(), DatabaseValue::UInt64(789)),
-                (
-                    "album".to_string(),
-                    DatabaseValue::String("Test Album".to_string()),
-                ),
-                (
-                    "track".to_string(),
-                    DatabaseValue::String("Test Track".to_string()),
-                ),
-                ("contains_cover".to_string(), DatabaseValue::Bool(true)),
-            ],
-        };
+            let source_json =
+                serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()))
+                    .unwrap();
+            let row = Row {
+                columns: vec![
+                    (
+                        "type".to_string(),
+                        DatabaseValue::String("TRACK".to_string()),
+                    ),
+                    ("source".to_string(), DatabaseValue::String(source_json)),
+                    ("track_id".to_string(), DatabaseValue::UInt64(123)),
+                    (
+                        "quality".to_string(),
+                        DatabaseValue::String("FLAC_HIGHEST_RES".to_string()),
+                    ),
+                    ("artist_id".to_string(), DatabaseValue::UInt64(456)),
+                    (
+                        "artist".to_string(),
+                        DatabaseValue::String("Test Artist".to_string()),
+                    ),
+                    ("album_id".to_string(), DatabaseValue::UInt64(789)),
+                    (
+                        "album".to_string(),
+                        DatabaseValue::String("Test Album".to_string()),
+                    ),
+                    (
+                        "track".to_string(),
+                        DatabaseValue::String("Test Track".to_string()),
+                    ),
+                    ("contains_cover".to_string(), DatabaseValue::Bool(true)),
+                ],
+            };
 
-        let result: Result<DownloadItem, _> = (&row).to_value_type();
-        let item = result.unwrap();
+            let result: Result<DownloadItem, _> = (&row).to_value_type();
+            let item = result.unwrap();
 
-        match item {
-            DownloadItem::Track {
-                track_id,
-                quality,
-                artist,
-                album,
-                title,
-                contains_cover,
-                ..
-            } => {
-                assert_eq!(track_id, 123.into());
-                assert_eq!(quality, TrackAudioQuality::FlacHighestRes);
-                assert_eq!(artist, "Test Artist");
-                assert_eq!(album, "Test Album");
-                assert_eq!(title, "Test Track");
-                assert!(contains_cover);
+            match item {
+                DownloadItem::Track {
+                    track_id,
+                    quality,
+                    artist,
+                    album,
+                    title,
+                    contains_cover,
+                    ..
+                } => {
+                    assert_eq!(track_id, 123.into());
+                    assert_eq!(quality, TrackAudioQuality::FlacHighestRes);
+                    assert_eq!(artist, "Test Artist");
+                    assert_eq!(album, "Test Album");
+                    assert_eq!(title, "Test Track");
+                    assert!(contains_cover);
+                }
+                _ => panic!("Expected Track variant"),
             }
-            _ => panic!("Expected Track variant"),
         }
     }
 
     #[test_log::test]
     fn test_download_item_to_value_type_from_row_album_cover() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let source_json =
-            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
-        let row = Row {
-            columns: vec![
-                (
-                    "type".to_string(),
-                    DatabaseValue::String("ALBUM_COVER".to_string()),
-                ),
-                ("source".to_string(), DatabaseValue::String(source_json)),
-                ("artist_id".to_string(), DatabaseValue::UInt64(456)),
-                (
-                    "artist".to_string(),
-                    DatabaseValue::String("Test Artist".to_string()),
-                ),
-                ("album_id".to_string(), DatabaseValue::UInt64(789)),
-                (
-                    "album".to_string(),
-                    DatabaseValue::String("Test Album".to_string()),
-                ),
-                ("contains_cover".to_string(), DatabaseValue::Bool(true)),
-            ],
-        };
+            let source_json =
+                serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()))
+                    .unwrap();
+            let row = Row {
+                columns: vec![
+                    (
+                        "type".to_string(),
+                        DatabaseValue::String("ALBUM_COVER".to_string()),
+                    ),
+                    ("source".to_string(), DatabaseValue::String(source_json)),
+                    ("artist_id".to_string(), DatabaseValue::UInt64(456)),
+                    (
+                        "artist".to_string(),
+                        DatabaseValue::String("Test Artist".to_string()),
+                    ),
+                    ("album_id".to_string(), DatabaseValue::UInt64(789)),
+                    (
+                        "album".to_string(),
+                        DatabaseValue::String("Test Album".to_string()),
+                    ),
+                    ("contains_cover".to_string(), DatabaseValue::Bool(true)),
+                ],
+            };
 
-        let result: Result<DownloadItem, _> = (&row).to_value_type();
-        let item = result.unwrap();
+            let result: Result<DownloadItem, _> = (&row).to_value_type();
+            let item = result.unwrap();
 
-        match item {
-            DownloadItem::AlbumCover {
-                album_id,
-                artist,
-                title,
-                contains_cover,
-                ..
-            } => {
-                assert_eq!(album_id, 789.into());
-                assert_eq!(artist, "Test Artist");
-                assert_eq!(title, "Test Album");
-                assert!(contains_cover);
+            match item {
+                DownloadItem::AlbumCover {
+                    album_id,
+                    artist,
+                    title,
+                    contains_cover,
+                    ..
+                } => {
+                    assert_eq!(album_id, 789.into());
+                    assert_eq!(artist, "Test Artist");
+                    assert_eq!(title, "Test Album");
+                    assert!(contains_cover);
+                }
+                _ => panic!("Expected AlbumCover variant"),
             }
-            _ => panic!("Expected AlbumCover variant"),
         }
     }
 
     #[test_log::test]
     fn test_download_item_to_value_type_from_row_artist_cover() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let source_json =
-            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
-        let row = Row {
-            columns: vec![
-                (
-                    "type".to_string(),
-                    DatabaseValue::String("ARTIST_COVER".to_string()),
-                ),
-                ("source".to_string(), DatabaseValue::String(source_json)),
-                ("artist_id".to_string(), DatabaseValue::UInt64(456)),
-                (
-                    "artist".to_string(),
-                    DatabaseValue::String("Test Artist".to_string()),
-                ),
-                ("album_id".to_string(), DatabaseValue::UInt64(789)),
-                ("contains_cover".to_string(), DatabaseValue::Bool(false)),
-            ],
-        };
+            let source_json =
+                serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()))
+                    .unwrap();
+            let row = Row {
+                columns: vec![
+                    (
+                        "type".to_string(),
+                        DatabaseValue::String("ARTIST_COVER".to_string()),
+                    ),
+                    ("source".to_string(), DatabaseValue::String(source_json)),
+                    ("artist_id".to_string(), DatabaseValue::UInt64(456)),
+                    (
+                        "artist".to_string(),
+                        DatabaseValue::String("Test Artist".to_string()),
+                    ),
+                    ("album_id".to_string(), DatabaseValue::UInt64(789)),
+                    ("contains_cover".to_string(), DatabaseValue::Bool(false)),
+                ],
+            };
 
-        let result: Result<DownloadItem, _> = (&row).to_value_type();
-        let item = result.unwrap();
+            let result: Result<DownloadItem, _> = (&row).to_value_type();
+            let item = result.unwrap();
 
-        match item {
-            DownloadItem::ArtistCover {
-                artist_id,
-                album_id,
-                title,
-                contains_cover,
-                ..
-            } => {
-                assert_eq!(artist_id, 456.into());
-                assert_eq!(album_id, 789.into());
-                assert_eq!(title, "Test Artist");
-                assert!(!contains_cover);
+            match item {
+                DownloadItem::ArtistCover {
+                    artist_id,
+                    album_id,
+                    title,
+                    contains_cover,
+                    ..
+                } => {
+                    assert_eq!(artist_id, 456.into());
+                    assert_eq!(album_id, 789.into());
+                    assert_eq!(title, "Test Artist");
+                    assert!(!contains_cover);
+                }
+                _ => panic!("Expected ArtistCover variant"),
             }
-            _ => panic!("Expected ArtistCover variant"),
         }
     }
 
     #[test_log::test]
     fn test_download_item_to_value_type_from_row_invalid_type_returns_error() {
-        use moosicbox_json_utils::ParseError;
-        use switchy_database::Row;
+        {
+            use moosicbox_json_utils::ParseError;
+            use switchy_database::Row;
 
-        let row = Row {
-            columns: vec![(
-                "type".to_string(),
-                DatabaseValue::String("INVALID_TYPE".to_string()),
-            )],
-        };
+            let row = Row {
+                columns: vec![(
+                    "type".to_string(),
+                    DatabaseValue::String("INVALID_TYPE".to_string()),
+                )],
+            };
 
-        let result: Result<DownloadItem, ParseError> = (&row).to_value_type();
+            let result: Result<DownloadItem, ParseError> = (&row).to_value_type();
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::ConvertType(msg) => {
-                assert!(msg.contains("Invalid DownloadItem type"));
-                assert!(msg.contains("INVALID_TYPE"));
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::ConvertType(msg) => {
+                    assert!(msg.contains("Invalid DownloadItem type"));
+                    assert!(msg.contains("INVALID_TYPE"));
+                }
+                _ => panic!("Expected ConvertType error"),
             }
-            _ => panic!("Expected ConvertType error"),
         }
     }
 
     #[test_log::test]
     fn test_download_task_to_value_type_from_row() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let source_json =
-            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
-        let row = Row {
-            columns: vec![
-                ("id".to_string(), DatabaseValue::UInt64(100)),
-                (
-                    "state".to_string(),
-                    DatabaseValue::String("STARTED".to_string()),
-                ),
-                (
-                    "type".to_string(),
-                    DatabaseValue::String("TRACK".to_string()),
-                ),
-                ("source".to_string(), DatabaseValue::String(source_json)),
-                ("track_id".to_string(), DatabaseValue::UInt64(123)),
-                (
-                    "quality".to_string(),
-                    DatabaseValue::String("FLAC_HIGHEST_RES".to_string()),
-                ),
-                ("artist_id".to_string(), DatabaseValue::UInt64(456)),
-                (
-                    "artist".to_string(),
-                    DatabaseValue::String("Test Artist".to_string()),
-                ),
-                ("album_id".to_string(), DatabaseValue::UInt64(789)),
-                (
-                    "album".to_string(),
-                    DatabaseValue::String("Test Album".to_string()),
-                ),
-                (
-                    "track".to_string(),
-                    DatabaseValue::String("Test Track".to_string()),
-                ),
-                ("contains_cover".to_string(), DatabaseValue::Bool(true)),
-                (
-                    "file_path".to_string(),
-                    DatabaseValue::String("/music/test.flac".to_string()),
-                ),
-                ("total_bytes".to_string(), DatabaseValue::UInt64(1_024_000)),
-                (
-                    "created".to_string(),
-                    DatabaseValue::String("2024-01-15".to_string()),
-                ),
-                (
-                    "updated".to_string(),
-                    DatabaseValue::String("2024-01-16".to_string()),
-                ),
-            ],
-        };
+            let source_json =
+                serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()))
+                    .unwrap();
+            let row = Row {
+                columns: vec![
+                    ("id".to_string(), DatabaseValue::UInt64(100)),
+                    (
+                        "state".to_string(),
+                        DatabaseValue::String("STARTED".to_string()),
+                    ),
+                    (
+                        "type".to_string(),
+                        DatabaseValue::String("TRACK".to_string()),
+                    ),
+                    ("source".to_string(), DatabaseValue::String(source_json)),
+                    ("track_id".to_string(), DatabaseValue::UInt64(123)),
+                    (
+                        "quality".to_string(),
+                        DatabaseValue::String("FLAC_HIGHEST_RES".to_string()),
+                    ),
+                    ("artist_id".to_string(), DatabaseValue::UInt64(456)),
+                    (
+                        "artist".to_string(),
+                        DatabaseValue::String("Test Artist".to_string()),
+                    ),
+                    ("album_id".to_string(), DatabaseValue::UInt64(789)),
+                    (
+                        "album".to_string(),
+                        DatabaseValue::String("Test Album".to_string()),
+                    ),
+                    (
+                        "track".to_string(),
+                        DatabaseValue::String("Test Track".to_string()),
+                    ),
+                    ("contains_cover".to_string(), DatabaseValue::Bool(true)),
+                    (
+                        "file_path".to_string(),
+                        DatabaseValue::String("/music/test.flac".to_string()),
+                    ),
+                    ("total_bytes".to_string(), DatabaseValue::UInt64(1_024_000)),
+                    (
+                        "created".to_string(),
+                        DatabaseValue::String("2024-01-15".to_string()),
+                    ),
+                    (
+                        "updated".to_string(),
+                        DatabaseValue::String("2024-01-16".to_string()),
+                    ),
+                ],
+            };
 
-        let result: Result<DownloadTask, _> = (&row).to_value_type();
-        let task = result.unwrap();
+            let result: Result<DownloadTask, _> = (&row).to_value_type();
+            let task = result.unwrap();
 
-        assert_eq!(task.id, 100);
-        assert_eq!(task.state, DownloadTaskState::Started);
-        assert_eq!(task.file_path, "/music/test.flac");
-        assert_eq!(task.total_bytes, Some(1_024_000));
-        assert_eq!(task.created, "2024-01-15");
-        assert_eq!(task.updated, "2024-01-16");
+            assert_eq!(task.id, 100);
+            assert_eq!(task.state, DownloadTaskState::Started);
+            assert_eq!(task.file_path, "/music/test.flac");
+            assert_eq!(task.total_bytes, Some(1_024_000));
+            assert_eq!(task.created, "2024-01-15");
+            assert_eq!(task.updated, "2024-01-16");
 
-        match task.item {
-            DownloadItem::Track {
-                track_id, title, ..
-            } => {
-                assert_eq!(track_id, 123.into());
-                assert_eq!(title, "Test Track");
+            match task.item {
+                DownloadItem::Track {
+                    track_id, title, ..
+                } => {
+                    assert_eq!(track_id, 123.into());
+                    assert_eq!(title, "Test Track");
+                }
+                _ => panic!("Expected Track item"),
             }
-            _ => panic!("Expected Track item"),
         }
     }
 
     #[test_log::test]
     fn test_download_task_to_value_type_from_row_with_null_total_bytes() {
-        use switchy_database::Row;
+        {
+            use switchy_database::Row;
 
-        let source_json =
-            serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())).unwrap();
-        let row = Row {
-            columns: vec![
-                ("id".to_string(), DatabaseValue::UInt64(101)),
-                (
-                    "state".to_string(),
-                    DatabaseValue::String("PENDING".to_string()),
-                ),
-                (
-                    "type".to_string(),
-                    DatabaseValue::String("ALBUM_COVER".to_string()),
-                ),
-                ("source".to_string(), DatabaseValue::String(source_json)),
-                ("artist_id".to_string(), DatabaseValue::UInt64(456)),
-                (
-                    "artist".to_string(),
-                    DatabaseValue::String("Test Artist".to_string()),
-                ),
-                ("album_id".to_string(), DatabaseValue::UInt64(789)),
-                (
-                    "album".to_string(),
-                    DatabaseValue::String("Test Album".to_string()),
-                ),
-                ("contains_cover".to_string(), DatabaseValue::Bool(true)),
-                (
-                    "file_path".to_string(),
-                    DatabaseValue::String("/music/cover.jpg".to_string()),
-                ),
-                ("total_bytes".to_string(), DatabaseValue::Null),
-                (
-                    "created".to_string(),
-                    DatabaseValue::String("2024-01-15".to_string()),
-                ),
-                (
-                    "updated".to_string(),
-                    DatabaseValue::String("2024-01-16".to_string()),
-                ),
-            ],
-        };
+            let source_json =
+                serde_json::to_string(&crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()))
+                    .unwrap();
+            let row = Row {
+                columns: vec![
+                    ("id".to_string(), DatabaseValue::UInt64(101)),
+                    (
+                        "state".to_string(),
+                        DatabaseValue::String("PENDING".to_string()),
+                    ),
+                    (
+                        "type".to_string(),
+                        DatabaseValue::String("ALBUM_COVER".to_string()),
+                    ),
+                    ("source".to_string(), DatabaseValue::String(source_json)),
+                    ("artist_id".to_string(), DatabaseValue::UInt64(456)),
+                    (
+                        "artist".to_string(),
+                        DatabaseValue::String("Test Artist".to_string()),
+                    ),
+                    ("album_id".to_string(), DatabaseValue::UInt64(789)),
+                    (
+                        "album".to_string(),
+                        DatabaseValue::String("Test Album".to_string()),
+                    ),
+                    ("contains_cover".to_string(), DatabaseValue::Bool(true)),
+                    (
+                        "file_path".to_string(),
+                        DatabaseValue::String("/music/cover.jpg".to_string()),
+                    ),
+                    ("total_bytes".to_string(), DatabaseValue::Null),
+                    (
+                        "created".to_string(),
+                        DatabaseValue::String("2024-01-15".to_string()),
+                    ),
+                    (
+                        "updated".to_string(),
+                        DatabaseValue::String("2024-01-16".to_string()),
+                    ),
+                ],
+            };
 
-        let result: Result<DownloadTask, _> = (&row).to_value_type();
-        let task = result.unwrap();
+            let result: Result<DownloadTask, _> = (&row).to_value_type();
+            let task = result.unwrap();
 
-        assert_eq!(task.id, 101);
-        assert_eq!(task.state, DownloadTaskState::Pending);
-        assert_eq!(task.total_bytes, None);
+            assert_eq!(task.id, 101);
+            assert_eq!(task.state, DownloadTaskState::Pending);
+            assert_eq!(task.total_bytes, None);
 
-        match task.item {
-            DownloadItem::AlbumCover { album_id, .. } => {
-                assert_eq!(album_id, 789.into());
+            match task.item {
+                DownloadItem::AlbumCover { album_id, .. } => {
+                    assert_eq!(album_id, 789.into());
+                }
+                _ => panic!("Expected AlbumCover item"),
             }
-            _ => panic!("Expected AlbumCover item"),
         }
     }
 }

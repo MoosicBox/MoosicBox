@@ -482,96 +482,100 @@ mod tests {
 
     #[test_log::test]
     fn test_concurrent_reservations() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let range = next_port_range(100);
-        let reservation = Arc::new(PortReservation::new(range));
-        let mut handles = vec![];
+            let range = next_port_range(100);
+            let reservation = Arc::new(PortReservation::new(range));
+            let mut handles = vec![];
 
-        // Spawn 10 threads that each try to reserve 5 ports
-        for _ in 0..10 {
-            let reservation_clone = Arc::clone(&reservation);
-            let handle = thread::spawn(move || reservation_clone.reserve_ports(5));
-            handles.push(handle);
-        }
+            // Spawn 10 threads that each try to reserve 5 ports
+            for _ in 0..10 {
+                let reservation_clone = Arc::clone(&reservation);
+                let handle = thread::spawn(move || reservation_clone.reserve_ports(5));
+                handles.push(handle);
+            }
 
-        // Collect all reserved ports
-        let mut all_ports = Vec::new();
-        for handle in handles {
-            let ports = handle.join().unwrap();
-            all_ports.extend(ports);
-        }
+            // Collect all reserved ports
+            let mut all_ports = Vec::new();
+            for handle in handles {
+                let ports = handle.join().unwrap();
+                all_ports.extend(ports);
+            }
 
-        // Verify no duplicates (each port should be reserved only once)
-        let mut unique_ports = all_ports.clone();
-        unique_ports.sort_unstable();
-        unique_ports.dedup();
-        assert_eq!(
-            unique_ports.len(),
-            all_ports.len(),
-            "Concurrent reservations should not result in duplicate ports"
-        );
-
-        // Verify all ports are marked as reserved
-        for port in &all_ports {
-            assert!(
-                reservation.is_reserved(*port),
-                "Port {port} should be marked as reserved"
+            // Verify no duplicates (each port should be reserved only once)
+            let mut unique_ports = all_ports.clone();
+            unique_ports.sort_unstable();
+            unique_ports.dedup();
+            assert_eq!(
+                unique_ports.len(),
+                all_ports.len(),
+                "Concurrent reservations should not result in duplicate ports"
             );
+
+            // Verify all ports are marked as reserved
+            for port in &all_ports {
+                assert!(
+                    reservation.is_reserved(*port),
+                    "Port {port} should be marked as reserved"
+                );
+            }
         }
     }
 
     #[test_log::test]
     fn test_concurrent_reserve_and_release() {
-        use std::sync::Arc;
-        use std::thread;
+        {
+            use std::sync::Arc;
+            use std::thread;
 
-        let range = next_port_range(100);
-        let reservation = Arc::new(PortReservation::new(range));
-        let mut handles = vec![];
+            let range = next_port_range(100);
+            let reservation = Arc::new(PortReservation::new(range));
+            let mut handles = vec![];
 
-        // Spawn threads that reserve and release ports concurrently
-        for i in 0..5 {
-            let reservation_clone = Arc::clone(&reservation);
-            let handle = thread::spawn(move || {
-                let ports = reservation_clone.reserve_ports(3);
+            // Spawn threads that reserve and release ports concurrently
+            for i in 0..5 {
+                let reservation_clone = Arc::clone(&reservation);
+                let handle = thread::spawn(move || {
+                    let ports = reservation_clone.reserve_ports(3);
 
-                // Even-numbered threads release their ports
-                if i % 2 == 0 {
-                    reservation_clone.release_ports(ports.iter().copied());
-                    vec![]
-                } else {
-                    ports
-                }
-            });
-            handles.push(handle);
-        }
+                    // Even-numbered threads release their ports
+                    if i % 2 == 0 {
+                        reservation_clone.release_ports(ports.iter().copied());
+                        vec![]
+                    } else {
+                        ports
+                    }
+                });
+                handles.push(handle);
+            }
 
-        // Collect ports that were not released
-        let mut remaining_ports = Vec::new();
-        for handle in handles {
-            let ports = handle.join().unwrap();
-            remaining_ports.extend(ports);
-        }
+            // Collect ports that were not released
+            let mut remaining_ports = Vec::new();
+            for handle in handles {
+                let ports = handle.join().unwrap();
+                remaining_ports.extend(ports);
+            }
 
-        // Verify that the remaining ports are still reserved
-        for port in &remaining_ports {
-            assert!(
-                reservation.is_reserved(*port),
-                "Port {port} should still be reserved"
+            // Verify that the remaining ports are still reserved
+            for port in &remaining_ports {
+                assert!(
+                    reservation.is_reserved(*port),
+                    "Port {port} should still be reserved"
+                );
+            }
+
+            // Verify no duplicates among remaining ports
+            let mut unique_ports = remaining_ports.clone();
+            unique_ports.sort_unstable();
+            unique_ports.dedup();
+            assert_eq!(
+                unique_ports.len(),
+                remaining_ports.len(),
+                "No duplicate ports should remain"
             );
         }
-
-        // Verify no duplicates among remaining ports
-        let mut unique_ports = remaining_ports.clone();
-        unique_ports.sort_unstable();
-        unique_ports.dedup();
-        assert_eq!(
-            unique_ports.len(),
-            remaining_ports.len(),
-            "No duplicate ports should remain"
-        );
     }
 
     #[test_log::test]
@@ -738,22 +742,24 @@ mod tests {
 
     #[test_log::test]
     fn test_reservation_is_free_helper() {
-        use std::collections::BTreeSet;
+        {
+            use std::collections::BTreeSet;
 
-        let mut reserved = BTreeSet::new();
+            let mut reserved = BTreeSet::new();
 
-        // Get a port that is actually free on the system
-        let range = next_port_range(100);
-        let port = crate::pick_unused_port(range);
-        if let Some(port) = port {
-            // Port not in set and free on system should return true
-            assert!(reservation_is_free(&reserved, port));
+            // Get a port that is actually free on the system
+            let range = next_port_range(100);
+            let port = crate::pick_unused_port(range);
+            if let Some(port) = port {
+                // Port not in set and free on system should return true
+                assert!(reservation_is_free(&reserved, port));
 
-            // Add to reserved set
-            reserved.insert(port);
+                // Add to reserved set
+                reserved.insert(port);
 
-            // Port in set should return false even if free on system
-            assert!(!reservation_is_free(&reserved, port));
+                // Port in set should return false even if free on system
+                assert!(!reservation_is_free(&reserved, port));
+            }
         }
     }
 }

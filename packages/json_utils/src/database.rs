@@ -1033,41 +1033,43 @@ mod tests {
 
     #[test_log::test]
     fn test_to_value_type_datetime_utc_from_string() {
-        use chrono::{DateTime, Datelike, Timelike, Utc};
+        {
+            use chrono::{DateTime, Datelike, Timelike, Utc};
 
-        // Test ISO 8601 format with milliseconds (database format)
-        let value = &DatabaseValue::String("2025-08-01T20:06:35.421".to_string());
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            // Test ISO 8601 format with milliseconds (database format)
+            let value = &DatabaseValue::String("2025-08-01T20:06:35.421".to_string());
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
 
-        let datetime = result.unwrap();
-        assert_eq!(datetime.year(), 2025);
-        assert_eq!(datetime.month(), 8);
-        assert_eq!(datetime.day(), 1);
-        assert_eq!(datetime.hour(), 20);
-        assert_eq!(datetime.minute(), 6);
-        assert_eq!(datetime.second(), 35);
-        assert_eq!(datetime.nanosecond(), 421_000_000); // 421 milliseconds
+            let datetime = result.unwrap();
+            assert_eq!(datetime.year(), 2025);
+            assert_eq!(datetime.month(), 8);
+            assert_eq!(datetime.day(), 1);
+            assert_eq!(datetime.hour(), 20);
+            assert_eq!(datetime.minute(), 6);
+            assert_eq!(datetime.second(), 35);
+            assert_eq!(datetime.nanosecond(), 421_000_000); // 421 milliseconds
 
-        // Test ISO 8601 format without milliseconds
-        let value = &DatabaseValue::String("2025-08-01T20:06:35".to_string());
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            // Test ISO 8601 format without milliseconds
+            let value = &DatabaseValue::String("2025-08-01T20:06:35".to_string());
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
 
-        // Test RFC3339 format with timezone
-        let value = &DatabaseValue::String("2025-08-01T20:06:35.421Z".to_string());
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            // Test RFC3339 format with timezone
+            let value = &DatabaseValue::String("2025-08-01T20:06:35.421Z".to_string());
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
 
-        // Test invalid format (non-ISO 8601)
-        let value = &DatabaseValue::String("2025-08-01 20:06:35.421".to_string());
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_err());
+            // Test invalid format (non-ISO 8601)
+            let value = &DatabaseValue::String("2025-08-01 20:06:35.421".to_string());
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_err());
 
-        // Test completely invalid format
-        let value = &DatabaseValue::String("invalid-date".to_string());
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_err());
+            // Test completely invalid format
+            let value = &DatabaseValue::String("invalid-date".to_string());
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_err());
+        }
     }
 
     #[test_log::test]
@@ -1098,74 +1100,82 @@ mod tests {
 
     #[test_log::test]
     fn test_to_value_type_string_from_datetime() {
-        use chrono::NaiveDate;
+        {
+            use chrono::NaiveDate;
 
-        let datetime = NaiveDate::from_ymd_opt(2025, 8, 1)
-            .unwrap()
-            .and_hms_opt(20, 6, 35)
-            .unwrap();
-        let value = &DatabaseValue::DateTime(datetime);
-        let result: Result<String, ParseError> = value.to_value_type();
-        assert_eq!(result.unwrap(), "2025-08-01T20:06:35+00:00");
+            let datetime = NaiveDate::from_ymd_opt(2025, 8, 1)
+                .unwrap()
+                .and_hms_opt(20, 6, 35)
+                .unwrap();
+            let value = &DatabaseValue::DateTime(datetime);
+            let result: Result<String, ParseError> = value.to_value_type();
+            assert_eq!(result.unwrap(), "2025-08-01T20:06:35+00:00");
+        }
     }
 
     #[test_log::test]
     #[cfg(feature = "uuid")]
     fn test_to_value_type_string_from_uuid() {
-        use uuid::Uuid;
+        {
+            use uuid::Uuid;
 
-        let test_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
-        let value = &DatabaseValue::Uuid(test_uuid);
-        let result: Result<String, ParseError> = value.to_value_type();
-        assert_eq!(result.unwrap(), "550e8400-e29b-41d4-a716-446655440000");
+            let test_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+            let value = &DatabaseValue::Uuid(test_uuid);
+            let result: Result<String, ParseError> = value.to_value_type();
+            assert_eq!(result.unwrap(), "550e8400-e29b-41d4-a716-446655440000");
+        }
     }
 
     #[test_log::test]
     fn test_to_value_type_naive_datetime_from_string() {
-        use chrono::{Datelike, NaiveDateTime, Timelike};
+        {
+            use chrono::{Datelike, NaiveDateTime, Timelike};
 
-        // Test ISO 8601 format with milliseconds
-        let value = DatabaseValue::String("2025-08-01T20:06:35.421".to_string());
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
-        let dt = result.unwrap();
-        assert_eq!(dt.year(), 2025);
-        assert_eq!(dt.month(), 8);
-        assert_eq!(dt.day(), 1);
-        assert_eq!(dt.hour(), 20);
-        assert_eq!(dt.minute(), 6);
-        assert_eq!(dt.second(), 35);
+            // Test ISO 8601 format with milliseconds
+            let value = DatabaseValue::String("2025-08-01T20:06:35.421".to_string());
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
+            let dt = result.unwrap();
+            assert_eq!(dt.year(), 2025);
+            assert_eq!(dt.month(), 8);
+            assert_eq!(dt.day(), 1);
+            assert_eq!(dt.hour(), 20);
+            assert_eq!(dt.minute(), 6);
+            assert_eq!(dt.second(), 35);
 
-        // Test format without milliseconds
-        let value = DatabaseValue::String("2025-08-01 20:06:35".to_string());
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            // Test format without milliseconds
+            let value = DatabaseValue::String("2025-08-01 20:06:35".to_string());
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
 
-        // Test invalid datetime string
-        let value = DatabaseValue::String("invalid-date".to_string());
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+            // Test invalid datetime string
+            let value = DatabaseValue::String("invalid-date".to_string());
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
     }
 
     #[test_log::test]
     fn test_to_value_type_naive_datetime_from_database_value() {
-        use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
+        {
+            use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 
-        let datetime = NaiveDate::from_ymd_opt(2025, 8, 1)
-            .unwrap()
-            .and_hms_opt(20, 6, 35)
-            .unwrap();
-        let value = DatabaseValue::DateTime(datetime);
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
-        let dt = result.unwrap();
-        assert_eq!(dt.year(), 2025);
-        assert_eq!(dt.month(), 8);
-        assert_eq!(dt.day(), 1);
-        assert_eq!(dt.hour(), 20);
-        assert_eq!(dt.minute(), 6);
-        assert_eq!(dt.second(), 35);
+            let datetime = NaiveDate::from_ymd_opt(2025, 8, 1)
+                .unwrap()
+                .and_hms_opt(20, 6, 35)
+                .unwrap();
+            let value = DatabaseValue::DateTime(datetime);
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
+            let dt = result.unwrap();
+            assert_eq!(dt.year(), 2025);
+            assert_eq!(dt.month(), 8);
+            assert_eq!(dt.day(), 1);
+            assert_eq!(dt.hour(), 20);
+            assert_eq!(dt.minute(), 6);
+            assert_eq!(dt.second(), 35);
+        }
     }
 
     #[test_log::test]
@@ -1321,46 +1331,52 @@ mod tests {
 
     #[test_log::test]
     fn test_to_value_type_datetime_utc_from_naive_datetime() {
-        use chrono::{DateTime, Datelike, NaiveDate, Timelike, Utc};
+        {
+            use chrono::{DateTime, Datelike, NaiveDate, Timelike, Utc};
 
-        let datetime = NaiveDate::from_ymd_opt(2025, 6, 15)
-            .unwrap()
-            .and_hms_opt(12, 30, 45)
-            .unwrap();
-        let value = &DatabaseValue::DateTime(datetime);
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            let datetime = NaiveDate::from_ymd_opt(2025, 6, 15)
+                .unwrap()
+                .and_hms_opt(12, 30, 45)
+                .unwrap();
+            let value = &DatabaseValue::DateTime(datetime);
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
 
-        let dt = result.unwrap();
-        assert_eq!(dt.year(), 2025);
-        assert_eq!(dt.month(), 6);
-        assert_eq!(dt.day(), 15);
-        assert_eq!(dt.hour(), 12);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 45);
+            let dt = result.unwrap();
+            assert_eq!(dt.year(), 2025);
+            assert_eq!(dt.month(), 6);
+            assert_eq!(dt.day(), 15);
+            assert_eq!(dt.hour(), 12);
+            assert_eq!(dt.minute(), 30);
+            assert_eq!(dt.second(), 45);
+        }
     }
 
     #[test_log::test]
     fn test_to_value_type_datetime_utc_invalid_type() {
-        use chrono::{DateTime, Utc};
+        {
+            use chrono::{DateTime, Utc};
 
-        // Error case: wrong type
-        let value = &DatabaseValue::Int64(12345);
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+            // Error case: wrong type
+            let value = &DatabaseValue::Int64(12345);
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
     }
 
     #[test_log::test]
     fn test_owned_datetime_utc_conversion() {
-        use chrono::{DateTime, NaiveDate, Utc};
+        {
+            use chrono::{DateTime, NaiveDate, Utc};
 
-        let datetime = NaiveDate::from_ymd_opt(2025, 1, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap();
-        let value = DatabaseValue::DateTime(datetime);
-        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
-        assert!(result.is_ok());
+            let datetime = NaiveDate::from_ymd_opt(2025, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
+            let value = DatabaseValue::DateTime(datetime);
+            let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+            assert!(result.is_ok());
+        }
     }
 
     #[test_log::test]
@@ -1520,25 +1536,29 @@ mod tests {
 
     #[test_log::test]
     fn test_naive_datetime_conversion_invalid_format() {
-        use chrono::NaiveDateTime;
+        {
+            use chrono::NaiveDateTime;
 
-        // Invalid datetime string format
-        let value = DatabaseValue::String("01-08-2025 20:06:35".to_string());
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ParseError::ConvertType(_)));
-        assert!(err.to_string().contains("Invalid datetime format"));
+            // Invalid datetime string format
+            let value = DatabaseValue::String("01-08-2025 20:06:35".to_string());
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(matches!(err, ParseError::ConvertType(_)));
+            assert!(err.to_string().contains("Invalid datetime format"));
+        }
     }
 
     #[test_log::test]
     fn test_naive_datetime_conversion_wrong_type() {
-        use chrono::NaiveDateTime;
+        {
+            use chrono::NaiveDateTime;
 
-        // Wrong type entirely
-        let value = DatabaseValue::Int64(12345);
-        let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
-        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+            // Wrong type entirely
+            let value = DatabaseValue::Int64(12345);
+            let result: Result<NaiveDateTime, ParseError> = value.to_value_type();
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
     }
 
     #[test_log::test]
@@ -1613,15 +1633,17 @@ mod tests {
 
     #[test_log::test]
     fn test_owned_string_from_datetime() {
-        use chrono::NaiveDate;
+        {
+            use chrono::NaiveDate;
 
-        let datetime = NaiveDate::from_ymd_opt(2025, 1, 15)
-            .unwrap()
-            .and_hms_opt(10, 30, 0)
-            .unwrap();
-        let value = DatabaseValue::DateTime(datetime);
-        let result: Result<String, ParseError> = value.to_value_type();
-        assert_eq!(result.unwrap(), "2025-01-15T10:30:00+00:00");
+            let datetime = NaiveDate::from_ymd_opt(2025, 1, 15)
+                .unwrap()
+                .and_hms_opt(10, 30, 0)
+                .unwrap();
+            let value = DatabaseValue::DateTime(datetime);
+            let result: Result<String, ParseError> = value.to_value_type();
+            assert_eq!(result.unwrap(), "2025-01-15T10:30:00+00:00");
+        }
     }
 
     #[test_log::test]

@@ -448,21 +448,23 @@ macro_rules! impl_file_sync {
 
         impl std::io::Write for $file {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-                use bytes::BufMut as _;
+                {
+                    use bytes::BufMut as _;
 
-                if !self.write {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::PermissionDenied,
-                        "File not opened in write mode",
-                    ));
+                    if !self.write {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            "File not opened in write mode",
+                        ));
+                    }
+                    let mut binding = self.data.lock().unwrap();
+
+                    binding.put(buf);
+
+                    drop(binding);
+
+                    Ok(buf.len())
                 }
-                let mut binding = self.data.lock().unwrap();
-
-                binding.put(buf);
-
-                drop(binding);
-
-                Ok(buf.len())
             }
 
             fn flush(&mut self) -> std::io::Result<()> {
@@ -1353,259 +1355,275 @@ pub mod sync {
 
         #[test_log::test]
         fn test_write_without_write_permission() {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with write permission
-            let mut file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open("/tmp/test_perms.txt")
-                .unwrap();
-            file.write_all(b"initial").unwrap();
-            drop(file);
+                // Create file with write permission
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open("/tmp/test_perms.txt")
+                    .unwrap();
+                file.write_all(b"initial").unwrap();
+                drop(file);
 
-            // Open file with read-only permission
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/test_perms.txt")
-                .unwrap();
+                // Open file with read-only permission
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/test_perms.txt")
+                    .unwrap();
 
-            // Attempt to write should fail with PermissionDenied
-            let result = file.write_all(b"should fail");
-            assert!(result.is_err());
-            assert_eq!(
-                result.unwrap_err().kind(),
-                std::io::ErrorKind::PermissionDenied
-            );
+                // Attempt to write should fail with PermissionDenied
+                let result = file.write_all(b"should fail");
+                assert!(result.is_err());
+                assert_eq!(
+                    result.unwrap_err().kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+            }
         }
 
         #[test_log::test]
         fn test_truncate_existing_file() {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with initial content
-            super::write(
-                "/tmp/truncate_test.txt",
-                b"initial content that should be removed",
-            )
-            .unwrap();
-
-            // Verify initial content exists
-            let content = super::read_to_string("/tmp/truncate_test.txt").unwrap();
-            assert_eq!(content, "initial content that should be removed");
-
-            // Open with truncate flag
-            let mut file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open("/tmp/truncate_test.txt")
+                // Create file with initial content
+                super::write(
+                    "/tmp/truncate_test.txt",
+                    b"initial content that should be removed",
+                )
                 .unwrap();
 
-            // Write new content
-            file.write_all(b"new").unwrap();
-            drop(file);
+                // Verify initial content exists
+                let content = super::read_to_string("/tmp/truncate_test.txt").unwrap();
+                assert_eq!(content, "initial content that should be removed");
 
-            // Verify file was truncated and only has new content
-            let content = super::read_to_string("/tmp/truncate_test.txt").unwrap();
-            assert_eq!(content, "new");
+                // Open with truncate flag
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open("/tmp/truncate_test.txt")
+                    .unwrap();
+
+                // Write new content
+                file.write_all(b"new").unwrap();
+                drop(file);
+
+                // Verify file was truncated and only has new content
+                let content = super::read_to_string("/tmp/truncate_test.txt").unwrap();
+                assert_eq!(content, "new");
+            }
         }
 
         #[test_log::test]
         fn test_partial_reads() {
-            use std::io::Read as _;
+            {
+                use std::io::Read as _;
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with known content
-            let test_data = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"; // 36 bytes
-            super::write("/tmp/partial_read.txt", test_data).unwrap();
+                // Create file with known content
+                let test_data = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"; // 36 bytes
+                super::write("/tmp/partial_read.txt", test_data).unwrap();
 
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/partial_read.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/partial_read.txt")
+                    .unwrap();
 
-            // Read in small chunks
-            let mut buf = [0u8; 10];
-            let mut total_read = Vec::new();
+                // Read in small chunks
+                let mut buf = [0u8; 10];
+                let mut total_read = Vec::new();
 
-            loop {
-                let count = file.read(&mut buf).unwrap();
-                if count == 0 {
-                    break;
+                loop {
+                    let count = file.read(&mut buf).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    total_read.extend_from_slice(&buf[..count]);
                 }
-                total_read.extend_from_slice(&buf[..count]);
-            }
 
-            // Verify all data was read correctly
-            assert_eq!(total_read.as_slice(), test_data);
+                // Verify all data was read correctly
+                assert_eq!(total_read.as_slice(), test_data);
+            }
         }
 
         #[test_log::test]
         fn test_seek_and_read() {
-            use std::io::{Read as _, Seek as _, SeekFrom};
+            {
+                use std::io::{Read as _, Seek as _, SeekFrom};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with content
-            super::write("/tmp/seek_test.txt", b"Hello, World!").unwrap();
+                // Create file with content
+                super::write("/tmp/seek_test.txt", b"Hello, World!").unwrap();
 
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/seek_test.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/seek_test.txt")
+                    .unwrap();
 
-            // Seek to position 7 (start of "World")
-            let pos = file.seek(SeekFrom::Start(7)).unwrap();
-            assert_eq!(pos, 7);
+                // Seek to position 7 (start of "World")
+                let pos = file.seek(SeekFrom::Start(7)).unwrap();
+                assert_eq!(pos, 7);
 
-            // Read from new position
-            let mut buf = [0u8; 5];
-            let count = file.read(&mut buf).unwrap();
-            assert_eq!(count, 5);
-            assert_eq!(&buf, b"World");
+                // Read from new position
+                let mut buf = [0u8; 5];
+                let count = file.read(&mut buf).unwrap();
+                assert_eq!(count, 5);
+                assert_eq!(&buf, b"World");
 
-            // Seek back to beginning
-            let pos = file.seek(SeekFrom::Start(0)).unwrap();
-            assert_eq!(pos, 0);
+                // Seek back to beginning
+                let pos = file.seek(SeekFrom::Start(0)).unwrap();
+                assert_eq!(pos, 0);
 
-            // Read again
-            let mut buf = [0u8; 5];
-            let count = file.read(&mut buf).unwrap();
-            assert_eq!(count, 5);
-            assert_eq!(&buf, b"Hello");
+                // Read again
+                let mut buf = [0u8; 5];
+                let count = file.read(&mut buf).unwrap();
+                assert_eq!(count, 5);
+                assert_eq!(&buf, b"Hello");
+            }
         }
 
         #[test_log::test]
         fn test_seek_from_end() {
-            use std::io::{Read as _, Seek as _, SeekFrom};
+            {
+                use std::io::{Read as _, Seek as _, SeekFrom};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with content
-            super::write("/tmp/seek_end.txt", b"0123456789").unwrap(); // 10 bytes
+                // Create file with content
+                super::write("/tmp/seek_end.txt", b"0123456789").unwrap(); // 10 bytes
 
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/seek_end.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/seek_end.txt")
+                    .unwrap();
 
-            // NOTE: Current implementation bug with SeekFrom::End
-            // The formula is: length - offset
-            // When offset is negative, it should ADD to length, but instead:
-            // length - (-3) causes underflow in u64::try_from(i64 - i64)
-            // We test with positive offset to avoid underflow while documenting the issue
-            let pos = file.seek(SeekFrom::End(0)).unwrap();
-            assert_eq!(pos, 10, "Seek to end of 10-byte file");
+                // NOTE: Current implementation bug with SeekFrom::End
+                // The formula is: length - offset
+                // When offset is negative, it should ADD to length, but instead:
+                // length - (-3) causes underflow in u64::try_from(i64 - i64)
+                // We test with positive offset to avoid underflow while documenting the issue
+                let pos = file.seek(SeekFrom::End(0)).unwrap();
+                assert_eq!(pos, 10, "Seek to end of 10-byte file");
 
-            // Reading should return 0 bytes (at EOF)
-            let mut buf = [0u8; 10];
-            let count = file.read(&mut buf).unwrap();
-            assert_eq!(count, 0);
+                // Reading should return 0 bytes (at EOF)
+                let mut buf = [0u8; 10];
+                let count = file.read(&mut buf).unwrap();
+                assert_eq!(count, 0);
 
-            // BUG: SeekFrom::End with negative offsets causes underflow
-            // This is a known bug - negative offsets subtract instead of add
+                // BUG: SeekFrom::End with negative offsets causes underflow
+                // This is a known bug - negative offsets subtract instead of add
+            }
         }
 
         #[test_log::test]
         fn test_seek_from_current() {
-            use std::io::{Read as _, Seek as _, SeekFrom};
+            {
+                use std::io::{Read as _, Seek as _, SeekFrom};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            super::write("/tmp/seek_current.txt", b"0123456789").unwrap();
+                super::write("/tmp/seek_current.txt", b"0123456789").unwrap();
 
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/seek_current.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/seek_current.txt")
+                    .unwrap();
 
-            // Read first 3 bytes
-            let mut buf = [0u8; 3];
-            file.read_exact(&mut buf).unwrap();
-            assert_eq!(&buf, b"012");
+                // Read first 3 bytes
+                let mut buf = [0u8; 3];
+                file.read_exact(&mut buf).unwrap();
+                assert_eq!(&buf, b"012");
 
-            // Seek forward 2 bytes from current position
-            let pos = file.seek(SeekFrom::Current(2)).unwrap();
-            assert_eq!(pos, 5);
+                // Seek forward 2 bytes from current position
+                let pos = file.seek(SeekFrom::Current(2)).unwrap();
+                assert_eq!(pos, 5);
 
-            // Read next 3 bytes (should be "567")
-            file.read_exact(&mut buf).unwrap();
-            assert_eq!(&buf, b"567");
+                // Read next 3 bytes (should be "567")
+                file.read_exact(&mut buf).unwrap();
+                assert_eq!(&buf, b"567");
 
-            // Seek backward 4 bytes from current position
-            let pos = file.seek(SeekFrom::Current(-4)).unwrap();
-            assert_eq!(pos, 4);
+                // Seek backward 4 bytes from current position
+                let pos = file.seek(SeekFrom::Current(-4)).unwrap();
+                assert_eq!(pos, 4);
 
-            // Read should give "456"
-            file.read_exact(&mut buf).unwrap();
-            assert_eq!(&buf, b"456");
+                // Read should give "456"
+                file.read_exact(&mut buf).unwrap();
+                assert_eq!(&buf, b"456");
+            }
         }
 
         #[test_log::test]
         fn test_seek_past_eof() {
-            use std::io::{Seek as _, SeekFrom};
+            {
+                use std::io::{Seek as _, SeekFrom};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            super::write("/tmp/seek_past_eof.txt", b"12345").unwrap(); // 5 bytes
+                super::write("/tmp/seek_past_eof.txt", b"12345").unwrap(); // 5 bytes
 
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open("/tmp/seek_past_eof.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/seek_past_eof.txt")
+                    .unwrap();
 
-            // Seek past EOF using Start should succeed
-            let pos = file.seek(SeekFrom::Start(100)).unwrap();
-            assert_eq!(pos, 100);
+                // Seek past EOF using Start should succeed
+                let pos = file.seek(SeekFrom::Start(100)).unwrap();
+                assert_eq!(pos, 100);
 
-            // NOTE: Current implementation has an underflow bug with SeekFrom::End
-            // when seeking way past EOF. We test normal seek behavior above.
-            // The overflow happens because: length - large_negative_offset overflows
+                // NOTE: Current implementation has an underflow bug with SeekFrom::End
+                // when seeking way past EOF. We test normal seek behavior above.
+                // The overflow happens because: length - large_negative_offset overflows
+            }
         }
 
         #[test_log::test]
         fn test_multiple_handles_same_file() {
-            use std::io::{Read as _, Write as _};
+            {
+                use std::io::{Read as _, Write as _};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create initial file
-            super::write("/tmp/shared.txt", b"initial").unwrap();
+                // Create initial file
+                super::write("/tmp/shared.txt", b"initial").unwrap();
 
-            // Open file for writing
-            let mut writer = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open("/tmp/shared.txt")
-                .unwrap();
+                // Open file for writing
+                let mut writer = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open("/tmp/shared.txt")
+                    .unwrap();
 
-            // Open same file for reading
-            let mut reader = OpenOptions::new()
-                .read(true)
-                .open("/tmp/shared.txt")
-                .unwrap();
+                // Open same file for reading
+                let mut reader = OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/shared.txt")
+                    .unwrap();
 
-            // Write new content
-            writer.write_all(b"updated content").unwrap();
-            drop(writer);
+                // Write new content
+                writer.write_all(b"updated content").unwrap();
+                drop(writer);
 
-            // Reader should see updated content (shared Arc<Mutex<BytesMut>>)
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-            assert_eq!(buf, b"updated content");
+                // Reader should see updated content (shared Arc<Mutex<BytesMut>>)
+                let mut buf = Vec::new();
+                reader.read_to_end(&mut buf).unwrap();
+                assert_eq!(buf, b"updated content");
+            }
         }
 
         #[test_log::test]
@@ -1628,68 +1646,72 @@ pub mod sync {
 
         #[test_log::test]
         fn test_file_position_after_operations() {
-            use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
+            {
+                use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            let mut file = OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .open("/tmp/position_test.txt")
-                .unwrap();
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .read(true)
+                    .write(true)
+                    .open("/tmp/position_test.txt")
+                    .unwrap();
 
-            // Write data
-            file.write_all(b"0123456789").unwrap();
+                // Write data
+                file.write_all(b"0123456789").unwrap();
 
-            // NOTE: Current implementation bug - write does not update position
-            // It always appends, so position stays at 0
-            // This test documents the current buggy behavior
-            let pos = file.stream_position().unwrap();
-            assert_eq!(pos, 0, "BUG: Write should update position but doesn't");
+                // NOTE: Current implementation bug - write does not update position
+                // It always appends, so position stays at 0
+                // This test documents the current buggy behavior
+                let pos = file.stream_position().unwrap();
+                assert_eq!(pos, 0, "BUG: Write should update position but doesn't");
 
-            // Seek to beginning (no-op since we're at 0)
-            file.seek(SeekFrom::Start(0)).unwrap();
+                // Seek to beginning (no-op since we're at 0)
+                file.seek(SeekFrom::Start(0)).unwrap();
 
-            // Read 5 bytes
-            let mut buf = [0u8; 5];
-            file.read_exact(&mut buf).unwrap();
+                // Read 5 bytes
+                let mut buf = [0u8; 5];
+                file.read_exact(&mut buf).unwrap();
 
-            // Position should be at 5 after read
-            let pos = file.stream_position().unwrap();
-            assert_eq!(pos, 5);
+                // Position should be at 5 after read
+                let pos = file.stream_position().unwrap();
+                assert_eq!(pos, 5);
+            }
         }
 
         #[test_log::test]
         #[cfg(all(feature = "sync", feature = "async"))]
         fn test_into_async_conversion() {
-            use std::io::{Seek as _, SeekFrom, Write as _};
+            {
+                use std::io::{Seek as _, SeekFrom, Write as _};
 
-            super::super::reset_fs();
-            super::create_dir_all("/tmp").unwrap();
+                super::super::reset_fs();
+                super::create_dir_all("/tmp").unwrap();
 
-            // Create file with content and specific position
-            let mut file = OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .open("/tmp/convert_test.txt")
-                .unwrap();
+                // Create file with content and specific position
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .read(true)
+                    .write(true)
+                    .open("/tmp/convert_test.txt")
+                    .unwrap();
 
-            file.write_all(b"Hello, World!").unwrap();
-            file.seek(SeekFrom::Start(7)).unwrap();
+                file.write_all(b"Hello, World!").unwrap();
+                file.seek(SeekFrom::Start(7)).unwrap();
 
-            let position = file.position;
-            let path = file.path.clone();
+                let position = file.position;
+                let path = file.path.clone();
 
-            // Convert to async
-            let async_file = file.into_async();
+                // Convert to async
+                let async_file = file.into_async();
 
-            // Verify state is preserved
-            assert_eq!(async_file.position, position);
-            assert_eq!(async_file.path, path);
-            assert_eq!(async_file.write, true);
+                // Verify state is preserved
+                assert_eq!(async_file.position, position);
+                assert_eq!(async_file.path, path);
+                assert_eq!(async_file.write, true);
+            }
         }
 
         #[test_log::test]
@@ -1733,23 +1755,25 @@ pub mod sync {
 
         #[test_log::test]
         fn test_create_file_in_current_directory() {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            super::super::reset_fs();
+                super::super::reset_fs();
 
-            // Creating file in current directory "." should work
-            let mut file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open("./test.txt")
-                .unwrap();
+                // Creating file in current directory "." should work
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open("./test.txt")
+                    .unwrap();
 
-            file.write_all(b"content").unwrap();
-            drop(file);
+                file.write_all(b"content").unwrap();
+                drop(file);
 
-            // Should be able to read it back
-            let content = super::read_to_string("./test.txt").unwrap();
-            assert_eq!(content, "content");
+                // Should be able to read it back
+                let content = super::read_to_string("./test.txt").unwrap();
+                assert_eq!(content, "content");
+            }
         }
     }
 }
@@ -1873,18 +1897,20 @@ pub mod unsync {
             _cx: &mut std::task::Context<'_>,
             buf: &mut tokio::io::ReadBuf<'_>,
         ) -> Poll<std::io::Result<()>> {
-            use std::io::Read as _;
+            {
+                use std::io::Read as _;
 
-            let dst = buf.initialize_unfilled();
+                let dst = buf.initialize_unfilled();
 
-            match self.get_mut().read(dst) {
-                Ok(count) => {
-                    buf.advance(count);
+                match self.get_mut().read(dst) {
+                    Ok(count) => {
+                        buf.advance(count);
+                    }
+                    Err(e) => return Poll::Ready(Err(e)),
                 }
-                Err(e) => return Poll::Ready(Err(e)),
-            }
 
-            Poll::Ready(Ok(()))
+                Poll::Ready(Ok(()))
+            }
         }
     }
 
@@ -1893,19 +1919,23 @@ pub mod unsync {
             self: std::pin::Pin<&mut Self>,
             position: std::io::SeekFrom,
         ) -> std::io::Result<()> {
-            use std::io::Seek as _;
+            {
+                use std::io::Seek as _;
 
-            self.get_mut().seek(position)?;
-            Ok(())
+                self.get_mut().seek(position)?;
+                Ok(())
+            }
         }
 
         fn poll_complete(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> Poll<std::io::Result<u64>> {
-            use std::io::Seek as _;
+            {
+                use std::io::Seek as _;
 
-            Poll::Ready(self.get_mut().stream_position())
+                Poll::Ready(self.get_mut().stream_position())
+            }
         }
     }
 
@@ -1915,18 +1945,22 @@ pub mod unsync {
             _cx: &mut std::task::Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize, std::io::Error>> {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            Poll::Ready(self.get_mut().write(buf))
+                Poll::Ready(self.get_mut().write(buf))
+            }
         }
 
         fn poll_flush(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> Poll<Result<(), std::io::Error>> {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            Poll::Ready(self.get_mut().flush())
+                Poll::Ready(self.get_mut().flush())
+            }
         }
 
         fn poll_shutdown(

@@ -111,6 +111,7 @@ pub async fn send_players_updated_event() -> Result<(), Vec<Box<dyn std::error::
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     // Note: All tests in this module use #[serial] because they interact with the global
     // PLAYERS_UPDATED_EVENT_LISTENERS state. Running these tests in parallel would cause
@@ -133,8 +134,6 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_players_updated_event_calls_all_listeners() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
         // Clear listeners to avoid interference from other tests
         PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
 
@@ -174,8 +173,6 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_trigger_players_updated_event_collects_errors() {
-        use std::sync::atomic::{AtomicBool, Ordering};
-
         // Clear listeners to start fresh
         PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
 

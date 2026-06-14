@@ -1332,34 +1332,40 @@ mod tests {
 
     #[test_log::test]
     fn test_p2p_node_id_trait_from_bytes() {
-        use crate::traits::P2PNodeId;
+        {
+            use crate::traits::P2PNodeId;
 
-        let bytes = [123u8; 32];
-        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+            let bytes = [123u8; 32];
+            let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
 
-        assert_eq!(id.as_bytes(), &bytes);
+            assert_eq!(id.as_bytes(), &bytes);
+        }
     }
 
     #[test_log::test]
     fn test_p2p_node_id_trait_as_bytes() {
-        use crate::traits::P2PNodeId;
+        {
+            use crate::traits::P2PNodeId;
 
-        let bytes = [42u8; 32];
-        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+            let bytes = [42u8; 32];
+            let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
 
-        assert_eq!(id.as_bytes(), &bytes);
+            assert_eq!(id.as_bytes(), &bytes);
+        }
     }
 
     #[test_log::test]
     fn test_p2p_node_id_trait_fmt_short() {
-        use crate::traits::P2PNodeId;
+        {
+            use crate::traits::P2PNodeId;
 
-        let bytes = [0xAB; 32];
-        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+            let bytes = [0xAB; 32];
+            let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
 
-        let short = id.fmt_short();
-        assert_eq!(short.len(), 10);
-        assert_eq!(short, "ababababab");
+            let short = id.fmt_short();
+            assert_eq!(short.len(), 10);
+            assert_eq!(short, "ababababab");
+        }
     }
 
     // === Network Partition and Healing Tests ===

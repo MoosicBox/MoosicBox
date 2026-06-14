@@ -1470,78 +1470,84 @@ mod tests {
 
     #[test_log::test]
     fn test_qobuz_artist_to_api_artist_conversion() {
-        use moosicbox_music_models::api::ApiArtist;
+        {
+            use moosicbox_music_models::api::ApiArtist;
 
-        let qobuz_artist = QobuzArtist {
-            id: 54321,
-            name: "API Artist".to_string(),
-            image: Some(QobuzImage {
-                thumbnail: Some("thumb.jpg".to_string()),
-                small: None,
-                medium: None,
-                large: None,
-                extralarge: None,
-                mega: None,
-            }),
-        };
+            let qobuz_artist = QobuzArtist {
+                id: 54321,
+                name: "API Artist".to_string(),
+                image: Some(QobuzImage {
+                    thumbnail: Some("thumb.jpg".to_string()),
+                    small: None,
+                    medium: None,
+                    large: None,
+                    extralarge: None,
+                    mega: None,
+                }),
+            };
 
-        let api_artist: ApiArtist = qobuz_artist.into();
+            let api_artist: ApiArtist = qobuz_artist.into();
 
-        assert_eq!(api_artist.artist_id, 54321_u64.into());
-        assert_eq!(api_artist.title, "API Artist");
-        assert!(api_artist.contains_cover);
+            assert_eq!(api_artist.artist_id, 54321_u64.into());
+            assert_eq!(api_artist.title, "API Artist");
+            assert!(api_artist.contains_cover);
+        }
     }
 
     #[test_log::test]
     fn test_qobuz_artist_to_api_artist_no_cover() {
-        use moosicbox_music_models::api::ApiArtist;
+        {
+            use moosicbox_music_models::api::ApiArtist;
 
-        let qobuz_artist = QobuzArtist {
-            id: 11111,
-            name: "No Cover".to_string(),
-            image: None,
-        };
+            let qobuz_artist = QobuzArtist {
+                id: 11111,
+                name: "No Cover".to_string(),
+                image: None,
+            };
 
-        let api_artist: ApiArtist = qobuz_artist.into();
+            let api_artist: ApiArtist = qobuz_artist.into();
 
-        assert!(!api_artist.contains_cover);
+            assert!(!api_artist.contains_cover);
+        }
     }
 
     #[test_log::test]
     fn test_qobuz_artist_to_api_global_search_result() {
-        use moosicbox_music_api::models::search::api::{
-            ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-        };
+        {
+            use moosicbox_music_api::models::search::api::{
+                ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+            };
 
-        let qobuz_artist = QobuzArtist {
-            id: 99999,
-            name: "Search Artist".to_string(),
-            image: Some(QobuzImage {
-                thumbnail: None,
-                small: Some("small.jpg".to_string()),
-                medium: None,
-                large: None,
-                extralarge: None,
-                mega: None,
-            }),
-        };
+            let qobuz_artist = QobuzArtist {
+                id: 99999,
+                name: "Search Artist".to_string(),
+                image: Some(QobuzImage {
+                    thumbnail: None,
+                    small: Some("small.jpg".to_string()),
+                    medium: None,
+                    large: None,
+                    extralarge: None,
+                    mega: None,
+                }),
+            };
 
-        let search_result: ApiGlobalSearchResult = qobuz_artist.into();
+            let search_result: ApiGlobalSearchResult = qobuz_artist.into();
 
-        match search_result {
-            ApiGlobalSearchResult::Artist(ApiGlobalArtistSearchResult {
-                artist_id,
-                title,
-                contains_cover,
-                blur,
-                ..
-            }) => {
-                assert_eq!(artist_id, 99999_u64.into());
-                assert_eq!(title, "Search Artist");
-                assert!(contains_cover);
-                assert!(!blur);
+            match search_result {
+                ApiGlobalSearchResult::Artist(ApiGlobalArtistSearchResult {
+                    artist_id,
+                    title,
+                    contains_cover,
+                    blur,
+                    ..
+                }) => {
+                    assert_eq!(artist_id, 99999_u64.into());
+                    assert_eq!(title, "Search Artist");
+                    assert!(contains_cover);
+                    assert!(!blur);
+                }
+                _ => panic!("Expected ApiGlobalSearchResult::Artist"),
             }
-            _ => panic!("Expected ApiGlobalSearchResult::Artist"),
         }
     }
 
@@ -1587,110 +1593,114 @@ mod tests {
 
     #[test_log::test]
     fn test_qobuz_track_to_api_global_search_result() {
-        use moosicbox_music_api::models::search::api::{
-            ApiGlobalSearchResult, ApiGlobalTrackSearchResult,
-        };
+        {
+            use moosicbox_music_api::models::search::api::{
+                ApiGlobalSearchResult, ApiGlobalTrackSearchResult,
+            };
 
-        let qobuz_track = QobuzTrack {
-            id: 555_555,
-            track_number: 1,
-            artist: "Search Track Artist".to_string(),
-            artist_id: 111,
-            album: "Search Album".to_string(),
-            album_id: "searchalbum".to_string(),
-            album_type: crate::QobuzAlbumReleaseType::Single,
-            image: Some(QobuzImage {
-                thumbnail: Some("t.jpg".to_string()),
-                small: None,
-                medium: None,
-                large: None,
-                extralarge: None,
-                mega: None,
-            }),
-            copyright: None,
-            duration: 180,
-            parental_warning: true,
-            isrc: "ISRC00000001".to_string(),
-            title: "Search Track".to_string(),
-            version: None,
-        };
+            let qobuz_track = QobuzTrack {
+                id: 555_555,
+                track_number: 1,
+                artist: "Search Track Artist".to_string(),
+                artist_id: 111,
+                album: "Search Album".to_string(),
+                album_id: "searchalbum".to_string(),
+                album_type: crate::QobuzAlbumReleaseType::Single,
+                image: Some(QobuzImage {
+                    thumbnail: Some("t.jpg".to_string()),
+                    small: None,
+                    medium: None,
+                    large: None,
+                    extralarge: None,
+                    mega: None,
+                }),
+                copyright: None,
+                duration: 180,
+                parental_warning: true,
+                isrc: "ISRC00000001".to_string(),
+                title: "Search Track".to_string(),
+                version: None,
+            };
 
-        let search_result: ApiGlobalSearchResult = qobuz_track.into();
+            let search_result: ApiGlobalSearchResult = qobuz_track.into();
 
-        match search_result {
-            ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
-                track_id,
-                artist,
-                album,
-                title,
-                contains_cover,
-                ..
-            }) => {
-                assert_eq!(track_id, 555_555_u64.into());
-                assert_eq!(artist, "Search Track Artist");
-                assert_eq!(album, "Search Album");
-                assert_eq!(title, "Search Track");
-                assert!(contains_cover);
+            match search_result {
+                ApiGlobalSearchResult::Track(ApiGlobalTrackSearchResult {
+                    track_id,
+                    artist,
+                    album,
+                    title,
+                    contains_cover,
+                    ..
+                }) => {
+                    assert_eq!(track_id, 555_555_u64.into());
+                    assert_eq!(artist, "Search Track Artist");
+                    assert_eq!(album, "Search Album");
+                    assert_eq!(title, "Search Track");
+                    assert!(contains_cover);
+                }
+                _ => panic!("Expected ApiGlobalSearchResult::Track"),
             }
-            _ => panic!("Expected ApiGlobalSearchResult::Track"),
         }
     }
 
     #[test_log::test]
     fn test_qobuz_album_to_api_global_search_result() {
-        use moosicbox_music_api::models::search::api::{
-            ApiGlobalAlbumSearchResult, ApiGlobalSearchResult,
-        };
+        {
+            use moosicbox_music_api::models::search::api::{
+                ApiGlobalAlbumSearchResult, ApiGlobalSearchResult,
+            };
 
-        let qobuz_album = QobuzAlbum {
-            id: "searchalbum456".to_string(),
-            artist: "Search Album Artist".to_string(),
-            artist_id: 222,
-            album_type: crate::QobuzAlbumReleaseType::Compilation,
-            maximum_bit_depth: 24,
-            image: Some(QobuzImage {
-                thumbnail: None,
-                small: None,
-                medium: None,
-                large: Some("large.jpg".to_string()),
-                extralarge: None,
-                mega: None,
-            }),
-            title: "Search Album Title".to_string(),
-            version: Some("Special Edition".to_string()),
-            qobuz_id: 0,
-            released_at: 0,
-            release_date_original: "2023-05-15".to_string(),
-            duration: 2400,
-            parental_warning: false,
-            popularity: 80,
-            tracks_count: 10,
-            genre: QobuzGenre::default(),
-            maximum_channel_count: 2,
-            maximum_sampling_rate: 96.0,
-        };
+            let qobuz_album = QobuzAlbum {
+                id: "searchalbum456".to_string(),
+                artist: "Search Album Artist".to_string(),
+                artist_id: 222,
+                album_type: crate::QobuzAlbumReleaseType::Compilation,
+                maximum_bit_depth: 24,
+                image: Some(QobuzImage {
+                    thumbnail: None,
+                    small: None,
+                    medium: None,
+                    large: Some("large.jpg".to_string()),
+                    extralarge: None,
+                    mega: None,
+                }),
+                title: "Search Album Title".to_string(),
+                version: Some("Special Edition".to_string()),
+                qobuz_id: 0,
+                released_at: 0,
+                release_date_original: "2023-05-15".to_string(),
+                duration: 2400,
+                parental_warning: false,
+                popularity: 80,
+                tracks_count: 10,
+                genre: QobuzGenre::default(),
+                maximum_channel_count: 2,
+                maximum_sampling_rate: 96.0,
+            };
 
-        let search_result: ApiGlobalSearchResult = qobuz_album.into();
+            let search_result: ApiGlobalSearchResult = qobuz_album.into();
 
-        match search_result {
-            ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
-                album_id,
-                artist,
-                artist_id,
-                title,
-                contains_cover,
-                date_released,
-                ..
-            }) => {
-                assert_eq!(album_id, "searchalbum456".into());
-                assert_eq!(artist, "Search Album Artist");
-                assert_eq!(artist_id, 222_u64.into());
-                // Title should include the version
-                assert_eq!(title, "Search Album Title - Special Edition");
-                assert!(contains_cover);
-                assert_eq!(date_released, Some("2023-05-15".to_string()));
+            match search_result {
+                ApiGlobalSearchResult::Album(ApiGlobalAlbumSearchResult {
+                    album_id,
+                    artist,
+                    artist_id,
+                    title,
+                    contains_cover,
+                    date_released,
+                    ..
+                }) => {
+                    assert_eq!(album_id, "searchalbum456".into());
+                    assert_eq!(artist, "Search Album Artist");
+                    assert_eq!(artist_id, 222_u64.into());
+                    // Title should include the version
+                    assert_eq!(title, "Search Album Title - Special Edition");
+                    assert!(contains_cover);
+                    assert_eq!(date_released, Some("2023-05-15".to_string()));
+                }
+                _ => panic!("Expected ApiGlobalSearchResult::Album"),
             }
-            _ => panic!("Expected ApiGlobalSearchResult::Album"),
         }
     }
 
@@ -1817,38 +1827,40 @@ mod tests {
 
     #[test_log::test]
     fn test_qobuz_album_try_from_album_roundtrip() {
-        use moosicbox_music_models::AlbumType;
+        {
+            use moosicbox_music_models::AlbumType;
 
-        let original_album = moosicbox_music_models::Album {
-            id: "qobuzid123".into(),
-            title: "Test Album".to_string(),
-            artist: "Test Artist".to_string(),
-            artist_id: 500_u64.into(),
-            album_type: AlbumType::Lp,
-            date_released: None,
-            date_added: None,
-            artwork: Some("artwork.jpg".to_string()),
-            directory: None,
-            blur: false,
-            versions: vec![],
-            album_source: crate::API_SOURCE.clone().into(),
-            api_source: crate::API_SOURCE.clone(),
-            artist_sources: moosicbox_music_models::ApiSources::default(),
-            album_sources: moosicbox_music_models::ApiSources::default(),
-        };
+            let original_album = moosicbox_music_models::Album {
+                id: "qobuzid123".into(),
+                title: "Test Album".to_string(),
+                artist: "Test Artist".to_string(),
+                artist_id: 500_u64.into(),
+                album_type: AlbumType::Lp,
+                date_released: None,
+                date_added: None,
+                artwork: Some("artwork.jpg".to_string()),
+                directory: None,
+                blur: false,
+                versions: vec![],
+                album_source: crate::API_SOURCE.clone().into(),
+                api_source: crate::API_SOURCE.clone(),
+                artist_sources: moosicbox_music_models::ApiSources::default(),
+                album_sources: moosicbox_music_models::ApiSources::default(),
+            };
 
-        let qobuz_album: Result<QobuzAlbum, _> = original_album.try_into();
-        assert!(qobuz_album.is_ok());
+            let qobuz_album: Result<QobuzAlbum, _> = original_album.try_into();
+            assert!(qobuz_album.is_ok());
 
-        let qobuz_album = qobuz_album.unwrap();
-        assert_eq!(qobuz_album.id, "qobuzid123");
-        assert_eq!(qobuz_album.title, "Test Album");
-        assert_eq!(qobuz_album.artist, "Test Artist");
-        assert_eq!(qobuz_album.artist_id, 500);
-        // The image should be stored in the mega field
-        assert!(qobuz_album.image.is_some());
-        let image = qobuz_album.image.unwrap();
-        assert_eq!(image.mega, Some("artwork.jpg".to_string()));
+            let qobuz_album = qobuz_album.unwrap();
+            assert_eq!(qobuz_album.id, "qobuzid123");
+            assert_eq!(qobuz_album.title, "Test Album");
+            assert_eq!(qobuz_album.artist, "Test Artist");
+            assert_eq!(qobuz_album.artist_id, 500);
+            // The image should be stored in the mega field
+            assert!(qobuz_album.image.is_some());
+            let image = qobuz_album.image.unwrap();
+            assert_eq!(image.mega, Some("artwork.jpg".to_string()));
+        }
     }
 
     #[test_log::test]

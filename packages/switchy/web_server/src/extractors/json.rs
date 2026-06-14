@@ -683,28 +683,30 @@ mod tests {
 
     #[test_log::test]
     fn test_json_error_deserialization_error_with_field_path() {
-        #[derive(Debug, serde::Deserialize)]
-        struct TestStruct {
-            #[allow(dead_code)]
-            required_field: String,
-        }
-
-        // Test creating DeserializationError that extracts field path
-        let json_missing_field = r"{}";
-        let err = serde_json::from_str::<TestStruct>(json_missing_field).unwrap_err();
-
-        let json_error = JsonError::deserialization_error(&err);
-
-        match json_error {
-            JsonError::DeserializationError {
-                message,
-                field_path,
-            } => {
-                assert!(message.contains("required_field"));
-                // The field_path should be extracted from the error message
-                assert_eq!(field_path, Some("required_field".to_string()));
+        {
+            #[derive(Debug, serde::Deserialize)]
+            struct TestStruct {
+                #[allow(dead_code)]
+                required_field: String,
             }
-            _ => panic!("Expected DeserializationError variant"),
+
+            // Test creating DeserializationError that extracts field path
+            let json_missing_field = r"{}";
+            let err = serde_json::from_str::<TestStruct>(json_missing_field).unwrap_err();
+
+            let json_error = JsonError::deserialization_error(&err);
+
+            match json_error {
+                JsonError::DeserializationError {
+                    message,
+                    field_path,
+                } => {
+                    assert!(message.contains("required_field"));
+                    // The field_path should be extracted from the error message
+                    assert_eq!(field_path, Some("required_field".to_string()));
+                }
+                _ => panic!("Expected DeserializationError variant"),
+            }
         }
     }
 

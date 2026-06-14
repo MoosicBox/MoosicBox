@@ -162,99 +162,105 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_with_stream_like_future() {
-        use futures::{StreamExt, stream};
+        {
+            use futures::{StreamExt, stream};
 
-        switchy_time::simulator::with_real_time(|| {
-            let runtime = build_runtime(&Builder::new()).unwrap();
+            switchy_time::simulator::with_real_time(|| {
+                let runtime = build_runtime(&Builder::new()).unwrap();
 
-            runtime.block_on(async move {
-                // Test that our custom select! macro works with stream-like futures
-                let mut stream = Box::new(stream::iter(vec![1, 2, 3]));
-                let timeout = super::time::sleep(Duration::from_millis(100));
+                runtime.block_on(async move {
+                    // Test that our custom select! macro works with stream-like futures
+                    let mut stream = Box::new(stream::iter(vec![1, 2, 3]));
+                    let timeout = super::time::sleep(Duration::from_millis(100));
 
-                crate::select! {
-                    item = stream.next() => {
-                        assert_eq!(item, Some(1));
-                    },
-                    () = timeout => {
-                        panic!("Should have selected stream item");
-                    },
-                }
+                    crate::select! {
+                        item = stream.next() => {
+                            assert_eq!(item, Some(1));
+                        },
+                        () = timeout => {
+                            panic!("Should have selected stream item");
+                        },
+                    }
+                });
+
+                runtime.wait().unwrap();
             });
-
-            runtime.wait().unwrap();
-        });
+        }
     }
 
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_with_complex_patterns() {
-        use futures::{StreamExt, stream};
+        {
+            use futures::{StreamExt, stream};
 
-        switchy_time::simulator::with_real_time(|| {
-            let runtime = build_runtime(&Builder::new()).unwrap();
+            switchy_time::simulator::with_real_time(|| {
+                let runtime = build_runtime(&Builder::new()).unwrap();
 
-            runtime.block_on(async move {
-                // Test complex patterns like the ones used in stream_utils
-                let mut stream = Box::new(stream::iter(vec![Ok::<i32, &str>(42)]));
-                let timeout1 = super::time::sleep(Duration::from_millis(100));
-                let timeout2 = super::time::sleep(Duration::from_millis(200));
+                runtime.block_on(async move {
+                    // Test complex patterns like the ones used in stream_utils
+                    let mut stream = Box::new(stream::iter(vec![Ok::<i32, &str>(42)]));
+                    let timeout1 = super::time::sleep(Duration::from_millis(100));
+                    let timeout2 = super::time::sleep(Duration::from_millis(200));
 
-                let result = crate::select! {
-                    item = stream.next() => item,
-                    () = timeout1 => {
-                        log::debug!("Timeout 1");
-                        None
-                    }
-                    () = timeout2 => {
-                        log::debug!("Timeout 2");
-                        None
-                    }
-                };
+                    let result = crate::select! {
+                        item = stream.next() => item,
+                        () = timeout1 => {
+                            log::debug!("Timeout 1");
+                            None
+                        }
+                        () = timeout2 => {
+                            log::debug!("Timeout 2");
+                            None
+                        }
+                    };
 
-                assert_eq!(result, Some(Ok(42)));
+                    assert_eq!(result, Some(Ok(42)));
+                });
+
+                runtime.wait().unwrap();
             });
-
-            runtime.wait().unwrap();
-        });
+        }
     }
 
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_with_while_let_pattern() {
-        use futures::{StreamExt, stream};
+        {
+            use futures::{StreamExt, stream};
 
-        switchy_time::simulator::with_real_time(|| {
-            let runtime = build_runtime(&Builder::new()).unwrap();
+            switchy_time::simulator::with_real_time(|| {
+                let runtime = build_runtime(&Builder::new()).unwrap();
 
-            runtime.block_on(async move {
-                // Test the while let pattern used in stream_utils
-                let mut stream = Box::new(stream::iter(vec!["data1", "data2"]));
-                let timeout1 = super::time::sleep(Duration::from_millis(100));
-                let timeout2 = super::time::sleep(Duration::from_millis(200));
+                runtime.block_on(async move {
+                    // Test the while let pattern used in stream_utils
+                    let mut stream = Box::new(stream::iter(vec!["data1", "data2"]));
+                    let timeout1 = super::time::sleep(Duration::from_millis(100));
+                    let timeout2 = super::time::sleep(Duration::from_millis(200));
 
-                let mut results = Vec::new();
-                while let Some(item) = crate::select! {
-                    resp = stream.next() => resp,
-                    () = timeout1 => {
-                        log::debug!("Timeout 1");
-                        None
+                    let mut results = Vec::new();
+                    while let Some(item) = crate::select! {
+                        resp = stream.next() => resp,
+                        () = timeout1 => {
+                            log::debug!("Timeout 1");
+                            None
+                        }
+                        () = timeout2 => {
+                            log::debug!("Timeout 2");
+                            None
+                        }
+                    } {
+                        results.push(item);
                     }
-                    () = timeout2 => {
-                        log::debug!("Timeout 2");
-                        None
-                    }
-                } {
-                    results.push(item);
-                }
 
-                assert_eq!(results.len(), 2);
-                assert_eq!(results[0], "data1");
-                assert_eq!(results[1], "data2");
+                    assert_eq!(results.len(), 2);
+                    assert_eq!(results[0], "data1");
+                    assert_eq!(results[1], "data2");
+                });
+
+                runtime.wait().unwrap();
             });
-
-            runtime.wait().unwrap();
-        });
+        }
     }
 
     #[cfg(feature = "time")]
@@ -304,68 +310,76 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test(crate::internal_test(real_time))]
     async fn timeout_can_be_cancelled() {
-        use std::future::pending;
+        {
+            use std::future::pending;
 
-        // Test that dropping timeout future works correctly
-        let timeout_future = super::time::timeout(Duration::from_millis(100), pending::<()>());
+            // Test that dropping timeout future works correctly
+            let timeout_future = super::time::timeout(Duration::from_millis(100), pending::<()>());
 
-        // Create and immediately drop the timeout
-        #[allow(clippy::drop_non_drop)]
-        drop(timeout_future);
+            // Create and immediately drop the timeout
+            #[allow(clippy::drop_non_drop)]
+            drop(timeout_future);
 
-        // Should not panic or cause issues
+            // Should not panic or cause issues
+        }
     }
 
     #[cfg(feature = "time")]
     #[test_log::test(crate::internal_test(real_time))]
     async fn timeout_into_inner_works() {
-        use std::future::ready;
+        {
+            use std::future::ready;
 
-        // Test that into_inner returns the original future
-        let original_future = ready(42);
-        let timeout_future = super::time::timeout(Duration::from_millis(100), original_future);
+            // Test that into_inner returns the original future
+            let original_future = ready(42);
+            let timeout_future = super::time::timeout(Duration::from_millis(100), original_future);
 
-        let inner_future = timeout_future.into_inner();
-        let result = inner_future.await;
-        assert_eq!(result, 42);
+            let inner_future = timeout_future.into_inner();
+            let result = inner_future.await;
+            assert_eq!(result, 42);
+        }
     }
 
     #[cfg(feature = "time")]
     #[test_log::test(crate::internal_test(real_time))]
     async fn test_new_macro_syntax_works() {
-        use std::time::Duration;
-        use switchy_time::instant_now;
+        {
+            use std::time::Duration;
+            use switchy_time::instant_now;
 
-        // Test that the new macro syntax works with real time
-        let start = instant_now();
-        super::time::sleep(Duration::from_millis(10)).await;
-        let elapsed = start.elapsed();
+            // Test that the new macro syntax works with real time
+            let start = instant_now();
+            super::time::sleep(Duration::from_millis(10)).await;
+            let elapsed = start.elapsed();
 
-        // Should have actually slept for ~10ms
-        assert!(elapsed >= Duration::from_millis(8)); // Allow some tolerance
-        assert!(elapsed < Duration::from_millis(50)); // But not too much
+            // Should have actually slept for ~10ms
+            assert!(elapsed >= Duration::from_millis(8)); // Allow some tolerance
+            assert!(elapsed < Duration::from_millis(50)); // But not too much
+        }
     }
 
     #[cfg(feature = "time")]
     #[crate::internal_test]
     async fn test_simulated_time_behavior() {
-        use std::time::Duration;
+        {
+            use std::time::Duration;
 
-        // Test that without real_time, time doesn't advance automatically
-        let start_time = switchy_time::now();
+            // Test that without real_time, time doesn't advance automatically
+            let start_time = switchy_time::now();
 
-        // This would hang forever if we actually waited, but since we're in
-        // simulated time mode, we can test the behavior differently
-        let timeout_future =
-            super::time::timeout(Duration::from_millis(10), std::future::pending::<()>());
+            // This would hang forever if we actually waited, but since we're in
+            // simulated time mode, we can test the behavior differently
+            let timeout_future =
+                super::time::timeout(Duration::from_millis(10), std::future::pending::<()>());
 
-        // The timeout should be created but time won't advance
-        #[allow(clippy::drop_non_drop)]
-        drop(timeout_future);
+            // The timeout should be created but time won't advance
+            #[allow(clippy::drop_non_drop)]
+            drop(timeout_future);
 
-        let end_time = switchy_time::now();
-        // Time should not have advanced since we're in simulation mode
-        assert_eq!(start_time, end_time);
+            let end_time = switchy_time::now();
+            // Time should not have advanced since we're in simulation mode
+            assert_eq!(start_time, end_time);
+        }
     }
 
     #[cfg(feature = "time")]

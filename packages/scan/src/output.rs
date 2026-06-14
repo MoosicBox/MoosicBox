@@ -1257,144 +1257,147 @@ mod test {
 
     #[test_log::test(switchy_async::test)]
     async fn can_scan_single_artist_with_single_album_with_single_track() {
-        static API_SOURCE: LazyLock<ApiSource> =
-            LazyLock::new(|| ApiSource::register("MockApi", "MockApi"));
+        {
+            static API_SOURCE: LazyLock<ApiSource> =
+                LazyLock::new(|| ApiSource::register("MockApi", "MockApi"));
 
-        let db = switchy::database_connection::init_sqlite_sqlx(None)
-            .await
-            .unwrap();
-        let db = LibraryDatabase {
-            database: Arc::new(db),
-        };
+            let db = switchy::database_connection::init_sqlite_sqlx(None)
+                .await
+                .unwrap();
+            let db = LibraryDatabase {
+                database: Arc::new(db),
+            };
 
-        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
-            .with_table_name("__moosicbox_schema_migrations")
-            .run(&*db)
-            .await
-            .unwrap();
+            MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+                .with_table_name("__moosicbox_schema_migrations")
+                .run(&*db)
+                .await
+                .unwrap();
 
-        let mut output = ScanOutput::new();
+            let mut output = ScanOutput::new();
 
-        let api_source = API_SOURCE.clone();
+            let api_source = API_SOURCE.clone();
 
-        let name = "artist1";
-        let id = "1".into();
+            let name = "artist1";
+            let id = "1".into();
 
-        let artist = output
-            .add_artist(name, &Some(&id), api_source.clone())
-            .await;
+            let artist = output
+                .add_artist(name, &Some(&id), api_source.clone())
+                .await;
 
-        let name = "album1";
-        let id = "1".into();
-        let date_released = "2022-01-01".to_string();
+            let name = "album1";
+            let id = "1".into();
+            let date_released = "2022-01-01".to_string();
 
-        let album = artist
-            .write()
-            .await
-            .add_album(
-                name,
-                &Some(date_released),
-                None,
-                &Some(&id),
-                api_source.clone(),
-            )
-            .await;
+            let album = artist
+                .write()
+                .await
+                .add_album(
+                    name,
+                    &Some(date_released),
+                    None,
+                    &Some(&id),
+                    api_source.clone(),
+                )
+                .await;
 
-        let name = "track1";
-        let id = "1".into();
+            let name = "track1";
+            let id = "1".into();
 
-        let _ = album
-            .write()
-            .await
-            .add_track(
-                &None,
-                1,
-                name,
-                10.0,
-                &None,
-                AudioFormat::Source,
-                &None,
-                &None,
-                &None,
-                &None,
-                &None,
-                api_source.clone().into(),
-                &Some(&id),
-                api_source.clone(),
-            )
-            .await;
+            let _ = album
+                .write()
+                .await
+                .add_track(
+                    &None,
+                    1,
+                    name,
+                    10.0,
+                    &None,
+                    AudioFormat::Source,
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    api_source.clone().into(),
+                    &Some(&id),
+                    api_source.clone(),
+                )
+                .await;
 
-        output.update_database(&db).await.unwrap();
+            output.update_database(&db).await.unwrap();
 
-        let artists: Vec<LibraryArtist> = db
-            .select("artists")
-            .execute(&*db)
-            .await
-            .unwrap()
-            .to_value_type()
-            .unwrap();
+            let artists: Vec<LibraryArtist> = db
+                .select("artists")
+                .execute(&*db)
+                .await
+                .unwrap()
+                .to_value_type()
+                .unwrap();
 
-        let albums: Vec<LibraryAlbum> = db
-            .select("albums")
-            .execute(&*db)
-            .await
-            .unwrap()
-            .to_value_type()
-            .unwrap();
+            let albums: Vec<LibraryAlbum> = db
+                .select("albums")
+                .execute(&*db)
+                .await
+                .unwrap()
+                .to_value_type()
+                .unwrap();
 
-        let tracks: Vec<LibraryTrack> = db
-            .select("tracks")
-            .execute(&*db)
-            .await
-            .unwrap()
-            .to_value_type()
-            .unwrap();
+            let tracks: Vec<LibraryTrack> = db
+                .select("tracks")
+                .execute(&*db)
+                .await
+                .unwrap()
+                .to_value_type()
+                .unwrap();
 
-        assert_eq!(
-            artists,
-            vec![LibraryArtist {
-                id: 1,
-                title: "artist1".to_string(),
-                api_sources: ApiSources::default()
-                    .with_source(ApiSource::library(), 1.into())
-                    .with_source(api_source.clone(), "1".into()),
-                ..Default::default()
-            }]
-        );
+            assert_eq!(
+                artists,
+                vec![LibraryArtist {
+                    id: 1,
+                    title: "artist1".to_string(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into())
+                        .with_source(api_source.clone(), "1".into()),
+                    ..Default::default()
+                }]
+            );
 
-        assert_eq!(
-            albums,
-            vec![LibraryAlbum {
-                id: 1,
-                title: "album1".to_string(),
-                artist_id: 1,
-                date_released: Some("2022-01-01".to_string()),
-                date_added: albums.first().and_then(|x| x.date_added.clone()),
-                album_sources: ApiSources::default()
-                    .with_source(ApiSource::library(), 1.into())
-                    .with_source(api_source.clone(), "1".into()),
-                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
-                ..Default::default()
-            }]
-        );
+            assert_eq!(
+                albums,
+                vec![LibraryAlbum {
+                    id: 1,
+                    title: "album1".to_string(),
+                    artist_id: 1,
+                    date_released: Some("2022-01-01".to_string()),
+                    date_added: albums.first().and_then(|x| x.date_added.clone()),
+                    album_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into())
+                        .with_source(api_source.clone(), "1".into()),
+                    artist_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into()),
+                    ..Default::default()
+                }]
+            );
 
-        assert_eq!(
-            tracks,
-            vec![LibraryTrack {
-                id: 1,
-                number: 1,
-                title: "track1".to_string(),
-                duration: 10.0,
-                album_id: 1,
-                format: Some(AudioFormat::Source),
-                source: TrackApiSource::Api(api_source.clone()),
-                api_source: ApiSource::library(),
-                api_sources: ApiSources::default()
-                    .with_source(ApiSource::library(), 1.into())
-                    .with_source(api_source.clone(), "1".into()),
-                ..Default::default()
-            }]
-        );
+            assert_eq!(
+                tracks,
+                vec![LibraryTrack {
+                    id: 1,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into())
+                        .with_source(api_source.clone(), "1".into()),
+                    ..Default::default()
+                }]
+            );
+        }
     }
 
     #[test_log::test(switchy_async::test)]

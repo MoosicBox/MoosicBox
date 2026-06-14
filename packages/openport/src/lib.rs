@@ -438,48 +438,52 @@ mod tests {
 
     #[test_log::test]
     fn test_ipv6_tcp_binding_affects_is_free() {
-        use std::net::{Ipv6Addr, SocketAddrV6};
+        {
+            use std::net::{Ipv6Addr, SocketAddrV6};
 
-        let range = test_utils::next_port_range(1000);
-        // Try multiple times to find a port and bind to it with IPv6
-        for _ in 0..10 {
-            if let Some(port) = pick_unused_port(range.clone()) {
-                // Port should be free initially
-                if is_free_tcp(port) {
-                    // Try to bind to IPv6 only
-                    let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
-                    if let Ok(_listener) = TcpListener::bind(addr) {
-                        // Port should now be occupied (at least on IPv6)
-                        assert!(!is_free_tcp(port));
-                        return; // Test passed
+            let range = test_utils::next_port_range(1000);
+            // Try multiple times to find a port and bind to it with IPv6
+            for _ in 0..10 {
+                if let Some(port) = pick_unused_port(range.clone()) {
+                    // Port should be free initially
+                    if is_free_tcp(port) {
+                        // Try to bind to IPv6 only
+                        let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
+                        if let Ok(_listener) = TcpListener::bind(addr) {
+                            // Port should now be occupied (at least on IPv6)
+                            assert!(!is_free_tcp(port));
+                            return; // Test passed
+                        }
                     }
                 }
             }
+            // IPv6 might not be available on all systems, so we don't panic
         }
-        // IPv6 might not be available on all systems, so we don't panic
     }
 
     #[test_log::test]
     fn test_ipv6_udp_binding_affects_is_free() {
-        use std::net::{Ipv6Addr, SocketAddrV6};
+        {
+            use std::net::{Ipv6Addr, SocketAddrV6};
 
-        let range = test_utils::next_port_range(1000);
-        // Try multiple times to find a port and bind to it with IPv6
-        for _ in 0..10 {
-            if let Some(port) = pick_unused_port(range.clone()) {
-                // Port should be free initially
-                if is_free_udp(port) {
-                    // Try to bind to IPv6 only
-                    let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
-                    if let Ok(_socket) = UdpSocket::bind(addr) {
-                        // Port should now be occupied (at least on IPv6)
-                        assert!(!is_free_udp(port));
-                        return; // Test passed
+            let range = test_utils::next_port_range(1000);
+            // Try multiple times to find a port and bind to it with IPv6
+            for _ in 0..10 {
+                if let Some(port) = pick_unused_port(range.clone()) {
+                    // Port should be free initially
+                    if is_free_udp(port) {
+                        // Try to bind to IPv6 only
+                        let addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port, 0, 0);
+                        if let Ok(_socket) = UdpSocket::bind(addr) {
+                            // Port should now be occupied (at least on IPv6)
+                            assert!(!is_free_udp(port));
+                            return; // Test passed
+                        }
                     }
                 }
             }
+            // IPv6 might not be available on all systems, so we don't panic
         }
-        // IPv6 might not be available on all systems, so we don't panic
     }
 
     #[test_log::test]
@@ -538,48 +542,52 @@ mod tests {
 
     #[test_log::test]
     fn test_ipv4_tcp_binding_affects_is_free() {
-        use std::net::{Ipv4Addr, SocketAddrV4};
+        {
+            use std::net::{Ipv4Addr, SocketAddrV4};
 
-        let range = test_utils::next_port_range(1000);
-        // Try multiple times to find a port and bind to it with IPv4
-        for _ in 0..10 {
-            if let Some(port) = pick_unused_port(range.clone()) {
-                // Port should be free initially
-                if is_free_tcp(port) {
-                    // Try to bind to IPv4 only
-                    let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-                    if let Ok(_listener) = TcpListener::bind(addr) {
-                        // Port should now be occupied (at least on IPv4)
-                        assert!(!is_free_tcp(port));
-                        return; // Test passed
+            let range = test_utils::next_port_range(1000);
+            // Try multiple times to find a port and bind to it with IPv4
+            for _ in 0..10 {
+                if let Some(port) = pick_unused_port(range.clone()) {
+                    // Port should be free initially
+                    if is_free_tcp(port) {
+                        // Try to bind to IPv4 only
+                        let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                        if let Ok(_listener) = TcpListener::bind(addr) {
+                            // Port should now be occupied (at least on IPv4)
+                            assert!(!is_free_tcp(port));
+                            return; // Test passed
+                        }
                     }
                 }
             }
+            panic!("Could not find a port to test with after 10 attempts");
         }
-        panic!("Could not find a port to test with after 10 attempts");
     }
 
     #[test_log::test]
     fn test_ipv4_udp_binding_affects_is_free() {
-        use std::net::{Ipv4Addr, SocketAddrV4};
+        {
+            use std::net::{Ipv4Addr, SocketAddrV4};
 
-        let range = test_utils::next_port_range(1000);
-        // Try multiple times to find a port and bind to it with IPv4
-        for _ in 0..10 {
-            if let Some(port) = pick_unused_port(range.clone()) {
-                // Port should be free initially
-                if is_free_udp(port) {
-                    // Try to bind to IPv4 only
-                    let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-                    if let Ok(_socket) = UdpSocket::bind(addr) {
-                        // Port should now be occupied (at least on IPv4)
-                        assert!(!is_free_udp(port));
-                        return; // Test passed
+            let range = test_utils::next_port_range(1000);
+            // Try multiple times to find a port and bind to it with IPv4
+            for _ in 0..10 {
+                if let Some(port) = pick_unused_port(range.clone()) {
+                    // Port should be free initially
+                    if is_free_udp(port) {
+                        // Try to bind to IPv4 only
+                        let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                        if let Ok(_socket) = UdpSocket::bind(addr) {
+                            // Port should now be occupied (at least on IPv4)
+                            assert!(!is_free_udp(port));
+                            return; // Test passed
+                        }
                     }
                 }
             }
+            panic!("Could not find a port to test with after 10 attempts");
         }
-        panic!("Could not find a port to test with after 10 attempts");
     }
 
     #[test_log::test]
@@ -606,38 +614,40 @@ mod tests {
 
     #[test_log::test]
     fn test_pick_unused_port_with_all_ports_occupied() {
-        use std::net::{Ipv4Addr, SocketAddrV4};
+        {
+            use std::net::{Ipv4Addr, SocketAddrV4};
 
-        // Try to occupy all ports in a very small range
-        let range = test_utils::next_port_range(3);
-        let mut listeners = Vec::new();
-        let mut sockets = Vec::new();
+            // Try to occupy all ports in a very small range
+            let range = test_utils::next_port_range(3);
+            let mut listeners = Vec::new();
+            let mut sockets = Vec::new();
 
-        // Bind to all ports in the range on both TCP and UDP
-        for port in range.clone() {
-            let addr_tcp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-            let addr_udp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-            if let Ok(listener) = TcpListener::bind(addr_tcp) {
-                listeners.push(listener);
+            // Bind to all ports in the range on both TCP and UDP
+            for port in range.clone() {
+                let addr_tcp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                let addr_udp = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+                if let Ok(listener) = TcpListener::bind(addr_tcp) {
+                    listeners.push(listener);
+                }
+                if let Ok(socket) = UdpSocket::bind(addr_udp) {
+                    sockets.push(socket);
+                }
             }
-            if let Ok(socket) = UdpSocket::bind(addr_udp) {
-                sockets.push(socket);
+
+            // If we managed to bind to any ports, try to find a free one
+            // The result depends on what ports were successfully bound
+            let result = pick_unused_port(range);
+            // We can't assert None because some ports might not have been bindable,
+            // but the function should not panic
+            if let Some(port) = result {
+                // If we got a port, verify it's actually in the range
+                // (this is a sanity check)
+                let _ = port;
             }
-        }
 
-        // If we managed to bind to any ports, try to find a free one
-        // The result depends on what ports were successfully bound
-        let result = pick_unused_port(range);
-        // We can't assert None because some ports might not have been bindable,
-        // but the function should not panic
-        if result.is_some() {
-            // If we got a port, verify it's actually in the range
-            // (this is a sanity check)
-            let _ = result.unwrap();
+            // Keep listeners and sockets alive until the end of the test
+            drop(listeners);
+            drop(sockets);
         }
-
-        // Keep listeners and sockets alive until the end of the test
-        drop(listeners);
-        drop(sockets);
     }
 }

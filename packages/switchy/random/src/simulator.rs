@@ -340,74 +340,78 @@ mod tests {
 
     #[test_log::test]
     fn test_thread_isolation() {
-        use std::sync::mpsc;
-        use std::thread;
+        {
+            use std::sync::mpsc;
+            use std::thread;
 
-        let (tx1, rx1) = mpsc::channel();
-        let (tx2, rx2) = mpsc::channel();
+            let (tx1, rx1) = mpsc::channel();
+            let (tx2, rx2) = mpsc::channel();
 
-        // Thread 1: reset seed and generate values
-        let handle1 = thread::spawn(move || {
-            reset_seed();
-            let seed = seed();
-            let rng = rng();
-            let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
-            tx1.send((seed, values)).unwrap();
-        });
+            // Thread 1: reset seed and generate values
+            let handle1 = thread::spawn(move || {
+                reset_seed();
+                let seed = seed();
+                let rng = rng();
+                let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
+                tx1.send((seed, values)).unwrap();
+            });
 
-        // Thread 2: reset seed and generate values
-        let handle2 = thread::spawn(move || {
-            reset_seed();
-            let seed = seed();
-            let rng = rng();
-            let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
-            tx2.send((seed, values)).unwrap();
-        });
+            // Thread 2: reset seed and generate values
+            let handle2 = thread::spawn(move || {
+                reset_seed();
+                let seed = seed();
+                let rng = rng();
+                let values: Vec<u32> = (0..5).map(|_| rng.next_u32()).collect();
+                tx2.send((seed, values)).unwrap();
+            });
 
-        handle1.join().unwrap();
-        handle2.join().unwrap();
+            handle1.join().unwrap();
+            handle2.join().unwrap();
 
-        let (seed1, values1) = rx1.recv().unwrap();
-        let (seed2, values2) = rx2.recv().unwrap();
+            let (seed1, values1) = rx1.recv().unwrap();
+            let (seed2, values2) = rx2.recv().unwrap();
 
-        // Different threads should get different seeds
-        assert_ne!(
-            seed1, seed2,
-            "Different threads should have independent seeds"
-        );
+            // Different threads should get different seeds
+            assert_ne!(
+                seed1, seed2,
+                "Different threads should have independent seeds"
+            );
 
-        // And therefore different value sequences
-        assert_ne!(
-            values1, values2,
-            "Different threads should produce different sequences"
-        );
+            // And therefore different value sequences
+            assert_ne!(
+                values1, values2,
+                "Different threads should produce different sequences"
+            );
+        }
     }
 
     #[test_log::test]
     fn test_simulator_rng_mutable_rng_core_interface() {
-        use rand::RngCore;
+        {
+            use rand::RngCore;
 
-        let mut sim_rng = SimulatorRng::new(42_u64);
+            let mut sim_rng = SimulatorRng::new(42_u64);
 
-        // Test the mutable RngCore trait interface (lines 170-186 in simulator.rs)
-        let val1 = RngCore::next_u32(&mut sim_rng);
-        let val2 = RngCore::next_u64(&mut sim_rng);
-        assert!(val1 > 0 || val2 > 0, "Should produce values");
+            // Test the mutable RngCore trait interface (lines 170-186 in simulator.rs)
+            let val1 = RngCore::next_u32(&mut sim_rng);
+            let val2 = RngCore::next_u64(&mut sim_rng);
+            assert!(val1 > 0 || val2 > 0, "Should produce values");
 
-        let mut buffer = [0_u8; 16];
-        RngCore::fill_bytes(&mut sim_rng, &mut buffer);
-        assert!(
-            buffer.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer = [0_u8; 16];
+            RngCore::fill_bytes(&mut sim_rng, &mut buffer);
+            assert!(
+                buffer.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
 
-        let mut buffer2 = [0_u8; 16];
-        let result = RngCore::try_fill_bytes(&mut sim_rng, &mut buffer2);
-        assert!(result.is_ok(), "try_fill_bytes should succeed");
-        assert!(
-            buffer2.iter().any(|&x| x != 0),
-            "Should fill with non-zero bytes"
-        );
+            let mut buffer2 = [0_u8; 16];
+            let result = RngCore::try_fill_bytes(&mut sim_rng, &mut buffer2);
+            assert!(result.is_ok(), "try_fill_bytes should succeed");
+            assert!(
+                buffer2.iter().any(|&x| x != 0),
+                "Should fill with non-zero bytes"
+            );
+        }
     }
 
     #[test_log::test]
