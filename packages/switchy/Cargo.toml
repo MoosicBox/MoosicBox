@@ -155,22 +155,27 @@ all-database = [
     "database-turso",
 ]
 
-database                 = ["dep:switchy_database"]
-database-api             = ["database", "switchy_database?/api"]
-database-mysql           = ["database", "switchy_database?/mysql"]
-database-mysql-sqlx      = ["database", "switchy_database?/mysql-sqlx"]
-database-postgres        = ["database", "switchy_database?/postgres"]
-database-postgres-raw    = ["database", "switchy_database?/postgres-raw"]
-database-postgres-sqlx   = ["database", "switchy_database?/postgres-sqlx"]
-database-schema          = ["database", "switchy_database?/schema"]
-database-simulator       = ["database", "switchy_database?/simulator"]
-database-sqlite          = ["database", "switchy_database?/sqlite"]
+database = ["dep:switchy_database"]
+database-api = ["database", "switchy_database?/api"]
+database-mysql = ["database", "switchy_database?/mysql"]
+database-mysql-sqlx = ["database", "switchy_database?/mysql-sqlx"]
+database-postgres = ["database", "switchy_database?/postgres"]
+database-postgres-raw = ["database", "switchy_database?/postgres-raw"]
+database-postgres-sqlx = ["database", "switchy_database?/postgres-sqlx"]
+database-schema = ["database", "switchy_database?/schema"]
+database-simulator = ["database", "switchy_database?/simulator"]
+database-sqlite = ["database", "switchy_database?/sqlite"]
 database-sqlite-rusqlite = ["database", "switchy_database?/sqlite-rusqlite"]
-database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
-database-sqlx            = ["database", "switchy_database?/sqlx"]
-database-tls             = ["database", "switchy_database?/tls"]
-database-turso           = ["database", "switchy_database?/turso"]
-schema                   = ["database-schema", "dep:switchy_schema", "switchy_schema?/code"]
+database-sqlite-sqlx = ["database", "switchy_database?/sqlite-sqlx"]
+database-sqlx = ["database", "switchy_database?/sqlx"]
+database-tls = ["database", "switchy_database?/tls"]
+database-turso = ["database", "switchy_database?/turso"]
+schema = [
+    "database-schema",
+    "dep:switchy_schema",
+    "switchy_database?/schema",
+    "switchy_schema?/code",
+]
 
 all-database-connection = [
     "database-connection",
@@ -345,7 +350,7 @@ upnp-simulator = ["switchy_upnp?/simulator", "upnp"]
 
 all-uuid = ["uuid", "uuid-serde", "uuid-simulator", "uuid-uuid"]
 
-uuid           = ["dep:switchy_uuid"]
+uuid           = ["dep:switchy_uuid", "switchy_schema?/uuid"]
 uuid-serde     = ["switchy_uuid?/serde", "uuid"]
 uuid-simulator = ["switchy_uuid?/simulator", "uuid"]
 uuid-uuid      = ["switchy_uuid?/uuid", "uuid"]

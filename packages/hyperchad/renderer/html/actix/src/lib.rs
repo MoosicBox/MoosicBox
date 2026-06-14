@@ -723,7 +723,39 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
 ))]
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "assets")]
+    use super::directory_route_pattern;
     use super::*;
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    use hyperchad_renderer::transformer::actions::logic::Value;
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    use hyperchad_router::RouteRequest;
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    use hyperchad_shared_state_bridge::{BridgeError, RouteCommandInput, SharedStateRouteResolver};
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    use hyperchad_shared_state_models::{
+        ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
+    };
+    #[cfg(feature = "shared-state-transport")]
+    use hyperchad_shared_state_models::{TransportInbound, TransportOutbound, TransportPing};
+
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    #[derive(Debug)]
+    struct TestRouteResolver;
+
+    #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
+    impl SharedStateRouteResolver for TestRouteResolver {
+        fn resolve_channel_id(&self, _request: &RouteRequest) -> Result<ChannelId, BridgeError> {
+            Ok(ChannelId::new("test-channel"))
+        }
+
+        fn resolve_participant_id(
+            &self,
+            _request: &RouteRequest,
+        ) -> Result<ParticipantId, BridgeError> {
+            Ok(ParticipantId::new("test-participant"))
+        }
+    }
 
     #[derive(Clone)]
     struct TestProcessor;
@@ -833,34 +865,6 @@ mod tests {
     #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
     #[test_log::test]
     fn test_actix_app_with_shared_state_bridge() {
-        use hyperchad_renderer::transformer::actions::logic::Value;
-        use hyperchad_router::RouteRequest;
-        use hyperchad_shared_state_bridge::{
-            BridgeError, RouteCommandInput, SharedStateRouteResolver,
-        };
-        use hyperchad_shared_state_models::{
-            ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
-        };
-
-        #[derive(Debug)]
-        struct TestRouteResolver;
-
-        impl SharedStateRouteResolver for TestRouteResolver {
-            fn resolve_channel_id(
-                &self,
-                _request: &RouteRequest,
-            ) -> Result<ChannelId, BridgeError> {
-                Ok(ChannelId::new("test-channel"))
-            }
-
-            fn resolve_participant_id(
-                &self,
-                _request: &RouteRequest,
-            ) -> Result<ParticipantId, BridgeError> {
-                Ok(ParticipantId::new("test-participant"))
-            }
-        }
-
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let (command_tx, _command_rx) = flume::unbounded();
         let processor = TestProcessor;
@@ -894,8 +898,6 @@ mod tests {
     #[cfg(feature = "shared-state-transport")]
     #[test_log::test]
     fn test_actix_app_with_shared_state_transport() {
-        use hyperchad_shared_state_models::{TransportInbound, TransportOutbound, TransportPing};
-
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let (outbound_tx, _outbound_rx) = flume::unbounded::<TransportOutbound>();
         let (inbound_tx, inbound_rx) = flume::unbounded::<TransportInbound>();
@@ -919,8 +921,6 @@ mod tests {
     #[test_log::test]
     #[allow(clippy::literal_string_with_formatting_args)]
     fn test_directory_route_pattern() {
-        use super::directory_route_pattern;
-
         // Root routes use .+ to avoid matching "/" itself
         assert_eq!(directory_route_pattern("/"), "/{path:.+}");
         assert_eq!(directory_route_pattern(""), "/{path:.+}");
