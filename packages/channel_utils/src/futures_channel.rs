@@ -307,16 +307,21 @@ pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
 mod tests {
     use super::*;
     use futures_core::Stream;
+    use std::pin::Pin;
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
+    use std::task::{Context, Poll};
+
+    #[derive(Debug, Clone)]
+    struct Message {
+        priority: usize,
+        data: String,
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_unbounded_send_without_priority() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         tx.send(1).unwrap();
@@ -337,9 +342,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_priority_ordering_with_updates() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         // Configure priority - higher values have higher priority
@@ -373,9 +375,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_priority_with_equal_values() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -407,9 +406,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_sender_clone_shares_buffer() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -452,9 +448,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_unbounded_send_bypasses_priority() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -485,9 +478,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_buffer_flush_after_poll() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -527,9 +517,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_concurrent_senders() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<usize>();
 
         let tx = tx.with_priority(|msg: &usize| *msg);
@@ -582,14 +569,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_priority_function_with_complex_type() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-        #[derive(Debug, Clone)]
-        struct Message {
-            priority: usize,
-            data: String,
-        }
-
         let (tx, mut rx) = unbounded::<Message>();
 
         let tx = tx.with_priority(|msg: &Message| msg.priority);
@@ -638,9 +617,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_ready_to_send_state_transitions() {
-        use std::pin::Pin;
-        use std::task::Context;
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -675,9 +651,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_priority_ordering_with_dynamic_priority() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         // Configure priority - higher values have higher priority
@@ -712,9 +685,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_zero_priority_values() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         let tx = tx.with_priority(|_msg: &i32| 0); // All messages have same priority (0)
@@ -743,9 +713,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_priority_function_called_correct_number_of_times() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         let call_count = Arc::new(AtomicUsize::new(0));
@@ -788,9 +755,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_large_number_of_messages() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<usize>();
 
         let tx = tx.with_priority(|msg: &usize| *msg);
@@ -824,9 +788,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_interleave_send_and_unbounded_send() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         #[allow(clippy::cast_sign_loss)]
@@ -882,9 +843,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_fused_stream_termination_after_close() {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
         let (tx, mut rx) = unbounded::<i32>();
 
         tx.send(1).unwrap();

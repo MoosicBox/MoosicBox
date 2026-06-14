@@ -2354,8 +2354,11 @@ impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use moosicbox_music_models::api::ApiArtist;
+    use moosicbox_music_models::{Album as MusicAlbum, Artist as MusicArtist, Track as MusicTrack};
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test_log::test]
     fn test_yt_artist_image_size_from_u16() {
@@ -2620,8 +2623,6 @@ mod tests {
 
     #[test_log::test]
     fn test_yt_artist_to_artist_model() {
-        use moosicbox_music_models::Artist;
-
         let yt_artist = YtArtist {
             id: "artist123".to_string(),
             picture: Some("pic-url".to_string()),
@@ -2630,15 +2631,13 @@ mod tests {
             name: "Test Artist".to_string(),
         };
 
-        let artist: Artist = yt_artist.into();
+        let artist: MusicArtist = yt_artist.into();
         assert_eq!(artist.title, "Test Artist");
         assert_eq!(artist.cover, Some("pic-url".to_string()));
     }
 
     #[test_log::test]
     fn test_yt_artist_to_api_artist() {
-        use moosicbox_music_models::api::ApiArtist;
-
         let yt_artist = YtArtist {
             id: "artist456".to_string(),
             picture: None,
@@ -2654,8 +2653,6 @@ mod tests {
 
     #[test_log::test]
     fn test_yt_track_to_track_model() {
-        use moosicbox_music_models::Track;
-
         let yt_track = YtTrack {
             id: "track123".to_string(),
             track_number: 5,
@@ -2676,7 +2673,7 @@ mod tests {
             media_metadata_tags: vec!["tag1".to_string()],
         };
 
-        let track: Track = yt_track.into();
+        let track: MusicTrack = yt_track.into();
         assert_eq!(track.title, "Great Track");
         assert_eq!(track.number, 5);
         assert!((track.duration - 180.0).abs() < f64::EPSILON);
@@ -2687,8 +2684,6 @@ mod tests {
 
     #[test_log::test]
     fn test_yt_track_to_track_model_without_album_cover() {
-        use moosicbox_music_models::Track;
-
         let yt_track = YtTrack {
             id: "track456".to_string(),
             track_number: 1,
@@ -2709,7 +2704,7 @@ mod tests {
             media_metadata_tags: vec![],
         };
 
-        let track: Track = yt_track.into();
+        let track: MusicTrack = yt_track.into();
         assert_eq!(track.title, "Another Track");
         assert_eq!(track.artwork, None);
         assert!(!track.blur);
@@ -2717,8 +2712,6 @@ mod tests {
 
     #[test_log::test]
     fn test_yt_album_try_from_to_album() {
-        use moosicbox_music_models::Album;
-
         let yt_album = YtAlbum {
             id: "album123".to_string(),
             artist: "Album Artist".to_string(),
@@ -2737,7 +2730,7 @@ mod tests {
             media_metadata_tags: vec!["tag1".to_string()],
         };
 
-        let album: Album = yt_album.try_into().unwrap();
+        let album: MusicAlbum = yt_album.try_into().unwrap();
         assert_eq!(album.title, "Test Album");
         assert_eq!(album.artist, "Album Artist");
         assert_eq!(album.artwork, Some("cover-url".to_string()));
@@ -2745,8 +2738,6 @@ mod tests {
 
     #[test_log::test]
     fn test_yt_album_try_from_to_album_without_release_date() {
-        use moosicbox_music_models::Album;
-
         let yt_album = YtAlbum {
             id: "album789".to_string(),
             artist: "Another Artist".to_string(),
@@ -2765,7 +2756,7 @@ mod tests {
             media_metadata_tags: vec![],
         };
 
-        let album: Album = yt_album.try_into().unwrap();
+        let album: MusicAlbum = yt_album.try_into().unwrap();
         assert_eq!(album.title, "Compilation");
         assert!(album.date_released.is_none());
         assert!(album.artwork.is_none());

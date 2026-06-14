@@ -230,6 +230,12 @@ mod tests {
         name: String,
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct ComplexData {
+        items: Vec<TestData>,
+        metadata: BTreeMap<String, String>,
+    }
+
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct IncompatibleType {
         required_field: Vec<u64>,
@@ -422,12 +428,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_complex_nested_data() -> Result<(), Error> {
-        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-        struct ComplexData {
-            items: Vec<TestData>,
-            metadata: BTreeMap<String, String>,
-        }
-
         // Test serialization and deserialization of complex nested structures
         let persistence = SqlitePersistence::new_in_memory().await?;
         let store = StateStore::new(persistence);
