@@ -227,7 +227,7 @@ fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), Dec
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use symphonia::core::codecs::CodecParameters;
+    use symphonia::core::codecs::{CODEC_TYPE_FLAC, CodecParameters};
 
     #[test_log::test]
     fn test_first_supported_track_empty() {
@@ -246,8 +246,6 @@ mod tests {
 
     #[test_log::test]
     fn test_first_supported_track_finds_supported() {
-        use symphonia::core::codecs::CODEC_TYPE_FLAC;
-
         let tracks = vec![
             Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
             Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
@@ -318,8 +316,6 @@ mod tests {
 
     #[test_log::test]
     fn test_first_supported_track_first_track_is_supported() {
-        use symphonia::core::codecs::CODEC_TYPE_FLAC;
-
         let tracks = vec![
             Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
             Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),

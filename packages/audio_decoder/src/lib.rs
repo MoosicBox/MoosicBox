@@ -944,9 +944,109 @@ fn do_verification(finalization: FinalizeResult) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+
     use pretty_assertions::assert_eq;
-    use symphonia::core::codecs::CodecParameters;
+    use symphonia::core::codecs::{CODEC_TYPE_FLAC, CodecParameters};
     use symphonia::core::formats::Track;
+
+    struct MockOutput;
+
+    impl AudioDecode for MockOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            Ok(())
+        }
+    }
+
+    struct FlagOutput {
+        flag: Arc<AtomicBool>,
+    }
+
+    impl AudioDecode for FlagOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            self.flag.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    struct CountingOutput {
+        count: Arc<AtomicUsize>,
+    }
+
+    impl AudioDecode for CountingOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            self.count.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    struct FailingOutput;
+
+    impl AudioDecode for FailingOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            Err(AudioDecodeError::StreamClosed)
+        }
+    }
+
+    struct FlushCountingOutput {
+        flush_count: Arc<AtomicUsize>,
+    }
+
+    impl AudioDecode for FlushCountingOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            Ok(())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioDecodeError> {
+            self.flush_count.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    struct PlayStreamFlushOutput;
+
+    impl AudioDecode for PlayStreamFlushOutput {
+        fn decoded(
+            &mut self,
+            _decoded: AudioBuffer<f32>,
+            _packet: &Packet,
+            _track: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            Ok(())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioDecodeError> {
+            Err(AudioDecodeError::PlayStream)
+        }
+    }
 
     #[test_log::test]
     fn test_audio_decode_handler_new() {
@@ -987,18 +1087,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_try_open_success() {
-        struct MockOutput;
-        impl AudioDecode for MockOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-
         let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
             Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
         }));
@@ -1041,8 +1129,6 @@ mod tests {
 
     #[test_log::test]
     fn test_first_supported_track_finds_supported() {
-        use symphonia::core::codecs::CODEC_TYPE_FLAC;
-
         let tracks = vec![
             Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
             Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
@@ -1139,8 +1225,6 @@ mod tests {
     }
 
     fn create_test_track() -> Track {
-        use symphonia::core::codecs::CODEC_TYPE_FLAC;
-
         Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone())
     }
 
@@ -1153,23 +1237,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_filter_is_applied() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
-        struct TrackingOutput {
-            received_buffer: Arc<AtomicBool>,
-        }
-        impl AudioDecode for TrackingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                self.received_buffer.store(true, Ordering::SeqCst);
-                Ok(())
-            }
-        }
-
         let filter_called = Arc::new(AtomicBool::new(false));
         let filter_called_clone = filter_called.clone();
         let output_received = Arc::new(AtomicBool::new(false));
@@ -1181,8 +1248,8 @@ mod tests {
                 Ok(())
             }))
             .with_output(Box::new(move |_spec, _duration| {
-                Ok(Box::new(TrackingOutput {
-                    received_buffer: output_received_clone.clone(),
+                Ok(Box::new(FlagOutput {
+                    flag: output_received_clone.clone(),
                 }) as Box<dyn AudioDecode>)
             }));
 
@@ -1214,18 +1281,7 @@ mod tests {
                 Err(AudioDecodeError::Interrupt)
             }))
             .with_output(Box::new(|_spec, _duration| {
-                struct DummyOutput;
-                impl AudioDecode for DummyOutput {
-                    fn decoded(
-                        &mut self,
-                        _decoded: AudioBuffer<f32>,
-                        _packet: &Packet,
-                        _track: &Track,
-                    ) -> Result<(), AudioDecodeError> {
-                        Ok(())
-                    }
-                }
-                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }));
 
         let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
@@ -1242,23 +1298,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_multiple_outputs_all_receive_data() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        struct CountingOutput {
-            count: Arc<AtomicUsize>,
-        }
-        impl AudioDecode for CountingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                self.count.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            }
-        }
-
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_1 = call_count.clone();
         let call_count_2 = call_count.clone();
@@ -1298,18 +1337,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_output_error_propagates() {
-        struct FailingOutput;
-        impl AudioDecode for FailingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Err(AudioDecodeError::StreamClosed)
-            }
-        }
-
         let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
             Ok(Box::new(FailingOutput) as Box<dyn AudioDecode>)
         }));
@@ -1328,27 +1355,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_flush_propagates_to_all_outputs() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        struct FlushCountingOutput {
-            flush_count: Arc<AtomicUsize>,
-        }
-        impl AudioDecode for FlushCountingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioDecodeError> {
-                self.flush_count.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            }
-        }
-
         let flush_count = Arc::new(AtomicUsize::new(0));
         let flush_count_1 = flush_count.clone();
         let flush_count_2 = flush_count.clone();
@@ -1375,24 +1381,8 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_flush_error_propagates() {
-        struct FailingFlushOutput;
-        impl AudioDecode for FailingFlushOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-
-            fn flush(&mut self) -> Result<(), AudioDecodeError> {
-                Err(AudioDecodeError::PlayStream)
-            }
-        }
-
         let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
-            Ok(Box::new(FailingFlushOutput) as Box<dyn AudioDecode>)
+            Ok(Box::new(PlayStreamFlushOutput) as Box<dyn AudioDecode>)
         }));
 
         let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
@@ -1405,19 +1395,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_multiple_filters_applied_in_order() {
-        use std::sync::{Arc, Mutex};
-        struct DummyOutput;
-        impl AudioDecode for DummyOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-
         let order = Arc::new(Mutex::new(Vec::new()));
         let order_1 = order.clone();
         let order_2 = order.clone();
@@ -1437,7 +1414,7 @@ mod tests {
                 Ok(())
             }))
             .with_output(Box::new(|_spec, _duration| {
-                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }));
 
         let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
@@ -1456,35 +1433,12 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_try_open_multiple_outputs() {
-        struct Output1;
-        impl AudioDecode for Output1 {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-        struct Output2;
-        impl AudioDecode for Output2 {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-
         let mut handler = AudioDecodeHandler::new()
             .with_output(Box::new(|_spec, _duration| {
-                Ok(Box::new(Output1) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }))
             .with_output(Box::new(|_spec, _duration| {
-                Ok(Box::new(Output2) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }));
 
         assert_eq!(handler.open_decode_handlers.len(), 2);
@@ -1545,20 +1499,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_multiple_filters_early_error_stops_subsequent() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
-        struct DummyOutput;
-        impl AudioDecode for DummyOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-
         let filter2_called = Arc::new(AtomicBool::new(false));
         let filter2_called_clone = filter2_called.clone();
 
@@ -1573,7 +1513,7 @@ mod tests {
                 Ok(())
             }))
             .with_output(Box::new(|_spec, _duration| {
-                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }));
 
         let spec = SignalSpec::new(44100, symphonia::core::audio::Channels::default());
@@ -1597,20 +1537,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_try_open_error_on_second_output() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        struct DummyOutput;
-        impl AudioDecode for DummyOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Ok(())
-            }
-        }
-
         let open_count = Arc::new(AtomicUsize::new(0));
         let open_count_1 = open_count.clone();
         let open_count_2 = open_count.clone();
@@ -1618,7 +1544,7 @@ mod tests {
         let mut handler = AudioDecodeHandler::new()
             .with_output(Box::new(move |_spec, _duration| {
                 open_count_1.fetch_add(1, Ordering::SeqCst);
-                Ok(Box::new(DummyOutput) as Box<dyn AudioDecode>)
+                Ok(Box::new(MockOutput) as Box<dyn AudioDecode>)
             }))
             .with_output(Box::new(move |_spec, _duration| {
                 open_count_2.fetch_add(1, Ordering::SeqCst);
@@ -1666,34 +1592,6 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_decode_handler_multiple_outputs_first_error_stops_subsequent() {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
-        struct FailingOutput;
-        impl AudioDecode for FailingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                Err(AudioDecodeError::StreamClosed)
-            }
-        }
-        struct TrackingOutput {
-            called: Arc<AtomicBool>,
-        }
-        impl AudioDecode for TrackingOutput {
-            fn decoded(
-                &mut self,
-                _decoded: AudioBuffer<f32>,
-                _packet: &Packet,
-                _track: &Track,
-            ) -> Result<(), AudioDecodeError> {
-                self.called.store(true, Ordering::SeqCst);
-                Ok(())
-            }
-        }
-
         let second_output_called = Arc::new(AtomicBool::new(false));
         let second_output_called_clone = second_output_called.clone();
 
@@ -1702,8 +1600,8 @@ mod tests {
                 Ok(Box::new(FailingOutput) as Box<dyn AudioDecode>)
             }))
             .with_output(Box::new(move |_spec, _duration| {
-                Ok(Box::new(TrackingOutput {
-                    called: second_output_called_clone.clone(),
+                Ok(Box::new(FlagOutput {
+                    flag: second_output_called_clone.clone(),
                 }) as Box<dyn AudioDecode>)
             }));
 
@@ -1746,8 +1644,6 @@ mod tests {
 
     #[test_log::test]
     fn test_first_supported_track_first_track_is_supported() {
-        use symphonia::core::codecs::CODEC_TYPE_FLAC;
-
         let tracks = vec![
             Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
             Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
