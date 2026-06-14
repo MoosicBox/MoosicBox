@@ -815,6 +815,7 @@ impl AsModelResult<TidalSearchResults, ParseError> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use moosicbox_json_utils::database::AsModelResult;
     use moosicbox_music_api::models::ImageCoverSize;
     use moosicbox_music_api::models::search::api::ApiGlobalSearchResult;
     use moosicbox_music_models::id::Id;
@@ -1686,8 +1687,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_artist_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 12345,
             "picture": "abc-def-ghi",
@@ -1705,8 +1704,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_artist_json_parsing_without_picture() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 12345,
             "picture": null,
@@ -1724,8 +1721,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_search_artist_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 67890,
             "picture": "xyz-abc-123",
@@ -1743,8 +1738,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_album_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 55555,
             "artist": { "name": "Album Artist", "id": 11111 },
@@ -1784,8 +1777,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_album_json_parsing_with_ep_type() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 55555,
             "artist": { "name": "Album Artist", "id": 11111 },
@@ -1815,8 +1806,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_track_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 99999,
             "trackNumber": 5,
@@ -1857,8 +1846,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_track_json_parsing_without_album_type() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 99999,
             "trackNumber": 1,
@@ -1885,8 +1872,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_search_album_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 77777,
             "artists": [
@@ -1927,8 +1912,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_search_track_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "id": 88888,
             "trackNumber": 3,
@@ -1972,8 +1955,6 @@ mod tests {
 
     #[test_log::test]
     fn test_tidal_search_results_json_parsing() {
-        use moosicbox_json_utils::database::AsModelResult;
-
         let json = serde_json::json!({
             "albums": {
                 "items": [
