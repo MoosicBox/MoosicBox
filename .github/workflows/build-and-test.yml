@@ -418,7 +418,7 @@ jobs:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: MoosicBox/MoosicBox
                   flags: ${{ matrix.package.name }}
-                  fail_ci_if_error: true
+                  fail_ci_if_error: false
 
             - name: Upload failure data for workflow summary
               if: always() && steps.test-suite.outputs.failure-artifact-path != ''
