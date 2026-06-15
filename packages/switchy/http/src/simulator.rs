@@ -225,28 +225,30 @@ mod tests {
     #[cfg(feature = "json")]
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_json_body_serialization() {
-        #[derive(serde::Serialize)]
-        struct TestPayload {
-            name: String,
-            value: i32,
+        {
+            #[derive(serde::Serialize)]
+            struct TestPayload {
+                name: String,
+                value: i32,
+            }
+
+            let client = crate::SimulatorClient::new();
+
+            let payload = TestPayload {
+                name: "test".to_string(),
+                value: 42,
+            };
+
+            // Verify the JSON serialization path doesn't panic
+            let response = client
+                .post("http://example.com/api")
+                .json(&payload)
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::Ok);
         }
-
-        let client = crate::SimulatorClient::new();
-
-        let payload = TestPayload {
-            name: "test".to_string(),
-            value: 42,
-        };
-
-        // Verify the JSON serialization path doesn't panic
-        let response = client
-            .post("http://example.com/api")
-            .json(&payload)
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::Ok);
     }
 
     /// Test that the form serialization path works correctly through the macro-generated client.
@@ -254,65 +256,73 @@ mod tests {
     #[cfg(feature = "json")]
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_form_body_serialization() {
-        #[derive(serde::Serialize)]
-        struct FormData {
-            username: String,
-            password: String,
+        {
+            #[derive(serde::Serialize)]
+            struct FormData {
+                username: String,
+                password: String,
+            }
+
+            let client = crate::SimulatorClient::new();
+
+            let form = FormData {
+                username: "user".to_string(),
+                password: "pass".to_string(),
+            };
+
+            // Verify the form serialization path doesn't panic
+            let response = client
+                .post("http://example.com/login")
+                .form(&form)
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::Ok);
         }
-
-        let client = crate::SimulatorClient::new();
-
-        let form = FormData {
-            username: "user".to_string(),
-            password: "pass".to_string(),
-        };
-
-        // Verify the form serialization path doesn't panic
-        let response = client
-            .post("http://example.com/login")
-            .form(&form)
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::Ok);
     }
 
     /// Test the `bytes_stream` response method works correctly through the macro-generated response.
     #[cfg(feature = "stream")]
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_bytes_stream_consumption() {
-        use futures_util::StreamExt;
+        {
+            use futures_util::StreamExt;
 
-        let client = crate::SimulatorClient::new();
-        let response = client.get("http://example.com").send().await.unwrap();
+            let client = crate::SimulatorClient::new();
+            let response = client.get("http://example.com").send().await.unwrap();
 
-        // Test consuming the response as a stream
-        let mut stream = response.bytes_stream();
-        let chunks: Vec<_> = stream.by_ref().collect().await;
-        assert!(chunks.is_empty());
+            // Test consuming the response as a stream
+            let mut stream = response.bytes_stream();
+            let chunks: Vec<_> = stream.by_ref().collect().await;
+            assert!(chunks.is_empty());
+        }
     }
 
     /// Test that `Response::bytes()` returns empty bytes for simulator.
     /// This verifies the `bytes()` code path in `GenericResponse` impl is working.
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_response_bytes() {
-        use crate::GenericResponse;
+        {
+            use crate::GenericResponse;
 
-        let mut response = Response::default();
-        let bytes = response.bytes().await.unwrap();
-        assert!(bytes.is_empty());
+            let mut response = Response::default();
+            let bytes = response.bytes().await.unwrap();
+            assert!(bytes.is_empty());
+        }
     }
 
     /// Test that `Response::text()` returns empty string for simulator.
     /// This verifies the `text()` code path in `GenericResponse` impl is working.
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_response_text() {
-        use crate::GenericResponse;
+        {
+            use crate::GenericResponse;
 
-        let mut response = Response::default();
-        let text = response.text().await.unwrap();
-        assert!(text.is_empty());
+            let mut response = Response::default();
+            let text = response.text().await.unwrap();
+            assert!(text.is_empty());
+        }
     }
 
     /// Test that the underlying `RequestBuilder::body()` method accepts raw bytes.
@@ -359,14 +369,16 @@ mod tests {
     #[cfg(feature = "stream")]
     #[test_log::test(switchy_async::test)]
     async fn test_simulator_response_bytes_stream_trait() {
-        use crate::GenericResponse;
-        use futures_util::StreamExt;
+        {
+            use crate::GenericResponse;
+            use futures_util::StreamExt;
 
-        let mut response = Response::default();
+            let mut response = Response::default();
 
-        let mut stream = response.bytes_stream();
-        let chunks: Vec<_> = stream.by_ref().collect().await;
-        assert!(chunks.is_empty());
+            let mut stream = response.bytes_stream();
+            let chunks: Vec<_> = stream.by_ref().collect().await;
+            assert!(chunks.is_empty());
+        }
     }
 
     /// Test the `Client::request()` method with various HTTP methods.
