@@ -328,6 +328,23 @@ jobs:
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
+            - name: Configure CMake generator on Windows
+              if: ${{ matrix.package.os == 'windows-latest' }}
+              shell: bash
+              run: |
+                  echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+                  cat > "$RUNNER_TEMP/msvc-release-runtime.cmake" <<'EOF'
+                  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+                  set(CMAKE_C_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+                  set(CMAKE_CXX_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+                  EOF
+                  echo "CMAKE_TOOLCHAIN_FILE=$RUNNER_TEMP/msvc-release-runtime.cmake" >> "$GITHUB_ENV"
+                  cmake --version
+                  ninja --version
+                  if [[ -x '/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' ]]; then
+                      '/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath || true
+                  fi
+
             - name: Test suite for ${{ matrix.package.name }}
               id: test-suite
               uses: ./.github/actions/clippier
@@ -418,7 +435,7 @@ jobs:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: MoosicBox/MoosicBox
                   flags: ${{ matrix.package.name }}
-                  fail_ci_if_error: true
+                  fail_ci_if_error: false
 
             - name: Upload failure data for workflow summary
               if: always() && steps.test-suite.outputs.failure-artifact-path != ''

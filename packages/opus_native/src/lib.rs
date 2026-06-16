@@ -591,23 +591,25 @@ impl Decoder {
         range_decoder: &mut range::RangeDecoder,
         frame_size: FrameSize,
     ) -> Result<Vec<bool>> {
-        match frame_size.to_ms() {
-            10 | 20 => Ok(vec![true]),
-            40 => {
-                const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
-                let flags_value = range_decoder.ec_dec_icdf(LBRR_40MS_ICDF, 8)?;
-                Ok(vec![(flags_value & 1) != 0, (flags_value & 2) != 0])
+        {
+            match frame_size.to_ms() {
+                10 | 20 => Ok(vec![true]),
+                40 => {
+                    const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+                    let flags_value = range_decoder.ec_dec_icdf(LBRR_40MS_ICDF, 8)?;
+                    Ok(vec![(flags_value & 1) != 0, (flags_value & 2) != 0])
+                }
+                60 => {
+                    const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+                    let flags_value = range_decoder.ec_dec_icdf(LBRR_60MS_ICDF, 8)?;
+                    Ok(vec![
+                        (flags_value & 1) != 0,
+                        (flags_value & 2) != 0,
+                        (flags_value & 4) != 0,
+                    ])
+                }
+                _ => Err(Error::DecodeFailed("Invalid frame size".into())),
             }
-            60 => {
-                const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
-                let flags_value = range_decoder.ec_dec_icdf(LBRR_60MS_ICDF, 8)?;
-                Ok(vec![
-                    (flags_value & 1) != 0,
-                    (flags_value & 2) != 0,
-                    (flags_value & 4) != 0,
-                ])
-            }
-            _ => Err(Error::DecodeFailed("Invalid frame size".into())),
         }
     }
 
@@ -904,78 +906,80 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        use crate::{
-            celt::{CELT_NUM_BANDS, fixed_point::sig_to_int16},
-            range::RangeDecoder,
-        };
+        {
+            use crate::{
+                celt::{CELT_NUM_BANDS, fixed_point::sig_to_int16},
+                range::RangeDecoder,
+            };
 
-        let mut ec = RangeDecoder::new(frame_data)?;
+            let mut ec = RangeDecoder::new(frame_data)?;
 
-        self.celt.set_start_band(0);
-        self.celt.set_end_band(CELT_NUM_BANDS);
-        self.celt.set_output_rate(self.sample_rate)?;
+            self.celt.set_start_band(0);
+            self.celt.set_end_band(CELT_NUM_BANDS);
+            self.celt.set_output_rate(self.sample_rate)?;
 
-        let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
+            let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
 
-        if decoded_frame.channels != channels {
-            return Err(Error::DecodeFailed(format!(
-                "CELT channel mismatch: expected {channels:?}, got {:?}",
-                decoded_frame.channels
-            )));
-        }
-
-        log::debug!(
-            "decode_celt_only: frame has {} samples, nonzero={}, first 20: {:?}",
-            decoded_frame.samples.len(),
-            decoded_frame.samples.iter().filter(|&&x| x != 0).count(),
-            &decoded_frame.samples[..20.min(decoded_frame.samples.len())]
-        );
-        if decoded_frame.samples.len() >= 60 {
-            log::debug!(
-                "decode_celt_only[40..60]: {:?}",
-                &decoded_frame.samples[40..60]
-            );
-        }
-
-        // Convert CeltSig (Q12 format) to i16 PCM
-        for (i, &sample) in decoded_frame.samples.iter().enumerate() {
-            if i < output.len() {
-                // sig_to_int16 converts Q12 → i16 with proper rounding and saturation
-                output[i] = sig_to_int16(sample);
+            if decoded_frame.channels != channels {
+                return Err(Error::DecodeFailed(format!(
+                    "CELT channel mismatch: expected {channels:?}, got {:?}",
+                    decoded_frame.channels
+                )));
             }
-        }
 
-        log::debug!(
-            "decode_celt_only: After conversion to PCM, output[0..20]: {:?}",
-            &output[..20]
-        );
-        if output.len() >= 60 {
-            log::debug!("decode_celt_only: output[40..60]: {:?}", &output[40..60]);
-        }
-
-        // DEBUG: For WB, log the Q12 samples before conversion
-        if self.sample_rate == SampleRate::Hz16000 && decoded_frame.samples.len() >= 60 {
             log::debug!(
-                "CELT decode Q12 samples[40..60]: {:?}",
-                &decoded_frame.samples[40..60]
+                "decode_celt_only: frame has {} samples, nonzero={}, first 20: {:?}",
+                decoded_frame.samples.len(),
+                decoded_frame.samples.iter().filter(|&&x| x != 0).count(),
+                &decoded_frame.samples[..20.min(decoded_frame.samples.len())]
             );
+            if decoded_frame.samples.len() >= 60 {
+                log::debug!(
+                    "decode_celt_only[40..60]: {:?}",
+                    &decoded_frame.samples[40..60]
+                );
+            }
+
+            // Convert CeltSig (Q12 format) to i16 PCM
+            for (i, &sample) in decoded_frame.samples.iter().enumerate() {
+                if i < output.len() {
+                    // sig_to_int16 converts Q12 → i16 with proper rounding and saturation
+                    output[i] = sig_to_int16(sample);
+                }
+            }
+
+            log::debug!(
+                "decode_celt_only: After conversion to PCM, output[0..20]: {:?}",
+                &output[..20]
+            );
+            if output.len() >= 60 {
+                log::debug!("decode_celt_only: output[40..60]: {:?}", &output[40..60]);
+            }
+
+            // DEBUG: For WB, log the Q12 samples before conversion
+            if self.sample_rate == SampleRate::Hz16000 && decoded_frame.samples.len() >= 60 {
+                log::debug!(
+                    "CELT decode Q12 samples[40..60]: {:?}",
+                    &decoded_frame.samples[40..60]
+                );
+            }
+
+            // TODO: Apply deemphasis + decimation when downsample > 1
+            // Currently CELT always outputs 48kHz samples (480 for 10ms frame).
+            // When self.sample_rate < 48kHz, we should decimate the output.
+            // For example, WB (16kHz) should output 160 samples, not 480.
+            // The downsample factor is set via set_output_rate(), but decimation
+            // is not yet implemented in this decode path.
+            //
+            // RFC 6716 lines 498-501: "decimate the MDCT layer output"
+            // LibOpus: celt_decoder.c applies deemphasis filter + time-domain decimation
+            //
+            // Until decimation is implemented:
+            // - 48kHz output works correctly (bit-exact for NB via downsampling)
+            // - Other rates (8/12/16/24kHz) will fail with sample count mismatch
+
+            Ok(decoded_frame.samples.len())
         }
-
-        // TODO: Apply deemphasis + decimation when downsample > 1
-        // Currently CELT always outputs 48kHz samples (480 for 10ms frame).
-        // When self.sample_rate < 48kHz, we should decimate the output.
-        // For example, WB (16kHz) should output 160 samples, not 480.
-        // The downsample factor is set via set_output_rate(), but decimation
-        // is not yet implemented in this decode path.
-        //
-        // RFC 6716 lines 498-501: "decimate the MDCT layer output"
-        // LibOpus: celt_decoder.c applies deemphasis filter + time-domain decimation
-        //
-        // Until decimation is implemented:
-        // - 48kHz output works correctly (bit-exact for NB via downsampling)
-        // - Other rates (8/12/16/24kHz) will fail with sample count mismatch
-
-        Ok(decoded_frame.samples.len())
     }
 
     /// Decode hybrid mode frame (SILK low-freq + CELT high-freq)
@@ -1014,102 +1018,106 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        use crate::{celt::CELT_NUM_BANDS, celt::fixed_point::sig_to_int16, range::RangeDecoder};
+        {
+            use crate::{
+                celt::CELT_NUM_BANDS, celt::fixed_point::sig_to_int16, range::RangeDecoder,
+            };
+            const HYBRID_SILK_INTERNAL_RATE: u32 = 16000;
+            const HYBRID_START_BAND: usize = 17;
 
-        const HYBRID_SILK_INTERNAL_RATE: u32 = 16000;
-        const HYBRID_START_BAND: usize = 17;
+            let mut ec = RangeDecoder::new(frame_data)?;
 
-        let mut ec = RangeDecoder::new(frame_data)?;
+            let header_flags =
+                Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
 
-        let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
+            let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
 
-        let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
+            let num_silk_frames = match config.frame_size.to_ms() {
+                10 | 20 => 1,
+                40 => 2,
+                60 => 3,
+                _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
+            };
 
-        let num_silk_frames = match config.frame_size.to_ms() {
-            10 | 20 => 1,
-            40 => 2,
-            60 => 3,
-            _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
-        };
+            let frame_samples = Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
+            let num_channels = channels as usize;
+            let total_samples = frame_samples * num_silk_frames;
+            let mut silk_16k = vec![0i16; total_samples * num_channels];
 
-        let frame_samples = Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
-        let num_channels = channels as usize;
-        let total_samples = frame_samples * num_silk_frames;
-        let mut silk_16k = vec![0i16; total_samples * num_channels];
+            for frame_idx in 0..num_silk_frames {
+                for ch_idx in 0..num_channels {
+                    let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
+                    let vad_flag = header_flags
+                        .vad_flags
+                        .get(vad_flag_index)
+                        .copied()
+                        .unwrap_or(true);
 
-        for frame_idx in 0..num_silk_frames {
-            for ch_idx in 0..num_channels {
-                let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
-                let vad_flag = header_flags
-                    .vad_flags
-                    .get(vad_flag_index)
-                    .copied()
-                    .unwrap_or(true);
+                    let mut frame_buffer = vec![0i16; frame_samples];
 
-                let mut frame_buffer = vec![0i16; frame_samples];
+                    let decoded =
+                        self.silk
+                            .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
 
-                let decoded = self
-                    .silk
-                    .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
+                    if decoded != frame_samples {
+                        return Err(Error::DecodeFailed(format!(
+                            "Hybrid SILK sample count mismatch: expected {frame_samples}, got {decoded}"
+                        )));
+                    }
 
-                if decoded != frame_samples {
-                    return Err(Error::DecodeFailed(format!(
-                        "Hybrid SILK sample count mismatch: expected {frame_samples}, got {decoded}"
-                    )));
-                }
-
-                let base_offset = frame_idx * frame_samples * num_channels;
-                for sample_idx in 0..frame_samples {
-                    silk_16k[base_offset + sample_idx * num_channels + ch_idx] =
-                        frame_buffer[sample_idx];
+                    let base_offset = frame_idx * frame_samples * num_channels;
+                    for sample_idx in 0..frame_samples {
+                        silk_16k[base_offset + sample_idx * num_channels + ch_idx] =
+                            frame_buffer[sample_idx];
+                    }
                 }
             }
+
+            self.celt.set_start_band(HYBRID_START_BAND);
+            self.celt.set_end_band(CELT_NUM_BANDS);
+
+            let target_rate = self.sample_rate as u32;
+            self.celt.set_output_rate(self.sample_rate)?;
+
+            let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
+
+            if decoded_frame.channels != channels {
+                return Err(Error::DecodeFailed(format!(
+                    "Hybrid CELT channel mismatch: expected {channels:?}, got {:?}",
+                    decoded_frame.channels
+                )));
+            }
+
+            let target_samples = Self::calculate_samples(config.frame_size, target_rate);
+
+            #[cfg(feature = "resampling")]
+            let silk_target =
+                self.resample_silk(&silk_16k, HYBRID_SILK_INTERNAL_RATE, target_rate, channels)?;
+
+            #[cfg(not(feature = "resampling"))]
+            let silk_target = if HYBRID_SILK_INTERNAL_RATE == target_rate {
+                silk_16k.clone()
+            } else {
+                return Err(Error::InvalidSampleRate(format!(
+                    "Resampling not available: SILK rate {HYBRID_SILK_INTERNAL_RATE} != target rate {target_rate}"
+                )));
+            };
+
+            let celt_i16: Vec<i16> = decoded_frame
+                .samples
+                .iter()
+                .map(|&s| sig_to_int16(s))
+                .collect();
+
+            let sample_count = target_samples * channels as usize;
+            for i in 0..sample_count.min(output.len()) {
+                let silk_sample = silk_target.get(i).copied().unwrap_or(0);
+                let celt_sample = celt_i16.get(i).copied().unwrap_or(0);
+                output[i] = silk_sample.saturating_add(celt_sample);
+            }
+
+            Ok(target_samples)
         }
-
-        self.celt.set_start_band(HYBRID_START_BAND);
-        self.celt.set_end_band(CELT_NUM_BANDS);
-
-        let target_rate = self.sample_rate as u32;
-        self.celt.set_output_rate(self.sample_rate)?;
-
-        let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
-
-        if decoded_frame.channels != channels {
-            return Err(Error::DecodeFailed(format!(
-                "Hybrid CELT channel mismatch: expected {channels:?}, got {:?}",
-                decoded_frame.channels
-            )));
-        }
-
-        let target_samples = Self::calculate_samples(config.frame_size, target_rate);
-
-        #[cfg(feature = "resampling")]
-        let silk_target =
-            self.resample_silk(&silk_16k, HYBRID_SILK_INTERNAL_RATE, target_rate, channels)?;
-
-        #[cfg(not(feature = "resampling"))]
-        let silk_target = if HYBRID_SILK_INTERNAL_RATE == target_rate {
-            silk_16k.clone()
-        } else {
-            return Err(Error::InvalidSampleRate(format!(
-                "Resampling not available: SILK rate {HYBRID_SILK_INTERNAL_RATE} != target rate {target_rate}"
-            )));
-        };
-
-        let celt_i16: Vec<i16> = decoded_frame
-            .samples
-            .iter()
-            .map(|&s| sig_to_int16(s))
-            .collect();
-
-        let sample_count = target_samples * channels as usize;
-        for i in 0..sample_count.min(output.len()) {
-            let silk_sample = silk_target.get(i).copied().unwrap_or(0);
-            let celt_sample = celt_i16.get(i).copied().unwrap_or(0);
-            output[i] = silk_sample.saturating_add(celt_sample);
-        }
-
-        Ok(target_samples)
     }
 
     /// Resample SILK output to target rate
@@ -1141,75 +1149,77 @@ impl Decoder {
         output_rate: u32,
         channels: Channels,
     ) -> Result<Vec<i16>> {
-        use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
-
-        if input_rate == output_rate {
-            return Ok(input.to_vec());
-        }
-
-        let required_delay_ms = match input_rate {
-            8000 => 0.538,
-            12000 => 0.692,
-            16000 => 0.706,
-            _ => {
-                return Err(Error::InvalidSampleRate(format!(
-                    "Invalid SILK internal rate: {input_rate} (must be 8000/12000/16000)"
-                )));
-            }
-        };
-
-        let num_channels = match channels {
-            Channels::Mono => symphonia::core::audio::Channels::FRONT_LEFT,
-            Channels::Stereo => {
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT
-            }
-        };
-
-        if self.silk_resampler_state.is_none()
-            || self.silk_resampler_input_rate != input_rate
-            || self.silk_resampler_output_rate != output_rate
         {
-            let num_samples = input.len() / channels as usize;
-            let spec = SignalSpec::new(input_rate, num_channels);
+            use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 
-            let resampler = moosicbox_resampler::Resampler::<i16>::new(
-                spec,
-                output_rate as usize,
+            if input_rate == output_rate {
+                return Ok(input.to_vec());
+            }
+
+            let required_delay_ms = match input_rate {
+                8000 => 0.538,
+                12000 => 0.692,
+                16000 => 0.706,
+                _ => {
+                    return Err(Error::InvalidSampleRate(format!(
+                        "Invalid SILK internal rate: {input_rate} (must be 8000/12000/16000)"
+                    )));
+                }
+            };
+
+            let num_channels = match channels {
+                Channels::Mono => symphonia::core::audio::Channels::FRONT_LEFT,
+                Channels::Stereo => {
+                    symphonia::core::audio::Channels::FRONT_LEFT
+                        | symphonia::core::audio::Channels::FRONT_RIGHT
+                }
+            };
+
+            if self.silk_resampler_state.is_none()
+                || self.silk_resampler_input_rate != input_rate
+                || self.silk_resampler_output_rate != output_rate
+            {
+                let num_samples = input.len() / channels as usize;
+                let spec = SignalSpec::new(input_rate, num_channels);
+
+                let resampler = moosicbox_resampler::Resampler::<i16>::new(
+                    spec,
+                    output_rate as usize,
+                    num_samples as u64,
+                );
+
+                self.silk_resampler_state = Some(resampler);
+                self.silk_resampler_input_rate = input_rate;
+                self.silk_resampler_output_rate = output_rate;
+                self.silk_resampler_required_delay_ms = required_delay_ms;
+            }
+
+            let num_samples = input.len() / channels as usize;
+            let mut audio_buffer = AudioBuffer::<f32>::new(
                 num_samples as u64,
+                SignalSpec::new(input_rate, num_channels),
             );
 
-            self.silk_resampler_state = Some(resampler);
-            self.silk_resampler_input_rate = input_rate;
-            self.silk_resampler_output_rate = output_rate;
-            self.silk_resampler_required_delay_ms = required_delay_ms;
-        }
-
-        let num_samples = input.len() / channels as usize;
-        let mut audio_buffer = AudioBuffer::<f32>::new(
-            num_samples as u64,
-            SignalSpec::new(input_rate, num_channels),
-        );
-
-        for ch in 0..channels as usize {
-            for sample_idx in 0..num_samples {
-                let interleaved_idx = sample_idx * channels as usize + ch;
-                #[allow(clippy::cast_precision_loss)]
-                let sample_f32 = f32::from(input[interleaved_idx]) / 32768.0;
-                audio_buffer.chan_mut(ch)[sample_idx] = sample_f32;
+            for ch in 0..channels as usize {
+                for sample_idx in 0..num_samples {
+                    let interleaved_idx = sample_idx * channels as usize + ch;
+                    #[allow(clippy::cast_precision_loss)]
+                    let sample_f32 = f32::from(input[interleaved_idx]) / 32768.0;
+                    audio_buffer.chan_mut(ch)[sample_idx] = sample_f32;
+                }
             }
+
+            let resampler = self
+                .silk_resampler_state
+                .as_mut()
+                .ok_or_else(|| Error::DecodeFailed("Resampler not initialized".into()))?;
+
+            let resampled_i16 = resampler
+                .resample(&audio_buffer)
+                .ok_or_else(|| Error::DecodeFailed("Resampling produced no output".into()))?;
+
+            Ok(resampled_i16.to_vec())
         }
-
-        let resampler = self
-            .silk_resampler_state
-            .as_mut()
-            .ok_or_else(|| Error::DecodeFailed("Resampler not initialized".into()))?;
-
-        let resampled_i16 = resampler
-            .resample(&audio_buffer)
-            .ok_or_else(|| Error::DecodeFailed("Resampling produced no output".into()))?;
-
-        Ok(resampled_i16.to_vec())
     }
 }
 
@@ -1308,22 +1318,28 @@ mod lbrr_tests {
 
     #[test_log::test]
     fn test_lbrr_40ms_icdf_values() {
-        const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
-        assert_eq!(LBRR_40MS_ICDF[0], 203);
-        assert_eq!(LBRR_40MS_ICDF[1], 150);
-        assert_eq!(LBRR_40MS_ICDF[2], 0);
+        {
+            const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+
+            assert_eq!(LBRR_40MS_ICDF[0], 203);
+            assert_eq!(LBRR_40MS_ICDF[1], 150);
+            assert_eq!(LBRR_40MS_ICDF[2], 0);
+        }
     }
 
     #[test_log::test]
     fn test_lbrr_60ms_icdf_values() {
-        const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
-        assert_eq!(LBRR_60MS_ICDF[0], 215);
-        assert_eq!(LBRR_60MS_ICDF[1], 195);
-        assert_eq!(LBRR_60MS_ICDF[2], 166);
-        assert_eq!(LBRR_60MS_ICDF[3], 125);
-        assert_eq!(LBRR_60MS_ICDF[4], 110);
-        assert_eq!(LBRR_60MS_ICDF[5], 82);
-        assert_eq!(LBRR_60MS_ICDF[6], 0);
+        {
+            const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+
+            assert_eq!(LBRR_60MS_ICDF[0], 215);
+            assert_eq!(LBRR_60MS_ICDF[1], 195);
+            assert_eq!(LBRR_60MS_ICDF[2], 166);
+            assert_eq!(LBRR_60MS_ICDF[3], 125);
+            assert_eq!(LBRR_60MS_ICDF[4], 110);
+            assert_eq!(LBRR_60MS_ICDF[5], 82);
+            assert_eq!(LBRR_60MS_ICDF[6], 0);
+        }
     }
 }
 

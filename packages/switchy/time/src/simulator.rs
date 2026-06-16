@@ -379,6 +379,7 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use std::{collections::BTreeMap, time::Duration};
+    use switchy_random::rand::rand::Rng as _;
 
     // Note: All tests in this module use #[serial] because they interact with:
     // 1. Thread-local state (EPOCH_OFFSET, STEP_MULTIPLIER, STEP) that can be reused
@@ -570,8 +571,6 @@ mod tests {
     #[test_log::test]
     #[serial]
     fn test_seeded_epoch_offsets_follow_deterministic_sequence() {
-        use switchy_random::rand::rand::Rng as _;
-
         let _guard = EnvGuard::new(&[
             "SIMULATOR_SEED",
             "SIMULATOR_EPOCH_OFFSET",

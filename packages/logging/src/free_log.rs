@@ -104,7 +104,17 @@ pub fn init(
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
+
+    fn assert_error<T: Error + std::fmt::Debug>() {}
+
+    fn assert_from<T, E: Error>()
+    where
+        T: From<E>,
+    {
+    }
 
     #[test_log::test]
     fn test_init_succeeds_or_already_initialized() {
@@ -158,26 +168,15 @@ mod tests {
     #[test_log::test]
     fn test_init_error_is_error() {
         // Test that InitError implements the Error trait properly
-        use std::error::Error;
-
         // The type should implement Error and Debug
-        fn assert_error<T: Error + std::fmt::Debug>() {}
         assert_error::<InitError>();
     }
 
     #[test_log::test]
     fn test_init_error_from_conversions() {
         // Test that From trait implementations work correctly for InitError
-        use std::error::Error;
-
         // We can't construct the actual error types from free_log_client,
         // but we can verify the type relationships exist
-        fn assert_from<T, E: Error>()
-        where
-            T: From<E>,
-        {
-        }
-
         assert_from::<InitError, free_log_client::LogsInitError>();
         assert_from::<InitError, free_log_client::BuildLogsConfigError>();
         assert_from::<InitError, free_log_client::BuildFileWriterConfigError>();

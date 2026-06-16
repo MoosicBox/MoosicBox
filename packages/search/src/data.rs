@@ -233,6 +233,7 @@ pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::NaiveDateTime;
     use moosicbox_music_models::{
         AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, ApiSources, TrackApiSource, id::Id,
     };
@@ -510,8 +511,6 @@ mod tests {
 
     #[test_log::test]
     fn test_album_as_data_values_with_dates() {
-        use chrono::NaiveDateTime;
-
         let date_released =
             NaiveDateTime::parse_from_str("2023-06-15 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let date_added =

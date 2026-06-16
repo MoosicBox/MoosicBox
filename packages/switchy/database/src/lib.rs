@@ -2415,19 +2415,22 @@ mod tests {
 
         #[test_log::test]
         fn test_as_datetime() {
-            use chrono::NaiveDate;
-            let dt = NaiveDate::from_ymd_opt(2024, 1, 15)
-                .unwrap()
-                .and_hms_opt(10, 30, 0)
-                .unwrap();
-            let val = DatabaseValue::DateTime(dt);
-            assert_eq!(val.as_datetime(), Some(dt));
+            {
+                use chrono::NaiveDate;
 
-            // Non-datetime values return None
-            assert_eq!(
-                DatabaseValue::String("2024-01-15".to_string()).as_datetime(),
-                None
-            );
+                let dt = NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_hms_opt(10, 30, 0)
+                    .unwrap();
+                let val = DatabaseValue::DateTime(dt);
+                assert_eq!(val.as_datetime(), Some(dt));
+
+                // Non-datetime values return None
+                assert_eq!(
+                    DatabaseValue::String("2024-01-15".to_string()).as_datetime(),
+                    None
+                );
+            }
         }
 
         #[test_log::test]

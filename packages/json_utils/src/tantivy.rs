@@ -445,71 +445,81 @@ mod tests {
 
     #[test_log::test]
     fn test_get_value_type_from_document() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert(
-            "test_field".to_string(),
-            vec![OwnedValue::Str("test_value".to_string())],
-        );
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert(
+                "test_field".to_string(),
+                vec![OwnedValue::Str("test_value".to_string())],
+            );
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<String, ParseError> = get_value_type(&doc, "test_field");
-        assert_eq!(result.unwrap(), "test_value");
+            let result: Result<String, ParseError> = get_value_type(&doc, "test_field");
+            assert_eq!(result.unwrap(), "test_value");
+        }
     }
 
     #[test_log::test]
     fn test_get_value_type_missing_field() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let fields = BTreeMap::new();
-        let doc = NamedFieldDocument(fields);
+            let fields = BTreeMap::new();
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<String, ParseError> = get_value_type(&doc, "missing_field");
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+            let result: Result<String, ParseError> = get_value_type(&doc, "missing_field");
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+        }
     }
 
     #[test_log::test]
     fn test_get_doc_value_types() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert(
-            "numbers".to_string(),
-            vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)],
-        );
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert(
+                "numbers".to_string(),
+                vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)],
+            );
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "numbers");
-        assert_eq!(result.unwrap(), vec![1, 2, 3]);
+            let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "numbers");
+            assert_eq!(result.unwrap(), vec![1, 2, 3]);
+        }
     }
 
     #[test_log::test]
     fn test_to_value_trait_on_document() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert(
-            "test".to_string(),
-            vec![OwnedValue::Str("value".to_string())],
-        );
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert(
+                "test".to_string(),
+                vec![OwnedValue::Str("value".to_string())],
+            );
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<String, ParseError> = doc.to_value("test");
-        assert_eq!(result.unwrap(), "value");
+            let result: Result<String, ParseError> = doc.to_value("test");
+            assert_eq!(result.unwrap(), "value");
+        }
     }
 
     #[test_log::test]
     fn test_to_value_trait_on_document_ref() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert("num".to_string(), vec![OwnedValue::U64(42)]);
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert("num".to_string(), vec![OwnedValue::U64(42)]);
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<u64, ParseError> = doc.to_value("num");
-        assert_eq!(result.unwrap(), 42);
+            let result: Result<u64, ParseError> = doc.to_value("num");
+            assert_eq!(result.unwrap(), 42);
+        }
     }
 
     #[test_log::test]
@@ -565,14 +575,16 @@ mod tests {
 
     #[test_log::test]
     fn test_get_doc_value_types_missing_field() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let fields = BTreeMap::new();
-        let doc = NamedFieldDocument(fields);
+            let fields = BTreeMap::new();
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "missing");
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+            let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "missing");
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+        }
     }
 
     #[test_log::test]
@@ -589,43 +601,49 @@ mod tests {
 
     #[test_log::test]
     fn test_to_value_missing_field_error() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert("existing".to_string(), vec![OwnedValue::U64(42)]);
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert("existing".to_string(), vec![OwnedValue::U64(42)]);
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<Vec<u64>, ParseError> = doc.to_value("nonexistent");
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ParseError::Parse(_)));
-        assert!(err.to_string().contains("nonexistent"));
+            let result: Result<Vec<u64>, ParseError> = doc.to_value("nonexistent");
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(matches!(err, ParseError::Parse(_)));
+            assert!(err.to_string().contains("nonexistent"));
+        }
     }
 
     #[test_log::test]
     fn test_to_value_with_doc_ref() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert("field".to_string(), vec![OwnedValue::U64(99)]);
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert("field".to_string(), vec![OwnedValue::U64(99)]);
+            let doc = NamedFieldDocument(fields);
 
-        // Test using &NamedFieldDocument
-        let doc_ref = &doc;
-        let result: Result<u64, ParseError> = doc_ref.to_value("field");
-        assert_eq!(result.unwrap(), 99);
+            // Test using &NamedFieldDocument
+            let doc_ref = &doc;
+            let result: Result<u64, ParseError> = doc_ref.to_value("field");
+            assert_eq!(result.unwrap(), 99);
+        }
     }
 
     #[test_log::test]
     fn test_get_value_type_empty_field() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut fields = BTreeMap::new();
-        fields.insert("empty_field".to_string(), vec![]);
-        let doc = NamedFieldDocument(fields);
+            let mut fields = BTreeMap::new();
+            fields.insert("empty_field".to_string(), vec![]);
+            let doc = NamedFieldDocument(fields);
 
-        let result: Result<String, ParseError> = get_value_type(&doc, "empty_field");
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+            let result: Result<String, ParseError> = get_value_type(&doc, "empty_field");
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+        }
     }
 }

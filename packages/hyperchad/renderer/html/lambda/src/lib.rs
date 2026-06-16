@@ -358,6 +358,42 @@ impl<
 mod tests {
     use super::*;
 
+    #[cfg(feature = "assets")]
+    #[derive(Clone)]
+    struct TestProcessor;
+
+    #[cfg(feature = "assets")]
+    #[async_trait]
+    impl LambdaResponseProcessor<String> for TestProcessor {
+        fn prepare_request(
+            &self,
+            _req: Request,
+            _body: Option<Arc<Bytes>>,
+        ) -> Result<String, lambda_runtime::Error> {
+            Ok(String::new())
+        }
+
+        fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
+            None
+        }
+
+        async fn to_response(
+            &self,
+            _data: String,
+        ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
+        {
+            Ok(None)
+        }
+
+        async fn to_body(
+            &self,
+            _content: hyperchad_renderer::Content,
+            _data: String,
+        ) -> Result<Content, lambda_runtime::Error> {
+            Ok(Content::Html(String::new()))
+        }
+    }
+
     #[test_log::test]
     fn test_content_html_creation() {
         let html = Content::Html("<h1>Test</h1>".to_string());
@@ -470,43 +506,6 @@ mod tests {
     #[cfg(feature = "assets")]
     #[test_log::test]
     fn test_lambda_app_new() {
-        #[derive(Clone)]
-        struct TestProcessor;
-
-        #[async_trait]
-        impl LambdaResponseProcessor<String> for TestProcessor {
-            fn prepare_request(
-                &self,
-                _req: Request,
-                _body: Option<Arc<Bytes>>,
-            ) -> Result<String, lambda_runtime::Error> {
-                Ok(String::new())
-            }
-
-            fn headers(
-                &self,
-                _content: &hyperchad_renderer::Content,
-            ) -> Option<Vec<(String, String)>> {
-                None
-            }
-
-            async fn to_response(
-                &self,
-                _data: String,
-            ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
-            {
-                Ok(None)
-            }
-
-            async fn to_body(
-                &self,
-                _content: hyperchad_renderer::Content,
-                _data: String,
-            ) -> Result<Content, lambda_runtime::Error> {
-                Ok(Content::Html(String::new()))
-            }
-        }
-
         let processor = TestProcessor;
         let app = LambdaApp::new(processor);
 
@@ -517,43 +516,6 @@ mod tests {
     #[cfg(feature = "assets")]
     #[test_log::test]
     fn test_lambda_app_with_static_routes() {
-        #[derive(Clone)]
-        struct TestProcessor;
-
-        #[async_trait]
-        impl LambdaResponseProcessor<String> for TestProcessor {
-            fn prepare_request(
-                &self,
-                _req: Request,
-                _body: Option<Arc<Bytes>>,
-            ) -> Result<String, lambda_runtime::Error> {
-                Ok(String::new())
-            }
-
-            fn headers(
-                &self,
-                _content: &hyperchad_renderer::Content,
-            ) -> Option<Vec<(String, String)>> {
-                None
-            }
-
-            async fn to_response(
-                &self,
-                _data: String,
-            ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
-            {
-                Ok(None)
-            }
-
-            async fn to_body(
-                &self,
-                _content: hyperchad_renderer::Content,
-                _data: String,
-            ) -> Result<Content, lambda_runtime::Error> {
-                Ok(Content::Html(String::new()))
-            }
-        }
-
         let processor = TestProcessor;
         let mut app = LambdaApp::new(processor);
 

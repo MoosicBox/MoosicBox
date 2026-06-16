@@ -1625,142 +1625,146 @@ async fn track_to_playable_file(
     format: PlaybackQuality,
     quality: TrackAudioQuality,
 ) -> Result<PlayableTrack, PlayerError> {
-    log::trace!("track_to_playable_file track={track:?} format={format:?} quality={quality:?}");
-
-    let mut hint = Hint::new();
-
-    let file = track.file.clone().unwrap();
-    let path = Path::new(&file);
-
-    // Provide the file extension as a hint.
-    if let Some(extension) = path.extension()
-        && let Some(extension_str) = extension.to_str()
     {
-        hint.with_extension(extension_str);
-    }
+        log::trace!("track_to_playable_file track={track:?} format={format:?} quality={quality:?}");
 
-    #[allow(clippy::match_wildcard_for_single_variants)]
-    let same_source = match format.format {
-        AudioFormat::Source => true,
-        #[allow(unreachable_patterns)]
-        _ => track.format.is_none_or(|x| x == format.format),
-    };
+        let mut hint = Hint::new();
 
-    let source: Box<dyn MediaSource> = if same_source {
-        Box::new(File::open(path)?)
-    } else {
-        #[allow(unused_mut)]
-        let mut signal_chain = SignalChain::new();
+        let file = track.file.clone().unwrap();
+        let path = Path::new(&file);
 
-        match format.format {
-            #[cfg(feature = "format-aac")]
-            AudioFormat::Aac => {
-                #[cfg(feature = "encoder-aac")]
-                {
-                    use moosicbox_audio_output::encoder::aac::AacEncoder;
-                    log::debug!("Encoding playback with AacEncoder");
-                    let mut hint = Hint::new();
-                    hint.with_extension("m4a");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(AacEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(not(feature = "encoder-aac"))]
-                panic!("No encoder-aac feature");
-            }
-            #[cfg(feature = "format-flac")]
-            AudioFormat::Flac => {
-                #[cfg(feature = "encoder-flac")]
-                {
-                    use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                    log::debug!("Encoding playback with FlacEncoder");
-                    let mut hint = Hint::new();
-                    hint.with_extension("flac");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(FlacEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(not(feature = "encoder-flac"))]
-                panic!("No encoder-flac feature");
-            }
-            #[cfg(feature = "format-mp3")]
-            AudioFormat::Mp3 => {
-                #[cfg(feature = "encoder-mp3")]
-                {
-                    use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                    log::debug!("Encoding playback with Mp3Encoder");
-                    let mut hint = Hint::new();
-                    hint.with_extension("mp3");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(Mp3Encoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(not(feature = "encoder-mp3"))]
-                panic!("No encoder-mp3 feature");
-            }
-            #[cfg(feature = "format-opus")]
-            AudioFormat::Opus => {
-                #[cfg(feature = "encoder-opus")]
-                {
-                    use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                    log::debug!("Encoding playback with OpusEncoder");
-                    let mut hint = Hint::new();
-                    hint.with_extension("opus");
-                    signal_chain = signal_chain
-                        .add_encoder_step(|| Box::new(OpusEncoder::new()))
-                        .with_hint(hint);
-                }
-                #[cfg(not(feature = "encoder-opus"))]
-                panic!("No encoder-opus feature");
-            }
+        // Provide the file extension as a hint.
+        if let Some(extension) = path.extension()
+            && let Some(extension_str) = extension.to_str()
+        {
+            hint.with_extension(extension_str);
+        }
+
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let same_source = match format.format {
+            AudioFormat::Source => true,
             #[allow(unreachable_patterns)]
-            _ => {
-                moosicbox_assert::die!("Invalid format {}", format.format);
+            _ => track.format.is_none_or(|x| x == format.format),
+        };
+
+        let source: Box<dyn MediaSource> = if same_source {
+            Box::new(File::open(path)?)
+        } else {
+            #[allow(unused_mut)]
+            let mut signal_chain = SignalChain::new();
+
+            match format.format {
+                #[cfg(feature = "format-aac")]
+                AudioFormat::Aac => {
+                    #[cfg(feature = "encoder-aac")]
+                    {
+                        use moosicbox_audio_output::encoder::aac::AacEncoder;
+                        log::debug!("Encoding playback with AacEncoder");
+                        let mut hint = Hint::new();
+                        hint.with_extension("m4a");
+                        signal_chain = signal_chain
+                            .add_encoder_step(|| Box::new(AacEncoder::new()))
+                            .with_hint(hint);
+                    }
+                    #[cfg(not(feature = "encoder-aac"))]
+                    panic!("No encoder-aac feature");
+                }
+                #[cfg(feature = "format-flac")]
+                AudioFormat::Flac => {
+                    #[cfg(feature = "encoder-flac")]
+                    {
+                        use moosicbox_audio_output::encoder::flac::FlacEncoder;
+                        log::debug!("Encoding playback with FlacEncoder");
+                        let mut hint = Hint::new();
+                        hint.with_extension("flac");
+                        signal_chain = signal_chain
+                            .add_encoder_step(|| Box::new(FlacEncoder::new()))
+                            .with_hint(hint);
+                    }
+                    #[cfg(not(feature = "encoder-flac"))]
+                    panic!("No encoder-flac feature");
+                }
+                #[cfg(feature = "format-mp3")]
+                AudioFormat::Mp3 => {
+                    #[cfg(feature = "encoder-mp3")]
+                    {
+                        use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
+                        log::debug!("Encoding playback with Mp3Encoder");
+                        let mut hint = Hint::new();
+                        hint.with_extension("mp3");
+                        signal_chain = signal_chain
+                            .add_encoder_step(|| Box::new(Mp3Encoder::new()))
+                            .with_hint(hint);
+                    }
+                    #[cfg(not(feature = "encoder-mp3"))]
+                    panic!("No encoder-mp3 feature");
+                }
+                #[cfg(feature = "format-opus")]
+                AudioFormat::Opus => {
+                    #[cfg(feature = "encoder-opus")]
+                    {
+                        use moosicbox_audio_output::encoder::opus::OpusEncoder;
+                        log::debug!("Encoding playback with OpusEncoder");
+                        let mut hint = Hint::new();
+                        hint.with_extension("opus");
+                        signal_chain = signal_chain
+                            .add_encoder_step(|| Box::new(OpusEncoder::new()))
+                            .with_hint(hint);
+                    }
+                    #[cfg(not(feature = "encoder-opus"))]
+                    panic!("No encoder-opus feature");
+                }
+                #[allow(unreachable_patterns)]
+                _ => {
+                    moosicbox_assert::die!("Invalid format {}", format.format);
+                }
             }
-        }
 
-        log::trace!(
-            "track_to_playable_file: getting file at path={}",
-            path.display()
-        );
-        let file = tokio::fs::File::open(path.to_path_buf()).await?;
+            log::trace!(
+                "track_to_playable_file: getting file at path={}",
+                path.display()
+            );
+            let file = tokio::fs::File::open(path.to_path_buf()).await?;
 
-        log::trace!("track_to_playable_file: Creating ByteStreamSource");
-        let ms = Box::new(ByteStreamSource::new(
-            Box::new(
-                StalledReadMonitor::new(
-                    FramedRead::new(file, BytesCodec::new())
-                        .map_ok(bytes::BytesMut::freeze)
-                        .boxed(),
-                )
-                .map(|x| match x {
-                    Ok(Ok(x)) => Ok(x),
-                    Ok(Err(err)) | Err(err) => Err(err),
-                }),
-            ),
-            None,
-            true,
-            false,
-            CancellationToken::new(),
-        ));
+            log::trace!("track_to_playable_file: Creating ByteStreamSource");
+            let ms = Box::new(ByteStreamSource::new(
+                Box::new(
+                    StalledReadMonitor::new(
+                        FramedRead::new(file, BytesCodec::new())
+                            .map_ok(bytes::BytesMut::freeze)
+                            .boxed(),
+                    )
+                    .map(|x| match x {
+                        Ok(Ok(x)) => Ok(x),
+                        Ok(Err(err)) | Err(err) => Err(err),
+                    }),
+                ),
+                None,
+                true,
+                false,
+                CancellationToken::new(),
+            ));
 
-        match signal_chain.process(ms) {
-            Ok(stream) => stream,
-            Err(SignalChainError::Playback(e)) => {
-                return Err(PlayerError::PlaybackError(match e {
-                    symphonia_unsync::PlaybackError::Symphonia(e) => PlaybackError::Symphonia(e),
-                    symphonia_unsync::PlaybackError::Decode(e) => PlaybackError::Decode(e),
-                }));
+            match signal_chain.process(ms) {
+                Ok(stream) => stream,
+                Err(SignalChainError::Playback(e)) => {
+                    return Err(PlayerError::PlaybackError(match e {
+                        symphonia_unsync::PlaybackError::Symphonia(e) => {
+                            PlaybackError::Symphonia(e)
+                        }
+                        symphonia_unsync::PlaybackError::Decode(e) => PlaybackError::Decode(e),
+                    }));
+                }
+                Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),
             }
-            Err(SignalChainError::Empty) => unreachable!("Empty signal chain"),
-        }
-    };
+        };
 
-    Ok(PlayableTrack {
-        track_id: track.id.clone(),
-        source,
-        hint,
-    })
+        Ok(PlayableTrack {
+            track_id: track.id.clone(),
+            source,
+            hint,
+        })
+    }
 }
 
 #[allow(unused)]
@@ -2185,39 +2189,41 @@ mod tests {
 
     #[test_log::test]
     fn test_playback_handler_new_creates_valid_instance() {
-        #[derive(Debug)]
-        struct MockPlayer;
+        {
+            #[derive(Debug)]
+            struct MockPlayer;
 
-        #[async_trait]
-        impl Player for MockPlayer {
-            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
-                Ok(())
+            #[async_trait]
+            impl Player for MockPlayer {
+                async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                    Ok(ApiPlaybackStatus {
+                        active_playbacks: None,
+                    })
+                }
+                fn get_source(&self) -> &PlayerSource {
+                    &PlayerSource::Local
+                }
             }
-            async fn trigger_stop(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_pause(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_resume(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
-                Ok(ApiPlaybackStatus {
-                    active_playbacks: None,
-                })
-            }
-            fn get_source(&self) -> &PlayerSource {
-                &PlayerSource::Local
-            }
+
+            let handler = PlaybackHandler::new(MockPlayer);
+            assert!(handler.playback.read().unwrap().is_none());
+            assert!(handler.output.is_none());
         }
-
-        let handler = PlaybackHandler::new(MockPlayer);
-        assert!(handler.playback.read().unwrap().is_none());
-        assert!(handler.output.is_none());
     }
 
     #[test_log::test]
@@ -2688,427 +2694,453 @@ mod tests {
 
     #[test_log::test]
     fn test_playback_handler_with_playback_sets_playback() {
-        #[derive(Debug)]
-        struct MockPlayer;
+        {
+            #[derive(Debug)]
+            struct MockPlayer;
 
-        #[async_trait]
-        impl Player for MockPlayer {
-            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
-                Ok(())
+            #[async_trait]
+            impl Player for MockPlayer {
+                async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                    Ok(ApiPlaybackStatus {
+                        active_playbacks: None,
+                    })
+                }
+                fn get_source(&self) -> &PlayerSource {
+                    &PlayerSource::Local
+                }
             }
-            async fn trigger_stop(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_pause(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_resume(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
-                Ok(ApiPlaybackStatus {
-                    active_playbacks: None,
-                })
-            }
-            fn get_source(&self) -> &PlayerSource {
-                &PlayerSource::Local
-            }
+
+            let shared_playback = Arc::new(std::sync::RwLock::new(Some(Playback::new(
+                vec![create_test_track(1)],
+                Some(0),
+                AtomicF64::new(1.0),
+                PlaybackQuality::default(),
+                1,
+                "test".to_string(),
+                None,
+            ))));
+
+            let handler = PlaybackHandler::new(MockPlayer).with_playback(shared_playback.clone());
+
+            // Verify the playback was set
+            assert!(handler.playback.read().unwrap().is_some());
+
+            // Verify it's the same Arc (shared reference)
+            assert!(Arc::ptr_eq(&handler.playback, &shared_playback));
         }
-
-        let shared_playback = Arc::new(std::sync::RwLock::new(Some(Playback::new(
-            vec![create_test_track(1)],
-            Some(0),
-            AtomicF64::new(1.0),
-            PlaybackQuality::default(),
-            1,
-            "test".to_string(),
-            None,
-        ))));
-
-        let handler = PlaybackHandler::new(MockPlayer).with_playback(shared_playback.clone());
-
-        // Verify the playback was set
-        assert!(handler.playback.read().unwrap().is_some());
-
-        // Verify it's the same Arc (shared reference)
-        assert!(Arc::ptr_eq(&handler.playback, &shared_playback));
     }
 
     #[test_log::test]
     fn test_playback_handler_with_output_sets_output() {
-        #[derive(Debug)]
-        struct MockPlayer;
+        {
+            #[derive(Debug)]
+            struct MockPlayer;
 
-        #[async_trait]
-        impl Player for MockPlayer {
-            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
-                Ok(())
+            #[async_trait]
+            impl Player for MockPlayer {
+                async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                    Ok(ApiPlaybackStatus {
+                        active_playbacks: None,
+                    })
+                }
+                fn get_source(&self) -> &PlayerSource {
+                    &PlayerSource::Local
+                }
             }
-            async fn trigger_stop(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_pause(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_resume(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
-                Ok(ApiPlaybackStatus {
-                    active_playbacks: None,
-                })
-            }
-            fn get_source(&self) -> &PlayerSource {
-                &PlayerSource::Local
-            }
+
+            let handler = PlaybackHandler::new(MockPlayer);
+            assert!(handler.output.is_none());
+
+            let output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>> = None;
+            let handler = handler.with_output(output);
+            assert!(handler.output.is_none());
         }
-
-        let handler = PlaybackHandler::new(MockPlayer);
-        assert!(handler.output.is_none());
-
-        let output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>> = None;
-        let handler = handler.with_output(output);
-        assert!(handler.output.is_none());
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_remote_source() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 42.into();
-        let api_source = ApiSource::library();
-        let player_source = PlayerSource::Remote {
-            host: "http://example.com:8080".to_string(),
-            query: None,
-            headers: None,
-        };
-        let format = PlaybackQuality::default();
-        let quality = TrackAudioQuality::Low;
+            let track_id = 42.into();
+            let api_source = ApiSource::library();
+            let player_source = PlayerSource::Remote {
+                host: "http://example.com:8080".to_string(),
+                query: None,
+                headers: None,
+            };
+            let format = PlaybackQuality::default();
+            let quality = TrackAudioQuality::Low;
 
-        let (url, headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should construct a URL with the remote host
-        assert!(url.starts_with("http://example.com:8080/files/track"));
-        assert!(url.contains("trackId=42"));
-        assert!(url.contains("quality=LOW"));
-        // Headers should be None when not provided
-        assert!(headers.is_none());
+            // Should construct a URL with the remote host
+            assert!(url.starts_with("http://example.com:8080/files/track"));
+            assert!(url.contains("trackId=42"));
+            assert!(url.contains("quality=LOW"));
+            // Headers should be None when not provided
+            assert!(headers.is_none());
+        }
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_remote_source_and_query_params() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 123.into();
-        let api_source = ApiSource::library();
+            let track_id = 123.into();
+            let api_source = ApiSource::library();
 
-        let mut query = std::collections::BTreeMap::new();
-        query.insert("customParam".to_string(), "customValue".to_string());
+            let mut query = std::collections::BTreeMap::new();
+            query.insert("customParam".to_string(), "customValue".to_string());
 
-        let player_source = PlayerSource::Remote {
-            host: "http://music.local:9000".to_string(),
-            query: Some(query),
-            headers: None,
-        };
-        let format = PlaybackQuality::default();
-        let quality = TrackAudioQuality::FlacHighestRes;
+            let player_source = PlayerSource::Remote {
+                host: "http://music.local:9000".to_string(),
+                query: Some(query),
+                headers: None,
+            };
+            let format = PlaybackQuality::default();
+            let quality = TrackAudioQuality::FlacHighestRes;
 
-        let (url, _headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, _headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should include custom query params
-        assert!(url.contains("customParam=customValue"));
-        assert!(url.contains("trackId=123"));
-        assert!(url.contains("quality=FLAC_HIGHEST_RES"));
+            // Should include custom query params
+            assert!(url.contains("customParam=customValue"));
+            assert!(url.contains("trackId=123"));
+            assert!(url.contains("quality=FLAC_HIGHEST_RES"));
+        }
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_remote_source_and_headers() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 456.into();
-        let api_source = ApiSource::library();
+            let track_id = 456.into();
+            let api_source = ApiSource::library();
 
-        let mut headers = std::collections::BTreeMap::new();
-        headers.insert("moosicbox-profile".to_string(), "test-profile".to_string());
+            let mut headers = std::collections::BTreeMap::new();
+            headers.insert("moosicbox-profile".to_string(), "test-profile".to_string());
 
-        let player_source = PlayerSource::Remote {
-            host: "http://remote.server".to_string(),
-            query: None,
-            headers: Some(headers),
-        };
-        let format = PlaybackQuality::default();
-        let quality = TrackAudioQuality::Low;
+            let player_source = PlayerSource::Remote {
+                host: "http://remote.server".to_string(),
+                query: None,
+                headers: Some(headers),
+            };
+            let format = PlaybackQuality::default();
+            let quality = TrackAudioQuality::Low;
 
-        let (url, returned_headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, returned_headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Headers should be returned
-        assert!(returned_headers.is_some());
-        let headers = returned_headers.unwrap();
-        assert_eq!(
-            headers.get("moosicbox-profile"),
-            Some(&"test-profile".to_string())
-        );
+            // Headers should be returned
+            assert!(returned_headers.is_some());
+            let headers = returned_headers.unwrap();
+            assert_eq!(
+                headers.get("moosicbox-profile"),
+                Some(&"test-profile".to_string())
+            );
 
-        // Profile should be included in URL when header is present
-        assert!(url.contains("moosicboxProfile=test-profile"));
+            // Profile should be included in URL when header is present
+            assert!(url.contains("moosicboxProfile=test-profile"));
+        }
     }
 
     #[cfg(feature = "format-flac")]
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_non_source_format() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 789.into();
-        let api_source = ApiSource::library();
-        let player_source = PlayerSource::Remote {
-            host: "http://test.host".to_string(),
-            query: None,
-            headers: None,
-        };
-        let format = PlaybackQuality {
-            format: moosicbox_music_models::AudioFormat::Flac,
-        };
-        let quality = TrackAudioQuality::Low;
+            let track_id = 789.into();
+            let api_source = ApiSource::library();
+            let player_source = PlayerSource::Remote {
+                host: "http://test.host".to_string(),
+                query: None,
+                headers: None,
+            };
+            let format = PlaybackQuality {
+                format: moosicbox_music_models::AudioFormat::Flac,
+            };
+            let quality = TrackAudioQuality::Low;
 
-        let (url, _headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, _headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should include format when not Source
-        assert!(url.contains("format=FLAC"));
+            // Should include format when not Source
+            assert!(url.contains("format=FLAC"));
+        }
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_source_format_omits_format_param() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 111.into();
-        let api_source = ApiSource::library();
-        let player_source = PlayerSource::Remote {
-            host: "http://test.host".to_string(),
-            query: None,
-            headers: None,
-        };
-        let format = PlaybackQuality {
-            format: moosicbox_music_models::AudioFormat::Source,
-        };
-        let quality = TrackAudioQuality::Low;
+            let track_id = 111.into();
+            let api_source = ApiSource::library();
+            let player_source = PlayerSource::Remote {
+                host: "http://test.host".to_string(),
+                query: None,
+                headers: None,
+            };
+            let format = PlaybackQuality {
+                format: moosicbox_music_models::AudioFormat::Source,
+            };
+            let quality = TrackAudioQuality::Low;
 
-        let (url, _headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, _headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should NOT include format when it's Source
-        assert!(!url.contains("format="));
+            // Should NOT include format when it's Source
+            assert!(!url.contains("format="));
+        }
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_library_source_omits_source_param() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        let track_id = 222.into();
-        let api_source = ApiSource::library();
-        let player_source = PlayerSource::Remote {
-            host: "http://test.host".to_string(),
-            query: None,
-            headers: None,
-        };
-        let format = PlaybackQuality::default();
-        let quality = TrackAudioQuality::Low;
+            let track_id = 222.into();
+            let api_source = ApiSource::library();
+            let player_source = PlayerSource::Remote {
+                host: "http://test.host".to_string(),
+                query: None,
+                headers: None,
+            };
+            let format = PlaybackQuality::default();
+            let quality = TrackAudioQuality::Low;
 
-        let (url, _headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, _headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should NOT include source when it's library
-        assert!(!url.contains("source="));
+            // Should NOT include source when it's library
+            assert!(!url.contains("source="));
+        }
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_get_track_url_with_local_source() {
-        use moosicbox_music_api::models::TrackAudioQuality;
+        {
+            use moosicbox_music_api::models::TrackAudioQuality;
 
-        // Set up SERVICE_PORT for local source
-        set_service_port(8765);
+            // Set up SERVICE_PORT for local source
+            set_service_port(8765);
 
-        let track_id = 333.into();
-        let api_source = ApiSource::library();
-        let player_source = PlayerSource::Local;
-        let format = PlaybackQuality::default();
-        let quality = TrackAudioQuality::FlacLossless;
+            let track_id = 333.into();
+            let api_source = ApiSource::library();
+            let player_source = PlayerSource::Local;
+            let format = PlaybackQuality::default();
+            let quality = TrackAudioQuality::FlacLossless;
 
-        let (url, headers) = get_track_url(
-            &track_id,
-            &api_source,
-            &player_source,
-            format,
-            quality,
-            false,
-        )
-        .await
-        .expect("Failed to get track URL");
+            let (url, headers) = get_track_url(
+                &track_id,
+                &api_source,
+                &player_source,
+                format,
+                quality,
+                false,
+            )
+            .await
+            .expect("Failed to get track URL");
 
-        // Should use local IP and configured port
-        assert!(url.starts_with("http://127.0.0.1:8765/files/track"));
-        assert!(url.contains("trackId=333"));
-        assert!(url.contains("quality=FLAC_LOSSLESS"));
-        // Headers should be None for local source
-        assert!(headers.is_none());
+            // Should use local IP and configured port
+            assert!(url.starts_with("http://127.0.0.1:8765/files/track"));
+            assert!(url.contains("trackId=333"));
+            assert!(url.contains("quality=FLAC_LOSSLESS"));
+            // Headers should be None for local source
+            assert!(headers.is_none());
+        }
     }
 
     #[test_log::test]
     fn test_on_playback_event_registers_listener() {
-        use std::sync::atomic::AtomicBool;
+        {
+            use std::sync::atomic::AtomicBool;
 
-        // Define the listener function first (before any statements)
-        fn test_listener(_update: &UpdateSession, _playback: &Playback) {
-            static LISTENER_CALLED: AtomicBool = AtomicBool::new(false);
-            LISTENER_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+            // Define the listener function first (before any statements)
+            fn test_listener(_update: &UpdateSession, _playback: &Playback) {
+                {
+                    static LISTENER_CALLED: AtomicBool = AtomicBool::new(false);
+                    LISTENER_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+
+            on_playback_event(test_listener);
+
+            // Create playback with a target (required for events to fire)
+            let tracks = vec![create_test_track(1)];
+            let mut playback1 = Playback::new(
+                tracks,
+                Some(0),
+                AtomicF64::new(1.0),
+                PlaybackQuality::default(),
+                1,
+                "test".to_string(),
+                Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
+            );
+            playback1.playing = false;
+
+            let mut playback2 = playback1.clone();
+            playback2.playing = true;
+
+            // Trigger event which should call our registered listener
+            trigger_playback_event(&playback2, &playback1);
         }
-
-        on_playback_event(test_listener);
-
-        // Create playback with a target (required for events to fire)
-        let tracks = vec![create_test_track(1)];
-        let mut playback1 = Playback::new(
-            tracks,
-            Some(0),
-            AtomicF64::new(1.0),
-            PlaybackQuality::default(),
-            1,
-            "test".to_string(),
-            Some(PlaybackTarget::AudioZone { audio_zone_id: 1 }),
-        );
-        playback1.playing = false;
-
-        let mut playback2 = playback1.clone();
-        playback2.playing = true;
-
-        // Trigger event which should call our registered listener
-        trigger_playback_event(&playback2, &playback1);
 
         // The listener was registered and can be called - this test verifies registration works
     }
 
     #[test_log::test]
     fn test_send_playback_event_calls_all_registered_listeners() {
-        // Define the listener function first (before any statements)
-        fn counter_listener(_update: &UpdateSession, _playback: &Playback) {
-            // This function is registered as a listener
+        {
+            // Define the listener function first (before any statements)
+            fn counter_listener(_update: &UpdateSession, _playback: &Playback) {
+                // This function is registered as a listener
+            }
+
+            // Note: Since PLAYBACK_EVENT_LISTENERS is global and we can't easily clear it,
+            // we just verify that registering and calling works. The call count will include
+            // any previously registered listeners from other tests.
+            let initial_count = PLAYBACK_EVENT_LISTENERS.read().unwrap().len();
+
+            on_playback_event(counter_listener);
+
+            // Verify registration increased the count
+            assert_eq!(
+                PLAYBACK_EVENT_LISTENERS.read().unwrap().len(),
+                initial_count + 1
+            );
         }
-
-        // Note: Since PLAYBACK_EVENT_LISTENERS is global and we can't easily clear it,
-        // we just verify that registering and calling works. The call count will include
-        // any previously registered listeners from other tests.
-        let initial_count = PLAYBACK_EVENT_LISTENERS.read().unwrap().len();
-
-        on_playback_event(counter_listener);
-
-        // Verify registration increased the count
-        assert_eq!(
-            PLAYBACK_EVENT_LISTENERS.read().unwrap().len(),
-            initial_count + 1
-        );
     }
 
     #[test_log::test]
     fn test_playback_handler_new_boxed() {
-        #[derive(Debug)]
-        struct TestPlayer;
+        {
+            #[derive(Debug)]
+            struct TestPlayer;
 
-        #[async_trait]
-        impl Player for TestPlayer {
-            async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
-                Ok(())
+            #[async_trait]
+            impl Player for TestPlayer {
+                async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_stop(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_pause(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                async fn trigger_resume(&self) -> Result<(), PlayerError> {
+                    Ok(())
+                }
+                fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
+                    Ok(ApiPlaybackStatus {
+                        active_playbacks: None,
+                    })
+                }
+                fn get_source(&self) -> &PlayerSource {
+                    &PlayerSource::Local
+                }
             }
-            async fn trigger_stop(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_seek(&self, _seek: f64) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_pause(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            async fn trigger_resume(&self) -> Result<(), PlayerError> {
-                Ok(())
-            }
-            fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError> {
-                Ok(ApiPlaybackStatus {
-                    active_playbacks: None,
-                })
-            }
-            fn get_source(&self) -> &PlayerSource {
-                &PlayerSource::Local
-            }
+
+            let boxed_player: Box<dyn Player + Sync> = Box::new(TestPlayer);
+            let handler = PlaybackHandler::new_boxed(boxed_player);
+
+            // Verify it was created correctly
+            assert!(handler.playback.read().unwrap().is_none());
+            assert!(handler.output.is_none());
+
+            // Verify player_status works through the handler
+            let status = handler
+                .player
+                .player_status()
+                .expect("Failed to get status");
+            assert!(status.active_playbacks.is_none());
         }
-
-        let boxed_player: Box<dyn Player + Sync> = Box::new(TestPlayer);
-        let handler = PlaybackHandler::new_boxed(boxed_player);
-
-        // Verify it was created correctly
-        assert!(handler.playback.read().unwrap().is_none());
-        assert!(handler.output.is_none());
-
-        // Verify player_status works through the handler
-        let status = handler
-            .player
-            .player_status()
-            .expect("Failed to get status");
-        assert!(status.active_playbacks.is_none());
     }
 }

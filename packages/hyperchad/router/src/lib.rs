@@ -919,92 +919,92 @@ impl RouteRequest {
     /// ```
     #[cfg(feature = "form")]
     pub fn parse_form<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
-        use std::io::{Cursor, Read as _};
-
         use base64::engine::{Engine as _, general_purpose};
         use hyper_old::header::{ContentDisposition, ContentType, DispositionParam, Headers};
         use mime_multipart::{Node, read_multipart_body};
         use mime_old::Mime;
-
+        use std::io::{Cursor, Read as _};
         fn parse_multipart_form_data(
             body: &[u8],
             content_type: &str,
         ) -> Result<BTreeMap<String, String>, ParseError> {
-            fn process_nodes(
-                nodes: Vec<Node>,
-                map: &mut BTreeMap<String, String>,
-            ) -> Result<(), ParseError> {
-                for node in nodes {
-                    match node {
-                        Node::Part(part) => {
-                            let cd = part
-                                .headers
-                                .get::<ContentDisposition>()
-                                .ok_or(ParseError::InvalidContentDisposition)?;
-                            let field_name = cd
-                                .parameters
-                                .iter()
-                                .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param
-                                        && key.eq_ignore_ascii_case("name")
-                                    {
-                                        return Some(val.clone());
-                                    }
-                                    None
-                                })
-                                .ok_or(ParseError::InvalidContentDisposition)?;
+            {
+                fn process_nodes(
+                    nodes: Vec<Node>,
+                    map: &mut BTreeMap<String, String>,
+                ) -> Result<(), ParseError> {
+                    for node in nodes {
+                        match node {
+                            Node::Part(part) => {
+                                let cd = part
+                                    .headers
+                                    .get::<ContentDisposition>()
+                                    .ok_or(ParseError::InvalidContentDisposition)?;
+                                let field_name = cd
+                                    .parameters
+                                    .iter()
+                                    .find_map(|param| {
+                                        if let DispositionParam::Ext(key, val) = param
+                                            && key.eq_ignore_ascii_case("name")
+                                        {
+                                            return Some(val.clone());
+                                        }
+                                        None
+                                    })
+                                    .ok_or(ParseError::InvalidContentDisposition)?;
 
-                            let text = String::from_utf8(part.body)?;
-                            map.insert(field_name, text);
-                        }
+                                let text = String::from_utf8(part.body)?;
+                                map.insert(field_name, text);
+                            }
 
-                        Node::File(filepart) => {
-                            let cd = filepart
-                                .headers
-                                .get::<ContentDisposition>()
-                                .ok_or(ParseError::InvalidContentDisposition)?;
-                            let field_name = cd
-                                .parameters
-                                .iter()
-                                .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param
-                                        && key.eq_ignore_ascii_case("name")
-                                    {
-                                        return Some(val.clone());
-                                    }
-                                    None
-                                })
-                                .ok_or(ParseError::InvalidContentDisposition)?;
+                            Node::File(filepart) => {
+                                let cd = filepart
+                                    .headers
+                                    .get::<ContentDisposition>()
+                                    .ok_or(ParseError::InvalidContentDisposition)?;
+                                let field_name = cd
+                                    .parameters
+                                    .iter()
+                                    .find_map(|param| {
+                                        if let DispositionParam::Ext(key, val) = param
+                                            && key.eq_ignore_ascii_case("name")
+                                        {
+                                            return Some(val.clone());
+                                        }
+                                        None
+                                    })
+                                    .ok_or(ParseError::InvalidContentDisposition)?;
 
-                            let mut f = std::fs::File::open(&filepart.path)?;
-                            let mut data = Vec::new();
-                            f.read_to_end(&mut data)?;
+                                let mut f = std::fs::File::open(&filepart.path)?;
+                                let mut data = Vec::new();
+                                f.read_to_end(&mut data)?;
 
-                            let b64 = general_purpose::STANDARD.encode(&data);
-                            map.insert(field_name, b64);
-                        }
+                                let b64 = general_purpose::STANDARD.encode(&data);
+                                map.insert(field_name, b64);
+                            }
 
-                        Node::Multipart((_hdrs, subparts)) => {
-                            process_nodes(subparts, map)?;
+                            Node::Multipart((_hdrs, subparts)) => {
+                                process_nodes(subparts, map)?;
+                            }
                         }
                     }
+                    Ok(())
                 }
-                Ok(())
+
+                let mut headers = Headers::new();
+                let mime_type: Mime = content_type
+                    .parse()
+                    .map_err(|()| ParseError::InvalidContentType)?;
+                headers.set(ContentType(mime_type));
+
+                let mut cursor = Cursor::new(body);
+                let parts: Vec<Node> = read_multipart_body(&mut cursor, &headers, false)?;
+
+                let mut map = BTreeMap::new();
+                process_nodes(parts, &mut map)?;
+
+                Ok(map)
             }
-
-            let mut headers = Headers::new();
-            let mime_type: Mime = content_type
-                .parse()
-                .map_err(|()| ParseError::InvalidContentType)?;
-            headers.set(ContentType(mime_type));
-
-            let mut cursor = Cursor::new(body);
-            let parts: Vec<Node> = read_multipart_body(&mut cursor, &headers, false)?;
-
-            let mut map = BTreeMap::new();
-            process_nodes(parts, &mut map)?;
-
-            Ok(map)
         }
 
         let content_type = self.content_type().ok_or(ParseError::InvalidContentType)?;
@@ -2056,57 +2056,60 @@ mod tests {
         #[cfg(feature = "serde")]
         #[test_log::test]
         fn test_parse_body_missing() {
-            use serde::Deserialize;
+            {
+                use serde::Deserialize;
+                #[derive(Deserialize)]
+                struct Data {
+                    #[allow(dead_code)]
+                    value: String,
+                }
 
-            #[derive(Deserialize)]
-            struct Data {
-                #[allow(dead_code)]
-                value: String,
+                let req = RouteRequest::from_path("/api", RequestInfo::default());
+                let result: Result<Data, _> = req.parse_body();
+                assert!(matches!(result, Err(ParseError::MissingBody)));
             }
-
-            let req = RouteRequest::from_path("/api", RequestInfo::default());
-            let result: Result<Data, _> = req.parse_body();
-            assert!(matches!(result, Err(ParseError::MissingBody)));
         }
 
         #[cfg(feature = "serde")]
         #[test_log::test]
         fn test_parse_body_valid_json() {
-            use serde::Deserialize;
+            {
+                use serde::Deserialize;
+                #[derive(Deserialize, PartialEq, Debug)]
+                struct Data {
+                    value: String,
+                    count: u32,
+                }
 
-            #[derive(Deserialize, PartialEq, Debug)]
-            struct Data {
-                value: String,
-                count: u32,
+                let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+                let json_data = r#"{"value":"test","count":42}"#;
+                req.body = Some(Arc::new(Bytes::from(json_data)));
+
+                let result: Result<Data, _> = req.parse_body();
+                assert!(result.is_ok());
+                let data = result.unwrap();
+                assert_eq!(data.value, "test");
+                assert_eq!(data.count, 42);
             }
-
-            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
-            let json_data = r#"{"value":"test","count":42}"#;
-            req.body = Some(Arc::new(Bytes::from(json_data)));
-
-            let result: Result<Data, _> = req.parse_body();
-            assert!(result.is_ok());
-            let data = result.unwrap();
-            assert_eq!(data.value, "test");
-            assert_eq!(data.count, 42);
         }
 
         #[cfg(feature = "serde")]
         #[test_log::test]
         fn test_parse_body_invalid_json() {
-            use serde::Deserialize;
+            {
+                use serde::Deserialize;
+                #[allow(dead_code)]
+                #[derive(Deserialize)]
+                struct Data {
+                    value: String,
+                }
 
-            #[allow(dead_code)]
-            #[derive(Deserialize)]
-            struct Data {
-                value: String,
+                let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+                req.body = Some(Arc::new(Bytes::from("not valid json")));
+
+                let result: Result<Data, _> = req.parse_body();
+                assert!(matches!(result, Err(ParseError::SerdeJson(_))));
             }
-
-            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
-            req.body = Some(Arc::new(Bytes::from("not valid json")));
-
-            let result: Result<Data, _> = req.parse_body();
-            assert!(matches!(result, Err(ParseError::SerdeJson(_))));
         }
 
         #[test_log::test]
@@ -2459,407 +2462,435 @@ mod tests {
 
         #[test_log::test]
         fn test_deserialize_primitives() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                age: u64,
-                score: i32,
-                ratio: f64,
-                active: bool,
-                letter: char,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    age: u64,
+                    score: i32,
+                    ratio: f64,
+                    active: bool,
+                    letter: char,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("age".to_string(), "2445072108".to_string());
+                data.insert("score".to_string(), "-42".to_string());
+                data.insert("ratio".to_string(), "5.5".to_string());
+                data.insert("active".to_string(), "true".to_string());
+                data.insert("letter".to_string(), "A".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.age, 2_445_072_108);
+                assert_eq!(form.score, -42);
+                assert!((form.ratio - 5.5).abs() < f64::EPSILON);
+                assert!(form.active);
+                assert_eq!(form.letter, 'A');
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("age".to_string(), "2445072108".to_string());
-            data.insert("score".to_string(), "-42".to_string());
-            data.insert("ratio".to_string(), "5.5".to_string());
-            data.insert("active".to_string(), "true".to_string());
-            data.insert("letter".to_string(), "A".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.age, 2_445_072_108);
-            assert_eq!(form.score, -42);
-            assert!((form.ratio - 5.5).abs() < f64::EPSILON);
-            assert!(form.active);
-            assert_eq!(form.letter, 'A');
         }
 
         #[test_log::test]
         fn test_deserialize_strings() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                name: String,
-                email: String,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    name: String,
+                    email: String,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("name".to_string(), "Alice".to_string());
+                data.insert("email".to_string(), "alice@example.com".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.name, "Alice");
+                assert_eq!(form.email, "alice@example.com");
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("name".to_string(), "Alice".to_string());
-            data.insert("email".to_string(), "alice@example.com".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.name, "Alice");
-            assert_eq!(form.email, "alice@example.com");
         }
 
         #[test_log::test]
         fn test_deserialize_options() {
-            #[allow(clippy::struct_field_names)]
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                optional_field: Option<u64>,
-                empty_field: Option<String>,
-                null_field: Option<i32>,
-                present_field: Option<String>,
+            {
+                #[allow(clippy::struct_field_names)]
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    optional_field: Option<u64>,
+                    empty_field: Option<String>,
+                    null_field: Option<i32>,
+                    present_field: Option<String>,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("optional_field".to_string(), "123".to_string());
+                data.insert("empty_field".to_string(), String::new());
+                data.insert("null_field".to_string(), "null".to_string());
+                data.insert("present_field".to_string(), "value".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.optional_field, Some(123));
+                assert_eq!(form.empty_field, None);
+                assert_eq!(form.null_field, None);
+                assert_eq!(form.present_field, Some("value".to_string()));
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("optional_field".to_string(), "123".to_string());
-            data.insert("empty_field".to_string(), String::new());
-            data.insert("null_field".to_string(), "null".to_string());
-            data.insert("present_field".to_string(), "value".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.optional_field, Some(123));
-            assert_eq!(form.empty_field, None);
-            assert_eq!(form.null_field, None);
-            assert_eq!(form.present_field, Some("value".to_string()));
         }
 
         #[test_log::test]
         fn test_deserialize_all_integer_types() {
-            #[allow(clippy::struct_field_names)]
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                u8_field: u8,
-                u16_field: u16,
-                u32_field: u32,
-                u64_field: u64,
-                i8_field: i8,
-                i16_field: i16,
-                i32_field: i32,
-                i64_field: i64,
+            {
+                #[allow(clippy::struct_field_names)]
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    u8_field: u8,
+                    u16_field: u16,
+                    u32_field: u32,
+                    u64_field: u64,
+                    i8_field: i8,
+                    i16_field: i16,
+                    i32_field: i32,
+                    i64_field: i64,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("u8_field".to_string(), "255".to_string());
+                data.insert("u16_field".to_string(), "65535".to_string());
+                data.insert("u32_field".to_string(), "4294967295".to_string());
+                data.insert("u64_field".to_string(), "18446744073709551615".to_string());
+                data.insert("i8_field".to_string(), "-128".to_string());
+                data.insert("i16_field".to_string(), "-32768".to_string());
+                data.insert("i32_field".to_string(), "-2147483648".to_string());
+                data.insert("i64_field".to_string(), "-9223372036854775808".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.u8_field, 255);
+                assert_eq!(form.u16_field, 65_535);
+                assert_eq!(form.u32_field, 4_294_967_295);
+                assert_eq!(form.u64_field, 18_446_744_073_709_551_615);
+                assert_eq!(form.i8_field, -128);
+                assert_eq!(form.i16_field, -32_768);
+                assert_eq!(form.i32_field, -2_147_483_648);
+                assert_eq!(form.i64_field, -9_223_372_036_854_775_808);
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("u8_field".to_string(), "255".to_string());
-            data.insert("u16_field".to_string(), "65535".to_string());
-            data.insert("u32_field".to_string(), "4294967295".to_string());
-            data.insert("u64_field".to_string(), "18446744073709551615".to_string());
-            data.insert("i8_field".to_string(), "-128".to_string());
-            data.insert("i16_field".to_string(), "-32768".to_string());
-            data.insert("i32_field".to_string(), "-2147483648".to_string());
-            data.insert("i64_field".to_string(), "-9223372036854775808".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.u8_field, 255);
-            assert_eq!(form.u16_field, 65_535);
-            assert_eq!(form.u32_field, 4_294_967_295);
-            assert_eq!(form.u64_field, 18_446_744_073_709_551_615);
-            assert_eq!(form.i8_field, -128);
-            assert_eq!(form.i16_field, -32_768);
-            assert_eq!(form.i32_field, -2_147_483_648);
-            assert_eq!(form.i64_field, -9_223_372_036_854_775_808);
         }
 
         #[test_log::test]
         fn test_deserialize_booleans() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                bool1: bool,
-                bool2: bool,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    bool1: bool,
+                    bool2: bool,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("bool1".to_string(), "true".to_string());
+                data.insert("bool2".to_string(), "false".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert!(form.bool1);
+                assert!(!form.bool2);
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("bool1".to_string(), "true".to_string());
-            data.insert("bool2".to_string(), "false".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert!(form.bool1);
-            assert!(!form.bool2);
         }
 
         #[test_log::test]
         fn test_deserialize_with_serde_rename() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                #[serde(rename = "user_age")]
-                age: u64,
-                #[serde(rename = "user_name")]
-                name: String,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    #[serde(rename = "user_age")]
+                    age: u64,
+                    #[serde(rename = "user_name")]
+                    name: String,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("user_age".to_string(), "30".to_string());
+                data.insert("user_name".to_string(), "Bob".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.age, 30);
+                assert_eq!(form.name, "Bob");
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("user_age".to_string(), "30".to_string());
-            data.insert("user_name".to_string(), "Bob".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.age, 30);
-            assert_eq!(form.name, "Bob");
         }
 
         #[test_log::test]
         fn test_deserialize_with_default() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                required: String,
-                #[serde(default)]
-                optional: String,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    required: String,
+                    #[serde(default)]
+                    optional: String,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("required".to_string(), "value".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.required, "value");
+                assert_eq!(form.optional, "");
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("required".to_string(), "value".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.required, "value");
-            assert_eq!(form.optional, "");
         }
 
         #[test_log::test]
         fn test_invalid_integer_format() {
-            #[allow(dead_code)]
-            #[derive(Debug, Deserialize)]
-            struct TestForm {
-                age: u64,
+            {
+                #[allow(dead_code)]
+                #[derive(Debug, Deserialize)]
+                struct TestForm {
+                    age: u64,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("age".to_string(), "not_a_number".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_err());
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("age".to_string(), "not_a_number".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_err());
         }
 
         #[test_log::test]
         fn test_integer_overflow() {
-            #[allow(dead_code)]
-            #[derive(Debug, Deserialize)]
-            struct TestForm {
-                small: u8,
+            {
+                #[allow(dead_code)]
+                #[derive(Debug, Deserialize)]
+                struct TestForm {
+                    small: u8,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("small".to_string(), "999999".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_err());
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("small".to_string(), "999999".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_err());
         }
 
         #[test_log::test]
         fn test_original_error_case() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                id: u64,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    id: u64,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("id".to_string(), "2445072108".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.id, 2_445_072_108);
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("id".to_string(), "2445072108".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.id, 2_445_072_108);
         }
 
         #[test_log::test]
         fn test_flatten_with_tagged_enum() {
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            #[serde(tag = "comment_type")]
-            enum CommentType {
-                General,
-                Reply { in_reply_to: u64 },
-            }
-
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            struct CreateComment {
-                body: String,
-                #[serde(flatten)]
-                comment_type: CommentType,
-            }
-
-            let mut data = BTreeMap::new();
-            data.insert("body".to_string(), "test comment".to_string());
-            data.insert("comment_type".to_string(), "Reply".to_string());
-            data.insert("in_reply_to".to_string(), "2445072108".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<CreateComment, _> = CreateComment::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let comment = result.unwrap();
-            assert_eq!(comment.body, "test comment");
-            assert_eq!(
-                comment.comment_type,
-                CommentType::Reply {
-                    in_reply_to: 2_445_072_108
+            {
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                #[serde(tag = "comment_type")]
+                enum CommentType {
+                    General,
+                    Reply { in_reply_to: u64 },
                 }
-            );
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                struct CreateComment {
+                    body: String,
+                    #[serde(flatten)]
+                    comment_type: CommentType,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("body".to_string(), "test comment".to_string());
+                data.insert("comment_type".to_string(), "Reply".to_string());
+                data.insert("in_reply_to".to_string(), "2445072108".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<CreateComment, _> = CreateComment::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let comment = result.unwrap();
+                assert_eq!(comment.body, "test comment");
+                assert_eq!(
+                    comment.comment_type,
+                    CommentType::Reply {
+                        in_reply_to: 2_445_072_108
+                    }
+                );
+            }
         }
 
         #[test_log::test]
         fn test_flatten_with_tagged_enum_general_variant() {
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            #[serde(tag = "comment_type")]
-            enum CommentType {
-                General,
-                Reply { in_reply_to: u64 },
+            {
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                #[serde(tag = "comment_type")]
+                enum CommentType {
+                    General,
+                    Reply { in_reply_to: u64 },
+                }
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                struct CreateComment {
+                    body: String,
+                    #[serde(flatten)]
+                    comment_type: CommentType,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("body".to_string(), "test comment".to_string());
+                data.insert("comment_type".to_string(), "General".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<CreateComment, _> = CreateComment::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let comment = result.unwrap();
+                assert_eq!(comment.body, "test comment");
+                assert_eq!(comment.comment_type, CommentType::General);
             }
-
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            struct CreateComment {
-                body: String,
-                #[serde(flatten)]
-                comment_type: CommentType,
-            }
-
-            let mut data = BTreeMap::new();
-            data.insert("body".to_string(), "test comment".to_string());
-            data.insert("comment_type".to_string(), "General".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<CreateComment, _> = CreateComment::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let comment = result.unwrap();
-            assert_eq!(comment.body, "test comment");
-            assert_eq!(comment.comment_type, CommentType::General);
         }
 
         #[test_log::test]
         fn test_flatten_with_multiple_integer_fields() {
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            #[serde(tag = "action_type")]
-            enum Action {
-                Transfer { from: u64, to: u64, amount: u64 },
-            }
-
-            #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-            struct Request {
-                user_id: u64,
-                #[serde(flatten)]
-                action: Action,
-            }
-
-            let mut data = BTreeMap::new();
-            data.insert("user_id".to_string(), "100".to_string());
-            data.insert("action_type".to_string(), "Transfer".to_string());
-            data.insert("from".to_string(), "200".to_string());
-            data.insert("to".to_string(), "300".to_string());
-            data.insert("amount".to_string(), "1000".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<Request, _> = Request::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let request = result.unwrap();
-            assert_eq!(request.user_id, 100);
-            assert_eq!(
-                request.action,
-                Action::Transfer {
-                    from: 200,
-                    to: 300,
-                    amount: 1000
+            {
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                #[serde(tag = "action_type")]
+                enum Action {
+                    Transfer { from: u64, to: u64, amount: u64 },
                 }
-            );
+                #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+                struct Request {
+                    user_id: u64,
+                    #[serde(flatten)]
+                    action: Action,
+                }
+
+                let mut data = BTreeMap::new();
+                data.insert("user_id".to_string(), "100".to_string());
+                data.insert("action_type".to_string(), "Transfer".to_string());
+                data.insert("from".to_string(), "200".to_string());
+                data.insert("to".to_string(), "300".to_string());
+                data.insert("amount".to_string(), "1000".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<Request, _> = Request::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let request = result.unwrap();
+                assert_eq!(request.user_id, 100);
+                assert_eq!(
+                    request.action,
+                    Action::Transfer {
+                        from: 200,
+                        to: 300,
+                        amount: 1000
+                    }
+                );
+            }
         }
 
         #[test_log::test]
         fn test_deserialize_any_type_inference() {
-            use serde::de::Deserialize;
+            {
+                use serde::de::Deserialize;
 
-            let bool_true = form_deserializer::StringValueDeserializer::new("true".to_string());
-            let result: Result<bool, _> = bool::deserialize(bool_true);
-            assert!(result.unwrap());
+                let bool_true = form_deserializer::StringValueDeserializer::new("true".to_string());
+                let result: Result<bool, _> = bool::deserialize(bool_true);
+                assert!(result.unwrap());
 
-            let bool_false = form_deserializer::StringValueDeserializer::new("false".to_string());
-            let result: Result<bool, _> = bool::deserialize(bool_false);
-            assert!(!result.unwrap());
+                let bool_false =
+                    form_deserializer::StringValueDeserializer::new("false".to_string());
+                let result: Result<bool, _> = bool::deserialize(bool_false);
+                assert!(!result.unwrap());
 
-            let number = form_deserializer::StringValueDeserializer::new("42".to_string());
-            let result: Result<u64, _> = u64::deserialize(number);
-            assert_eq!(result.unwrap(), 42);
+                let number = form_deserializer::StringValueDeserializer::new("42".to_string());
+                let result: Result<u64, _> = u64::deserialize(number);
+                assert_eq!(result.unwrap(), 42);
 
-            let negative = form_deserializer::StringValueDeserializer::new("-42".to_string());
-            let result: Result<i64, _> = i64::deserialize(negative);
-            assert_eq!(result.unwrap(), -42);
+                let negative = form_deserializer::StringValueDeserializer::new("-42".to_string());
+                let result: Result<i64, _> = i64::deserialize(negative);
+                assert_eq!(result.unwrap(), -42);
 
-            let float_val = form_deserializer::StringValueDeserializer::new("2.5".to_string());
-            let result: Result<f64, _> = f64::deserialize(float_val);
-            assert!((result.unwrap() - 2.5).abs() < f64::EPSILON);
+                let float_val = form_deserializer::StringValueDeserializer::new("2.5".to_string());
+                let result: Result<f64, _> = f64::deserialize(float_val);
+                assert!((result.unwrap() - 2.5).abs() < f64::EPSILON);
 
-            let string_val = form_deserializer::StringValueDeserializer::new("hello".to_string());
-            let result: Result<String, _> = String::deserialize(string_val);
-            assert_eq!(result.unwrap(), "hello");
+                let string_val =
+                    form_deserializer::StringValueDeserializer::new("hello".to_string());
+                let result: Result<String, _> = String::deserialize(string_val);
+                assert_eq!(result.unwrap(), "hello");
+            }
         }
 
         #[test_log::test]
         fn test_flatten_with_mixed_types() {
-            #[derive(Debug, Clone, Deserialize, PartialEq)]
-            #[serde(tag = "type")]
-            enum Metadata {
-                Numeric { count: u64, ratio: f64 },
-                Text { description: String },
-            }
+            {
+                #[derive(Debug, Clone, Deserialize, PartialEq)]
+                #[serde(tag = "type")]
+                enum Metadata {
+                    Numeric { count: u64, ratio: f64 },
+                    Text { description: String },
+                }
+                #[derive(Debug, Clone, Deserialize, PartialEq)]
+                struct Item {
+                    name: String,
+                    active: bool,
+                    #[serde(flatten)]
+                    metadata: Metadata,
+                }
 
-            #[derive(Debug, Clone, Deserialize, PartialEq)]
-            struct Item {
-                name: String,
-                active: bool,
-                #[serde(flatten)]
-                metadata: Metadata,
-            }
+                let mut data = BTreeMap::new();
+                data.insert("name".to_string(), "Test Item".to_string());
+                data.insert("active".to_string(), "true".to_string());
+                data.insert("type".to_string(), "Numeric".to_string());
+                data.insert("count".to_string(), "42".to_string());
+                data.insert("ratio".to_string(), "0.75".to_string());
 
-            let mut data = BTreeMap::new();
-            data.insert("name".to_string(), "Test Item".to_string());
-            data.insert("active".to_string(), "true".to_string());
-            data.insert("type".to_string(), "Numeric".to_string());
-            data.insert("count".to_string(), "42".to_string());
-            data.insert("ratio".to_string(), "0.75".to_string());
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<Item, _> = Item::deserialize(deserializer);
 
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<Item, _> = Item::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let item = result.unwrap();
-            assert_eq!(item.name, "Test Item");
-            assert!(item.active);
-            if let Metadata::Numeric { count, ratio } = item.metadata {
-                assert_eq!(count, 42);
-                assert!((ratio - 0.75).abs() < f64::EPSILON);
-            } else {
-                panic!("Expected Numeric variant");
+                assert!(result.is_ok());
+                let item = result.unwrap();
+                assert_eq!(item.name, "Test Item");
+                assert!(item.active);
+                if let Metadata::Numeric { count, ratio } = item.metadata {
+                    assert_eq!(count, 42);
+                    assert!((ratio - 0.75).abs() < f64::EPSILON);
+                } else {
+                    panic!("Expected Numeric variant");
+                }
             }
         }
 
@@ -2872,26 +2903,30 @@ mod tests {
 
         #[test_log::test]
         fn test_deserialize_bytes_with_visitor() {
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct ByteBufVisitor;
+                impl serde::de::Visitor<'_> for ByteBufVisitor {
+                    type Value = Vec<u8>;
 
-            struct ByteBufVisitor;
-            impl serde::de::Visitor<'_> for ByteBufVisitor {
-                type Value = Vec<u8>;
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        write!(formatter, "byte buffer")
+                    }
 
-                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(formatter, "byte buffer")
+                    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+                        Ok(v)
+                    }
                 }
 
-                fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-                    Ok(v)
-                }
+                let deserializer =
+                    form_deserializer::StringValueDeserializer::new("test data".to_string());
+                let result = deserializer.deserialize_byte_buf(ByteBufVisitor);
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), b"test data".to_vec());
             }
-
-            let deserializer =
-                form_deserializer::StringValueDeserializer::new("test data".to_string());
-            let result = deserializer.deserialize_byte_buf(ByteBufVisitor);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), b"test data".to_vec());
         }
 
         #[test_log::test]
@@ -2904,54 +2939,65 @@ mod tests {
 
         #[test_log::test]
         fn test_deserialize_null_value_as_unit() {
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct UnitVisitor;
+                impl serde::de::Visitor<'_> for UnitVisitor {
+                    type Value = ();
 
-            struct UnitVisitor;
-            impl serde::de::Visitor<'_> for UnitVisitor {
-                type Value = ();
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        write!(formatter, "null")
+                    }
 
-                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(formatter, "null")
+                    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                        Ok(())
+                    }
                 }
 
-                fn visit_unit<E>(self) -> Result<Self::Value, E> {
-                    Ok(())
-                }
+                let deserializer =
+                    form_deserializer::StringValueDeserializer::new("null".to_string());
+                let result = deserializer.deserialize_any(UnitVisitor);
+                assert!(result.is_ok());
             }
-
-            let deserializer = form_deserializer::StringValueDeserializer::new("null".to_string());
-            let result = deserializer.deserialize_any(UnitVisitor);
-            assert!(result.is_ok());
         }
 
         #[test_log::test]
         fn test_deserialize_any_case_insensitive_booleans() {
-            // The `deserialize_any` method supports case-insensitive booleans
-            // This is used when struct fields use serde's untagged or default deserialization
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct BoolVisitor;
+                impl serde::de::Visitor<'_> for BoolVisitor {
+                    type Value = bool;
 
-            struct BoolVisitor;
-            impl serde::de::Visitor<'_> for BoolVisitor {
-                type Value = bool;
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        write!(formatter, "boolean")
+                    }
 
-                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(formatter, "boolean")
+                    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+                        Ok(v)
+                    }
                 }
 
-                fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
-                    Ok(v)
-                }
+                // The `deserialize_any` method supports case-insensitive booleans
+                // This is used when struct fields use serde's untagged or default deserialization
+                let true_upper =
+                    form_deserializer::StringValueDeserializer::new("TRUE".to_string());
+                let result = true_upper.deserialize_any(BoolVisitor);
+                assert!(result.is_ok());
+                assert!(result.unwrap());
+
+                let false_mixed =
+                    form_deserializer::StringValueDeserializer::new("False".to_string());
+                let result = false_mixed.deserialize_any(BoolVisitor);
+                assert!(result.is_ok());
+                assert!(!result.unwrap());
             }
-
-            let true_upper = form_deserializer::StringValueDeserializer::new("TRUE".to_string());
-            let result = true_upper.deserialize_any(BoolVisitor);
-            assert!(result.is_ok());
-            assert!(result.unwrap());
-
-            let false_mixed = form_deserializer::StringValueDeserializer::new("False".to_string());
-            let result = false_mixed.deserialize_any(BoolVisitor);
-            assert!(result.is_ok());
-            assert!(!result.unwrap());
         }
 
         #[test_log::test]
@@ -2981,188 +3027,198 @@ mod tests {
 
         #[test_log::test]
         fn test_form_data_deserializer_error_on_primitive_types() {
-            use serde::de::Deserializer;
-
-            struct BoolVisitor;
-            impl serde::de::Visitor<'_> for BoolVisitor {
-                type Value = bool;
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "bool")
+            {
+                use serde::de::Deserializer;
+                struct BoolVisitor;
+                impl serde::de::Visitor<'_> for BoolVisitor {
+                    type Value = bool;
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "bool")
+                    }
                 }
-            }
 
-            let data = BTreeMap::new();
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_bool(BoolVisitor);
-            assert!(result.is_err());
+                let data = BTreeMap::new();
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_bool(BoolVisitor);
+                assert!(result.is_err());
+            }
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_error_on_seq() {
-            use serde::de::Deserializer;
-
-            struct SeqVisitor;
-            impl serde::de::Visitor<'_> for SeqVisitor {
-                type Value = Vec<String>;
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "seq")
+            {
+                use serde::de::Deserializer;
+                struct SeqVisitor;
+                impl serde::de::Visitor<'_> for SeqVisitor {
+                    type Value = Vec<String>;
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "seq")
+                    }
                 }
-            }
 
-            let data = BTreeMap::new();
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_seq(SeqVisitor);
-            assert!(result.is_err());
+                let data = BTreeMap::new();
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_seq(SeqVisitor);
+                assert!(result.is_err());
+            }
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_error_on_tuple() {
-            use serde::de::Deserializer;
-
-            struct TupleVisitor;
-            impl serde::de::Visitor<'_> for TupleVisitor {
-                type Value = (String, i32);
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "tuple")
+            {
+                use serde::de::Deserializer;
+                struct TupleVisitor;
+                impl serde::de::Visitor<'_> for TupleVisitor {
+                    type Value = (String, i32);
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "tuple")
+                    }
                 }
-            }
 
-            let data = BTreeMap::new();
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_tuple(2, TupleVisitor);
-            assert!(result.is_err());
+                let data = BTreeMap::new();
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_tuple(2, TupleVisitor);
+                assert!(result.is_err());
+            }
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_error_on_enum() {
-            use serde::de::Deserializer;
-
-            struct EnumVisitor;
-            impl serde::de::Visitor<'_> for EnumVisitor {
-                type Value = String;
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "enum")
+            {
+                use serde::de::Deserializer;
+                struct EnumVisitor;
+                impl serde::de::Visitor<'_> for EnumVisitor {
+                    type Value = String;
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "enum")
+                    }
                 }
-            }
 
-            let data = BTreeMap::new();
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_enum("Test", &["A", "B"], EnumVisitor);
-            assert!(result.is_err());
+                let data = BTreeMap::new();
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_enum("Test", &["A", "B"], EnumVisitor);
+                assert!(result.is_err());
+            }
         }
 
         #[test_log::test]
         fn test_deserialize_newtype_struct() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct UserId(u64);
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct UserId(u64);
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    user_id: UserId,
+                }
 
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                user_id: UserId,
+                let mut data = BTreeMap::new();
+                data.insert("user_id".to_string(), "12345".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.user_id, UserId(12345));
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("user_id".to_string(), "12345".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.user_id, UserId(12345));
         }
 
         #[test_log::test]
         fn test_deserialize_newtype_string_wrapper() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct Email(String);
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct Email(String);
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct TestForm {
+                    email: Email,
+                }
 
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct TestForm {
-                email: Email,
+                let mut data = BTreeMap::new();
+                data.insert("email".to_string(), "test@example.com".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.email, Email("test@example.com".to_string()));
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("email".to_string(), "test@example.com".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result: Result<TestForm, _> = TestForm::deserialize(deserializer);
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.email, Email("test@example.com".to_string()));
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_unit_struct() {
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct UnitVisitor;
+                impl serde::de::Visitor<'_> for UnitVisitor {
+                    type Value = ();
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "unit")
+                    }
+                    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                        Ok(())
+                    }
+                }
 
-            struct UnitVisitor;
-            impl serde::de::Visitor<'_> for UnitVisitor {
-                type Value = ();
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "unit")
-                }
-                fn visit_unit<E>(self) -> Result<Self::Value, E> {
-                    Ok(())
-                }
+                let data = BTreeMap::new();
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_unit_struct("TestUnit", UnitVisitor);
+                assert!(result.is_ok());
             }
-
-            let data = BTreeMap::new();
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_unit_struct("TestUnit", UnitVisitor);
-            assert!(result.is_ok());
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_ignored_any() {
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct IgnoredVisitor;
+                impl serde::de::Visitor<'_> for IgnoredVisitor {
+                    type Value = ();
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "ignored")
+                    }
+                    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                        Ok(())
+                    }
+                }
 
-            struct IgnoredVisitor;
-            impl serde::de::Visitor<'_> for IgnoredVisitor {
-                type Value = ();
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "ignored")
-                }
-                fn visit_unit<E>(self) -> Result<Self::Value, E> {
-                    Ok(())
-                }
+                let mut data = BTreeMap::new();
+                data.insert("field1".to_string(), "value1".to_string());
+                data.insert("field2".to_string(), "value2".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_ignored_any(IgnoredVisitor);
+                assert!(result.is_ok());
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("field1".to_string(), "value1".to_string());
-            data.insert("field2".to_string(), "value2".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_ignored_any(IgnoredVisitor);
-            assert!(result.is_ok());
         }
 
         #[test_log::test]
         fn test_form_data_deserializer_option_visits_some() {
-            use serde::de::Deserializer;
+            {
+                use serde::de::Deserializer;
+                struct OptionVisitor;
 
-            struct OptionVisitor;
-            impl<'de> serde::de::Visitor<'de> for OptionVisitor {
-                type Value = Option<BTreeMap<String, String>>;
-                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "option")
+                impl<'de> serde::de::Visitor<'de> for OptionVisitor {
+                    type Value = Option<BTreeMap<String, String>>;
+                    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "option")
+                    }
+                    fn visit_some<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
+                    where
+                        D: serde::de::Deserializer<'de>,
+                    {
+                        Ok(Some(BTreeMap::new()))
+                    }
                 }
-                fn visit_some<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
-                where
-                    D: serde::de::Deserializer<'de>,
-                {
-                    Ok(Some(BTreeMap::new()))
-                }
+
+                let mut data = BTreeMap::new();
+                data.insert("field".to_string(), "value".to_string());
+
+                let deserializer = form_deserializer::FormDataDeserializer::new(data);
+                let result = deserializer.deserialize_option(OptionVisitor);
+                assert!(result.is_ok());
+                assert!(result.unwrap().is_some());
             }
-
-            let mut data = BTreeMap::new();
-            data.insert("field".to_string(), "value".to_string());
-
-            let deserializer = form_deserializer::FormDataDeserializer::new(data);
-            let result = deserializer.deserialize_option(OptionVisitor);
-            assert!(result.is_ok());
-            assert!(result.unwrap().is_some());
         }
     }
 
@@ -3273,26 +3329,28 @@ mod tests {
 
         #[test_log::test]
         fn test_parse_urlencoded_form_with_optional_fields() {
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct FormWithOptional {
-                name: String,
-                email: Option<String>,
+            {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct FormWithOptional {
+                    name: String,
+                    email: Option<String>,
+                }
+
+                let body = b"name=Alice";
+                let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
+                req.body = Some(Arc::new(Bytes::from_static(body)));
+                req.headers.insert(
+                    "content-type".to_string(),
+                    "application/x-www-form-urlencoded".to_string(),
+                );
+
+                let result: Result<FormWithOptional, _> = req.parse_form();
+
+                assert!(result.is_ok());
+                let form = result.unwrap();
+                assert_eq!(form.name, "Alice");
+                assert_eq!(form.email, None);
             }
-
-            let body = b"name=Alice";
-            let mut req = RouteRequest::from_path("/submit", RequestInfo::default());
-            req.body = Some(Arc::new(Bytes::from_static(body)));
-            req.headers.insert(
-                "content-type".to_string(),
-                "application/x-www-form-urlencoded".to_string(),
-            );
-
-            let result: Result<FormWithOptional, _> = req.parse_form();
-
-            assert!(result.is_ok());
-            let form = result.unwrap();
-            assert_eq!(form.name, "Alice");
-            assert_eq!(form.email, None);
         }
     }
 

@@ -304,24 +304,26 @@ mod tests {
     #[test_log::test]
     #[cfg(feature = "serde")]
     fn test_request_body_json_from_serialize() {
-        #[derive(serde::Serialize)]
-        struct TestData {
-            name: String,
-            value: i32,
-        }
-
-        let data = TestData {
-            name: "test".to_string(),
-            value: 123,
-        };
-        let body = RequestBody::json(&data).unwrap();
-
-        match body {
-            RequestBody::Json(value) => {
-                assert_eq!(value["name"], "test");
-                assert_eq!(value["value"], 123);
+        {
+            #[derive(serde::Serialize)]
+            struct TestData {
+                name: String,
+                value: i32,
             }
-            _ => panic!("Expected Json variant"),
+
+            let data = TestData {
+                name: "test".to_string(),
+                value: 123,
+            };
+            let body = RequestBody::json(&data).unwrap();
+
+            match body {
+                RequestBody::Json(value) => {
+                    assert_eq!(value["name"], "test");
+                    assert_eq!(value["value"], 123);
+                }
+                _ => panic!("Expected Json variant"),
+            }
         }
     }
 

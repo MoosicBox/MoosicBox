@@ -183,6 +183,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
     use serial_test::serial;
 
     use super::*;
@@ -468,11 +473,6 @@ mod tests {
     #[test_log::test(switchy_async::test)]
     #[serial]
     async fn test_run_until_simulation_cancelled_with_concurrent_cancellation() {
-        use std::sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        };
-
         // Reset all states
         reset_global_simulator_cancellation_token();
         reset_simulator_cancellation_token();

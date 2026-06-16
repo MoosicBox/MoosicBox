@@ -561,25 +561,27 @@ mod tests {
 
     #[test_log::test]
     fn test_signal_chain_process_empty_chain_returns_error() {
-        use std::io::Cursor;
+        {
+            use std::io::Cursor;
 
-        // Create an empty signal chain
-        let chain = SignalChain::new();
+            // Create an empty signal chain
+            let chain = SignalChain::new();
 
-        // Create a minimal media source (empty cursor)
-        let media_source: Box<dyn MediaSource> = Box::new(Cursor::new(vec![]));
+            // Create a minimal media source (empty cursor)
+            let media_source: Box<dyn MediaSource> = Box::new(Cursor::new(vec![]));
 
-        // Processing an empty chain should return SignalChainError::Empty
-        let result = chain.process(media_source);
-        assert!(result.is_err());
+            // Processing an empty chain should return SignalChainError::Empty
+            let result = chain.process(media_source);
+            assert!(result.is_err());
 
-        // Verify it's the Empty error variant by checking the string representation
-        let err = result.err().unwrap();
-        let err_str = err.to_string();
-        assert!(
-            err_str.to_lowercase().contains("empty"),
-            "Expected 'empty' in error message, got: {err_str}"
-        );
+            // Verify it's the Empty error variant by checking the string representation
+            let err = result.err().unwrap();
+            let err_str = err.to_string();
+            assert!(
+                err_str.to_lowercase().contains("empty"),
+                "Expected 'empty' in error message, got: {err_str}"
+            );
+        }
     }
 
     #[test_log::test]
@@ -595,12 +597,14 @@ mod tests {
 
     #[test_log::test]
     fn test_signal_chain_processor_error_display() {
-        // Test that SignalChainProcessorError variants display correctly
-        use moosicbox_audio_decoder::AudioDecodeError;
+        {
+            // Test that SignalChainProcessorError variants display correctly
+            use moosicbox_audio_decoder::AudioDecodeError;
 
-        // Use the OpenStream variant which exists in AudioDecodeError
-        let audio_error = SignalChainProcessorError::AudioDecode(AudioDecodeError::OpenStream);
-        assert!(!audio_error.to_string().is_empty());
+            // Use the OpenStream variant which exists in AudioDecodeError
+            let audio_error = SignalChainProcessorError::AudioDecode(AudioDecodeError::OpenStream);
+            assert!(!audio_error.to_string().is_empty());
+        }
     }
 
     #[test_log::test]
@@ -639,161 +643,176 @@ mod tests {
 
     #[test_log::test]
     fn test_signal_chain_add_encoder_step_creates_step_with_encoder() {
-        use moosicbox_audio_output::AudioOutputError;
+        {
+            use moosicbox_audio_output::AudioOutputError;
 
-        /// Mock encoder for testing `add_encoder_step`
-        struct MockEncoder;
+            /// Mock encoder for testing `add_encoder_step`
+            struct MockEncoder;
 
-        impl moosicbox_audio_output::encoder::AudioEncoder for MockEncoder {
-            fn encode(
-                &mut self,
-                _decoded: symphonia::core::audio::AudioBuffer<f32>,
-            ) -> Result<bytes::Bytes, AudioOutputError> {
-                Ok(bytes::Bytes::new())
-            }
+            impl moosicbox_audio_output::encoder::AudioEncoder for MockEncoder {
+                fn encode(
+                    &mut self,
+                    _decoded: symphonia::core::audio::AudioBuffer<f32>,
+                ) -> Result<bytes::Bytes, AudioOutputError> {
+                    Ok(bytes::Bytes::new())
+                }
 
-            fn spec(&self) -> symphonia::core::audio::SignalSpec {
-                symphonia::core::audio::SignalSpec {
-                    rate: 44100,
-                    channels: symphonia::core::audio::Layout::Stereo.into_channels(),
+                fn spec(&self) -> symphonia::core::audio::SignalSpec {
+                    symphonia::core::audio::SignalSpec {
+                        rate: 44100,
+                        channels: symphonia::core::audio::Layout::Stereo.into_channels(),
+                    }
                 }
             }
-        }
 
-        let chain = SignalChain::new().add_encoder_step(|| {
-            // Return a minimal encoder for testing
-            Box::new(MockEncoder)
-        });
-        assert_eq!(chain.steps.len(), 1);
+            let chain = SignalChain::new().add_encoder_step(|| {
+                // Return a minimal encoder for testing
+                Box::new(MockEncoder)
+            });
+            assert_eq!(chain.steps.len(), 1);
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_seek_returns_error() {
-        use std::io::{Seek, SeekFrom};
+        {
+            use std::io::{Seek, SeekFrom};
 
-        // Create a processor with a channel that will never receive
-        let (_tx, rx) = flume::unbounded();
-        let mut processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![],
-        };
+            // Create a processor with a channel that will never receive
+            let (_tx, rx) = flume::unbounded();
+            let mut processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![],
+            };
 
-        // Seeking should always return an error
-        let result = processor.seek(SeekFrom::Start(0));
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(err.kind(), std::io::ErrorKind::Other);
-        assert!(err.to_string().contains("does not support seeking"));
+            // Seeking should always return an error
+            let result = processor.seek(SeekFrom::Start(0));
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::Other);
+            assert!(err.to_string().contains("does not support seeking"));
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_is_not_seekable() {
-        use symphonia::core::io::MediaSource;
+        {
+            use symphonia::core::io::MediaSource;
 
-        // Create a processor with a channel that will never receive
-        let (_tx, rx) = flume::unbounded();
-        let processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![],
-        };
+            // Create a processor with a channel that will never receive
+            let (_tx, rx) = flume::unbounded();
+            let processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![],
+            };
 
-        // MediaSource should report as not seekable
-        assert!(!processor.is_seekable());
+            // MediaSource should report as not seekable
+            assert!(!processor.is_seekable());
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_byte_len_returns_none() {
-        use symphonia::core::io::MediaSource;
+        {
+            use symphonia::core::io::MediaSource;
 
-        // Create a processor with a channel that will never receive
-        let (_tx, rx) = flume::unbounded();
-        let processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![],
-        };
+            // Create a processor with a channel that will never receive
+            let (_tx, rx) = flume::unbounded();
+            let processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![],
+            };
 
-        // MediaSource should report unknown byte length
-        assert!(processor.byte_len().is_none());
+            // MediaSource should report unknown byte length
+            assert!(processor.byte_len().is_none());
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_read_from_overflow() {
-        use std::io::Read;
+        {
+            use std::io::Read;
 
-        // Create a processor with pre-populated overflow
-        let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
-        let mut processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![1, 2, 3, 4, 5, 6, 7, 8],
-        };
+            // Create a processor with pre-populated overflow
+            let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let mut processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![1, 2, 3, 4, 5, 6, 7, 8],
+            };
 
-        // Read should pull from overflow first
-        let mut buf = [0u8; 4];
-        let result = processor.read(&mut buf);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 4);
-        assert_eq!(&buf, &[1, 2, 3, 4]);
+            // Read should pull from overflow first
+            let mut buf = [0u8; 4];
+            let result = processor.read(&mut buf);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), 4);
+            assert_eq!(&buf, &[1, 2, 3, 4]);
 
-        // Overflow should have remaining bytes
-        assert_eq!(processor.overflow, vec![5, 6, 7, 8]);
+            // Overflow should have remaining bytes
+            assert_eq!(processor.overflow, vec![5, 6, 7, 8]);
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_read_entire_overflow() {
-        use std::io::Read;
+        {
+            use std::io::Read;
 
-        // Create a processor with pre-populated overflow
-        let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
-        let mut processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![10, 20, 30],
-        };
+            // Create a processor with pre-populated overflow
+            let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let mut processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![10, 20, 30],
+            };
 
-        // Read buffer larger than overflow
-        let mut buf = [0u8; 10];
-        let result = processor.read(&mut buf);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 3);
-        assert_eq!(&buf[..3], &[10, 20, 30]);
+            // Read buffer larger than overflow
+            let mut buf = [0u8; 10];
+            let result = processor.read(&mut buf);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), 3);
+            assert_eq!(&buf[..3], &[10, 20, 30]);
 
-        // Overflow should be empty
-        assert!(processor.overflow.is_empty());
+            // Overflow should be empty
+            assert!(processor.overflow.is_empty());
+        }
     }
 
     #[test_log::test]
     fn test_signal_chain_step_processor_read_timeout_when_no_data() {
-        use std::io::Read;
+        {
+            use std::io::Read;
 
-        // Create a processor with empty overflow and a receiver that won't receive
-        let (tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
-        let mut processor = SignalChainStepProcessor {
-            encoder: None,
-            resampler: None,
-            receiver: rx,
-            overflow: vec![],
-        };
+            // Create a processor with empty overflow and a receiver that won't receive
+            let (tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let mut processor = SignalChainStepProcessor {
+                encoder: None,
+                resampler: None,
+                receiver: rx,
+                overflow: vec![],
+            };
 
-        // Drop the sender so receiver will timeout immediately
-        drop(tx);
+            // Drop the sender so receiver will timeout immediately
+            drop(tx);
 
-        // Read should timeout and return an error
-        let mut buf = [0u8; 10];
-        let result = processor.read(&mut buf);
-        assert!(result.is_err());
-        // The error should be a timeout or disconnected channel error
-        let err = result.unwrap_err();
-        assert!(
-            err.kind() == std::io::ErrorKind::TimedOut || err.to_string().contains("Disconnected")
-        );
+            // Read should timeout and return an error
+            let mut buf = [0u8; 10];
+            let result = processor.read(&mut buf);
+            assert!(result.is_err());
+            // The error should be a timeout or disconnected channel error
+            let err = result.unwrap_err();
+            assert!(
+                err.kind() == std::io::ErrorKind::TimedOut
+                    || err.to_string().contains("Disconnected")
+            );
+        }
     }
 }

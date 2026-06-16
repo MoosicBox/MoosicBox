@@ -807,90 +807,96 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_json_response_handler() {
-        #[derive(Serialize)]
-        struct TestData {
-            name: String,
-            value: i32,
+        {
+            #[derive(Serialize)]
+            struct TestData {
+                name: String,
+                value: i32,
+            }
+
+            let server = SimulationWebServer::new();
+            server.start().await.unwrap();
+
+            let handler = handlers::json_response(
+                HttpMethod::Get,
+                "/api/data",
+                TestData {
+                    name: "test".to_string(),
+                    value: 42,
+                },
+            );
+            server.add_route(handler).await;
+
+            let request = SimulatedRequest::new(HttpMethod::Get, "/api/data");
+            let response = server.handle_request(request).await.unwrap();
+
+            assert_eq!(response.status_code, StatusCode::Ok);
+            assert_eq!(
+                response.headers.get("content-type"),
+                Some(&"application/json".to_string())
+            );
+
+            let body = response.body.unwrap();
+            let body_str = std::str::from_utf8(&body).unwrap();
+            assert!(body_str.contains("\"name\":\"test\""));
+            assert!(body_str.contains("\"value\":42"));
         }
-
-        let server = SimulationWebServer::new();
-        server.start().await.unwrap();
-
-        let handler = handlers::json_response(
-            HttpMethod::Get,
-            "/api/data",
-            TestData {
-                name: "test".to_string(),
-                value: 42,
-            },
-        );
-        server.add_route(handler).await;
-
-        let request = SimulatedRequest::new(HttpMethod::Get, "/api/data");
-        let response = server.handle_request(request).await.unwrap();
-
-        assert_eq!(response.status_code, StatusCode::Ok);
-        assert_eq!(
-            response.headers.get("content-type"),
-            Some(&"application/json".to_string())
-        );
-
-        let body = response.body.unwrap();
-        let body_str = std::str::from_utf8(&body).unwrap();
-        assert!(body_str.contains("\"name\":\"test\""));
-        assert!(body_str.contains("\"value\":42"));
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_request_with_json_body() {
-        #[derive(Serialize)]
-        struct RequestData {
-            id: u32,
-            message: String,
+        {
+            #[derive(Serialize)]
+            struct RequestData {
+                id: u32,
+                message: String,
+            }
+
+            let request = SimulatedRequest::new(HttpMethod::Post, "/api/data")
+                .with_json_body(&RequestData {
+                    id: 1,
+                    message: "hello".to_string(),
+                })
+                .unwrap();
+
+            assert_eq!(
+                request.headers.get("content-type"),
+                Some(&"application/json".to_string())
+            );
+
+            let body = request.body.unwrap();
+            let body_str = std::str::from_utf8(&body).unwrap();
+            assert!(body_str.contains("\"id\":1"));
+            assert!(body_str.contains("\"message\":\"hello\""));
         }
-
-        let request = SimulatedRequest::new(HttpMethod::Post, "/api/data")
-            .with_json_body(&RequestData {
-                id: 1,
-                message: "hello".to_string(),
-            })
-            .unwrap();
-
-        assert_eq!(
-            request.headers.get("content-type"),
-            Some(&"application/json".to_string())
-        );
-
-        let body = request.body.unwrap();
-        let body_str = std::str::from_utf8(&body).unwrap();
-        assert!(body_str.contains("\"id\":1"));
-        assert!(body_str.contains("\"message\":\"hello\""));
     }
 
     #[test_log::test(switchy_async::test)]
     async fn test_response_with_json_body() {
-        #[derive(Serialize)]
-        struct ResponseData {
-            success: bool,
-            count: usize,
+        {
+            #[derive(Serialize)]
+            struct ResponseData {
+                success: bool,
+                count: usize,
+            }
+
+            let response = SimulatedResponse::ok()
+                .with_json_body(&ResponseData {
+                    success: true,
+                    count: 10,
+                })
+                .unwrap();
+
+            assert_eq!(
+                response.headers.get("content-type"),
+                Some(&"application/json".to_string())
+            );
+
+            let body = response.body.unwrap();
+            let body_str = std::str::from_utf8(&body).unwrap();
+            assert!(body_str.contains("\"success\":true"));
+            assert!(body_str.contains("\"count\":10"));
         }
-
-        let response = SimulatedResponse::ok()
-            .with_json_body(&ResponseData {
-                success: true,
-                count: 10,
-            })
-            .unwrap();
-
-        assert_eq!(
-            response.headers.get("content-type"),
-            Some(&"application/json".to_string())
-        );
-
-        let body = response.body.unwrap();
-        let body_str = std::str::from_utf8(&body).unwrap();
-        assert!(body_str.contains("\"success\":true"));
-        assert!(body_str.contains("\"count\":10"));
     }
 
     #[test_log::test(switchy_async::test)]
@@ -929,22 +935,24 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_request_with_multiple_headers_via_btreemap() {
-        use std::collections::BTreeMap;
+        {
+            use std::collections::BTreeMap;
 
-        let mut headers = BTreeMap::new();
-        headers.insert("X-Custom-Header".to_string(), "custom-value".to_string());
-        headers.insert("X-Request-Id".to_string(), "12345".to_string());
+            let mut headers = BTreeMap::new();
+            headers.insert("X-Custom-Header".to_string(), "custom-value".to_string());
+            headers.insert("X-Request-Id".to_string(), "12345".to_string());
 
-        let request = SimulatedRequest::new(HttpMethod::Get, "/test").with_headers(headers);
+            let request = SimulatedRequest::new(HttpMethod::Get, "/test").with_headers(headers);
 
-        assert_eq!(
-            request.headers.get("X-Custom-Header"),
-            Some(&"custom-value".to_string())
-        );
-        assert_eq!(
-            request.headers.get("X-Request-Id"),
-            Some(&"12345".to_string())
-        );
+            assert_eq!(
+                request.headers.get("X-Custom-Header"),
+                Some(&"custom-value".to_string())
+            );
+            assert_eq!(
+                request.headers.get("X-Request-Id"),
+                Some(&"12345".to_string())
+            );
+        }
     }
 
     #[test_log::test(switchy_async::test)]

@@ -126,7 +126,7 @@ pub fn setup_cdn_optimization(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyperchad_router::RouteRequest;
+    use hyperchad_router::{RequestInfo, RouteRequest};
     use pretty_assertions::assert_eq;
 
     #[test_log::test]
@@ -213,8 +213,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_setup_cdn_optimization_preserves_dynamic_root() {
-        use hyperchad_router::RequestInfo;
-
         // Create a router with a dynamic root that returns specific content
         let expected_content = "Original dynamic content from handler";
         let router =
@@ -290,8 +288,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_skeleton_html_content_structure() {
-        use hyperchad_router::RequestInfo;
-
         // Setup CDN optimization with title and viewport
         let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
         let result = setup_cdn_optimization(
@@ -358,8 +354,6 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn test_skeleton_html_without_title_or_viewport() {
-        use hyperchad_router::RequestInfo;
-
         // Setup CDN optimization without title or viewport
         let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
         let result = setup_cdn_optimization(router, None, None);

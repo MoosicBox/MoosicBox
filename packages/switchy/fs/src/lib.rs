@@ -528,21 +528,23 @@ mod temp_dir_tests {
     #[cfg(feature = "simulator")]
     #[test]
     fn test_temp_dir_simulator_reset() {
-        use crate::simulator::temp_dir::reset_temp_dirs;
+        {
+            use crate::simulator::temp_dir::reset_temp_dirs;
 
-        // Reset the simulator state
-        reset_temp_dirs();
+            // Reset the simulator state
+            reset_temp_dirs();
 
-        // Create a temp directory
-        let temp_dir = tempdir().expect("Failed to create temp directory");
-        let path = temp_dir.path().to_path_buf();
+            // Create a temp directory
+            let temp_dir = tempdir().expect("Failed to create temp directory");
+            let path = temp_dir.path().to_path_buf();
 
-        // Path should be accessible
-        assert!(!path.to_string_lossy().is_empty());
+            // Path should be accessible
+            assert!(!path.to_string_lossy().is_empty());
 
-        // Drop the temp directory (should trigger cleanup)
-        drop(temp_dir);
+            // Drop the temp directory (should trigger cleanup)
+            drop(temp_dir);
 
-        // Test passes - cleanup is handled internally
+            // Test passes - cleanup is handled internally
+        }
     }
 }
