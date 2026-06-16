@@ -328,10 +328,16 @@ jobs:
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
-            - name: Force supported CMake generator on Windows
+            - name: Configure CMake generator on Windows
               if: ${{ matrix.package.os == 'windows-latest' }}
               shell: bash
-              run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> "$GITHUB_ENV"
+              run: |
+                  echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+                  cmake --version
+                  ninja --version
+                  if [[ -x '/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' ]]; then
+                      '/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath || true
+                  fi
 
             - name: Test suite for ${{ matrix.package.name }}
               id: test-suite
