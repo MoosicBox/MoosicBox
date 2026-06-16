@@ -333,6 +333,12 @@ jobs:
               shell: bash
               run: |
                   echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+                  cat > "$RUNNER_TEMP/msvc-release-runtime.cmake" <<'EOF'
+                  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+                  set(CMAKE_C_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+                  set(CMAKE_CXX_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+                  EOF
+                  echo "CMAKE_TOOLCHAIN_FILE=$RUNNER_TEMP/msvc-release-runtime.cmake" >> "$GITHUB_ENV"
                   cmake --version
                   ninja --version
                   if [[ -x '/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' ]]; then
