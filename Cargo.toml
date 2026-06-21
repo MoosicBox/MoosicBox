@@ -372,11 +372,11 @@ actix = "0.13.5"
 actix-cors = "0.7.1"
 actix-files = "0.6.10"
 actix-htmx = "0.4.1"
-actix-http = "3.12.1"
+actix-http = "3.13.0"
 actix-rt = "2.11.0"
 actix-service = "2.0.3"
 actix-test = "0.1.5"
-actix-web = "4.13.0"
+actix-web = "4.14.0"
 actix-web-opentelemetry = { version = "0.22.0", features = [
     "metrics",
     "metrics-prometheus",
@@ -384,7 +384,7 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
 ] }
 actix-ws = "0.4.0"
 anyhow = "1.0.102"
-arrayvec = "0.7.6"
+arrayvec = "0.7.7"
 assert_cmd = "2.2.2"
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
@@ -397,8 +397,8 @@ base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
 btparse = "0.2.0"
 bumpalo = "3.20.3"
-bytes = "1.11.1"
-bytesize = "2.3.1"
+bytes = "1.12.0"
+bytesize = "2.4.0"
 cargo_metadata = "0.23.1"
 chrono = { version = "0.4.45", default-features = false, features = [
     "clock",
@@ -422,7 +422,7 @@ deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
 dirs = "6.0.0"
-duckdb = { version = "1.10503.1", default-features = false }
+duckdb = { version = "1.10504.0", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
@@ -440,7 +440,7 @@ futures-core = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false, features = [
     "std",
 ] }
-getrandom = "0.4.2"
+getrandom = "0.4.3"
 gh-emoji = { version = "1.0.8", default-features = false }
 git2 = "0.20.4"
 glob = "0.3.3"
@@ -466,7 +466,7 @@ lambda_http = "1.2.1"
 lambda_runtime = "1.2.1"
 libvips = { version = "1.7.6" }
 local-ip-address = "0.6.13"
-log = { version = "0.4.32", features = ["release_max_level_trace"] }
+log = { version = "0.4.33", features = ["release_max_level_trace"] }
 markdown = "1.0.0"
 maud = "0.27.0"
 md5 = "0.8.0"
@@ -518,12 +518,12 @@ puffin_http = "0.17.0"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 qstring = "0.7.2"
 test-strategy = { version = "0.4.5", default-features = false }
-time = "0.3.47"
+time = "0.3.49"
 
 quote = "1.0.45"
 rand = "0.10.1"
 rangemap = "1.7.1"
-ratatui = "0.30.1"
+ratatui = "0.30.2"
 rayon = { version = "1.12.0", default-features = false }
 rb = "0.4.1"
 rcgen = "0.14.8"
@@ -578,12 +578,12 @@ swc_ecma_transforms_base = "39.0.0"
 swc_ecma_transforms_typescript = "43.0.0"
 swc_ecma_visit = "21.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
-syn = "2.0.117"
+syn = "2.0.118"
 syntect = "5.3.0"
 tantivy = "0.25.0"
-tauri = { version = "2.11.2", features = ["protocol-asset"] }
-tauri-build = { version = "2.6.2", features = [] }
-tauri-plugin = { version = "2.6.2", features = ["build"] }
+tauri = { version = "2.11.3", features = ["protocol-asset"] }
+tauri-build = { version = "2.6.3", features = [] }
+tauri-plugin = { version = "2.6.3", features = ["build"] }
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-log = "2.8.0"
@@ -625,7 +625,7 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
 uuid = { version = "1.23.3", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
-which = { version = "8.0.3", default-features = false }
+which = { version = "8.0.4", default-features = false }
 whoami = "2.1.2"
 xml = "1.3.0"
 
