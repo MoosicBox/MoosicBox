@@ -70,6 +70,8 @@ fn main() -> anyhow::Result<()> {
 
     moosicbox_log_watch::run_watch(moosicbox_log_watch::WatchRunConfig {
         title: cli.title,
+        source: None,
+        input_format: moosicbox_log_watch::WatchInputFormat::PlainText,
         log_dir,
         log_file_prefix: cli.log_file_prefix,
         lines: cli.lines,

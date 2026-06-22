@@ -108,11 +108,80 @@ pub struct WatchFilterState {
     pub enabled: bool,
 }
 
+/// Source watched by the interactive log watch UI.
+#[derive(Debug, Clone)]
+pub enum WatchSource {
+    /// Watch the newest file in a directory whose file name starts with a prefix.
+    DirectoryPrefix {
+        /// Directory containing candidate log files.
+        log_dir: PathBuf,
+        /// Prefix used to select candidate log files.
+        log_file_prefix: String,
+    },
+    /// Watch one explicit file path.
+    File {
+        /// File to watch.
+        path: PathBuf,
+    },
+}
+
+/// Input format used to transform raw watched lines into UI entries.
+#[derive(Debug, Clone, Default)]
+pub enum WatchInputFormat {
+    /// Treat each source line as plain text.
+    #[default]
+    PlainText,
+    /// Parse each source line as JSON Lines and render configured columns.
+    #[cfg(feature = "persistence-json")]
+    JsonLines(JsonLinesWatchConfig),
+}
+
+/// JSON Lines display configuration for the interactive watcher.
+#[derive(Debug, Clone, Default)]
+pub struct JsonLinesWatchConfig {
+    /// Columns rendered into the primary watch list.
+    pub columns: Vec<JsonLineColumn>,
+}
+
+/// One JSON field rendered as a watch-list column.
+#[derive(Debug, Clone)]
+pub struct JsonLineColumn {
+    /// Column title.
+    pub title: String,
+    /// Dot-separated path in the JSON object.
+    pub path: String,
+    /// Optional fixed maximum display width.
+    pub width: Option<usize>,
+}
+
+impl JsonLineColumn {
+    /// Creates a JSON Lines column.
+    #[must_use]
+    pub fn new(title: impl Into<String>, path: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            path: path.into(),
+            width: None,
+        }
+    }
+
+    /// Sets a fixed maximum display width for the column.
+    #[must_use]
+    pub const fn width(mut self, width: usize) -> Self {
+        self.width = Some(width);
+        self
+    }
+}
+
 /// Runtime configuration for the interactive log watch UI.
 #[derive(Debug, Clone)]
 pub struct WatchRunConfig {
     /// Panel title shown in the UI.
     pub title: String,
+    /// Optional explicit watch source. When omitted, `log_dir` and `log_file_prefix` are used.
+    pub source: Option<WatchSource>,
+    /// Input format used to transform raw lines before rendering/filtering.
+    pub input_format: WatchInputFormat,
     /// Directory containing rolling log files.
     pub log_dir: PathBuf,
     /// Prefix used to select candidate log files.
@@ -589,7 +658,7 @@ mod tui {
     use ratatui::style::{Color, Modifier, Style};
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-    use std::collections::VecDeque;
+    use std::collections::{BTreeMap, VecDeque};
     use std::io::{Read, Seek, Write};
     use std::time::Duration;
 
@@ -597,6 +666,120 @@ mod tui {
     const WATCH_STATUS_HEIGHT: u16 = 4;
     const WATCH_FILTER_HEIGHT: u16 = 5;
     const WATCH_INFO_HEIGHT: u16 = 3;
+
+    #[derive(Debug, Clone)]
+    struct WatchEntry {
+        raw: String,
+        display: String,
+        fields: BTreeMap<String, String>,
+    }
+
+    impl WatchEntry {
+        fn from_line(line: &str, input_format: &WatchInputFormat) -> Self {
+            match input_format {
+                WatchInputFormat::PlainText => Self {
+                    raw: line.to_string(),
+                    display: line.to_string(),
+                    fields: BTreeMap::new(),
+                },
+                #[cfg(feature = "persistence-json")]
+                WatchInputFormat::JsonLines(config) => json_line_entry(line, config),
+            }
+        }
+
+        fn matches_text(&self, value: &str) -> bool {
+            self.raw.contains(value)
+                || self.display.contains(value)
+                || self.fields.values().any(|field| field.contains(value))
+        }
+    }
+
+    #[cfg(feature = "persistence-json")]
+    fn json_line_entry(line: &str, config: &JsonLinesWatchConfig) -> WatchEntry {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            return WatchEntry {
+                raw: line.to_string(),
+                display: format!("[json parse error] {line}"),
+                fields: BTreeMap::new(),
+            };
+        };
+
+        let mut fields = BTreeMap::new();
+        flatten_json_fields(None, &value, &mut fields);
+        let display = if config.columns.is_empty() {
+            line.to_string()
+        } else {
+            config
+                .columns
+                .iter()
+                .map(|column| {
+                    let raw = json_path_value(&value, &column.path).unwrap_or_default();
+                    format_column_value(&raw, column.width)
+                })
+                .collect::<Vec<_>>()
+                .join("  ")
+        };
+
+        WatchEntry {
+            raw: line.to_string(),
+            display,
+            fields,
+        }
+    }
+
+    #[cfg(feature = "persistence-json")]
+    fn flatten_json_fields(
+        prefix: Option<&str>,
+        value: &serde_json::Value,
+        fields: &mut BTreeMap<String, String>,
+    ) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (key, value) in map {
+                    let path =
+                        prefix.map_or_else(|| key.clone(), |prefix| format!("{prefix}.{key}"));
+                    flatten_json_fields(Some(&path), value, fields);
+                }
+            }
+            _ => {
+                if let Some(prefix) = prefix {
+                    fields.insert(prefix.to_string(), json_value_to_display(value));
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "persistence-json")]
+    fn json_path_value(value: &serde_json::Value, path: &str) -> Option<String> {
+        let mut current = value;
+        for part in path.split('.') {
+            current = current.get(part)?;
+        }
+        Some(json_value_to_display(current))
+    }
+
+    #[cfg(feature = "persistence-json")]
+    fn json_value_to_display(value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::Null => String::new(),
+            serde_json::Value::Bool(value) => value.to_string(),
+            serde_json::Value::Number(value) => value.to_string(),
+            serde_json::Value::String(value) => value.clone(),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => value.to_string(),
+        }
+    }
+
+    fn format_column_value(value: &str, width: Option<usize>) -> String {
+        let Some(width) = width else {
+            return value.to_string();
+        };
+        let mut truncated = value.chars().take(width).collect::<String>();
+        if value.chars().count() > width && width > 0 {
+            truncated.pop();
+            truncated.push('…');
+        }
+        format!("{truncated:<width$}")
+    }
 
     #[derive(Debug, Clone, Copy, Default)]
     struct AnsiStyleState {
@@ -815,6 +998,7 @@ mod tui {
     /// * Returns an error when terminal raw mode or alternate screen setup fails.
     /// * Returns an error when rendering or keyboard event handling fails.
     /// * Returns an error when persistence is enabled and state cannot be read or written.
+    #[allow(clippy::too_many_lines, clippy::collapsible_match)]
     pub fn run_watch(config: WatchRunConfig) -> Result<()> {
         let profile_name = normalize_profile_name(config.profile.as_deref())?;
 
@@ -876,7 +1060,14 @@ mod tui {
         let mut auto_follow = true;
         let mut log_cursor = usize::MAX;
 
-        let mut active_path = active_log_file_path(&config.log_dir, &config.log_file_prefix);
+        let source = config
+            .source
+            .clone()
+            .unwrap_or_else(|| WatchSource::DirectoryPrefix {
+                log_dir: config.log_dir.clone(),
+                log_file_prefix: config.log_file_prefix.clone(),
+            });
+        let mut active_path = source_active_path(&source);
         let mut entries = VecDeque::new();
         let mut pending_fragment = String::new();
         let mut read_offset = 0_u64;
@@ -888,6 +1079,7 @@ mod tui {
                 effective_lines,
                 since_cutoff,
                 WATCH_BUFFER_LIMIT,
+                &config.input_format,
             )?;
         }
 
@@ -925,7 +1117,7 @@ mod tui {
         };
 
         loop {
-            let newest_path = active_log_file_path(&config.log_dir, &config.log_file_prefix);
+            let newest_path = source_active_path(&source);
             if newest_path != active_path {
                 active_path = newest_path;
                 log_file = open_log_file(&active_path)?;
@@ -948,7 +1140,7 @@ mod tui {
                 {
                     for line in new_lines {
                         if line_matches_since(&line, since_cutoff) {
-                            entries.push_back(line);
+                            entries.push_back(WatchEntry::from_line(&line, &config.input_format));
                         }
                     }
                     while entries.len() > WATCH_BUFFER_LIMIT {
@@ -977,7 +1169,7 @@ mod tui {
 
             let visible_count = entries
                 .iter()
-                .filter(|line| line_visible_in_watch(line, &filters, quick_filter.as_deref()))
+                .filter(|entry| entry_visible_in_watch(entry, &filters, quick_filter.as_deref()))
                 .count();
             if visible_count == 0 {
                 log_cursor = 0;
@@ -1234,18 +1426,39 @@ mod tui {
         Ok(Some(file))
     }
 
+    fn source_active_path(source: &WatchSource) -> PathBuf {
+        match source {
+            WatchSource::DirectoryPrefix {
+                log_dir,
+                log_file_prefix,
+            } => active_log_file_path(log_dir, log_file_prefix),
+            WatchSource::File { path } => path.clone(),
+        }
+    }
+
+    fn entry_visible_in_watch(
+        entry: &WatchEntry,
+        filters: &[LogFilterRule],
+        quick_filter: Option<&str>,
+    ) -> bool {
+        line_visible_in_watch(&entry.raw, filters, quick_filter)
+            || line_visible_in_watch(&entry.display, filters, quick_filter)
+            || quick_filter.is_some_and(|value| entry.matches_text(value))
+    }
+
     fn preload_entries(
         path: &Path,
-        entries: &mut VecDeque<String>,
+        entries: &mut VecDeque<WatchEntry>,
         lines: usize,
         since_cutoff: Option<OffsetDateTime>,
         max_entries: usize,
+        input_format: &WatchInputFormat,
     ) -> Result<()> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("failed reading log file {}", path.display()))?;
         for line in content.lines() {
             if line_matches_since(line, since_cutoff) {
-                entries.push_back(line.to_string());
+                entries.push_back(WatchEntry::from_line(line, input_format));
             }
         }
         while entries.len() > max_entries {
@@ -1314,7 +1527,7 @@ mod tui {
         terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
         title: &str,
         active_path: &Path,
-        entries: &VecDeque<String>,
+        entries: &VecDeque<WatchEntry>,
         filters: &[LogFilterRule],
         selected_filter: usize,
         quick_filter: Option<&str>,
@@ -1326,8 +1539,8 @@ mod tui {
     ) -> Result<()> {
         let mut visible_lines = entries
             .iter()
-            .filter(|line| line_visible_in_watch(line, filters, quick_filter))
-            .cloned()
+            .filter(|entry| entry_visible_in_watch(entry, filters, quick_filter))
+            .map(|entry| entry.display.clone())
             .collect::<Vec<_>>();
         if visible_lines.is_empty() {
             visible_lines.push("(no visible log lines)".to_string());
