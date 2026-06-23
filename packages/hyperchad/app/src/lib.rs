@@ -1145,6 +1145,158 @@ mod tests {
     use hyperchad_router::Router;
     use pretty_assertions::assert_eq;
 
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    use async_trait::async_trait;
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    use hyperchad_renderer_html::actix::SharedStateTransportDispatcher;
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "logic",
+        feature = "actions",
+        feature = "shared-state-bridge"
+    ))]
+    use hyperchad_shared_state_bridge::{
+        BridgeError, RouteCommandInput, SharedStateRouteResolver, resolve_route_context,
+    };
+    #[cfg(any(
+        all(
+            feature = "html",
+            feature = "actix",
+            feature = "vanilla-js",
+            feature = "logic",
+            feature = "actions",
+            feature = "shared-state-bridge"
+        ),
+        all(
+            feature = "html",
+            feature = "actix",
+            feature = "vanilla-js",
+            feature = "shared-state-transport"
+        )
+    ))]
+    use hyperchad_shared_state_models::ChannelId;
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "logic",
+        feature = "actions",
+        feature = "shared-state-bridge"
+    ))]
+    use hyperchad_shared_state_models::{
+        CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
+    };
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    use hyperchad_shared_state_models::{
+        EventEnvelope, TransportInbound, TransportOutbound, TransportPing,
+    };
+    #[cfg(any(
+        all(
+            feature = "html",
+            feature = "actix",
+            feature = "vanilla-js",
+            feature = "logic",
+            feature = "actions",
+            feature = "shared-state-bridge"
+        ),
+        all(
+            feature = "html",
+            feature = "actix",
+            feature = "vanilla-js",
+            feature = "shared-state-transport"
+        )
+    ))]
+    use std::sync::Arc;
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "logic",
+        feature = "actions",
+        feature = "shared-state-bridge"
+    ))]
+    #[derive(Debug)]
+    struct TestRouteResolver;
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "logic",
+        feature = "actions",
+        feature = "shared-state-bridge"
+    ))]
+    impl SharedStateRouteResolver for TestRouteResolver {
+        fn resolve_channel_id(
+            &self,
+            _request: &hyperchad_router::RouteRequest,
+        ) -> Result<ChannelId, BridgeError> {
+            Ok(ChannelId::new("channel-1"))
+        }
+
+        fn resolve_participant_id(
+            &self,
+            _request: &hyperchad_router::RouteRequest,
+        ) -> Result<ParticipantId, BridgeError> {
+            Ok(ParticipantId::new("participant-1"))
+        }
+    }
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    #[derive(Debug)]
+    struct TestDispatcher;
+
+    #[cfg(all(
+        feature = "html",
+        feature = "actix",
+        feature = "vanilla-js",
+        feature = "shared-state-transport"
+    ))]
+    #[async_trait]
+    impl SharedStateTransportDispatcher for TestDispatcher {
+        async fn ingest_outbound(
+            &self,
+            _outbound: TransportOutbound,
+        ) -> Result<Vec<TransportInbound>, Box<dyn std::error::Error + Send + Sync + 'static>>
+        {
+            Ok(Vec::new())
+        }
+
+        async fn subscribe_channel(
+            &self,
+            _channel_id: &ChannelId,
+        ) -> Result<
+            flume::Receiver<EventEnvelope>,
+            Box<dyn std::error::Error + Send + Sync + 'static>,
+        > {
+            let (_tx, rx) = flume::unbounded();
+            Ok(rx)
+        }
+    }
+
     #[test_log::test]
     fn test_app_builder_new() {
         let builder = AppBuilder::new();
@@ -1614,33 +1766,6 @@ mod tests {
     ))]
     #[test_log::test]
     fn test_build_default_html_vanilla_js_actix_applies_shared_state_route_bridge() {
-        use hyperchad_shared_state_bridge::{
-            BridgeError, RouteCommandInput, SharedStateRouteResolver, resolve_route_context,
-        };
-        use hyperchad_shared_state_models::{
-            ChannelId, CommandId, IdempotencyKey, ParticipantId, PayloadBlob, Revision,
-        };
-        use std::sync::Arc;
-
-        #[derive(Debug)]
-        struct TestRouteResolver;
-
-        impl SharedStateRouteResolver for TestRouteResolver {
-            fn resolve_channel_id(
-                &self,
-                _request: &hyperchad_router::RouteRequest,
-            ) -> Result<ChannelId, BridgeError> {
-                Ok(ChannelId::new("channel-1"))
-            }
-
-            fn resolve_participant_id(
-                &self,
-                _request: &hyperchad_router::RouteRequest,
-            ) -> Result<ParticipantId, BridgeError> {
-                Ok(ParticipantId::new("participant-1"))
-            }
-        }
-
         let payload =
             PayloadBlob::from_serializable(&11_u32).expect("shared-state payload should serialize");
         let (command_tx, _command_rx) = flume::unbounded();
@@ -1707,8 +1832,6 @@ mod tests {
     ))]
     #[test_log::test]
     fn test_build_default_html_vanilla_js_actix_applies_shared_state_transport() {
-        use hyperchad_shared_state_models::{TransportInbound, TransportOutbound, TransportPing};
-
         let (outbound_tx, _outbound_rx) = flume::unbounded::<TransportOutbound>();
         let runtime = switchy::unsync::runtime::Builder::new()
             .max_blocking_threads(1)
@@ -1756,38 +1879,6 @@ mod tests {
     ))]
     #[test_log::test]
     fn test_build_default_html_vanilla_js_actix_applies_shared_state_transport_dispatcher() {
-        use async_trait::async_trait;
-        use hyperchad_renderer_html::actix::SharedStateTransportDispatcher;
-        use hyperchad_shared_state_models::{
-            ChannelId, EventEnvelope, TransportInbound, TransportOutbound,
-        };
-        use std::sync::Arc;
-
-        #[derive(Debug)]
-        struct TestDispatcher;
-
-        #[async_trait]
-        impl SharedStateTransportDispatcher for TestDispatcher {
-            async fn ingest_outbound(
-                &self,
-                _outbound: TransportOutbound,
-            ) -> Result<Vec<TransportInbound>, Box<dyn std::error::Error + Send + Sync + 'static>>
-            {
-                Ok(Vec::new())
-            }
-
-            async fn subscribe_channel(
-                &self,
-                _channel_id: &ChannelId,
-            ) -> Result<
-                flume::Receiver<EventEnvelope>,
-                Box<dyn std::error::Error + Send + Sync + 'static>,
-            > {
-                let (_tx, rx) = flume::unbounded();
-                Ok(rx)
-            }
-        }
-
         let runtime = switchy::unsync::runtime::Builder::new()
             .max_blocking_threads(1)
             .build()
