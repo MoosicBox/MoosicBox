@@ -9,7 +9,7 @@ use hyperchad::router::Router;
 use hyperchad::template::{Containers, container};
 
 use crate::link_map::rewrite_relative_links;
-use crate::registry::{DocPage, NavSection, PageKind, nav_sections};
+use crate::registry::{DocPage, DocsSection, NavSection, PageKind, nav_sections};
 use crate::theme::Theme;
 
 /// Default viewport meta tag for responsive documentation sites.
@@ -58,6 +58,7 @@ pub struct DocsSiteBuilder {
     description: String,
     theme: Theme,
     pages: Vec<DocPage>,
+    sections: Vec<DocsSection>,
     home: Option<fn() -> Containers>,
     scans: Vec<MarkdownScan>,
 }
@@ -72,6 +73,7 @@ impl DocsSiteBuilder {
             description: format!("Documentation for {name}"),
             theme: Theme::default(),
             pages: Vec::new(),
+            sections: Vec::new(),
             home: None,
             scans: Vec::new(),
         }
@@ -105,6 +107,20 @@ impl DocsSiteBuilder {
         self
     }
 
+    /// Register navigation sections in display order.
+    #[must_use]
+    pub fn sections(mut self, sections: &'static [DocsSection]) -> Self {
+        self.sections.extend_from_slice(sections);
+        self
+    }
+
+    /// Register multiple pages in declaration order.
+    #[must_use]
+    pub fn pages(mut self, pages: &'static [DocPage]) -> Self {
+        self.pages.extend_from_slice(pages);
+        self
+    }
+
     /// Register a page.
     #[must_use]
     pub fn page(mut self, page: DocPage) -> Self {
@@ -128,7 +144,7 @@ impl DocsSiteBuilder {
             title: Some(title),
             section,
             nav_label,
-            kind: PageKind::Generated { generate },
+            kind: PageKind::GeneratedMarkdown { generate },
         });
         self
     }
@@ -157,6 +173,7 @@ impl DocsSiteBuilder {
             description: self.description,
             theme: self.theme,
             pages: self.pages,
+            sections: self.sections,
             home: self.home,
         }
     }
@@ -207,12 +224,14 @@ impl DocsSiteBuilder {
 }
 
 /// Built documentation site model.
+#[derive(Clone)]
 pub struct DocsSite {
     name: &'static str,
     title: String,
     description: String,
     theme: Theme,
     pages: Vec<DocPage>,
+    sections: Vec<DocsSection>,
     home: Option<fn() -> Containers>,
 }
 
@@ -273,7 +292,7 @@ impl DocsSite {
     fn render_page(&self, page: &DocPage) -> Containers {
         match &page.kind {
             PageKind::Markdown { contents } => self.render_markdown_page(page, contents),
-            PageKind::Generated { generate } => {
+            PageKind::GeneratedMarkdown { generate } => {
                 let markdown = generate();
                 self.render_markdown_page(page, leak_string(markdown))
             }
@@ -300,7 +319,7 @@ impl DocsSite {
     }
 
     fn wrap_page(&self, current_path: &str, body: &Containers) -> Containers {
-        let sections = nav_sections(&self.pages);
+        let sections = nav_sections(&self.sections, &self.pages);
         container! {
             div direction=column min-height="100vh" background=#0d1117 color=#f0f6fc {
                 header direction=row align-items=center justify-content=space-between padding-x=24 padding-y=16 border-bottom="1, #21262d" {

@@ -10,6 +10,6 @@ pub mod registry;
 pub mod site;
 pub mod theme;
 
-pub use registry::{DocPage, NavItem, NavSection, PageKind};
+pub use registry::{DocPage, DocsSection, NavItem, NavSection, PageKind};
 pub use site::{DocsSite, DocsSiteBuilder, MarkdownScan};
 pub use theme::Theme;

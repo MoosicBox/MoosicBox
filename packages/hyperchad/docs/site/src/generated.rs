@@ -7,7 +7,138 @@ use std::collections::BTreeMap;
 use clap::builder::ValueHint;
 use hyperchad_docs_config::{ConfigDocSchema, FieldDoc, NestedFieldDoc};
 
+/// Builder for CLI reference generation.
+pub struct CliReference {
+    root_name: &'static str,
+    command: clap::Command,
+    max_depth: usize,
+    include_usage: bool,
+}
+
+impl CliReference {
+    /// Create a CLI reference builder.
+    #[must_use]
+    pub const fn new(root_name: &'static str, command: clap::Command) -> Self {
+        Self {
+            root_name,
+            command,
+            max_depth: usize::MAX,
+            include_usage: true,
+        }
+    }
+
+    /// Set max subcommand recursion depth.
+    #[must_use]
+    pub const fn max_depth(mut self, max_depth: usize) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
+    /// Toggle usage rendering.
+    #[must_use]
+    pub const fn include_usage(mut self, include_usage: bool) -> Self {
+        self.include_usage = include_usage;
+        self
+    }
+
+    /// Render markdown.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let mut doc = String::new();
+        render_command(
+            &mut doc,
+            &self.command,
+            &[self.root_name],
+            0,
+            self.max_depth,
+            self.include_usage,
+        );
+        doc
+    }
+}
+
+/// Builder for config reference generation.
+pub struct ConfigReference<T: ConfigDocSchema> {
+    intro: String,
+    env_overrides: Vec<EnvOverrideDoc>,
+    appendices: Vec<String>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: ConfigDocSchema> ConfigReference<T> {
+    /// Create a config reference builder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            intro: String::new(),
+            env_overrides: Vec::new(),
+            appendices: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Set intro markdown.
+    #[must_use]
+    pub fn intro(mut self, intro: impl Into<String>) -> Self {
+        self.intro = intro.into();
+        self
+    }
+
+    /// Add one environment/path override doc.
+    #[must_use]
+    pub fn env_override(
+        mut self,
+        variable: &'static str,
+        scope: &'static str,
+        description: &'static str,
+    ) -> Self {
+        self.env_overrides.push(EnvOverrideDoc {
+            variable,
+            scope,
+            description,
+        });
+        self
+    }
+
+    /// Add several environment/path override docs.
+    #[must_use]
+    pub fn env_overrides<I>(mut self, env_overrides: I) -> Self
+    where
+        I: IntoIterator<Item = EnvOverrideDoc>,
+    {
+        self.env_overrides.extend(env_overrides);
+        self
+    }
+
+    /// Append arbitrary markdown after generated config sections.
+    #[must_use]
+    pub fn append_markdown(mut self, markdown: impl Into<String>) -> Self {
+        self.appendices.push(markdown.into());
+        self
+    }
+
+    /// Render markdown.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let mut doc = render_config_reference::<T>(&self.intro, &self.env_overrides);
+        for appendix in &self.appendices {
+            if !doc.ends_with("\n\n") {
+                doc.push_str("\n\n");
+            }
+            doc.push_str(appendix);
+        }
+        doc
+    }
+}
+
+impl<T: ConfigDocSchema> Default for ConfigReference<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Metadata for an environment/path override rendered in config docs.
+#[derive(Clone)]
 pub struct EnvOverrideDoc {
     /// Environment variable name.
     pub variable: &'static str,
@@ -19,13 +150,19 @@ pub struct EnvOverrideDoc {
 
 /// Generate a CLI reference from a clap command tree.
 #[must_use]
-pub fn cli_reference(root_name: &str, cmd: &clap::Command) -> String {
-    let mut doc = String::new();
-    render_command(&mut doc, cmd, &[root_name], 0);
-    doc
+pub fn cli_reference(root_name: &'static str, cmd: clap::Command) -> String {
+    CliReference::new(root_name, cmd).render()
 }
 
-fn render_command(doc: &mut String, cmd: &clap::Command, path: &[&str], depth: usize) {
+#[allow(clippy::too_many_lines)]
+fn render_command(
+    doc: &mut String,
+    cmd: &clap::Command,
+    path: &[&str],
+    depth: usize,
+    max_depth: usize,
+    include_usage: bool,
+) {
     let full_path = path.join(" ");
     let heading = match depth {
         0 => "##",
@@ -44,6 +181,23 @@ fn render_command(doc: &mut String, cmd: &clap::Command, path: &[&str], depth: u
         .collect();
     let positionals: Vec<_> = options.iter().filter(|arg| arg.is_positional()).collect();
     let flags: Vec<_> = options.iter().filter(|arg| !arg.is_positional()).collect();
+
+    if include_usage && (!positionals.is_empty() || !flags.is_empty()) {
+        let mut usage = format!("`{full_path}");
+        for pos in &positionals {
+            let name = pos.get_id().as_str().to_uppercase();
+            if pos.is_required_set() {
+                usage.push_str(&format!(" <{name}>"));
+            } else {
+                usage.push_str(&format!(" [{name}]"));
+            }
+        }
+        if !flags.is_empty() {
+            usage.push_str(" [OPTIONS]");
+        }
+        usage.push('`');
+        doc.push_str(&format!("**Usage:** {usage}\n\n"));
+    }
 
     if !positionals.is_empty() {
         doc.push_str("**Arguments:**\n\n| Name | Description | Required |\n|------|-------------|----------|\n");
@@ -112,9 +266,12 @@ fn render_command(doc: &mut String, cmd: &clap::Command, path: &[&str], depth: u
     }
 
     for sub in subcommands {
+        if depth >= max_depth {
+            continue;
+        }
         let mut child_path = path.to_vec();
         child_path.push(sub.get_name());
-        render_command(doc, sub, &child_path, depth + 1);
+        render_command(doc, sub, &child_path, depth + 1, max_depth, include_usage);
     }
 }
 
@@ -140,6 +297,13 @@ fn render_possible_values(arg: &clap::Arg) -> String {
 /// Generate a config reference from a root config schema.
 #[must_use]
 pub fn config_reference<T: ConfigDocSchema>(
+    intro: &str,
+    env_overrides: &[EnvOverrideDoc],
+) -> String {
+    render_config_reference::<T>(intro, env_overrides)
+}
+
+fn render_config_reference<T: ConfigDocSchema>(
     intro: &str,
     env_overrides: &[EnvOverrideDoc],
 ) -> String {
