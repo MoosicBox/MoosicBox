@@ -1,0 +1,16 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Types and trait for TOML configuration documentation schemas"
+edition     = { workspace = true }
+keywords    = ["config", "documentation", "hyperchad", "schema"]
+license     = { workspace = true }
+name        = "hyperchad_docs_config"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[features]
+fail-on-warnings = []
+
+[dependencies]

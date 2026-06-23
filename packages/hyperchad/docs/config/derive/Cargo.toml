@@ -1,0 +1,30 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Proc macros for generating TOML configuration documentation schemas"
+edition     = { workspace = true }
+keywords    = ["config", "derive", "documentation", "hyperchad"]
+license     = { workspace = true }
+name        = "hyperchad_docs_config_derive"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[lib]
+proc-macro = true
+
+[features]
+fail-on-warnings = []
+
+[dependencies]
+proc-macro2 = { workspace = true, features = ["proc-macro"] }
+quote = { workspace = true, features = ["proc-macro"] }
+syn = { workspace = true, features = [
+    "clone-impls",
+    "derive",
+    "extra-traits",
+    "full",
+    "parsing",
+    "printing",
+    "proc-macro",
+] }

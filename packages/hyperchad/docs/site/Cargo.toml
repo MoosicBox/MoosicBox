@@ -1,0 +1,47 @@
+[package]
+authors     = { workspace = true }
+categories  = ["web-programming"]
+description = "HyperChad documentation site framework"
+edition     = { workspace = true }
+keywords    = ["documentation", "hyperchad", "site"]
+license     = { workspace = true }
+name        = "hyperchad_docs_site"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[features]
+default          = ["assets", "html", "static-routes", "vanilla-js"]
+fail-on-warnings = ["hyperchad_docs_config/fail-on-warnings"]
+
+actix = ["hyperchad/renderer-html-actix"]
+assets = ["hyperchad/renderer-assets"]
+html = ["hyperchad/renderer-html"]
+static-routes = ["hyperchad/router-static-routes"]
+vanilla-js = [
+    "html",
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-plugin-actions-click",
+    "hyperchad/renderer-vanilla-js-plugin-actions-click-outside",
+    "hyperchad/renderer-vanilla-js-plugin-nav",
+    "hyperchad/renderer-vanilla-js-plugin-routing",
+]
+
+[dependencies]
+clap = { workspace = true, features = ["help", "std", "usage"] }
+hyperchad = { workspace = true, features = [
+    "actions",
+    "actions-logic",
+    "app",
+    "color",
+    "markdown",
+    "markdown-syntax-highlighting",
+    "markdown-xss-protection",
+    "renderer",
+    "router",
+    "template",
+    "transformer",
+    "transformer-models",
+] }
+hyperchad_docs_config = { workspace = true }
+serde_json = { workspace = true }

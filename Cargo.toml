@@ -38,6 +38,9 @@ members = [
     "packages/hyperchad/actions",
     "packages/hyperchad/app",
     "packages/hyperchad/color",
+    "packages/hyperchad/docs/config",
+    "packages/hyperchad/docs/config/derive",
+    "packages/hyperchad/docs/site",
     "packages/hyperchad/examples/details_summary",
     "packages/hyperchad/examples/http_events",
     "packages/hyperchad/examples/markdown",
@@ -326,6 +329,9 @@ hyperchad                          = { version = "0.3.0", default-features = fal
 hyperchad_actions                  = { version = "0.3.0", default-features = false, path = "packages/hyperchad/actions" }
 hyperchad_app                      = { version = "0.3.0", default-features = false, path = "packages/hyperchad/app" }
 hyperchad_color                    = { version = "0.3.0", default-features = false, path = "packages/hyperchad/color" }
+hyperchad_docs_config              = { version = "0.3.0", default-features = false, path = "packages/hyperchad/docs/config" }
+hyperchad_docs_config_derive       = { version = "0.3.0", default-features = false, path = "packages/hyperchad/docs/config/derive" }
+hyperchad_docs_site                = { version = "0.3.0", default-features = false, path = "packages/hyperchad/docs/site" }
 hyperchad_js_bundler               = { version = "0.3.0", default-features = false, path = "packages/hyperchad/js_bundler" }
 hyperchad_markdown                 = { version = "0.3.0", default-features = false, path = "packages/hyperchad/markdown" }
 hyperchad_renderer                 = { version = "0.3.0", default-features = false, path = "packages/hyperchad/renderer" }

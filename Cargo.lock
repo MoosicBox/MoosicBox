@@ -6586,6 +6586,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_docs_config"
+version = "0.3.0"
+
+[[package]]
+name = "hyperchad_docs_config_derive"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "hyperchad_docs_site"
+version = "0.3.0"
+dependencies = [
+ "clap",
+ "hyperchad",
+ "hyperchad_docs_config",
+ "serde_json",
+]
+
+[[package]]
 name = "hyperchad_http_events_example"
 version = "0.3.0"
 dependencies = [
