@@ -337,22 +337,43 @@ fn render_command(
 }
 
 fn render_possible_values(arg: &clap::Arg) -> String {
+    let mut parts = Vec::new();
     let possible_values = arg.get_possible_values();
-    if !possible_values.is_empty() {
-        return possible_values
-            .iter()
-            .map(|value| format!("`{}`", value.get_name()))
-            .collect::<Vec<_>>()
-            .join(", ");
+    if possible_values.is_empty() {
+        let value_hint = match arg.get_value_hint() {
+            ValueHint::FilePath => "file path",
+            ValueHint::DirPath => "directory path",
+            ValueHint::Url => "URL",
+            ValueHint::CommandName | ValueHint::CommandString => "command",
+            _ => "",
+        };
+        if !value_hint.is_empty() {
+            parts.push(value_hint.to_string());
+        }
+    } else {
+        parts.push(
+            possible_values
+                .iter()
+                .map(|value| format!("`{}`", value.get_name()))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
     }
 
-    match arg.get_value_hint() {
-        ValueHint::FilePath => "file path".to_string(),
-        ValueHint::DirPath => "directory path".to_string(),
-        ValueHint::Url => "URL".to_string(),
-        ValueHint::CommandName | ValueHint::CommandString => "command".to_string(),
-        _ => String::new(),
+    if is_repeatable(arg) {
+        parts.push("repeatable".to_string());
     }
+
+    parts.join(", ")
+}
+
+fn is_repeatable(arg: &clap::Arg) -> bool {
+    matches!(
+        arg.get_action(),
+        clap::ArgAction::Append | clap::ArgAction::Count
+    ) || arg
+        .get_num_args()
+        .is_some_and(|range| range.max_values() != 1 || range.min_values() > 1)
 }
 
 /// Generate a config reference from a root config schema.
