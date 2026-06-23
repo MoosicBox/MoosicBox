@@ -27,9 +27,10 @@ mod ast;
 mod generate;
 
 use ast::DiagnosticParse;
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::{ParseStream, Parser};
 
 /// Preprocesses the token stream to handle numeric literals with CSS units.
@@ -181,6 +182,30 @@ pub fn container(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
+fn template_crate_path() -> Result<TokenStream, String> {
+    if let Ok(found) = crate_name("hyperchad_template") {
+        return Ok(match found {
+            FoundCrate::Itself => quote!(crate),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{name}");
+                quote!(::#ident)
+            }
+        });
+    }
+
+    if let Ok(found) = crate_name("hyperchad") {
+        return Ok(match found {
+            FoundCrate::Itself => quote!(crate::template),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{name}");
+                quote!(::#ident::template)
+            }
+        });
+    }
+
+    Err("container! requires either a `hyperchad_template` dependency, or a `hyperchad` dependency with the `template` feature enabled".to_string())
+}
+
 fn expand(input: TokenStream) -> Result<TokenStream, String> {
     let mut diagnostics = Vec::new();
 
@@ -218,8 +243,10 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
         }
     };
 
+    let template_crate = template_crate_path()?;
+
     Ok(quote! {{
-        use hyperchad_template::prelude::*;
+        use #template_crate::prelude::*;
         let mut #output_ident: Vec<hyperchad_transformer::Container> = Vec::new();
         #stmts
         #(#diag_tokens)*

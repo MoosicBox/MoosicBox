@@ -31,19 +31,6 @@ use log::info;
 #[cfg(feature = "actix")]
 use hyperchad::renderer_html_actix::RuntimeFanoutTransportDispatcher;
 
-#[allow(unused_imports)]
-use hyperchad::actions as hyperchad_actions;
-#[allow(unused_imports)]
-use hyperchad::color as hyperchad_color;
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
-#[allow(unused_imports)]
-use hyperchad::template::template_actions_dsl as hyperchad_template_actions_dsl;
-#[allow(unused_imports)]
-use hyperchad::transformer as hyperchad_transformer;
-#[allow(unused_imports)]
-use hyperchad::transformer_models as hyperchad_transformer_models;
-
 #[cfg(feature = "assets")]
 use std::sync::LazyLock;
 

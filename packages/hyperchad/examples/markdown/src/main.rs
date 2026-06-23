@@ -17,8 +17,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
 use hyperchad::{
     app::AppBuilder,
     renderer::View,

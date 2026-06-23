@@ -67,8 +67,6 @@
 //! }
 //! ```
 
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
 use hyperchad::{
     app::AppBuilder,
     renderer::View,

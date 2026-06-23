@@ -15,12 +15,6 @@ use regex::Regex;
 
 use crate::page;
 
-/// Re-exported `HyperChad` template module for convenient access to template types and macros.
-///
-/// This module provides the `Containers` type and `container!` macro used in the
-/// download page components.
-pub use hyperchad::template as hyperchad_template;
-
 /// Generates the downloads page.
 ///
 /// Returns a page container with a header and a container that will be

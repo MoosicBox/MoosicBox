@@ -21,8 +21,6 @@ pub mod state;
 
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
 use hyperchad::{
     actions::ActionType,
     template::{Containers, IntoActionEffect, container},

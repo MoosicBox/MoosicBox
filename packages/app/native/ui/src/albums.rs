@@ -7,8 +7,6 @@
 
 use std::slice;
 
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
 use hyperchad::{
     template::{Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},

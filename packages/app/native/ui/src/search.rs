@@ -5,8 +5,6 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-#[allow(unused_imports)]
-use hyperchad::template as hyperchad_template;
 use hyperchad::{
     actions::Key,
     template::{Containers, container},
