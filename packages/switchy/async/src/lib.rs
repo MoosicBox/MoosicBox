@@ -123,7 +123,7 @@ pub use switchy_async_macros::tokio_main_wrapper as main;
 #[doc(hidden)]
 macro_rules! select_internal {
     ($($tokens:tt)*) => {
-        ::switchy_async::__private::tokio::select! { $($tokens)* }
+        $crate::__private::tokio::select! { $($tokens)* }
     };
 }
 
@@ -133,7 +133,7 @@ macro_rules! select_internal {
 #[doc(hidden)]
 macro_rules! join_internal {
     ($($tokens:tt)*) => {
-        ::switchy_async::__private::tokio::join! { $($tokens)* }
+        $crate::__private::tokio::join! { $($tokens)* }
     };
 }
 
@@ -143,7 +143,7 @@ macro_rules! join_internal {
 #[doc(hidden)]
 macro_rules! try_join_internal {
     ($($tokens:tt)*) => {
-        ::switchy_async::__private::tokio::try_join! { $($tokens)* }
+        $crate::__private::tokio::try_join! { $($tokens)* }
     };
 }
 
