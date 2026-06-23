@@ -25,6 +25,7 @@
 //! # let _ = site;
 //! ```
 
+pub mod assets;
 pub mod generated;
 pub mod link_map;
 pub mod registry;
@@ -33,5 +34,5 @@ pub mod theme;
 
 pub use generated::{CliReference, ConfigReference, EnvOverrideDoc, SectionHeadingStyle};
 pub use registry::{DocPage, DocsSection, NavItem, NavSection, PageKind};
-pub use site::{DocsSite, DocsSiteBuilder, MarkdownScan};
+pub use site::{DocsSite, DocsSiteBuilder, HeaderLink, MarkdownScan, PageShell, ShellContext};
 pub use theme::Theme;

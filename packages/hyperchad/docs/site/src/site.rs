@@ -8,6 +8,9 @@ use hyperchad::markdown::markdown_to_container;
 use hyperchad::router::Router;
 use hyperchad::template::{Container, Containers, container};
 
+#[cfg(feature = "assets")]
+use hyperchad::renderer::assets::StaticAssetRoute;
+
 use crate::link_map::LinkMap;
 use crate::registry::{DocPage, DocsSection, NavSection, PageKind, nav_sections};
 use crate::theme::Theme;
@@ -51,6 +54,79 @@ impl MarkdownScan {
     }
 }
 
+/// Link rendered in the default docs header.
+#[derive(Clone)]
+pub struct HeaderLink {
+    label: &'static str,
+    href: &'static str,
+    external: bool,
+}
+
+impl HeaderLink {
+    /// Create an internal header link.
+    #[must_use]
+    pub const fn new(label: &'static str, href: &'static str) -> Self {
+        Self {
+            label,
+            href,
+            external: false,
+        }
+    }
+
+    /// Create an external header link.
+    #[must_use]
+    pub const fn external(label: &'static str, href: &'static str) -> Self {
+        Self {
+            label,
+            href,
+            external: true,
+        }
+    }
+
+    /// Link label.
+    #[must_use]
+    pub const fn label(&self) -> &'static str {
+        self.label
+    }
+
+    /// Link target.
+    #[must_use]
+    pub const fn href(&self) -> &'static str {
+        self.href
+    }
+
+    /// Whether this is an external link.
+    #[must_use]
+    pub const fn is_external(&self) -> bool {
+        self.external
+    }
+}
+
+/// Context passed to custom docs site shells.
+pub struct ShellContext<'a> {
+    /// Site model.
+    pub site: &'a DocsSite,
+    /// Current route path.
+    pub current_path: &'a str,
+    /// Page title, when available.
+    pub title: Option<&'static str>,
+    /// Rendered page body.
+    pub body: &'a Containers,
+    /// Navigation sections derived from the site registry.
+    pub sections: Vec<NavSection>,
+}
+
+impl ShellContext<'_> {
+    /// Render the default sidebar for this shell context.
+    #[must_use]
+    pub fn sidebar(&self) -> Containers {
+        render_sidebar(&self.sections, self.current_path, &self.site.theme)
+    }
+}
+
+/// Custom page shell function.
+pub type PageShell = for<'a> fn(ShellContext<'a>) -> Containers;
+
 /// Builder for a reusable `HyperChad` documentation site.
 pub struct DocsSiteBuilder {
     name: &'static str,
@@ -60,6 +136,10 @@ pub struct DocsSiteBuilder {
     pages: Vec<DocPage>,
     sections: Vec<DocsSection>,
     home: Option<fn() -> Containers>,
+    shell: Option<PageShell>,
+    brand: Option<(&'static str, &'static str)>,
+    header_links: Vec<HeaderLink>,
+    global_font: Option<&'static str>,
     scans: Vec<MarkdownScan>,
 }
 
@@ -75,6 +155,10 @@ impl DocsSiteBuilder {
             pages: Vec::new(),
             sections: Vec::new(),
             home: None,
+            shell: None,
+            brand: None,
+            header_links: Vec::new(),
+            global_font: None,
             scans: Vec::new(),
         }
     }
@@ -104,6 +188,41 @@ impl DocsSiteBuilder {
     #[must_use]
     pub const fn home(mut self, home: fn() -> Containers) -> Self {
         self.home = Some(home);
+        self
+    }
+
+    /// Set a custom page shell used to wrap docs pages.
+    #[must_use]
+    pub const fn shell(mut self, shell: PageShell) -> Self {
+        self.shell = Some(shell);
+        self
+    }
+
+    /// Set the default header brand text and link.
+    #[must_use]
+    pub const fn brand(mut self, label: &'static str, href: &'static str) -> Self {
+        self.brand = Some((label, href));
+        self
+    }
+
+    /// Add a link to the default header.
+    #[must_use]
+    pub fn header_link(mut self, link: HeaderLink) -> Self {
+        self.header_links.push(link);
+        self
+    }
+
+    /// Add links to the default header.
+    #[must_use]
+    pub fn header_links(mut self, links: impl IntoIterator<Item = HeaderLink>) -> Self {
+        self.header_links.extend(links);
+        self
+    }
+
+    /// Set the global font family for the default shell.
+    #[must_use]
+    pub const fn global_font(mut self, font: &'static str) -> Self {
+        self.global_font = Some(font);
         self
     }
 
@@ -187,6 +306,10 @@ impl DocsSiteBuilder {
             pages: self.pages,
             sections: self.sections,
             home: self.home,
+            shell: self.shell,
+            brand: self.brand,
+            header_links: self.header_links,
+            global_font: self.global_font,
             link_map,
         }
     }
@@ -246,7 +369,35 @@ pub struct DocsSite {
     pages: Vec<DocPage>,
     sections: Vec<DocsSection>,
     home: Option<fn() -> Containers>,
+    shell: Option<PageShell>,
+    brand: Option<(&'static str, &'static str)>,
+    header_links: Vec<HeaderLink>,
+    global_font: Option<&'static str>,
     link_map: LinkMap,
+}
+
+impl DocsSite {
+    /// Site name.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Site theme.
+    #[must_use]
+    pub const fn theme(&self) -> &Theme {
+        &self.theme
+    }
+
+    /// Configured global font, or the theme monospace font.
+    #[must_use]
+    pub const fn font_family(&self) -> &'static str {
+        if let Some(font) = self.global_font {
+            font
+        } else {
+            self.theme.mono_font
+        }
+    }
 }
 
 impl DocsSite {
@@ -259,6 +410,20 @@ impl DocsSite {
     /// Initialize a `HyperChad` app builder for this docs site.
     #[must_use]
     pub fn init(self) -> AppBuilder {
+        let title = self.title.clone();
+        let description = self.description.clone();
+        let background = self.theme.background;
+        AppBuilder::new()
+            .with_router(self.router())
+            .with_background(background)
+            .with_title(title)
+            .with_description(description)
+            .with_size(1100.0, 700.0)
+    }
+
+    /// Build a router for this docs site.
+    #[must_use]
+    pub fn router(self) -> Router {
         let site: &'static Self = Box::leak(Box::new(self));
         let mut router = Router::new()
             .with_static_route(&["/", "/home"], move |_| async move { site.render_home() });
@@ -270,33 +435,37 @@ impl DocsSite {
             });
         }
 
-        router =
-            router.with_static_route(
-                &["/not-found"],
-                move |_| async move { site.render_not_found() },
-            );
+        router.with_static_route(
+            &["/not-found"],
+            move |_| async move { site.render_not_found() },
+        )
+    }
 
-        AppBuilder::new()
-            .with_router(router)
-            .with_background(site.theme.background)
-            .with_title(site.title.clone())
-            .with_description(site.description.clone())
-            .with_size(1100.0, 700.0)
+    /// Return default static asset routes used by generated docs sites.
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub fn assets(&self) -> Vec<StaticAssetRoute> {
+        vec![
+            #[cfg(feature = "vanilla-js")]
+            crate::assets::vanilla_js_route(),
+        ]
     }
 }
 
 impl DocsSite {
     fn render_home(&self) -> Containers {
-        if let Some(home) = self.home {
-            return home();
-        }
-
-        container! {
-            div direction=column padding=48 background=#0d1117 color=#f0f6fc {
-                h1 { (self.title.clone()) }
-                span color=#c9d1d9 { (self.description.clone()) }
-            }
-        }
+        let body = self.home.map_or_else(
+            || {
+                container! {
+                    div direction=column gap=16 {
+                        h1 { (self.title.clone()) }
+                        span color=#c9d1d9 { (self.description.clone()) }
+                    }
+                }
+            },
+            |home| home(),
+        );
+        self.wrap_page("/", &body)
     }
 
     fn render_not_found(&self) -> Containers {
@@ -309,7 +478,9 @@ impl DocsSite {
         self.wrap_page("/not-found", &body)
     }
 
-    fn render_page(&self, page: &DocPage) -> Containers {
+    /// Render a documentation page.
+    #[must_use]
+    pub fn render_page(&self, page: &DocPage) -> Containers {
         match &page.kind {
             PageKind::Markdown { contents } => self.render_markdown_page(page, contents),
             PageKind::GeneratedMarkdown { generate } => {
@@ -322,17 +493,8 @@ impl DocsSite {
 
     fn render_markdown_page(&self, page: &DocPage, markdown: &'static str) -> Containers {
         let content = self.render_markdown_content(page, markdown);
-        let body = if let Some(title) = page.title {
-            container! {
-                div direction=column gap=20 {
-                    h1 { (title) }
-                    (content)
-                }
-            }
-        } else {
-            vec![content]
-        };
-        self.wrap_page(page.route, &body)
+        let body = vec![content];
+        self.wrap_page_with_title(page.route, page.title, &body)
     }
 
     /// Render markdown content with registry-owned relative link rewriting.
@@ -345,20 +507,56 @@ impl DocsSite {
         content
     }
 
-    fn wrap_page(&self, current_path: &str, body: &Containers) -> Containers {
+    /// Wrap rendered content in the configured page shell.
+    #[must_use]
+    pub fn wrap_page(&self, current_path: &str, body: &Containers) -> Containers {
+        self.wrap_page_with_title(current_path, None, body)
+    }
+
+    fn wrap_page_with_title(
+        &self,
+        current_path: &str,
+        title: Option<&'static str>,
+        body: &Containers,
+    ) -> Containers {
         let sections = nav_sections(&self.sections, &self.pages);
+        if let Some(shell) = self.shell {
+            return shell(ShellContext {
+                site: self,
+                current_path,
+                title,
+                body,
+                sections,
+            });
+        }
+
         let border = (self.theme.border, 1);
+        let brand = self.brand.unwrap_or((self.name, "/"));
+        let header_links = self.header_links.clone();
+        let font_family = self.global_font.unwrap_or(self.theme.mono_font);
         container! {
-            div direction=column min-height="100vh" background=(self.theme.background) color=(self.theme.text_primary) {
+            div direction=column min-height="100vh" background=(self.theme.background) color=(self.theme.text_primary) font-family=(font_family) {
                 header direction=row align-items=center justify-content=space-between padding-x=24 padding-y=16 border-bottom=(border) {
-                    anchor href="/" color=(self.theme.accent) text-decoration="none" font-size=20 font-weight=700 { (self.name) }
+                    anchor href=(brand.1) color=(self.theme.accent) text-decoration="none" font-size=20 font-weight=700 { (brand.0) }
+                    div direction=row align-items=center justify-content=end gap=24 {
+                        @for link in header_links {
+                            @if link.external {
+                                anchor href=(link.href) target="_blank" color=(self.theme.text_secondary) text-decoration="none" font-size=14 { (link.label) }
+                            } @else {
+                                anchor href=(link.href) color=(self.theme.text_secondary) text-decoration="none" font-size=14 { (link.label) }
+                            }
+                        }
+                    }
                 }
                 div direction=row flex=1 {
                     aside direction=column width=260 min-width=260 background=(self.theme.surface) border-right=(border) padding-y=24 overflow-y=auto {
                         (render_sidebar(&sections, current_path, &self.theme))
                     }
                     main flex=1 padding=32 overflow-x=auto {
-                        div max-width=900 direction=column {
+                        div max-width=900 direction=column gap=24 {
+                            @if let Some(title) = title {
+                                h1 { (title) }
+                            }
                             (body)
                         }
                     }
