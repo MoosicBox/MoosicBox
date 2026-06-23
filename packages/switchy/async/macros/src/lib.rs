@@ -44,14 +44,24 @@ use std::str::FromStr as _;
 
 use proc_macro::TokenStream;
 
-#[cfg(feature = "simulator")]
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::visit_mut::{VisitMut, visit_expr_mut};
 use syn::{Expr, ImplItem, Item, ItemMod, parse_macro_input};
 
 #[cfg(feature = "simulator")]
 mod simulator;
+
+#[cfg(feature = "simulator")]
+fn parse_path_tokens(input: syn::parse::ParseStream) -> syn::Result<TokenStream2> {
+    let mut tokens = TokenStream2::new();
+    while !input.peek(syn::Token![;]) {
+        let token: proc_macro2::TokenTree = input.parse()?;
+        tokens.extend([token]);
+    }
+    Ok(tokens)
+}
 
 /// Represents the parsed input to a test macro with crate path.
 ///
@@ -60,7 +70,7 @@ mod simulator;
 /// and simulator disabling.
 #[cfg(feature = "simulator")]
 struct TestWithPathInput {
-    crate_path: syn::Path,
+    crate_path: TokenStream2,
     use_real_time: bool,
     use_real_fs: bool,
     no_simulator: bool,
@@ -76,7 +86,7 @@ impl syn::parse::Parse for TestWithPathInput {
         let _: Token![@] = input.parse()?;
         let _path_ident: syn::Ident = input.parse()?; // Should be "path"
         let _: Token![=] = input.parse()?;
-        let crate_path: syn::Path = input.parse()?;
+        let crate_path = parse_path_tokens(input)?;
         let _: Token![;] = input.parse()?;
 
         // Check for optional real_time, real_fs, and no_simulator parameters
@@ -162,6 +172,42 @@ impl syn::parse::Parse for TestArgs {
     }
 }
 
+fn found_crate_path(found: FoundCrate) -> TokenStream2 {
+    match found {
+        FoundCrate::Itself => quote!(crate),
+        FoundCrate::Name(name) => {
+            let ident = format_ident!("{name}");
+            quote!(::#ident)
+        }
+    }
+}
+
+fn switchy_async_path() -> TokenStream2 {
+    if let Ok(found) = crate_name("switchy_async") {
+        return found_crate_path(found);
+    }
+
+    if let Ok(found) = crate_name("switchy") {
+        let root = found_crate_path(found);
+        return quote!(#root::unsync);
+    }
+
+    quote!(::switchy_async)
+}
+
+fn switchy_unsync_path() -> TokenStream2 {
+    if let Ok(found) = crate_name("switchy") {
+        let root = found_crate_path(found);
+        return quote!(#root::unsync);
+    }
+
+    if let Ok(found) = crate_name("switchy_async") {
+        return found_crate_path(found);
+    }
+
+    quote!(::switchy::unsync)
+}
+
 /// Helper function to convert `TestArgs` to the internal token format.
 ///
 /// Constructs the token stream that will be passed to `test_internal`,
@@ -169,16 +215,11 @@ impl syn::parse::Parse for TestArgs {
 #[cfg(feature = "simulator")]
 #[must_use]
 fn build_test_tokens(
-    crate_path: &str,
+    crate_path: &TokenStream2,
     args: &TestArgs,
     item_tokens: &TokenStream2,
 ) -> TokenStream2 {
-    let mut tokens = if crate_path == "crate" {
-        quote! { @path = crate; }
-    } else {
-        let path: syn::Path = syn::parse_str(crate_path).expect("Invalid crate path");
-        quote! { @path = #path; }
-    };
+    let mut tokens = quote! { @path = #crate_path; };
 
     if args.real_time {
         tokens.extend(quote! { real_time; });
@@ -289,7 +330,9 @@ pub fn try_join_internal(input: TokenStream) -> TokenStream {
 ///
 /// This visitor walks through the syntax tree and transforms async await
 /// expressions to include `yield_now()` calls for deterministic testing.
-struct YieldInjector;
+struct YieldInjector {
+    yield_path: TokenStream2,
+}
 
 impl VisitMut for YieldInjector {
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
@@ -297,9 +340,10 @@ impl VisitMut for YieldInjector {
 
         if let Expr::Await(expr_await) = expr {
             let base = (*expr_await.base).clone();
+            let yield_path = &self.yield_path;
             *expr = syn::parse_quote!({
                 let __yield_res = #base.await;
-                switchy::unsync::task::yield_now().await;
+                #yield_path::task::yield_now().await;
                 __yield_res
             });
         }
@@ -369,7 +413,9 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
     #[allow(unreachable_code)]
     {
         let mut ast = parse_macro_input!(item as Item);
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: switchy_unsync_path(),
+        };
         inject_item(&mut ast, &mut injector);
         TokenStream::from(quote!(#ast))
     }
@@ -489,24 +535,22 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
     }
 
     // Determine the correct paths for fs and time modules based on crate_path
-    let (fs_path, time_path) = if crate_path == syn::parse_quote!(switchy_async)
-        || crate_path == syn::parse_quote!(crate)
+    let crate_path_string = crate_path.to_string();
+    let (fs_path, time_path) = if crate_path_string == "switchy_async"
+        || crate_path_string == ":: switchy_async"
+        || crate_path_string == "crate"
     {
         // Direct invocation from switchy_async or internal tests
-        // Try to use switchy umbrella crate first, but fall back to direct crate access
-        // if switchy is not available (e.g., in packages that only depend on switchy_async)
+        // Try to use direct fs/time crate access for packages that only depend on switchy_async.
         (quote!(switchy_fs), quote!(switchy_time))
-    } else if let Some(first_segment) = crate_path.segments.first() {
-        if first_segment.ident == "switchy" {
-            // Any path starting with switchy (like switchy::unsync)
-            // We need to use switchy::fs, not switchy::unsync::fs
-            (quote!(switchy::fs), quote!(switchy::time))
-        } else {
-            // Some other crate that might have its own fs/time modules
-            (quote!(#crate_path::fs), quote!(#crate_path::time))
-        }
+    } else if crate_path_string == "switchy :: unsync"
+        || crate_path_string == ":: switchy :: unsync"
+    {
+        // Any path starting with switchy (like switchy::unsync)
+        // We need to use switchy::fs, not switchy::unsync::fs
+        (quote!(switchy::fs), quote!(switchy::time))
     } else {
-        // Fallback - assume the crate_path has fs and time
+        // Some other crate that might have its own fs/time modules
         (quote!(#crate_path::fs), quote!(#crate_path::time))
     };
 
@@ -620,7 +664,7 @@ pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_test_tokens("crate", &test_args, &item_tokens);
+    let input_tokens = build_test_tokens(&quote!(crate), &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
@@ -679,7 +723,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_test_tokens("switchy_async", &test_args, &item_tokens);
+    let input_tokens = build_test_tokens(&switchy_async_path(), &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
@@ -738,7 +782,7 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_test_tokens("switchy::unsync", &test_args, &item_tokens);
+    let input_tokens = build_test_tokens(&switchy_unsync_path(), &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
@@ -794,11 +838,13 @@ pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
         .filter(|attr| !attr.path().is_ident("test"))
         .collect();
 
+    let runtime_path = switchy_async_path();
+
     let result = quote! {
         #(#filtered_attrs)*
         #[::core::prelude::v1::test]
         #fn_vis fn #fn_name() #fn_output {
-            let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+            let rt = #runtime_path::Builder::new().build().expect("Failed to build runtime");
             rt.block_on(async move #fn_block)
             // Don't call rt.wait() as it can hang in tests
         }
@@ -817,7 +863,7 @@ pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
 /// including the runtime path and optional configuration parameters.
 #[cfg(feature = "simulator")]
 struct MainWithPathInput {
-    crate_path: syn::Path,
+    crate_path: TokenStream2,
     function: syn::ItemFn,
 }
 
@@ -830,7 +876,7 @@ impl syn::parse::Parse for MainWithPathInput {
         let _: Token![@] = input.parse()?;
         let _path_ident: syn::Ident = input.parse()?; // Should be "path"
         let _: Token![=] = input.parse()?;
-        let crate_path: syn::Path = input.parse()?;
+        let crate_path = parse_path_tokens(input)?;
         let _: Token![;] = input.parse()?;
 
         let function: syn::ItemFn = input.parse()?;
@@ -867,15 +913,8 @@ impl syn::parse::Parse for MainArgs {
 /// combining the crate path and function tokens.
 #[cfg(feature = "simulator")]
 #[must_use]
-fn build_main_tokens(crate_path: &str, item_tokens: &TokenStream2) -> TokenStream2 {
-    let tokens = if crate_path == "crate" {
-        quote! { @path = crate; }
-    } else {
-        let path: syn::Path = syn::parse_str(crate_path).expect("Invalid crate path");
-        quote! { @path = #path; }
-    };
-
-    let mut result = tokens;
+fn build_main_tokens(crate_path: &TokenStream2, item_tokens: &TokenStream2) -> TokenStream2 {
+    let mut result = quote! { @path = #crate_path; };
     result.extend(quote! { #item_tokens });
     result
 }
@@ -978,7 +1017,7 @@ pub fn internal_main(args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_main_tokens("crate", &item_tokens);
+    let input_tokens = build_main_tokens(&quote!(crate), &item_tokens);
 
     main_internal(input_tokens.into())
 }
@@ -1026,7 +1065,7 @@ pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_main_tokens("switchy_async", &item_tokens);
+    let input_tokens = build_main_tokens(&switchy_async_path(), &item_tokens);
 
     main_internal(input_tokens.into())
 }
@@ -1074,7 +1113,7 @@ pub fn unsync_main(args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = build_main_tokens("switchy::unsync", &item_tokens);
+    let input_tokens = build_main_tokens(&switchy_unsync_path(), &item_tokens);
 
     main_internal(input_tokens.into())
 }
@@ -1129,10 +1168,12 @@ pub fn tokio_main_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
         .filter(|attr| !attr.path().is_ident("main"))
         .collect();
 
+    let runtime_path = switchy_async_path();
+
     let result = quote! {
         #(#filtered_attrs)*
         #fn_vis fn #fn_name() #fn_output {
-            let rt = ::switchy_async::Builder::new().build().expect("Failed to build runtime");
+            let rt = #runtime_path::Builder::new().build().expect("Failed to build runtime");
             let result = rt.block_on(async move #fn_block);
             rt.wait().expect("Runtime wait failed");
             result
@@ -1175,7 +1216,9 @@ pub fn inject_yields_mod(input: TokenStream) -> TokenStream {
         let code = std::fs::read_to_string(path).unwrap();
         // parse the file’s AST, run your YieldInjector on it…
         let mut file = syn::parse_file(&code).unwrap();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: switchy_unsync_path(),
+        };
         injector.visit_file_mut(&mut file);
         // emit back: `pub mod x { /* transformed file.items */ }`
         let items = file.items;
@@ -1304,10 +1347,7 @@ mod tests {
         let parsed: TestWithPathInput =
             syn::parse2(input).expect("Failed to parse basic TestWithPathInput");
 
-        assert_eq!(
-            parsed.crate_path.segments.last().unwrap().ident.to_string(),
-            "crate"
-        );
+        assert_eq!(parsed.crate_path.to_string(), "crate");
         assert!(!parsed.use_real_time, "real_time should be false");
         assert!(!parsed.use_real_fs, "real_fs should be false");
         assert!(!parsed.no_simulator, "no_simulator should be false");
@@ -1390,10 +1430,10 @@ mod tests {
         let parsed: TestWithPathInput =
             syn::parse2(input).expect("Failed to parse TestWithPathInput with qualified path");
 
-        assert_eq!(parsed.crate_path.segments.len(), 3);
-        assert_eq!(parsed.crate_path.segments[0].ident.to_string(), "switchy");
-        assert_eq!(parsed.crate_path.segments[1].ident.to_string(), "unsync");
-        assert_eq!(parsed.crate_path.segments[2].ident.to_string(), "runtime");
+        assert_eq!(
+            parsed.crate_path.to_string(),
+            "switchy :: unsync :: runtime"
+        );
     }
 
     /// Tests that invalid flag in `TestWithPathInput` produces error.
@@ -1456,7 +1496,9 @@ mod tests {
         };
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1478,7 +1520,9 @@ mod tests {
         };
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1496,7 +1540,9 @@ mod tests {
 
         let original = quote!(#input).to_string();
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1514,7 +1560,9 @@ mod tests {
         };
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1543,7 +1591,9 @@ mod tests {
         };
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1571,7 +1621,9 @@ mod tests {
         }};
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1593,7 +1645,9 @@ mod tests {
         };
 
         let mut expr = input;
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         injector.visit_expr_mut(&mut expr);
 
         let output = quote!(#expr).to_string();
@@ -1618,7 +1672,9 @@ mod tests {
             }
         };
 
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1638,7 +1694,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1660,7 +1718,9 @@ mod tests {
             }
         };
 
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1693,7 +1753,9 @@ mod tests {
             }
         };
 
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1715,7 +1777,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1737,7 +1801,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1752,7 +1818,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1778,7 +1846,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1807,7 +1877,9 @@ mod tests {
             }
         };
 
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1827,7 +1899,9 @@ mod tests {
         };
 
         let original = quote!(#item).to_string();
-        let mut injector = YieldInjector;
+        let mut injector = YieldInjector {
+            yield_path: quote!(switchy::unsync),
+        };
         inject_item(&mut item, &mut injector);
 
         let output = quote!(#item).to_string();
@@ -1851,7 +1925,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(crate), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1870,7 +1944,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("switchy_async", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(switchy_async), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1889,7 +1963,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(crate), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1908,7 +1982,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(crate), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1927,7 +2001,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("crate", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(crate), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1946,7 +2020,7 @@ mod tests {
         };
         let item_tokens = quote! { async fn my_test() {} };
 
-        let tokens = build_test_tokens("switchy::unsync", &args, &item_tokens);
+        let tokens = build_test_tokens(&quote!(switchy::unsync), &args, &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -1978,10 +2052,7 @@ mod tests {
         let parsed: MainWithPathInput =
             syn::parse2(input).expect("Failed to parse basic MainWithPathInput");
 
-        assert_eq!(
-            parsed.crate_path.segments.last().unwrap().ident.to_string(),
-            "crate"
-        );
+        assert_eq!(parsed.crate_path.to_string(), "crate");
         assert_eq!(parsed.function.sig.ident.to_string(), "main");
     }
 
@@ -1995,10 +2066,7 @@ mod tests {
         let parsed: MainWithPathInput =
             syn::parse2(input).expect("Failed to parse MainWithPathInput with external path");
 
-        assert_eq!(
-            parsed.crate_path.segments.last().unwrap().ident.to_string(),
-            "switchy_async"
-        );
+        assert_eq!(parsed.crate_path.to_string(), "switchy_async");
     }
 
     /// Tests parsing of `MainWithPathInput` with qualified crate path.
@@ -2011,9 +2079,7 @@ mod tests {
         let parsed: MainWithPathInput =
             syn::parse2(input).expect("Failed to parse MainWithPathInput with qualified path");
 
-        assert_eq!(parsed.crate_path.segments.len(), 2);
-        assert_eq!(parsed.crate_path.segments[0].ident.to_string(), "switchy");
-        assert_eq!(parsed.crate_path.segments[1].ident.to_string(), "unsync");
+        assert_eq!(parsed.crate_path.to_string(), "switchy :: unsync");
     }
 
     /// Tests parsing of `MainWithPathInput` with return type.
@@ -2041,7 +2107,7 @@ mod tests {
     fn build_main_tokens_crate_path() {
         let item_tokens = quote! { async fn main() {} };
 
-        let tokens = build_main_tokens("crate", &item_tokens);
+        let tokens = build_main_tokens(&quote!(crate), &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -2055,7 +2121,7 @@ mod tests {
     fn build_main_tokens_external_path() {
         let item_tokens = quote! { async fn main() {} };
 
-        let tokens = build_main_tokens("switchy_async", &item_tokens);
+        let tokens = build_main_tokens(&quote!(switchy_async), &item_tokens);
         let output = tokens.to_string();
 
         assert!(
@@ -2069,7 +2135,7 @@ mod tests {
     fn build_main_tokens_qualified_path() {
         let item_tokens = quote! { async fn main() {} };
 
-        let tokens = build_main_tokens("switchy::unsync", &item_tokens);
+        let tokens = build_main_tokens(&quote!(switchy::unsync), &item_tokens);
         let output = tokens.to_string();
 
         assert!(

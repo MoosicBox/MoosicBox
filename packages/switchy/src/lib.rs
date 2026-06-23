@@ -74,8 +74,8 @@ pub mod unsync {
     #[macro_export]
     macro_rules! select {
         ($($tokens:tt)*) => {
-            switchy::unsync_macros::select_internal! {
-                @path = switchy::unsync;
+            $crate::unsync_macros::select_internal! {
+                @path = $crate::unsync;
                 $($tokens)*
             }
         };
@@ -110,8 +110,8 @@ pub mod unsync {
     #[macro_export]
     macro_rules! join {
         ($($tokens:tt)*) => {
-            switchy::unsync_macros::join_internal! {
-                @path = switchy::unsync;
+            $crate::unsync_macros::join_internal! {
+                @path = $crate::unsync;
                 $($tokens)*
             }
         };
@@ -147,8 +147,8 @@ pub mod unsync {
     #[macro_export]
     macro_rules! try_join {
         ($($tokens:tt)*) => {
-            switchy::unsync_macros::try_join_internal! {
-                @path = switchy::unsync;
+            $crate::unsync_macros::try_join_internal! {
+                @path = $crate::unsync;
                 $($tokens)*
             }
         };
@@ -209,11 +209,11 @@ pub mod unsync_macros {
     macro_rules! select_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            ::switchy::unsync::tokio::select! { $($tokens)* }
+            $crate::unsync::tokio::select! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            ::switchy::unsync::tokio::select! { $($tokens)* }
+            $crate::unsync::tokio::select! { $($tokens)* }
         };
     }
 
@@ -230,11 +230,11 @@ pub mod unsync_macros {
     macro_rules! join_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            ::switchy::unsync::tokio::join! { $($tokens)* }
+            $crate::unsync::tokio::join! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            ::switchy::unsync::tokio::join! { $($tokens)* }
+            $crate::unsync::tokio::join! { $($tokens)* }
         };
     }
 
@@ -251,11 +251,11 @@ pub mod unsync_macros {
     macro_rules! try_join_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            ::switchy::unsync::tokio::try_join! { $($tokens)* }
+            $crate::unsync::tokio::try_join! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            ::switchy::unsync::tokio::try_join! { $($tokens)* }
+            $crate::unsync::tokio::try_join! { $($tokens)* }
         };
     }
 
@@ -314,18 +314,18 @@ pub mod unsync_macros {
     macro_rules! main_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; #[$($attr:tt)*] $($rest:tt)*) => {
-            #[::switchy::unsync::tokio::main]
+            #[$crate::unsync::tokio::main]
             #[$($attr)*]
             $($rest)*
         };
         // Handle case without additional attributes
         (@path = $path:path; $($rest:tt)*) => {
-            #[::switchy::unsync::tokio::main]
+            #[$crate::unsync::tokio::main]
             $($rest)*
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            #[::switchy::unsync::tokio::main]
+            #[$crate::unsync::tokio::main]
             $($tokens)*
         };
     }

@@ -48,8 +48,9 @@ mod evaluator;
 mod parser;
 
 use hyperchad_actions::dsl::{Dsl, Statement};
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::Parser;
 
 /// Main proc-macro for parsing actions DSL syntax
@@ -134,6 +135,30 @@ fn expand_actions_dsl(input: &TokenStream) -> Result<TokenStream, String> {
     generate_pure_compile_time_dsl(&dsl)
 }
 
+fn actions_crate_path() -> Result<TokenStream, String> {
+    if let Ok(found) = crate_name("hyperchad_actions") {
+        return Ok(match found {
+            FoundCrate::Itself => quote!(crate),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{name}");
+                quote!(::#ident)
+            }
+        });
+    }
+
+    if let Ok(found) = crate_name("hyperchad") {
+        return Ok(match found {
+            FoundCrate::Itself => quote!(crate::actions),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{name}");
+                quote!(::#ident::actions)
+            }
+        });
+    }
+
+    Err("actions_dsl! requires either a `hyperchad_actions` dependency, or a `hyperchad` dependency with the `actions` feature enabled".to_string())
+}
+
 /// Generates completely compile-time optimized DSL with zero runtime logic
 ///
 /// This function optimizes the generated code based on the number of statements:
@@ -172,8 +197,13 @@ fn generate_pure_compile_time_dsl(dsl: &Dsl) -> Result<TokenStream, String> {
         }
     };
 
+    let actions_crate = actions_crate_path()?;
+
     // Combine variable bindings with the result
-    Ok(result)
+    Ok(quote! {{
+        use #actions_crate as hyperchad_actions;
+        #result
+    }})
 }
 
 /// Generates a single action effect from exactly one statement

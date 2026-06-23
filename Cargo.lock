@@ -7038,6 +7038,7 @@ version = "0.3.0"
 dependencies = [
  "hyperchad_actions",
  "log 0.4.32",
+ "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -16252,6 +16253,7 @@ name = "switchy_async_macros"
 version = "0.3.0"
 dependencies = [
  "log 0.4.32",
+ "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",

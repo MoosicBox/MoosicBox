@@ -84,7 +84,7 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
 /// This struct captures both the crate path for generating qualified paths
 /// and the parsed select branches.
 struct SelectWithPathInput {
-    crate_path: syn::Path,
+    crate_path: TokenStream2,
     select_input: SelectInput,
 }
 
@@ -107,13 +107,22 @@ struct SelectBranch {
     guard: Option<Expr>,
 }
 
+fn parse_path_tokens(input: ParseStream) -> ParseResult<TokenStream2> {
+    let mut tokens = TokenStream2::new();
+    while !input.peek(Token![;]) {
+        let token: proc_macro2::TokenTree = input.parse()?;
+        tokens.extend([token]);
+    }
+    Ok(tokens)
+}
+
 impl Parse for SelectWithPathInput {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         // Parse: (@path ::some::path) (normal_select_syntax)
         let _: Token![@] = input.parse()?;
         let _path_ident: syn::Ident = input.parse()?; // Should be "path"
         let _: Token![=] = input.parse()?;
-        let crate_path: syn::Path = input.parse()?;
+        let crate_path = parse_path_tokens(input)?;
         let _: Token![;] = input.parse()?;
         let select_input: SelectInput = input.parse()?;
 
@@ -255,7 +264,7 @@ pub fn try_join_internal(input: TokenStream) -> TokenStream {
 /// Contains the crate path for generating qualified paths and the list
 /// of futures to join.
 struct JoinWithPathInput {
-    crate_path: syn::Path,
+    crate_path: TokenStream2,
     futures: Vec<Expr>,
 }
 
@@ -265,7 +274,7 @@ impl Parse for JoinWithPathInput {
         let _: Token![@] = input.parse()?;
         let _path_ident: syn::Ident = input.parse()?; // Should be "path"
         let _: Token![=] = input.parse()?;
-        let crate_path: syn::Path = input.parse()?;
+        let crate_path = parse_path_tokens(input)?;
         let _: Token![;] = input.parse()?;
 
         let mut futures = Vec::new();
@@ -402,10 +411,7 @@ mod tests {
         let parsed: SelectWithPathInput =
             syn::parse2(input).expect("Failed to parse SelectWithPathInput");
 
-        assert_eq!(
-            parsed.crate_path.segments.last().unwrap().ident.to_string(),
-            "crate"
-        );
+        assert_eq!(parsed.crate_path.to_string(), "crate");
         assert_eq!(parsed.select_input.branches.len(), 1);
     }
 
