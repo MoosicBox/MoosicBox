@@ -6,9 +6,9 @@ use std::sync::LazyLock;
 use hyperchad::app::{App, AppBuilder, renderer::DefaultRenderer};
 use hyperchad::markdown::markdown_to_container;
 use hyperchad::router::Router;
-use hyperchad::template::{Containers, container};
+use hyperchad::template::{Container, Containers, container};
 
-use crate::link_map::rewrite_relative_links;
+use crate::link_map::LinkMap;
 use crate::registry::{DocPage, DocsSection, NavSection, PageKind, nav_sections};
 use crate::theme::Theme;
 
@@ -69,8 +69,8 @@ impl DocsSiteBuilder {
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
-            title: format!("{name} docs"),
-            description: format!("Documentation for {name}"),
+            title: String::new(),
+            description: String::new(),
             theme: Theme::default(),
             pages: Vec::new(),
             sections: Vec::new(),
@@ -167,14 +167,27 @@ impl DocsSiteBuilder {
             self.scan_pages(&scan);
         }
 
+        let title = if self.title.is_empty() {
+            format!("{} docs", self.name)
+        } else {
+            self.title
+        };
+        let description = if self.description.is_empty() {
+            format!("Documentation for {}", self.name)
+        } else {
+            self.description
+        };
+        let link_map = LinkMap::from_pages(&self.pages);
+
         DocsSite {
             name: self.name,
-            title: self.title,
-            description: self.description,
+            title,
+            description,
             theme: self.theme,
             pages: self.pages,
             sections: self.sections,
             home: self.home,
+            link_map,
         }
     }
 
@@ -233,9 +246,16 @@ pub struct DocsSite {
     pages: Vec<DocPage>,
     sections: Vec<DocsSection>,
     home: Option<fn() -> Containers>,
+    link_map: LinkMap,
 }
 
 impl DocsSite {
+    /// Create a docs site builder for `name`.
+    #[must_use]
+    pub fn builder(name: &'static str) -> DocsSiteBuilder {
+        DocsSiteBuilder::new(name)
+    }
+
     /// Initialize a `HyperChad` app builder for this docs site.
     #[must_use]
     pub fn init(self) -> AppBuilder {
@@ -301,10 +321,7 @@ impl DocsSite {
     }
 
     fn render_markdown_page(&self, page: &DocPage, markdown: &'static str) -> Containers {
-        let mut content = markdown_to_container(markdown);
-        if let Some(source) = page.source {
-            rewrite_relative_links(&mut content, source, &self.pages);
-        }
+        let content = self.render_markdown_content(page, markdown);
         let body = if let Some(title) = page.title {
             container! {
                 div direction=column gap=20 {
@@ -316,6 +333,16 @@ impl DocsSite {
             vec![content]
         };
         self.wrap_page(page.route, &body)
+    }
+
+    /// Render markdown content with registry-owned relative link rewriting.
+    #[must_use]
+    pub fn render_markdown_content(&self, page: &DocPage, markdown: &str) -> Container {
+        let mut content = markdown_to_container(markdown);
+        if let Some(source) = page.source {
+            self.link_map.rewrite_relative_links(&mut content, source);
+        }
+        content
     }
 
     fn wrap_page(&self, current_path: &str, body: &Containers) -> Containers {

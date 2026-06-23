@@ -62,7 +62,14 @@ pub struct ConfigReference<T: ConfigDocSchema> {
     intro: String,
     env_overrides: Vec<EnvOverrideDoc>,
     appendices: Vec<String>,
+    section_appendices: Vec<SectionAppendix>,
     _marker: std::marker::PhantomData<T>,
+}
+
+#[derive(Clone)]
+struct SectionAppendix {
+    section_name: String,
+    markdown: String,
 }
 
 impl<T: ConfigDocSchema> ConfigReference<T> {
@@ -73,6 +80,7 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
             intro: String::new(),
             env_overrides: Vec::new(),
             appendices: Vec::new(),
+            section_appendices: Vec::new(),
             _marker: std::marker::PhantomData,
         }
     }
@@ -110,6 +118,20 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
         self
     }
 
+    /// Append arbitrary markdown after a generated top-level config section.
+    #[must_use]
+    pub fn section_appendix(
+        mut self,
+        section_name: impl Into<String>,
+        markdown: impl Into<String>,
+    ) -> Self {
+        self.section_appendices.push(SectionAppendix {
+            section_name: section_name.into(),
+            markdown: markdown.into(),
+        });
+        self
+    }
+
     /// Append arbitrary markdown after generated config sections.
     #[must_use]
     pub fn append_markdown(mut self, markdown: impl Into<String>) -> Self {
@@ -120,7 +142,11 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
     /// Render markdown.
     #[must_use]
     pub fn render(&self) -> String {
-        let mut doc = render_config_reference::<T>(&self.intro, &self.env_overrides);
+        let mut doc = render_config_reference::<T>(
+            &self.intro,
+            &self.env_overrides,
+            &self.section_appendices,
+        );
         for appendix in &self.appendices {
             if !doc.ends_with("\n\n") {
                 doc.push_str("\n\n");
@@ -300,12 +326,13 @@ pub fn config_reference<T: ConfigDocSchema>(
     intro: &str,
     env_overrides: &[EnvOverrideDoc],
 ) -> String {
-    render_config_reference::<T>(intro, env_overrides)
+    render_config_reference::<T>(intro, env_overrides, &[])
 }
 
 fn render_config_reference<T: ConfigDocSchema>(
     intro: &str,
     env_overrides: &[EnvOverrideDoc],
+    section_appendices: &[SectionAppendix],
 ) -> String {
     let mut doc = String::new();
     if !intro.is_empty() {
@@ -337,6 +364,7 @@ fn render_config_reference<T: ConfigDocSchema>(
                 &fields,
                 &defaults,
             );
+            append_section_appendices(&mut doc, field.toml_key, section_appendices);
         }
     }
 
@@ -349,6 +377,25 @@ struct RenderField {
     type_display: &'static str,
     description: &'static str,
     enum_values: Option<&'static [&'static str]>,
+}
+
+fn append_section_appendices(
+    doc: &mut String,
+    section_name: &str,
+    section_appendices: &[SectionAppendix],
+) {
+    for appendix in section_appendices
+        .iter()
+        .filter(|appendix| appendix.section_name == section_name)
+    {
+        if !doc.ends_with("\n\n") {
+            doc.push_str("\n\n");
+        }
+        doc.push_str(&appendix.markdown);
+        if !doc.ends_with("\n\n") {
+            doc.push_str("\n\n");
+        }
+    }
 }
 
 fn render_section(
@@ -463,4 +510,62 @@ fn escape_markdown_table_cell(value: &str) -> String {
 
 fn escape_inline_code(value: &str) -> String {
     value.replace('`', "\\`")
+}
+
+#[cfg(test)]
+mod tests {
+    use hyperchad_docs_config::{ConfigDocSchema, FieldDoc, NestedFieldDoc};
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct TestConfig;
+
+    impl ConfigDocSchema for TestConfig {
+        fn section_name() -> &'static str {
+            "server"
+        }
+
+        fn section_description() -> &'static str {
+            "Server settings."
+        }
+
+        fn default_values() -> BTreeMap<String, String> {
+            BTreeMap::new()
+        }
+
+        fn field_docs() -> Vec<FieldDoc> {
+            vec![FieldDoc {
+                toml_key: "server",
+                description: "Server settings.",
+                type_display: "table",
+                enum_values: None,
+                nested: Some(NestedFieldDoc::Inline {
+                    fields: vec![FieldDoc {
+                        toml_key: "host",
+                        description: "Bind host.",
+                        type_display: "string",
+                        enum_values: None,
+                        nested: None,
+                    }],
+                    defaults: BTreeMap::from([("host".to_string(), "127.0.0.1".to_string())]),
+                }),
+            }]
+        }
+    }
+
+    #[test]
+    fn config_reference_appends_section_markdown_after_matching_section() {
+        let doc = ConfigReference::<TestConfig>::new()
+            .section_appendix(
+                "server",
+                "### Server examples\n\n```toml\n[server]\nhost = \"0.0.0.0\"\n```",
+            )
+            .render();
+
+        assert!(doc.contains("## `server`"));
+        assert!(doc.contains("### Server examples"));
+        assert!(doc.contains("host = \"0.0.0.0\""));
+    }
 }

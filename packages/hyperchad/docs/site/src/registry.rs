@@ -90,6 +90,14 @@ impl DocPage {
         }
     }
 
+    /// Create a generated markdown documentation page.
+    ///
+    /// Alias for [`Self::generated_markdown`] for concise call sites.
+    #[must_use]
+    pub const fn generated(route: &'static str, generate: fn() -> String) -> Self {
+        Self::generated_markdown(route, generate)
+    }
+
     /// Create a custom-rendered documentation page.
     #[must_use]
     pub const fn custom(route: &'static str, render: PageRenderer) -> Self {
@@ -120,6 +128,14 @@ impl DocPage {
     /// Set the page navigation label.
     #[must_use]
     pub const fn nav_label(mut self, nav_label: &'static str) -> Self {
+        self.nav_label = Some(nav_label);
+        self
+    }
+
+    /// Set both sidebar section identifier and navigation label.
+    #[must_use]
+    pub const fn nav(mut self, section: &'static str, nav_label: &'static str) -> Self {
+        self.section = Some(section);
         self.nav_label = Some(nav_label);
         self
     }
@@ -185,8 +201,7 @@ macro_rules! docs_markdown_page {
     ) => {
         $crate::DocPage::markdown($source, $route, $contents)
             .title($title)
-            .section($section)
-            .nav_label($nav_label)
+            .nav($section, $nav_label)
     };
     (
         source: $source:literal,
@@ -201,8 +216,7 @@ macro_rules! docs_markdown_page {
             include_str!(concat!("../../../../", $source)),
         )
         .title($title)
-        .section($section)
-        .nav_label($nav_label)
+        .nav($section, $nav_label)
     };
 }
 
@@ -218,7 +232,46 @@ macro_rules! docs_generated_page {
     ) => {
         $crate::DocPage::generated_markdown($route, $generate)
             .title($title)
-            .section($section)
-            .nav_label($nav_label)
+            .nav($section, $nav_label)
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn generate() -> String {
+        "# Generated".to_string()
+    }
+
+    #[test]
+    fn nav_sets_section_and_label() {
+        let page = DocPage::generated("/docs/generated", generate).nav("reference", "Generated");
+
+        assert_eq!(page.section, Some("reference"));
+        assert_eq!(page.nav_label, Some("Generated"));
+    }
+
+    #[test]
+    fn nav_sections_preserve_declared_section_and_page_order() {
+        let sections = [
+            DocsSection::new("getting-started", "Getting Started"),
+            DocsSection::new("reference", "Reference"),
+        ];
+        let pages = [
+            DocPage::generated("/docs/cli", generate).nav("reference", "CLI"),
+            DocPage::generated("/docs", generate).nav("getting-started", "Overview"),
+            DocPage::generated("/docs/config", generate).nav("reference", "Config"),
+            DocPage::generated("/hidden", generate),
+        ];
+
+        let nav = nav_sections(&sections, &pages);
+
+        assert_eq!(nav.len(), 2);
+        assert_eq!(nav[0].title, "Getting Started");
+        assert_eq!(nav[0].items[0].label, "Overview");
+        assert_eq!(nav[1].title, "Reference");
+        assert_eq!(nav[1].items[0].label, "CLI");
+        assert_eq!(nav[1].items[1].label, "Config");
+    }
 }

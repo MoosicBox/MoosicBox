@@ -29,6 +29,12 @@ impl Theme {
     /// Return the default dark documentation theme.
     #[must_use]
     pub fn default_dark() -> Self {
+        Self::terminal_dark()
+    }
+
+    /// Return a terminal-inspired dark documentation theme.
+    #[must_use]
+    pub fn terminal_dark() -> Self {
         Self {
             background: Color::from_hex("#0d1117"),
             surface: Color::from_hex("#161b22"),
