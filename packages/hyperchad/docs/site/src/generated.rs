@@ -63,7 +63,17 @@ pub struct ConfigReference<T: ConfigDocSchema> {
     env_overrides: Vec<EnvOverrideDoc>,
     appendices: Vec<String>,
     section_appendices: Vec<SectionAppendix>,
+    section_heading_style: SectionHeadingStyle,
+    option_column_label: &'static str,
     _marker: std::marker::PhantomData<T>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SectionHeadingStyle {
+    /// Render headings like ``## `server` ``.
+    Name,
+    /// Render headings like ``## `[server]` ``.
+    TomlTable,
 }
 
 #[derive(Clone)]
@@ -81,6 +91,8 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
             env_overrides: Vec::new(),
             appendices: Vec::new(),
             section_appendices: Vec::new(),
+            section_heading_style: SectionHeadingStyle::Name,
+            option_column_label: "Key",
             _marker: std::marker::PhantomData,
         }
     }
@@ -132,6 +144,27 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
         self
     }
 
+    /// Set top-level config section heading rendering style.
+    #[must_use]
+    pub const fn section_heading_style(mut self, style: SectionHeadingStyle) -> Self {
+        self.section_heading_style = style;
+        self
+    }
+
+    /// Render top-level config headings as TOML table headings, e.g. ``## `[server]` ``.
+    #[must_use]
+    pub const fn toml_table_headings(mut self) -> Self {
+        self.section_heading_style = SectionHeadingStyle::TomlTable;
+        self
+    }
+
+    /// Set the first table column label.
+    #[must_use]
+    pub const fn option_column_label(mut self, label: &'static str) -> Self {
+        self.option_column_label = label;
+        self
+    }
+
     /// Append arbitrary markdown after generated config sections.
     #[must_use]
     pub fn append_markdown(mut self, markdown: impl Into<String>) -> Self {
@@ -146,6 +179,8 @@ impl<T: ConfigDocSchema> ConfigReference<T> {
             &self.intro,
             &self.env_overrides,
             &self.section_appendices,
+            self.section_heading_style,
+            self.option_column_label,
         );
         for appendix in &self.appendices {
             if !doc.ends_with("\n\n") {
@@ -326,13 +361,15 @@ pub fn config_reference<T: ConfigDocSchema>(
     intro: &str,
     env_overrides: &[EnvOverrideDoc],
 ) -> String {
-    render_config_reference::<T>(intro, env_overrides, &[])
+    render_config_reference::<T>(intro, env_overrides, &[], SectionHeadingStyle::Name, "Key")
 }
 
 fn render_config_reference<T: ConfigDocSchema>(
     intro: &str,
     env_overrides: &[EnvOverrideDoc],
     section_appendices: &[SectionAppendix],
+    section_heading_style: SectionHeadingStyle,
+    option_column_label: &str,
 ) -> String {
     let mut doc = String::new();
     if !intro.is_empty() {
@@ -363,6 +400,8 @@ fn render_config_reference<T: ConfigDocSchema>(
                 field.description,
                 &fields,
                 &defaults,
+                section_heading_style,
+                option_column_label,
             );
             append_section_appendices(&mut doc, field.toml_key, section_appendices);
         }
@@ -404,15 +443,20 @@ fn render_section(
     section_description: &str,
     fields: &[RenderField],
     defaults: &BTreeMap<String, String>,
+    heading_style: SectionHeadingStyle,
+    option_column_label: &str,
 ) {
-    doc.push_str(&format!("## `{section_name}`\n\n"));
+    match heading_style {
+        SectionHeadingStyle::Name => doc.push_str(&format!("## `{section_name}`\n\n")),
+        SectionHeadingStyle::TomlTable => doc.push_str(&format!("## `[{section_name}]`\n\n")),
+    }
     if !section_description.is_empty() {
         doc.push_str(section_description);
         doc.push_str("\n\n");
     }
-    doc.push_str(
-        "| Key | Type | Default | Description |\n|-----|------|---------|-------------|\n",
-    );
+    doc.push_str(&format!(
+        "| {option_column_label} | Type | Default | Description |\n|-----|------|---------|-------------|\n",
+    ));
     for field in fields {
         let default = defaults.get(&field.key).map_or(String::new(), |value| {
             format!("`{}`", escape_inline_code(value))

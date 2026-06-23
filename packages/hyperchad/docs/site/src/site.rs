@@ -347,13 +347,14 @@ impl DocsSite {
 
     fn wrap_page(&self, current_path: &str, body: &Containers) -> Containers {
         let sections = nav_sections(&self.sections, &self.pages);
+        let border = (self.theme.border, 1);
         container! {
-            div direction=column min-height="100vh" background=#0d1117 color=#f0f6fc {
-                header direction=row align-items=center justify-content=space-between padding-x=24 padding-y=16 border-bottom="1, #21262d" {
+            div direction=column min-height="100vh" background=(self.theme.background) color=(self.theme.text_primary) {
+                header direction=row align-items=center justify-content=space-between padding-x=24 padding-y=16 border-bottom=(border) {
                     anchor href="/" color=(self.theme.accent) text-decoration="none" font-size=20 font-weight=700 { (self.name) }
                 }
                 div direction=row flex=1 {
-                    aside direction=column width=260 min-width=260 background=#010409 border-right="1, #21262d" padding-y=24 overflow-y=auto {
+                    aside direction=column width=260 min-width=260 background=(self.theme.surface) border-right=(border) padding-y=24 overflow-y=auto {
                         (render_sidebar(&sections, current_path, &self.theme))
                     }
                     main flex=1 padding=32 overflow-x=auto {
@@ -372,7 +373,7 @@ fn render_sidebar(sections: &[NavSection], current_path: &str, theme: &Theme) ->
         div direction=column gap=24 padding-x=16 {
             @for section in sections {
                 div direction=column gap=8 {
-                    div color=#8b949e font-size=12 font-weight=700 {
+                    div color=(theme.text_muted) font-size=12 font-weight=700 {
                         (section.title)
                     }
                     @for item in &section.items {
