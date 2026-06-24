@@ -194,6 +194,30 @@ macro_rules! docs_markdown_page {
     (
         source: $source:literal,
         route: $route:literal,
+        title: None,
+        section: $section:expr,
+        nav_label: $nav_label:expr,
+        contents: $contents:expr $(,)?
+    ) => {
+        $crate::DocPage::markdown($source, $route, $contents).nav($section, $nav_label)
+    };
+    (
+        source: $source:literal,
+        route: $route:literal,
+        title: None,
+        section: $section:expr,
+        nav_label: $nav_label:expr $(,)?
+    ) => {
+        $crate::DocPage::markdown(
+            $source,
+            $route,
+            include_str!(concat!("../../../../", $source)),
+        )
+        .nav($section, $nav_label)
+    };
+    (
+        source: $source:literal,
+        route: $route:literal,
         title: $title:expr,
         section: $section:expr,
         nav_label: $nav_label:expr,
@@ -223,6 +247,15 @@ macro_rules! docs_markdown_page {
 /// Declare a generated markdown documentation page.
 #[macro_export]
 macro_rules! docs_generated_page {
+    (
+        route: $route:literal,
+        title: None,
+        section: $section:expr,
+        nav_label: $nav_label:expr,
+        generate: $generate:expr $(,)?
+    ) => {
+        $crate::DocPage::generated_markdown($route, $generate).nav($section, $nav_label)
+    };
     (
         route: $route:literal,
         title: $title:expr,

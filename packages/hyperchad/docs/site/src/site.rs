@@ -7,6 +7,7 @@ use hyperchad::app::{App, AppBuilder, renderer::DefaultRenderer};
 use hyperchad::markdown::markdown_to_container;
 use hyperchad::router::Router;
 use hyperchad::template::{Container, Containers, container};
+use hyperchad::transformer::Element;
 
 #[cfg(feature = "assets")]
 use hyperchad::renderer::assets::StaticAssetRoute;
@@ -494,8 +495,9 @@ impl DocsSite {
 
     fn render_markdown_page(&self, page: &DocPage, markdown: &'static str) -> Containers {
         let content = self.render_markdown_content(page, markdown);
+        let title = markdown_shell_title(&content, page.title);
         let body = Self::render_markdown_body(&vec![content]);
-        self.wrap_page_with_title(page.route, page.title, &body)
+        self.wrap_page_with_title(page.route, title, &body)
     }
 
     /// Render markdown content with registry-owned relative link rewriting.
@@ -656,6 +658,34 @@ fn route_for_markdown(path: &Path, root: &Path, route_prefix: &str) -> String {
         route_prefix.to_string()
     } else {
         format!("{}/{suffix}", route_prefix.trim_end_matches('/'))
+    }
+}
+
+fn markdown_shell_title(content: &Container, title: Option<&'static str>) -> Option<&'static str> {
+    let title = title?;
+    let first_heading = content.children.iter().find_map(heading_text);
+    if first_heading.as_deref().map(str::trim) == Some(title.trim()) {
+        None
+    } else {
+        Some(title)
+    }
+}
+
+fn heading_text(container: &Container) -> Option<String> {
+    if matches!(container.element, Element::Heading { .. }) {
+        let mut text = String::new();
+        collect_text(container, &mut text);
+        return Some(text);
+    }
+    None
+}
+
+fn collect_text(container: &Container, text: &mut String) {
+    if let Element::Text { value } = &container.element {
+        text.push_str(value);
+    }
+    for child in &container.children {
+        collect_text(child, text);
     }
 }
 
