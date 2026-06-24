@@ -12,6 +12,7 @@ use hyperchad::template::{Container, Containers, container};
 use hyperchad::renderer::assets::StaticAssetRoute;
 
 use crate::link_map::LinkMap;
+use crate::markdown::MarkdownStyle;
 use crate::registry::{DocPage, DocsSection, NavSection, PageKind, nav_sections};
 use crate::theme::Theme;
 
@@ -493,7 +494,7 @@ impl DocsSite {
 
     fn render_markdown_page(&self, page: &DocPage, markdown: &'static str) -> Containers {
         let content = self.render_markdown_content(page, markdown);
-        let body = vec![content];
+        let body = Self::render_markdown_body(&vec![content]);
         self.wrap_page_with_title(page.route, page.title, &body)
     }
 
@@ -504,7 +505,18 @@ impl DocsSite {
         if let Some(source) = page.source {
             self.link_map.rewrite_relative_links(&mut content, source);
         }
+        let style = MarkdownStyle::new(&self.theme, self.font_family());
+        style.apply(&mut content);
+        style.apply_body(&mut content);
         content
+    }
+
+    fn render_markdown_body(content: &Containers) -> Containers {
+        container! {
+            div {
+                (content)
+            }
+        }
     }
 
     /// Wrap rendered content in the configured page shell.

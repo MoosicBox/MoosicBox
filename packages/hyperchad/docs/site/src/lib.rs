@@ -28,6 +28,7 @@
 pub mod assets;
 pub mod generated;
 pub mod link_map;
+pub mod markdown;
 pub mod registry;
 pub mod site;
 pub mod theme;
