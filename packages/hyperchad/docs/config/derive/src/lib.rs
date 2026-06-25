@@ -642,7 +642,17 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
                 #field_name.to_string(),
                 toml::Value::try_from(&d.#field_ident)
                     .map(|v| {
-                        if v.is_table() || v.is_array() {
+                        if let toml::Value::Table(table) = &v
+                            && table.is_empty()
+                        {
+                            return "{}".to_string();
+                        }
+                        if let toml::Value::Array(array) = &v
+                            && array.is_empty()
+                        {
+                            return "[]".to_string();
+                        }
+                        if v.is_table() {
                             toml::to_string_pretty(&v)
                                 .unwrap_or_default()
                                 .trim()
