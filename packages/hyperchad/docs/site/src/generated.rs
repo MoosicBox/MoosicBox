@@ -544,6 +544,32 @@ fn flatten_field_docs(
                 flattened_fields.extend(child_fields);
                 flattened_defaults.extend(child_defaults);
             }
+            Some(NestedFieldDoc::MapValue {
+                key_placeholder,
+                value_type_display,
+                value_description,
+                value_enum_values,
+            }) => {
+                flattened_fields.push(RenderField {
+                    key: dotted_key(&full_key, key_placeholder),
+                    type_display: value_type_display,
+                    description: value_description,
+                    enum_values: value_enum_values,
+                });
+            }
+            Some(NestedFieldDoc::ListValue {
+                index_placeholder,
+                item_type_display,
+                item_description,
+                item_enum_values,
+            }) => {
+                flattened_fields.push(RenderField {
+                    key: dotted_key(&full_key, index_placeholder),
+                    type_display: item_type_display,
+                    description: item_description,
+                    enum_values: item_enum_values,
+                });
+            }
             None => {
                 if let Some(default) = defaults.get(field.toml_key) {
                     flattened_defaults.insert(full_key.clone(), default.clone());
@@ -632,5 +658,70 @@ mod tests {
         assert!(doc.contains("## `server`"));
         assert!(doc.contains("### Server examples"));
         assert!(doc.contains("host = \"0.0.0.0\""));
+    }
+
+    #[test]
+    fn config_reference_flattens_dynamic_map_and_list_values() {
+        #[derive(Default)]
+        struct DynamicConfig;
+
+        impl ConfigDocSchema for DynamicConfig {
+            fn section_name() -> &'static str {
+                "dynamic"
+            }
+
+            fn section_description() -> &'static str {
+                "Dynamic settings."
+            }
+
+            fn default_values() -> BTreeMap<String, String> {
+                BTreeMap::new()
+            }
+
+            fn field_docs() -> Vec<FieldDoc> {
+                vec![FieldDoc {
+                    toml_key: "dynamic",
+                    description: "Dynamic settings.",
+                    type_display: "table",
+                    enum_values: None,
+                    nested: Some(NestedFieldDoc::Inline {
+                        fields: vec![
+                            FieldDoc {
+                                toml_key: "tools",
+                                description: "Per-tool enablement.",
+                                type_display: "table",
+                                enum_values: None,
+                                nested: Some(NestedFieldDoc::MapValue {
+                                    key_placeholder: "<tool-id>",
+                                    value_type_display: "bool",
+                                    value_description: "Enable or disable this tool.",
+                                    value_enum_values: None,
+                                }),
+                            },
+                            FieldDoc {
+                                toml_key: "modes",
+                                description: "Mode preference order.",
+                                type_display: "array<string>",
+                                enum_values: None,
+                                nested: Some(NestedFieldDoc::ListValue {
+                                    index_placeholder: "<index>",
+                                    item_type_display: "string",
+                                    item_description: "Mode id.",
+                                    item_enum_values: Some(&["auto", "manual"]),
+                                }),
+                            },
+                        ],
+                        defaults: BTreeMap::new(),
+                    }),
+                }]
+            }
+        }
+
+        let doc = ConfigReference::<DynamicConfig>::new().render();
+
+        assert!(doc.contains("tools.<tool-id>"));
+        assert!(doc.contains("Enable or disable this tool."));
+        assert!(doc.contains("modes.<index>"));
+        assert!(doc.contains("`auto`, `manual`"));
     }
 }

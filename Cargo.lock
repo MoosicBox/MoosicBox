@@ -6588,6 +6588,12 @@ dependencies = [
 [[package]]
 name = "hyperchad_docs_config"
 version = "0.3.0"
+dependencies = [
+ "hyperchad_docs_config_derive",
+ "serde",
+ "serde_json",
+ "toml 1.1.2+spec-1.1.0",
+]
 
 [[package]]
 name = "hyperchad_docs_config_derive"
