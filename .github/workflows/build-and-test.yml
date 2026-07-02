@@ -300,7 +300,7 @@ jobs:
                   submodules: ${{ matrix.package.gitSubmodules == true }}
 
             - name: Enable patches
-              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == 'true' }}
+              if: ${{ github.event.inputs.edge == 'true' }}
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
@@ -489,7 +489,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Enable patches
-              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == 'true' }}
+              if: ${{ github.event.inputs.edge == 'true' }}
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
@@ -518,7 +518,7 @@ jobs:
                   submodules: ${{ matrix.gitSubmodules == true }}
 
             - name: Enable patches
-              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == 'true' }}
+              if: ${{ github.event.inputs.edge == 'true' }}
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
