@@ -1248,7 +1248,10 @@ mod tests {
 
         // Should generate empty vec
         let result = result.to_string();
-        assert_eq!(result, "hyperchad_actions :: ActionType :: NoOp");
+        assert_eq!(
+            result,
+            "{ use :: hyperchad_actions as hyperchad_actions ; hyperchad_actions :: ActionType :: NoOp }"
+        );
     }
 
     #[test]

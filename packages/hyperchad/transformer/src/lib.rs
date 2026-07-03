@@ -3857,11 +3857,9 @@ impl Container {
     ) -> Option<Vec<Self>> {
         let parent = self.find_element_by_id_mut(id)?;
 
-        let original = parent.children.drain(..).collect::<Vec<_>>();
+        let original = std::mem::take(&mut parent.children);
 
-        for element in replacement {
-            parent.children.push(element);
-        }
+        parent.children = replacement;
 
         Some(original)
     }
@@ -3882,11 +3880,9 @@ impl Container {
     ) -> Option<Vec<Self>> {
         let parent = self.find_element_by_str_id_mut(id)?;
 
-        let original = parent.children.drain(..).collect::<Vec<_>>();
+        let original = std::mem::take(&mut parent.children);
 
-        for element in replacement {
-            parent.children.push(element);
-        }
+        parent.children = replacement;
 
         Some(original)
     }

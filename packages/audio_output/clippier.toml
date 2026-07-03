@@ -13,7 +13,7 @@ features = ["asio", "cpal", "default", "default-windows", "jack"]
 os = "macos"
 
 [[config.dependencies]]
-command  = "brew install jack"
+command  = "brew install berkeley-db@5 jack"
 features = ["jack"]
 
 [[config]]

@@ -185,7 +185,7 @@ pub fn container(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 fn template_crate_path() -> Result<TokenStream, String> {
     if let Ok(found) = crate_name("hyperchad_template") {
         return Ok(match found {
-            FoundCrate::Itself => quote!(crate),
+            FoundCrate::Itself => quote!(::hyperchad_template),
             FoundCrate::Name(name) => {
                 let ident = format_ident!("{name}");
                 quote!(::#ident)

@@ -97,6 +97,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 extern crate alloc;
+extern crate self as hyperchad_template;
 
 use alloc::string::ToString;
 use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};

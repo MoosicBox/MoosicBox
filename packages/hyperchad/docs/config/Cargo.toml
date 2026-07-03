@@ -19,4 +19,3 @@ fail-on-warnings = []
 hyperchad_docs_config_derive = { workspace = true }
 serde                        = { workspace = true, features = ["derive"] }
 serde_json                   = { workspace = true }
-toml                         = { workspace = true, features = ["display"] }

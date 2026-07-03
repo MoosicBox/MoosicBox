@@ -6592,7 +6592,6 @@ dependencies = [
  "hyperchad_docs_config_derive",
  "serde",
  "serde_json",
- "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -6611,7 +6610,6 @@ dependencies = [
  "clap",
  "hyperchad",
  "hyperchad_docs_config",
- "serde_json",
 ]
 
 [[package]]

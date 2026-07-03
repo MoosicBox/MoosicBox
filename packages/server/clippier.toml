@@ -28,3 +28,7 @@ features = ["default", "postgres-openssl", "tls"]
 
 [[config]]
 os = "macos"
+
+[[config.dependencies]]
+command  = "brew install berkeley-db@5 jack"
+features = ["jack"]
