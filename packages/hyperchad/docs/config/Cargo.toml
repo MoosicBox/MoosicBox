@@ -11,7 +11,10 @@ repository  = { workspace = true }
 version     = { workspace = true }
 
 [features]
-fail-on-warnings = []
+fail-on-warnings = ["hyperchad_docs_config_derive/fail-on-warnings"]
+
+[package.metadata.cargo-machete]
+ignored = ["toml"]
 
 [dependencies]
 
@@ -19,3 +22,4 @@ fail-on-warnings = []
 hyperchad_docs_config_derive = { workspace = true }
 serde                        = { workspace = true, features = ["derive"] }
 serde_json                   = { workspace = true }
+toml                         = { workspace = true, features = ["display"] }
