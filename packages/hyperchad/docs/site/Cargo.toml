@@ -11,8 +11,11 @@ repository  = { workspace = true }
 version     = { workspace = true }
 
 [features]
-default          = ["assets", "html", "static-routes", "vanilla-js"]
-fail-on-warnings = ["hyperchad_docs_config/fail-on-warnings"]
+default = ["assets", "html", "static-routes", "vanilla-js"]
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "hyperchad_docs_config/fail-on-warnings",
+]
 
 actix = ["hyperchad/renderer-html-actix"]
 assets = ["hyperchad/renderer-assets"]
