@@ -232,6 +232,8 @@ pub struct AppBuilder {
     actix_shared_state_bridge: Option<ActixSharedStateBridgeConfig>,
     #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
     actix_shared_state_transport: Option<ActixSharedStateTransportConfig>,
+    #[cfg(feature = "actix")]
+    actix_bind_address: Option<String>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -312,6 +314,8 @@ impl AppBuilder {
             actix_shared_state_bridge: None,
             #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
             actix_shared_state_transport: None,
+            #[cfg(feature = "actix")]
+            actix_bind_address: None,
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
@@ -432,6 +436,14 @@ impl AppBuilder {
     #[must_use]
     pub fn with_viewport(mut self, content: String) -> Self {
         self.viewport.replace(content);
+        self
+    }
+
+    /// Sets the address used by Actix-backed renderers (builder pattern).
+    #[cfg(feature = "actix")]
+    #[must_use]
+    pub fn with_actix_bind_address(mut self, address: impl Into<String>) -> Self {
+        self.actix_bind_address = Some(address.into());
         self
     }
 
@@ -1436,6 +1448,13 @@ mod tests {
         assert_eq!(builder.viewport, Some(viewport));
     }
 
+    #[cfg(feature = "actix")]
+    #[test_log::test]
+    fn test_app_builder_with_actix_bind_address() {
+        let builder = AppBuilder::new().with_actix_bind_address("127.0.0.1");
+        assert_eq!(builder.actix_bind_address.as_deref(), Some("127.0.0.1"));
+    }
+
     #[test_log::test]
     fn test_app_builder_with_background() {
         let color = Color::from_hex("#ffffff");
@@ -1754,6 +1773,18 @@ mod tests {
             .with_runtime_handle(handle);
 
         assert!(builder.runtime_handle.is_some());
+    }
+
+    #[cfg(all(feature = "html", feature = "actix", feature = "vanilla-js"))]
+    #[test_log::test]
+    fn test_build_default_html_vanilla_js_actix_applies_bind_address() {
+        let app = AppBuilder::new()
+            .with_router(Router::new())
+            .with_actix_bind_address("127.0.0.1")
+            .build_default_html_vanilla_js_actix()
+            .expect("default actix renderer should build");
+
+        assert_eq!(app.renderer.app.bind_address.as_deref(), Some("127.0.0.1"));
     }
 
     #[cfg(all(

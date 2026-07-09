@@ -200,6 +200,10 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
 pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> {
     /// The response processor that handles HTTP request/response conversion.
     pub processor: R,
+    /// Optional address used by the Actix HTTP server.
+    ///
+    /// When unset, the server listens on `0.0.0.0` for backward compatibility.
+    pub bind_address: Option<String>,
     /// Receiver channel for renderer events from the hyperchad application.
     pub renderer_event_rx: Receiver<RendererEvent>,
     /// Optional sender channel for user-triggered actions (requires `actions` feature).
@@ -232,6 +236,7 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         Self {
             processor,
             renderer_event_rx,
+            bind_address: None,
             #[cfg(feature = "actions")]
             action_tx: None,
             #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
@@ -244,6 +249,18 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             _phantom: PhantomData,
         }
+    }
+
+    /// Configures the address used by the Actix HTTP server.
+    #[must_use]
+    pub fn with_bind_address(mut self, address: impl Into<String>) -> Self {
+        self.bind_address = Some(address.into());
+        self
+    }
+
+    /// Configures the address used by the Actix HTTP server in place.
+    pub fn set_bind_address(&mut self, address: impl Into<String>) {
+        self.bind_address = Some(address.into());
     }
 
     /// Sets the action transmitter channel and returns the modified app.
@@ -435,6 +452,10 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
         log::debug!("run: starting");
 
         let html_app = self.app.clone();
+        let addr = html_app
+            .bind_address
+            .clone()
+            .unwrap_or_else(|| "0.0.0.0".to_owned());
 
         self.handle.block_on(async move {
             let app = move || {
@@ -694,13 +715,12 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
 
             let mut http_server = actix_web::HttpServer::new(app);
 
-            let addr = "0.0.0.0";
             let service_port = default_env_u16!("PORT", 8343);
 
             log::info!("Server started on {addr}:{service_port}");
 
             http_server = http_server
-                .bind((addr, service_port))
+                .bind((addr.as_str(), service_port))
                 .expect("Failed to bind the address");
 
             if let Err(e) = http_server.run().await {

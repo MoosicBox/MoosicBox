@@ -732,6 +732,10 @@ pub mod html {
                     router,
                 );
 
+                if let Some(address) = self.actix_bind_address.as_deref() {
+                    renderer.app.set_bind_address(address);
+                }
+
                 #[cfg(feature = "assets")]
                 #[allow(unused_mut)]
                 let mut renderer = renderer
@@ -819,6 +823,10 @@ pub mod html {
                         router,
                     )
                     .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
+
+                    if let Some(address) = self.actix_bind_address.as_deref() {
+                        renderer.app.set_bind_address(address);
+                    }
 
                     #[cfg(feature = "assets")]
                     #[allow(unused_mut)]
