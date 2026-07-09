@@ -204,6 +204,10 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     ///
     /// When unset, the server listens on `0.0.0.0` for backward compatibility.
     pub bind_address: Option<String>,
+    /// Optional port used by the Actix HTTP server.
+    ///
+    /// When unset, the server reads `PORT` and then falls back to `8343`.
+    pub port: Option<u16>,
     /// Receiver channel for renderer events from the hyperchad application.
     pub renderer_event_rx: Receiver<RendererEvent>,
     /// Optional sender channel for user-triggered actions (requires `actions` feature).
@@ -237,6 +241,7 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             processor,
             renderer_event_rx,
             bind_address: None,
+            port: None,
             #[cfg(feature = "actions")]
             action_tx: None,
             #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
@@ -261,6 +266,18 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     /// Configures the address used by the Actix HTTP server in place.
     pub fn set_bind_address(&mut self, address: impl Into<String>) {
         self.bind_address = Some(address.into());
+    }
+
+    /// Configures the port used by the Actix HTTP server.
+    #[must_use]
+    pub const fn with_port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    /// Configures the port used by the Actix HTTP server in place.
+    pub const fn set_port(&mut self, port: u16) {
+        self.port = Some(port);
     }
 
     /// Sets the action transmitter channel and returns the modified app.
@@ -456,6 +473,10 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
             .bind_address
             .clone()
             .unwrap_or_else(|| "0.0.0.0".to_owned());
+
+        let service_port = html_app
+            .port
+            .unwrap_or_else(|| default_env_u16!("PORT", 8343));
 
         self.handle.block_on(async move {
             let app = move || {
@@ -714,8 +735,6 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
             };
 
             let mut http_server = actix_web::HttpServer::new(app);
-
-            let service_port = default_env_u16!("PORT", 8343);
 
             log::info!("Server started on {addr}:{service_port}");
 

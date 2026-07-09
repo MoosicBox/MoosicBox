@@ -735,6 +735,9 @@ pub mod html {
                 if let Some(address) = self.actix_bind_address.as_deref() {
                     renderer.app.set_bind_address(address);
                 }
+                if let Some(port) = self.actix_port {
+                    renderer.app.set_port(port);
+                }
 
                 #[cfg(feature = "assets")]
                 #[allow(unused_mut)]
@@ -826,6 +829,9 @@ pub mod html {
 
                     if let Some(address) = self.actix_bind_address.as_deref() {
                         renderer.app.set_bind_address(address);
+                    }
+                    if let Some(port) = self.actix_port {
+                        renderer.app.set_port(port);
                     }
 
                     #[cfg(feature = "assets")]

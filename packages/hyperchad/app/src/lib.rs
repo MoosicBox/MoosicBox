@@ -234,6 +234,8 @@ pub struct AppBuilder {
     actix_shared_state_transport: Option<ActixSharedStateTransportConfig>,
     #[cfg(feature = "actix")]
     actix_bind_address: Option<String>,
+    #[cfg(feature = "actix")]
+    actix_port: Option<u16>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -316,6 +318,8 @@ impl AppBuilder {
             actix_shared_state_transport: None,
             #[cfg(feature = "actix")]
             actix_bind_address: None,
+            #[cfg(feature = "actix")]
+            actix_port: None,
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
@@ -444,6 +448,14 @@ impl AppBuilder {
     #[must_use]
     pub fn with_actix_bind_address(mut self, address: impl Into<String>) -> Self {
         self.actix_bind_address = Some(address.into());
+        self
+    }
+
+    /// Sets the port used by Actix-backed renderers (builder pattern).
+    #[cfg(feature = "actix")]
+    #[must_use]
+    pub const fn with_actix_port(mut self, port: u16) -> Self {
+        self.actix_port = Some(port);
         self
     }
 
@@ -1455,6 +1467,13 @@ mod tests {
         assert_eq!(builder.actix_bind_address.as_deref(), Some("127.0.0.1"));
     }
 
+    #[cfg(feature = "actix")]
+    #[test_log::test]
+    fn test_app_builder_with_actix_port() {
+        let builder = AppBuilder::new().with_actix_port(4321);
+        assert_eq!(builder.actix_port, Some(4321));
+    }
+
     #[test_log::test]
     fn test_app_builder_with_background() {
         let color = Color::from_hex("#ffffff");
@@ -1785,6 +1804,18 @@ mod tests {
             .expect("default actix renderer should build");
 
         assert_eq!(app.renderer.app.bind_address.as_deref(), Some("127.0.0.1"));
+    }
+
+    #[cfg(all(feature = "html", feature = "actix", feature = "vanilla-js"))]
+    #[test_log::test]
+    fn test_build_default_html_vanilla_js_actix_applies_port() {
+        let app = AppBuilder::new()
+            .with_router(Router::new())
+            .with_actix_port(4321)
+            .build_default_html_vanilla_js_actix()
+            .expect("default actix renderer should build");
+
+        assert_eq!(app.renderer.app.port, Some(4321));
     }
 
     #[cfg(all(
