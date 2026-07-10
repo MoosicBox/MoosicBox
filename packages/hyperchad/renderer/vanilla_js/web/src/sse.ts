@@ -1,4 +1,4 @@
-import { triggerMessage } from './core';
+import { on, triggerMessage } from './core';
 import { startEventSourceStream, stopEventSourceStream } from './sse-base';
 
 const DEFAULT_SSE_STREAM_KEY = '/$sse';
@@ -17,7 +17,7 @@ export {
 } from './sse-base';
 
 export function initSSE() {
-    startEventSourceStream('/$sse', {
+    startEventSourceStream(`/$sse${window.location.search}`, {
         streamKey: DEFAULT_SSE_STREAM_KEY,
         onmessage: (e) => triggerMessage(e.event, e.data, e.id),
     });
@@ -26,6 +26,13 @@ export function initSSE() {
 export function stopSSE() {
     stopEventSourceStream(DEFAULT_SSE_STREAM_KEY);
 }
+
+on('domLoad', ({ navigation }) => {
+    if (navigation) {
+        stopSSE();
+        initSSE();
+    }
+});
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSSE);

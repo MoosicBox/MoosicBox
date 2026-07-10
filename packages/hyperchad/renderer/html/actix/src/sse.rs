@@ -27,6 +27,19 @@ use hyperchad_renderer::{Content, RendererEvent};
 
 use crate::{ActixApp, ActixResponseProcessor};
 
+fn renderer_event_for_scope(
+    event: RendererEvent,
+    subscriber_scope: Option<&str>,
+) -> Option<RendererEvent> {
+    match event {
+        RendererEvent::Scoped { scope, event } if subscriber_scope == Some(scope.as_str()) => {
+            renderer_event_for_scope(*event, subscriber_scope)
+        }
+        RendererEvent::Scoped { .. } => None,
+        event => Some(event),
+    }
+}
+
 /// Server-sent event data message with optional event type and ID fields.
 ///
 /// This structure represents a single SSE message that will be sent to connected clients.
@@ -152,7 +165,7 @@ impl Event {
 /// // Register the SSE endpoint in your Actix app configuration.
 /// let _route = web::resource("/$sse").route(web::get().to(handle_sse::<(), _>));
 /// ```
-#[allow(clippy::future_not_send, clippy::too_many_lines)]
+#[allow(clippy::future_not_send, clippy::too_many_lines, unused_variables)]
 pub async fn handle_sse<
     T: Send + Sync + Clone + 'static,
     R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
@@ -169,10 +182,21 @@ pub async fn handle_sse<
 
     let encoding = ContentEncoding::Identity;
 
-    let stream = app
-        .renderer_event_rx
-        .clone()
+    let renderer_event_rx = app.renderer_event_rx_factory.as_ref().map_or_else(
+        || {
+            app.renderer_event_rx
+                .as_ref()
+                .expect("renderer event receiver is not configured")
+                .clone()
+        },
+        |factory| factory(),
+    );
+    let event_scope = app.processor.event_scope(&data);
+    let stream = renderer_event_rx
         .into_stream()
+        .filter_map(move |event| {
+            std::future::ready(renderer_event_for_scope(event, event_scope.as_deref()))
+        })
         .then(move |event| {
             let app = app.clone();
             let data = data.clone();
@@ -265,6 +289,11 @@ pub async fn handle_sse<
                             .event("canvas_update"),
                         ]
                     }
+                    RendererEvent::Scoped { .. } => {
+                        return Err(ErrorInternalServerError(
+                            "scoped renderer event was not unwrapped",
+                        ));
+                    }
                     RendererEvent::Event { name, value } => {
                         moosicbox_logging::debug_or_trace!(
                             ("handle_sse: SSE sending event name={name}"),
@@ -335,6 +364,35 @@ pub async fn handle_sse<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_log::test]
+    fn scoped_renderer_events_require_an_exact_subscriber_scope() {
+        let event = RendererEvent::Scoped {
+            scope: "session-1".to_owned(),
+            event: Box::new(RendererEvent::Event {
+                name: "updated".to_owned(),
+                value: None,
+            }),
+        };
+        assert!(renderer_event_for_scope(event.clone(), None).is_none());
+        assert!(renderer_event_for_scope(event.clone(), Some("session-2")).is_none());
+        assert!(matches!(
+            renderer_event_for_scope(event, Some("session-1")),
+            Some(RendererEvent::Event { .. })
+        ));
+    }
+
+    #[test_log::test]
+    fn unscoped_renderer_events_remain_broadcast() {
+        let event = RendererEvent::Event {
+            name: "broadcast".to_owned(),
+            value: None,
+        };
+        assert!(matches!(
+            renderer_event_for_scope(event, Some("session-1")),
+            Some(RendererEvent::Event { .. })
+        ));
+    }
 
     #[test_log::test]
     fn test_event_data_new() {

@@ -14,6 +14,7 @@ describe('SSE', () => {
                     '=;expires=' + new Date().toUTCString() + ';path=/',
                 );
         });
+        history.replaceState({}, '', '/');
         document.body.innerHTML = '';
         // Clean up window test globals
         Object.keys(window)
@@ -228,6 +229,45 @@ describe('SSE', () => {
     });
 
     describe('connection lifecycle', () => {
+        test('restarts with current page query after navigation', async ({
+            worker,
+        }) => {
+            const queries: string[] = [];
+            worker.use(
+                sse('/$sse', ({ request }) => {
+                    queries.push(new URL(request.url).search);
+                }),
+            );
+
+            history.replaceState(
+                {},
+                '',
+                '/?token=one&hyperchad-event-scope=one',
+            );
+            const { triggerHandlers } = await import('../../src/core');
+            await import('../../src/uuid');
+            const { initSSE } = await import('../../src/sse');
+            initSSE();
+            await vi.waitFor(() => expect(queries).toHaveLength(1));
+
+            history.pushState(
+                {},
+                '',
+                '/session/two?token=one&hyperchad-event-scope=two',
+            );
+            triggerHandlers('domLoad', {
+                initial: false,
+                navigation: true,
+                elements: [document.documentElement],
+            });
+            await vi.waitFor(() => expect(queries).toHaveLength(2));
+
+            expect(queries).toEqual([
+                '?token=one&hyperchad-event-scope=one',
+                '?token=one&hyperchad-event-scope=two',
+            ]);
+        });
+
         test('handles connection errors gracefully', async ({ worker }) => {
             worker.use(
                 sse('/$sse', ({ client }) => {

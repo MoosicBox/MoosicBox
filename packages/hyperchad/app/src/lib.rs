@@ -236,6 +236,8 @@ pub struct AppBuilder {
     actix_bind_address: Option<String>,
     #[cfg(feature = "actix")]
     actix_port: Option<u16>,
+    #[cfg(feature = "actix")]
+    actix_on_bound: Option<Arc<dyn Fn(std::net::SocketAddr) + Send + Sync>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -320,6 +322,8 @@ impl AppBuilder {
             actix_bind_address: None,
             #[cfg(feature = "actix")]
             actix_port: None,
+            #[cfg(feature = "actix")]
+            actix_on_bound: None,
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
@@ -456,6 +460,17 @@ impl AppBuilder {
     #[must_use]
     pub const fn with_actix_port(mut self, port: u16) -> Self {
         self.actix_port = Some(port);
+        self
+    }
+
+    /// Registers a callback invoked after an Actix-backed renderer binds its socket.
+    #[cfg(feature = "actix")]
+    #[must_use]
+    pub fn with_actix_on_bound(
+        mut self,
+        callback: impl Fn(std::net::SocketAddr) + Send + Sync + 'static,
+    ) -> Self {
+        self.actix_on_bound = Some(Arc::new(callback));
         self
     }
 
@@ -1472,6 +1487,13 @@ mod tests {
     fn test_app_builder_with_actix_port() {
         let builder = AppBuilder::new().with_actix_port(4321);
         assert_eq!(builder.actix_port, Some(4321));
+    }
+
+    #[cfg(feature = "actix")]
+    #[test_log::test]
+    fn test_app_builder_with_actix_on_bound() {
+        let builder = AppBuilder::new().with_actix_on_bound(|_| {});
+        assert!(builder.actix_on_bound.is_some());
     }
 
     #[test_log::test]

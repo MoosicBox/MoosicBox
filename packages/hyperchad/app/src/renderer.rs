@@ -738,6 +738,9 @@ pub mod html {
                 if let Some(port) = self.actix_port {
                     renderer.app.set_port(port);
                 }
+                if let Some(callback) = self.actix_on_bound.clone() {
+                    renderer.app.set_on_bound(callback);
+                }
 
                 #[cfg(feature = "assets")]
                 #[allow(unused_mut)]
@@ -832,6 +835,9 @@ pub mod html {
                     }
                     if let Some(port) = self.actix_port {
                         renderer.app.set_port(port);
+                    }
+                    if let Some(callback) = self.actix_on_bound.clone() {
+                        renderer.app.set_on_bound(callback);
                     }
 
                     #[cfg(feature = "assets")]

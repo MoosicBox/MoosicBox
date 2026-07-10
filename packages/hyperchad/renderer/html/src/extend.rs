@@ -4,6 +4,8 @@
 //! with custom event handling, server-sent events, WebSocket updates, or other
 //! real-time features. It enables publishing and subscribing to renderer events.
 
+use std::sync::{Arc, Mutex};
+
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use hyperchad_renderer::{
@@ -17,7 +19,7 @@ use thiserror::Error;
 /// Allows publishing renderer events to subscribers through a channel.
 #[derive(Clone)]
 pub struct HtmlRendererEventPub {
-    sender: Sender<RendererEvent>,
+    subscribers: Arc<Mutex<Vec<Sender<RendererEvent>>>>,
 }
 
 /// Errors that can occur when publishing HTML renderer events.
@@ -32,16 +34,47 @@ impl HtmlRendererEventPub {
     /// Creates a new event publisher and returns the publisher along with a receiver.
     #[must_use]
     pub fn new() -> (Self, Receiver<RendererEvent>) {
-        let (tx, rx) = flume::unbounded();
+        let publisher = Self {
+            subscribers: Arc::new(Mutex::new(Vec::new())),
+        };
+        let receiver = publisher.subscribe();
+        (publisher, receiver)
+    }
 
-        (Self { sender: tx }, rx)
+    /// Subscribe to every renderer event published after this call.
+    #[must_use]
+    pub fn subscribe(&self) -> Receiver<RendererEvent> {
+        let (sender, receiver) = flume::unbounded();
+        self.subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(sender);
+        receiver
     }
 
     /// # Errors
     ///
-    /// * If the sender failed to send the event
+    /// * If all current subscribers disconnected before receiving the event
     pub fn publish(&self, event: RendererEvent) -> Result<(), HtmlRendererEventPubError> {
-        Ok(self.sender.send(event).map_err(Box::new)?)
+        let mut subscribers = self
+            .subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut last_error = None;
+        subscribers.retain(|subscriber| match subscriber.send(event.clone()) {
+            Ok(()) => true,
+            Err(error) => {
+                last_error = Some(error);
+                false
+            }
+        });
+        drop(event);
+        let subscribers_empty = subscribers.is_empty();
+        drop(subscribers);
+        if subscribers_empty && let Some(error) = last_error {
+            return Err(HtmlRendererEventPubError::Sender(Box::new(error)));
+        }
+        Ok(())
     }
 }
 
@@ -76,6 +109,20 @@ pub trait ExtendHtmlRenderer {
         _view: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         Ok(())
+    }
+
+    /// Renders a scoped view update.
+    ///
+    /// # Errors
+    ///
+    /// * If the `ExtendHtmlRenderer` implementation fails to render the view
+    async fn render_scoped(
+        &self,
+        publisher: HtmlRendererEventPub,
+        _scope: String,
+        view: View,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        self.render(publisher, view).await
     }
 
     /// Renders a canvas update.
@@ -114,6 +161,24 @@ mod tests {
         pub_handle.publish(event).unwrap();
         let received = rx.recv().unwrap();
         assert!(matches!(received, RendererEvent::Event { .. }));
+    }
+
+    #[test_log::test]
+    fn test_html_renderer_event_pub_fans_out_to_each_subscriber() {
+        let (publisher, first) = HtmlRendererEventPub::new();
+        let second = publisher.subscribe();
+        publisher
+            .publish(RendererEvent::Event {
+                name: "broadcast".to_owned(),
+                value: None,
+            })
+            .unwrap();
+
+        assert!(matches!(first.recv().unwrap(), RendererEvent::Event { .. }));
+        assert!(matches!(
+            second.recv().unwrap(),
+            RendererEvent::Event { .. }
+        ));
     }
 
     #[test_log::test]

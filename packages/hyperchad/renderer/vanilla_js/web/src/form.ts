@@ -1,6 +1,6 @@
 import { appendQueryParams } from './core';
 import { handleNavigation } from './nav-base';
-import { processRoute } from './routing';
+import { processRoute, waitForPendingRoutes } from './routing';
 
 function initFormHandler() {
     document.body.addEventListener(
@@ -19,6 +19,10 @@ function initFormHandler() {
             if (!hasHxRoute && !action) return;
 
             e.preventDefault();
+
+            // Preserve request ordering when a change-triggered draft save is
+            // still in flight for this form.
+            await waitForPendingRoutes(element);
 
             // Build form data
             let form: HTMLFormElement | null = element;

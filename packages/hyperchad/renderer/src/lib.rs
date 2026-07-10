@@ -56,8 +56,15 @@ pub use switchy_async::runtime::Handle;
 pub use hyperchad_transformer as transformer;
 
 /// Events that can be emitted by a renderer
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RendererEvent {
+    /// Event delivered only to subscribers in a matching renderer-defined scope.
+    Scoped {
+        /// Opaque scope identifier interpreted by the renderer backend.
+        scope: String,
+        /// Scoped renderer event payload.
+        event: Box<Self>,
+    },
     /// View content to render
     View(Box<View>),
     /// Canvas update event
@@ -515,6 +522,22 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     ///
     /// * If the `Renderer` implementation fails to render the view
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    /// Render a view only to subscribers in a renderer-defined scope.
+    ///
+    /// The default implementation ignores the scope and renders normally. Renderers with scoped
+    /// transports should override this method.
+    ///
+    /// # Errors
+    ///
+    /// * If the `Renderer` implementation fails to render the view
+    async fn render_scoped(
+        &self,
+        _scope: String,
+        view: View,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        self.render(view).await
+    }
 
     /// Render a canvas update with drawing operations.
     ///

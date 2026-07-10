@@ -49,11 +49,15 @@ pub fn router_to_actix<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     hyperchad_renderer_html_actix::ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>,
 > {
     let (publisher, event_rx) = crate::extend::HtmlRendererEventPub::new();
+    let subscription_publisher = publisher.clone();
 
-    HtmlRenderer::new(hyperchad_renderer_html_actix::ActixApp::new(
-        HtmlActixResponseProcessor::new(tag_renderer, value),
-        event_rx,
-    ))
+    HtmlRenderer::new(
+        hyperchad_renderer_html_actix::ActixApp::new(
+            HtmlActixResponseProcessor::new(tag_renderer, value),
+            event_rx,
+        )
+        .with_renderer_event_rx_factory(move || subscription_publisher.subscribe()),
+    )
     .with_html_renderer_event_pub(publisher)
 }
 
@@ -158,12 +162,14 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 
     fn with_html_renderer_event_rx(mut self, rx: Receiver<RendererEvent>) -> Self {
-        self.renderer_event_rx = rx;
+        self.renderer_event_rx = Some(rx);
+        self.renderer_event_rx_factory = None;
         self
     }
 
     fn set_html_renderer_event_rx(&mut self, rx: Receiver<RendererEvent>) {
-        self.renderer_event_rx = rx;
+        self.renderer_event_rx = Some(rx);
+        self.renderer_event_rx_factory = None;
     }
 
     #[cfg(feature = "assets")]
@@ -253,6 +259,10 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     hyperchad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
     for HtmlActixResponseProcessor<T>
 {
+    fn event_scope(&self, data: &PreparedRequest) -> Option<String> {
+        data.req.query.get("hyperchad-event-scope").cloned()
+    }
+
     fn prepare_request(
         &self,
         req: actix_web::HttpRequest,

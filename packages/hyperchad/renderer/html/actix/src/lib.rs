@@ -168,6 +168,13 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
         body: Option<Arc<Bytes>>,
     ) -> Result<T, actix_web::Error>;
 
+    /// Returns the opaque renderer event scope associated with prepared request data.
+    ///
+    /// Scoped events are delivered only when this value exactly matches their scope.
+    fn event_scope(&self, _data: &T) -> Option<String> {
+        None
+    }
+
     /// Converts prepared data into an HTTP response.
     ///
     /// # Errors
@@ -208,8 +215,12 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     ///
     /// When unset, the server reads `PORT` and then falls back to `8343`.
     pub port: Option<u16>,
-    /// Receiver channel for renderer events from the hyperchad application.
-    pub renderer_event_rx: Receiver<RendererEvent>,
+    /// Optional callback invoked after the server socket binds successfully.
+    pub on_bound: Option<Arc<dyn Fn(std::net::SocketAddr) + Send + Sync>>,
+    /// Legacy receiver channel for renderer events from the hyperchad application.
+    pub renderer_event_rx: Option<Receiver<RendererEvent>>,
+    /// Factory for independent renderer event subscriptions.
+    pub renderer_event_rx_factory: Option<Arc<dyn Fn() -> Receiver<RendererEvent> + Send + Sync>>,
     /// Optional sender channel for user-triggered actions (requires `actions` feature).
     #[cfg(feature = "actions")]
     pub action_tx: Option<
@@ -239,9 +250,11 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     pub const fn new(processor: R, renderer_event_rx: Receiver<RendererEvent>) -> Self {
         Self {
             processor,
-            renderer_event_rx,
+            renderer_event_rx: Some(renderer_event_rx),
+            renderer_event_rx_factory: None,
             bind_address: None,
             port: None,
+            on_bound: None,
             #[cfg(feature = "actions")]
             action_tx: None,
             #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
@@ -254,6 +267,26 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
             _phantom: PhantomData,
         }
+    }
+
+    /// Configures a factory that creates an independent renderer event subscription.
+    #[must_use]
+    pub fn with_renderer_event_rx_factory(
+        mut self,
+        factory: impl Fn() -> Receiver<RendererEvent> + Send + Sync + 'static,
+    ) -> Self {
+        self.renderer_event_rx = None;
+        self.renderer_event_rx_factory = Some(Arc::new(factory));
+        self
+    }
+
+    /// Configures a shared factory that creates independent renderer event subscriptions.
+    pub fn set_renderer_event_rx_factory(
+        &mut self,
+        factory: Arc<dyn Fn() -> Receiver<RendererEvent> + Send + Sync>,
+    ) {
+        self.renderer_event_rx = None;
+        self.renderer_event_rx_factory = Some(factory);
     }
 
     /// Configures the address used by the Actix HTTP server.
@@ -278,6 +311,21 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     /// Configures the port used by the Actix HTTP server in place.
     pub const fn set_port(&mut self, port: u16) {
         self.port = Some(port);
+    }
+
+    /// Registers a callback invoked after the HTTP server binds its socket.
+    #[must_use]
+    pub fn with_on_bound(
+        mut self,
+        callback: impl Fn(std::net::SocketAddr) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_bound = Some(Arc::new(callback));
+        self
+    }
+
+    /// Registers a shared callback invoked after the HTTP server binds its socket.
+    pub fn set_on_bound(&mut self, callback: Arc<dyn Fn(std::net::SocketAddr) + Send + Sync>) {
+        self.on_bound = Some(callback);
     }
 
     /// Sets the action transmitter channel and returns the modified app.
@@ -477,6 +525,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
         let service_port = html_app
             .port
             .unwrap_or_else(|| default_env_u16!("PORT", 8343));
+        let on_bound = html_app.on_bound.clone();
 
         self.handle.block_on(async move {
             let app = move || {
@@ -734,13 +783,19 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                 )
             };
 
-            let mut http_server = actix_web::HttpServer::new(app);
-
-            log::info!("Server started on {addr}:{service_port}");
-
-            http_server = http_server
-                .bind((addr.as_str(), service_port))
+            let listener = std::net::TcpListener::bind((addr.as_str(), service_port))
                 .expect("Failed to bind the address");
+            let local_addr = listener
+                .local_addr()
+                .expect("Failed to read the bound address");
+            if let Some(on_bound) = &on_bound {
+                on_bound(local_addr);
+            }
+            log::info!("Server started on {local_addr}");
+
+            let http_server = actix_web::HttpServer::new(app)
+                .listen(listener)
+                .expect("Failed to listen on the bound address");
 
             if let Err(e) = http_server.run().await {
                 log::error!("Error from http server: {e:?}");

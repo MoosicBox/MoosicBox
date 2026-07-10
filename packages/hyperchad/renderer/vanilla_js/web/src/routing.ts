@@ -10,6 +10,34 @@ import {
 } from './core';
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
+const pendingRoutes = new WeakMap<HTMLElement, Promise<unknown>>();
+
+function routeQueueOwner(element: HTMLElement): HTMLElement {
+    return element.closest('form') ?? element;
+}
+
+export function enqueueRoute<T>(
+    element: HTMLElement,
+    route: () => Promise<T>,
+): Promise<T> {
+    const owner = routeQueueOwner(element);
+    const pending = pendingRoutes.get(owner) ?? Promise.resolve();
+    const next = pending.catch(() => undefined).then(route);
+    pendingRoutes.set(owner, next);
+    const cleanup = () => {
+        if (pendingRoutes.get(owner) === next) {
+            pendingRoutes.delete(owner);
+        }
+    };
+    void next.then(cleanup, cleanup);
+    return next;
+}
+
+export async function waitForPendingRoutes(
+    element: HTMLElement,
+): Promise<void> {
+    await pendingRoutes.get(routeQueueOwner(element));
+}
 
 function handleResponse(element: HTMLElement, text: string): boolean {
     const { html, style } = splitHtml(text);
@@ -255,7 +283,9 @@ createEventDelegator('change', 'hx-trigger', (element, triggerValue, _e) => {
             }
         }
 
-        handleHtmlResponse(element, elementFetch(route, options, element));
+        void enqueueRoute(element, () =>
+            handleHtmlResponse(element, elementFetch(route, options, element)),
+        );
         return;
     }
 });

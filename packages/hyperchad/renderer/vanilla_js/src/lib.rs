@@ -1193,6 +1193,28 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         Ok(())
     }
 
+    /// Renders and publishes a scoped view update through the renderer's event publisher.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if publishing the view fails.
+    async fn render_scoped(
+        &self,
+        publisher: HtmlRendererEventPub,
+        scope: String,
+        view: View,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let () = *INSECURE_WARNING;
+
+        publisher
+            .publish(RendererEvent::Scoped {
+                scope,
+                event: Box::new(RendererEvent::View(Box::new(view))),
+            })
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+        Ok(())
+    }
+
     /// Renders and publishes a canvas update through the renderer's event publisher.
     ///
     /// Converts the provided [`canvas::CanvasUpdate`] into a [`RendererEvent::CanvasUpdate`]

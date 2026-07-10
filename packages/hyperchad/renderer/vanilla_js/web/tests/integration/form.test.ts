@@ -14,6 +14,64 @@ describe('form', () => {
     });
 
     describe('form submission', () => {
+        test('waits for an in-flight change request before submitting', async ({
+            worker,
+        }) => {
+            const requests: string[] = [];
+            let releaseDraft: (() => void) | undefined;
+            const draftBlocked = new Promise<void>((resolve) => {
+                releaseDraft = resolve;
+            });
+
+            worker.use(
+                http.post('/api/draft', async () => {
+                    requests.push('draft-start');
+                    await draftBlocked;
+                    requests.push('draft-finish');
+                    return new HttpResponse('<div>Draft saved</div>', {
+                        headers: { 'content-type': 'text/html' },
+                    });
+                }),
+                http.post('/api/submit', () => {
+                    requests.push('submit');
+                    return new HttpResponse('<div>Submitted</div>', {
+                        headers: { 'content-type': 'text/html' },
+                    });
+                }),
+            );
+
+            await import('../../src/core');
+            await import('../../src/form');
+            await import('../../src/routing');
+
+            const form = document.createElement('form');
+            form.setAttribute('hx-post', '/api/submit');
+            const textarea = document.createElement('textarea');
+            textarea.name = 'text';
+            textarea.value = 'hello';
+            textarea.setAttribute('hx-post', '/api/draft');
+            textarea.setAttribute('hx-trigger', 'change');
+            form.appendChild(textarea);
+            document.body.appendChild(form);
+
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            await vi.waitFor(() => expect(requests).toEqual(['draft-start']));
+            form.dispatchEvent(
+                new Event('submit', { bubbles: true, cancelable: true }),
+            );
+
+            await Promise.resolve();
+            expect(requests).toEqual(['draft-start']);
+            releaseDraft?.();
+            await vi.waitFor(() =>
+                expect(requests).toEqual([
+                    'draft-start',
+                    'draft-finish',
+                    'submit',
+                ]),
+            );
+        });
+
         test('submits form data via fetch', async ({ worker }) => {
             const receivedData: Record<string, string> = {};
 

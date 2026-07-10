@@ -1089,6 +1089,25 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         Ok(())
     }
 
+    /// Renders a view update only to subscribers in a matching renderer-defined scope.
+    ///
+    /// # Errors
+    ///
+    /// * If the renderer extension fails to process the view
+    async fn render_scoped(
+        &self,
+        scope: String,
+        elements: View,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        #[cfg(feature = "extend")]
+        if let (Some(extend), Some(publisher)) = (self.extend.as_ref(), self.publisher.as_ref()) {
+            extend
+                .render_scoped(publisher.clone(), scope, elements)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Renders canvas drawing updates to the HTML renderer.
     ///
     /// Processes canvas drawing operations through any configured renderer extensions
