@@ -1416,139 +1416,6 @@ mod turso {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
-    async fn test_turso_unique_upsert_targets_only_conflicting_row() {
-        let db = switchy_database_connection::init_turso_local(None)
-            .await
-            .expect("Turso database");
-        db.exec_raw("CREATE TABLE unique_upsert (item_key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-            .await
-            .expect("create unique upsert table");
-        db.insert("unique_upsert")
-            .value("item_key", "first")
-            .value("value", "old")
-            .execute(&*db)
-            .await
-            .expect("insert first row");
-        db.insert("unique_upsert")
-            .value("item_key", "second")
-            .value("value", "untouched")
-            .execute(&*db)
-            .await
-            .expect("insert second row");
-
-        let rows = db
-            .upsert("unique_upsert")
-            .unique(&["item_key"])
-            .value("item_key", "first")
-            .value("value", "updated")
-            .execute(&*db)
-            .await
-            .expect("upsert conflicting row");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(
-            rows[0].get("value").expect("value").as_str(),
-            Some("updated")
-        );
-
-        let first = db
-            .upsert_first("unique_upsert")
-            .unique(&["item_key"])
-            .value("item_key", "first")
-            .value("value", "updated again")
-            .execute_first(&*db)
-            .await
-            .expect("upsert first conflicting row");
-        assert_eq!(
-            first.get("value").expect("value").as_str(),
-            Some("updated again")
-        );
-
-        let stored = db
-            .select("unique_upsert")
-            .sort("item_key", switchy_database::query::SortDirection::Asc)
-            .execute(&*db)
-            .await
-            .expect("stored rows");
-        assert_eq!(stored.len(), 2);
-        assert_eq!(
-            stored[0].get("value").expect("value").as_str(),
-            Some("updated again")
-        );
-        assert_eq!(
-            stored[1].get("value").expect("value").as_str(),
-            Some("untouched")
-        );
-    }
-
-    #[test_log::test(switchy_async::test(no_simulator))]
-    async fn test_turso_transaction_unique_upsert_targets_only_conflicting_row() {
-        let db = switchy_database_connection::init_turso_local(None)
-            .await
-            .expect("Turso database");
-        db.exec_raw(
-            "CREATE TABLE transaction_unique_upsert (item_key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-        )
-        .await
-        .expect("create transaction unique upsert table");
-        db.insert("transaction_unique_upsert")
-            .value("item_key", "first")
-            .value("value", "old")
-            .execute(&*db)
-            .await
-            .expect("insert first row");
-        db.insert("transaction_unique_upsert")
-            .value("item_key", "second")
-            .value("value", "untouched")
-            .execute(&*db)
-            .await
-            .expect("insert second row");
-
-        let tx = db.begin_transaction().await.expect("begin transaction");
-        let rows = tx
-            .upsert("transaction_unique_upsert")
-            .unique(&["item_key"])
-            .value("item_key", "first")
-            .value("value", "updated")
-            .execute(&*tx)
-            .await
-            .expect("transaction upsert conflicting row");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(
-            rows[0].get("value").expect("value").as_str(),
-            Some("updated")
-        );
-        let first = tx
-            .upsert_first("transaction_unique_upsert")
-            .unique(&["item_key"])
-            .value("item_key", "first")
-            .value("value", "updated again")
-            .execute_first(&*tx)
-            .await
-            .expect("transaction upsert first conflicting row");
-        assert_eq!(
-            first.get("value").expect("value").as_str(),
-            Some("updated again")
-        );
-        tx.commit().await.expect("commit transaction");
-
-        let stored = db
-            .select("transaction_unique_upsert")
-            .sort("item_key", switchy_database::query::SortDirection::Asc)
-            .execute(&*db)
-            .await
-            .expect("stored rows");
-        assert_eq!(stored.len(), 2);
-        assert_eq!(
-            stored[0].get("value").expect("value").as_str(),
-            Some("updated again")
-        );
-        assert_eq!(
-            stored[1].get("value").expect("value").as_str(),
-            Some("untouched")
-        );
-    }
-
-    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_turso_query_raw_with_valid_sql() {
         let suite = TursoIntegrationTests;
         suite.test_query_raw_with_valid_sql().await;
@@ -2099,6 +1966,22 @@ mod mysql_returning_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_unique_upsert_targets_only_conflicting_row() {
+        let suite = MysqlReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = MysqlReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_mysql_transaction_operations_return_data() {
         let suite = MysqlReturningTests;
         suite.test_transaction_operations_return_data().await;
@@ -2185,6 +2068,22 @@ mod postgres_returning_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_unique_upsert_targets_only_conflicting_row() {
+        let suite = PostgresReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = PostgresReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_transaction_operations_return_data() {
         let suite = PostgresReturningTests;
         suite.test_transaction_operations_return_data().await;
@@ -2263,6 +2162,22 @@ mod sqlite_returning_tests {
     async fn test_sqlite_upsert_returns_correct_row() {
         let suite = SqliteReturningTests;
         suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_unique_upsert_targets_only_conflicting_row() {
+        let suite = SqliteReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = SqliteReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
@@ -2358,6 +2273,22 @@ mod rusqlite_returning_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_rusqlite_unique_upsert_targets_only_conflicting_row() {
+        let suite = RusqliteReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_rusqlite_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = RusqliteReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_rusqlite_transaction_operations_return_data() {
         let suite = RusqliteReturningTests;
         suite.test_transaction_operations_return_data().await;
@@ -2433,6 +2364,22 @@ mod turso_returning_tests {
     async fn test_turso_upsert_returns_correct_row() {
         let suite = TursoReturningTests;
         suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_unique_upsert_targets_only_conflicting_row() {
+        let suite = TursoReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = TursoReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
     }
 
     #[ignore = "Turso does not properly return auto-incremented ID from inserts yet"]
@@ -2538,6 +2485,22 @@ mod postgres_native_returning_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_native_unique_upsert_targets_only_conflicting_row() {
+        let suite = PostgresNativeReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_native_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = PostgresNativeReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_native_transaction_operations_return_data() {
         let suite = PostgresNativeReturningTests;
         suite.test_transaction_operations_return_data().await;
@@ -2611,6 +2574,22 @@ mod simulator_returning_tests {
     async fn test_simulator_upsert_returns_correct_row() {
         let suite = SimulatorReturningTests;
         suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_unique_upsert_targets_only_conflicting_row() {
+        let suite = SimulatorReturningTests;
+        suite
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_transaction_unique_upsert_targets_only_conflicting_row() {
+        let suite = SimulatorReturningTests;
+        suite
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
@@ -2695,6 +2674,20 @@ mod duckdb_returning_tests {
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
     async fn test_duckdb_upsert_returns_correct_row() {
         DuckDbReturningTests.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_unique_upsert_targets_only_conflicting_row() {
+        DuckDbReturningTests
+            .test_unique_upsert_targets_only_conflicting_row()
+            .await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator, real_time))]
+    async fn test_duckdb_transaction_unique_upsert_targets_only_conflicting_row() {
+        DuckDbReturningTests
+            .test_transaction_unique_upsert_targets_only_conflicting_row()
+            .await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator, real_time))]

@@ -85,6 +85,30 @@ pub async fn create_returning_test_schema_with_name(
     Ok(())
 }
 
+async fn create_unique_upsert_test_schema(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<(), switchy_database::DatabaseError> {
+    create_table(table_name)
+        .column(Column {
+            name: "item_key".to_string(),
+            data_type: DataType::VarChar(255),
+            nullable: false,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "value".to_string(),
+            data_type: DataType::Text,
+            nullable: false,
+            auto_increment: false,
+            default: None,
+        })
+        .primary_key("item_key")
+        .execute(db)
+        .await
+}
+
 /// Comprehensive RETURNING functionality test suite
 #[allow(unused)]
 pub trait ReturningTestSuite {
@@ -431,6 +455,126 @@ pub trait ReturningTestSuite {
         );
 
         // Cleanup
+        self.cleanup_test_table(&*db, &table_name).await;
+    }
+
+    /// Test conflict-targeted UPSERT only updates the conflicting row.
+    async fn test_unique_upsert_targets_only_conflicting_row(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = self.get_table_name("unique_upsert");
+        create_unique_upsert_test_schema(&*db, &table_name)
+            .await
+            .unwrap();
+
+        db.insert(&table_name)
+            .value("item_key", "first")
+            .value("value", "old")
+            .execute(&*db)
+            .await
+            .unwrap();
+        db.insert(&table_name)
+            .value("item_key", "second")
+            .value("value", "untouched")
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let upsert = db
+            .upsert(&table_name)
+            .unique(&["item_key"])
+            .value("item_key", "first")
+            .value("value", "updated");
+        let upsert = upsert.where_eq("item_key", "first");
+        let rows = upsert.execute(&*db).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("value").unwrap().as_str(), Some("updated"));
+
+        let upsert = db
+            .upsert_first(&table_name)
+            .unique(&["item_key"])
+            .value("item_key", "first")
+            .value("value", "updated again");
+        let upsert = upsert.where_eq("item_key", "first");
+        let first = upsert.execute_first(&*db).await.unwrap();
+        assert_eq!(first.get("value").unwrap().as_str(), Some("updated again"));
+
+        let stored = db
+            .select(&table_name)
+            .sort("item_key", switchy_database::query::SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+        assert_eq!(stored.len(), 2);
+        assert_eq!(
+            stored[0].get("value").unwrap().as_str(),
+            Some("updated again")
+        );
+        assert_eq!(stored[1].get("value").unwrap().as_str(), Some("untouched"));
+
+        self.cleanup_test_table(&*db, &table_name).await;
+    }
+
+    /// Test conflict-targeted UPSERT behaves consistently in transactions.
+    async fn test_transaction_unique_upsert_targets_only_conflicting_row(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = self.get_table_name("tx_unique_upsert");
+        create_unique_upsert_test_schema(&*db, &table_name)
+            .await
+            .unwrap();
+
+        db.insert(&table_name)
+            .value("item_key", "first")
+            .value("value", "old")
+            .execute(&*db)
+            .await
+            .unwrap();
+        db.insert(&table_name)
+            .value("item_key", "second")
+            .value("value", "untouched")
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let tx = db.begin_transaction().await.unwrap();
+        let upsert = tx
+            .upsert(&table_name)
+            .unique(&["item_key"])
+            .value("item_key", "first")
+            .value("value", "updated");
+        let upsert = upsert.where_eq("item_key", "first");
+        let rows = upsert.execute(&*tx).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("value").unwrap().as_str(), Some("updated"));
+
+        let upsert = tx
+            .upsert_first(&table_name)
+            .unique(&["item_key"])
+            .value("item_key", "first")
+            .value("value", "updated again");
+        let upsert = upsert.where_eq("item_key", "first");
+        let first = upsert.execute_first(&*tx).await.unwrap();
+        assert_eq!(first.get("value").unwrap().as_str(), Some("updated again"));
+        tx.commit().await.unwrap();
+
+        let stored = db
+            .select(&table_name)
+            .sort("item_key", switchy_database::query::SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+        assert_eq!(stored.len(), 2);
+        assert_eq!(
+            stored[0].get("value").unwrap().as_str(),
+            Some("updated again")
+        );
+        assert_eq!(stored[1].get("value").unwrap().as_str(), Some("untouched"));
+
         self.cleanup_test_table(&*db, &table_name).await;
     }
 
