@@ -194,7 +194,7 @@ async fn fetch_local_album_cover(
 
                 log::debug!(
                     "Updating Album {} artwork file from '{cover}' to '{artwork}'",
-                    &album.id
+                    album.id
                 );
 
                 db.update("albums")
@@ -247,7 +247,7 @@ async fn fetch_local_album_cover_bytes(
 
         log::debug!(
             "Updating Album {} artwork file from '{cover}' to '{artwork}'",
-            &album.id
+            album.id
         );
 
         db.update("albums")

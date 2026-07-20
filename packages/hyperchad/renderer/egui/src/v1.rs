@@ -3356,7 +3356,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 .ceil();
 
                 let default_color = Color32::BLACK;
-                let stroke = &mut egui::epaint::PathStroke::new(1.0, default_color).inside();
+                let stroke = &mut egui::epaint::PathStroke::new(1.0_f32, default_color).inside();
                 stroke.color = egui::epaint::ColorMode::Solid(default_color);
 
                 for action in actions {

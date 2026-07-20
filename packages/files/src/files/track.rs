@@ -166,7 +166,7 @@ pub async fn get_track_source(
 ) -> Result<TrackSource, TrackSourceError> {
     log::debug!(
         "get_track_source: track_id={:?} quality={quality:?} source={:?}",
-        &track.id,
+        track.id,
         api.source(),
     );
 

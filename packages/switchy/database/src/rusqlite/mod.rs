@@ -1518,7 +1518,7 @@ fn rusqlite_exec_create_table(
         if column.auto_increment && statement.primary_key.is_none_or(|x| x != column.name) {
             return Err(DatabaseError::InvalidSchema(format!(
                 "Column '{}' must be the primary key to enable auto increment",
-                &column.name
+                column.name
             )));
         }
 

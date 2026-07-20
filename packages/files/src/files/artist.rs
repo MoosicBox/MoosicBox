@@ -211,7 +211,7 @@ async fn fetch_local_artist_cover(
 
                 log::debug!(
                     "Updating Artist {} cover file from '{cover}' to '{new_cover}'",
-                    &artist.id
+                    artist.id
                 );
 
                 db.update("artists")
@@ -264,7 +264,7 @@ async fn fetch_local_artist_cover_bytes(
 
         log::debug!(
             "Updating Artist {} cover file from '{cover}' to '{new_cover}'",
-            &artist.id
+            artist.id
         );
 
         db.update("artists")

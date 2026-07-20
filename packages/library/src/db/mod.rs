@@ -540,7 +540,7 @@ pub async fn get_track(
     db: &LibraryDatabase,
     id: &Id,
 ) -> Result<Option<LibraryTrack>, DatabaseFetchError> {
-    Ok(get_tracks(db, Some(&[id.to_owned()]))
+    Ok(get_tracks(db, Some(std::slice::from_ref(id)))
         .await?
         .into_iter()
         .next())

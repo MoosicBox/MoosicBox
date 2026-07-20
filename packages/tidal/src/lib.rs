@@ -231,7 +231,7 @@ fn attach_query_string(value: &str, query: &[(&str, &str)]) -> String {
         query_string.append_pair(key, value);
     }
 
-    format!("{}?{}", value, &query_string.finish())
+    format!("{}?{}", value, query_string.finish())
 }
 
 /// Constructs Tidal API endpoint URLs with optional parameters and query strings.

@@ -537,7 +537,7 @@ fn attach_query_string(value: &str, query: &[(&str, &str)]) -> String {
         query_string.append_pair(key, value);
     }
 
-    format!("{}?{}", value, &query_string.finish())
+    format!("{}?{}", value, query_string.finish())
 }
 
 /// Constructs Qobuz API endpoint URLs with path parameters and query strings.
@@ -2036,9 +2036,9 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, Error> {
 
     let mut secrets = BTreeMap::new();
 
-    log::trace!("seed_timezones={:?}", &seed_timezones);
+    log::trace!("seed_timezones={seed_timezones:?}");
     for (seed, timezone) in seed_timezones {
-        log::trace!("name_info_extras={:?}", &name_info_extras);
+        log::trace!("name_info_extras={name_info_extras:?}");
         let (_, info, _) = name_info_extras
             .iter()
             .find(|(name, _, _)| name.starts_with(&capitalize(&timezone)))

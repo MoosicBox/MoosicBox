@@ -1096,13 +1096,13 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
     /// * If the renderer extension fails to process the view
     async fn render_scoped(
         &self,
-        scope: String,
-        elements: View,
+        _scope: String,
+        _elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         #[cfg(feature = "extend")]
         if let (Some(extend), Some(publisher)) = (self.extend.as_ref(), self.publisher.as_ref()) {
             extend
-                .render_scoped(publisher.clone(), scope, elements)
+                .render_scoped(publisher.clone(), _scope, _elements)
                 .await?;
         }
         Ok(())
@@ -1120,16 +1120,15 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
     /// # Panics
     ///
     /// * If the elements `Mutex` is poisoned
-    #[allow(unused_variables)]
     async fn render_canvas(
         &self,
-        update: CanvasUpdate,
+        _update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas");
 
         #[cfg(feature = "extend")]
         if let (Some(extend), Some(publisher)) = (self.extend.as_ref(), self.publisher.as_ref()) {
-            extend.render_canvas(publisher.clone(), update).await?;
+            extend.render_canvas(publisher.clone(), _update).await?;
         }
 
         log::debug!("render_canvas: finished");
