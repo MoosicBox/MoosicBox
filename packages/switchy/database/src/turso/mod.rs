@@ -1204,14 +1204,68 @@ async fn delete(
     Ok(results)
 }
 
+async fn upsert_on_conflict(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+    unique: &[&str],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    if unique.is_empty() {
+        return Err(TursoDatabaseError::Query(
+            "UPSERT conflict target cannot be empty".to_string(),
+        ));
+    }
+
+    let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    let set_clause = columns
+        .iter()
+        .map(|name| format!("{name}=excluded.{name}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let query = format!(
+        "INSERT INTO {table_name} ({}) {} ON CONFLICT ({}) DO UPDATE SET {set_clause} {} RETURNING *",
+        columns.join(", "),
+        build_values_clause(values),
+        unique.join(", "),
+        build_where_clause(filters),
+    );
+    let mut all_values = values
+        .iter()
+        .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+        .collect::<Vec<_>>();
+    all_values.extend(bexprs_to_values_opt(filters).unwrap_or_default());
+
+    log::trace!("Running conflict-target upsert query: {query} with params: {all_values:?}");
+
+    let mut statement = connection.prepare(&query).await?;
+    let column_names = statement
+        .columns()
+        .iter()
+        .map(|column| column.name().to_string())
+        .collect::<Vec<_>>();
+    let params = to_turso_params(&all_values)?;
+    let mut rows = statement.query(params).await?;
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().await? {
+        results.push(from_turso_row(&column_names, &row)?);
+    }
+    Ok(results)
+}
+
 async fn upsert(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
+    unique: Option<&[&str]>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
     log::trace!("Running upsert on table: {table_name}");
+    if let Some(unique) = unique {
+        return upsert_on_conflict(connection, table_name, values, unique, filters).await;
+    }
+
     let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
@@ -1229,7 +1283,16 @@ async fn upsert_and_get_row(
     values: &[(&str, Box<dyn crate::query::Expression>)],
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
+    unique: Option<&[&str]>,
 ) -> Result<crate::Row, TursoDatabaseError> {
+    if let Some(unique) = unique {
+        return upsert_on_conflict(connection, table_name, values, unique, filters)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| TursoDatabaseError::Query("UPSERT did not return a row".to_string()));
+    }
+
     match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
             let updated = update_and_get_row(connection, table_name, values, filters, limit)
@@ -1464,6 +1527,7 @@ impl crate::Database for TursoDatabase {
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
+            statement.unique,
         )
         .await
         .map_err(crate::DatabaseError::Turso)?)
@@ -1479,6 +1543,7 @@ impl crate::Database for TursoDatabase {
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
+            statement.unique,
         )
         .await
         .map_err(crate::DatabaseError::Turso)?)
@@ -1490,9 +1555,16 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         let mut all_results = Vec::new();
         for values in &statement.values {
-            let results = upsert(&self.connection, statement.table_name, values, None, None)
-                .await
-                .map_err(crate::DatabaseError::Turso)?;
+            let results = upsert(
+                &self.connection,
+                statement.table_name,
+                values,
+                None,
+                None,
+                None,
+            )
+            .await
+            .map_err(crate::DatabaseError::Turso)?;
             all_results.extend(results);
         }
 

@@ -419,6 +419,7 @@ impl crate::Database for TursoTransaction {
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
+            statement.unique,
         )
         .await
         .map_err(DatabaseError::Turso)?)
@@ -434,6 +435,7 @@ impl crate::Database for TursoTransaction {
             &statement.values,
             statement.filters.as_deref(),
             statement.limit,
+            statement.unique,
         )
         .await
         .map_err(DatabaseError::Turso)?)
@@ -446,9 +448,16 @@ impl crate::Database for TursoTransaction {
         let mut all_results = Vec::new();
         for values in &statement.values {
             let results = {
-                super::upsert(&self.connection, statement.table_name, values, None, None)
-                    .await
-                    .map_err(DatabaseError::Turso)?
+                super::upsert(
+                    &self.connection,
+                    statement.table_name,
+                    values,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                .map_err(DatabaseError::Turso)?
             };
             all_results.extend(results);
         }
