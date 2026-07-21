@@ -102,10 +102,7 @@ fn navigate_to_property<'a>(toml: &'a Value, path: &[String]) -> Option<&'a Valu
     let mut current = toml;
 
     for segment in path {
-        match current.get(segment) {
-            Some(value) => current = value,
-            None => return None,
-        }
+        current = current.get(segment)?;
     }
 
     Some(current)

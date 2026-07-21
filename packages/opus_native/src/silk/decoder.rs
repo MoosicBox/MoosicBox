@@ -6086,7 +6086,7 @@ mod tests {
                 .iter()
                 .all(|&x| x == 8320),
             "History values: {:?}",
-            &decoder.ltp_state[0].lpc_history_q14
+            decoder.ltp_state[0].lpc_history_q14
         );
     }
 
