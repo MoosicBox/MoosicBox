@@ -112,7 +112,7 @@ pub async fn setup_tunnel(
                     while let Some(m) = rx.recv().await {
                         match m {
                             TunnelMessage::Text(m) => {
-                                log::debug!("Received text TunnelMessage {}", &m);
+                                log::debug!("Received text TunnelMessage {m}");
                                 let tunnel = tunnel.clone();
                                 switchy_async::runtime::Handle::current().spawn_with_name("server: tunnel message", async move {
                                     match serde_json::from_str(&m).unwrap() {

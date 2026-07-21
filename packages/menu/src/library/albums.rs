@@ -793,8 +793,8 @@ mod tests {
         let library_albums = vec![library_album];
 
         // Before propagation, album has empty sources
-        assert!(album.album_sources.iter().count() == 0);
-        assert!(album.artist_sources.iter().count() == 0);
+        assert_eq!(album.album_sources.iter().count(), 0);
+        assert_eq!(album.artist_sources.iter().count(), 0);
 
         propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
 
@@ -823,8 +823,8 @@ mod tests {
         propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
 
         // Sources should remain empty since there's no match for Tidal source
-        assert!(album.album_sources.iter().count() == 0);
-        assert!(album.artist_sources.iter().count() == 0);
+        assert_eq!(album.album_sources.iter().count(), 0);
+        assert_eq!(album.artist_sources.iter().count(), 0);
     }
 
     #[test_log::test]
@@ -846,8 +846,8 @@ mod tests {
         propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
 
         // Sources should remain empty since IDs don't match
-        assert!(album.album_sources.iter().count() == 0);
-        assert!(album.artist_sources.iter().count() == 0);
+        assert_eq!(album.album_sources.iter().count(), 0);
+        assert_eq!(album.artist_sources.iter().count(), 0);
     }
 
     #[test_log::test]
@@ -861,8 +861,8 @@ mod tests {
         propagate_api_sources_from_library_album(&tidal_source, &mut album, &library_albums);
 
         // Sources should remain empty since there are no library albums
-        assert!(album.album_sources.iter().count() == 0);
-        assert!(album.artist_sources.iter().count() == 0);
+        assert_eq!(album.album_sources.iter().count(), 0);
+        assert_eq!(album.artist_sources.iter().count(), 0);
     }
 
     #[test_log::test]

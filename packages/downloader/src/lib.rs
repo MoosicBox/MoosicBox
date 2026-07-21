@@ -466,7 +466,7 @@ pub async fn get_create_download_tasks_for_track_ids(
     let tracks = api.tracks(Some(track_ids), None, None, None, None).await?;
     log::debug!(
         "get_create_download_tasks_for_track_ids: track_ids={track_ids:?} tracks={:?}",
-        &tracks.items()
+        tracks.items()
     );
 
     get_create_download_tasks_for_tracks(api, &tracks, download_path, source, quality).await
