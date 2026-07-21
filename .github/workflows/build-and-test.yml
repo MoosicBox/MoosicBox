@@ -336,8 +336,9 @@ jobs:
               with:
                   command: run-matrix
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-preset: rust-validation
-                  run-matrix-coverage: "true"
+                  run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
+                  run-matrix-template-vars: |
+                      {"test-command":"llvm-cov test --no-report"}
                   run-matrix-debug-shells: "fish,bash"
                   run-matrix-auto-upload: true
 

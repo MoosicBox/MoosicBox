@@ -299,14 +299,14 @@ inputs:
         default: "rustfmt, clippy"
 
     # Inputs for run-matrix command
-    run-matrix-preset:
-        description: "Built-in command preset (currently: rust-validation)"
+    run-matrix-steps-file:
+        description: "Path to a YAML/JSON file containing run-matrix step definitions. Cannot be used with run-matrix-commands or run-matrix-steps."
         required: false
 
-    run-matrix-coverage:
-        description: "Use cargo-llvm-cov for tests in the rust-validation preset"
+    run-matrix-template-vars:
+        description: "JSON object exposed to command templates as {{vars.*}}"
         required: false
-        default: "false"
+        default: "{}"
 
     run-matrix-package-json:
         description: "Package JSON from matrix (same format as package-json for setup)"
@@ -328,7 +328,7 @@ inputs:
                 cargo test {{clippier.feature-flags}}
                 cargo test --doc {{clippier.feature-flags}}
 
-            Cannot be used together with run-matrix-steps.
+            Cannot be used together with run-matrix-steps or run-matrix-steps-file.
         required: false
 
     run-matrix-steps:
@@ -840,8 +840,8 @@ runs:
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
               INPUT_RUN_MATRIX_PACKAGE_JSON: ${{ inputs.run-matrix-package-json }}
-              INPUT_RUN_MATRIX_PRESET: ${{ inputs.run-matrix-preset }}
-              INPUT_RUN_MATRIX_COVERAGE: ${{ inputs.run-matrix-coverage }}
+              INPUT_RUN_MATRIX_STEPS_FILE: ${{ inputs.run-matrix-steps-file }}
+              INPUT_RUN_MATRIX_TEMPLATE_VARS: ${{ inputs.run-matrix-template-vars }}
               INPUT_RUN_MATRIX_COMMANDS: ${{ inputs.run-matrix-commands }}
               INPUT_RUN_MATRIX_STEPS: ${{ inputs.run-matrix-steps }}
               INPUT_RUN_MATRIX_STRATEGY: ${{ inputs.run-matrix-strategy }}

@@ -40,6 +40,8 @@ init_template_context() {
     local required_features="$3"
     local iteration="$4"
     local total_iterations="$5"
+    local template_vars="${INPUT_RUN_MATRIX_TEMPLATE_VARS:-}"
+    [[ -z "$template_vars" ]] && template_vars='{}'
 
     # Build all features list
     local all_features="fail-on-warnings"
@@ -62,11 +64,13 @@ init_template_context() {
         --arg feature_flags "$feature_flags" \
         --argjson iteration "$iteration" \
         --argjson total_iterations "$total_iterations" \
+        --argjson vars "$template_vars" \
         --arg runner_debug "$runner_debug" \
         '{
             matrix: {
                 package: $matrix
             },
+            vars: $vars,
             clippier: {
                 features: $features,
                 "all-features": $all_features,

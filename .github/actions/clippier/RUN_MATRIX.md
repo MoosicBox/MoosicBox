@@ -248,6 +248,25 @@ Example usage:
       exit 1
 ```
 
+## File-backed step templates
+
+Keep reusable command suites outside the action by passing a repository YAML or JSON file:
+
+```yaml
+- uses: ./.github/actions/clippier
+  with:
+      command: run-matrix
+      run-matrix-package-json: ${{ toJson(matrix.package) }}
+      run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
+      run-matrix-template-vars: '{"test-command":"test"}'
+```
+
+`run-matrix-steps-file` uses the same schema and template syntax as
+`run-matrix-steps`. Relative paths are resolved from `GITHUB_WORKSPACE`.
+`run-matrix-template-vars` accepts a JSON object whose values are available as
+`{{vars.*}}` during command rendering. Exactly one of `run-matrix-commands`, `run-matrix-steps`, or
+`run-matrix-steps-file` must be provided.
+
 ## Complete Example
 
 ```yaml

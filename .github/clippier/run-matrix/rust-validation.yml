@@ -1,0 +1,39 @@
+clear-target-1:
+    commands: rm -rf target
+
+clippy:
+    commands: |
+        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+    label: "Clippy"
+    strategy: "sequential"
+
+tests:
+    commands: |
+        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} {{vars.test-command}} {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+    label: "Tests"
+    strategy: "sequential"
+
+doctests:
+    commands: |
+        PACKAGE_PATH="{{matrix.package.path}}"
+        PACKAGE_PATH="${PACKAGE_PATH#./}"
+        if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+            echo "Skipping doctests for {{matrix.package.name}} - no library target found"
+            exit 0
+        fi
+        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+    label: "Doctests"
+    strategy: "sequential"
+
+clear-target-2:
+    commands: rm -rf target
+
+format:
+    commands: cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --all -- --check
+    label: "Format"
+    strategy: "combined"
+
+machete:
+    commands: cd "$GITHUB_WORKSPACE" && cargo machete --with-metadata "{{matrix.package.path}}"
+    label: "Cargo machete"
+    strategy: "combined"

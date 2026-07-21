@@ -1393,69 +1393,24 @@ run_matrix_multi_step_mode() {
     fi
 }
 
-# Configure a standard command suite shared by Rust validation workflows.
-configure_run_matrix_preset() {
-    local preset="${INPUT_RUN_MATRIX_PRESET:-}"
-    [[ -z "$preset" ]] && return
-
-    if [[ -n "${INPUT_RUN_MATRIX_COMMANDS:-}" || -n "${INPUT_RUN_MATRIX_STEPS:-}" ]]; then
-        echo "❌ Error: run-matrix-preset cannot be combined with run-matrix-commands or run-matrix-steps"
+# Load multi-step configuration from a repository file.
+load_run_matrix_steps_file() {
+    local steps_file="$1"
+    if [[ "$steps_file" != /* ]]; then
+        steps_file="${GITHUB_WORKSPACE:-$(pwd)}/$steps_file"
+    fi
+    if [[ ! -f "$steps_file" ]]; then
+        echo "❌ Error: run-matrix steps file not found: $steps_file"
         return 1
     fi
-
-    if [[ "$preset" != "rust-validation" ]]; then
-        echo "❌ Error: Unknown run-matrix preset: $preset"
-        return 1
-    fi
-
-    local test_command="cargo{{if matrix.package.nightly}} +nightly{{endif}} test"
-    if [[ "${INPUT_RUN_MATRIX_COVERAGE:-false}" == "true" ]]; then
-        test_command="cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report"
-    fi
-
-    INPUT_RUN_MATRIX_STEPS=$(cat <<EOF
-clear-target-1:
-  commands: rm -rf target
-clippy:
-  commands: |
-    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
-  label: "Clippy"
-  strategy: "sequential"
-tests:
-  commands: |
-    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}${test_command} {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
-  label: "Tests"
-  strategy: "sequential"
-doctests:
-  commands: |
-    PACKAGE_PATH="{{matrix.package.path}}"
-    PACKAGE_PATH="\${PACKAGE_PATH#./}"
-    if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"\${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
-        echo "Skipping doctests for {{matrix.package.name}} - no library target found"
-        exit 0
-    fi
-    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
-  label: "Doctests"
-  strategy: "sequential"
-clear-target-2:
-  commands: rm -rf target
-format:
-  commands: cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --all -- --check
-  label: "Format"
-  strategy: "combined"
-machete:
-  commands: cd "$GITHUB_WORKSPACE" && cargo machete --with-metadata "{{matrix.package.path}}"
-  label: "Cargo machete"
-  strategy: "combined"
-EOF
-)
+    INPUT_RUN_MATRIX_STEPS=$(cat "$steps_file")
     export INPUT_RUN_MATRIX_STEPS
 }
 
 # Main run-matrix command entry point
 #
 # Routes to either single-command mode or multi-step mode based on inputs.
-# Validates that commands and steps are mutually exclusive.
+# Validates that commands, inline steps, and file-backed steps are mutually exclusive.
 #
 # Outputs (written to GITHUB_OUTPUT):
 #   run-success: Overall success (true/false)
@@ -1472,27 +1427,30 @@ EOF
 run_matrix_command() {
     CONTEXT_PHASE="run-matrix"
 
-    configure_run_matrix_preset || return 1
-
-    # Validation: commands vs steps (mutually exclusive)
+    # Exactly one command source must be supplied.
     local has_commands="${INPUT_RUN_MATRIX_COMMANDS:+true}"
     local has_steps="${INPUT_RUN_MATRIX_STEPS:+true}"
+    local has_steps_file="${INPUT_RUN_MATRIX_STEPS_FILE:+true}"
+    local source_count=0
+    [[ "$has_commands" == "true" ]] && ((source_count += 1))
+    [[ "$has_steps" == "true" ]] && ((source_count += 1))
+    [[ "$has_steps_file" == "true" ]] && ((source_count += 1))
 
-    if [[ "$has_commands" == "true" && "$has_steps" == "true" ]]; then
-        echo "❌ Error: Cannot use both run-matrix-commands and run-matrix-steps"
-        echo "   Please use only one of these inputs"
-        echo ""
-        echo "   For single command execution, use: run-matrix-commands"
-        echo "   For multi-step execution, use: run-matrix-steps"
+    local template_vars="${INPUT_RUN_MATRIX_TEMPLATE_VARS:-}"
+    [[ -z "$template_vars" ]] && template_vars='{}'
+    if ! echo "$template_vars" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo "❌ Error: run-matrix-template-vars must be a JSON object"
         return 1
     fi
 
-    if [[ "$has_commands" != "true" && "$has_steps" != "true" ]]; then
-        echo "❌ Error: Must provide either run-matrix-commands or run-matrix-steps"
-        echo ""
-        echo "   For single command execution, use: run-matrix-commands"
-        echo "   For multi-step execution, use: run-matrix-steps"
+    if [[ "$source_count" -ne 1 ]]; then
+        echo "❌ Error: Provide exactly one of run-matrix-commands, run-matrix-steps, or run-matrix-steps-file"
         return 1
+    fi
+
+    if [[ "$has_steps_file" == "true" ]]; then
+        load_run_matrix_steps_file "$INPUT_RUN_MATRIX_STEPS_FILE" || return 1
+        has_steps=true
     fi
 
     # Route to appropriate mode
