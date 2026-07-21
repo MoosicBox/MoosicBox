@@ -345,102 +345,38 @@ pub const LSF_PRED_WEIGHT_SEL_NB: &[[u8; 9]; 32] = &[
 // Values: b'C' (use LSF_PRED_WEIGHTS_WB_C) or b'D' (use LSF_PRED_WEIGHTS_WB_D)
 /// Lsf pred weight sel wb (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHT_SEL_WB: &[[u8; 15]; 32] = &[
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=0
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C',
-    ], // I1=1
-    [
-        b'C', b'C', b'D', b'C', b'C', b'D', b'D', b'D', b'C', b'D', b'D', b'D', b'D', b'C', b'C',
-    ], // I1=2
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D', b'C', b'C',
-    ], // I1=3
-    [
-        b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'D', b'C', b'D', b'D', b'D', b'D', b'D', b'C',
-    ], // I1=4
-    [
-        b'C', b'C', b'D', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C',
-    ], // I1=5
-    [
-        b'D', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D', b'C', b'D', b'C',
-    ], // I1=6
-    [
-        b'C', b'D', b'D', b'C', b'C', b'C', b'D', b'C', b'D', b'D', b'D', b'C', b'D', b'C', b'D',
-    ], // I1=7
-    [
-        b'C', b'D', b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'D',
-    ], // I1=8
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=9
-    [
-        b'C', b'D', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C',
-    ], // I1=10
-    [
-        b'C', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'D', b'D', b'D', b'C', b'D', b'C', b'C',
-    ], // I1=11
-    [
-        b'C', b'C', b'D', b'C', b'C', b'D', b'C', b'D', b'C', b'D', b'C', b'C', b'D', b'C', b'C',
-    ], // I1=12
-    [
-        b'C', b'C', b'C', b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'C', b'C',
-    ], // I1=13
-    [
-        b'C', b'D', b'C', b'C', b'C', b'D', b'D', b'C', b'D', b'D', b'D', b'C', b'D', b'D', b'D',
-    ], // I1=14
-    [
-        b'C', b'C', b'D', b'D', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D', b'D', b'C',
-    ], // I1=15
-    [
-        b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'D', b'C', b'D', b'C', b'C',
-    ], // I1=16
-    [
-        b'C', b'C', b'D', b'C', b'C', b'C', b'C', b'D', b'C', b'C', b'D', b'D', b'D', b'C', b'C',
-    ], // I1=17
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=18
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D', b'C', b'C',
-    ], // I1=19
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C',
-    ], // I1=20
-    [
-        b'C', b'D', b'C', b'D', b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'C', b'D', b'D', b'C',
-    ], // I1=21
-    [
-        b'C', b'C', b'D', b'D', b'D', b'D', b'C', b'D', b'D', b'C', b'C', b'D', b'D', b'C', b'C',
-    ], // I1=22
-    [
-        b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'C', b'D', b'C', b'C', b'C', b'C', b'D', b'C',
-    ], // I1=23
-    [
-        b'C', b'C', b'C', b'D', b'D', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'D', b'D', b'D',
-    ], // I1=24
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=25
-    [
-        b'C', b'D', b'D', b'C', b'C', b'C', b'D', b'D', b'C', b'C', b'D', b'D', b'D', b'D', b'D',
-    ], // I1=26
-    [
-        b'C', b'C', b'C', b'C', b'C', b'D', b'C', b'D', b'D', b'D', b'D', b'C', b'D', b'D', b'D',
-    ], // I1=27
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=28
-    [
-        b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
-    ], // I1=29
-    [
-        b'D', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D', b'C', b'C', b'C',
-    ], // I1=30
-    [
-        b'C', b'C', b'D', b'C', b'C', b'D', b'D', b'D', b'C', b'C', b'D', b'C', b'C', b'D', b'C',
-    ], // I1=31
+    *b"CCCCCCCCCCCCCCD", // I1=0
+    *b"CCCCCCCCCCCCCCC", // I1=1
+    *b"CCDCCDDDCDDDDCC", // I1=2
+    *b"CCCCCCCCCCCCDCC", // I1=3
+    *b"CDDCDCDDCDDDDDC", // I1=4
+    *b"CCDCCCCCCCCCCCC", // I1=5
+    *b"DCCCCCCCCCCDCDC", // I1=6
+    *b"CDDCCCDCDDDCDCD", // I1=7
+    *b"CDCDDCDCDCDDDDD", // I1=8
+    *b"CCCCCCCCCCCCCCD", // I1=9
+    *b"CDCCCCCCCCCCCCC", // I1=10
+    *b"CCDCDDDDDDDCDCC", // I1=11
+    *b"CCDCCDCDCDCCDCC", // I1=12
+    *b"CCCCDDCDCDDDDCC", // I1=13
+    *b"CDCCCDDCDDDCDDD", // I1=14
+    *b"CCDDCCCCCCCCDDC", // I1=15
+    *b"CDDCDCDDDDDCDCC", // I1=16
+    *b"CCDCCCCDCCDDDCC", // I1=17
+    *b"CCCCCCCCCCCCCCD", // I1=18
+    *b"CCCCCCCCCCCCDCC", // I1=19
+    *b"CCCCCCCCCCCCCCC", // I1=20
+    *b"CDCDCDDCDCDCDDC", // I1=21
+    *b"CCDDDDCDDCCDDCC", // I1=22
+    *b"CDDCDCDCDCCCCDC", // I1=23
+    *b"CCCDDCDCDDDDDDD", // I1=24
+    *b"CCCCCCCCCCCCCCD", // I1=25
+    *b"CDDCCCDDCCDDDDD", // I1=26
+    *b"CCCCCDCDDDDCDDD", // I1=27
+    *b"CCCCCCCCCCCCCCD", // I1=28
+    *b"CCCCCCCCCCCCCCD", // I1=29
+    *b"DCCCCCCCCCCDCCC", // I1=30
+    *b"CCDCCDDDCCDCCDC", // I1=31
 ];
 
 // RFC 6716 Table 23: NB/MB Normalized LSF Stage-1 Codebook Vectors (lines 3255-3333)
