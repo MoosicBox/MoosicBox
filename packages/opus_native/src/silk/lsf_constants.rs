@@ -148,134 +148,38 @@ pub const LSF_CB_SELECT_NB: &[[u8; 10]; 32] = &[
 ///
 /// Maps Stage-1 index (I1) and coefficient index to codebook letter (i-p).
 pub const LSF_CB_SELECT_WB: &[[u8; 16]; 32] = &[
-    [
-        b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
-        b'i',
-    ], // I1=0
-    [
-        b'k', b'l', b'l', b'l', b'l', b'l', b'k', b'k', b'k', b'k', b'k', b'j', b'j', b'j', b'i',
-        b'l',
-    ], // I1=1
-    [
-        b'k', b'n', b'n', b'l', b'p', b'm', b'm', b'n', b'k', b'n', b'm', b'n', b'n', b'm', b'l',
-        b'l',
-    ], // I1=2
-    [
-        b'i', b'k', b'j', b'k', b'k', b'j', b'j', b'j', b'j', b'j', b'i', b'i', b'i', b'i', b'i',
-        b'j',
-    ], // I1=3
-    [
-        b'i', b'o', b'n', b'm', b'o', b'm', b'p', b'n', b'm', b'm', b'm', b'n', b'n', b'm', b'm',
-        b'l',
-    ], // I1=4
-    [
-        b'i', b'l', b'n', b'n', b'm', b'l', b'l', b'n', b'l', b'l', b'l', b'l', b'l', b'l', b'k',
-        b'm',
-    ], // I1=5
-    [
-        b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
-        b'i',
-    ], // I1=6
-    [
-        b'i', b'k', b'o', b'l', b'p', b'k', b'n', b'l', b'm', b'n', b'n', b'm', b'l', b'l', b'k',
-        b'l',
-    ], // I1=7
-    [
-        b'i', b'o', b'k', b'o', b'o', b'm', b'n', b'm', b'o', b'n', b'm', b'm', b'n', b'l', b'l',
-        b'l',
-    ], // I1=8
-    [
-        b'k', b'j', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
-        b'i',
-    ], // I1=9
-    [
-        b'i', b'j', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
-        b'j',
-    ], // I1=10
-    [
-        b'k', b'k', b'l', b'm', b'n', b'l', b'l', b'l', b'l', b'l', b'l', b'l', b'k', b'k', b'j',
-        b'l',
-    ], // I1=11
-    [
-        b'k', b'k', b'l', b'l', b'm', b'l', b'l', b'l', b'l', b'l', b'l', b'l', b'l', b'k', b'j',
-        b'l',
-    ], // I1=12
-    [
-        b'l', b'm', b'm', b'm', b'o', b'm', b'm', b'n', b'l', b'n', b'm', b'm', b'n', b'm', b'l',
-        b'm',
-    ], // I1=13
-    [
-        b'i', b'o', b'm', b'n', b'm', b'p', b'n', b'k', b'o', b'n', b'p', b'm', b'm', b'l', b'n',
-        b'l',
-    ], // I1=14
-    [
-        b'i', b'j', b'i', b'j', b'j', b'j', b'j', b'j', b'j', b'j', b'i', b'i', b'i', b'i', b'j',
-        b'i',
-    ], // I1=15
-    [
-        b'j', b'o', b'n', b'p', b'n', b'm', b'n', b'l', b'm', b'n', b'm', b'm', b'm', b'l', b'l',
-        b'm',
-    ], // I1=16
-    [
-        b'j', b'l', b'l', b'm', b'm', b'l', b'l', b'n', b'k', b'l', b'l', b'n', b'n', b'n', b'l',
-        b'm',
-    ], // I1=17
-    [
-        b'k', b'l', b'l', b'k', b'k', b'k', b'l', b'k', b'j', b'k', b'j', b'k', b'j', b'j', b'j',
-        b'm',
-    ], // I1=18
-    [
-        b'i', b'k', b'l', b'n', b'l', b'l', b'k', b'k', b'k', b'j', b'j', b'i', b'i', b'i', b'i',
-        b'i',
-    ], // I1=19
-    [
-        b'l', b'm', b'l', b'n', b'l', b'l', b'k', b'k', b'j', b'j', b'j', b'j', b'j', b'k', b'k',
-        b'm',
-    ], // I1=20
-    [
-        b'k', b'o', b'l', b'p', b'p', b'm', b'n', b'm', b'n', b'l', b'n', b'l', b'l', b'k', b'l',
-        b'l',
-    ], // I1=21
-    [
-        b'k', b'l', b'n', b'o', b'o', b'l', b'n', b'l', b'm', b'm', b'l', b'l', b'l', b'l', b'k',
-        b'm',
-    ], // I1=22
-    [
-        b'j', b'l', b'l', b'm', b'm', b'm', b'm', b'l', b'n', b'n', b'n', b'l', b'j', b'j', b'j',
-        b'j',
-    ], // I1=23
-    [
-        b'k', b'n', b'l', b'o', b'o', b'm', b'p', b'm', b'm', b'n', b'l', b'm', b'm', b'l', b'l',
-        b'l',
-    ], // I1=24
-    [
-        b'i', b'o', b'j', b'j', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
-        b'i',
-    ], // I1=25
-    [
-        b'i', b'o', b'o', b'l', b'n', b'k', b'n', b'n', b'l', b'm', b'm', b'p', b'p', b'm', b'm',
-        b'm',
-    ], // I1=26
-    [
-        b'l', b'l', b'p', b'l', b'n', b'm', b'l', b'l', b'l', b'k', b'k', b'l', b'l', b'l', b'k',
-        b'l',
-    ], // I1=27
-    [
-        b'i', b'i', b'j', b'i', b'i', b'i', b'k', b'j', b'k', b'j', b'j', b'k', b'k', b'k', b'j',
-        b'j',
-    ], // I1=28
-    [
-        b'i', b'l', b'k', b'n', b'l', b'l', b'k', b'l', b'k', b'j', b'i', b'i', b'j', b'i', b'i',
-        b'j',
-    ], // I1=29
-    [
-        b'l', b'n', b'n', b'm', b'p', b'n', b'l', b'l', b'k', b'l', b'k', b'k', b'j', b'i', b'j',
-        b'i',
-    ], // I1=30
-    [
-        b'k', b'l', b'n', b'l', b'm', b'l', b'l', b'l', b'k', b'j', b'k', b'o', b'm', b'i', b'i',
-        b'i',
-    ], // I1=31
+    *b"iiiiiiiiiiiiiiii", // I1=0
+    *b"klllllkkkkkjjjil", // I1=1
+    *b"knnlpmmnknmnnmll", // I1=2
+    *b"ikjkkjjjjjiiiiij", // I1=3
+    *b"ionmompnmmmnnmml", // I1=4
+    *b"ilnnmllnllllllkm", // I1=5
+    *b"iiiiiiiiiiiiiiii", // I1=6
+    *b"ikolpknlmnnmllkl", // I1=7
+    *b"iokoomnmonmmnlll", // I1=8
+    *b"kjiiiiiiiiiiiiii", // I1=9
+    *b"ijiiiiiiiiiiiiij", // I1=10
+    *b"kklmnlllllllkkjl", // I1=11
+    *b"kkllmllllllllkjl", // I1=12
+    *b"lmmmommnlnmmnmlm", // I1=13
+    *b"iomnmpnkonpmmlnl", // I1=14
+    *b"ijijjjjjjjiiiiji", // I1=15
+    *b"jonpnmnlmnmmmllm", // I1=16
+    *b"jllmmllnkllnnnlm", // I1=17
+    *b"kllkkklkjkjkjjjm", // I1=18
+    *b"iklnllkkkjjiiiii", // I1=19
+    *b"lmlnllkkjjjjjkkm", // I1=20
+    *b"kolppmnmnlnllkll", // I1=21
+    *b"klnoolnlmmllllkm", // I1=22
+    *b"jllmmmmlnnnljjjj", // I1=23
+    *b"knloompmmnlmmlll", // I1=24
+    *b"iojjiiiiiiiiiiii", // I1=25
+    *b"ioolnknnlmmppmmm", // I1=26
+    *b"llplnmlllkklllkl", // I1=27
+    *b"iijiiikjkjjkkkjj", // I1=28
+    *b"ilknllklkjiijiij", // I1=29
+    *b"lnnmpnllklkkjiji", // I1=30
+    *b"klnlmlllkjkomiii", // I1=31
 ];
 
 // RFC 6716 Table 19: PDF for Normalized LSF Index Extension Decoding (lines 2928-2934)
