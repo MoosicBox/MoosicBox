@@ -30,18 +30,13 @@ env:
 jobs:
     build-matrix:
         name: Build matrix
-
         strategy:
             fail-fast: true
-
             matrix:
                 os: ["ubuntu-latest"]
-
         runs-on: ${{ matrix.os }}
-
         outputs:
             matrix: ${{ steps.build-matrix-step.outputs.matrix }}
-
         steps:
             - uses: dtolnay/rust-toolchain@stable
 
@@ -61,56 +56,27 @@ jobs:
 
     bloaty:
         runs-on: ${{ matrix.package.os }}
-
         needs: build-matrix
-
         strategy:
             fail-fast: false
-
             matrix:
                 package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-
         steps:
             - uses: actions/checkout@v6
 
-            - uses: dtolnay/rust-toolchain@stable
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
               with:
-                  components: llvm-tools-preview
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: "true"
+                  rust-components: "rustfmt, clippy, llvm-tools-preview"
 
             - name: Install cargo-bloat
-              run: |
-                  cargo install cargo-bloat
+              run: cargo install cargo-bloat
 
             - name: Install cargo-binutils
-              run: |
-                  cargo install cargo-binutils
-
-            - name: Setup CI
-              if: ${{ matrix.package.ciSteps }}
-              run: ${{ matrix.package.ciSteps }}
-
-            - uses: pnpm/action-setup@v3
-              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
-              name: Install pnpm
-              with:
-                  version: latest
-                  run_install: false
-
-            - uses: actions/setup-node@v6
-              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
-              name: Install node
-              with:
-                  node-version: latest
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: "3.x"
-
-            - name: Install dependencies
-              if: ${{ matrix.package.dependencies }}
-              shell: bash
-              run: ${{ matrix.package.dependencies }}
+              run: cargo install cargo-binutils
 
             - name: Run bloaty ${{ matrix.package.name }}
               shell: bash

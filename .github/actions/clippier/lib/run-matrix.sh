@@ -1393,6 +1393,65 @@ run_matrix_multi_step_mode() {
     fi
 }
 
+# Configure a standard command suite shared by Rust validation workflows.
+configure_run_matrix_preset() {
+    local preset="${INPUT_RUN_MATRIX_PRESET:-}"
+    [[ -z "$preset" ]] && return
+
+    if [[ -n "${INPUT_RUN_MATRIX_COMMANDS:-}" || -n "${INPUT_RUN_MATRIX_STEPS:-}" ]]; then
+        echo "❌ Error: run-matrix-preset cannot be combined with run-matrix-commands or run-matrix-steps"
+        return 1
+    fi
+
+    if [[ "$preset" != "rust-validation" ]]; then
+        echo "❌ Error: Unknown run-matrix preset: $preset"
+        return 1
+    fi
+
+    local test_command="cargo{{if matrix.package.nightly}} +nightly{{endif}} test"
+    if [[ "${INPUT_RUN_MATRIX_COVERAGE:-false}" == "true" ]]; then
+        test_command="cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report"
+    fi
+
+    INPUT_RUN_MATRIX_STEPS=$(cat <<EOF
+clear-target-1:
+  commands: rm -rf target
+clippy:
+  commands: |
+    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+  label: "Clippy"
+  strategy: "sequential"
+tests:
+  commands: |
+    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}${test_command} {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+  label: "Tests"
+  strategy: "sequential"
+doctests:
+  commands: |
+    PACKAGE_PATH="{{matrix.package.path}}"
+    PACKAGE_PATH="\${PACKAGE_PATH#./}"
+    if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"\${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+        echo "Skipping doctests for {{matrix.package.name}} - no library target found"
+        exit 0
+    fi
+    {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
+  label: "Doctests"
+  strategy: "sequential"
+clear-target-2:
+  commands: rm -rf target
+format:
+  commands: cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --all -- --check
+  label: "Format"
+  strategy: "combined"
+machete:
+  commands: cd "$GITHUB_WORKSPACE" && cargo machete --with-metadata "{{matrix.package.path}}"
+  label: "Cargo machete"
+  strategy: "combined"
+EOF
+)
+    export INPUT_RUN_MATRIX_STEPS
+}
+
 # Main run-matrix command entry point
 #
 # Routes to either single-command mode or multi-step mode based on inputs.
@@ -1412,6 +1471,8 @@ run_matrix_multi_step_mode() {
 #   1: One or more tests failed OR configuration error
 run_matrix_command() {
     CONTEXT_PHASE="run-matrix"
+
+    configure_run_matrix_preset || return 1
 
     # Validation: commands vs steps (mutually exclusive)
     local has_commands="${INPUT_RUN_MATRIX_COMMANDS:+true}"

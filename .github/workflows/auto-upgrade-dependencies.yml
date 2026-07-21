@@ -290,89 +290,22 @@ jobs:
                   package-json: ${{ toJson(matrix.package) }}
                   skip-checkout: "true"
 
-            - name: Clippy ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          command=$(echo "$command" | xargs)
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
-                              ${{ runner.debug && '-vv' }} \
-                              --all-targets \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                           else
-                               >&2 echo "FAILED \`$command\`";
-                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                               exit 1
-                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
-
-            - name: Run ${{ matrix.package.name }} tests
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          command=$(echo "$command" | xargs)
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
-                              ${{ runner.debug && '-vv' }} \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                           else
-                               >&2 echo "FAILED \`$command\`";
-                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                               exit 1
-                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
-
-            - name: Format ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'macos-latest' }}
+            - name: Download cargo-machete
+              uses: actions/download-artifact@v8
               with:
-                  name: cargo-machete-macos
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              with:
-                  name: cargo-machete-ubuntu
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              with:
-                  name: cargo-machete.exe
+                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
                   path: ~/.cargo/bin
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
+              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
-
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete.exe
-
-            - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              shell: bash
-              run: |
-                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+            - name: Validate ${{ matrix.package.name }}
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-preset: rust-validation
 
     commit-compatible:
         name: Commit compatible upgrades
@@ -494,83 +427,22 @@ jobs:
                   package-json: ${{ toJson(matrix.package) }}
                   skip-checkout: "true"
 
-            - name: Clippy ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy --all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
-                              --all-targets \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                           else
-                               >&2 echo "FAILED \`$command\`";
-                               exit 1
-                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
-
-            - name: Run ${{ matrix.package.name }} tests
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                           else
-                               >&2 echo "FAILED \`$command\`";
-                               exit 1
-                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
-
-            - name: Format ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'macos-latest' }}
+            - name: Download cargo-machete
+              uses: actions/download-artifact@v8
               with:
-                  name: cargo-machete-macos
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              with:
-                  name: cargo-machete-ubuntu
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              with:
-                  name: cargo-machete.exe
+                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
                   path: ~/.cargo/bin
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
+              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
-
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete.exe
-
-            - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              shell: bash
-              run: |
-                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+            - name: Validate ${{ matrix.package.name }}
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-preset: rust-validation
 
     commit-incompatible:
         name: Commit incompatible upgrades

@@ -299,6 +299,15 @@ inputs:
         default: "rustfmt, clippy"
 
     # Inputs for run-matrix command
+    run-matrix-preset:
+        description: "Built-in command preset (currently: rust-validation)"
+        required: false
+
+    run-matrix-coverage:
+        description: "Use cargo-llvm-cov for tests in the rust-validation preset"
+        required: false
+        default: "false"
+
     run-matrix-package-json:
         description: "Package JSON from matrix (same format as package-json for setup)"
         required: false
@@ -831,6 +840,8 @@ runs:
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
               INPUT_RUN_MATRIX_PACKAGE_JSON: ${{ inputs.run-matrix-package-json }}
+              INPUT_RUN_MATRIX_PRESET: ${{ inputs.run-matrix-preset }}
+              INPUT_RUN_MATRIX_COVERAGE: ${{ inputs.run-matrix-coverage }}
               INPUT_RUN_MATRIX_COMMANDS: ${{ inputs.run-matrix-commands }}
               INPUT_RUN_MATRIX_STEPS: ${{ inputs.run-matrix-steps }}
               INPUT_RUN_MATRIX_STRATEGY: ${{ inputs.run-matrix-strategy }}

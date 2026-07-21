@@ -1437,6 +1437,23 @@ setup_ci_environment() {
         echo "⚠️  Note: free_disk_space toolchain detected. Please add jlumbroso/free-disk-space@main action before clippier setup in your workflow"
     fi
 
+    # Keep Windows C/C++ dependencies on the dynamic MSVC runtime. This matches
+    # vcpkg's x64-windows-static-md triplet and avoids debug-runtime mismatches.
+    if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+        CONTEXT_PHASE="configuring Windows CMake"
+        local cmake_toolchain_file="${RUNNER_TEMP}/msvc-release-runtime.cmake"
+        echo "🪟 Configuring CMake for the MSVC dynamic runtime"
+        cat > "$cmake_toolchain_file" <<'EOF'
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_DEBUG "/MD /Zi /Ob0 /Od" CACHE STRING "" FORCE)
+EOF
+        echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+        echo "CMAKE_TOOLCHAIN_FILE=$cmake_toolchain_file" >> "$GITHUB_ENV"
+        export CMAKE_GENERATOR=Ninja
+        export CMAKE_TOOLCHAIN_FILE="$cmake_toolchain_file"
+    fi
+
     if [[ "$INPUT_SKIP_CHECKOUT" == "true" && "$git_submodules" == "true" ]]; then
         echo "🔀 Initializing git submodules (checkout was skipped)"
         git submodule update --init --recursive

@@ -53,17 +53,12 @@ jobs:
 
     simulator:
         name: Simulator
-
         runs-on: ${{ matrix.package.os }}
-
         needs: build-matrix
-
         strategy:
             fail-fast: false
-
             matrix:
                 package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-
         steps:
             - uses: actions/checkout@v6
               with:
@@ -77,44 +72,21 @@ jobs:
                   git checkout edge
                   git rebase master
 
-            - uses: dtolnay/rust-toolchain@stable
-
-            - name: Setup CI
-              if: ${{ matrix.package.ciSteps }}
-              run: ${{ matrix.package.ciSteps }}
-
-            - uses: pnpm/action-setup@v3
-              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
-              name: Install pnpm
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
               with:
-                  version: latest
-                  run_install: false
-
-            - uses: actions/setup-node@v6
-              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
-              name: Install node
-              with:
-                  node-version: latest
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: "3.x"
-
-            - name: Install dependencies
-              if: ${{ matrix.package.dependencies }}
-              shell: bash
-              run: ${{ matrix.package.dependencies }}
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: "true"
 
             - name: Run server simulator
-              shell: bash
+              uses: ./.github/actions/clippier
               env:
                   ENABLE_ASSERT: 1
                   SIMULATOR_DURATION: 10
                   SIMULATOR_RUNS: 30
-              run: |
-                  while read -r feature; do \
-                      ${{ matrix.package.env }} cargo run --release -p moosicbox_server_simulator ${{ runner.debug && '-vv' }} \
-                          --no-default-features \
-                          --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}
-                  done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')"
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo run --release -p moosicbox_server_simulator {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
