@@ -1,5 +1,9 @@
 import { on, triggerHandlers, clearProcessedElements } from './core';
 import { Idiomorph } from './vendored/idiomorph.esm';
+import {
+    captureReadingPosition,
+    restoreReadingPosition,
+} from './reading-position';
 
 on('swapDom', ({ html, url }) => {
     if (typeof url === 'string') {
@@ -67,6 +71,7 @@ on('swapHtml', ({ target, html, strategy }) => {
     }
 
     const addedElements: HTMLElement[] = [];
+    const readingPosition = captureReadingPosition(target);
 
     // Handle morph strategies (children, this) using Idiomorph
     // Map to idiomorph's innerHTML/outerHTML terminology
@@ -88,6 +93,8 @@ on('swapHtml', ({ target, html, strategy }) => {
             },
         },
     });
+
+    restoreReadingPosition(readingPosition);
 
     if (addedElements.length > 0) {
         triggerHandlers('domLoad', {

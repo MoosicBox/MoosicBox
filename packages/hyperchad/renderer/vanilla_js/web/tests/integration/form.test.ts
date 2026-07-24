@@ -14,6 +14,56 @@ describe('form', () => {
     });
 
     describe('form submission', () => {
+        test('prevents duplicate submissions and restores submit controls', async ({
+            worker,
+        }) => {
+            let requestCount = 0;
+            let releaseRequest: (() => void) | undefined;
+            const blocked = new Promise<void>((resolve) => {
+                releaseRequest = resolve;
+            });
+
+            worker.use(
+                http.post('/api/submit-once', async () => {
+                    requestCount += 1;
+                    await blocked;
+                    return new HttpResponse('<div>Submitted once</div>', {
+                        headers: { 'content-type': 'text/html' },
+                    });
+                }),
+            );
+
+            await import('../../src/core');
+            await import('../../src/form');
+            await import('../../src/routing');
+
+            const form = document.createElement('form');
+            form.setAttribute('hx-post', '/api/submit-once');
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            form.appendChild(submit);
+            document.body.append(form);
+
+            form.dispatchEvent(
+                new Event('submit', { bubbles: true, cancelable: true }),
+            );
+            form.dispatchEvent(
+                new Event('submit', { bubbles: true, cancelable: true }),
+            );
+
+            await vi.waitFor(() => {
+                expect(requestCount).toBe(1);
+                expect(form.getAttribute('aria-busy')).toBe('true');
+                expect(submit.disabled).toBe(true);
+            });
+
+            releaseRequest?.();
+            await vi.waitFor(() => {
+                expect(form.hasAttribute('aria-busy')).toBe(false);
+                expect(submit.disabled).toBe(false);
+            });
+        });
+
         test('waits for an in-flight change request before submitting', async ({
             worker,
         }) => {

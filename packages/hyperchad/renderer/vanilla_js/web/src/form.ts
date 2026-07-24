@@ -2,6 +2,38 @@ import { appendQueryParams } from './core';
 import { handleNavigation } from './nav-base';
 import { processRoute, waitForPendingRoutes } from './routing';
 
+const pendingSubmissions = new WeakSet<HTMLFormElement>();
+
+function submitControls(
+    form: HTMLFormElement,
+): (HTMLButtonElement | HTMLInputElement)[] {
+    return Array.from(
+        form.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+            'button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]',
+        ),
+    );
+}
+
+function beginSubmission(form: HTMLFormElement): () => void {
+    pendingSubmissions.add(form);
+    form.setAttribute('aria-busy', 'true');
+    const controls = submitControls(form).map((control) => ({
+        control,
+        disabled: control.disabled,
+    }));
+    controls.forEach(({ control }) => {
+        control.disabled = true;
+    });
+
+    return () => {
+        pendingSubmissions.delete(form);
+        form.removeAttribute('aria-busy');
+        controls.forEach(({ control, disabled }) => {
+            control.disabled = disabled;
+        });
+    };
+}
+
 function initFormHandler() {
     document.body.addEventListener(
         'submit',
@@ -20,55 +52,62 @@ function initFormHandler() {
 
             e.preventDefault();
 
-            // Preserve request ordering when a change-triggered draft save is
-            // still in flight for this form.
-            await waitForPendingRoutes(element);
+            if (pendingSubmissions.has(element)) return false;
+            const endSubmission = beginSubmission(element);
 
-            // Build form data
-            let form: HTMLFormElement | null = element;
-            const formData = new FormData();
+            try {
+                // Preserve request ordering when a change-triggered draft save is
+                // still in flight for this form.
+                await waitForPendingRoutes(element);
 
-            while (form) {
-                const current = new FormData(form);
+                // Build form data
+                let form: HTMLFormElement | null = element;
+                const formData = new FormData();
 
-                for (const pair of current.entries()) {
-                    formData.append(pair[0], pair[1]);
+                while (form) {
+                    const current = new FormData(form);
+
+                    for (const pair of current.entries()) {
+                        formData.append(pair[0], pair[1]);
+                    }
+
+                    // TODO: Add support for no inheritance form
+                    form = form.parentElement?.closest('form') ?? null;
                 }
 
-                // TODO: Add support for no inheritance form
-                form = form.parentElement?.closest('form') ?? null;
-            }
-
-            // Step 1: Execute hx-* route first (if present)
-            if (hasHxRoute) {
-                await processRoute(element, { body: formData });
-            }
-
-            // Step 2: Execute action navigation (if present)
-            if (action) {
-                const method = (
-                    element.getAttribute('method') || 'GET'
-                ).toUpperCase();
-                const fetchOptions: RequestInit = {
-                    method,
-                };
-
-                let url = action;
-                if (method === 'GET') {
-                    url = appendQueryParams(action, formData);
-                } else {
-                    // POST/PUT/etc - send form data in body
-                    fetchOptions.body = formData;
+                // Step 1: Execute hx-* route first (if present)
+                if (hasHxRoute) {
+                    await processRoute(element, { body: formData });
                 }
 
-                // Fetch and trigger swapDom (same as anchor navigation)
-                const response = await fetch(url, fetchOptions);
-                const html = await response.text();
+                // Step 2: Execute action navigation (if present)
+                if (action) {
+                    const method = (
+                        element.getAttribute('method') || 'GET'
+                    ).toUpperCase();
+                    const fetchOptions: RequestInit = {
+                        method,
+                    };
 
-                handleNavigation(url, html);
+                    let url = action;
+                    if (method === 'GET') {
+                        url = appendQueryParams(action, formData);
+                    } else {
+                        // POST/PUT/etc - send form data in body
+                        fetchOptions.body = formData;
+                    }
+
+                    // Fetch and trigger swapDom (same as anchor navigation)
+                    const response = await fetch(url, fetchOptions);
+                    const html = await response.text();
+
+                    handleNavigation(url, html);
+                }
+
+                return false;
+            } finally {
+                endSubmission();
             }
-
-            return false;
         },
         true,
     );

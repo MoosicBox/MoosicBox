@@ -132,6 +132,45 @@ describe('idiomorph', () => {
             expect(exists).toBe(false);
         });
 
+        it('keeps the viewport at the end across a scoped morph', async () => {
+            await import('../../src/core');
+            await import('../../src/idiomorph');
+
+            const { triggerHandlers } = await import('../../src/core');
+            const target = document.createElement('main');
+            target.id = 'target';
+            target.textContent = 'Old';
+            document.body.appendChild(target);
+            const scroller = document.documentElement;
+            Object.defineProperties(scroller, {
+                scrollTop: {
+                    configurable: true,
+                    value: 1200,
+                    writable: true,
+                },
+                clientHeight: { configurable: true, value: 800 },
+                scrollHeight: {
+                    configurable: true,
+                    get: () =>
+                        document.getElementById('target')?.textContent === 'Old'
+                            ? 2000
+                            : 2400,
+                },
+            });
+            Object.defineProperty(document, 'scrollingElement', {
+                configurable: true,
+                value: scroller,
+            });
+
+            triggerHandlers('swapHtml', {
+                target: '#target',
+                html: '<main id="target">New streamed content</main>',
+                strategy: 'this',
+            });
+
+            expect(scroller.scrollTop).toBe(1600);
+        });
+
         it('processes new elements after swap', async () => {
             const { triggerHandlers, onAttr, clearProcessedElements } =
                 await import('../../src/core');

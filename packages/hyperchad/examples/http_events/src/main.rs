@@ -59,6 +59,21 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
     ]
 });
 
+/// Creates a generic form demonstrating guarded submission semantics.
+///
+/// Canonical `HyperChad` form handling marks the form busy and disables its submit
+/// controls until the request settles, preventing duplicate task creation.
+#[must_use]
+fn create_guarded_task_form() -> Containers {
+    container! {
+        form hx-post="/api/tasks" hx-target="#guarded-task-result" hx-swap=this gap=8 {
+            input name="title" type=text placeholder="Task title";
+            button type=submit { "Create task once" }
+        }
+        div #guarded-task-result { "No guarded task submitted yet." }
+    }
+}
+
 /// Creates a button that demonstrates HTTP event handlers for a normal task creation request.
 ///
 /// The button includes handlers for all 6 HTTP lifecycle events and sends a POST request to `/api/tasks`.
@@ -295,6 +310,7 @@ fn create_main_page() -> Container {
                             }
 
                             div class="button-group" direction=row gap=8 {
+                                (create_guarded_task_form())
                                 (create_add_task_button())
                                 (create_error_button())
                                 (create_slow_button())
