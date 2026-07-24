@@ -1204,6 +1204,90 @@ async fn delete(
     Ok(results)
 }
 
+fn upsert_multi_unique_columns(
+    unique: Option<&[Box<dyn crate::query::Expression>]>,
+) -> Result<Vec<&str>, TursoDatabaseError> {
+    let unique = unique.ok_or_else(|| {
+        TursoDatabaseError::Query("multi-row UPSERT requires a conflict target".to_owned())
+    })?;
+    unique
+        .iter()
+        .map(|expression| match expression.expression_type() {
+            crate::query::ExpressionType::Identifier(identifier) => Ok(identifier.value.as_str()),
+            _ => Err(TursoDatabaseError::Query(
+                "multi-row UPSERT conflict targets must be identifiers".to_owned(),
+            )),
+        })
+        .collect()
+}
+
+async fn upsert_multi(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[Vec<(&str, Box<dyn crate::query::Expression>)>],
+    unique: Option<&[Box<dyn crate::query::Expression>]>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let Some(first) = values.first() else {
+        return Ok(Vec::new());
+    };
+    if first.is_empty() {
+        return Err(TursoDatabaseError::Query(
+            "multi-row UPSERT rows cannot be empty".to_owned(),
+        ));
+    }
+    if values.iter().skip(1).any(|row| {
+        row.len() != first.len()
+            || row
+                .iter()
+                .zip(first)
+                .any(|((column, _), (expected, _))| column != expected)
+    }) {
+        return Err(TursoDatabaseError::Query(
+            "multi-row UPSERT rows must use the same columns in the same order".to_owned(),
+        ));
+    }
+    let unique = upsert_multi_unique_columns(unique)?;
+    if unique.is_empty() {
+        return Err(TursoDatabaseError::Query(
+            "multi-row UPSERT conflict target cannot be empty".to_owned(),
+        ));
+    }
+    let columns = first.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    let values_clause = values
+        .iter()
+        .map(|row| format!("({})", build_values_props(row).join(", ")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let set_clause = columns
+        .iter()
+        .map(|name| format!("{name}=excluded.{name}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let query = format!(
+        "INSERT INTO {table_name} ({}) VALUES {values_clause} ON CONFLICT ({}) DO UPDATE SET {set_clause} RETURNING *",
+        columns.join(", "),
+        unique.join(", "),
+    );
+    let params = values
+        .iter()
+        .flat_map(|row| row.iter())
+        .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
+        .collect::<Vec<_>>();
+    log::trace!("Running multi-row upsert query: {query} with params: {params:?}");
+    let mut statement = connection.prepare(&query).await?;
+    let column_names = statement
+        .columns()
+        .iter()
+        .map(|column| column.name().to_owned())
+        .collect::<Vec<_>>();
+    let mut rows = statement.query(to_turso_params(&params)?).await?;
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().await? {
+        results.push(from_turso_row(&column_names, &row)?);
+    }
+    Ok(results)
+}
+
 async fn upsert_on_conflict(
     connection: &turso::Connection,
     table_name: &str,
@@ -1553,22 +1637,14 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let mut all_results = Vec::new();
-        for values in &statement.values {
-            let results = upsert(
-                &self.connection,
-                statement.table_name,
-                values,
-                None,
-                None,
-                None,
-            )
-            .await
-            .map_err(crate::DatabaseError::Turso)?;
-            all_results.extend(results);
-        }
-
-        Ok(all_results)
+        Ok(upsert_multi(
+            &self.connection,
+            statement.table_name,
+            &statement.values,
+            statement.unique.as_deref(),
+        )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_delete(
@@ -3536,6 +3612,59 @@ mod tests {
         assert!(db.is_ok(), "Should create file-based database");
 
         let _ = std::fs::remove_file(&db_path);
+        drop(db);
+    }
+
+    #[switchy_async::test]
+    async fn test_upsert_multi_uses_one_conflict_aware_statement() {
+        let db = create_test_db().await;
+        db.exec_raw("CREATE TABLE test_multi (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+            .await
+            .expect("create table");
+
+        let mut initial = db.upsert_multi("test_multi");
+        initial
+            .values(vec![
+                vec![
+                    ("id", DatabaseValue::Int64(1)),
+                    ("name", DatabaseValue::String("one".to_owned())),
+                ],
+                vec![
+                    ("id", DatabaseValue::Int64(2)),
+                    ("name", DatabaseValue::String("two".to_owned())),
+                ],
+            ])
+            .unique(vec![Box::new(crate::query::identifier("id"))]);
+        let inserted = initial.execute(&db).await.expect("multi insert");
+        assert_eq!(inserted.len(), 2);
+
+        let tx = db.begin_transaction().await.expect("begin transaction");
+        let mut update = tx.upsert_multi("test_multi");
+        update
+            .values(vec![
+                vec![
+                    ("id", DatabaseValue::Int64(1)),
+                    ("name", DatabaseValue::String("updated".to_owned())),
+                ],
+                vec![
+                    ("id", DatabaseValue::Int64(3)),
+                    ("name", DatabaseValue::String("three".to_owned())),
+                ],
+            ])
+            .unique(vec![Box::new(crate::query::identifier("id"))]);
+        let changed = update.execute(&*tx).await.expect("transactional upsert");
+        assert_eq!(changed.len(), 2);
+        tx.commit().await.expect("commit transaction");
+
+        let rows = db
+            .query_raw("SELECT id, name FROM test_multi ORDER BY id")
+            .await
+            .expect("query rows");
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            rows[0].get("name"),
+            Some(DatabaseValue::String("updated".to_owned()))
+        );
         drop(db);
     }
 

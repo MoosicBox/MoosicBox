@@ -445,24 +445,14 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        let mut all_results = Vec::new();
-        for values in &statement.values {
-            let results = {
-                super::upsert(
-                    &self.connection,
-                    statement.table_name,
-                    values,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-                .map_err(DatabaseError::Turso)?
-            };
-            all_results.extend(results);
-        }
-
-        Ok(all_results)
+        Ok(super::upsert_multi(
+            &self.connection,
+            statement.table_name,
+            &statement.values,
+            statement.unique.as_deref(),
+        )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_delete(
