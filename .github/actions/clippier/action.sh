@@ -273,7 +273,7 @@ handle_binary_not_found() {
 # - run-matrix commands: use cached data, no clippier needed
 # Commands that DO need clippier (features, packages, workspace-setup, etc.) will fail if binary is missing.
 CONTEXT_PHASE="binary validation"
-if [[ "$INPUT_COMMAND" != "setup" && "$INPUT_COMMAND" != "run-matrix-aggregate-failures" && "$INPUT_COMMAND" != "run-matrix-flush" && "$INPUT_COMMAND" != "run-matrix" ]]; then
+if [[ "$INPUT_COMMAND" != "setup" && "$INPUT_COMMAND" != "run-matrix" && "$INPUT_COMMAND" != "report" ]]; then
     # workspace-setup with provided JSON doesn't need the clippier binary
     if [[ "$INPUT_COMMAND" == "workspace-setup" && -n "$INPUT_WORKSPACE_TOOLCHAINS_JSON" ]]; then
         echo "workspace-setup with provided toolchains JSON - skipping binary check"
@@ -1515,6 +1515,11 @@ main() {
         return
     fi
 
+    if [[ "$INPUT_COMMAND" == "report" ]]; then
+        run_matrix_aggregate_failures_command
+        return
+    fi
+
     if [[ "$INPUT_COMMAND" == "run-matrix" ]]; then
         # Disable error trap - run_matrix_command handles its own exit codes
         # (test failures should exit 1 without triggering "Action Failed" error summary)
@@ -1525,16 +1530,6 @@ main() {
 
         # Exit with the captured code (workflow step fails on test failure, but no misleading error summary)
         exit $exit_code
-    fi
-
-    if [[ "$INPUT_COMMAND" == "run-matrix-flush" ]]; then
-        run_matrix_flush_command
-        return
-    fi
-
-    if [[ "$INPUT_COMMAND" == "run-matrix-aggregate-failures" ]]; then
-        run_matrix_aggregate_failures_command
-        return
     fi
 
     # Set phase for other commands

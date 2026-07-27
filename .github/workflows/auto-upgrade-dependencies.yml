@@ -308,6 +308,7 @@ jobs:
                   run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
                   run-matrix-template-vars: |
                       {"test-command":"test"}
+                  run-matrix-reporting-scope: compatible
 
     commit-compatible:
         name: Commit compatible upgrades
@@ -447,6 +448,7 @@ jobs:
                   run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
                   run-matrix-template-vars: |
                       {"test-command":"test"}
+                  run-matrix-reporting-scope: incompatible
 
     commit-incompatible:
         name: Commit incompatible upgrades
@@ -482,3 +484,13 @@ jobs:
               if: ${{ needs.test-incompatible.result == 'failure' }}
               run: |
                   echo "❌ Tests failed - leaving branch ${{ needs.upgrade-dependencies.outputs.incompatible-branch }} for manual review"
+
+    clippier-report:
+        if: always()
+        permissions:
+            actions: read
+            contents: read
+        needs: [test-compatible, test-incompatible]
+        uses: ./.github/workflows/clippier-report.yml
+        with:
+            summary-title: Dependency Upgrade Validation Report

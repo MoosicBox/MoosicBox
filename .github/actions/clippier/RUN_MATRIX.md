@@ -102,123 +102,35 @@ Test N features at a time:
 run-matrix-strategy: 'chunked-3' # Test 3 features per run
 ```
 
-## Summary Modes
+## Reporting
 
-Control how test summaries are displayed in GitHub Actions.
-
-### Individual Summaries (default)
-
-Each run-matrix step creates its own summary section. This is the current behavior and requires no configuration changes.
+`run-matrix` provides reporting with no additional workflow steps. The default
+`standard` mode writes the job summary and uploads structured diagnostics and
+reproduction scripts when a run fails.
 
 ```yaml
-- name: Clippy
-  uses: ./.github/actions/clippier
+- uses: ./.github/actions/clippier
   with:
       command: run-matrix
       run-matrix-package-json: ${{ toJson(matrix.package) }}
-      run-matrix-label: 'Clippy'
-      # No summary-mode specified = individual (default)
+      run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
 ```
 
-### Combined Summary
+Use `run-matrix-reporting` only to override the default:
 
-All run-matrix steps in a job create a single combined summary. This reduces clutter when you have many test steps.
+- `off`: no summary or diagnostics
+- `summary`: GitHub job summary only
+- `standard`: summary plus failure-only diagnostics (default)
+- `always`: summary plus diagnostics for successful and failed runs
 
-```yaml
-- name: Clippy
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-package-json: ${{ toJson(matrix.package) }}
-      run-matrix-label: 'Clippy'
-      run-matrix-summary-mode: 'combined'
-
-- name: Run tests
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-package-json: ${{ toJson(matrix.package) }}
-      run-matrix-label: 'Tests'
-      run-matrix-summary-mode: 'combined'
-
-- name: Run doctests
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-package-json: ${{ toJson(matrix.package) }}
-      run-matrix-label: 'Doctests'
-      run-matrix-summary-mode: 'combined'
-
-# Flush accumulated summaries at the end
-- name: Generate combined summary
-  if: always() # Run even if previous steps failed
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix-flush
-```
-
-### Grouped Summaries
-
-Create multiple named summary groups for better organization.
+For a workflow-wide summary and an AI-friendly consolidated artifact, add one
+reusable workflow job:
 
 ```yaml
-# Testing group
-- name: Clippy
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-label: 'Clippy'
-      run-matrix-summary-mode: 'group:testing'
-
-- name: Run tests
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-label: 'Tests'
-      run-matrix-summary-mode: 'group:testing'
-
-# Validation group
-- name: Format check
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-label: 'Format'
-      run-matrix-summary-mode: 'group:validation'
-
-- name: Dependency validation
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-label: 'Machete'
-      run-matrix-summary-mode: 'group:validation'
-
-# Flush all groups
-- name: Generate summaries
-  if: always()
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix-flush
-```
-
-## Configuration Options
-
-```yaml
-- name: Run tests with custom configuration
-  uses: ./.github/actions/clippier
-  with:
-      command: run-matrix
-      run-matrix-package-json: ${{ toJson(matrix.package) }}
-      run-matrix-strategy: 'sequential' # sequential, parallel, combined, chunked-N
-      run-matrix-continue-on-failure: 'true' # Continue on failure (default: true)
-      run-matrix-fail-fast: 'false' # Stop on first failure (default: false)
-      run-matrix-verbose: 'false' # Show all output (default: false)
-      run-matrix-max-output-lines: '200' # Lines of error output to capture
-      run-matrix-working-directory: './custom' # Custom working directory
-      run-matrix-label: 'Custom Tests' # Custom label for summary
-      run-matrix-skip-doctest-check: 'false' # Skip lib target check for doctests
-      run-matrix-generate-summary: 'true' # Generate GitHub summary
-      run-matrix-summary-mode: 'individual' # individual, combined, or group:<name>
-      run-matrix-summary-flush: 'false' # Flush accumulated summaries
+clippier-report:
+    if: always()
+    needs: [test]
+    uses: ./.github/workflows/clippier-report.yml
 ```
 
 ## Outputs

@@ -11,9 +11,32 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 - ✅ **Additional Checks** - Run multiple package checks with custom summary sections
 - 🐳 **Docker Integration** - Optional Docker package analysis and matrix generation
 - 📊 **Rich Summaries** - Optional GitHub workflow summary generation with custom sections
+- 🧰 **Automatic Diagnostics** - `run-matrix` publishes failure JSON and reproduction scripts by default
 - 🎲 **Deterministic Randomization** - Reproducible test matrices with seed support
 - 🔄 **Flexible Transformation** - Package name transformation via regex
 - ⚡ **Smart Caching** - Automatic clippier binary caching
+
+
+## Standard run-matrix reporting
+
+`run-matrix` defaults to `run-matrix-reporting: standard`. Each invocation writes
+a human-readable job summary and automatically uploads structured diagnostics and
+reproduction scripts when it fails. No caller-managed artifact step is needed.
+
+Use `off`, `summary`, `standard`, or `always` to change that behavior. Add one
+reusable workflow job when a workflow-wide summary and consolidated AI artifact
+are desired:
+
+```yaml
+clippier-report:
+    if: always()
+    needs: [test]
+    uses: ./.github/workflows/clippier-report.yml
+```
+
+The report job combines all `clippier-diagnostics-*` artifacts with GitHub job
+metadata into `report.md`, `manifest.json`, raw diagnostics, and reproduction
+scripts.
 
 ## Quick Start
 

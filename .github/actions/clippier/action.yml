@@ -4,7 +4,7 @@ author: "MoosicBox"
 
 inputs:
     command:
-        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, workspace-setup, run-matrix, run-matrix-flush)"
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, workspace-setup, run-matrix, report)"
         required: true
 
     workspace-path:
@@ -414,10 +414,20 @@ inputs:
         required: false
         default: "false"
 
-    run-matrix-generate-summary:
-        description: "Generate GitHub Actions step summary with results"
+    run-matrix-reporting:
+        description: "Reporting mode: off, summary, standard (summary plus failure artifacts), or always"
         required: false
-        default: "true"
+        default: "standard"
+
+    run-matrix-reporting-scope:
+        description: "Optional logical scope included in diagnostic artifact names"
+        required: false
+        default: ""
+
+    run-matrix-reporting-retention-days:
+        description: "Retention period for diagnostic artifacts"
+        required: false
+        default: "7"
 
     run-matrix-summary-auto-expand:
         description: "Auto-expand summary details (always, failures, never)"
@@ -435,52 +445,14 @@ inputs:
         default: "combined"
 
     run-matrix-summary-only-on-failure:
-        description: "Only generate summary if there are failures (no output when all tests pass)"
+        description: "Only include run details when failures occur"
         required: false
         default: "true"
 
-    run-matrix-summary-flush:
-        description: "Whether to flush accumulated summaries (for combined/group modes)"
+    report-output-file:
+        description: "Path to write the consolidated Markdown report"
         required: false
-        default: "false"
-
-    run-matrix-prepare-upload:
-        description: "Prepare failure artifact for upload with unique filename (used with run-matrix-flush)"
-        required: false
-        default: "false"
-
-    run-matrix-prepare-upload-only-on-failure:
-        description: "Only prepare upload artifact if there are failures (default: false for backwards compatibility)"
-        required: false
-        default: "false"
-
-    run-matrix-upload-package-name:
-        description: "Package name for failure artifact filename (required if run-matrix-prepare-upload is true)"
-        required: false
-
-    run-matrix-upload-package-os:
-        description: "Package OS for failure artifact filename (required if run-matrix-prepare-upload is true)"
-        required: false
-
-    run-matrix-auto-upload:
-        description: |
-            Automatically flush and prepare upload artifact when run-matrix completes.
-            When enabled, run-matrix-flush is called automatically after all steps complete,
-            and failure-artifact-path/failure-artifact-name outputs are populated.
-
-            Users still need a separate upload-artifact step to actually upload the artifact.
-        required: false
-        default: "false"
-
-    run-matrix-auto-upload-only-on-failure:
-        description: "Only prepare upload artifact if there are failures (requires run-matrix-auto-upload)"
-        required: false
-        default: "true"
-
-    run-matrix-aggregate-output-file:
-        description: "Path to write aggregate failures summary markdown (for run-matrix-aggregate-failures command)"
-        required: false
-        default: ""
+        default: "clippier-report.md"
 
     run-matrix-print-commands:
         description: "Print each command before execution with copy-pasteable local reproduction instructions for configured shells (uses run-matrix-debug-shells)"
@@ -556,22 +528,6 @@ outputs:
     run-failed:
         description: "Number of failed runs"
         value: ${{ steps.run-action.outputs.run-failed }}
-
-    failure-artifact-path:
-        description: "Path to prepared failure artifact file (for run-matrix-flush with prepare-upload enabled)"
-        value: ${{ steps.run-action.outputs.failure-artifact-path }}
-
-    failure-artifact-name:
-        description: "Stable artifact name generated from matrix package JSON (for run-matrix-flush with prepare-upload enabled)"
-        value: ${{ steps.run-action.outputs.failure-artifact-name }}
-
-    aggregate-summary-path:
-        description: "Path to generated aggregate failures summary markdown (for run-matrix-aggregate-failures command)"
-        value: ${{ steps.run-action.outputs.aggregate-summary-path }}
-
-    aggregate-summary-generated:
-        description: "Whether aggregate summary was generated (true/false)"
-        value: ${{ steps.run-action.outputs.aggregate-summary-generated }}
 
 runs:
     using: "composite"
@@ -853,19 +809,13 @@ runs:
               INPUT_RUN_MATRIX_WORKING_DIRECTORY: ${{ inputs.run-matrix-working-directory }}
               INPUT_RUN_MATRIX_LABEL: ${{ inputs.run-matrix-label }}
               INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK: ${{ inputs.run-matrix-skip-doctest-check }}
-              INPUT_RUN_MATRIX_GENERATE_SUMMARY: ${{ inputs.run-matrix-generate-summary }}
+              INPUT_RUN_MATRIX_REPORTING: ${{ inputs.run-matrix-reporting }}
+              INPUT_RUN_MATRIX_REPORTING_SCOPE: ${{ inputs.run-matrix-reporting-scope }}
               INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND: ${{ inputs.run-matrix-summary-auto-expand }}
               INPUT_RUN_MATRIX_DEBUG_SHELLS: ${{ inputs.run-matrix-debug-shells }}
               INPUT_RUN_MATRIX_SUMMARY_MODE: ${{ inputs.run-matrix-summary-mode }}
               INPUT_RUN_MATRIX_SUMMARY_ONLY_ON_FAILURE: ${{ inputs.run-matrix-summary-only-on-failure }}
-              INPUT_RUN_MATRIX_SUMMARY_FLUSH: ${{ inputs.run-matrix-summary-flush }}
-              INPUT_RUN_MATRIX_PREPARE_UPLOAD: ${{ inputs.run-matrix-prepare-upload }}
-              INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-prepare-upload-only-on-failure }}
-              INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME: ${{ inputs.run-matrix-upload-package-name }}
-              INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS: ${{ inputs.run-matrix-upload-package-os }}
-              INPUT_RUN_MATRIX_AUTO_UPLOAD: ${{ inputs.run-matrix-auto-upload }}
-              INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: ${{ inputs.run-matrix-auto-upload-only-on-failure }}
-              INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE: ${{ inputs.run-matrix-aggregate-output-file }}
+              INPUT_RUN_MATRIX_AGGREGATE_OUTPUT_FILE: ${{ inputs.report-output-file }}
               INPUT_RUN_MATRIX_PRINT_COMMANDS: ${{ inputs.run-matrix-print-commands }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
@@ -874,3 +824,14 @@ runs:
               GITHUB_BASE_REF: ${{ github.base_ref }}
               GITHUB_SHA: ${{ github.sha }}
               GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+              GITHUB_JOB_ID: ${{ github.job }}
+
+        - name: Upload Clippier diagnostics
+          if: always() && inputs.command == 'run-matrix' && steps.run-action.outputs.failure-artifact-path != ''
+          uses: actions/upload-artifact@v6
+          with:
+              name: ${{ steps.run-action.outputs.failure-artifact-name }}
+              path: ${{ steps.run-action.outputs.failure-artifact-path }}
+              if-no-files-found: error
+              overwrite: true
+              retention-days: ${{ inputs.run-matrix-reporting-retention-days }}

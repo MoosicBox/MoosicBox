@@ -1,0 +1,99 @@
+name: Clippier Report
+
+on:
+    workflow_call:
+        inputs:
+            artifact-name:
+                description: Name of the consolidated report artifact
+                required: false
+                type: string
+                default: clippier-workflow-report
+            retention-days:
+                description: Retention period for the consolidated report
+                required: false
+                type: number
+                default: 7
+            summary-title:
+                description: Title appended to the workflow summary
+                required: false
+                type: string
+                default: Clippier Workflow Report
+            summary-auto-expand:
+                description: Expansion mode for failure details
+                required: false
+                type: string
+                default: failures
+
+jobs:
+    report:
+        name: Generate Clippier Report
+        runs-on: ubuntu-latest
+        permissions:
+            actions: read
+            contents: read
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Download Clippier diagnostics
+              id: download
+              continue-on-error: true
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: clippier-diagnostics-*
+                  path: ./clippier-report/diagnostics
+
+            - name: Capture workflow job metadata
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RUN_ID: ${{ github.run_id }}
+                  REPOSITORY: ${{ github.repository }}
+              run: |
+                  mkdir -p ./clippier-report
+                  gh api --paginate \
+                      -H "Accept: application/vnd.github+json" \
+                      "/repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
+                      --jq '.jobs[]' | jq -s '{jobs: .}' > ./clippier-report/jobs.json
+
+            - name: Generate workflow failure report
+              uses: ./.github/actions/clippier
+              with:
+                  command: report
+                  run-matrix-working-directory: ./clippier-report/diagnostics
+                  run-matrix-summary-auto-expand: ${{ inputs.summary-auto-expand }}
+                  report-output-file: ./clippier-report/report.md
+
+            - name: Add workflow job health
+              shell: bash
+              env:
+                  SUMMARY_TITLE: ${{ inputs.summary-title }}
+              run: |
+                  {
+                      echo ""
+                      echo "## $SUMMARY_TITLE"
+                      echo ""
+                      echo "### Job health"
+                      echo ""
+                      echo "| Job | Conclusion | URL |"
+                      echo "| --- | --- | --- |"
+                      jq -r '.jobs[] | select(.name != "Generate Clippier Report") | "| \(.name | gsub("\\|"; "\\|")) | \(.conclusion // .status) | [Open job](\(.html_url)) |"' ./clippier-report/jobs.json
+                  } | tee -a "$GITHUB_STEP_SUMMARY" >> ./clippier-report/report.md
+
+                  jq -n \
+                      --arg repository "$GITHUB_REPOSITORY" \
+                      --arg workflow "$GITHUB_WORKFLOW" \
+                      --argjson runId "$GITHUB_RUN_ID" \
+                      --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+                      --slurpfile jobs ./clippier-report/jobs.json \
+                      '{repository: $repository, workflow: $workflow, run_id: $runId, run_attempt: $runAttempt, jobs: $jobs[0].jobs}' \
+                      > ./clippier-report/manifest.json
+
+            - name: Upload consolidated Clippier report
+              if: always()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: ${{ inputs.artifact-name }}
+                  path: ./clippier-report
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: ${{ inputs.retention-days }}

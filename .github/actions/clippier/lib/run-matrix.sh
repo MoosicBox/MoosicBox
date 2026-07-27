@@ -877,7 +877,7 @@ run_matrix_single_command_mode() {
     # Validate required inputs
     if [[ -z "$INPUT_RUN_MATRIX_PACKAGE_JSON" ]]; then
         echo "❌ ERROR: run-matrix-package-json is required"
-        exit 1
+        return 1
     fi
 
     local package_json="$INPUT_RUN_MATRIX_PACKAGE_JSON"
@@ -923,7 +923,7 @@ run_matrix_single_command_mode() {
     feature_output=$(generate_feature_combinations "$features" "$strategy")
     if [[ $? -ne 0 ]]; then
         echo "❌ Failed to generate feature combinations"
-        exit 1
+        return 1
     fi
 
     # Use while-read loop for bash 3.2 compatibility (macOS)
@@ -1098,7 +1098,7 @@ run_matrix_single_command_mode() {
                         "$failures_array"
                 fi
 
-                exit 1
+                return 1
             fi
         fi
     done
@@ -1150,8 +1150,7 @@ run_matrix_single_command_mode() {
 #
 # Environment Variables (inputs):
 #   INPUT_RUN_MATRIX_STEPS: YAML/JSON object with step definitions
-#   INPUT_RUN_MATRIX_AUTO_UPLOAD: Auto-flush and prepare artifact after all steps
-#   INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE: Only upload if failures occurred
+#   INPUT_RUN_MATRIX_REPORTING: Reporting mode configured by run_matrix_command
 #   All other INPUT_RUN_MATRIX_* variables serve as global defaults
 #
 # Outputs (written to GITHUB_OUTPUT):
@@ -1160,8 +1159,6 @@ run_matrix_single_command_mode() {
 #   run-passed: Total passed across all steps
 #   run-failed: Total failed across all steps
 #   run-results: Combined JSON array of all failures
-#   failure-artifact-path: Path to prepared artifact (if auto-upload enabled)
-#   failure-artifact-name: Name of prepared artifact (if auto-upload enabled)
 #
 # Exit codes:
 #   0: All steps passed
@@ -1361,26 +1358,6 @@ run_matrix_multi_step_mode() {
     echo "   Failed: $total_steps_failed"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # Handle auto-upload if enabled
-    if [[ "${INPUT_RUN_MATRIX_AUTO_UPLOAD:-false}" == "true" ]]; then
-        echo ""
-        echo "🔄 Auto-upload enabled, flushing and preparing artifact..."
-
-        # Set up for flush
-        export INPUT_RUN_MATRIX_SUMMARY_FLUSH="true"
-        export INPUT_RUN_MATRIX_PREPARE_UPLOAD="true"
-        export INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE="${INPUT_RUN_MATRIX_AUTO_UPLOAD_ONLY_ON_FAILURE:-true}"
-
-        # Save current phase context before flush changes it
-        local saved_phase="$CONTEXT_PHASE"
-
-        # Run flush command
-        run_matrix_flush_command
-
-        # Restore phase context so error reporting shows correct phase
-        CONTEXT_PHASE="$saved_phase"
-    fi
-
     # The outputs are already written by run_matrix_single_command_mode
     # We just need to return the appropriate exit code
 
@@ -1418,8 +1395,6 @@ load_run_matrix_steps_file() {
 #   run-passed: Number of passed runs
 #   run-failed: Number of failed runs
 #   run-results: JSON array of failure details
-#   failure-artifact-path: Path to prepared artifact (multi-step + auto-upload)
-#   failure-artifact-name: Name of prepared artifact (multi-step + auto-upload)
 #
 # Exit codes:
 #   0: All tests passed
@@ -1453,12 +1428,43 @@ run_matrix_command() {
         has_steps=true
     fi
 
-    # Route to appropriate mode
+    local reporting="${INPUT_RUN_MATRIX_REPORTING:-standard}"
+    case "$reporting" in
+        off)
+            export INPUT_RUN_MATRIX_GENERATE_SUMMARY=false
+            ;;
+        summary|standard|always)
+            export INPUT_RUN_MATRIX_GENERATE_SUMMARY=true
+            ;;
+        *)
+            echo "❌ Error: run-matrix-reporting must be one of: off, summary, standard, always"
+            return 1
+            ;;
+    esac
+
+    # Preserve the test result while finalizing reporting. Diagnostics must be
+    # prepared even when the test command itself fails.
+    local run_exit=0
     if [[ "$has_steps" == "true" ]]; then
-        run_matrix_multi_step_mode
+        run_matrix_multi_step_mode || run_exit=$?
     else
-        run_matrix_single_command_mode
+        run_matrix_single_command_mode || run_exit=$?
     fi
+
+    if [[ "$reporting" != "off" ]]; then
+        export INPUT_RUN_MATRIX_PREPARE_UPLOAD=false
+        if [[ "$reporting" == "standard" || "$reporting" == "always" ]]; then
+            export INPUT_RUN_MATRIX_PREPARE_UPLOAD=true
+            if [[ "$reporting" == "standard" ]]; then
+                export INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE=true
+            else
+                export INPUT_RUN_MATRIX_PREPARE_UPLOAD_ONLY_ON_FAILURE=false
+            fi
+        fi
+        run_matrix_flush_command || return $?
+    fi
+
+    return "$run_exit"
 }
 
 # Flush accumulated summaries command
@@ -1501,23 +1507,19 @@ run_matrix_flush_command() {
             # Generate stable hash from entire matrix package (sorted for consistency)
             local matrix_hash=$(echo "$package_json" | jq -S -c '.' | md5sum | cut -c1-8)
 
-            # Create stable artifact name
-            artifact_name="test-results-${package_name}-${package_os}-${matrix_hash}"
+            # Include the producer job and optional logical scope so separate
+            # matrices can never overwrite one another's diagnostics.
+            local job_id="${GITHUB_JOB_ID:-job}"
+            local scope="${INPUT_RUN_MATRIX_REPORTING_SCOPE:-}"
+            local identity="${job_id}${scope:+-$scope}-${package_name}-${package_os}-${matrix_hash}"
+            identity=$(printf '%s' "$identity" | tr -cs '[:alnum:]_.-' '-')
+            artifact_name="clippier-diagnostics-${identity}"
 
             echo "failure-artifact-name=$artifact_name" >> $GITHUB_OUTPUT
             echo "📛 Generated stable artifact name: $artifact_name (hash: $matrix_hash)"
         else
-            # Fallback to legacy behavior using explicit inputs
-            local package_name="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_NAME}"
-            local package_os="${INPUT_RUN_MATRIX_UPLOAD_PACKAGE_OS}"
-
-            if [[ -n "$package_name" && -n "$package_os" ]]; then
-                artifact_name="test-results-${package_name}-${package_os}"
-                echo "failure-artifact-name=$artifact_name" >> $GITHUB_OUTPUT
-                echo "📛 Generated artifact name (legacy): $artifact_name"
-            else
-                echo "⚠️  Warning: prepare-upload enabled but package-json not provided and package-name/package-os missing"
-            fi
+            echo "❌ Error: run-matrix-package-json is required for diagnostic artifacts"
+            return 1
         fi
 
         if [[ -n "$artifact_name" ]]; then
@@ -1614,7 +1616,7 @@ write_aggregate_content() {
 # after all matrix jobs complete, providing a centralized view of all failures.
 #
 # Algorithm:
-# 1. Find all test-results-*.json files in current directory (downloaded artifacts)
+# 1. Find all clippier-diagnostics-*.json files in current directory (downloaded artifacts)
 # 2. Parse each JSON file and extract packages with failures
 # 3. Aggregate by package → category → failures
 # 4. Calculate workflow-wide statistics
@@ -1708,9 +1710,9 @@ run_matrix_aggregate_failures_command() {
     esac
 
     # Find all test result artifact files in current directory
-    # Pattern: test-results-*.json (downloaded and merged from all matrix jobs)
+    # Pattern: clippier-diagnostics-*.json (downloaded and merged from all matrix jobs)
     local json_files=()
-    for file in test-results-*.json; do
+    for file in clippier-diagnostics-*.json; do
         if [[ -f "$file" ]]; then
             json_files+=("$file")
         fi
@@ -1720,14 +1722,14 @@ run_matrix_aggregate_failures_command() {
     # When artifacts are merged, multiple reproduce.sh files would overwrite each other
     # We look for reproduce.sh in subdirectories (artifact-name/reproduce.sh pattern)
     # and rename them to reproduce_<artifact-name>.sh in the current directory
-    for artifact_dir in test-results-*/; do
+    for artifact_dir in clippier-diagnostics-*/; do
         if [[ -d "$artifact_dir" ]]; then
             local reproduce_script="${artifact_dir}reproduce.sh"
             if [[ -f "$reproduce_script" ]]; then
                 # Extract artifact name from directory (remove trailing slash)
                 local artifact_name="${artifact_dir%/}"
-                # Remove "test-results-" prefix for cleaner name
-                local unique_suffix="${artifact_name#test-results-}"
+                # Remove "clippier-diagnostics-" prefix for cleaner name
+                local unique_suffix="${artifact_name#clippier-diagnostics-}"
                 local new_name="reproduce_${unique_suffix}.sh"
                 mv "$reproduce_script" "./$new_name"
                 echo "  📜 Renamed: $reproduce_script -> $new_name"
@@ -1752,7 +1754,7 @@ run_matrix_aggregate_failures_command() {
         # Get unique suffix from first JSON file
         local first_json="${json_files[0]}"
         local unique_suffix="${first_json%.json}"
-        unique_suffix="${unique_suffix#test-results-}"
+        unique_suffix="${unique_suffix#clippier-diagnostics-}"
         local new_name="reproduce_${unique_suffix}.sh"
         if [[ ! -f "$new_name" ]]; then
             mv "reproduce.sh" "$new_name"

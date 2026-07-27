@@ -340,7 +340,6 @@ jobs:
                   run-matrix-template-vars: |
                       {"test-command":"llvm-cov test --no-report"}
                   run-matrix-debug-shells: "fish,bash"
-                  run-matrix-auto-upload: true
 
             - name: Create coverage report
               id: create_coverage_report
@@ -378,47 +377,13 @@ jobs:
                   flags: ${{ matrix.package.name }}
                   fail_ci_if_error: false
 
-            - name: Upload failure data for workflow summary
-              if: always() && steps.test-suite.outputs.failure-artifact-path != ''
-              uses: actions/upload-artifact@v6
-              with:
-                  name: ${{ steps.test-suite.outputs.failure-artifact-name }}
-                  path: ${{ steps.test-suite.outputs.failure-artifact-path }}
-                  if-no-files-found: ignore
-                  overwrite: true
-
-    generate-failures-summary:
-        name: Generate Workflow Failures Summary
-        runs-on: ubuntu-latest
-        needs: [build]
+    clippier-report:
         if: always()
-
-        steps:
-            - uses: actions/checkout@v6
-
-            - name: Download failure artifacts
-              uses: actions/download-artifact@v8
-              with:
-                  pattern: test-results-*
-                  path: ./failure-data
-                  merge-multiple: true
-
-            - name: Generate workflow-wide failures summary
-              id: failures-summary
-              uses: ./.github/actions/clippier
-              with:
-                  command: run-matrix-aggregate-failures
-                  run-matrix-working-directory: ./failure-data
-                  run-matrix-summary-auto-expand: never
-                  run-matrix-aggregate-output-file: ./failures-summary.md
-
-            - name: Upload failures summary artifact
-              if: always() && steps.failures-summary.outputs.aggregate-summary-path != ''
-              uses: actions/upload-artifact@v6
-              with:
-                  name: workflow-failures-summary
-                  path: ${{ steps.failures-summary.outputs.aggregate-summary-path }}
-                  if-no-files-found: ignore
+        permissions:
+            actions: read
+            contents: read
+        needs: [build]
+        uses: ./.github/workflows/clippier-report.yml
 
     build-docker-images:
         runs-on: ubuntu-latest

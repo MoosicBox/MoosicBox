@@ -90,3 +90,13 @@ jobs:
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
                   run-matrix-commands: |
                       {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo run --release -p moosicbox_server_simulator {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+
+    clippier-report:
+        if: always()
+        permissions:
+            actions: read
+            contents: read
+        needs: [simulator]
+        uses: ./.github/workflows/clippier-report.yml
+        with:
+            summary-title: Server Simulator Report
