@@ -580,6 +580,10 @@ impl From<Value> for DatabaseValue {
                 log::warn!("Lossy conversion: DuckDB Union -> inner value");
                 (*inner).into()
             }
+            value => {
+                log::warn!("Lossy conversion: unknown DuckDB value -> String");
+                Self::String(format!("{value:?}"))
+            }
         }
     }
 }
