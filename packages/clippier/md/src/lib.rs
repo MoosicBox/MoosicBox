@@ -4,7 +4,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Write;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -172,7 +172,7 @@ impl Default for Config {
             line_width: 80,
             trim_trailing_whitespace: true,
             end_of_file_newline: true,
-            blank_lines_max_consecutive: 2,
+            blank_lines_max_consecutive: 1,
             list_indent_width: 4,
             list_style: ListStyle::Preserve,
             list_indentation: ListIndentationMode::Preserve,
@@ -868,17 +868,36 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
     let mut out = String::new();
     let mut cursor = 0usize;
 
-    for child in &root_node.children {
+    for (child_index, child) in root_node.children.iter().enumerate() {
         let Some((start, end)) = node_offsets(child) else {
             continue;
         };
 
         if cursor < start {
-            out.push_str(&source[cursor..start]);
+            let gap = &source[cursor..start];
+            let previous = child_index
+                .checked_sub(1)
+                .and_then(|index| root_node.children.get(index));
+            if previous.is_some_and(|node| matches!(node, Node::Code(_)))
+                && matches!(child, Node::Paragraph(_))
+                && !gap.contains("\n\n")
+            {
+                out.push_str("\n\n");
+            } else {
+                out.push_str(gap);
+            }
         }
 
         if should_normalize_ast_node(child, config) {
-            out.push_str(&render_normalized_ast_node(child, source, config, 0));
+            let context = BlockRenderContext {
+                previous: child_index
+                    .checked_sub(1)
+                    .and_then(|index| root_node.children.get(index))
+                    .map(block_kind),
+                next: root_node.children.get(child_index + 1).map(block_kind),
+                ..BlockRenderContext::default()
+            };
+            out.push_str(&render_normalized_ast_node(child, source, config, context));
         } else {
             out.push_str(&source[start..end]);
         }
@@ -909,14 +928,58 @@ fn should_normalize_ast_node(node: &Node, config: &Config) -> bool {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct BlockRenderContext {
+    base_indent: usize,
+    quote_depth: usize,
+    previous: Option<BlockKind>,
+    next: Option<BlockKind>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockKind {
+    Paragraph,
+    Heading,
+    Code,
+    List,
+    Blockquote,
+    Other,
+}
+
+const fn block_kind(node: &Node) -> BlockKind {
+    match node {
+        Node::Paragraph(_) => BlockKind::Paragraph,
+        Node::Heading(_) => BlockKind::Heading,
+        Node::Code(_) => BlockKind::Code,
+        Node::List(_) => BlockKind::List,
+        Node::Blockquote(_) => BlockKind::Blockquote,
+        _ => BlockKind::Other,
+    }
+}
+
 fn render_normalized_ast_node(
     node: &Node,
     source: &str,
     config: &Config,
-    base_indent: usize,
+    context: BlockRenderContext,
 ) -> String {
+    let base_indent = context.base_indent;
     match node {
         Node::Heading(heading) => {
+            if heading.depth == 1
+                && let Some((start, end)) = node_offsets(node)
+                && source[start..end]
+                    .lines()
+                    .nth(1)
+                    .is_some_and(|line| line.trim().chars().all(|character| character == '='))
+            {
+                let text = source[start..end]
+                    .lines()
+                    .next()
+                    .map(str::trim)
+                    .unwrap_or_default();
+                return format!("# {text}");
+            }
             let text = render_inline_source(&heading.children, source);
             let heading_text =
                 format!("{} {}", "#".repeat(usize::from(heading.depth)), text.trim());
@@ -932,20 +995,18 @@ fn render_normalized_ast_node(
             heading_text
         }
         Node::Paragraph(paragraph) => {
-            if let Some((start, end)) = node_offsets(node) {
-                let text = source[start..end]
-                    .lines()
-                    .map(str::trim)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                wrap_line(text.trim(), config.line_width).join("\n")
+            if base_indent > 0
+                && let Some((start, end)) = node_offsets(node)
+            {
+                source[start..end]
+                    .trim_end_matches(['\n', '\r'])
+                    .to_string()
             } else {
-                let text = render_inline_source(&paragraph.children, source);
-                wrap_line(text.trim(), config.line_width).join("\n")
+                render_paragraph_node(paragraph, source, config.line_width)
             }
         }
         Node::List(list) => render_list_node(list, source, config, base_indent),
-        Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config),
+        Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config, context),
         Node::Table(table) => render_table_node(table),
         _ => {
             if let Some((start, end)) = node_offsets(node) {
@@ -957,32 +1018,350 @@ fn render_normalized_ast_node(
     }
 }
 
+fn render_paragraph_node(
+    paragraph: &markdown::mdast::Paragraph,
+    source: &str,
+    line_width: usize,
+) -> String {
+    let tokens = paragraph_inline_tokens(paragraph, source);
+    render_inline_tokens(&tokens, line_width)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum InlineToken {
+    Content(String),
+    SoftBreak,
+    HardBreak(HardBreakStyle),
+    LiteralBreak,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HardBreakStyle {
+    Spaces,
+    Backslash,
+}
+
+fn paragraph_inline_tokens(
+    paragraph: &markdown::mdast::Paragraph,
+    source: &str,
+) -> Vec<InlineToken> {
+    let Some(position) = &paragraph.position else {
+        return paragraph
+            .children
+            .iter()
+            .map(render_inline_text)
+            .map(InlineToken::Content)
+            .collect();
+    };
+    let mut hard_breaks = BTreeMap::new();
+    let mut literal_ranges = Vec::new();
+    let mut emphasis_delimiters = BTreeSet::new();
+    collect_inline_boundaries(
+        &paragraph.children,
+        &mut hard_breaks,
+        &mut literal_ranges,
+        &mut emphasis_delimiters,
+    );
+    if hard_breaks.is_empty() {
+        emphasis_delimiters.clear();
+    }
+
+    let start = position.start.offset;
+    let paragraph_source = &source[start..position.end.offset];
+    let mut tokens = Vec::new();
+    let mut line_start = 0;
+    for (index, byte) in paragraph_source.bytes().enumerate() {
+        if byte != b'\n' {
+            continue;
+        }
+        let absolute_newline = start + index;
+        let mut content = normalize_emphasis_delimiters(
+            paragraph_source[line_start..index].trim_end_matches('\r'),
+            start + line_start,
+            &emphasis_delimiters,
+        );
+        let source_style = if content.ends_with("  ") || content.ends_with("\t\t") {
+            Some(HardBreakStyle::Spaces)
+        } else if content.ends_with('\\') {
+            Some(HardBreakStyle::Backslash)
+        } else {
+            None
+        };
+        let break_style = source_style.or_else(|| hard_breaks.get(&absolute_newline).copied());
+        let break_token = break_style.map_or_else(
+            || {
+                if literal_ranges.iter().any(|(range_start, range_end)| {
+                    absolute_newline > *range_start && absolute_newline < *range_end
+                }) {
+                    InlineToken::LiteralBreak
+                } else {
+                    InlineToken::SoftBreak
+                }
+            },
+            |style| {
+                match style {
+                    HardBreakStyle::Spaces => {
+                        content = content.trim_end_matches([' ', '\t']).to_string();
+                    }
+                    HardBreakStyle::Backslash => {
+                        content = content.trim_end_matches('\\').to_string();
+                    }
+                }
+                InlineToken::HardBreak(style)
+            },
+        );
+        push_inline_content(&mut tokens, content);
+        tokens.push(break_token);
+        line_start = index + 1;
+    }
+    push_inline_content(
+        &mut tokens,
+        normalize_emphasis_delimiters(
+            paragraph_source[line_start..].trim_end_matches('\r'),
+            start + line_start,
+            &emphasis_delimiters,
+        ),
+    );
+    while matches!(
+        tokens.last(),
+        Some(InlineToken::SoftBreak | InlineToken::LiteralBreak)
+    ) {
+        tokens.pop();
+    }
+    tokens
+}
+
+fn normalize_emphasis_delimiters(
+    content: &str,
+    absolute_start: usize,
+    delimiters: &BTreeSet<usize>,
+) -> String {
+    content
+        .char_indices()
+        .map(|(offset, character)| {
+            if character == '*' && delimiters.contains(&(absolute_start + offset)) {
+                '_'
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
+fn collect_inline_boundaries(
+    nodes: &[Node],
+    hard_breaks: &mut BTreeMap<usize, HardBreakStyle>,
+    literal_ranges: &mut Vec<(usize, usize)>,
+    emphasis_delimiters: &mut BTreeSet<usize>,
+) {
+    for node in nodes {
+        if let Some(position) = node.position() {
+            match node {
+                Node::Break(_) => {
+                    let style = if position.end.column == 1
+                        && position.end.offset.saturating_sub(position.start.offset) == 2
+                    {
+                        HardBreakStyle::Backslash
+                    } else {
+                        HardBreakStyle::Spaces
+                    };
+                    hard_breaks.insert(position.end.offset.saturating_sub(1), style);
+                }
+                Node::InlineCode(_) | Node::Html(_) => {
+                    literal_ranges.push((position.start.offset, position.end.offset));
+                }
+                Node::Emphasis(_) => {
+                    emphasis_delimiters.insert(position.start.offset);
+                    emphasis_delimiters.insert(position.end.offset.saturating_sub(1));
+                }
+                _ => {}
+            }
+        }
+        if let Some(children) = node.children() {
+            collect_inline_boundaries(children, hard_breaks, literal_ranges, emphasis_delimiters);
+        }
+    }
+}
+
+fn push_inline_content(tokens: &mut Vec<InlineToken>, content: String) {
+    if content.is_empty() {
+        return;
+    }
+    if let Some(InlineToken::Content(existing)) = tokens.last_mut() {
+        existing.push_str(&content);
+    } else {
+        tokens.push(InlineToken::Content(content));
+    }
+}
+
+fn render_inline_tokens(tokens: &[InlineToken], line_width: usize) -> String {
+    let mut lines = vec![String::new()];
+    let mut preserve_one_leading_space = false;
+    for token in tokens {
+        match token {
+            InlineToken::Content(content) => {
+                let content = if preserve_one_leading_space && content.starts_with([' ', '\t']) {
+                    format!(" {}", content.trim_start_matches([' ', '\t']))
+                } else {
+                    content.trim_start_matches([' ', '\t']).to_string()
+                };
+                lines
+                    .last_mut()
+                    .expect("inline rendering must always have a line")
+                    .push_str(&content);
+                preserve_one_leading_space = false;
+            }
+            InlineToken::SoftBreak => {
+                lines.push(String::new());
+                preserve_one_leading_space = false;
+            }
+            InlineToken::LiteralBreak => {
+                lines.push(String::new());
+                preserve_one_leading_space = true;
+            }
+            InlineToken::HardBreak(style) => {
+                let line = lines
+                    .last_mut()
+                    .expect("inline rendering must always have a line");
+                line.push_str(match style {
+                    HardBreakStyle::Spaces => "  ",
+                    HardBreakStyle::Backslash => "\\",
+                });
+                lines.push(String::new());
+                preserve_one_leading_space = true;
+            }
+        }
+    }
+
+    lines
+        .into_iter()
+        .map(|line| normalize_inline_line(&line, line_width))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_matches('\n')
+        .to_string()
+}
+
+fn normalize_inline_line(line: &str, line_width: usize) -> String {
+    let trailing_break = if line.ends_with("  ") {
+        "  "
+    } else if line.ends_with('\\') {
+        "\\"
+    } else {
+        ""
+    };
+    let content_end = line.len().saturating_sub(trailing_break.len());
+    let content = line[..content_end].trim_end();
+    let normalized = if content.len() <= line_width {
+        content.to_string()
+    } else {
+        wrap_line(content, line_width).join("\n")
+    };
+    format!("{normalized}{trailing_break}")
+}
+
 fn render_blockquote_node(
     blockquote: &markdown::mdast::Blockquote,
     source: &str,
     config: &Config,
+    context: BlockRenderContext,
 ) -> String {
+    let child_count = blockquote.children.len();
     let mut rendered_children = Vec::new();
-    for child in &blockquote.children {
-        if should_normalize_ast_node(child, config) {
-            rendered_children.push(render_normalized_ast_node(child, source, config, 0));
-        } else if let Some(extracted) = node_source_without_trailing_newlines(child, source) {
-            rendered_children.push(extracted);
-        }
+    for (index, child) in blockquote.children.iter().enumerate() {
+        let child_context = BlockRenderContext {
+            base_indent: context.base_indent,
+            quote_depth: context.quote_depth + 1,
+            previous: index
+                .checked_sub(1)
+                .and_then(|previous| blockquote.children.get(previous))
+                .map(block_kind),
+            next: blockquote.children.get(index + 1).map(block_kind),
+        };
+        let rendered = if should_normalize_ast_node(child, config) {
+            render_normalized_ast_node(child, source, config, child_context)
+        } else {
+            node_source_without_trailing_newlines(child, source).unwrap_or_default()
+        };
+        rendered_children.push((block_kind(child), rendered));
     }
 
-    rendered_children
-        .join("\n\n")
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                ">".to_string()
+    let mut inner = String::new();
+    let preserve_single_child_blank_lines = rendered_children.len() == 1
+        && rendered_children
+            .first()
+            .is_some_and(|(kind, _)| *kind == BlockKind::Paragraph)
+        && blockquote.position.as_ref().is_some_and(|position| {
+            source[position.start.offset..position.end.offset].contains("\n>\n")
+        });
+    let source_has_blank_quote = blockquote.position.as_ref().is_some_and(|position| {
+        source[position.start.offset..position.end.offset].contains("\n>\n")
+    });
+    for (index, (kind, rendered)) in rendered_children.iter().enumerate() {
+        if index > 0 {
+            let previous_kind = rendered_children[index - 1].0;
+            if previous_kind == BlockKind::Heading
+                || matches!(
+                    (previous_kind, kind),
+                    (BlockKind::Paragraph, BlockKind::List)
+                )
+                || (source_has_blank_quote
+                    && previous_kind == BlockKind::Paragraph
+                    && *kind == BlockKind::Paragraph)
+            {
+                inner.push_str("\n\n");
             } else {
-                format!("> {line}")
+                inner.push('\n');
             }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+        }
+        inner.push_str(rendered);
+    }
+    if preserve_single_child_blank_lines {
+        let parts = inner.split('\n').collect::<Vec<_>>();
+        inner = parts.join("\n\n");
+    }
+
+    let prefix = "> ".repeat(context.quote_depth + 1);
+    let blank_prefix = "> ".repeat(context.quote_depth + 1).trim_end().to_string();
+    let adjacent_to_container =
+        matches!(
+            context.previous,
+            Some(BlockKind::List | BlockKind::Blockquote)
+        ) || matches!(context.next, Some(BlockKind::List | BlockKind::Blockquote));
+    if child_count == 0 {
+        blank_prefix
+    } else {
+        let rendered = inner
+            .lines()
+            .map(|line| {
+                if line.trim().is_empty() {
+                    blank_prefix.clone()
+                } else {
+                    format!(
+                        "{prefix}{}",
+                        strip_quote_prefixes(line, context.quote_depth + 1)
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if adjacent_to_container {
+            rendered.trim_end_matches('\n').to_string()
+        } else {
+            rendered
+        }
+    }
+}
+
+fn strip_quote_prefixes(mut line: &str, maximum: usize) -> &str {
+    line = line.trim_start();
+    for _ in 0..maximum {
+        let Some(rest) = line.strip_prefix('>') else {
+            break;
+        };
+        line = rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    line
 }
 
 fn render_list_node(
@@ -1076,7 +1455,12 @@ fn render_list_item(
     let mut blocks = Vec::new();
     for child in &item.children {
         let rendered = if should_normalize_ast_node(child, config) {
-            Some(render_normalized_ast_node(child, source, config, 0))
+            Some(render_normalized_ast_node(
+                child,
+                source,
+                config,
+                BlockRenderContext::default(),
+            ))
         } else {
             node_source_without_trailing_newlines(child, source)
         };
@@ -1498,8 +1882,35 @@ fn finalize_markdown_output(input: &str, config: &Config) -> String {
     }
 
     if config.trim_trailing_whitespace {
-        for line in &mut lines {
-            *line = line.trim_end().to_string();
+        let mut in_fence = false;
+        let mut fence_prefix = String::new();
+        let line_count = lines.len();
+        for (index, line) in lines.iter_mut().enumerate() {
+            if is_fence_start(line) {
+                let trimmed = line.trim_start();
+                if !in_fence {
+                    in_fence = true;
+                    fence_prefix = trimmed
+                        .chars()
+                        .take_while(|character| matches!(character, '`' | '~'))
+                        .collect();
+                } else if trimmed.starts_with(&fence_prefix) {
+                    in_fence = false;
+                    fence_prefix.clear();
+                }
+                continue;
+            }
+            if !in_fence {
+                let is_terminal_line = index + 1 == line_count;
+                let trailing = line.len() - line.trim_end_matches([' ', '\t']).len();
+                if line.trim().is_empty() {
+                    line.clear();
+                } else if trailing >= 2 && !is_terminal_line {
+                    *line = format!("{}  ", line.trim_end_matches([' ', '\t']));
+                } else {
+                    *line = trim_markdown_trailing_whitespace(line);
+                }
+            }
         }
     }
 
@@ -1814,9 +2225,13 @@ fn is_markdown_path(path: &Path) -> bool {
         })
 }
 
+fn trim_markdown_trailing_whitespace(line: &str) -> String {
+    line.trim_end().to_string()
+}
+
 fn finish_line(line: &str, config: &Config) -> String {
     if config.trim_trailing_whitespace {
-        line.trim_end().to_string()
+        trim_markdown_trailing_whitespace(line)
     } else {
         line.to_string()
     }
@@ -2114,6 +2529,120 @@ mod tests {
         };
         let output = format_markdown(input, &config);
         assert!(output.lines().all(|line| line.len() <= 20));
+    }
+
+    #[test]
+    fn preserves_semantic_soft_and_hard_breaks() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        let input = "soft\nbreak\n\nspaces  \nbreak\n\nbackslash\\\nbreak\n";
+        assert_eq!(format_markdown(input, &config), input);
+    }
+
+    #[test]
+    fn paragraph_tokens_distinguish_break_kinds() {
+        let source = "soft\nbreak  \nhard\\\nescape\n`literal\ncode`\n";
+        let mut options = ParseOptions::gfm();
+        options.constructs = Constructs::gfm();
+        let root = to_mdast(source, &options).expect("paragraph must parse");
+        let Node::Root(root) = root else {
+            panic!("expected root node");
+        };
+        let Node::Paragraph(paragraph) = &root.children[0] else {
+            panic!("expected paragraph node");
+        };
+        assert_eq!(
+            paragraph_inline_tokens(paragraph, source),
+            vec![
+                InlineToken::Content("soft".to_string()),
+                InlineToken::SoftBreak,
+                InlineToken::Content("break".to_string()),
+                InlineToken::HardBreak(HardBreakStyle::Spaces),
+                InlineToken::Content("hard".to_string()),
+                InlineToken::HardBreak(HardBreakStyle::Backslash),
+                InlineToken::Content("escape".to_string()),
+                InlineToken::SoftBreak,
+                InlineToken::Content("`literal".to_string()),
+                InlineToken::LiteralBreak,
+                InlineToken::Content("code`".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn preserves_literal_newlines_inside_inline_code_and_html() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        let input = "`code  \nspan`\n\n<a href=\"foo  \nbar\">\n";
+        assert_eq!(format_markdown(input, &config), input);
+    }
+
+    #[test]
+    fn normalizes_hard_break_spacing_and_emphasis_delimiters() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        assert_eq!(
+            format_markdown("foo       \nbaz\n", &config),
+            "foo  \nbaz\n"
+        );
+        assert_eq!(format_markdown("*foo  \nbar*\n", &config), "_foo  \nbar_\n");
+    }
+
+    #[test]
+    fn block_context_normalizes_quote_depth_and_heading_boundaries() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            heading_indentation: HeadingIndentationMode::Normalize,
+            ..Config::default()
+        };
+        assert_eq!(
+            format_markdown("># Foo\n>bar\n> baz\n", &config),
+            "> # Foo\n>\n> bar\n> baz\n"
+        );
+        assert_eq!(
+            format_markdown(">>> foo\n> bar\n>>baz\n", &config),
+            "> > > foo\n> > > bar\n> > > baz\n"
+        );
+    }
+
+    #[test]
+    fn block_context_preserves_explicit_quote_blank_lines() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        let input = "> foo\n>\n> bar\n";
+        assert_eq!(format_markdown(input, &config), input);
+    }
+
+    #[test]
+    fn normalizes_block_boundaries_and_terminal_trailing_spaces() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        assert_eq!(format_markdown("aaa\n\n\nbbb\n", &config), "aaa\n\nbbb\n");
+        assert_eq!(
+            format_markdown("    aaa\nbbb\n", &config),
+            "    aaa\n\nbbb\n"
+        );
+        assert_eq!(
+            format_markdown("aaa     \nbbb     \n", &config),
+            "aaa  \nbbb\n"
+        );
+        assert_eq!(format_markdown("foo  \n", &config), "foo\n");
     }
 
     #[test]
