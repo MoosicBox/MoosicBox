@@ -12,8 +12,9 @@ describe('actions-resize', () => {
     });
 
     it('triggers on window resize with v-onresize attribute', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-resize');
 
@@ -40,8 +41,9 @@ describe('actions-resize', () => {
     });
 
     it('provides element in context', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-resize');
 
@@ -67,8 +69,9 @@ describe('actions-resize', () => {
     });
 
     it('provides event in context', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-resize');
 
@@ -94,8 +97,9 @@ describe('actions-resize', () => {
     });
 
     it('triggers for multiple elements with v-onresize', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-resize');
 

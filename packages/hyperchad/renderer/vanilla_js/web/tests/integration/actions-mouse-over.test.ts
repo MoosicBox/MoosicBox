@@ -12,8 +12,9 @@ describe('actions-mouse-over', () => {
     });
 
     it('triggers on mouseover with v-onmouseover attribute', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-mouse-over');
 
@@ -37,8 +38,9 @@ describe('actions-mouse-over', () => {
     });
 
     it('provides element in context', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-mouse-over');
 
@@ -65,8 +67,9 @@ describe('actions-mouse-over', () => {
     });
 
     it('provides event in context', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-mouse-over');
 
@@ -93,8 +96,9 @@ describe('actions-mouse-over', () => {
     });
 
     it('bubbles up to find v-onmouseover attribute', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-mouse-over');
 
@@ -123,8 +127,9 @@ describe('actions-mouse-over', () => {
     });
 
     it('handles mouseout to reset state', async () => {
-        const { processElement, clearProcessedElements } =
-            await import('../../src/core');
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
         await import('../../src/actions');
         await import('../../src/actions-mouse-over');
 

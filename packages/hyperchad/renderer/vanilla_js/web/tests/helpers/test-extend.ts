@@ -19,8 +19,9 @@ export const test = testBase.extend<TestFixtures>({
 
             await use(worker);
 
-            const { stopAllEventSourceStreams } =
-                await import('../../src/sse-base');
+            const { stopAllEventSourceStreams } = await import(
+                '../../src/sse-base'
+            );
 
             stopAllEventSourceStreams();
             worker.resetHandlers();

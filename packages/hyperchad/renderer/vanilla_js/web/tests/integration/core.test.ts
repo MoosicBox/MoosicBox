@@ -45,8 +45,9 @@ describe('core', () => {
 
         describe('onMessage() and triggerMessage()', () => {
             it('registers and triggers message handlers', async () => {
-                const { onMessage, triggerMessage } =
-                    await import('../../src/core');
+                const { onMessage, triggerMessage } = await import(
+                    '../../src/core'
+                );
 
                 const results: Array<{ data: string; id?: string }> = [];
                 onMessage('view', (data, id) => {
@@ -72,8 +73,9 @@ describe('core', () => {
 
         describe('onAttr() and onAttrValue()', () => {
             it('calls handler when element has matching attribute', async () => {
-                const { onAttr, processElement } =
-                    await import('../../src/core');
+                const { onAttr, processElement } = await import(
+                    '../../src/core'
+                );
 
                 const results: string[] = [];
                 onAttr('v-test', ({ element, attr }) => {
@@ -91,8 +93,9 @@ describe('core', () => {
             });
 
             it('onAttrValue only triggers for specific value', async () => {
-                const { onAttrValue, processElement } =
-                    await import('../../src/core');
+                const { onAttrValue, processElement } = await import(
+                    '../../src/core'
+                );
 
                 const results: string[] = [];
                 onAttrValue('hx-trigger', 'load', ({ element }) => {
