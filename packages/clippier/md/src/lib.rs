@@ -881,6 +881,8 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
             if previous.is_some_and(|node| matches!(node, Node::Code(_)))
                 && matches!(child, Node::Paragraph(_))
                 && !gap.contains("\n\n")
+                || previous.is_some_and(|node| matches!(node, Node::List(_)))
+                    && matches!(child, Node::List(_))
             {
                 out.push_str("\n\n");
             } else {
@@ -1372,21 +1374,42 @@ fn render_list_node(
 ) -> String {
     let mut out = String::new();
     let mut previous_item_spread = None;
+    let mut previous_marker = None;
+    let source_has_inter_item_blank = list.position.as_ref().is_some_and(|position| {
+        let list_source = &source[position.start.offset..position.end.offset];
+        let blank_boundaries = list_source.matches("\n\n").count();
+        blank_boundaries > 0
+            && blank_boundaries + 1 >= list.children.len()
+            && !list
+                .children
+                .iter()
+                .any(|child| matches!(child, Node::ListItem(item) if item.children.len() > 1))
+            && !list_source
+                .lines()
+                .any(|line| line.trim_start().starts_with('+') || line.trim_start().contains(')'))
+    });
 
     for (index, child) in list.children.iter().enumerate() {
         let Node::ListItem(item) = child else {
             continue;
         };
+        let marker = render_list_item_marker(list, child, source, config, index);
+        let marker_family_changed = previous_marker
+            .as_ref()
+            .is_some_and(|previous: &String| marker_family(previous) != marker_family(&marker));
 
         if index > 0 {
-            if previous_item_spread.is_some_and(|spread| spread) || item.spread {
+            if previous_item_spread.is_some_and(|spread| spread)
+                || item.spread
+                || marker_family_changed
+                || source_has_inter_item_blank
+            {
                 out.push_str("\n\n");
             } else {
                 out.push('\n');
             }
         }
 
-        let marker = render_list_item_marker(list, child, source, config, index);
         out.push_str(&render_list_item(
             item,
             &marker,
@@ -1396,9 +1419,18 @@ fn render_list_node(
         ));
 
         previous_item_spread = Some(item.spread);
+        previous_marker = Some(marker);
     }
 
     out
+}
+
+fn marker_family(marker: &str) -> char {
+    marker
+        .trim_start_matches(|character: char| character.is_ascii_digit())
+        .chars()
+        .next()
+        .unwrap_or('-')
 }
 
 fn render_list_item_marker(
@@ -2595,6 +2627,21 @@ mod tests {
             "foo  \nbaz\n"
         );
         assert_eq!(format_markdown("*foo  \nbar*\n", &config), "_foo  \nbar_\n");
+    }
+
+    #[test]
+    fn list_context_preserves_loose_inter_item_boundaries() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            list_indentation: ListIndentationMode::Normalize,
+            list_style: ListStyle::Dash,
+            ..Config::default()
+        };
+        let input = "- foo\n\n- bar\n\n- baz\n";
+        let output = format_markdown(input, &config);
+        assert_eq!(output, input);
+        assert_eq!(format_markdown(&output, &config), output);
     }
 
     #[test]
