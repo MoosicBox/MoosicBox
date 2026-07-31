@@ -45,6 +45,7 @@ switchy_http_models = { workspace = true, optional = true }
 thiserror           = { workspace = true }
 
 [dev-dependencies]
+qstring  = { workspace = true }
 test-log = { workspace = true }
 
 [features]

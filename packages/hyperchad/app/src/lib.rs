@@ -294,7 +294,6 @@ impl AppBuilder {
                 feature = "actions"
             ))]
             actix_shared_state_bridge: None,
-            #[cfg(all(feature = "actix", feature = "shared-state-transport"))]
             #[cfg(feature = "actix")]
             actix_bind_address: None,
             #[cfg(feature = "actix")]
