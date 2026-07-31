@@ -31,7 +31,7 @@ describe('triggerAction', () => {
 
         expect(globalThis.fetch).toHaveBeenCalledWith('$action', {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: expect.any(Headers),
             body: JSON.stringify({ action: 'test-action' }),
         });
     });
@@ -43,7 +43,7 @@ describe('triggerAction', () => {
 
         expect(globalThis.fetch).toHaveBeenCalledWith('$action', {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: expect.any(Headers),
             body: JSON.stringify({
                 action: 'test-action',
                 value: { foo: 'bar' },
@@ -66,7 +66,7 @@ describe('triggerAction', () => {
 
         expect(globalThis.fetch).toHaveBeenCalledWith('$action', {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: expect.any(Headers),
             body: JSON.stringify(complexAction),
         });
     });

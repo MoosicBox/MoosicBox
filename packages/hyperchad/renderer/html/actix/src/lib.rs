@@ -241,6 +241,12 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     /// Optional shared-state transport server bridge for WS/SSE+POST endpoints.
     #[cfg(feature = "shared-state-transport")]
     pub shared_state_transport: Option<shared_state_transport::SharedStateTransportBridge>,
+    /// Optional web security shared by action/form and shared-state transport POST requests.
+    #[cfg(feature = "shared-state-transport")]
+    pub web_security: Option<Arc<dyn WebSharedStateSecurity>>,
+    /// Optional CSRF token rendered into full HTML for renderer-owned clients.
+    #[cfg(feature = "shared-state-transport")]
+    pub shared_state_csrf_token: Option<String>,
     /// Static asset routes for serving files and directories (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -267,6 +273,10 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             shared_state_bridge: None,
             #[cfg(feature = "shared-state-transport")]
             shared_state_transport: None,
+            #[cfg(feature = "shared-state-transport")]
+            web_security: None,
+            #[cfg(feature = "shared-state-transport")]
+            shared_state_csrf_token: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
             #[cfg(feature = "assets")]
@@ -436,6 +446,7 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         dispatcher: Arc<dyn SharedStateTransportDispatcher>,
         web_security: Arc<dyn WebSharedStateSecurity>,
     ) -> Self {
+        self.web_security = Some(web_security.clone());
         self.shared_state_transport = Some(
             shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(
                 dispatcher,
@@ -452,12 +463,19 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         dispatcher: Arc<dyn SharedStateTransportDispatcher>,
         web_security: Arc<dyn WebSharedStateSecurity>,
     ) {
+        self.web_security = Some(web_security.clone());
         self.shared_state_transport = Some(
             shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(
                 dispatcher,
                 web_security,
             ),
         );
+    }
+
+    /// Sets the CSRF token rendered for the renderer-owned shared-state client.
+    #[cfg(feature = "shared-state-transport")]
+    pub fn set_shared_state_csrf_token(&mut self, token: impl Into<String>) {
+        self.shared_state_csrf_token = Some(token.into());
     }
 
     /// Sets the default behavior when a requested asset file is not found.

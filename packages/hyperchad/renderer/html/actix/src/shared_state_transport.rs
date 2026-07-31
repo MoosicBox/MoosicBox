@@ -1488,6 +1488,18 @@ mod tests {
             .expect("Alice private replay should be authorized");
         assert_eq!(alice_private.len(), 1);
 
+        let bob_private = dispatcher
+            .ingest_outbound(
+                &bob,
+                TransportOutbound::Subscribe(TransportSubscribe {
+                    channel_id: ChannelId::new("private:bob"),
+                    last_seen_revision: Some(Revision::new(0)),
+                }),
+            )
+            .await
+            .expect("Bob private replay should be authorized");
+        assert_eq!(bob_private.len(), 1);
+
         assert!(
             dispatcher
                 .ingest_outbound(
@@ -1514,6 +1526,125 @@ mod tests {
                 .is_err(),
             "Alice must not replay Bob's private channel"
         );
+    }
+
+    #[actix_web::test]
+    async fn reconnect_and_multiple_tabs_replay_without_cross_participant_leakage() {
+        let store = Arc::new(MemoryStore::default());
+        let fanout = Arc::new(InProcessFanoutBus::new());
+        let engine = Arc::new(SharedStateEngine::new(
+            store.clone(),
+            store.clone(),
+            store.clone(),
+            fanout.clone(),
+        ));
+        let dispatcher = RuntimeFanoutTransportDispatcher::new(
+            engine,
+            fanout,
+            Arc::new(PrivateProjectionPolicy),
+        );
+        let alice = participant_context("alice");
+        let bob = participant_context("bob");
+
+        let alice_tab_one = dispatcher
+            .subscribe_channel(&alice, &ChannelId::new("private:alice"))
+            .await
+            .expect("first Alice tab should subscribe");
+        let alice_tab_two = dispatcher
+            .subscribe_channel(&alice, &ChannelId::new("private:alice"))
+            .await
+            .expect("second Alice tab should subscribe");
+        assert!(
+            dispatcher
+                .subscribe_channel(&bob, &ChannelId::new("private:alice"))
+                .await
+                .is_err(),
+            "Bob must not subscribe to Alice's private channel"
+        );
+
+        let command = CommandEnvelope {
+            command_id: CommandId::new("alice-private-command"),
+            channel_id: ChannelId::new("private:alice"),
+            participant_id: ParticipantId::new("alice"),
+            idempotency_key: IdempotencyKey::new("alice-private-idem"),
+            expected_revision: Revision::new(0),
+            command_name: "PRIVATE_VALUE_CHANGED".to_string(),
+            payload: PayloadBlob::from_serializable(&"alice-secret")
+                .expect("payload should serialize"),
+            metadata: BTreeMap::new(),
+            created_at_ms: 1,
+        };
+        dispatcher
+            .ingest_outbound(&alice, TransportOutbound::Command(command))
+            .await
+            .expect("authorized private command should apply");
+
+        for receiver in [&alice_tab_one, &alice_tab_two] {
+            let event = receiver
+                .recv_async()
+                .await
+                .expect("each Alice tab should receive private fanout");
+            assert_eq!(event.channel_id, ChannelId::new("private:alice"));
+        }
+        drop(alice_tab_one);
+
+        let replay = dispatcher
+            .ingest_outbound(
+                &alice,
+                TransportOutbound::Subscribe(TransportSubscribe {
+                    channel_id: ChannelId::new("private:alice"),
+                    last_seen_revision: Some(Revision::new(0)),
+                }),
+            )
+            .await
+            .expect("reconnected Alice tab should replay missed state");
+        assert_eq!(replay.len(), 1);
+        assert!(matches!(replay[0], TransportInbound::Event(_)));
+
+        let duplicate = CommandEnvelope {
+            command_id: CommandId::new("alice-private-command-duplicate"),
+            channel_id: ChannelId::new("private:alice"),
+            participant_id: ParticipantId::new("alice"),
+            idempotency_key: IdempotencyKey::new("alice-private-idem"),
+            expected_revision: Revision::new(1),
+            command_name: "PRIVATE_VALUE_CHANGED".to_string(),
+            payload: PayloadBlob::from_serializable(&"different")
+                .expect("payload should serialize"),
+            metadata: BTreeMap::new(),
+            created_at_ms: 2,
+        };
+        let duplicate_result = dispatcher
+            .ingest_outbound(&alice, TransportOutbound::Command(duplicate))
+            .await
+            .expect("duplicate idempotency result should be transportable");
+        assert!(matches!(
+            duplicate_result.as_slice(),
+            [TransportInbound::CommandAccepted {
+                resulting_revision,
+                ..
+            }] if *resulting_revision == Revision::new(1)
+        ));
+
+        let stale = CommandEnvelope {
+            command_id: CommandId::new("alice-stale-command"),
+            channel_id: ChannelId::new("private:alice"),
+            participant_id: ParticipantId::new("alice"),
+            idempotency_key: IdempotencyKey::new("alice-stale-idem"),
+            expected_revision: Revision::new(0),
+            command_name: "PRIVATE_VALUE_CHANGED".to_string(),
+            payload: PayloadBlob::from_serializable(&"stale").expect("payload should serialize"),
+            metadata: BTreeMap::new(),
+            created_at_ms: 3,
+        };
+        let conflict = dispatcher
+            .ingest_outbound(&alice, TransportOutbound::Command(stale))
+            .await
+            .expect("revision conflict should be transportable");
+        assert!(matches!(
+            conflict.as_slice(),
+            [TransportInbound::CommandRejected { reason, .. }]
+                if reason.contains("Expected revision 0") && reason.contains("actual revision is 1")
+        ));
     }
 
     #[actix_web::test]

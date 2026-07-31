@@ -363,7 +363,107 @@ pub async fn handle_sse<
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use actix_web::{HttpRequest, HttpResponse, body::to_bytes, test, web};
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use hyperchad_renderer::{ReplaceContainer, View, transformer::Container};
+
     use super::*;
+    use crate::{ActixApp, ActixResponseProcessor};
+
+    #[derive(Clone)]
+    struct ScopedFragmentProcessor;
+
+    #[async_trait]
+    impl ActixResponseProcessor<Option<String>> for ScopedFragmentProcessor {
+        fn event_scope(&self, data: &Option<String>) -> Option<String> {
+            data.clone()
+        }
+
+        fn prepare_request(
+            &self,
+            req: HttpRequest,
+            _body: Option<Arc<Bytes>>,
+        ) -> Result<Option<String>, actix_web::Error> {
+            Ok(qstring::QString::from(req.query_string())
+                .get("scope")
+                .map(ToOwned::to_owned))
+        }
+
+        async fn to_response(
+            &self,
+            _data: Option<String>,
+        ) -> Result<HttpResponse, actix_web::Error> {
+            Ok(HttpResponse::Ok().finish())
+        }
+
+        async fn to_body(
+            &self,
+            _content: Content,
+            _data: Option<String>,
+        ) -> Result<(Bytes, String), actix_web::Error> {
+            Ok((Bytes::from_static(b"full"), "text/html".to_string()))
+        }
+
+        async fn to_fragment_body(
+            &self,
+            fragment: &hyperchad_renderer::ReplaceContainer,
+            _data: Option<String>,
+        ) -> Result<(Bytes, String), actix_web::Error> {
+            Ok((
+                Bytes::from(format!(
+                    "fragment:{}",
+                    fragment.container.str_id.as_deref().unwrap_or_default()
+                )),
+                "text/html".to_string(),
+            ))
+        }
+    }
+
+    fn scoped_fragment(scope: &str, id: &str) -> RendererEvent {
+        let fragment = ReplaceContainer::from(Container {
+            str_id: Some(id.to_string()),
+            ..Container::default()
+        });
+        RendererEvent::Scoped {
+            scope: scope.to_string(),
+            event: Box::new(RendererEvent::View(Box::new(
+                View::builder().with_fragment(fragment).build(),
+            ))),
+        }
+    }
+
+    #[actix_web::test]
+    async fn scoped_fragments_reach_only_the_matching_authenticated_scope() {
+        let (tx, rx) = flume::unbounded();
+        tx.send(scoped_fragment("bob", "bob-rack"))
+            .expect("Bob fragment should enqueue");
+        tx.send(scoped_fragment("alice", "alice-rack"))
+            .expect("Alice fragment should enqueue");
+        drop(tx);
+
+        let app = ActixApp::new(ScopedFragmentProcessor, rx);
+        let response = handle_sse(
+            test::TestRequest::get()
+                .uri("/$sse?scope=alice")
+                .to_http_request(),
+            web::Data::new(app),
+            None,
+        )
+        .await
+        .respond_to(&test::TestRequest::default().to_http_request());
+        let body = to_bytes(response.into_body())
+            .await
+            .unwrap_or_else(|_| panic!("SSE body should be readable"));
+        let body = std::str::from_utf8(&body).expect("SSE body should be UTF-8");
+
+        assert!(body.contains("event: partial_view"));
+        assert!(body.contains("id: alice-rack"));
+        assert!(body.contains("fragment:alice-rack"));
+        assert!(!body.contains("bob-rack"));
+    }
 
     #[test_log::test]
     fn scoped_renderer_events_require_an_exact_subscriber_scope() {

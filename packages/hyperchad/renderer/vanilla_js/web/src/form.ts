@@ -1,4 +1,5 @@
 import { appendQueryParams } from './core';
+import { withCsrfHeader } from './csrf';
 import { handleNavigation } from './nav-base';
 import { processRoute, waitForPendingRoutes } from './routing';
 
@@ -87,6 +88,7 @@ function initFormHandler() {
                     ).toUpperCase();
                     const fetchOptions: RequestInit = {
                         method,
+                        headers: withCsrfHeader(),
                     };
 
                     let url = action;

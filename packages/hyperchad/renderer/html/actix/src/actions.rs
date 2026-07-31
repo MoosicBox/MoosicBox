@@ -153,6 +153,11 @@ pub async fn handle_action<
     #[cfg(not(feature = "shared-state-bridge"))]
     let _ = &req;
 
+    #[cfg(feature = "shared-state-transport")]
+    if let Some(web_security) = &app.web_security {
+        web_security.authenticate_request(&req, true).await?;
+    }
+
     let action_name = action.0.action.as_str().map_or_else(
         || serde_json::to_string(&action.0.action).unwrap(),
         std::string::ToString::to_string,

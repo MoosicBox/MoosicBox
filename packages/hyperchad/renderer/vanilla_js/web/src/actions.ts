@@ -1,10 +1,12 @@
+import { withCsrfHeader } from './csrf';
+
 export function triggerAction(action: {
     action: unknown;
     value?: unknown | undefined;
 }) {
     fetch('$action', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: withCsrfHeader({ 'content-type': 'application/json' }),
         body: JSON.stringify(action),
     });
 }

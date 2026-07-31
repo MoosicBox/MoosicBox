@@ -1,7 +1,14 @@
 import { on } from './core';
+import { withCsrfHeader } from './csrf';
 import { hasActiveEventSourceStream, startEventSourceStream } from './sse-base';
 
 const SHARED_STATE_CHANNEL_ATTR = 'data-shared-state-channel';
+const SHARED_STATE_COMMAND_ATTR = 'data-shared-state-command';
+const SHARED_STATE_COMMAND_ID_ATTR = 'data-shared-state-command-id';
+const SHARED_STATE_IDEMPOTENCY_KEY_ATTR = 'data-shared-state-idempotency-key';
+const SHARED_STATE_EXPECTED_REVISION_ATTR =
+    'data-shared-state-expected-revision';
+const SHARED_STATE_COMMAND_PAYLOAD_ATTR = 'data-shared-state-command-payload';
 const SHARED_STATE_SESSION_STORAGE_KEY = 'sharedStateSessionId';
 const SHARED_STATE_SESSION_COOKIE_NAME = 'v-shared-state-session-id';
 const SHARED_STATE_TRANSPORT_POST_PATH = '/$shared-state/transport';
@@ -21,7 +28,20 @@ type SharedStateTransportPing = {
     sent_at_ms: number;
 };
 
+type SharedStateTransportCommand = {
+    command_id: string;
+    channel_id: string;
+    participant_id: string;
+    idempotency_key: string;
+    expected_revision: number;
+    command_name: string;
+    payload: unknown;
+    metadata: Record<string, string>;
+    created_at_ms: number;
+};
+
 type SharedStateTransportOutbound =
+    | { Command: SharedStateTransportCommand }
     | { Subscribe: SharedStateTransportSubscribe }
     | { Unsubscribe: SharedStateTransportUnsubscribe }
     | { Ping: SharedStateTransportPing };
@@ -223,9 +243,9 @@ async function postSharedStateTransport(
     try {
         const response = await fetch(sharedStateTransportPath(), {
             method: 'POST',
-            headers: {
+            headers: withCsrfHeader({
                 'content-type': 'application/json',
-            },
+            }),
             body: JSON.stringify(outbound),
         });
 
@@ -258,6 +278,70 @@ async function unsubscribeChannel(channelId: string): Promise<boolean> {
     return postSharedStateTransport({
         Unsubscribe: {
             channel_id: channelId,
+        },
+    });
+}
+
+function parseJsonAttribute(value: string | null): unknown {
+    if (!value) {
+        return null;
+    }
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        console.error('Failed to parse shared-state command payload', error);
+        return null;
+    }
+}
+
+async function handleSharedStateCommandClick(event: Event): Promise<void> {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+        return;
+    }
+    const element = target.closest<HTMLElement>(
+        `[${SHARED_STATE_COMMAND_ATTR}]`,
+    );
+    if (!element) {
+        return;
+    }
+
+    const commandName = element.getAttribute(SHARED_STATE_COMMAND_ATTR);
+    const commandId = element.getAttribute(SHARED_STATE_COMMAND_ID_ATTR);
+    const idempotencyKey = element.getAttribute(
+        SHARED_STATE_IDEMPOTENCY_KEY_ATTR,
+    );
+    const channelId = element.getAttribute(SHARED_STATE_CHANNEL_ATTR);
+    const participantId = element.getAttribute('data-shared-state-participant');
+    const expectedRevision = Number(
+        element.getAttribute(SHARED_STATE_EXPECTED_REVISION_ATTR),
+    );
+    if (
+        !commandName ||
+        !commandId ||
+        !idempotencyKey ||
+        !channelId ||
+        !participantId ||
+        !Number.isSafeInteger(expectedRevision) ||
+        expectedRevision < 0
+    ) {
+        console.error('Shared-state command metadata is incomplete');
+        return;
+    }
+
+    await postSharedStateTransport({
+        Command: {
+            command_id: commandId,
+            channel_id: channelId,
+            participant_id: participantId,
+            idempotency_key: idempotencyKey,
+            expected_revision: expectedRevision,
+            command_name: commandName,
+            payload: parseJsonAttribute(
+                element.getAttribute(SHARED_STATE_COMMAND_PAYLOAD_ATTR),
+            ),
+            metadata: {},
+            created_at_ms: Date.now(),
         },
     });
 }
@@ -350,6 +434,9 @@ async function refreshSharedStateChannels(): Promise<void> {
 
 export function initSharedStateTransport(): void {
     void refreshSharedStateChannels();
+    document.addEventListener('click', (event) => {
+        void handleSharedStateCommandClick(event);
+    });
 
     on('domLoad', () => {
         void refreshSharedStateChannels();
