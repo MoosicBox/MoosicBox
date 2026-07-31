@@ -1,0 +1,5 @@
+allowBuilds:
+    aws-crt: true
+    aws-sdk: true
+    esbuild: true
+    sharp: true
