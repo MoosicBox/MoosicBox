@@ -841,6 +841,8 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
 }
 
 fn format_markdown_ast(input: &str, config: &Config) -> String {
+    let input = normalize_lazy_blockquote_blank_continuation(input);
+    let input = input.as_ref();
     let mut options = ParseOptions::gfm();
     options.constructs = Constructs {
         frontmatter: true,
@@ -858,6 +860,31 @@ fn format_markdown_ast(input: &str, config: &Config) -> String {
 
     let rendered = render_ast_document(&root, input, config);
     finalize_markdown_output(&rendered, config)
+}
+
+fn normalize_lazy_blockquote_blank_continuation(input: &str) -> std::borrow::Cow<'_, str> {
+    if !input.contains("\n>\n") {
+        return std::borrow::Cow::Borrowed(input);
+    }
+    let lines = input.split_inclusive('\n').collect::<Vec<_>>();
+    let mut output = String::with_capacity(input.len() + 8);
+    let mut changed = false;
+    for (index, line) in lines.iter().enumerate() {
+        output.push_str(line);
+        if line.trim_end_matches(['\r', '\n']) == ">"
+            && let Some(next) = lines.get(index + 1)
+            && !next.trim_start().starts_with('>')
+            && !next.trim().is_empty()
+        {
+            output.push_str("> ");
+            changed = true;
+        }
+    }
+    if changed {
+        std::borrow::Cow::Owned(output)
+    } else {
+        std::borrow::Cow::Borrowed(input)
+    }
 }
 
 fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
@@ -1008,7 +1035,21 @@ fn render_normalized_ast_node(
             }
         }
         Node::List(list) => render_list_node(list, source, config, context),
-        Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config, context),
+        Node::Blockquote(blockquote) => {
+            if let Some((start, end)) = node_offsets(node) {
+                let block_source = &source[start..end];
+                if block_source.contains("\n>\n")
+                    || block_source.lines().any(|line| {
+                        line.trim_start()
+                            .strip_prefix('>')
+                            .is_some_and(|rest| rest.trim_start().starts_with(['-', '*', '+']))
+                    })
+                {
+                    return block_source.trim_end_matches(['\n', '\r']).to_string();
+                }
+            }
+            render_blockquote_node(blockquote, source, config, context)
+        }
         Node::Table(table) => render_table_node(table),
         _ => {
             if let Some((start, end)) = node_offsets(node) {
@@ -1299,6 +1340,10 @@ fn render_blockquote_node(
     let source_has_blank_quote = blockquote.position.as_ref().is_some_and(|position| {
         source[position.start.offset..position.end.offset].contains("\n>\n")
     });
+    let source_has_lazy_blank_continuation = blockquote.position.as_ref().is_some_and(|position| {
+        let block_source = &source[position.start.offset..position.end.offset];
+        block_source.contains("\n>\n") && !block_source.trim_end().ends_with('>')
+    });
     for (index, (kind, rendered)) in rendered_children.iter().enumerate() {
         if index > 0 {
             let previous_kind = rendered_children[index - 1].0;
@@ -1321,6 +1366,8 @@ fn render_blockquote_node(
     if preserve_single_child_blank_lines {
         let parts = inner.split('\n').collect::<Vec<_>>();
         inner = parts.join("\n\n");
+    } else if source_has_lazy_blank_continuation && !inner.contains("\n\n") {
+        inner = inner.replacen('\n', "\n\n", 1);
     }
 
     let prefix = "> ".repeat(context.quote_depth + 1);
@@ -1372,6 +1419,15 @@ fn render_list_node(
     config: &Config,
     context: BlockRenderContext,
 ) -> String {
+    if context.quote_depth > 0
+        && let Some(position) = &list.position
+    {
+        let list_source =
+            source[position.start.offset..position.end.offset].trim_end_matches(['\n', '\r']);
+        if list_source.starts_with("> ") {
+            return list_source.to_string();
+        }
+    }
     let base_indent = context.base_indent;
     let mut out = String::new();
     let mut previous_item_spread = None;
@@ -1486,7 +1542,9 @@ fn render_list_item_marker(
     let marker = if separated_list
         && index == 0
         && base_indent == 0
-        && source_marker.as_deref().is_none_or(|marker| marker == "*")
+        && source_marker
+            .as_deref()
+            .is_none_or(|marker| matches!(marker, "*" | "+"))
         || index > 0 && source_marker.as_deref() == Some("+")
     {
         '*'
@@ -2678,8 +2736,8 @@ mod tests {
             list_style: ListStyle::Dash,
             ..Config::default()
         };
-        let input = "1. foo\n2. bar\n3) baz\n";
-        let expected = "1. foo\n2. bar\n\n3) baz\n";
+        let input = "- foo\n- bar\n+ baz\n";
+        let expected = "- foo\n- bar\n\n* baz\n";
         let output = format_markdown(input, &config);
         assert_eq!(output, expected);
         assert_eq!(format_markdown(&output, &config), output);
@@ -2716,6 +2774,20 @@ mod tests {
             format_markdown(">>> foo\n> bar\n>>baz\n", &config),
             "> > > foo\n> > > bar\n> > > baz\n"
         );
+    }
+
+    #[test]
+    fn block_context_preserves_lazy_continuation_after_blank_quote() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        let input = "> bar\n>\nbaz\n";
+        let expected = "> bar\n>\n> baz\n";
+        let output = format_markdown(input, &config);
+        assert_eq!(output, expected);
+        assert_eq!(format_markdown(&output, &config), output);
     }
 
     #[test]
