@@ -95,9 +95,15 @@ mod sse;
 #[cfg(feature = "shared-state-transport")]
 mod shared_state_transport;
 #[cfg(feature = "shared-state-transport")]
-pub use shared_state_transport::RuntimeFanoutTransportDispatcher;
+pub use hyperchad_shared_state_transport::{
+    AllowAllSharedStateTransportPolicy, SharedStateTransportDispatchError,
+    SharedStateTransportDispatchResult, SharedStateTransportDispatcher,
+};
 #[cfg(feature = "shared-state-transport")]
-pub use shared_state_transport::SharedStateTransportDispatcher;
+pub use shared_state_transport::{
+    CookieCsrfWebSecurity, CookieCsrfWebSecurityConfig, RejectWebSessionIdentityResolver,
+    WebSessionIdentityError, WebSessionIdentityResolver, WebSharedStateSecurity,
+};
 
 #[cfg(all(feature = "actions", feature = "shared-state-bridge"))]
 type SharedStateCommandInputResolver = Arc<
@@ -428,9 +434,13 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     pub fn with_shared_state_transport_dispatcher(
         mut self,
         dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+        web_security: Arc<dyn WebSharedStateSecurity>,
     ) -> Self {
         self.shared_state_transport = Some(
-            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(dispatcher),
+            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(
+                dispatcher,
+                web_security,
+            ),
         );
         self
     }
@@ -440,9 +450,13 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     pub fn set_shared_state_transport_dispatcher(
         &mut self,
         dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+        web_security: Arc<dyn WebSharedStateSecurity>,
     ) {
         self.shared_state_transport = Some(
-            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(dispatcher),
+            shared_state_transport::SharedStateTransportBridge::new_with_dispatcher(
+                dispatcher,
+                web_security,
+            ),
         );
     }
 

@@ -6812,6 +6812,7 @@ dependencies = [
  "hyperchad_shared_state",
  "hyperchad_shared_state_bridge",
  "hyperchad_shared_state_models",
+ "hyperchad_shared_state_transport",
  "log 0.4.33",
  "moosicbox_assert",
  "moosicbox_env_utils",
@@ -6822,6 +6823,7 @@ dependencies = [
  "serde_json",
  "switchy_http_models",
  "test-log",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -6968,6 +6970,7 @@ dependencies = [
  "async-trait",
  "flume 0.12.0",
  "hyperchad_shared_state_models",
+ "hyperchad_shared_state_transport",
  "log 0.4.33",
  "moosicbox_assert",
  "switchy_async",

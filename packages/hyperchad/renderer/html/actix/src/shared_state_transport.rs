@@ -17,156 +17,154 @@ use futures_util::{
     future::{Either, select},
     pin_mut,
 };
-use hyperchad_shared_state::{
-    runtime::{ApplyPreparedCommandResult, SharedStateEngine},
-    traits::{CommandStore, EventDraft, EventStore, FanoutBus, SnapshotStore},
-};
 use hyperchad_shared_state_models::{
     ChannelId, EventEnvelope, TransportInbound, TransportOutbound,
+};
+use hyperchad_shared_state_transport::{
+    AuthenticatedTransportContext, SharedStateTransportDispatcher,
 };
 
 use crate::{ActixApp, ActixResponseProcessor};
 
 pub type SharedStateInboundReceiverFactory = dyn Fn() -> Receiver<TransportInbound> + Send + Sync;
 
-pub type SharedStateTransportDispatchError = Box<dyn std::error::Error + Send + Sync>;
-pub type SharedStateTransportDispatchResult<T> = Result<T, SharedStateTransportDispatchError>;
+/// Web-renderer security hook for authenticating and authorizing one HTTP transport request.
+#[async_trait(?Send)]
+pub trait WebSharedStateSecurity: Send + Sync {
+    /// Resolves a renderer-neutral identity and applies web-specific protections such as CSRF.
+    ///
+    /// # Errors
+    ///
+    /// Returns an Actix error when authentication or web request validation fails.
+    async fn authenticate_request(
+        &self,
+        request: &HttpRequest,
+        is_state_changing: bool,
+    ) -> Result<AuthenticatedTransportContext, actix_web::Error>;
+}
 
+#[derive(Debug, thiserror::Error)]
+pub enum WebSessionIdentityError {
+    #[error("web session is unauthenticated")]
+    Unauthenticated,
+    #[error("web session is forbidden: {0}")]
+    Forbidden(String),
+    #[error("web session identity resolution failed: {0}")]
+    Operation(String),
+}
+
+/// Resolves an opaque web session credential into renderer-neutral identity.
 #[async_trait]
-pub trait SharedStateTransportDispatcher: Send + Sync {
-    async fn ingest_outbound(
+pub trait WebSessionIdentityResolver: Send + Sync {
+    /// # Errors
+    ///
+    /// Returns an error when the opaque session credential is invalid or cannot be resolved.
+    async fn resolve_session(
         &self,
-        outbound: TransportOutbound,
-    ) -> SharedStateTransportDispatchResult<Vec<TransportInbound>>;
-
-    async fn subscribe_channel(
-        &self,
-        channel_id: &ChannelId,
-    ) -> SharedStateTransportDispatchResult<Receiver<EventEnvelope>>;
+        opaque_session: &str,
+    ) -> Result<AuthenticatedTransportContext, WebSessionIdentityError>;
 }
 
-#[derive(Clone)]
-pub struct RuntimeFanoutTransportDispatcher<C, E, S, F>
-where
-    C: CommandStore,
-    E: EventStore,
-    S: SnapshotStore,
-    F: FanoutBus,
-{
-    engine: Arc<SharedStateEngine<C, E, S, F>>,
-    fanout_bus: Arc<F>,
-    replay_limit: u32,
+/// Cookie/header names used by the HTML/Actix shared-state transport security adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CookieCsrfWebSecurityConfig {
+    pub session_cookie_name: String,
+    pub csrf_cookie_name: String,
+    pub csrf_header_name: String,
 }
 
-impl<C, E, S, F> RuntimeFanoutTransportDispatcher<C, E, S, F>
-where
-    C: CommandStore,
-    E: EventStore,
-    S: SnapshotStore,
-    F: FanoutBus,
-{
+impl CookieCsrfWebSecurityConfig {
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn new(engine: Arc<SharedStateEngine<C, E, S, F>>, fanout_bus: Arc<F>) -> Self {
+    pub fn new(
+        session_cookie_name: impl Into<String>,
+        csrf_cookie_name: impl Into<String>,
+        csrf_header_name: impl Into<String>,
+    ) -> Self {
         Self {
-            engine,
-            fanout_bus,
-            replay_limit: 100,
+            session_cookie_name: session_cookie_name.into(),
+            csrf_cookie_name: csrf_cookie_name.into(),
+            csrf_header_name: csrf_header_name.into(),
         }
-    }
-
-    #[must_use]
-    pub const fn with_replay_limit(mut self, replay_limit: u32) -> Self {
-        self.replay_limit = replay_limit;
-        self
     }
 }
 
-#[async_trait]
-impl<C, E, S, F> SharedStateTransportDispatcher for RuntimeFanoutTransportDispatcher<C, E, S, F>
-where
-    C: CommandStore + Send + Sync,
-    E: EventStore + Send + Sync,
-    S: SnapshotStore + Send + Sync,
-    F: FanoutBus + Send + Sync,
-{
-    async fn ingest_outbound(
-        &self,
-        outbound: TransportOutbound,
-    ) -> SharedStateTransportDispatchResult<Vec<TransportInbound>> {
-        match outbound {
-            TransportOutbound::Command(command) => {
-                let drafts = vec![EventDraft::new(
-                    command.command_name.clone(),
-                    command.payload.clone(),
-                    command.metadata.clone(),
-                )];
+/// HTML/Actix authentication and CSRF adapter with application-configured names and identity.
+#[derive(Clone)]
+pub struct CookieCsrfWebSecurity {
+    config: CookieCsrfWebSecurityConfig,
+    identity_resolver: Arc<dyn WebSessionIdentityResolver>,
+}
 
-                let result = self.engine.apply_prepared(&command, &drafts, None).await?;
-
-                let inbound = match result {
-                    ApplyPreparedCommandResult::Applied {
-                        resulting_revision,
-                        emitted_event_count: _,
-                    } => TransportInbound::CommandAccepted {
-                        command_id: command.command_id,
-                        resulting_revision,
-                    },
-                    ApplyPreparedCommandResult::DuplicateApplied {
-                        command_id,
-                        resulting_revision,
-                    } => TransportInbound::CommandAccepted {
-                        command_id,
-                        resulting_revision,
-                    },
-                    ApplyPreparedCommandResult::DuplicateRejected { command_id, reason } => {
-                        TransportInbound::CommandRejected { command_id, reason }
-                    }
-                    ApplyPreparedCommandResult::Conflict { actual_revision } => {
-                        TransportInbound::CommandRejected {
-                            command_id: command.command_id,
-                            reason: format!(
-                                "Expected revision {} but actual revision is {}",
-                                command.expected_revision, actual_revision
-                            ),
-                        }
-                    }
-                };
-
-                Ok(vec![inbound])
-            }
-            TransportOutbound::Subscribe(subscribe) => {
-                let replay = self
-                    .engine
-                    .replay_since(
-                        &subscribe.channel_id,
-                        subscribe.last_seen_revision,
-                        self.replay_limit,
-                    )
-                    .await?;
-
-                let mut inbound = Vec::new();
-                if let Some(snapshot) = replay.snapshot {
-                    inbound.push(TransportInbound::Snapshot(snapshot));
-                }
-                inbound.extend(replay.events.into_iter().map(TransportInbound::Event));
-
-                Ok(inbound)
-            }
-            TransportOutbound::Unsubscribe(_unsubscribe) => Ok(Vec::new()),
-            TransportOutbound::Ping(ping) => Ok(vec![TransportInbound::Pong(ping)]),
+impl CookieCsrfWebSecurity {
+    #[must_use]
+    pub fn new(
+        config: CookieCsrfWebSecurityConfig,
+        identity_resolver: Arc<dyn WebSessionIdentityResolver>,
+    ) -> Self {
+        Self {
+            config,
+            identity_resolver,
         }
     }
+}
 
-    async fn subscribe_channel(
+#[async_trait(?Send)]
+impl WebSharedStateSecurity for CookieCsrfWebSecurity {
+    async fn authenticate_request(
         &self,
-        channel_id: &ChannelId,
-    ) -> SharedStateTransportDispatchResult<Receiver<EventEnvelope>> {
-        Ok(self.fanout_bus.subscribe(channel_id).await?)
+        request: &HttpRequest,
+        is_state_changing: bool,
+    ) -> Result<AuthenticatedTransportContext, actix_web::Error> {
+        let opaque_session = request
+            .cookie(&self.config.session_cookie_name)
+            .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing web session"))?;
+        let csrf_cookie = request
+            .cookie(&self.config.csrf_cookie_name)
+            .ok_or_else(|| actix_web::error::ErrorForbidden("missing CSRF cookie"))?;
+
+        if is_state_changing {
+            let csrf_header = request
+                .headers()
+                .get(&self.config.csrf_header_name)
+                .and_then(|value| value.to_str().ok());
+            if csrf_header != Some(csrf_cookie.value()) {
+                return Err(actix_web::error::ErrorForbidden("CSRF validation failed"));
+            }
+        }
+
+        self.identity_resolver
+            .resolve_session(opaque_session.value())
+            .await
+            .map_err(|error| match error {
+                WebSessionIdentityError::Unauthenticated => {
+                    actix_web::error::ErrorUnauthorized(error.to_string())
+                }
+                WebSessionIdentityError::Forbidden(_) => {
+                    actix_web::error::ErrorForbidden(error.to_string())
+                }
+                WebSessionIdentityError::Operation(_) => {
+                    ErrorInternalServerError(error.to_string())
+                }
+            })
+    }
+}
+
+/// Fail-closed resolver for runtimes that have not connected durable web sessions yet.
+#[derive(Debug, Default)]
+pub struct RejectWebSessionIdentityResolver;
+
+#[async_trait]
+impl WebSessionIdentityResolver for RejectWebSessionIdentityResolver {
+    async fn resolve_session(
+        &self,
+        _opaque_session: &str,
+    ) -> Result<AuthenticatedTransportContext, WebSessionIdentityError> {
+        Err(WebSessionIdentityError::Unauthenticated)
     }
 }
 
 struct SharedStateSseSession {
+    context: AuthenticatedTransportContext,
     client_tx: flume::Sender<TransportInbound>,
     subscriptions: BTreeMap<ChannelId, flume::Sender<()>>,
 }
@@ -174,8 +172,12 @@ struct SharedStateSseSession {
 impl SharedStateSseSession {
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
-    fn new(client_tx: flume::Sender<TransportInbound>) -> Self {
+    fn new(
+        context: AuthenticatedTransportContext,
+        client_tx: flume::Sender<TransportInbound>,
+    ) -> Self {
         Self {
+            context,
             client_tx,
             subscriptions: BTreeMap::new(),
         }
@@ -187,6 +189,7 @@ pub struct SharedStateTransportBridge {
     pub outbound_tx: flume::Sender<TransportOutbound>,
     pub inbound_receiver_factory: Arc<SharedStateInboundReceiverFactory>,
     dispatcher: Option<Arc<dyn SharedStateTransportDispatcher>>,
+    web_security: Option<Arc<dyn WebSharedStateSecurity>>,
     sse_sessions: Arc<RwLock<BTreeMap<String, Arc<Mutex<SharedStateSseSession>>>>>,
 }
 
@@ -200,12 +203,16 @@ impl SharedStateTransportBridge {
             outbound_tx,
             inbound_receiver_factory,
             dispatcher: None,
+            web_security: None,
             sse_sessions: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
     #[must_use]
-    pub fn new_with_dispatcher(dispatcher: Arc<dyn SharedStateTransportDispatcher>) -> Self {
+    pub fn new_with_dispatcher(
+        dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+        web_security: Arc<dyn WebSharedStateSecurity>,
+    ) -> Self {
         let (outbound_tx, _outbound_rx) = flume::unbounded();
         let (_inbound_tx, inbound_rx) = flume::unbounded();
 
@@ -213,6 +220,7 @@ impl SharedStateTransportBridge {
             outbound_tx,
             inbound_receiver_factory: Arc::new(move || inbound_rx.clone()),
             dispatcher: Some(dispatcher),
+            web_security: Some(web_security),
             sse_sessions: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
@@ -220,6 +228,20 @@ impl SharedStateTransportBridge {
 
 fn lock_poison_error(context: &str) -> actix_web::Error {
     ErrorInternalServerError(format!("{context}: lock poisoned"))
+}
+
+#[allow(clippy::future_not_send)]
+async fn resolve_authenticated_context(
+    bridge: &SharedStateTransportBridge,
+    req: &HttpRequest,
+    is_state_changing: bool,
+) -> Result<AuthenticatedTransportContext, actix_web::Error> {
+    bridge
+        .web_security
+        .as_ref()
+        .ok_or_else(|| ErrorInternalServerError("Missing shared-state web security"))?
+        .authenticate_request(req, is_state_changing)
+        .await
 }
 
 fn session_id_from_request(req: &HttpRequest) -> Option<String> {
@@ -254,6 +276,7 @@ fn sse_session_sender(
 fn upsert_sse_session_stream(
     bridge: &SharedStateTransportBridge,
     session_id: &str,
+    context: AuthenticatedTransportContext,
 ) -> Result<Receiver<TransportInbound>, actix_web::Error> {
     let (client_tx, client_rx) = flume::unbounded();
 
@@ -266,11 +289,16 @@ fn upsert_sse_session_stream(
         let mut session = session
             .lock()
             .map_err(|_| lock_poison_error("sse session lock"))?;
+        if session.context != context {
+            return Err(ErrorBadRequest(
+                "shared-state session identity does not match authenticated request",
+            ));
+        }
         session.client_tx = client_tx;
     } else {
         sessions.insert(
             session_id.to_string(),
-            Arc::new(Mutex::new(SharedStateSseSession::new(client_tx))),
+            Arc::new(Mutex::new(SharedStateSseSession::new(context, client_tx))),
         );
     }
 
@@ -309,6 +337,8 @@ fn remove_session_subscription(
 
 fn spawn_sse_subscription_forwarder(
     session: Arc<Mutex<SharedStateSseSession>>,
+    dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    context: AuthenticatedTransportContext,
     channel_id: ChannelId,
     event_rx: Receiver<EventEnvelope>,
     stop_rx: Receiver<()>,
@@ -326,6 +356,9 @@ fn spawn_sse_subscription_forwarder(
                 Either::Right((event, _pending_stop)) => {
                     let Ok(event) = event else {
                         break;
+                    };
+                    let Some(event) = dispatcher.project_event(&context, &event) else {
+                        continue;
                     };
 
                     let sender = match session.lock() {
@@ -361,8 +394,13 @@ async fn ensure_sse_session_subscription(
         return Ok(());
     }
 
+    let context = session
+        .lock()
+        .map_err(|_| lock_poison_error("sse session lock"))?
+        .context
+        .clone();
     let event_rx = dispatcher
-        .subscribe_channel(&channel_id)
+        .subscribe_channel(&context, &channel_id)
         .await
         .map_err(ErrorInternalServerError)?;
     let (stop_tx, stop_rx) = flume::bounded(1);
@@ -373,12 +411,14 @@ async fn ensure_sse_session_subscription(
         .subscriptions
         .insert(channel_id.clone(), stop_tx);
 
-    spawn_sse_subscription_forwarder(session, channel_id, event_rx, stop_rx);
+    spawn_sse_subscription_forwarder(session, dispatcher, context, channel_id, event_rx, stop_rx);
 
     Ok(())
 }
 
 fn spawn_ws_subscription_forwarder(
+    dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    context: AuthenticatedTransportContext,
     outbound_tx: flume::Sender<TransportInbound>,
     event_rx: Receiver<EventEnvelope>,
     stop_rx: Receiver<()>,
@@ -397,6 +437,9 @@ fn spawn_ws_subscription_forwarder(
                     let Ok(event) = event else {
                         break;
                     };
+                    let Some(event) = dispatcher.project_event(&context, &event) else {
+                        continue;
+                    };
 
                     if outbound_tx.send(TransportInbound::Event(event)).is_err() {
                         break;
@@ -410,6 +453,7 @@ fn spawn_ws_subscription_forwarder(
 async fn ensure_ws_subscription(
     subscriptions: &mut BTreeMap<ChannelId, flume::Sender<()>>,
     dispatcher: Arc<dyn SharedStateTransportDispatcher>,
+    context: AuthenticatedTransportContext,
     outbound_tx: flume::Sender<TransportInbound>,
     channel_id: ChannelId,
 ) -> Result<(), actix_web::Error> {
@@ -418,13 +462,13 @@ async fn ensure_ws_subscription(
     }
 
     let event_rx = dispatcher
-        .subscribe_channel(&channel_id)
+        .subscribe_channel(&context, &channel_id)
         .await
         .map_err(ErrorInternalServerError)?;
     let (stop_tx, stop_rx) = flume::bounded(1);
     subscriptions.insert(channel_id, stop_tx);
 
-    spawn_ws_subscription_forwarder(outbound_tx, event_rx, stop_rx);
+    spawn_ws_subscription_forwarder(dispatcher, context, outbound_tx, event_rx, stop_rx);
 
     Ok(())
 }
@@ -439,13 +483,14 @@ fn remove_ws_subscription(
 }
 
 async fn process_ws_dispatcher_outbound(
+    context: &AuthenticatedTransportContext,
     outbound: TransportOutbound,
     dispatcher: Arc<dyn SharedStateTransportDispatcher>,
     subscriptions: &mut BTreeMap<ChannelId, flume::Sender<()>>,
     ws_outbound_tx: flume::Sender<TransportInbound>,
 ) -> Result<(), actix_web::Error> {
     let responses = dispatcher
-        .ingest_outbound(outbound.clone())
+        .ingest_outbound(context, outbound.clone())
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -454,6 +499,7 @@ async fn process_ws_dispatcher_outbound(
             ensure_ws_subscription(
                 subscriptions,
                 dispatcher,
+                context.clone(),
                 ws_outbound_tx.clone(),
                 subscribe.channel_id,
             )
@@ -507,9 +553,21 @@ pub async fn handle_shared_state_transport_post<
             return Ok(HttpResponse::Conflict().finish());
         };
 
+        let request_context =
+            resolve_authenticated_context(shared_state_transport, &req, true).await?;
+        let context = session
+            .lock()
+            .map_err(|_| lock_poison_error("sse session lock"))?
+            .context
+            .clone();
+        if context != request_context {
+            return Err(ErrorBadRequest(
+                "shared-state session identity does not match authenticated request",
+            ));
+        }
         let outbound = outbound.0;
         let responses = dispatcher
-            .ingest_outbound(outbound.clone())
+            .ingest_outbound(&context, outbound.clone())
             .await
             .map_err(ErrorInternalServerError)?;
 
@@ -562,7 +620,8 @@ pub async fn handle_shared_state_transport_sse<
         let session_id = session_id_from_request(&req).ok_or_else(|| {
             ErrorBadRequest("Missing shared-state session id (query 'session_id' or cookie)")
         })?;
-        upsert_sse_session_stream(&shared_state_transport, &session_id)?
+        let context = resolve_authenticated_context(&shared_state_transport, &req, false).await?;
+        upsert_sse_session_stream(&shared_state_transport, &session_id, context)?
     } else {
         (shared_state_transport.inbound_receiver_factory)()
     };
@@ -593,6 +652,7 @@ pub async fn handle_shared_state_transport_ws<
     };
 
     if let Some(dispatcher) = shared_state_transport.dispatcher.clone() {
+        let context = resolve_authenticated_context(&shared_state_transport, &req, false).await?;
         let (response, mut session, message_stream) = actix_ws::handle(&req, body)?;
         let (ws_outbound_tx, ws_outbound_rx) = flume::unbounded::<TransportInbound>();
 
@@ -645,6 +705,7 @@ pub async fn handle_shared_state_transport_ws<
                         | actix_ws::Message::Nop => {
                             if let Some(outbound) = parse_ws_transport_outbound(&message)
                                 && let Err(error) = process_ws_dispatcher_outbound(
+                                    &context,
                                     outbound,
                                     dispatcher.clone(),
                                     &mut subscriptions,
@@ -811,7 +872,7 @@ mod tests {
     use hyperchad_renderer::RendererEvent;
     use hyperchad_shared_state::{
         fanout::InProcessFanoutBus,
-        runtime::SharedStateEngine,
+        runtime::{RuntimeFanoutTransportDispatcher, SharedStateEngine},
         traits::{
             AppendEventsResult, BeginCommandResult, CommandStore, EventDraft, EventStore,
             SnapshotStore,
@@ -824,13 +885,117 @@ mod tests {
     };
 
     use super::{
-        RuntimeFanoutTransportDispatcher, SharedStateTransportDispatcher,
+        AuthenticatedTransportContext, SharedStateTransportDispatcher, WebSharedStateSecurity,
         handle_shared_state_transport_post, handle_shared_state_transport_sse,
     };
     use crate::{ActixApp, ActixResponseProcessor};
 
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     struct TestProcessor;
+
+    #[derive(Debug)]
+    struct TestWebSecurity;
+
+    #[async_trait(?Send)]
+    impl WebSharedStateSecurity for TestWebSecurity {
+        async fn authenticate_request(
+            &self,
+            request: &HttpRequest,
+            is_state_changing: bool,
+        ) -> Result<AuthenticatedTransportContext, actix_web::Error> {
+            let csrf_cookie = request.cookie("test-csrf");
+            let csrf_header = request.headers().get("x-test-csrf");
+            if csrf_cookie.as_ref().map(actix_web::cookie::Cookie::value) != Some("csrf-a")
+                || (is_state_changing
+                    && csrf_header.and_then(|value| value.to_str().ok()) != Some("csrf-a"))
+            {
+                return Err(actix_web::error::ErrorForbidden("CSRF validation failed"));
+            }
+
+            Ok(AuthenticatedTransportContext {
+                participant_id: ParticipantId::new("participant-a"),
+                identity_binding: "identity-a".to_string(),
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestSessionIdentityResolver;
+
+    #[async_trait]
+    impl super::WebSessionIdentityResolver for TestSessionIdentityResolver {
+        async fn resolve_session(
+            &self,
+            opaque_session: &str,
+        ) -> Result<AuthenticatedTransportContext, super::WebSessionIdentityError> {
+            if opaque_session != "opaque-session" {
+                return Err(super::WebSessionIdentityError::Unauthenticated);
+            }
+            Ok(AuthenticatedTransportContext {
+                participant_id: ParticipantId::new("participant-web"),
+                identity_binding: "identity-web".to_string(),
+            })
+        }
+    }
+
+    fn test_context() -> AuthenticatedTransportContext {
+        AuthenticatedTransportContext {
+            participant_id: ParticipantId::new("participant-1"),
+            identity_binding: "identity-a".to_string(),
+        }
+    }
+
+    #[derive(Debug)]
+    struct PrivateProjectionPolicy;
+
+    #[async_trait]
+    impl hyperchad_shared_state_transport::SharedStateTransportPolicy for PrivateProjectionPolicy {
+        async fn authorize_channel(
+            &self,
+            context: &AuthenticatedTransportContext,
+            channel_id: &ChannelId,
+            _access: hyperchad_shared_state_transport::ChannelAccess,
+        ) -> Result<(), hyperchad_shared_state_transport::TransportAuthorizationError> {
+            let expected = format!("private:{}", context.participant_id);
+            if channel_id.as_str() == "public-game" || channel_id.as_str() == expected {
+                Ok(())
+            } else {
+                Err(
+                    hyperchad_shared_state_transport::TransportAuthorizationError::Denied(
+                        "participant cannot access this private channel".to_string(),
+                    ),
+                )
+            }
+        }
+
+        fn project_event(
+            &self,
+            context: &AuthenticatedTransportContext,
+            event: &EventEnvelope,
+        ) -> Option<EventEnvelope> {
+            let expected = format!("private:{}", context.participant_id);
+            (event.channel_id.as_str() == "public-game" || event.channel_id.as_str() == expected)
+                .then(|| event.clone())
+        }
+
+        fn project_snapshot(
+            &self,
+            context: &AuthenticatedTransportContext,
+            snapshot: &SnapshotEnvelope,
+        ) -> Option<SnapshotEnvelope> {
+            let expected = format!("private:{}", context.participant_id);
+            (snapshot.channel_id.as_str() == "public-game"
+                || snapshot.channel_id.as_str() == expected)
+                .then(|| snapshot.clone())
+        }
+    }
+
+    fn participant_context(participant: &str) -> AuthenticatedTransportContext {
+        AuthenticatedTransportContext {
+            participant_id: ParticipantId::new(participant),
+            identity_binding: format!("identity-{participant}"),
+        }
+    }
 
     #[async_trait]
     impl ActixResponseProcessor<()> for TestProcessor {
@@ -1111,6 +1276,45 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn cookie_csrf_web_security_uses_configured_web_names() {
+        let security = super::CookieCsrfWebSecurity::new(
+            super::CookieCsrfWebSecurityConfig::new(
+                "custom-session",
+                "custom-csrf",
+                "x-custom-csrf",
+            ),
+            Arc::new(TestSessionIdentityResolver),
+        );
+        let request = test::TestRequest::post()
+            .cookie(actix_web::cookie::Cookie::new(
+                "custom-session",
+                "opaque-session",
+            ))
+            .cookie(actix_web::cookie::Cookie::new("custom-csrf", "csrf-value"))
+            .insert_header(("x-custom-csrf", "csrf-value"))
+            .to_http_request();
+
+        let context = security
+            .authenticate_request(&request, true)
+            .await
+            .expect("configured web authentication should succeed");
+        assert_eq!(
+            context.participant_id,
+            ParticipantId::new("participant-web")
+        );
+
+        let invalid = test::TestRequest::post()
+            .cookie(actix_web::cookie::Cookie::new(
+                "custom-session",
+                "opaque-session",
+            ))
+            .cookie(actix_web::cookie::Cookie::new("custom-csrf", "csrf-value"))
+            .insert_header(("x-custom-csrf", "wrong-value"))
+            .to_http_request();
+        assert!(security.authenticate_request(&invalid, true).await.is_err());
+    }
+
+    #[actix_web::test]
     async fn runtime_dispatcher_translates_transport_messages() {
         let store = Arc::new(MemoryStore::default());
         let fanout = Arc::new(InProcessFanoutBus::new());
@@ -1120,7 +1324,11 @@ mod tests {
             store.clone(),
             fanout.clone(),
         ));
-        let dispatcher = RuntimeFanoutTransportDispatcher::new(engine, fanout.clone());
+        let dispatcher = RuntimeFanoutTransportDispatcher::new(
+            engine,
+            fanout.clone(),
+            Arc::new(hyperchad_shared_state_transport::AllowAllSharedStateTransportPolicy),
+        );
 
         let command = CommandEnvelope {
             command_id: CommandId::new("command-1"),
@@ -1135,7 +1343,7 @@ mod tests {
         };
 
         let command_result = dispatcher
-            .ingest_outbound(TransportOutbound::Command(command.clone()))
+            .ingest_outbound(&test_context(), TransportOutbound::Command(command.clone()))
             .await
             .expect("command dispatch should succeed");
         assert_eq!(
@@ -1147,17 +1355,20 @@ mod tests {
         );
 
         let replay_result = dispatcher
-            .ingest_outbound(TransportOutbound::Subscribe(TransportSubscribe {
-                channel_id: ChannelId::new("channel-a"),
-                last_seen_revision: None,
-            }))
+            .ingest_outbound(
+                &test_context(),
+                TransportOutbound::Subscribe(TransportSubscribe {
+                    channel_id: ChannelId::new("channel-a"),
+                    last_seen_revision: None,
+                }),
+            )
             .await
             .expect("subscribe replay should succeed");
         assert_eq!(replay_result.len(), 1);
         assert!(matches!(replay_result[0], TransportInbound::Event(_)));
 
         let receiver = dispatcher
-            .subscribe_channel(&ChannelId::new("channel-a"))
+            .subscribe_channel(&test_context(), &ChannelId::new("channel-a"))
             .await
             .expect("fanout subscription should succeed");
 
@@ -1174,7 +1385,10 @@ mod tests {
         };
 
         dispatcher
-            .ingest_outbound(TransportOutbound::Command(channel_b_command))
+            .ingest_outbound(
+                &test_context(),
+                TransportOutbound::Command(channel_b_command),
+            )
             .await
             .expect("channel-b command should succeed");
         assert!(receiver.is_empty());
@@ -1192,7 +1406,10 @@ mod tests {
         };
 
         dispatcher
-            .ingest_outbound(TransportOutbound::Command(channel_a_command))
+            .ingest_outbound(
+                &test_context(),
+                TransportOutbound::Command(channel_a_command),
+            )
             .await
             .expect("channel-a command should succeed");
 
@@ -1201,6 +1418,102 @@ mod tests {
             .await
             .expect("channel-a subscriber should receive event");
         assert_eq!(forwarded.channel_id, ChannelId::new("channel-a"));
+    }
+
+    #[actix_web::test]
+    async fn authenticated_clients_receive_public_and_only_their_private_replay() {
+        let store = Arc::new(MemoryStore::default());
+        let fanout = Arc::new(InProcessFanoutBus::new());
+        let engine = Arc::new(SharedStateEngine::new(
+            store.clone(),
+            store.clone(),
+            store.clone(),
+            fanout.clone(),
+        ));
+        let dispatcher = RuntimeFanoutTransportDispatcher::new(
+            engine,
+            fanout,
+            Arc::new(PrivateProjectionPolicy),
+        );
+        let alice = participant_context("alice");
+        let bob = participant_context("bob");
+
+        for (channel, participant, command_id) in [
+            ("public-game", "alice", "public-command"),
+            ("private:alice", "alice", "alice-command"),
+            ("private:bob", "bob", "bob-command"),
+        ] {
+            let command = CommandEnvelope {
+                command_id: CommandId::new(command_id),
+                channel_id: ChannelId::new(channel),
+                participant_id: ParticipantId::new(participant),
+                idempotency_key: IdempotencyKey::new(format!("idem-{command_id}")),
+                expected_revision: Revision::new(0),
+                command_name: "VALUE_CHANGED".to_string(),
+                payload: PayloadBlob::from_serializable(&channel)
+                    .expect("payload should serialize"),
+                metadata: BTreeMap::new(),
+                created_at_ms: 1,
+            };
+            let context = participant_context(participant);
+            dispatcher
+                .ingest_outbound(&context, TransportOutbound::Command(command))
+                .await
+                .expect("authorized command should apply");
+        }
+
+        for context in [&alice, &bob] {
+            let public = dispatcher
+                .ingest_outbound(
+                    context,
+                    TransportOutbound::Subscribe(TransportSubscribe {
+                        channel_id: ChannelId::new("public-game"),
+                        last_seen_revision: Some(Revision::new(0)),
+                    }),
+                )
+                .await
+                .expect("public replay should be authorized");
+            assert_eq!(public.len(), 1);
+        }
+
+        let alice_private = dispatcher
+            .ingest_outbound(
+                &alice,
+                TransportOutbound::Subscribe(TransportSubscribe {
+                    channel_id: ChannelId::new("private:alice"),
+                    last_seen_revision: Some(Revision::new(0)),
+                }),
+            )
+            .await
+            .expect("Alice private replay should be authorized");
+        assert_eq!(alice_private.len(), 1);
+
+        assert!(
+            dispatcher
+                .ingest_outbound(
+                    &bob,
+                    TransportOutbound::Subscribe(TransportSubscribe {
+                        channel_id: ChannelId::new("private:alice"),
+                        last_seen_revision: Some(Revision::new(0)),
+                    }),
+                )
+                .await
+                .is_err(),
+            "Bob must not replay Alice's private channel"
+        );
+        assert!(
+            dispatcher
+                .ingest_outbound(
+                    &alice,
+                    TransportOutbound::Subscribe(TransportSubscribe {
+                        channel_id: ChannelId::new("private:bob"),
+                        last_seen_revision: Some(Revision::new(0)),
+                    }),
+                )
+                .await
+                .is_err(),
+            "Alice must not replay Bob's private channel"
+        );
     }
 
     #[actix_web::test]
@@ -1287,24 +1600,40 @@ mod tests {
         impl SharedStateTransportDispatcher for TestDispatcher {
             async fn ingest_outbound(
                 &self,
+                _context: &AuthenticatedTransportContext,
                 _outbound: TransportOutbound,
-            ) -> super::SharedStateTransportDispatchResult<Vec<TransportInbound>> {
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                Vec<TransportInbound>,
+            > {
                 Ok(Vec::new())
             }
 
             async fn subscribe_channel(
                 &self,
+                _context: &AuthenticatedTransportContext,
                 _channel_id: &ChannelId,
-            ) -> super::SharedStateTransportDispatchResult<flume::Receiver<EventEnvelope>>
-            {
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                flume::Receiver<EventEnvelope>,
+            > {
                 let (_tx, rx) = flume::unbounded();
                 Ok(rx)
+            }
+
+            fn project_event(
+                &self,
+                _context: &AuthenticatedTransportContext,
+                event: &EventEnvelope,
+            ) -> Option<EventEnvelope> {
+                Some(event.clone())
             }
         }
 
         let (_renderer_event_tx, renderer_event_rx) = flume::unbounded::<RendererEvent>();
         let app = ActixApp::new(TestProcessor, renderer_event_rx)
-            .with_shared_state_transport_dispatcher(Arc::new(TestDispatcher));
+            .with_shared_state_transport_dispatcher(
+                Arc::new(TestDispatcher),
+                Arc::new(TestWebSecurity),
+            );
 
         let response = handle_shared_state_transport_post(
             test::TestRequest::post().to_http_request(),
@@ -1325,30 +1654,48 @@ mod tests {
         impl SharedStateTransportDispatcher for TestDispatcher {
             async fn ingest_outbound(
                 &self,
+                _context: &AuthenticatedTransportContext,
                 _outbound: TransportOutbound,
-            ) -> super::SharedStateTransportDispatchResult<Vec<TransportInbound>> {
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                Vec<TransportInbound>,
+            > {
                 Ok(Vec::new())
             }
 
             async fn subscribe_channel(
                 &self,
+                _context: &AuthenticatedTransportContext,
                 _channel_id: &ChannelId,
-            ) -> super::SharedStateTransportDispatchResult<flume::Receiver<EventEnvelope>>
-            {
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                flume::Receiver<EventEnvelope>,
+            > {
                 let (_tx, rx) = flume::unbounded();
                 Ok(rx)
+            }
+
+            fn project_event(
+                &self,
+                _context: &AuthenticatedTransportContext,
+                event: &EventEnvelope,
+            ) -> Option<EventEnvelope> {
+                Some(event.clone())
             }
         }
 
         let (_renderer_event_tx, renderer_event_rx) = flume::unbounded::<RendererEvent>();
         let app = ActixApp::new(TestProcessor, renderer_event_rx)
-            .with_shared_state_transport_dispatcher(Arc::new(TestDispatcher));
+            .with_shared_state_transport_dispatcher(
+                Arc::new(TestDispatcher),
+                Arc::new(TestWebSecurity),
+            );
 
         let session_cookie =
             actix_web::cookie::Cookie::new("v-shared-state-session-id", "session-cookie-1");
+        let csrf_cookie = actix_web::cookie::Cookie::new("test-csrf", "csrf-a");
 
         let sse_request = test::TestRequest::get()
             .cookie(session_cookie.clone())
+            .cookie(csrf_cookie.clone())
             .to_http_request();
         let sse_response =
             handle_shared_state_transport_sse(sse_request, web::Data::new(app.clone()))
@@ -1358,6 +1705,8 @@ mod tests {
 
         let post_request = test::TestRequest::post()
             .cookie(session_cookie)
+            .cookie(csrf_cookie)
+            .insert_header(("x-test-csrf", "csrf-a"))
             .to_http_request();
         let post_response = handle_shared_state_transport_post(
             post_request,

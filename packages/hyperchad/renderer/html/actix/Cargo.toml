@@ -17,16 +17,17 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-actix-ws                      = { workspace = true, optional = true }
-hyperchad_renderer            = { workspace = true, features = ["canvas"] }
-hyperchad_router              = { workspace = true, optional = true }
-hyperchad_shared_state        = { workspace = true, optional = true }
-hyperchad_shared_state_bridge = { workspace = true, optional = true }
-hyperchad_shared_state_models = { workspace = true, optional = true }
-moosicbox_assert              = { workspace = true }
-moosicbox_env_utils           = { workspace = true }
-moosicbox_logging             = { workspace = true }
-moosicbox_middleware          = { workspace = true }
+actix-ws                         = { workspace = true, optional = true }
+hyperchad_renderer               = { workspace = true, features = ["canvas"] }
+hyperchad_router                 = { workspace = true, optional = true }
+hyperchad_shared_state           = { workspace = true, optional = true }
+hyperchad_shared_state_bridge    = { workspace = true, optional = true }
+hyperchad_shared_state_models    = { workspace = true, optional = true }
+hyperchad_shared_state_transport = { workspace = true, optional = true }
+moosicbox_assert                 = { workspace = true }
+moosicbox_env_utils              = { workspace = true }
+moosicbox_logging                = { workspace = true }
+moosicbox_middleware             = { workspace = true }
 
 actix-cors          = { workspace = true }
 actix-files         = { workspace = true, optional = true }
@@ -41,6 +42,7 @@ qstring             = { workspace = true, optional = true }
 serde               = { workspace = true, optional = true }
 serde_json          = { workspace = true, optional = true }
 switchy_http_models = { workspace = true, optional = true }
+thiserror           = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
@@ -54,6 +56,7 @@ fail-on-warnings = [
     "hyperchad_shared_state?/fail-on-warnings",
     "hyperchad_shared_state_bridge?/fail-on-warnings",
     "hyperchad_shared_state_models?/fail-on-warnings",
+    "hyperchad_shared_state_transport?/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",
@@ -78,6 +81,7 @@ shared-state-transport = [
     "dep:actix-ws",
     "dep:hyperchad_shared_state",
     "dep:hyperchad_shared_state_models",
+    "dep:hyperchad_shared_state_transport",
     "dep:qstring",
     "dep:serde_json",
 ]

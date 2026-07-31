@@ -29,7 +29,7 @@ use hyperchad::{
 use log::info;
 
 #[cfg(feature = "actix")]
-use hyperchad::renderer_html_actix::RuntimeFanoutTransportDispatcher;
+use hyperchad::shared_state::runtime::RuntimeFanoutTransportDispatcher;
 
 #[cfg(feature = "assets")]
 use std::sync::LazyLock;
@@ -340,6 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dispatcher = Arc::new(RuntimeFanoutTransportDispatcher::new(
         engine.clone(),
         fanout_bus,
+        Arc::new(hyperchad::shared_state_transport::AllowAllSharedStateTransportPolicy),
     ));
 
     let command_sequence = Arc::new(AtomicU64::new(1));
@@ -386,7 +387,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     #[cfg(feature = "actix")]
-    let app_builder = app_builder.with_shared_state_transport_dispatcher(dispatcher);
+    {
+        let _ = dispatcher;
+    }
 
     #[cfg_attr(not(feature = "assets"), allow(unused_mut))]
     let mut app_builder = app_builder;

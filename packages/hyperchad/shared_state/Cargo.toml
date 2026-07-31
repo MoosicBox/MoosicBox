@@ -17,8 +17,9 @@ examples = false
 group = "hyperchad"
 
 [dependencies]
-hyperchad_shared_state_models = { workspace = true }
-moosicbox_assert              = { workspace = true }
+hyperchad_shared_state_models    = { workspace = true }
+hyperchad_shared_state_transport = { workspace = true }
+moosicbox_assert                 = { workspace = true }
 
 async-trait      = { workspace = true }
 flume            = { workspace = true }
@@ -37,6 +38,7 @@ default = []
 
 fail-on-warnings = [
     "hyperchad_shared_state_models/fail-on-warnings",
+    "hyperchad_shared_state_transport/fail-on-warnings",
     "moosicbox_assert/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
