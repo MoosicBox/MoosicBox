@@ -80,6 +80,12 @@ CommonMark + GFM behavior. Tests run `prettier` (pinned to `3.8.1`) at runtime
 and compare output byte-for-byte with `clippier-md`.
 The runner fallback order is: `bunx`, then `pnpm dlx`, then `npx --yes`.
 
+The harness supports focused ID/range/section/fixture/category runs,
+machine-readable reports, deterministic local oracle caching, and independent
+live-cache verification. See
+[`tests/parity/README.md`](tests/parity/README.md) for exact commands and
+environment variables.
+
 When the CommonMark spec submodule is present at
 `packages/clippier/md/tests/vendor/commonmark-spec`, parity tests also execute
 all examples from `spec.txt` against Prettier.
