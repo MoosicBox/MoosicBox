@@ -1007,7 +1007,7 @@ fn render_normalized_ast_node(
                 render_paragraph_node(paragraph, source, config.line_width)
             }
         }
-        Node::List(list) => render_list_node(list, source, config, base_indent),
+        Node::List(list) => render_list_node(list, source, config, context),
         Node::Blockquote(blockquote) => render_blockquote_node(blockquote, source, config, context),
         Node::Table(table) => render_table_node(table),
         _ => {
@@ -1370,8 +1370,9 @@ fn render_list_node(
     list: &markdown::mdast::List,
     source: &str,
     config: &Config,
-    base_indent: usize,
+    context: BlockRenderContext,
 ) -> String {
+    let base_indent = context.base_indent;
     let mut out = String::new();
     let mut previous_item_spread = None;
     let mut previous_marker = None;
@@ -1393,7 +1394,15 @@ fn render_list_node(
         let Node::ListItem(item) = child else {
             continue;
         };
-        let marker = render_list_item_marker(list, child, source, config, index);
+        let marker = render_list_item_marker(
+            list,
+            child,
+            source,
+            config,
+            index,
+            context.previous == Some(BlockKind::List),
+            base_indent,
+        );
         let marker_family_changed = previous_marker
             .as_ref()
             .is_some_and(|previous: &String| marker_family(previous) != marker_family(&marker));
@@ -1403,6 +1412,7 @@ fn render_list_node(
                 || item.spread
                 || marker_family_changed
                 || source_has_inter_item_blank
+                || context.quote_depth > 0 && list.spread
             {
                 out.push_str("\n\n");
             } else {
@@ -1439,12 +1449,27 @@ fn render_list_item_marker(
     source: &str,
     config: &Config,
     index: usize,
+    separated_list: bool,
+    base_indent: usize,
 ) -> String {
+    let source_marker = list_item_source_marker(item_node, source);
     if list.ordered {
         let number = list
             .start
             .unwrap_or(1)
             .saturating_add(u32::try_from(index).unwrap_or(0));
+        let delimiter = if separated_list {
+            source_marker
+                .as_ref()
+                .and_then(|marker| {
+                    marker
+                        .chars()
+                        .find(|character| matches!(character, '.' | ')'))
+                })
+                .unwrap_or('.')
+        } else {
+            '.'
+        };
         let spacing = node_offsets(item_node).map_or(1, |(start, end)| {
             let trimmed = source[start..end].trim_start();
             let digits = trimmed.chars().take_while(char::is_ascii_digit).count();
@@ -1455,26 +1480,41 @@ fn render_list_item_marker(
                 .count();
             if spaces >= 2 { 2 } else { 1 }
         });
-        return format!("{number}.{}", " ".repeat(spacing));
+        return format!("{number}{delimiter}{}", " ".repeat(spacing));
     }
 
-    let marker = match config.list_style {
-        ListStyle::Dash => '-',
-        ListStyle::Plus => '+',
-        ListStyle::Asterisk => '*',
-        ListStyle::Preserve => {
-            if let Some((start, end)) = node_offsets(item_node)
-                && let Some(value) = source[start..end].trim_start().chars().next()
-                && matches!(value, '-' | '+' | '*')
-            {
-                value
-            } else {
-                '-'
-            }
+    let marker = if separated_list
+        && index == 0
+        && base_indent == 0
+        && source_marker.as_deref().is_none_or(|marker| marker == "*")
+        || index > 0 && source_marker.as_deref() == Some("+")
+    {
+        '*'
+    } else {
+        match config.list_style {
+            ListStyle::Dash => '-',
+            ListStyle::Plus => '+',
+            ListStyle::Asterisk => '*',
+            ListStyle::Preserve => source_marker
+                .as_deref()
+                .and_then(|marker| marker.chars().next())
+                .filter(|value| matches!(value, '-' | '+' | '*'))
+                .unwrap_or('-'),
         }
     };
 
     format!("{marker} ")
+}
+
+fn list_item_source_marker(item_node: &Node, source: &str) -> Option<String> {
+    let (start, end) = node_offsets(item_node)?;
+    let trimmed = source[start..end].trim_start();
+    let marker = trimmed
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(|character: char| !matches!(character, '.' | ')' | '-' | '+' | '*'));
+    (!marker.is_empty()).then(|| marker.to_string())
 }
 
 fn render_list_item(
@@ -2627,6 +2667,22 @@ mod tests {
             "foo  \nbaz\n"
         );
         assert_eq!(format_markdown("*foo  \nbar*\n", &config), "_foo  \nbar_\n");
+    }
+
+    #[test]
+    fn list_context_preserves_marker_family_boundaries() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            list_indentation: ListIndentationMode::Normalize,
+            list_style: ListStyle::Dash,
+            ..Config::default()
+        };
+        let input = "1. foo\n2. bar\n3) baz\n";
+        let expected = "1. foo\n2. bar\n\n3) baz\n";
+        let output = format_markdown(input, &config);
+        assert_eq!(output, expected);
+        assert_eq!(format_markdown(&output, &config), output);
     }
 
     #[test]
