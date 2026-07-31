@@ -143,6 +143,70 @@ impl From<Vec<Container>> for ReplaceContainer {
     }
 }
 
+/// Browser cookie same-site policy expressed without depending on an HTTP renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SameSite {
+    /// Send only for same-site requests.
+    Strict,
+    /// Permit top-level safe cross-site navigation.
+    Lax,
+    /// Permit cross-site requests; secure transport is required.
+    None,
+}
+
+/// Renderer-neutral response cookie mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponseCookie {
+    /// Cookie name.
+    pub name: String,
+    /// Cookie value. An empty value with `max_age_seconds = Some(0)` expires a cookie.
+    pub value: String,
+    /// Cookie path.
+    pub path: String,
+    /// Optional maximum age in seconds.
+    pub max_age_seconds: Option<i64>,
+    /// Prevent client-side script access.
+    pub http_only: bool,
+    /// Restrict transport to HTTPS.
+    pub secure: bool,
+    /// Same-site request policy.
+    pub same_site: SameSite,
+}
+
+impl ResponseCookie {
+    /// Creates a secure, HTTP-only, strict same-site cookie scoped to `/`.
+    #[must_use]
+    pub fn secure(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: value.into(),
+            path: "/".to_string(),
+            max_age_seconds: None,
+            http_only: true,
+            secure: true,
+            same_site: SameSite::Strict,
+        }
+    }
+
+    /// Creates an expired secure cookie mutation.
+    #[must_use]
+    pub fn expired(name: impl Into<String>) -> Self {
+        Self {
+            max_age_seconds: Some(0),
+            ..Self::secure(name, "")
+        }
+    }
+}
+
+/// Renderer-neutral HTTP response effects attached to a view.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ResponseMetadata {
+    /// Cookies to append to the response.
+    pub cookies: Vec<ResponseCookie>,
+    /// Client navigation requested after applying the response.
+    pub redirect: Option<String>,
+}
+
 /// Unified view structure - handles full pages, partials, and composite responses
 #[derive(Debug, Clone, Default)]
 pub struct View {
@@ -158,6 +222,9 @@ pub struct View {
     /// Element selectors to delete from the DOM
     /// Client finds DOM elements with matching selectors and removes them
     pub delete_selectors: Vec<Selector>,
+
+    /// Renderer-neutral response effects for web renderers.
+    pub response: ResponseMetadata,
 }
 
 impl View {
@@ -174,6 +241,7 @@ pub struct ViewBuilder {
     primary: Option<Container>,
     fragments: Vec<ReplaceContainer>,
     delete_selectors: Vec<Selector>,
+    response: ResponseMetadata,
 }
 
 impl ViewBuilder {
@@ -258,6 +326,19 @@ impl ViewBuilder {
         self
     }
 
+    /// Attach renderer-neutral response metadata.
+    #[must_use]
+    pub fn with_response(mut self, response: ResponseMetadata) -> Self {
+        self.response = response;
+        self
+    }
+
+    /// Attach renderer-neutral response metadata in place.
+    pub fn response(&mut self, response: ResponseMetadata) -> &mut Self {
+        self.response = response;
+        self
+    }
+
     /// Build the View
     #[must_use]
     pub fn build(self) -> View {
@@ -265,6 +346,7 @@ impl ViewBuilder {
             primary: self.primary,
             fragments: self.fragments,
             delete_selectors: self.delete_selectors,
+            response: self.response,
         }
     }
 }
@@ -357,6 +439,19 @@ impl ContentBuilder {
         self
     }
 
+    /// Attach renderer-neutral response metadata.
+    #[must_use]
+    pub fn with_response(mut self, response: ResponseMetadata) -> Self {
+        self.builder = self.builder.with_response(response);
+        self
+    }
+
+    /// Attach renderer-neutral response metadata in place.
+    pub fn response(&mut self, response: ResponseMetadata) -> &mut Self {
+        self.builder.response(response);
+        self
+    }
+
     /// Build the Content
     #[must_use]
     pub fn build(self) -> Content {
@@ -398,6 +493,7 @@ impl From<Container> for Content {
             primary: Some(value),
             fragments: vec![],
             delete_selectors: vec![],
+            response: ResponseMetadata::default(),
         }))
     }
 }
@@ -426,6 +522,7 @@ impl<'a> TryFrom<&'a str> for View {
             primary: Some(value.try_into()?),
             fragments: vec![],
             delete_selectors: vec![],
+            response: ResponseMetadata::default(),
         })
     }
 }
@@ -438,6 +535,7 @@ impl TryFrom<String> for View {
             primary: Some(value.try_into()?),
             fragments: vec![],
             delete_selectors: vec![],
+            response: ResponseMetadata::default(),
         })
     }
 }
@@ -448,6 +546,7 @@ impl From<Container> for View {
             primary: Some(value),
             fragments: vec![],
             delete_selectors: vec![],
+            response: ResponseMetadata::default(),
         }
     }
 }
@@ -458,6 +557,7 @@ impl From<Vec<Container>> for View {
             primary: Some(value.into()),
             fragments: vec![],
             delete_selectors: vec![],
+            response: ResponseMetadata::default(),
         }
     }
 }

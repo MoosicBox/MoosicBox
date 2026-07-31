@@ -245,6 +245,25 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+fn response_cookie(
+    cookie: hyperchad_renderer::ResponseCookie,
+) -> actix_web::cookie::Cookie<'static> {
+    let same_site = match cookie.same_site {
+        hyperchad_renderer::SameSite::Strict => actix_web::cookie::SameSite::Strict,
+        hyperchad_renderer::SameSite::Lax => actix_web::cookie::SameSite::Lax,
+        hyperchad_renderer::SameSite::None => actix_web::cookie::SameSite::None,
+    };
+    let mut builder = actix_web::cookie::Cookie::build(cookie.name, cookie.value)
+        .path(cookie.path)
+        .http_only(cookie.http_only)
+        .secure(cookie.secure)
+        .same_site(same_site);
+    if let Some(max_age_seconds) = cookie.max_age_seconds {
+        builder = builder.max_age(actix_web::cookie::time::Duration::seconds(max_age_seconds));
+    }
+    builder.finish()
+}
+
 /// Prepared request for Actix processing.
 ///
 /// Contains the parsed route request and flags indicating the request type.
@@ -339,6 +358,10 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
 
         match content {
             Some(content) => {
+                let response_metadata = match &content {
+                    hyperchad_renderer::Content::View(view) => view.response.clone(),
+                    _ => hyperchad_renderer::ResponseMetadata::default(),
+                };
                 let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
                 let delete_selectors = if let hyperchad_renderer::Content::View(v) = &content {
                     if v.delete_selectors.is_empty() {
@@ -366,6 +389,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 }
                 if let Some(selectors) = delete_selectors {
                     response.append_header(("X-HyperChad-Delete-Selectors", selectors));
+                }
+                for cookie in response_metadata.cookies {
+                    response.cookie(response_cookie(cookie));
+                }
+                if let Some(redirect) = response_metadata.redirect {
+                    response.append_header(("HX-Redirect", redirect));
                 }
 
                 Ok(response.body(body))

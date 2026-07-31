@@ -239,6 +239,26 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+fn response_cookie(cookie: &hyperchad_renderer::ResponseCookie) -> String {
+    let mut value = format!("{}={}; Path={}", cookie.name, cookie.value, cookie.path);
+    if let Some(max_age_seconds) = cookie.max_age_seconds {
+        use std::fmt::Write as _;
+        write!(value, "; Max-Age={max_age_seconds}").expect("writing to String is infallible");
+    }
+    if cookie.http_only {
+        value.push_str("; HttpOnly");
+    }
+    if cookie.secure {
+        value.push_str("; Secure");
+    }
+    value.push_str(match cookie.same_site {
+        hyperchad_renderer::SameSite::Strict => "; SameSite=Strict",
+        hyperchad_renderer::SameSite::Lax => "; SameSite=Lax",
+        hyperchad_renderer::SameSite::None => "; SameSite=None",
+    });
+    value
+}
+
 /// Prepared request for Lambda processing.
 ///
 /// Contains the parsed route request and flags indicating the request type.
@@ -339,6 +359,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         match content {
             hyperchad_renderer::Content::View(view) => {
                 let mut headers = Vec::new();
+
+                for cookie in &view.response.cookies {
+                    headers.push(("Set-Cookie".to_string(), response_cookie(cookie)));
+                }
+                if let Some(redirect) = &view.response.redirect {
+                    headers.push(("HX-Redirect".to_string(), redirect.clone()));
+                }
 
                 if !view.fragments.is_empty() {
                     headers.push(("X-HyperChad-Fragments".to_string(), "true".to_string()));

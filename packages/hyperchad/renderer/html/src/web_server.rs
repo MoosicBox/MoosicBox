@@ -237,6 +237,26 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+fn response_cookie(cookie: &hyperchad_renderer::ResponseCookie) -> String {
+    let mut value = format!("{}={}; Path={}", cookie.name, cookie.value, cookie.path);
+    if let Some(max_age_seconds) = cookie.max_age_seconds {
+        use std::fmt::Write as _;
+        write!(value, "; Max-Age={max_age_seconds}").expect("writing to String is infallible");
+    }
+    if cookie.http_only {
+        value.push_str("; HttpOnly");
+    }
+    if cookie.secure {
+        value.push_str("; Secure");
+    }
+    value.push_str(match cookie.same_site {
+        hyperchad_renderer::SameSite::Strict => "; SameSite=Strict",
+        hyperchad_renderer::SameSite::Lax => "; SameSite=Lax",
+        hyperchad_renderer::SameSite::None => "; SameSite=None",
+    });
+    value
+}
+
 /// Prepared request for web server processing.
 ///
 /// Contains the parsed route request and flags indicating the request type.
@@ -299,6 +319,10 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
 
         match content {
             Some(content) => {
+                let response_metadata = match &content {
+                    hyperchad_renderer::Content::View(view) => view.response.clone(),
+                    _ => hyperchad_renderer::ResponseMetadata::default(),
+                };
                 let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
                 let delete_selectors = if let hyperchad_renderer::Content::View(v) = &content {
                     if v.delete_selectors.is_empty() {
@@ -334,6 +358,14 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
                             response
                                 .headers
                                 .insert("X-HyperChad-Delete-Selectors".to_string(), selectors);
+                        }
+                        for cookie in &response_metadata.cookies {
+                            response
+                                .headers
+                                .insert("Set-Cookie".to_string(), response_cookie(cookie));
+                        }
+                        if let Some(redirect) = response_metadata.redirect {
+                            response.headers.insert("HX-Redirect".to_string(), redirect);
                         }
 
                         Ok(response)
