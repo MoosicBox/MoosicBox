@@ -19,17 +19,15 @@ jobs:
 
         steps:
             - uses: actions/checkout@v6
-              with:
-                  path: MoosicBox
 
             - uses: dtolnay/rust-toolchain@stable
 
             - name: Generate config
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: packages/app/tauri
               run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
 
             - name: Copy Files
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: packages/app/tauri
               shell: bash
               run: |
                   ./copy-files.sh
@@ -46,17 +44,21 @@ jobs:
                   echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
             - name: pnpm install
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: packages/app/tauri
               run: pnpm install
 
-            - name: pretty
-              working-directory: MoosicBox/packages/app/tauri
-              run: pnpm pretty
+            - name: Check formatting
+              uses: ./.github/actions/clippier
+              with:
+                  command: fmt
+                  clippier-version: ""
+                  workspace-path: packages/app/tauri
+                  format-tools: biome
 
             - name: lint
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: packages/app/tauri
               run: pnpm lint
 
             - name: typecheck
-              working-directory: MoosicBox/packages/app/tauri
+              working-directory: packages/app/tauri
               run: pnpm typecheck

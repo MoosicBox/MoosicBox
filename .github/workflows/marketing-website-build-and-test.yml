@@ -49,9 +49,13 @@ jobs:
               run: |
                   pnpm sst install --verbose --print-logs
 
-            - name: pretty
-              working-directory: packages/marketing_site
-              run: pnpm pretty
+            - name: Check formatting
+              uses: ./.github/actions/clippier
+              with:
+                  command: fmt
+                  clippier-version: ""
+                  workspace-path: packages/marketing_site
+                  format-tools: biome
 
             - name: lint
               working-directory: packages/marketing_site

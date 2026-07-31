@@ -1510,6 +1510,19 @@ main() {
         return
     fi
 
+    if [[ "$INPUT_COMMAND" == "fmt" ]]; then
+        CONTEXT_PHASE="formatting"
+        args=(fmt --working-dir "${INPUT_WORKSPACE_PATH:-.}")
+        if [[ -n "${INPUT_FORMAT_TOOLS:-}" ]]; then
+            args+=(--tools "$INPUT_FORMAT_TOOLS")
+        fi
+        if [[ "${INPUT_FORMAT_CHECK:-true}" == "true" ]]; then
+            args+=(--check)
+        fi
+        "$CLIPPIER_BIN" "${args[@]}"
+        return
+    fi
+
     if [[ "$INPUT_COMMAND" == "workspace-setup" ]]; then
         setup_workspace_ci_environment
         return

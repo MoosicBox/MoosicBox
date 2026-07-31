@@ -17,13 +17,11 @@
         "dev": "cargo run --bin moosicbox_marketing_site --no-default-features --features actix,htmx,dev serve",
         "sst:deploy": "sst deploy",
         "sst:dev": "sst dev",
-        "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
-        "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "lint": "eslint .",
         "lint:write": "eslint --fix",
         "typecheck": "tsc --noEmit",
-        "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
-        "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
+        "validate": "pnpm typecheck && pnpm lint",
+        "validate:write": "pnpm typecheck && pnpm lint"
     },
     "type": "module",
     "devDependencies": {
@@ -39,7 +37,6 @@
         "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
-        "prettier": "^3.8.3",
         "sst": "^3.19.3",
         "typescript": "^5.9.3"
     }

@@ -20,13 +20,11 @@
         "test:ui": "vitest --ui",
         "test:unit": "vitest run --project unit",
         "test:browser": "vitest run --project browser",
-        "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
-        "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "lint": "eslint src tests",
         "lint:write": "eslint src tests --fix",
         "typecheck": "tsc --noEmit",
-        "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
-        "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
+        "validate": "pnpm typecheck && pnpm lint",
+        "validate:write": "pnpm typecheck && pnpm lint"
     },
     "type": "module",
     "devDependencies": {
@@ -47,7 +45,6 @@
         "jsdom": "^27.4.0",
         "msw": "^2.14.3",
         "playwright": "~1.56.1",
-        "prettier": "^3.8.3",
         "typescript": "^5.9.3",
         "vitest": "^4.1.5"
     }

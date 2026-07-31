@@ -70,9 +70,13 @@ jobs:
               working-directory: packages/hyperchad/renderer/vanilla_js/web
               run: pnpm lint
 
-            - name: Format Check
-              working-directory: packages/hyperchad/renderer/vanilla_js/web
-              run: pnpm pretty
+            - name: Check formatting
+              uses: ./.github/actions/clippier
+              with:
+                  command: fmt
+                  clippier-version: ""
+                  workspace-path: packages/hyperchad/renderer/vanilla_js/web
+                  format-tools: biome
 
             - name: Unit Tests
               working-directory: packages/hyperchad/renderer/vanilla_js/web

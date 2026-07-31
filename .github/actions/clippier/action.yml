@@ -4,13 +4,22 @@ author: "MoosicBox"
 
 inputs:
     command:
-        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, workspace-setup, run-matrix, report)"
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, workspace-setup, run-matrix, report, fmt)"
         required: true
 
     workspace-path:
         description: "Path to workspace/package"
         required: false
         default: "."
+
+    format-check:
+        description: "Check formatting without modifying files"
+        required: false
+        default: "true"
+
+    format-tools:
+        description: "Comma-separated formatters to run"
+        required: false
 
     os:
         description: "Target operating system"
@@ -634,6 +643,7 @@ runs:
                 inputs.command == 'workspace-deps' ||
                 inputs.command == 'validate-feature-propagation' ||
                 inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
                 (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
           uses: actions/checkout@v6
@@ -651,6 +661,7 @@ runs:
               inputs.command == 'workspace-deps' ||
               inputs.command == 'validate-feature-propagation' ||
               inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
               (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
           shell: bash
           run: |
@@ -679,6 +690,7 @@ runs:
                 inputs.command == 'workspace-deps' ||
                 inputs.command == 'validate-feature-propagation' ||
                 inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
                 (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
               )
           uses: actions/cache@v5
@@ -694,6 +706,7 @@ runs:
               inputs.command == 'workspace-deps' ||
               inputs.command == 'validate-feature-propagation' ||
               inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
               (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
           uses: dtolnay/rust-toolchain@stable
 
@@ -705,6 +718,7 @@ runs:
               inputs.command == 'workspace-deps' ||
               inputs.command == 'validate-feature-propagation' ||
               inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
               (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
           shell: bash
           run: |
@@ -735,6 +749,8 @@ runs:
           run: ./action.sh
           env:
               INPUT_COMMAND: ${{ inputs.command }}
+              INPUT_FORMAT_CHECK: ${{ inputs.format-check }}
+              INPUT_FORMAT_TOOLS: ${{ inputs.format-tools }}
               INPUT_WORKSPACE_PATH: ${{ inputs.workspace-path }}
               INPUT_OS: ${{ inputs.os }}
               INPUT_OFFSET: ${{ inputs.offset }}

@@ -12,14 +12,12 @@
         "test-watch": "vitest",
         "test-ui": "vitest --ui",
         "coverage": "vitest run --coverage",
-        "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
-        "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "lint": "eslint --ext .ts,.tsx .",
         "lint:write": "eslint --fix",
         "tauri": "tauri",
         "typecheck": "tsc --noEmit",
-        "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
-        "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
+        "validate": "pnpm typecheck && pnpm lint",
+        "validate:write": "pnpm typecheck && pnpm lint"
     },
     "type": "module",
     "license": "MIT",
@@ -62,8 +60,6 @@
         "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-node": "^11.1.0",
         "jsdom": "^24.1.3",
-        "prettier": "^3.8.1",
-        "prettier-plugin-astro": "^0.14.1",
         "typescript": "^5.9.3",
         "vite": "^5.4.21",
         "vitest": "^1.6.1"

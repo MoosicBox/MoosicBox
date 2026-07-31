@@ -88,6 +88,16 @@ jobs:
               shell: bash
               run: pnpm validate:write
 
+            - name: Format
+              if: ${{ matrix.project.validate == true && steps.upgrade.outputs.upgraded == 'true' }}
+              uses: ./.github/actions/clippier
+              with:
+                  command: fmt
+                  clippier-version: ""
+                  workspace-path: ${{ matrix.project.directory }}
+                  format-check: "false"
+                  format-tools: biome
+
             - name: Commit
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
