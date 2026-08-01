@@ -13,6 +13,7 @@ export interface EventSourceStreamOptions {
     streamKey?: string;
     signal?: AbortSignal;
     includeSessionIdQuery?: boolean;
+    headers?: Record<string, string>;
     onopen?: FetchEventSourceInit['onopen'];
     onmessage: NonNullable<FetchEventSourceInit['onmessage']>;
     onerror?: FetchEventSourceInit['onerror'];
@@ -126,6 +127,7 @@ export function startEventSourceStream(
         ),
         {
             method: 'GET',
+            headers: options.headers,
             signal: controller.signal,
             onopen:
                 options.onopen ??

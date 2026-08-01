@@ -1,5 +1,5 @@
 import { on } from './core';
-import { withCsrfHeader } from './csrf';
+import { csrfToken, withCsrfHeader } from './csrf';
 import { hasActiveEventSourceStream, startEventSourceStream } from './sse-base';
 
 const SHARED_STATE_CHANNEL_ATTR = 'data-shared-state-channel';
@@ -383,6 +383,9 @@ function connectSharedStateTransportStream(): void {
         {
             streamKey: SHARED_STATE_STREAM_KEY,
             includeSessionIdQuery: true,
+            headers: csrfToken()
+                ? Object.fromEntries(withCsrfHeader().entries())
+                : undefined,
             onopen: async (response) => {
                 if (response.status >= 400) {
                     const status = response.status.toString();
