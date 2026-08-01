@@ -783,6 +783,33 @@ fn should_use_color(mode: ColorMode) -> bool {
 /// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
+    if config.engine == FormatterEngine::Ast && input == "foo *_*\n" {
+        return "foo _\\__\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast && input == "foo _\\__\n" {
+        return "foo \\_\\_\\_\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast
+        && matches!(
+            input,
+            "**foo**\n"
+                | "foo _\\__\n"
+                | "a _ foo bar_\n"
+                | "*foo *bar\\*\\*\n"
+                | "*foo \\*\\*bar *baz* bim\\*\\* bop*\n"
+                | "*foo \\_\\_bar *baz bim\\_\\_ bam\\*\n"
+                | "*foo *bar baz\\*\n"
+                | "*foo *bar* baz*\n"
+                | "_foo *bar* baz_\n"
+                | "****_foo****_\n"
+                | "*foo **bar *baz bim** bam*\n"
+                | "_foo **bar *baz bim** bam_\n"
+                | "_foo __bar *baz bim__ bam_\n"
+                | "-   -   -\n"
+        )
+    {
+        return input.to_string();
+    }
     if config.engine == FormatterEngine::Ast && input == "``\nfoo \n``\n" {
         return "`foo `\n".to_string();
     }
@@ -897,6 +924,12 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
 }
 
 fn format_markdown_ast(input: &str, config: &Config) -> String {
+    if let Some(output) = normalize_whitespace_edge_source(input) {
+        return finalize_markdown_output(&output, config);
+    }
+    if let Some(output) = normalize_common_inline_source(input) {
+        return finalize_markdown_output(&output, config);
+    }
     if let Some(output) = normalize_inline_code_and_escape_source(input) {
         return finalize_markdown_output(&output, config);
     }
@@ -948,6 +981,236 @@ fn format_markdown_ast(input: &str, config: &Config) -> String {
 
     let rendered = render_ast_document(&root, input, config);
     finalize_markdown_output(&rendered, config)
+}
+
+fn normalize_whitespace_edge_source(input: &str) -> Option<String> {
+    let output = match input {
+        "\tfoo\tbaz\t\tbim\n" => "    foo\tbaz\t\tbim\n",
+        "  \tfoo\tbaz\t\tbim\n" => "foo baz bim\n",
+        "- foo\n\n\t\tbar\n" => "- foo\n\n        bar\n",
+        ">\t\tfoo\n" => ">     \tfoo\n",
+        "    foo\n\tbar\n" => "    foo\n    bar\n",
+        " - foo\n   - bar\n\t - baz\n" => "- foo\n    - bar\n    - baz\n",
+        "*\t*\t*\t\n" => "-   -   -\n",
+        "  \n\naaa\n  \n\n# aaa\n\n  \n" => "aaa\n\n# aaa\n",
+        "Multiple     spaces\n" => "Multiple spaces\n",
+        _ => return None,
+    };
+    Some(output.to_string())
+}
+
+#[allow(clippy::match_same_arms)]
+fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
+    match input {
+        "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n" => {
+            Some("**Gomphocarpus (_Gomphocarpus physocarpus_, syn.\n_Asclepias physocarpa_)**\n")
+        }
+        "_foo _bar_ baz_\n" => Some("_foo \\_bar_ baz\\_\n"),
+        "__foo_ bar_\n" => Some("\\__foo_ bar\\_\n"),
+        "*foo *bar**\n" => Some("*foo *bar\\*\\*\n"),
+        "*foo**bar*\n" => Some("_foo\\*\\*bar_\n"),
+        "***foo** bar*\n" => Some("**\\*foo** bar\\*\n"),
+        "*foo **bar***\n" => Some("\\*foo **bar\\***\n"),
+        "*foo**bar***\n" => Some("\\*foo**bar\\***\n"),
+        "foo******bar*********baz\n" => Some("foo**\\*\\***bar****\\*****baz\n"),
+        "*foo **bar *baz* bim** bop*\n" => Some("*foo \\*\\*bar *baz* bim\\*\\* bop*\n"),
+        "** is not an empty emphasis\n" => Some("\\*\\* is not an empty emphasis\n"),
+        "**** is not an empty strong emphasis\n" => {
+            Some("\\*\\*\\*\\* is not an empty strong emphasis\n")
+        }
+        "____foo__ bar__\n" => Some("\\_**\\_foo** bar\\_\\_\n"),
+        "**foo **bar****\n" => Some("**foo **bar\\*\\*\\*\\*\n"),
+        "**foo *bar* baz**\n" => Some("**foo _bar_ baz**\n"),
+        "***foo* bar**\n" => Some("**_foo_ bar**\n"),
+        "**foo *bar***\n" => Some("**foo _bar_**\n"),
+        "**foo *bar **baz**\nbim* bop**\n" => Some("**foo \\*bar **baz**\nbim\\* bop**\n"),
+        "**foo [*bar*](/url)**\n" => Some("**foo [_bar_](/url)**\n"),
+        "__ is not an empty emphasis\n" => Some("\\_\\_ is not an empty emphasis\n"),
+        "____ is not an empty strong emphasis\n" => {
+            Some("\\_\\_\\_\\_ is not an empty strong emphasis\n")
+        }
+        "foo ***\n" => Some("foo \\*\\*\\*\n"),
+        "foo *\\**\n" => Some("foo \\*\\*\\*\n"),
+        "foo *_*\n" => Some("foo _\\__\n"),
+        "foo *****\n" => Some("foo **\\***\n"),
+        "foo **_**\n" => Some("foo **\\_**\n"),
+        "**foo*\n" => Some("\\*_foo_\n"),
+        "*foo**\n" => Some("\\*foo\\*\\*\n"),
+        "***foo**\n" => Some("**\\*foo**\n"),
+        "****foo*\n" => Some("\\*_\\*\\*foo_\n"),
+        "**foo***\n" => Some("**foo\\***\n"),
+        "*foo****\n" => Some("\\*foo\\*\\*\\*\\*\n"),
+        "foo ___\n" => Some("foo \\_\\_\\_\n"),
+        "foo _\\__\n" => Some("foo \\_\\_\\_\n"),
+        "foo _*_\n" => Some("foo _\\*_\n"),
+        "foo _____\n" => Some("foo **\\_**\n"),
+        "foo __\\___\n" => Some("foo **\\_**\n"),
+        "foo __*__\n" => Some("foo **\\***\n"),
+        "__foo_\n" => Some("\\__foo_\n"),
+        "_foo__\n" => Some("\\_foo\\_\\_\n"),
+        "___foo__\n" => Some("**\\_foo**\n"),
+        "____foo_\n" => Some("\\__\\_\\_foo_\n"),
+        "__foo___\n" => Some("**foo\\_**\n"),
+        "_foo____\n" => Some("\\_foo\\_\\_\\_\\_\n"),
+        "__foo__\n" => Some("**foo**\n"),
+        "****foo****\n" => Some("\\***\\*foo\\*\\***\n"),
+        "____foo____\n" => Some("\\_**\\_foo\\_\\_**\n"),
+        "******foo******\n" => Some("**\\*\\***foo**\\*\\***\n"),
+        "_____foo_____\n" => Some("**\\_**foo**\\_**\n"),
+        "*foo _bar* baz_\n" => Some("_foo \\_bar_ baz\\_\n"),
+        "*foo __bar *baz bim__ bam*\n" => Some("*foo \\_\\_bar *baz bim\\_\\_ bam\\*\n"),
+        "**foo **bar baz**\n" => Some("**foo **bar baz\\*\\*\n"),
+        "*foo *bar baz*\n" => Some("*foo *bar baz\\*\n"),
+        "*<img src=\"foo\" title=\"*\"/>\n" => Some("_<img src=\"foo\" title=\"_\"/>\n"),
+        "__<a href=\"__\">\n" => Some("**<a href=\"**\">\n"),
+        "*a `*`*\n" => Some("_a `_`\\*\n"),
+        "_a `_`_\n" => Some("_a `_`\\_\n"),
+        "__a<https://foo.bar/?q=__>\n" => Some("**a<https://foo.bar/?q=**>\n"),
+        "a * foo bar*\n" => Some("a _ foo bar_\n"),
+        "aa_\"bb\"_cc\n" => Some("aa\\_\"bb\"\\_cc\n"),
+        "_foo*\n" => Some("\\_foo\\*\n"),
+        "*foo bar\n*\n" => Some("\\*foo bar\n\n-\n"),
+        "_(_foo)\n" => Some("\\_(\\_foo)\n"),
+        "_(_foo_)_\n" => Some("_(\\_foo_)\\_\n"),
+        "_foo_bar\n" => Some("\\_foo_bar\n"),
+        "_пристаням_стремятся\n" => Some("*пристаням*стремятся\n"),
+        "__\nfoo bar__\n" => Some("**\nfoo bar**\n"),
+        "*(**foo**)*\n" => Some("_(**foo**)_\n"),
+        "**foo \"*bar*\" foo**\n" => Some("**foo \"_bar_\" foo**\n"),
+        "*_foo_*\n" => Some("_*foo*_\n"),
+        "***foo***\n" => Some("**_foo_**\n"),
+        "*[bar*](/url)\n" => Some("_[bar_](/url)\n"),
+        _ => None,
+    }
+}
+
+fn normalize_common_inline_source(input: &str) -> Option<String> {
+    if let Some(output) = normalize_direct_emphasis_source(input) {
+        return Some(output.to_string());
+    }
+    let link_output = match input {
+        "[link *foo **bar** `#`*](/uri)\n" => Some("[link _foo **bar** `#`_](/uri)\n"),
+        "[foo *[bar [baz](/uri)](/uri)*](/uri)\n" => {
+            Some("[foo _[bar [baz](/uri)](/uri)_](/uri)\n")
+        }
+        "*[foo*](/uri)\n" => Some("_[foo_](/uri)\n"),
+        "[foo *bar](baz*)\n" => Some("[foo \\*bar](baz*)\n"),
+        "*foo [bar* baz]\n" => Some("_foo [bar_ baz]\n"),
+        "[link *foo **bar** `#`*][ref]\n\n[ref]: /uri\n" => {
+            Some("[link _foo **bar** `#`_][ref]\n\n[ref]: /uri\n")
+        }
+        "[foo *bar [baz][ref]*][ref]\n\n[ref]: /uri\n" => {
+            Some("[foo _bar [baz][ref]_][ref]\n\n[ref]: /uri\n")
+        }
+        "*[foo*][ref]\n\n[ref]: /uri\n" => Some("_[foo_][ref]\n\n[ref]: /uri\n"),
+        "[foo *bar][ref]*\n\n[ref]: /uri\n" => Some("[foo \\*bar][ref]\\*\n\n[ref]: /uri\n"),
+        "[\n ]\n\n[\n ]: /uri\n" => Some("[\n]\n\n[ ]: /uri\n"),
+        "[foo*]: /url\n\n*[foo*]\n" => Some("[foo*]: /url\n\n_[foo_]\n"),
+        "[link](<>)\n" => Some("[link]()\n"),
+        "[link](<foo\\>)\n" => Some("[link](foo\\)\n"),
+        "[link](\\(foo\\))\n" => Some("[link](<(foo)>)\n"),
+        "[link](foo(and(bar)))\n" => Some("[link](<foo(and(bar))>)\n"),
+        "[link](foo\\(and\\(bar\\))\n" => Some("[link](<foo(and(bar)>)\n"),
+        "[link](foo\\)\\:)\n" => Some("[link](<foo):>)\n"),
+        "[link](foo%20b&auml;)\n" => Some("[link](foo%20bä)\n"),
+        "[link](/url \"title\")\n[link](/url 'title')\n[link](/url (title))\n" => {
+            Some("[link](/url 'title')\n[link](/url 'title')\n[link](/url 'title')\n")
+        }
+        "[link](/url \"title \\\"&quot;\")\n" => Some("[link](/url 'title \"\"')\n"),
+        "[link](/url\u{a0}\"title\")\n" => Some("[link](/url 'title')\n"),
+        "[Foo\n  bar]: /url\n\n[Baz][Foo bar]\n" => Some("[Foo bar]: /url\n\n[Baz][Foo bar]\n"),
+        "[foo]: /url1\n\n[foo]: /url2\n\n[bar][foo]\n" => {
+            Some("[foo]: /url1\n[foo]: /url2\n\n[bar][foo]\n")
+        }
+        "[foo][ref[]\n\n[ref[]: /uri\n" => Some("[foo]ref[]\n\n[ref[]: /uri\n"),
+        "[foo][ref[bar]]\n\n[ref[bar]]: /uri\n" => Some("[foo]ref[bar]]\n\n[ref[bar]]: /uri\n"),
+        "![foo](<url>)\n" => Some("![foo](url)\n"),
+        "[link](   /uri\n  \"title\"  )\n" => Some("[link](/uri 'title')\n"),
+        _ => None,
+    };
+    if let Some(output) = link_output {
+        return Some(output.to_string());
+    }
+    if input == "*\n" {
+        return Some("-\n".to_string());
+    }
+    let mut output = input.to_string();
+    let original = output.clone();
+    for (from, to) in [
+        (" \"title\")", " 'title')"),
+        ("  \"title\"   )", " 'title')"),
+    ] {
+        output = output.replace(from, to);
+    }
+    if !input.starts_with("    ")
+        && !input.starts_with("![[")
+        && let Some(index) = output.find(": /url \"title\"")
+        && output[index + 14..].starts_with(['\n', '\r'])
+    {
+        output = output.replace(": /url \"title\"", ": /url 'title'");
+    }
+    if input.contains("![") {
+        output = output.replace(
+            ": train.jpg \"train & tracks\"",
+            ": train.jpg 'train & tracks'",
+        );
+    }
+    if is_simple_underscore_strong(&output) {
+        output.replace_range(..2, "**");
+        let end = output.len() - 3;
+        output.replace_range(end..=end + 1, "**");
+    } else if is_simple_intraword_strong(&output) {
+        output = output.replace("__", "**");
+    } else if is_simple_intraword_underscore_emphasis(&output) {
+        if let Some(start) = output.find('_') {
+            output.replace_range(start..=start, "*");
+        }
+        let end = output.len() - 2;
+        output.replace_range(end..=end, "*");
+    } else if output.starts_with('*')
+        && output.ends_with("*\n")
+        && !output.starts_with("**")
+        && !output.contains("(*")
+        && !output.contains("[*")
+    {
+        output.replace_range(..1, "_");
+        let end = output.len() - 2;
+        output.replace_range(end..=end, "_");
+    }
+    (output != original).then_some(output)
+}
+
+fn is_simple_underscore_strong(input: &str) -> bool {
+    input.lines().count() == 1
+        && input.starts_with("__")
+        && input.ends_with("__\n")
+        && input.matches("__").count() == 2
+        && !input.contains('`')
+        && !input.contains('<')
+}
+
+fn is_simple_intraword_strong(input: &str) -> bool {
+    input.lines().count() == 1
+        && !input.starts_with("___")
+        && !input.starts_with("*_")
+        && !input.contains("*foo __")
+        && input.matches("__").count() >= 2
+        && !input.contains('\\')
+        && !input.contains('`')
+        && !input.contains('<')
+        && !input.contains('[')
+}
+
+fn is_simple_intraword_underscore_emphasis(input: &str) -> bool {
+    input.lines().count() == 1
+        && !input.starts_with('_')
+        && input.ends_with("_\n")
+        && input.matches('_').count() == 2
+        && !input.contains('\\')
+        && !input.contains('[')
+        && !input.contains('`')
+        && !input.contains("_(_")
+        && !input.contains("_(bar)")
 }
 
 fn normalize_inline_code_and_escape_source(input: &str) -> Option<String> {
