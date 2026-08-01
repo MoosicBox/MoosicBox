@@ -1048,7 +1048,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
     /// * The generated CSS bytes are not valid UTF-8 (should never occur as CSS is ASCII)
     fn root_html(
         &self,
-        _headers: &BTreeMap<String, String>,
+        headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
@@ -1082,6 +1082,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     }
                     @if let Some(description) = description {
                         meta name="description" content=(description);
+                    }
+                    @if let Some(csrf_token) = headers.get("hyperchad-shared-state-csrf") {
+                        meta name="hyperchad-shared-state-csrf" content=(csrf_token);
                     }
                     @for url in css_urls {
                         link rel="stylesheet" href=(url);
