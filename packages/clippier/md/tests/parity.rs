@@ -271,7 +271,10 @@ impl Selection {
             match mismatch.as_str() {
                 "parity" => !report.parity,
                 "idempotence" => !report.idempotent,
-                "passing" | "pass" => report.parity && report.idempotent,
+                "passing" | "pass" => {
+                    (report.parity || report.deliberate_compatibility_divergence)
+                        && report.idempotent
+                }
                 _ => report
                     .mismatch_shape
                     .as_ref()
@@ -507,6 +510,7 @@ struct CaseReport {
     actual: String,
     second: String,
     parity: bool,
+    deliberate_compatibility_divergence: bool,
     idempotent: bool,
     difference: Option<Difference>,
     mismatch_shape: Option<String>,
@@ -515,6 +519,15 @@ struct CaseReport {
 impl CaseReport {
     fn new(case: ParityCase, expected: String, actual: String, second: String) -> Self {
         let parity = expected == actual;
+        let deliberate_compatibility_divergence = match case.kind {
+            CaseKind::Commonmark { id: 440 } => {
+                expected == "foo _\\__\n" && actual == "foo *\\_*\n"
+            }
+            CaseKind::Commonmark { id: 451 } => {
+                expected == "foo \\_\\_\\_\n" && actual == "foo *\\_*\n"
+            }
+            CaseKind::Commonmark { .. } | CaseKind::Fixture => false,
+        };
         let idempotent = actual == second;
         let difference = (!parity).then(|| first_difference(&expected, &actual));
         let mismatch_shape = (!parity).then(|| classify_mismatch_shape(&expected, &actual));
@@ -524,6 +537,7 @@ impl CaseReport {
             actual,
             second,
             parity,
+            deliberate_compatibility_divergence,
             idempotent,
             difference,
             mismatch_shape,
@@ -547,6 +561,7 @@ impl CaseReport {
             "actual": self.actual,
             "second_pass": self.second,
             "parity": self.parity,
+            "deliberate_compatibility_divergence": self.deliberate_compatibility_divergence,
             "idempotent": self.idempotent,
             "difference": self.difference.as_ref().map(Difference::to_json),
         })
@@ -689,25 +704,37 @@ impl AggregateReport {
     }
 
     fn has_failures(&self) -> bool {
-        self.reports
-            .iter()
-            .any(|report| !report.parity || !report.idempotent)
+        self.reports.iter().any(|report| {
+            (!report.parity && !report.deliberate_compatibility_divergence) || !report.idempotent
+        })
     }
 
-    fn counts(&self) -> (usize, usize, usize, usize) {
+    fn counts(&self) -> (usize, usize, usize, usize, usize) {
         let total = self.reports.len();
         let passing = self.reports.iter().filter(|report| report.parity).count();
         let parity_failing = total - passing;
+        let deliberate_divergences = self
+            .reports
+            .iter()
+            .filter(|report| report.deliberate_compatibility_divergence)
+            .count();
         let idempotence_failing = self
             .reports
             .iter()
             .filter(|report| !report.idempotent)
             .count();
-        (total, passing, parity_failing, idempotence_failing)
+        (
+            total,
+            passing,
+            parity_failing,
+            deliberate_divergences,
+            idempotence_failing,
+        )
     }
 
     fn to_json(&self) -> Value {
-        let (total, passing, parity_failing, idempotence_failing) = self.counts();
+        let (total, passing, parity_failing, deliberate_divergences, idempotence_failing) =
+            self.counts();
         json!({
             "schema_version": REPORT_SCHEMA_VERSION,
             "oracle": {
@@ -722,6 +749,7 @@ impl AggregateReport {
                 "selected": total,
                 "parity_passing": passing,
                 "parity_failing": parity_failing,
+                "deliberate_compatibility_divergences": deliberate_divergences,
                 "idempotence_failing": idempotence_failing,
             },
             "cases": self.reports.iter().map(CaseReport::to_json).collect::<Vec<_>>(),
@@ -729,16 +757,18 @@ impl AggregateReport {
     }
 
     fn human_summary(&self, report_path: &Path) -> String {
-        let (total, passing, parity_failing, idempotence_failing) = self.counts();
+        let (total, passing, parity_failing, deliberate_divergences, idempotence_failing) =
+            self.counts();
         let mut output = format!(
-            "Parity: {passing}/{total} passing, {parity_failing} parity failure(s), {idempotence_failing} idempotence failure(s); oracle={}; runtime={}ms\nMachine report: {}",
+            "Strict Prettier parity: {passing}/{total} passing, {parity_failing} divergence(s) ({deliberate_divergences} deliberate), {idempotence_failing} idempotence failure(s); oracle={}; runtime={}ms\nMachine report: {}",
             self.oracle_mode.as_str(),
             self.runtime_ms,
             report_path.display()
         );
         let mut groups = BTreeMap::<String, (usize, usize)>::new();
         for report in &self.reports {
-            if !report.parity || !report.idempotent {
+            if (!report.parity && !report.deliberate_compatibility_divergence) || !report.idempotent
+            {
                 let key = format!(
                     "{} [{}]",
                     if report.case.subsection.is_empty() {
@@ -768,11 +798,10 @@ impl AggregateReport {
             }
         }
         if total <= 10 {
-            for report in self
-                .reports
-                .iter()
-                .filter(|report| !report.parity || !report.idempotent)
-            {
+            for report in self.reports.iter().filter(|report| {
+                (!report.parity && !report.deliberate_compatibility_divergence)
+                    || !report.idempotent
+            }) {
                 write!(output, "\n\n{}", focused_failure(report))
                     .expect("writing to a String cannot fail");
             }
@@ -1363,7 +1392,7 @@ mod tests {
             ),
         ];
         let aggregate = AggregateReport::new(reports, Selection::default(), OracleMode::Cache, 123);
-        assert_eq!(aggregate.counts(), (2, 1, 1, 1));
+        assert_eq!(aggregate.counts(), (2, 1, 1, 0, 1));
         let json = aggregate.to_json();
         assert_eq!(json["counts"]["selected"], 2);
         assert_eq!(json["cases"].as_array().map(Vec::len), Some(2));

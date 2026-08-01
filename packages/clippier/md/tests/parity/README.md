@@ -36,8 +36,11 @@ CLIPPIER_MD_PARITY_ID=1 \
 
 Every run writes a deterministic JSON report containing complete counts,
 case metadata, input, expected output, formatter output, second-pass output,
-first differing byte/line/column, mismatch shape, parity status, and
-idempotence status. The default report is
+first differing byte/line/column, mismatch shape, strict parity status,
+deliberate compatibility-divergence status, and idempotence status. Deliberate
+divergences are narrowly shape-checked and remain visible in strict parity
+counts; they are accepted only when the formatter output is semantic-preserving
+and idempotent. The default report is
 `target/clippier-md-parity/latest-report.json`.
 
 ## Oracle modes

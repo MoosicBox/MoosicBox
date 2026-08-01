@@ -783,11 +783,10 @@ fn should_use_color(mode: ColorMode) -> bool {
 /// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
-    if config.engine == FormatterEngine::Ast && input == "foo *_*\n" {
-        return "foo _\\__\n".to_string();
-    }
-    if config.engine == FormatterEngine::Ast && input == "foo _\\__\n" {
-        return "foo \\_\\_\\_\n".to_string();
+    if config.engine == FormatterEngine::Ast
+        && let Some(output) = normalize_literal_underscore_emphasis(input)
+    {
+        return output;
     }
     if config.engine == FormatterEngine::Ast
         && matches!(
@@ -919,6 +918,39 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
                 return Some(input.split_at(input.len()));
             }
             return None;
+        }
+    }
+}
+
+fn normalize_literal_underscore_emphasis(input: &str) -> Option<String> {
+    if !input.contains('_') {
+        return None;
+    }
+    let root = to_mdast(input, &ParseOptions::gfm()).ok()?;
+    let mut ranges = Vec::new();
+    collect_literal_underscore_emphasis_ranges(&root, &mut ranges);
+    if ranges.is_empty() {
+        return None;
+    }
+    let mut output = input.to_string();
+    for (start, end) in ranges.into_iter().rev() {
+        output.replace_range(start..end, "*\\_*");
+    }
+    Some(output)
+}
+
+fn collect_literal_underscore_emphasis_ranges(node: &Node, ranges: &mut Vec<(usize, usize)>) {
+    if let Node::Emphasis(emphasis) = node
+        && emphasis.children.len() == 1
+        && matches!(&emphasis.children[0], Node::Text(text) if text.value == "_")
+        && let Some((start, end)) = node_offsets(node)
+    {
+        ranges.push((start, end));
+        return;
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_literal_underscore_emphasis_ranges(child, ranges);
         }
     }
 }
@@ -3876,6 +3908,32 @@ mod tests {
             ),
             ("[foo]:\n/url\n\n[foo]\n", "[foo]: /url\n\n[foo]\n"),
         ] {
+            let output = format_markdown(input, &config);
+            assert_eq!(output, expected);
+            assert_eq!(format_markdown(&output, &config), output);
+        }
+    }
+
+    #[test]
+    fn emphasis_escape_collision_converges_without_changing_semantics() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        let canonical = "foo *\\_*\n";
+        for input in [
+            "foo *_*\n",
+            "foo _\\__\n",
+            "prefix *_* suffix\n",
+            "prefix _\\__ suffix\n",
+            canonical,
+        ] {
+            let expected = if input.starts_with("prefix") {
+                "prefix *\\_* suffix\n"
+            } else {
+                canonical
+            };
             let output = format_markdown(input, &config);
             assert_eq!(output, expected);
             assert_eq!(format_markdown(&output, &config), output);
