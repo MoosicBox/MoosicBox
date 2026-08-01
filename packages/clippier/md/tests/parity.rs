@@ -508,7 +508,6 @@ struct CaseReport {
     second: String,
     parity: bool,
     idempotent: bool,
-    oracle_idempotence_exception: bool,
     difference: Option<Difference>,
     mismatch_shape: Option<String>,
 }
@@ -516,10 +515,7 @@ struct CaseReport {
 impl CaseReport {
     fn new(case: ParityCase, expected: String, actual: String, second: String) -> Self {
         let parity = expected == actual;
-        let oracle_idempotence_exception = matches!(case.kind, CaseKind::Commonmark { id: 440 })
-            && actual == "foo _\\__\n"
-            && second == "foo \\_\\_\\_\n";
-        let idempotent = actual == second || oracle_idempotence_exception;
+        let idempotent = actual == second;
         let difference = (!parity).then(|| first_difference(&expected, &actual));
         let mismatch_shape = (!parity).then(|| classify_mismatch_shape(&expected, &actual));
         Self {
@@ -529,7 +525,6 @@ impl CaseReport {
             second,
             parity,
             idempotent,
-            oracle_idempotence_exception,
             difference,
             mismatch_shape,
         }
@@ -553,7 +548,6 @@ impl CaseReport {
             "second_pass": self.second,
             "parity": self.parity,
             "idempotent": self.idempotent,
-            "oracle_idempotence_exception": self.oracle_idempotence_exception,
             "difference": self.difference.as_ref().map(Difference::to_json),
         })
     }
@@ -1018,9 +1012,27 @@ fn assert_prettier_version() {
 fn run_prettier(input_path: &Path, input: &str) -> String {
     let runner = prettier_runner();
     let path = input_path.to_string_lossy().to_string();
+    let config_path = workspace_root().join(".prettierrc.json");
+    let config_path = config_path
+        .to_str()
+        .expect("Prettier config path must be UTF-8");
+    let ignore_path =
+        workspace_root().join("target/clippier-md-parity/nonexistent-prettier-ignore");
+    let ignore_path = ignore_path
+        .to_str()
+        .expect("Prettier ignore path must be UTF-8");
     let output = run_prettier_command(
         runner,
-        &["--parser", PRETTIER_PARSER, "--stdin-filepath", &path],
+        &[
+            "--config",
+            config_path,
+            "--ignore-path",
+            ignore_path,
+            "--parser",
+            PRETTIER_PARSER,
+            "--stdin-filepath",
+            &path,
+        ],
         Some(input),
     )
     .expect("Failed to execute prettier process for parity test");
@@ -1316,24 +1328,13 @@ mod tests {
     }
 
     #[test]
-    fn accounts_for_pinned_oracle_idempotence_collision() {
-        let report = CaseReport::new(
-            ParityCase {
-                name: "commonmark-spec#440".to_string(),
-                kind: CaseKind::Commonmark { id: 440 },
-                section: "Emphasis and strong emphasis".to_string(),
-                subsection: "Emphasis and strong emphasis".to_string(),
-                subsystem: "emphasis".to_string(),
-                virtual_path: PathBuf::from("commonmark-spec-440.md"),
-                input: "foo *_*\n".to_string(),
-            },
-            "foo _\\__\n".to_string(),
-            "foo _\\__\n".to_string(),
-            "foo \\_\\_\\_\n".to_string(),
-        );
-        assert!(report.parity);
-        assert!(report.idempotent);
-        assert!(report.oracle_idempotence_exception);
+    fn pinned_prettier_reproduces_commonmark_example_440_non_idempotence() {
+        let path = Path::new("commonmark-spec.md");
+        let first = run_prettier(path, "foo *_*\n");
+        let second = run_prettier(path, &first);
+        assert_eq!(first, "foo _\\__\n");
+        assert_eq!(second, "foo \\_\\_\\_\n");
+        assert_ne!(second, first);
     }
 
     #[test]

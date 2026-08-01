@@ -1,8 +1,10 @@
 # Prettier parity harness
 
 `parity.rs` compares `clippier_md` with Prettier 3.8.1 using the Markdown
-parser. The pinned CommonMark 0.31.2 checkout supplies 655 inputs; its HTML
-output is not used as the oracle.
+parser and the repository's `.prettierrc.json`. Oracle invocations use an
+explicit nonexistent ignore path so the repository `.prettierignore` cannot
+silently echo ignored Markdown input. The pinned CommonMark 0.31.2 checkout
+supplies 655 inputs; its HTML output is not used as the oracle.
 
 Initialize the pinned corpus before running parity tests:
 
