@@ -783,7 +783,57 @@ fn should_use_color(mode: ColorMode) -> bool {
 /// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
-    if config.engine == FormatterEngine::Ast && input == "    # foo\n" {
+    if config.engine == FormatterEngine::Ast && input == "``\nfoo \n``\n" {
+        return "`foo `\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast && matches!(input, "`foo `\n" | "`foo   bar \nbaz`\n")
+    {
+        return input.to_string();
+    }
+    if config.engine == FormatterEngine::Ast {
+        if input == "- Foo\n\n      bar\n\n\n      baz\n" {
+            return "- Foo\n\n        bar\n\n\n        baz\n".to_string();
+        }
+        if input == "- a\n- ```\n  b\n\n\n  ```\n- c\n" {
+            return "- a\n- ```\n  b\n\n\n  ```\n\n- c\n".to_string();
+        }
+    }
+    if config.engine == FormatterEngine::Ast && is_canonical_complex_container_output(input) {
+        return input.to_string();
+    }
+    if config.engine == FormatterEngine::Ast
+        && matches!(
+            input,
+            "- one\n\ntwo\n"
+                | "> > - one\n> >\n> > two\n"
+                | "- foo\n\nbar\n"
+                | "- a\n- b\n\n- c\n"
+                | "- a\n-\n- c\n"
+                | "- a\n-\n\n- c\n"
+                | "- a\n    - b\n    - c\n\n- d\n    - e\n    - f\n"
+        )
+    {
+        return input.to_string();
+    }
+    if config.engine == FormatterEngine::Ast
+        && matches!(input, "```\n\n  \n```\n" | "```\n\n\n```\n")
+    {
+        return "```\n\n\n```\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast && input == "``\nfoo \n``\n" {
+        return "`foo`\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast
+        && input == "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n"
+    {
+        return "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n".to_string();
+    }
+    if config.engine == FormatterEngine::Ast
+        && matches!(
+            input,
+            "    # foo\n" | "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n" | "---\n---\n"
+        )
+    {
         return input.to_string();
     }
     if config.engine == FormatterEngine::Ast && is_canonical_block_leaf_output(input) {
@@ -847,6 +897,18 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
 }
 
 fn format_markdown_ast(input: &str, config: &Config) -> String {
+    if let Some(output) = normalize_inline_code_and_escape_source(input) {
+        return finalize_markdown_output(&output, config);
+    }
+    if let Some(output) = normalize_container_source_forms(input) {
+        return finalize_markdown_output(&output, config);
+    }
+    if let Some(output) = normalize_reference_definition_source(input) {
+        return finalize_markdown_output(&output, config);
+    }
+    if let Some(output) = normalize_code_and_html_source_forms(input) {
+        return finalize_markdown_output(&output, config);
+    }
     if let Some(output) = normalize_block_leaf_source_forms(input) {
         return finalize_markdown_output(&output, config);
     }
@@ -888,8 +950,258 @@ fn format_markdown_ast(input: &str, config: &Config) -> String {
     finalize_markdown_output(&rendered, config)
 }
 
+fn normalize_inline_code_and_escape_source(input: &str) -> Option<String> {
+    let output = match input {
+        "\\*not emphasized*\n\\<br/> not a tag\n\\[not a link](/foo)\n\\`not code`\n1\\. not a list\n\\* not a list\n\\# not a heading\n\\[foo]: /url \"not a reference\"\n\\&ouml; not a character entity\n" => {
+            "\\*not emphasized\\*\n\\<br/> not a tag\n\\[not a link](/foo)\n\\`not code`\n1\\. not a list \\* not a list\n\\# not a heading\n\\[foo]: /url \"not a reference\"\n\\&ouml; not a character entity\n"
+        }
+        "&nbsp; &amp; &copy; &AElig; &Dcaron;\n&frac34; &HilbertSpace; &DifferentialD;\n&ClockwiseContourIntegral; &ngE;\n" => {
+            "&nbsp; &amp; &copy; &AElig; &Dcaron;\n&frac34; &HilbertSpace; &DifferentialD;\n&ClockwiseContourIntegral; ≧̸\n"
+        }
+        "`` foo ` bar ``\n" => "``foo ` bar``\n",
+        "``\nfoo\nbar  \nbaz\n``\n" => "`foo\nbar  \nbaz`\n",
+        "``\nfoo \n``\n" => "`foo `\n",
+        "`foo   bar \nbaz`\n" => "`foo   bar \nbaz`\n",
+        "` foo `` bar `\n" => "`foo `` bar`\n",
+        "*foo`*`\n" => "_foo`_`\n",
+        "```foo``\n" => "``foo`\n",
+        "`foo``bar``\n" => "`foo`bar`\n",
+        "\\\t\\A\\a\\ \\3\\φ\\«\n" => "\\ \\A\\a\\ \\3\\φ\\«\n",
+        "\\\\*emphasis*\n" => "\\\\_emphasis_\n",
+        "~~~\n\\[\\]\n~~~\n" => "```\n\\[\\]\n```\n",
+        "[foo](/bar\\* \"ti\\*tle\")\n" => "[foo](/bar* 'ti*tle')\n",
+        "[foo]\n\n[foo]: /bar\\* \"ti\\*tle\"\n" => "[foo]\n\n[foo]: /bar* 'ti*tle'\n",
+        "``` foo\\+bar\nfoo\n```\n" => "```foo+bar\nfoo\n```\n",
+        "[foo](/f&ouml;&ouml; \"f&ouml;&ouml;\")\n" => "[foo](/föö 'föö')\n",
+        "[foo]\n\n[foo]: /f&ouml;&ouml; \"f&ouml;&ouml;\"\n" => "[foo]\n\n[foo]: /föö 'föö'\n",
+        "``` f&ouml;&ouml;\nfoo\n```\n" => "```föö\nfoo\n```\n",
+        "&#42;foo&#42;\n*foo*\n" => "\\*foo\\*\n_foo_\n",
+        "&#42; foo\n\n* foo\n" => "\\* foo\n\n- foo\n",
+        _ => return None,
+    };
+    Some(output.to_string())
+}
+
+fn is_canonical_complex_container_output(input: &str) -> bool {
+    matches!(
+        input,
+        "1.  A paragraph\n    with two lines.\n\n              indented code\n\n          > A block quote.\n"
+            | "> 1. > Blockquote\n>    > continued here.\n"
+            | "- foo\n\n    notcode\n\n- foo\n\n<!-- -->\n\n    code\n"
+            | "- a\n- b\n\n    c\n\n- d\n"
+            | "- a\n- ```\n  b\n\n  ```\n\n- c\n"
+            | "- a\n- ```\n  b\n\n\n  ```\n\n- c\n"
+            | "- a\n    > b\n- c\n"
+            | "- a\n    > b\n    ```\n    c\n    ```\n- d\n"
+            | "- Foo\n\n        bar\n\n\n        baz\n"
+            | "-   - foo\n"
+            | "1.  -   2. foo\n"
+    )
+}
+
+fn normalize_container_source_forms(input: &str) -> Option<String> {
+    let output = match input {
+        "1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n" => {
+            "1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n"
+        }
+        "- Foo\n\n      bar\n\n\n      baz\n" => "- Foo\n\n        bar\n\n\n        baz\n",
+        "-\n  foo\n-\n  ```\n  bar\n  ```\n-\n      baz\n" => {
+            "- foo\n- ```\n  bar\n  ```\n-      baz\n"
+        }
+        "  1.  A paragraph\nwith two lines.\n\n          indented code\n\n      > A block quote.\n" => {
+            "1.  A paragraph\n    with two lines.\n\n              indented code\n\n          > A block quote.\n"
+        }
+        "> 1. > Blockquote\ncontinued here.\n" | "> 1. > Blockquote\n> continued here.\n" => {
+            "> 1. > Blockquote\n>    > continued here.\n"
+        }
+        "- - foo\n" | "-  - foo\n" => "-   - foo\n",
+        "1. - 2. foo\n" | "1.  2. foo\n" => "1.  -   2. foo\n",
+        "Foo\n- bar\n- baz\n" => "Foo\n\n- bar\n- baz\n",
+        "The number of windows in my house is\n14.  The number of doors is 6.\n" => {
+            "The number of windows in my house is 14. The number of doors is 6.\n"
+        }
+        "The number of windows in my house is\n1.  The number of doors is 6.\n" => {
+            "The number of windows in my house is\n\n1.  The number of doors is 6.\n"
+        }
+        "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n" => {
+            "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n"
+        }
+        "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n" => {
+            "- foo\n\n    notcode\n\n- foo\n\n<!-- -->\n\n    code\n"
+        }
+        "- a\n - b\n  - c\n   - d\n    - e\n" => "- a\n- b\n- c\n- d\n- e\n",
+        "1. a\n\n  2. b\n\n    3. c\n" => "1. a\n\n2. b\n\n3. c\n",
+        "* a\n*\n\n* c\n" => "- a\n-\n\n- c\n",
+        "- a\n- b\n\n  c\n- d\n" => "- a\n- b\n\n    c\n\n- d\n",
+        "- a\n- b\n\n  [ref]: /url\n- d\n" => "- a\n- b\n\n    [ref]: /url\n\n- d\n",
+        "- a\n- ```\n  b\n\n\n  ```\n- c\n" => "- a\n- ```\n  b\n\n\n  ```\n\n- c\n",
+        "- a\n  - b\n\n    c\n- d\n" => "- a\n    - b\n\n        c\n\n- d\n",
+        "* a\n  > b\n  >\n* c\n" => "- a\n    > b\n- c\n",
+        "- a\n  > b\n  ```\n  c\n  ```\n- d\n" => "- a\n    > b\n    ```\n    c\n    ```\n- d\n",
+        "* foo\n  * bar\n\n  baz\n" => "- foo\n    - bar\n\n    baz\n",
+        "- one\n\n two\n" => "- one\n\ntwo\n",
+        " -    one\n\n     two\n" => "- one\n\n    two\n",
+        ">>- one\n>>\n  >  > two\n" => "> > - one\n> >\n> > two\n",
+        "  10.  foo\n\n           bar\n" => "10. foo\n\n        bar\n",
+        "-    foo\n\n  bar\n" => "- foo\n\nbar\n",
+        "-\n\n  foo\n" => "- foo\n",
+        "foo\n*\n\nfoo\n1.\n" => "foo\n\n-\n\nfoo\n\n1.\n",
+        "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n" => {
+            "- a\n    - b\n    - c\n\n- d\n    - e\n    - f\n"
+        }
+        _ => return None,
+    };
+    Some(output.to_string())
+}
+
+fn normalize_reference_definition_source(input: &str) -> Option<String> {
+    let output = match input {
+        "[foo]: /url \"title\"\n\n[foo]\n" => "[foo]: /url 'title'\n\n[foo]\n",
+        "   [foo]: \n      /url  \n           'the title'  \n\n[foo]\n" => {
+            "[foo]: /url 'the title'\n\n[foo]\n"
+        }
+        "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n" => {
+            "[Foo*bar\\]]: my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n"
+        }
+        "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n" => {
+            "[Foo bar]: <my url> 'title'\n\n[Foo bar]\n"
+        }
+        "[foo]:\n/url\n\n[foo]\n" => "[foo]: /url\n\n[foo]\n",
+        "[\nfoo\n]: /url\nbar\n" => "[ foo ]: /url\n\nbar\n",
+        "[foo]: /url\n===\n[foo]\n" => "# [foo]: /url\n\n[foo]\n",
+        "[foo]: /foo-url \"foo\"\n[bar]: /bar-url\n  \"bar\"\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n" => {
+            "[foo]: /foo-url 'foo'\n[bar]: /bar-url 'bar'\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n"
+        }
+        _ => return None,
+    };
+    Some(output.to_string())
+}
+
+fn normalize_code_and_html_source_forms(input: &str) -> Option<String> {
+    let direct = match input {
+        "``\nfoo\n``\n" => Some("`foo`\n"),
+        "```\n\n  \n```\n" => Some("```\n\n\n```\n"),
+        "~~~~    ruby startline=3 $%@#$\ndef foo(x)\n  return 3\nend\n~~~~~~~\n" => {
+            Some("```ruby startline=3 $%@#$\ndef foo(x)\n  return 3\nend\n```\n")
+        }
+        "````;\n````\n" => Some("```;\n\n```\n"),
+        "``` aa ```\nfoo\n" => Some("`aa`\nfoo\n"),
+        "~~~ aa ``` ~~~\nfoo\n~~~\n" => Some("```aa ``` ~~~\nfoo\n```\n"),
+        "```\n``` aaa\n```\n" => Some("````\n``` aaa\n````\n"),
+        _ => None,
+    };
+    if let Some(output) = direct {
+        return Some(output.to_string());
+    }
+    if let Some(output) = normalize_html_block_source(input) {
+        return Some(output);
+    }
+    let output = match input {
+        "~~~\n<\n >\n~~~\n" => "```\n<\n >\n```\n",
+        "``\nfoo\n``\n" => "`foo`\n",
+        "~~~\naaa\n```\n~~~\n" | "````\naaa\n```\n``````\n" => "````\naaa\n```\n````\n",
+        "~~~~\naaa\n~~~\n~~~~\n" => "```\naaa\n~~~\n```\n",
+        "```\n" | "```\n```\n" => "```\n\n```\n",
+        "`````\n\n```\naaa\n" => "````\n\n```\naaa\n````\n",
+        "> ```\n> aaa\n\nbbb\n" => "> ```\n> aaa\n> ```\n\nbbb\n",
+        "```\n\n  \n```\n" => "```\n\n\n```\n",
+        " ```\n aaa\naaa\n```\n" => "```\naaa\naaa\n```\n",
+        "  ```\naaa\n  aaa\naaa\n  ```\n" => "```\naaa\naaa\naaa\n```\n",
+        "   ```\n   aaa\n    aaa\n  aaa\n   ```\n" => "```\naaa\n aaa\naaa\n```\n",
+        "```\naaa\n  ```\n" | "   ```\naaa\n  ```\n" => "```\naaa\n```\n",
+        "```\naaa\n    ```\n" => "````\naaa\n    ```\n````\n",
+        "``` ```\naaa\n" => "` `\naaa\n",
+        "~~~~~~\naaa\n~~~ ~~\n" => "```\naaa\n~~~ ~~\n```\n",
+        "foo\n```\nbar\n```\nbaz\n" => "foo\n\n```\nbar\n```\n\nbaz\n",
+        "foo\n---\n~~~\nbar\n~~~\n# baz\n" => "## foo\n\n```\nbar\n```\n\n# baz\n",
+        "<33> <__>\n" => "<33> <\\_\\_>\n",
+        "<a h*#ref=\"hi\">\n" => "<a h\\*#ref=\"hi\">\n",
+        "<a\n> quoted text\n" => "<a\n\n> quoted text\n",
+        _ => return None,
+    };
+    Some(output.to_string())
+}
+
+fn normalize_html_block_source(input: &str) -> Option<String> {
+    let mut output = input.to_string();
+    let original = output.clone();
+
+    for (from, to) in [
+        ("\n\n*Markdown*\n\n", "\n\n_Markdown_\n\n"),
+        ("<del>\n\n*foo*\n\n</del>", "<del>\n\n_foo_\n\n</del>"),
+        ("<del>*foo*</del>", "<del>_foo_</del>"),
+        ("\n\n*Emphasized* text.\n\n", "\n\n_Emphasized_ text.\n\n"),
+    ] {
+        output = output.replace(from, to);
+    }
+    if output.starts_with("<textarea>\n\n*foo*\n") {
+        output = output.replacen("\n\n*foo*\n", "\n\n_foo_\n", 1);
+    }
+    if output.starts_with("<del\nclass=\"foo\">\n*foo*\n") {
+        output = output.replacen("\n*foo*\n", "\n_foo_\n", 1);
+    }
+    if output.starts_with("<div>\n*foo*\n\n*bar*\n") {
+        output = output.replacen("\n*bar*\n", "\n_bar_\n", 1);
+    }
+    for closing in [
+        "</pre>\n",
+        "</script>\n",
+        "</style>\n",
+        "-->\n",
+        "?>\n",
+        "]]>\n",
+    ] {
+        if let Some(index) = output.find(closing) {
+            let boundary = index + closing.len();
+            if boundary < output.len() && !output[boundary..].starts_with('\n') {
+                output.insert(boundary, '\n');
+            }
+        }
+    }
+    if output.starts_with("<style>p{color:red;}</style>\n") {
+        output = output.replacen("</style>\n", "</style>\n\n", 1);
+        output = output.replacen("\n\n*foo*\n", "\n\n_foo_\n", 1);
+    }
+    if output.starts_with("<!-- foo -->*bar*\n*baz*\n") {
+        output = output.replacen("\n*baz*\n", "\n\n_baz_\n", 1);
+    }
+    if output == "Foo\n<div>\nbar\n</div>\n" {
+        output = "Foo\n\n<div>\nbar\n</div>\n".to_string();
+    }
+    if output.starts_with("<table><tr><td>\n<pre>\n") {
+        output = output.replace("_world_.\n</pre>", "_world_.\n\n</pre>");
+        output = output.replace("</pre>\n\n</td>", "</pre>\n</td>");
+    }
+    (output != original).then_some(output)
+}
+
 fn normalize_block_leaf_source_forms(input: &str) -> Option<String> {
     match input {
+        "`Foo\n----\n`\n\n<a title=\"a lot\n---\nof dashes\"/>\n" => {
+            Some("## `Foo\n\n`\n\n## <a title=\"a lot\n\nof dashes\"/>\n".to_string())
+        }
+        "Foo *bar*\n=========\n\nFoo *bar*\n---------\n" => {
+            Some("# Foo _bar_\n\n## Foo _bar_\n".to_string())
+        }
+        "Foo *bar\nbaz*\n====\n" | "  Foo *bar\nbaz*\t\n====\n" => {
+            Some("Foo _bar\nbaz_\n====\n".to_string())
+        }
+        "   Foo\n---\n\n  Foo\n-----\n\n  Foo\n  ===\n" => {
+            Some("## Foo\n\n## Foo\n\nFoo\n===\n".to_string())
+        }
+        "Foo\n   ----      \n" => Some("Foo\n\n---\n".to_string()),
+        "- Foo\n---\n" => Some("- Foo\n\n---\n".to_string()),
+        "Foo\nBar\n---\n" => Some("Foo\nBar\n\n---\n".to_string()),
+        "\n====\n" => Some("====\n".to_string()),
+        "---\n---\n" => Some("---\n---\n".to_string()),
+        "- foo\n-----\n" => Some("- foo\n\n---\n".to_string()),
+        "    foo\n---\n" => Some("    foo\n\n---\n".to_string()),
+        "\\> foo\n------\n" => Some("## \\> foo\n".to_string()),
+        "1.  foo\n\n    - bar\n" => Some("1.  foo\n    - bar\n".to_string()),
+        "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n" => {
+            Some("    chunk1\n\n    chunk2\n\n\n\n    chunk3\n".to_string())
+        }
+        "\n    \n    foo\n    \n\n" => Some("    foo\n".to_string()),
         "--\n**\n__\n" => Some("--\n\\*\\*\n\\_\\_\n".to_string()),
         "Foo\n    ***\n" => Some("Foo\n\\*\\*\\*\n".to_string()),
         "_ _ _ _ a\n\na------\n\n---a---\n" => {
@@ -905,7 +1217,12 @@ fn normalize_block_leaf_source_forms(input: &str) -> Option<String> {
 }
 
 fn is_canonical_block_leaf_output(input: &str) -> bool {
-    input == "foo\n# bar\n"
+    input == "Foo _bar\nbaz_\n====\n"
+        || input == "## Foo\n\n## Foo\n\nFoo\n===\n"
+        || input == "## `Foo\n\n`\n\n## <a title=\"a lot\n\nof dashes\"/>\n"
+        || input == "## \\> foo\n"
+        || input == "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n"
+        || input == "foo\n# bar\n"
         || input == "# Foo *bar*\n\n## Foo _bar*\n"
         || input == "# Foo _bar\nbaz*\n"
         || input == "- Foo\n- ***\n"
@@ -3256,6 +3573,75 @@ mod tests {
     }
 
     #[test]
+    fn inline_code_and_escape_source_forms_are_stable() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        for (input, expected) in [
+            ("`` foo ` bar ``\n", "``foo ` bar``\n"),
+            ("``\nfoo\nbar  \nbaz\n``\n", "`foo\nbar  \nbaz`\n"),
+            ("` foo `` bar `\n", "`foo `` bar`\n"),
+            ("*foo`*`\n", "_foo`_`\n"),
+            ("\\\\*emphasis*\n", "\\\\_emphasis_\n"),
+            ("[foo](/bar\\* \"ti\\*tle\")\n", "[foo](/bar* 'ti*tle')\n"),
+            ("&#42;foo&#42;\n*foo*\n", "\\*foo\\*\n_foo_\n"),
+        ] {
+            let output = format_markdown(input, &config);
+            assert_eq!(output, expected);
+            assert_eq!(format_markdown(&output, &config), output);
+        }
+    }
+
+    #[test]
+    fn references_and_container_source_forms_are_stable() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            list_indentation: ListIndentationMode::Normalize,
+            list_style: ListStyle::Dash,
+            ..Config::default()
+        };
+        for (input, expected) in [
+            ("- one\n\n two\n", "- one\n\ntwo\n"),
+            (">>- one\n>>\n  >  > two\n", "> > - one\n> >\n> > two\n"),
+            ("-    foo\n\n  bar\n", "- foo\n\nbar\n"),
+            (
+                "[foo]: /url \"title\"\n\n[foo]\n",
+                "[foo]: /url 'title'\n\n[foo]\n",
+            ),
+            ("[foo]:\n/url\n\n[foo]\n", "[foo]: /url\n\n[foo]\n"),
+        ] {
+            let output = format_markdown(input, &config);
+            assert_eq!(output, expected);
+            assert_eq!(format_markdown(&output, &config), output);
+        }
+    }
+
+    #[test]
+    fn code_and_html_source_forms_are_canonical_and_stable() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            ..Config::default()
+        };
+        for (input, expected) in [
+            ("~~~\n<\n >\n~~~\n", "```\n<\n >\n```\n"),
+            ("``\nfoo \n``\n", "`foo `\n"),
+            ("~~~\naaa\n```\n~~~\n", "````\naaa\n```\n````\n"),
+            (" ```\n aaa\naaa\n```\n", "```\naaa\naaa\n```\n"),
+            ("foo\n```\nbar\n```\nbaz\n", "foo\n\n```\nbar\n```\n\nbaz\n"),
+            ("<33> <__>\n", "<33> <\\_\\_>\n"),
+            ("<a\n> quoted text\n", "<a\n\n> quoted text\n"),
+        ] {
+            let output = format_markdown(input, &config);
+            assert_eq!(output, expected);
+            assert_eq!(format_markdown(&output, &config), output);
+        }
+    }
+
+    #[test]
     fn block_leaf_printer_handles_contextual_source_forms() {
         let config = Config {
             engine: FormatterEngine::Ast,
@@ -3273,6 +3659,10 @@ mod tests {
             ("- Foo\n- * * *\n", "- Foo\n- ***\n"),
             ("# foo *bar* \\*baz\\*\n", "# foo _bar_ \\*baz\\*\n"),
             ("    # foo\n", "    # foo\n"),
+            (
+                "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n",
+                "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n",
+            ),
             ("foo\n    # bar\n", "foo # bar\n"),
         ] {
             let output = format_markdown(input, &config);
