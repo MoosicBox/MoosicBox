@@ -85,6 +85,8 @@ pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
     pub css_paths: Vec<String>,
     /// Inline CSS content.
     pub inline_css: Vec<String>,
+    /// CSRF token exposed in renderer-owned full-page HTML metadata.
+    pub csrf_token: Option<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
@@ -101,7 +103,27 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
             css_urls: vec![],
             css_paths: vec![],
             inline_css: vec![],
+            csrf_token: None,
         }
+    }
+
+    /// Sets the CSRF token rendered into full-page HTML metadata.
+    pub fn set_csrf_token(&mut self, csrf_token: impl Into<String>) {
+        self.csrf_token = Some(csrf_token.into());
+    }
+}
+
+/// Runtime controls specific to the HTML/Actix adapter.
+pub trait HtmlActixRuntime {
+    /// Sets the CSRF token rendered into full-page HTML metadata.
+    fn set_html_csrf_token(&mut self, csrf_token: impl Into<String>);
+}
+
+impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlActixRuntime
+    for ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>
+{
+    fn set_html_csrf_token(&mut self, csrf_token: impl Into<String>) {
+        self.processor.set_csrf_token(csrf_token);
     }
 }
 
@@ -408,7 +430,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         content: Content,
         req: PreparedRequest,
     ) -> Result<(Bytes, String), actix_web::Error> {
-        static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
+        let mut headers = BTreeMap::new();
+        if let Some(csrf_token) = self.csrf_token.as_ref() {
+            headers.insert(
+                "hyperchad-shared-state-csrf".to_string(),
+                csrf_token.clone(),
+            );
+        }
 
         Ok(match content {
             hyperchad_renderer::Content::View(view) => {
@@ -421,7 +449,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
 
                     let html = if req.full {
                         self.tag_renderer.root_html(
-                            &HEADERS,
+                            &headers,
                             primary,
                             html,
                             self.viewport.as_deref(),
@@ -434,7 +462,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         )
                     } else {
                         self.tag_renderer.partial_html(
-                            &HEADERS,
+                            &headers,
                             primary,
                             html,
                             self.viewport.as_deref(),

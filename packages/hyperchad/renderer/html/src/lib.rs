@@ -535,7 +535,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
     /// * If the generated CSS contains invalid UTF-8 (should never happen as CSS is ASCII)
     fn root_html(
         &self,
-        _headers: &BTreeMap<String, String>,
+        headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
@@ -564,6 +564,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     }
                     @if let Some(description) = description {
                         meta name="description" content=(description);
+                    }
+                    @if let Some(csrf_token) = headers.get("hyperchad-shared-state-csrf") {
+                        meta name="hyperchad-shared-state-csrf" content=(csrf_token);
                     }
                     @for url in css_urls {
                         link rel="stylesheet" href=(url);
