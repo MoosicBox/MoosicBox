@@ -1958,8 +1958,7 @@ fn render_normalized_ast_node(
                     .unwrap_or_default();
                 return format!("# {text}");
             }
-            let text = render_inline_source(&heading.children, source);
-            let text = normalize_heading_inline_emphasis(&text);
+            let text = render_heading_inline_source(&heading.children, source);
             let heading_text =
                 format!("{} {}", "#".repeat(usize::from(heading.depth)), text.trim());
             if config.heading_indentation == HeadingIndentationMode::Preserve
@@ -2024,25 +2023,30 @@ fn render_normalized_ast_node(
     }
 }
 
-fn normalize_heading_inline_emphasis(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut output = String::with_capacity(text.len());
-    for (index, character) in text.char_indices() {
-        if character == '*'
-            && index > 0
-            && index + 1 < text.len()
-            && bytes[index - 1] != b'\\'
-            && (bytes[index - 1].is_ascii_whitespace()
-                || bytes[index + 1].is_ascii_whitespace()
-                || bytes[index - 1].is_ascii_alphanumeric()
-                || bytes[index + 1].is_ascii_alphanumeric())
-        {
-            output.push('_');
-        } else {
-            output.push(character);
+fn render_heading_inline_source(children: &[Node], source: &str) -> String {
+    children
+        .iter()
+        .map(|child| render_heading_inline_node(child, source))
+        .collect()
+}
+
+fn render_heading_inline_node(node: &Node, source: &str) -> String {
+    match node {
+        Node::Emphasis(emphasis) => {
+            format!(
+                "_{}_",
+                render_heading_inline_source(&emphasis.children, source)
+            )
         }
+        Node::Strong(strong) => format!(
+            "**{}**",
+            render_heading_inline_source(&strong.children, source)
+        ),
+        _ => node_offsets(node).map_or_else(
+            || render_inline_text(node),
+            |(start, end)| source[start..end].to_string(),
+        ),
     }
-    output
 }
 
 fn render_paragraph_node(
@@ -2743,18 +2747,6 @@ fn node_source_without_trailing_newlines(node: &Node, source: &str) -> Option<St
             .trim_end_matches(['\n', '\r'])
             .to_string(),
     )
-}
-
-fn render_inline_source(children: &[Node], source: &str) -> String {
-    let mut out = String::new();
-    for child in children {
-        if let Some((start, end)) = node_offsets(child) {
-            out.push_str(&source[start..end]);
-        } else {
-            out.push_str(&render_inline_text(child));
-        }
-    }
-    out
 }
 
 fn render_inline_text(node: &Node) -> String {
@@ -3989,6 +3981,22 @@ mod tests {
             normalize_nested_asterisk_emphasis_in_strong("prefix **foo *bar* baz**\n"),
             None
         );
+    }
+
+    #[test]
+    fn headings_preserve_strong_emphasis_delimiters() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            heading_indentation: HeadingIndentationMode::Normalize,
+            ..Config::default()
+        };
+        let input = "## Phase 1: Package Creation and Setup 🔴 **NOT STARTED**\n";
+
+        let output = format_markdown(input, &config);
+
+        assert_eq!(output, input);
+        assert_eq!(format_markdown(&output, &config), output);
     }
 
     #[test]
