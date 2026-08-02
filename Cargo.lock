@@ -3163,6 +3163,7 @@ dependencies = [
  "flate2",
  "git2",
  "globset",
+ "ignore",
  "insta",
  "itertools 0.14.0",
  "log 0.4.33",

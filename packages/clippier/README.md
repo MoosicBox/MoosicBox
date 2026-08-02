@@ -1105,20 +1105,31 @@ clippier check --output json
 `check`/`fmt` also load default tool settings from a `clippier.toml` in the working directory:
 
 ```toml
-[tools]
+[runner]
 skip = ["gofmt"]
 required = ["rustfmt", "taplo"]
 runner-fallback = true
 biome-use-editorconfig = true
 biome-use-vcs-ignore = true
 
-[[tools.overlap-warning-suppress]]
+[runner.scope]
+exclude = [
+    "/vendor/checkouts/**",
+]
+
+[[runner.overlap-warning-suppress]]
 capability = "format"
 tools = ["biome", "prettier"]
 extensions = ["md", "mdx"]
 ```
 
 CLI values are additive: `--skip` and `--required` are merged with config values.
+
+`runner.scope.exclude` defines paths that no file-oriented runner tool may
+process. Patterns are based on the directory containing `clippier.toml`; a
+leading `/` anchors a pattern to that directory. Tool-specific configuration
+continues to live under `[tools.<tool-id>]` and can add narrower exclusions for
+tools that support them.
 
 The `check` command automatically detects and runs:
 
@@ -1204,7 +1215,7 @@ Clippier only selects and runs tools that are already installed; it never instal
 Tool resolution precedence (for `prettier`, `biome`, `eslint`, `dprint`, `remark`, and `clippier_md`) is:
 
 1. CLI `--tool-path key=value` override
-2. Configured path in `tools.paths.<tool>`
+2. Configured path in `runner.executables.<tool>`
 3. `node_modules/.bin/<tool>` in the working directory or ancestors
 4. Standalone `<tool>` in PATH
 5. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx --yes`
@@ -1219,9 +1230,9 @@ Overlap warnings are computed dynamically from files currently present in the wo
 Suppress overlap warnings with pair-specific config rules (case-insensitive tool/extension matching):
 
 ```toml
-[tools]
+[runner]
 
-[[tools.overlap-warning-suppress]]
+[[runner.overlap-warning-suppress]]
 capability = "format"
 tools = ["biome", "prettier"]
 extensions = ["md", "mdx"]
@@ -1569,7 +1580,7 @@ Place a `clippier.toml` at the workspace root to define defaults for all package
 # {workspace_root}/clippier.toml
 # Workspace-level defaults apply to all packages unless overridden
 
-[tools]
+[runner]
 skip = ["gofmt"]
 required = ["rustfmt", "taplo"]
 

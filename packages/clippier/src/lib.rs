@@ -416,9 +416,12 @@ pub struct ClippierConf {
     pub rust: Option<RustConfig>,
     /// Node.js-specific configuration
     pub node: Option<NodeConfig>,
-    /// Tool configuration for check/format commands
+    /// Runner configuration for check/format commands.
     #[cfg(feature = "_tools")]
-    pub tools: Option<tools::ToolsConfig>,
+    pub runner: Option<tools::ToolsConfig>,
+    /// Tool-specific configuration keyed by arbitrary registered tool IDs.
+    #[cfg(feature = "_tools")]
+    pub tools: Option<toml::Value>,
 }
 
 /// Workspace-level configuration (root clippier.toml)

@@ -33,6 +33,7 @@
 
 mod registry;
 mod runner;
+mod scope;
 #[cfg(feature = "tools-tui")]
 mod tui;
 mod types;
@@ -41,6 +42,7 @@ use serde::Deserialize;
 
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
+pub use scope::ScopeConfig;
 pub use types::{
     OverlapWarningCapability, OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind,
     ToolsConfig,
@@ -593,7 +595,7 @@ fn parse_dprint_include_extensions(
     }
 }
 
-fn default_extensions_for_tool(
+pub(crate) fn default_extensions_for_tool(
     tool_name: &str,
     capability: ToolCapability,
 ) -> std::collections::BTreeSet<String> {
@@ -609,7 +611,9 @@ fn default_extensions_for_tool(
             "biome" => &[
                 "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
             ],
-            "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
+            "dprint" => &[
+                "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml",
+            ],
             "clippier_md" | "remark" => &["md", "mdx"],
             "mdformat" => &["md"],
             "yamlfmt" => &["yaml", "yml"],
@@ -800,7 +804,13 @@ pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsC
 
     let source = std::fs::read_to_string(config_path)?;
     let conf: crate::ClippierConf = toml::from_str(&source)?;
-    Ok(conf.tools.unwrap_or_default())
+    let has_runner = conf.runner.is_some();
+    if conf.tools.is_some() && !has_runner {
+        log::debug!("[tools] contains tool-specific settings; runner policy defaults apply");
+    }
+    let mut config = conf.runner.unwrap_or_default();
+    config.scope_base = Some(base_dir);
+    Ok(config)
 }
 
 /// Builds final tool config from file defaults plus CLI overrides.
@@ -826,7 +836,7 @@ pub fn build_tools_config(
     let cli_path_overrides = parse_tool_path_overrides(tool_paths)?;
 
     for (name, path) in cli_path_overrides {
-        config.paths.insert(name, path);
+        config.executables.insert(name, path);
     }
 
     if no_runner_fallback {
@@ -1028,12 +1038,12 @@ mod tests {
     }
 
     #[test]
-    fn load_tools_config_reads_tools_section() {
+    fn load_tools_config_reads_runner_section() {
         let dir = temp_dir("clippier-tools-config");
         let config_path = dir.join("clippier.toml");
         std::fs::write(
             &config_path,
-            "[tools]\nrequired = [\"rustfmt\"]\nskip = [\"gofmt\"]\n",
+            "[runner]\nrequired = [\"rustfmt\"]\nskip = [\"gofmt\"]\n",
         )
         .expect("failed to write clippier.toml");
 
@@ -1045,12 +1055,34 @@ mod tests {
     }
 
     #[test]
+    fn load_tools_config_reads_runner_scope_and_keeps_tools_namespace_independent() {
+        let dir = temp_dir("clippier-runner-scope-config");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            concat!(
+                "[runner.scope]\n",
+                "exclude = [\"/vendor/**\"]\n",
+                "[tools.paths]\n",
+                "custom = true\n",
+            ),
+        )
+        .expect("failed to write clippier.toml");
+
+        let loaded = load_tools_config(Some(&dir)).expect("failed to load runner config");
+
+        assert_eq!(loaded.scope.exclude, vec!["/vendor/**"]);
+        assert_eq!(loaded.scope_base.as_deref(), Some(dir.as_path()));
+        assert!(loaded.executables.is_empty());
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
     fn build_tools_config_merges_cli_with_file() {
         let dir = temp_dir("clippier-tools-merge");
         let config_path = dir.join("clippier.toml");
         std::fs::write(
             &config_path,
-            "[tools]\nrequired = [\"rustfmt\"]\nskip = [\"gofmt\"]\n",
+            "[runner]\nrequired = [\"rustfmt\"]\nskip = [\"gofmt\"]\n",
         )
         .expect("failed to write clippier.toml");
 
@@ -1079,7 +1111,7 @@ mod tests {
     fn build_tools_config_explicit_tools_override_skip() {
         let dir = temp_dir("clippier-tools-skip-override");
         let config_path = dir.join("clippier.toml");
-        std::fs::write(&config_path, "[tools]\nskip = [\"gofmt\", \"taplo\"]\n")
+        std::fs::write(&config_path, "[runner]\nskip = [\"gofmt\", \"taplo\"]\n")
             .expect("failed to write clippier.toml");
 
         let explicit = vec!["gofmt".to_string()];
@@ -1277,7 +1309,7 @@ mod tests {
         let config_path = dir.join("clippier.toml");
         std::fs::write(
             &config_path,
-            "[tools]\nrequired = [\"rustfmt\"]\nskip = [\"rustfmt\"]\n",
+            "[runner]\nrequired = [\"rustfmt\"]\nskip = [\"rustfmt\"]\n",
         )
         .expect("failed to write clippier.toml");
 
@@ -1307,7 +1339,7 @@ mod tests {
         let config_path = dir.join("clippier.toml");
         std::fs::write(
             &config_path,
-            "[tools.paths]\nprettier=\"/from/config/prettier\"\n",
+            "[runner.executables]\nprettier=\"/from/config/prettier\"\n",
         )
         .expect("failed to write clippier.toml");
 
@@ -1324,7 +1356,7 @@ mod tests {
         .expect("failed to build merged tools config");
 
         assert_eq!(
-            merged.paths.get("prettier"),
+            merged.executables.get("prettier"),
             Some(&"/from/cli/prettier".to_string())
         );
 
@@ -1482,7 +1514,7 @@ mod tests {
         let config_path = dir.join("clippier.toml");
         std::fs::write(
             &config_path,
-            "[tools]\n[[tools.overlap-warning-suppress]]\ncapability = \"format\"\ntools = [\"biome\", \"prettier\"]\nextensions = [\"md\", \"mdx\"]\n",
+            "[runner]\n[[runner.overlap-warning-suppress]]\ncapability = \"format\"\ntools = [\"biome\", \"prettier\"]\nextensions = [\"md\", \"mdx\"]\n",
         )
         .expect("failed to write clippier.toml");
 

@@ -152,9 +152,9 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub skip: Vec<String>,
 
-    /// Explicit paths for tools that can't be auto-detected
+    /// Explicit executable paths for tools that cannot be auto-detected.
     #[serde(default)]
-    pub paths: std::collections::BTreeMap<String, String>,
+    pub executables: std::collections::BTreeMap<String, String>,
 
     /// Allow executing missing tools through package manager runners
     #[serde(default = "default_true")]
@@ -179,6 +179,14 @@ pub struct ToolsConfig {
     /// Optional per-tool Nix package overrides (e.g. `nixpkgs#yamlfmt`)
     #[serde(default)]
     pub nix_packages: std::collections::BTreeMap<String, String>,
+
+    /// Repository content boundaries shared by file-oriented tools.
+    #[serde(default)]
+    pub scope: super::ScopeConfig,
+
+    /// Directory containing the configuration that defined runner scope.
+    #[serde(skip)]
+    pub scope_base: Option<PathBuf>,
 }
 
 const fn default_true() -> bool {
@@ -190,13 +198,15 @@ impl Default for ToolsConfig {
         Self {
             required: Vec::new(),
             skip: Vec::new(),
-            paths: std::collections::BTreeMap::new(),
+            executables: std::collections::BTreeMap::new(),
             runner_fallback: true,
             biome_use_editorconfig: true,
             biome_use_vcs_ignore: true,
             overlap_warning_suppress: Vec::new(),
             nix_fallback: true,
             nix_packages: std::collections::BTreeMap::new(),
+            scope: super::ScopeConfig::default(),
+            scope_base: None,
         }
     }
 }
@@ -225,7 +235,7 @@ impl ToolsConfig {
     /// Adds an explicit path for a tool
     #[must_use]
     pub fn with_path(mut self, tool: impl Into<String>, path: impl Into<String>) -> Self {
-        self.paths.insert(tool.into(), path.into());
+        self.executables.insert(tool.into(), path.into());
         self
     }
 
@@ -244,6 +254,6 @@ impl ToolsConfig {
     /// Gets the explicit path for a tool, if any
     #[must_use]
     pub fn get_path(&self, tool_name: &str) -> Option<&str> {
-        self.paths.get(tool_name).map(String::as_str)
+        self.executables.get(tool_name).map(String::as_str)
     }
 }

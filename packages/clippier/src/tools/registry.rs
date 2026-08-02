@@ -997,6 +997,18 @@ impl ToolRegistry {
         self.available.get(name)
     }
 
+    /// Returns the runner configuration.
+    #[must_use]
+    pub const fn config(&self) -> &ToolsConfig {
+        &self.config
+    }
+
+    /// Returns the directory used for local tool discovery and execution.
+    #[must_use]
+    pub fn working_dir(&self) -> &Path {
+        &self.working_dir
+    }
+
     /// Returns true if a tool is available
     #[must_use]
     pub fn is_available(&self, name: &str) -> bool {

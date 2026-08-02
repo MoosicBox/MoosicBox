@@ -1,6 +1,6 @@
 //! Tool execution and result aggregation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader, IsTerminal};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -18,7 +18,9 @@ use std::thread;
 use rayon::prelude::*;
 
 use crate::ColorMode;
+use crate::tools::default_extensions_for_tool;
 use crate::tools::registry::{ToolError, ToolRegistry};
+use crate::tools::scope::ScopeMatcher;
 #[cfg(feature = "tools-tui")]
 use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
@@ -149,18 +151,33 @@ pub struct ToolRunner<'a> {
     parallel: bool,
     /// Color mode for child tool output
     color_mode: ColorMode,
+    /// Global repository scope shared by file-oriented tools.
+    scope: Option<ScopeMatcher>,
 }
 
 impl<'a> ToolRunner<'a> {
     /// Creates a new tool runner (parallel by default)
     #[must_use]
-    pub const fn new(registry: &'a ToolRegistry) -> Self {
+    pub fn new(registry: &'a ToolRegistry) -> Self {
+        let scope_root = registry
+            .config()
+            .scope_base
+            .as_deref()
+            .unwrap_or_else(|| registry.working_dir());
+        let scope = if registry.config().scope.exclude.is_empty() {
+            None
+        } else {
+            ScopeMatcher::new(scope_root, &registry.config().scope.exclude)
+                .map_err(|error| log::error!("failed to build runner scope: {error}"))
+                .ok()
+        };
         Self {
             registry,
             working_dir: None,
             stream_output: true,
             parallel: true,
             color_mode: ColorMode::Auto,
+            scope,
         }
     }
 
@@ -190,6 +207,58 @@ impl<'a> ToolRunner<'a> {
     pub const fn with_color_mode(mut self, color_mode: ColorMode) -> Self {
         self.color_mode = color_mode;
         self
+    }
+
+    fn working_dir_path(&self) -> PathBuf {
+        self.working_dir.map_or_else(
+            || self.registry.working_dir().to_path_buf(),
+            Path::to_path_buf,
+        )
+    }
+
+    fn scoped_file_args(&self, tool: &Tool) -> Option<Vec<String>> {
+        let scope = self.scope.as_ref()?;
+        if matches!(tool.kind, ToolKind::Cargo) && tool.name != "clippier_md" {
+            return None;
+        }
+        let mut extensions = BTreeSet::new();
+        for capability in &tool.capabilities {
+            extensions.extend(default_extensions_for_tool(&tool.name, *capability));
+        }
+        if extensions.is_empty() {
+            return None;
+        }
+        let working_dir = self.working_dir_path();
+        Some(
+            scope
+                .collect_files(std::slice::from_ref(&working_dir), &extensions)
+                .into_iter()
+                .filter_map(|path| {
+                    path.strip_prefix(&working_dir)
+                        .ok()
+                        .map(|relative| relative.to_string_lossy().to_string())
+                })
+                .collect(),
+        )
+    }
+
+    fn replace_default_path_args(tool: &Tool, args: &mut Vec<String>, files: &[String]) {
+        if files.is_empty() {
+            return;
+        }
+        match tool.name.as_str() {
+            "biome" | "dprint" => args.extend(files.iter().cloned()),
+            "clippier_md" => {
+                args.retain(|arg| arg != ".");
+                args.extend(files.iter().cloned());
+            }
+            "taplo" | "prettier" | "remark" | "mdformat" | "yamlfmt" | "ruff" | "black"
+            | "gofmt" | "shfmt" | "eslint" => {
+                args.retain(|arg| arg != ".");
+                args.extend(files.iter().cloned());
+            }
+            _ => {}
+        }
     }
 
     fn should_use_color_auto() -> bool {
@@ -503,6 +572,7 @@ impl<'a> ToolRunner<'a> {
 
     #[cfg(feature = "tools-tui")]
     fn build_command_parts(
+        &self,
         tool: &Tool,
         check_mode: bool,
         working_dir: Option<&Path>,
@@ -537,6 +607,12 @@ impl<'a> ToolRunner<'a> {
             }
         };
 
+        if let Some(files) = self.scoped_file_args(tool) {
+            if files.is_empty() {
+                return None;
+            }
+            Self::replace_default_path_args(tool, &mut parts.1, &files);
+        }
         Self::append_prettier_ignore_path_arg(tool, &mut parts.1, working_dir, args_start_index);
         let warnings =
             Self::append_mdformat_extension_args(tool, &mut parts.1, working_dir, args_start_index);
@@ -896,6 +972,17 @@ impl<'a> ToolRunner<'a> {
             }
         };
 
+        if let Some(files) = self.scoped_file_args(tool) {
+            if files.is_empty() {
+                let _ = std::fs::remove_dir_all(&output_dir);
+                return ToolResult::success(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    start_time.elapsed(),
+                );
+            }
+            Self::replace_default_path_args(tool, &mut final_args, &files);
+        }
         Self::append_or_replace_remark_output_arg(&mut final_args, &output_dir);
 
         let mut command = Command::new(&program);
@@ -1126,7 +1213,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         let Some((program, final_args, warnings)) =
-            Self::build_command_parts(tool, check_mode, self.working_dir)
+            self.build_command_parts(tool, check_mode, self.working_dir)
         else {
             let result =
                 ToolResult::success(tool.name.clone(), tool.display_name.clone(), Duration::ZERO);
@@ -1318,6 +1405,16 @@ impl<'a> ToolRunner<'a> {
                 (runner.clone(), all_args, runner_args.len() + 1)
             }
         };
+        if let Some(files) = self.scoped_file_args(tool) {
+            if files.is_empty() {
+                return ToolResult::success(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    start_time.elapsed(),
+                );
+            }
+            Self::replace_default_path_args(tool, &mut final_args, &files);
+        }
         Self::append_prettier_ignore_path_arg(
             tool,
             &mut final_args,
@@ -1458,6 +1555,7 @@ impl<'a> ToolRunner<'a> {
     }
 
     /// Runs a single tool with buffered output (for parallel execution)
+    #[allow(clippy::too_many_lines)]
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
         let start_time = Instant::now();
 
@@ -1499,6 +1597,16 @@ impl<'a> ToolRunner<'a> {
                 (runner.clone(), all_args, runner_args.len() + 1)
             }
         };
+        if let Some(files) = self.scoped_file_args(tool) {
+            if files.is_empty() {
+                return ToolResult::success(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    start_time.elapsed(),
+                );
+            }
+            Self::replace_default_path_args(tool, &mut final_args, &files);
+        }
         Self::append_prettier_ignore_path_arg(
             tool,
             &mut final_args,
@@ -1683,6 +1791,31 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
         std::fs::create_dir_all(&path).expect("failed to create temp dir");
         path
+    }
+
+    #[test]
+    fn scope_excludes_apply_to_collected_files_without_skipping_nested_repositories() {
+        let dir = temp_dir("clippier-runner-scope");
+        let excluded = dir.join("vendor").join("checkout");
+        let nested = dir.join("nested");
+        std::fs::create_dir_all(&excluded).expect("failed to create excluded directory");
+        std::fs::create_dir_all(&nested).expect("failed to create nested repository");
+        std::fs::write(excluded.join("ignored.json"), "{}\n")
+            .expect("failed to write excluded file");
+        std::fs::write(nested.join(".git"), "gitdir: elsewhere\n")
+            .expect("failed to write nested Git marker");
+        std::fs::write(nested.join("included.json"), "{}\n")
+            .expect("failed to write included file");
+
+        let matcher = ScopeMatcher::new(&dir, &["/vendor/checkout/**".to_string()])
+            .expect("failed to build scope matcher");
+        let files = matcher.collect_files(
+            std::slice::from_ref(&dir),
+            &std::iter::once("json".to_string()).collect(),
+        );
+
+        assert_eq!(files, vec![nested.join("included.json")]);
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
     }
 
     #[test]
