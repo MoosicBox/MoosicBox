@@ -557,6 +557,10 @@ pub fn element_style_to_html(
         );
     }
 
+    if let Some(opacity) = &container.opacity {
+        write_css_attr!(b"opacity", number_to_html_string(opacity, false).as_bytes(),);
+    }
+
     if let Some(background) = container.background {
         write_css_attr!(b"background", color_to_css_string(background).as_bytes());
     }
@@ -2222,6 +2226,20 @@ mod tests {
         assert!(style.contains("display:flex"));
         assert!(style.contains("flex-direction:column"));
         assert!(style.contains("justify-content:center"));
+    }
+
+    #[test_log::test]
+    fn test_element_style_to_html_opacity() {
+        let container = Container {
+            opacity: Some(Number::Real(0.05)),
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_style_to_html(&mut buffer, &container, false).unwrap();
+        let style = std::str::from_utf8(&buffer).unwrap();
+
+        assert!(style.contains("opacity:0.05"));
     }
 
     #[test_log::test]
