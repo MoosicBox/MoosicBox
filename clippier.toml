@@ -25,4 +25,8 @@ indentation = "preserve"
 indentation = "preserve"
 
 [tools.clippier-md.files]
-exclude = ["packages/opus_native/libopus/**"]
+exclude = [
+    "packages/clippier/md/tests/parity/fixtures/**",
+    "packages/clippier/md/tests/vendor/commonmark-spec/**",
+    "packages/opus_native/libopus/opus/**",
+]
