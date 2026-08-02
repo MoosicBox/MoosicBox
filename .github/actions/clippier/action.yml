@@ -734,6 +734,31 @@ runs:
                 echo "Clippier source hash (fallback): ${{ inputs.clippier-version || 'unknown' }}"
               fi
 
+        - name: Compute effective clippier features
+          id: effective-clippier-features
+          if: |
+              inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
+              inputs.command == 'packages' ||
+              inputs.command == 'affected-packages' ||
+              inputs.command == 'workspace-deps' ||
+              inputs.command == 'validate-feature-propagation' ||
+              inputs.command == 'workspace-toolchains' ||
+                inputs.command == 'fmt' ||
+              (inputs.command == 'workspace-setup' && inputs.workspace-toolchains-json == '')
+          shell: bash
+          env:
+              COMMAND: ${{ inputs.command }}
+              CLIPPIER_FEATURES: ${{ inputs.clippier-features }}
+          run: |
+              features="$CLIPPIER_FEATURES"
+              if [[ "$COMMAND" == release-* ]] && [[ ",$features," != *,release,* ]]; then
+                features="${features:+$features,}release"
+              fi
+              cache_key=$(printf '%s' "$features" | sed 's/[^A-Za-z0-9._-]/-/g')
+              echo "features=$features" >> "$GITHUB_OUTPUT"
+              echo "cache-key=$cache_key" >> "$GITHUB_OUTPUT"
+
         - name: Cache clippier binary
           if: |
               inputs.skip-cache != 'true' && (
@@ -750,7 +775,7 @@ runs:
           uses: actions/cache@v5
           with:
               path: ./target/release/clippier
-              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}-${{ startsWith(inputs.command, 'release-') && 'release' || inputs.clippier-features }}
+              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}-${{ steps.effective-clippier-features.outputs.cache-key }}
 
         - name: Setup Rust toolchain for clippier build
           if: |
@@ -779,10 +804,7 @@ runs:
           shell: bash
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
-                FEATURES="${{ inputs.clippier-features }}"
-                if [[ "${{ inputs.command }}" == release-* ]] && [[ ",$FEATURES," != *,release,* ]]; then
-                  FEATURES="${FEATURES:+$FEATURES,}release"
-                fi
+                FEATURES="${{ steps.effective-clippier-features.outputs.features }}"
                 echo "Building clippier with features: $FEATURES"
 
                 if [[ -n "${{ inputs.clippier-version }}" ]]; then
