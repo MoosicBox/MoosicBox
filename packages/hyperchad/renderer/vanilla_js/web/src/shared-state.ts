@@ -1,6 +1,7 @@
 import { on } from './core';
 import { csrfToken, withCsrfHeader } from './csrf';
 import { hasActiveEventSourceStream, startEventSourceStream } from './sse-base';
+import { streamErrorLifecycle, streamStartLifecycle } from './shared-state-lifecycle';
 
 const SHARED_STATE_CHANNEL_ATTR = 'data-shared-state-channel';
 const SHARED_STATE_COMMAND_ATTR = 'data-shared-state-command';
@@ -389,8 +390,13 @@ function setDesiredChannels(channels: Set<string>): void {
 
 function connectSharedStateTransportStream(): void {
     if (!hasActiveEventSourceStream(SHARED_STATE_STREAM_KEY)) {
+        const wasConnected = sharedStateConnected;
         sharedStateConnected = false;
         subscribedChannels.clear();
+        dispatchSharedStateEvent(
+            streamStartLifecycle(wasConnected),
+            JSON.stringify({ session_id: sharedStateSessionId }),
+        );
     } else if (sharedStateConnected) {
         void reconcileChannelSubscriptions();
         return;
@@ -425,8 +431,13 @@ function connectSharedStateTransportStream(): void {
             onmessage: (message) =>
                 handleSharedStateInboundPayload(message.data),
             onerror: (error) => {
+                const wasConnected = sharedStateConnected;
                 sharedStateConnected = false;
                 subscribedChannels.clear();
+                dispatchSharedStateEvent(
+                    streamErrorLifecycle(wasConnected),
+                    JSON.stringify({ session_id: sharedStateSessionId }),
+                );
                 if (error && typeof error === 'object' && 'message' in error) {
                     console.error(
                         'Shared-state SSE stream error',
