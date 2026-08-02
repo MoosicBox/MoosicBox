@@ -26,10 +26,7 @@ indentation = "preserve"
 
 [tools.clippier-md.files]
 exclude = [
-    "**/libopus/opus/**",
-    "**/tests/parity/fixtures/**",
-    "**/tests/vendor/commonmark-spec/**",
-    "libopus/opus/**",
-    "tests/parity/fixtures/**",
-    "tests/vendor/commonmark-spec/**",
+    "/packages/clippier/md/tests/parity/fixtures/**",
+    "/packages/clippier/md/tests/vendor/commonmark-spec/**",
+    "/packages/opus_native/libopus/opus/**",
 ]

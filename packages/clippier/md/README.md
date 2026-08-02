@@ -42,7 +42,7 @@ indentation = "preserve"
 
 [files]
 respect-gitignore = true
-exclude = ["**/generated/**", "**/vendor/**"]
+exclude = ["/generated/**", "/vendor/**"]
 skip-dirs = ["node_modules", "target", ".direnv"]
 
 [check.diff]
@@ -54,6 +54,12 @@ intraline = true
 show-invisible-whitespace = true
 max-intraline-line-length = 400
 ```
+
+`files.exclude` patterns are resolved from the directory containing the config
+file, independent of the directory where `clippier-md` is invoked. A leading
+`/` anchors a pattern to that config directory (not the filesystem root), as in
+`/vendor/**`. Config values constructed programmatically use the supplied
+working directory as their exclude base.
 
 To preserve authored markdown prose line breaks (similar to Prettier `proseWrap: preserve`), set:
 

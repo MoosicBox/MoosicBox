@@ -24,7 +24,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -138,6 +138,11 @@ pub struct Config {
     pub respect_gitignore: bool,
     /// Glob patterns to exclude from processing.
     pub exclude: Vec<String>,
+    /// Base directory used to resolve exclude patterns loaded from a config file.
+    ///
+    /// When absent, exclude patterns are resolved relative to the formatter's
+    /// working directory.
+    pub exclude_base: Option<PathBuf>,
     /// Directory names to skip while walking paths.
     pub skip_dirs: Vec<String>,
     /// Diff rendering controls used by check mode.
@@ -196,6 +201,7 @@ impl Default for Config {
             frontmatter_mode: FrontmatterMode::Preserve,
             respect_gitignore: true,
             exclude: Vec::new(),
+            exclude_base: None,
             skip_dirs: Vec::new(),
             check_diff: CheckDiffConfig::default(),
             prose_wrap: ProseWrapMode::Always,
@@ -243,14 +249,14 @@ pub fn load_config(working_dir: &Path, explicit_config: Option<&Path>) -> Result
     if let Some(path) = explicit_config {
         if path.exists() {
             let value = parse_toml_file(path)?;
-            apply_root_config(&mut config, &value);
+            apply_root_config(&mut config, &value, config_parent(path, working_dir));
         }
         return Ok(config);
     }
 
     if let Some(path) = find_upward(working_dir, "clippier-md.toml") {
         let value = parse_toml_file(&path)?;
-        apply_root_config(&mut config, &value);
+        apply_root_config(&mut config, &value, config_parent(&path, working_dir));
     }
 
     let mut current = Some(working_dir);
@@ -268,7 +274,7 @@ pub fn load_config(working_dir: &Path, explicit_config: Option<&Path>) -> Result
                             .or_else(|| table.get("clippier_md"))
                     })
             {
-                apply_root_config(&mut config, tool_value);
+                apply_root_config(&mut config, tool_value, dir.to_path_buf());
                 break;
             }
         }
@@ -3177,8 +3183,19 @@ fn find_upward(start_dir: &Path, file_name: &str) -> Option<PathBuf> {
     None
 }
 
+fn config_parent(path: &Path, working_dir: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        working_dir.join(path)
+    };
+    absolute
+        .parent()
+        .map_or_else(|| working_dir.to_path_buf(), Path::to_path_buf)
+}
+
 #[allow(clippy::too_many_lines)]
-fn apply_root_config(config: &mut Config, value: &toml::Value) {
+fn apply_root_config(config: &mut Config, value: &toml::Value, config_dir: PathBuf) {
     if let Some(line_width) = value
         .get("line-width")
         .and_then(toml::Value::as_integer)
@@ -3263,6 +3280,7 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
             .filter_map(toml::Value::as_str)
             .map(ToString::to_string)
             .collect();
+        config.exclude_base = Some(config_dir);
     }
     if let Some(skip_dirs) = value
         .get("files")
@@ -3380,26 +3398,42 @@ fn apply_root_config(config: &mut Config, value: &toml::Value) {
 
 #[derive(Debug)]
 struct PathFilters {
-    root: PathBuf,
+    working_dir: PathBuf,
     skip_dirs: BTreeSet<String>,
     exclude_globs: GlobSet,
+    excluded_dir_globs: GlobSet,
 }
 
 impl PathFilters {
     fn new(config: &Config, working_dir: &Path) -> Result<Self> {
+        let working_dir = absolute_path(working_dir, working_dir);
+        let exclude_base = config.exclude_base.as_deref().map_or_else(
+            || working_dir.clone(),
+            |base| absolute_path(base, &working_dir),
+        );
         let skip_dirs = config.skip_dirs.iter().cloned().collect::<BTreeSet<_>>();
 
         let mut builder = GlobSetBuilder::new();
+        let mut dir_builder = GlobSetBuilder::new();
         for pattern in &config.exclude {
-            let glob = Glob::new(pattern)
+            let resolved = resolve_exclude_pattern(pattern, &exclude_base);
+            let glob = Glob::new(&resolved)
                 .with_context(|| format!("Invalid files.exclude glob pattern '{pattern}'"))?;
             builder.add(glob);
+            if let Some(directory_pattern) = resolved.strip_suffix("/**") {
+                dir_builder.add(
+                    Glob::new(directory_pattern).with_context(|| {
+                        format!("Invalid files.exclude glob pattern '{pattern}'")
+                    })?,
+                );
+            }
         }
 
         Ok(Self {
-            root: working_dir.to_path_buf(),
+            working_dir,
             skip_dirs,
             exclude_globs: builder.build()?,
+            excluded_dir_globs: dir_builder.build()?,
         })
     }
 
@@ -3412,25 +3446,45 @@ impl PathFilters {
             return true;
         }
 
-        self.matches_path(path)
+        let absolute = absolute_path(path, &self.working_dir);
+        self.excluded_dir_globs.is_match(&absolute) || self.exclude_globs.is_match(&absolute)
     }
 
     fn should_skip_path(&self, path: &Path) -> bool {
-        self.matches_path(path)
+        self.exclude_globs
+            .is_match(absolute_path(path, &self.working_dir))
     }
+}
 
-    fn matches_path(&self, path: &Path) -> bool {
-        self.relative_path(path)
-            .is_some_and(|relative| self.exclude_globs.is_match(relative))
-    }
+fn absolute_path(path: &Path, working_dir: &Path) -> PathBuf {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        working_dir.join(path.strip_prefix(Path::new(".")).unwrap_or(path))
+    };
+    normalize_path(&path)
+}
 
-    fn relative_path<'a>(&'a self, path: &'a Path) -> Option<&'a Path> {
-        if path.is_absolute() {
-            path.strip_prefix(&self.root).ok()
-        } else {
-            path.strip_prefix(Path::new(".")).ok().or(Some(path))
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
         }
     }
+    normalized
+}
+
+fn resolve_exclude_pattern(pattern: &str, base: &Path) -> String {
+    normalize_path(&base.join(pattern.trim_start_matches('/')))
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 
 fn is_markdown_path(path: &Path) -> bool {
@@ -4474,6 +4528,55 @@ mod tests {
         };
         let output = format_markdown(input, &config);
         assert_eq!(output, input);
+    }
+
+    #[test]
+    fn collect_markdown_files_resolves_excludes_from_their_config_directory() {
+        let dir = temp_dir("clippier-md-config-relative-excludes");
+        let package = dir.join("packages").join("app");
+        let excluded = dir.join("vendor").join("fixtures");
+        let nested_git = dir.join("nested-git");
+        std::fs::create_dir_all(&package).expect("failed to create package directory");
+        std::fs::create_dir_all(&excluded).expect("failed to create excluded directory");
+        std::fs::create_dir_all(&nested_git).expect("failed to create nested Git directory");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            "[tools.clippier-md.files]\nexclude = [\"/vendor/fixtures/**\"]\n",
+        )
+        .expect("failed to write config");
+        std::fs::write(excluded.join("ignored.md"), "# ignored\n")
+            .expect("failed to write excluded markdown");
+        std::fs::write(package.join("included.md"), "# included\n")
+            .expect("failed to write included markdown");
+        std::fs::write(nested_git.join(".git"), "gitdir: elsewhere\n")
+            .expect("failed to write nested Git marker");
+        std::fs::write(nested_git.join("included.md"), "# included\n")
+            .expect("failed to write nested Git markdown");
+        let config = load_config(&package, None).expect("failed to load config");
+
+        let files = collect_markdown_files(std::slice::from_ref(&dir), &config, &package)
+            .expect("failed to collect markdown files");
+        let explicit = collect_markdown_files(std::slice::from_ref(&excluded), &config, &package)
+            .expect("failed to collect explicitly excluded directory");
+        let relative_explicit =
+            collect_markdown_files(&[PathBuf::from("../../vendor/fixtures")], &config, &package)
+                .expect("failed to collect relatively addressed excluded directory");
+
+        assert_eq!(files.len(), 2);
+        assert!(
+            files
+                .iter()
+                .any(|path| path.ends_with("packages/app/included.md"))
+        );
+        assert!(
+            files
+                .iter()
+                .any(|path| path.ends_with("nested-git/included.md"))
+        );
+        assert!(explicit.is_empty());
+        assert!(relative_explicit.is_empty());
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
     }
 
     #[test]
